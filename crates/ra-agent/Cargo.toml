@@ -125,7 +125,7 @@ rustix = { workspace = true }
 # CDP-backed `web_search` fallback so `--no-default-features` builds keep the
 # pre-existing HTTP-only `web_search` behaviour byte-for-byte. It also lets
 # metasearch engines that render (Google) load in the person's browser
-# (`octos_research::browser`).
+# (`ra_research::browser`).
 default = ["browser"]
 browser = ["ra-research/browser"]
 # Results-page engines that need a browser-like client (Google's page for

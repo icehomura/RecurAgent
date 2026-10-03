@@ -9,15 +9,15 @@ use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use octos_agent::inspect_workspace_contract;
-use octos_bus::file_handle::{
+use ra_agent::inspect_workspace_contract;
+use ra_bus::file_handle::{
     encode_profile_file_handle, encode_tmp_upload_handle, resolve_legacy_file_request,
     resolve_scoped_file_handle, resolve_workspace_file_handle,
 };
 // `Message` is used by non-test lib code (`dedupe_history_rows` below),
 // so this import must not be test-gated.
-use octos_core::Message;
-use octos_core::{MAIN_PROFILE_ID, SessionKey};
+use ra_core::Message;
+use ra_core::{MAIN_PROFILE_ID, SessionKey};
 use serde::{Deserialize, Serialize};
 
 use super::AppState;
@@ -96,7 +96,7 @@ fn resolve_scoped_download_path(
 /// `ra-uploads/<tenant>/<uuid>_<name>`). `None` for any path NOT under the
 /// upload root (e.g. a profile file already scoped to its tenant `base_dir`).
 fn upload_tmpdir_tenant(p: &std::path::Path) -> Option<String> {
-    let root = std::fs::canonicalize(octos_bus::file_handle::temp_upload_root()).ok()?;
+    let root = std::fs::canonicalize(ra_bus::file_handle::temp_upload_root()).ok()?;
     let canon = std::fs::canonicalize(p).ok()?;
     match canon.strip_prefix(&root).ok()?.components().next()? {
         std::path::Component::Normal(s) => s.to_str().map(str::to_string),
@@ -126,7 +126,7 @@ fn resolve_within_workspace(
 
 /// A file the agent delivered in `session_id` from outside the tenant root is
 /// served from the copy stored at delivery time under the caller's own
-/// profile root (`octos_bus::session_artifacts`). The copy existing is the
+/// profile root (`ra_bus::session_artifacts`). The copy existing is the
 /// proof the agent delivered exactly `request_path` in that session; the
 /// lookup never leaves `profile_root`, and the external file is never read.
 fn resolve_delivered_copy(
@@ -137,9 +137,9 @@ fn resolve_delivered_copy(
     if session_id.is_empty() || request_path.is_empty() {
         return None;
     }
-    let copy = octos_bus::session_artifacts::delivered_copy_path(
+    let copy = ra_bus::session_artifacts::delivered_copy_path(
         profile_root,
-        &octos_core::SessionKey(session_id.to_string()),
+        &ra_core::SessionKey(session_id.to_string()),
         request_path,
     );
     let canonical = std::fs::canonicalize(copy).ok()?;
@@ -173,7 +173,7 @@ fn resolve_session_workspace_root(
     if session_id.is_empty() {
         return None;
     }
-    let key = octos_core::SessionKey(session_id.to_string());
+    let key = ra_core::SessionKey(session_id.to_string());
     if let Some(ws) =
         crate::api::ui_protocol_transport::session_workspace_root_for_profile(profile_id, &key)
     {
@@ -185,7 +185,7 @@ fn resolve_session_workspace_root(
     if base.is_empty() || base.contains('/') || base.contains('\\') || base.contains("..") {
         return None;
     }
-    let encoded = octos_bus::session::encode_path_component(base);
+    let encoded = ra_bus::session::encode_path_component(base);
     Some(data_dir.join("users").join(encoded).join("workspace"))
 }
 
@@ -431,7 +431,7 @@ fn api_profile_id_from_headers_authorized(
 /// Returns `true` when `session_id` is a bare SPA id whose raw form is
 /// safe to query as a `SessionKey` directly. Specifically: no `:` (which
 /// is the channel/profile separator in
-/// [`octos_core::SessionKey`]) and no `#` (the topic separator).
+/// [`ra_core::SessionKey`]) and no `#` (the topic separator).
 ///
 /// Without this guard, `/api/sessions/{id}/messages?id=telegram:123`
 /// would walk the raw-id candidate and return that telegram session's
@@ -561,7 +561,7 @@ fn standalone_api_session_key_candidates_with_topic(
 }
 
 pub(crate) fn encode_api_session_path_id(id: &str) -> String {
-    octos_bus::session::encode_path_component(id)
+    ra_bus::session::encode_path_component(id)
 }
 
 /// Result entry shape for the WS `session/list` RPC method (formerly the
@@ -584,7 +584,7 @@ pub struct SessionInfo {
     /// Preview of the session's MOST RECENT user prompt, truncated (~100 bytes,
     /// UTF-8 safe). Sourced by scanning the tail of the session JSONL for the
     /// last user-role message (see
-    /// `octos_bus::SessionManager::list_top_level_sessions_with_meta`). Lets the
+    /// `ra_bus::SessionManager::list_top_level_sessions_with_meta`). Lets the
     /// `/resume` picker show what each session was about. None for sessions with
     /// no user message.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -927,7 +927,7 @@ fn list_profile_sessions(
     active_turns: &std::collections::HashSet<SessionKey>,
     effective_profile_id: &str,
 ) -> Vec<SessionInfo> {
-    let Ok(mgr) = octos_bus::SessionManager::open(profile_data_dir) else {
+    let Ok(mgr) = ra_bus::SessionManager::open(profile_data_dir) else {
         return Vec::new();
     };
     mgr.list_top_level_sessions_with_meta()
@@ -993,7 +993,7 @@ fn append_topic_query(path: &mut String, topic: Option<&str>) {
         } else {
             "?topic="
         });
-        path.push_str(&octos_bus::session::encode_path_component(topic));
+        path.push_str(&ra_bus::session::encode_path_component(topic));
     }
 }
 
@@ -1277,7 +1277,7 @@ pub async fn session_tasks(
 // ───────── M7.9 / W2 task supervisor: cancel + restart-from-node ─────────
 
 /// `POST /api/tasks/{task_id}/cancel` — forward to
-/// [`octos_agent::TaskSupervisor::cancel`]. Returns:
+/// [`ra_agent::TaskSupervisor::cancel`]. Returns:
 ///
 /// - `200 OK` `{ "task_id": "...", "status": "cancelled" }` when the
 ///   task was running/queued and has been transitioned to `Cancelled`.
@@ -1331,7 +1331,7 @@ pub async fn cancel_task(
             })),
         )
             .into_response(),
-        Err(octos_agent::TaskCancelError::NotFound) => (
+        Err(ra_agent::TaskCancelError::NotFound) => (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({
                 "error": "task_not_found",
@@ -1339,7 +1339,7 @@ pub async fn cancel_task(
             })),
         )
             .into_response(),
-        Err(octos_agent::TaskCancelError::AlreadyTerminal) => (
+        Err(ra_agent::TaskCancelError::AlreadyTerminal) => (
             StatusCode::CONFLICT,
             Json(serde_json::json!({
                 "error": "task_already_terminal",
@@ -1361,7 +1361,7 @@ pub struct RestartFromNodeRequest {
 }
 
 /// `POST /api/tasks/{task_id}/restart-from-node` — forward to
-/// [`octos_agent::TaskSupervisor::relaunch`]. Returns:
+/// [`ra_agent::TaskSupervisor::relaunch`]. Returns:
 ///
 /// - `200 OK` `{ "original_task_id": "...", "new_task_id": "...",
 ///   "from_node": "..." }` on accept.
@@ -1407,7 +1407,7 @@ pub async fn restart_task_from_node(
             .into_response();
     };
 
-    let opts = octos_agent::RelaunchOpts {
+    let opts = ra_agent::RelaunchOpts {
         from_node: body.node_id.clone(),
     };
     match store.relaunch_task(&task_id, opts) {
@@ -1420,7 +1420,7 @@ pub async fn restart_task_from_node(
             })),
         )
             .into_response(),
-        Err(octos_agent::TaskRelaunchError::NotFound) => (
+        Err(ra_agent::TaskRelaunchError::NotFound) => (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({
                 "error": "task_not_found",
@@ -1428,7 +1428,7 @@ pub async fn restart_task_from_node(
             })),
         )
             .into_response(),
-        Err(octos_agent::TaskRelaunchError::StillActive) => (
+        Err(ra_agent::TaskRelaunchError::StillActive) => (
             StatusCode::CONFLICT,
             Json(serde_json::json!({
                 "error": "task_still_active",
@@ -1575,7 +1575,7 @@ pub async fn session_workspace_contract(
         if !workspace.exists() {
             continue;
         }
-        let Ok(repos) = octos_agent::list_workspace_repos(&workspace) else {
+        let Ok(repos) = ra_agent::list_workspace_repos(&workspace) else {
             continue;
         };
         statuses.extend(repos.iter().map(inspect_workspace_contract));
@@ -2281,7 +2281,7 @@ pub async fn mutate_file(
         return (StatusCode::NOT_FOUND, "File not found in this profile.").into_response();
     };
     let root = if let Some(owner) = upload_tmpdir_tenant(&path) {
-        octos_bus::file_handle::temp_upload_root().join(owner)
+        ra_bus::file_handle::temp_upload_root().join(owner)
     } else {
         data_dir.clone()
     };
@@ -2526,7 +2526,7 @@ async fn read_profile_session_messages(
 ) -> Option<Vec<MessageInfo>> {
     let fetch_count = offset.checked_add(limit)?;
     let topic = topic.unwrap_or_default();
-    let mut mgr = octos_bus::SessionManager::open(profile_data_dir).ok()?;
+    let mut mgr = ra_bus::SessionManager::open(profile_data_dir).ok()?;
     let mut candidates: Vec<SessionKey> = Vec::with_capacity(2);
     if is_safe_bare_session_id(session_id) {
         if topic.is_empty() {
@@ -2570,7 +2570,7 @@ async fn read_profile_session_messages(
 /// subtree once joined as a raw path component.
 ///
 /// The other candidates in [`api_session_workspace_dirs`] percent-encode
-/// the id via [`octos_bus::session::encode_path_component`], so traversal
+/// the id via [`ra_bus::session::encode_path_component`], so traversal
 /// bytes (`/`, `\`, `..`, NUL, control chars) are neutralized. The
 /// SPA-bare candidate, however, joins the id verbatim so it lines up with
 /// what SPA writers (`slides-…`, `web-…`, `site-…`) put on disk — which
@@ -2612,7 +2612,7 @@ fn api_session_workspace_dirs(
         SessionKey::with_profile(MAIN_PROFILE_ID, "api", session_id),
         SessionKey::new("api", session_id),
     ] {
-        let encoded_base = octos_bus::session::encode_path_component(key.base_key());
+        let encoded_base = ra_bus::session::encode_path_component(key.base_key());
         let path = data_dir.join("users").join(encoded_base).join("workspace");
         if seen.insert(path.clone()) {
             dirs.push(path);
@@ -4088,7 +4088,7 @@ pub async fn status(State(state): State<Arc<AppState>>) -> Json<StatusResponse> 
     // `state.agent` was removed; report the canonical "_main" profile
     // when present, falling back to "none" so the dashboard can still
     // render an unconfigured-server placeholder.
-    let main_runtime = state.profiles.get(octos_core::MAIN_PROFILE_ID).cloned();
+    let main_runtime = state.profiles.get(ra_core::MAIN_PROFILE_ID).cloned();
     let (model, provider) = match &main_runtime {
         Some(rt) => (rt.primary_model_id.clone(), rt.provider_name.clone()),
         None => ("none".to_string(), "none".to_string()),
@@ -4824,13 +4824,13 @@ mod tests {
         let bare_key =
             SessionKey("slides-1779130130502-th18yr#slides untitled-deck-th18yr".to_string());
         {
-            let mut mgr = octos_bus::SessionManager::open(profile_data_dir).unwrap();
-            let mut user = octos_core::Message::user("hello");
+            let mut mgr = ra_bus::SessionManager::open(profile_data_dir).unwrap();
+            let mut user = ra_core::Message::user("hello");
             user.media = vec!["uploads/photo.png".to_string()];
             mgr.add_message(&bare_key, user).await.unwrap();
             // PR F (M8.10 thread-binding): assistant persists require a
             // caller-supplied thread_id.
-            let mut assistant = octos_core::Message::assistant("hi back");
+            let mut assistant = ra_core::Message::assistant("hi back");
             assistant.thread_id = Some("turn-1".to_string());
             mgr.add_message(&bare_key, assistant).await.unwrap();
         }
@@ -4874,14 +4874,14 @@ mod tests {
         //   • `web-303#child-task-1` — internal child fanout (MUST be
         //     filtered by `is_internal_api_session_id`)
         {
-            let mut mgr = octos_bus::SessionManager::open(profile_data_dir).unwrap();
+            let mut mgr = ra_bus::SessionManager::open(profile_data_dir).unwrap();
             mgr.add_message(
                 &SessionKey("web-101".to_string()),
-                octos_core::Message::user("hi from 101"),
+                ra_core::Message::user("hi from 101"),
             )
             .await
             .unwrap();
-            let mut a1 = octos_core::Message::assistant("hello from 101");
+            let mut a1 = ra_core::Message::assistant("hello from 101");
             a1.thread_id = Some("turn-101".to_string());
             mgr.add_message(&SessionKey("web-101".to_string()), a1)
                 .await
@@ -4889,7 +4889,7 @@ mod tests {
 
             mgr.add_message(
                 &SessionKey("web-202".to_string()),
-                octos_core::Message::user("hi from 202"),
+                ra_core::Message::user("hi from 202"),
             )
             .await
             .unwrap();
@@ -4897,7 +4897,7 @@ mod tests {
             // Child fanout that must NOT show up in the sidebar.
             mgr.add_message(
                 &SessionKey("web-303#child-task-1".to_string()),
-                octos_core::Message::user("child task body"),
+                ra_core::Message::user("child task body"),
             )
             .await
             .unwrap();
@@ -4942,15 +4942,15 @@ mod tests {
         let profile_data_dir = tmp.path();
 
         {
-            let mut mgr = octos_bus::SessionManager::open(profile_data_dir).unwrap();
+            let mut mgr = ra_bus::SessionManager::open(profile_data_dir).unwrap();
             // First user turn + assistant reply.
             mgr.add_message(
                 &SessionKey("web-501".to_string()),
-                octos_core::Message::user("first question"),
+                ra_core::Message::user("first question"),
             )
             .await
             .unwrap();
-            let mut a1 = octos_core::Message::assistant("first answer");
+            let mut a1 = ra_core::Message::assistant("first answer");
             a1.thread_id = Some("turn-1".to_string());
             mgr.add_message(&SessionKey("web-501".to_string()), a1)
                 .await
@@ -4958,7 +4958,7 @@ mod tests {
             // Second (most recent) user turn — this is the expected preview.
             mgr.add_message(
                 &SessionKey("web-501".to_string()),
-                octos_core::Message::user("second question"),
+                ra_core::Message::user("second question"),
             )
             .await
             .unwrap();
@@ -5019,16 +5019,16 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let profile_data_dir = tmp.path();
         {
-            let mut mgr = octos_bus::SessionManager::open(profile_data_dir).unwrap();
+            let mut mgr = ra_bus::SessionManager::open(profile_data_dir).unwrap();
             mgr.add_message(
                 &SessionKey("web-1779100000001-aa".to_string()),
-                octos_core::Message::user("dspfac chat 1"),
+                ra_core::Message::user("dspfac chat 1"),
             )
             .await
             .unwrap();
             mgr.add_message(
                 &SessionKey("web-1779100000002-bb".to_string()),
-                octos_core::Message::user("dspfac chat 2"),
+                ra_core::Message::user("dspfac chat 2"),
             )
             .await
             .unwrap();
@@ -5059,7 +5059,7 @@ mod tests {
     async fn list_sessions_admin_legacy_path_still_emits_session() {
         let data_dir = tempfile::tempdir().unwrap();
         let sessions = std::sync::Arc::new(tokio::sync::Mutex::new(
-            octos_bus::SessionManager::open(data_dir.path()).unwrap(),
+            ra_bus::SessionManager::open(data_dir.path()).unwrap(),
         ));
 
         // Persist a profiled-key session under the process-wide store
@@ -5126,7 +5126,7 @@ mod tests {
             .unwrap();
 
         {
-            let mut tenant_sessions = octos_bus::SessionManager::open(&tenant_data_dir).unwrap();
+            let mut tenant_sessions = ra_bus::SessionManager::open(&tenant_data_dir).unwrap();
             tenant_sessions
                 .add_message(
                     &SessionKey("web-own-profile".into()),
@@ -5138,7 +5138,7 @@ mod tests {
 
         let legacy_data_dir = tempfile::tempdir().unwrap();
         let legacy_sessions = Arc::new(tokio::sync::Mutex::new(
-            octos_bus::SessionManager::open(legacy_data_dir.path()).unwrap(),
+            ra_bus::SessionManager::open(legacy_data_dir.path()).unwrap(),
         ));
         {
             let mut sessions = legacy_sessions.lock().await;
@@ -5235,7 +5235,7 @@ mod tests {
         // Seed one chat session the way the WS / stdio turn handler writes
         // it (bare `web-<id>` key under the per-profile data dir).
         {
-            let mut mgr = octos_bus::SessionManager::open(&sessions_dir).unwrap();
+            let mut mgr = ra_bus::SessionManager::open(&sessions_dir).unwrap();
             mgr.add_message(
                 &SessionKey("web-solo-1".to_string()),
                 Message::user("hi from solo"),
@@ -5353,7 +5353,7 @@ mod tests {
         let data_dir = tempfile::tempdir().unwrap();
         let state = AppState {
             sessions: Some(Arc::new(tokio::sync::Mutex::new(
-                octos_bus::SessionManager::open(data_dir.path()).unwrap(),
+                ra_bus::SessionManager::open(data_dir.path()).unwrap(),
             ))),
             ..AppState::empty_for_tests()
         };
@@ -5402,7 +5402,7 @@ mod tests {
         let state = Arc::new(AppState {
             profile_store: Some(Arc::new(store)),
             sessions: Some(Arc::new(tokio::sync::Mutex::new(
-                octos_bus::SessionManager::open(global_data_dir.path()).unwrap(),
+                ra_bus::SessionManager::open(global_data_dir.path()).unwrap(),
             ))),
             ..AppState::empty_for_tests()
         });
@@ -5465,7 +5465,7 @@ mod tests {
         let data_dir = tempfile::tempdir().unwrap();
         let state = AppState {
             sessions: Some(Arc::new(tokio::sync::Mutex::new(
-                octos_bus::SessionManager::open(data_dir.path()).unwrap(),
+                ra_bus::SessionManager::open(data_dir.path()).unwrap(),
             ))),
             ..AppState::empty_for_tests()
         };
@@ -5505,7 +5505,7 @@ mod tests {
         std::fs::write(&file, b"png").unwrap();
         let raw = file.to_string_lossy().into_owned();
         let session = "dev:api:web-6acb";
-        let key = octos_core::SessionKey(session.to_string());
+        let key = ra_core::SessionKey(session.to_string());
         assert!(
             resolve_scoped_download_path(profile_root.path(), &raw, Some("dev"), None).is_none(),
             "precondition: the external file itself is refused"
@@ -5515,7 +5515,7 @@ mod tests {
             "nothing is served before the agent delivers it"
         );
 
-        octos_bus::session_artifacts::store_delivered_copies(
+        ra_bus::session_artifacts::store_delivered_copies(
             profile_root.path(),
             &key,
             std::slice::from_ref(&raw),
@@ -5557,7 +5557,7 @@ mod tests {
             Some(std::fs::canonicalize(ws.join("uploads/report.md")).unwrap())
         );
 
-        let handle = octos_bus::file_handle::encode_workspace_file_handle(
+        let handle = ra_bus::file_handle::encode_workspace_file_handle(
             &ws,
             &ws.join("uploads/report.md"),
         )
@@ -5584,12 +5584,12 @@ mod tests {
         // codex round-6 P1.2: a download for an upload-tmpdir file owned by
         // another tenant is refused; the owner gets it.
         let data = tempfile::tempdir().unwrap();
-        let upload_root = octos_bus::file_handle::temp_upload_root().join("tenant-b");
+        let upload_root = ra_bus::file_handle::temp_upload_root().join("tenant-b");
         std::fs::create_dir_all(&upload_root).unwrap();
         let f = upload_root.join(format!("u-{}-secret.md", std::process::id()));
         std::fs::write(&f, b"theirs").unwrap();
         let handle =
-            octos_bus::file_handle::encode_tmp_upload_handle(&f, Some("secret.md")).unwrap();
+            ra_bus::file_handle::encode_tmp_upload_handle(&f, Some("secret.md")).unwrap();
 
         // Requester is tenant-a → refused.
         assert!(
@@ -5618,7 +5618,7 @@ mod tests {
             "slides-xyz#deck-1",
         )
         .unwrap();
-        let expected_base = octos_bus::session::encode_path_component("slides-xyz");
+        let expected_base = ra_bus::session::encode_path_component("slides-xyz");
         assert_eq!(
             ws,
             data.path()
@@ -5924,7 +5924,7 @@ mod tests {
     async fn session_messages_falls_back_to_bare_channel_key_for_ws_persisted_sessions() {
         let data_dir = tempfile::tempdir().unwrap();
         let sessions = std::sync::Arc::new(tokio::sync::Mutex::new(
-            octos_bus::SessionManager::open(data_dir.path()).unwrap(),
+            ra_bus::SessionManager::open(data_dir.path()).unwrap(),
         ));
 
         // Persist under the bare-channel key — this is what `turn/start`
@@ -5939,7 +5939,7 @@ mod tests {
                 &bare_key,
                 Message::assistant_with_thread(
                     "on it",
-                    octos_core::ThreadId::new("thread-reload-mid-stream"),
+                    ra_core::ThreadId::new("thread-reload-mid-stream"),
                 ),
             )
             .await
@@ -5999,7 +5999,7 @@ mod tests {
     async fn session_messages_does_not_mix_candidate_histories_under_pagination() {
         let data_dir = tempfile::tempdir().unwrap();
         let sessions = std::sync::Arc::new(tokio::sync::Mutex::new(
-            octos_bus::SessionManager::open(data_dir.path()).unwrap(),
+            ra_bus::SessionManager::open(data_dir.path()).unwrap(),
         ));
 
         // The "real" session (under the canonical profiled key) has 2 rows.
@@ -6016,7 +6016,7 @@ mod tests {
                 &profiled_key,
                 Message::assistant_with_thread(
                     "page one reply",
-                    octos_core::ThreadId::new("thread-pagi-1"),
+                    ra_core::ThreadId::new("thread-pagi-1"),
                 ),
             )
             .await
@@ -6076,7 +6076,7 @@ mod tests {
     async fn session_messages_does_not_leak_cross_channel_history_via_crafted_id() {
         let data_dir = tempfile::tempdir().unwrap();
         let sessions = std::sync::Arc::new(tokio::sync::Mutex::new(
-            octos_bus::SessionManager::open(data_dir.path()).unwrap(),
+            ra_bus::SessionManager::open(data_dir.path()).unwrap(),
         ));
 
         // Persist a telegram-channel row under the canonical key shape
@@ -6139,7 +6139,7 @@ mod tests {
     async fn session_messages_falls_back_to_raw_id_for_bareless_session_keys() {
         let data_dir = tempfile::tempdir().unwrap();
         let sessions = std::sync::Arc::new(tokio::sync::Mutex::new(
-            octos_bus::SessionManager::open(data_dir.path()).unwrap(),
+            ra_bus::SessionManager::open(data_dir.path()).unwrap(),
         ));
 
         // Persist under the raw id (no `api:` prefix) — this is what the
@@ -6155,7 +6155,7 @@ mod tests {
                 &raw_key,
                 Message::assistant_with_thread(
                     "raw reply",
-                    octos_core::ThreadId::new("thread-raw"),
+                    ra_core::ThreadId::new("thread-raw"),
                 ),
             )
             .await
@@ -6201,7 +6201,7 @@ mod tests {
     async fn list_sessions_hides_internal_runtime_sessions_from_standalone_store() {
         let data_dir = tempfile::tempdir().unwrap();
         let sessions = std::sync::Arc::new(tokio::sync::Mutex::new(
-            octos_bus::SessionManager::open(data_dir.path()).unwrap(),
+            ra_bus::SessionManager::open(data_dir.path()).unwrap(),
         ));
         let parent = SessionKey::with_profile(MAIN_PROFILE_ID, "api", "web-123");
         let child = SessionKey::with_profile_topic(MAIN_PROFILE_ID, "api", "web-123", "child-1");
@@ -6282,7 +6282,7 @@ mod tests {
         }
 
         let sessions = std::sync::Arc::new(tokio::sync::Mutex::new(
-            octos_bus::SessionManager::open(data_dir.path()).unwrap(),
+            ra_bus::SessionManager::open(data_dir.path()).unwrap(),
         ));
         let state = std::sync::Arc::new(AppState {
             sessions: Some(sessions),
@@ -6323,7 +6323,7 @@ mod tests {
     async fn delete_session_accepts_listed_topic_session_id_from_standalone_store() {
         let data_dir = tempfile::tempdir().unwrap();
         let sessions = std::sync::Arc::new(tokio::sync::Mutex::new(
-            octos_bus::SessionManager::open(data_dir.path()).unwrap(),
+            ra_bus::SessionManager::open(data_dir.path()).unwrap(),
         ));
         let topic_key =
             SessionKey::with_profile_topic(MAIN_PROFILE_ID, "api", "web-topic", "research");
@@ -6348,7 +6348,7 @@ mod tests {
         .await;
 
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
-        let fresh = octos_bus::SessionManager::open(data_dir.path()).unwrap();
+        let fresh = ra_bus::SessionManager::open(data_dir.path()).unwrap();
         assert!(fresh.load(&topic_key).await.is_none());
     }
 
@@ -6362,11 +6362,11 @@ mod tests {
         use crate::api::ui_protocol_reasoning_effort::{
             read_reasoning_effort, reasoning_effort_path, write_reasoning_effort,
         };
-        use octos_core::ui_protocol::ReasoningEffortLevel;
+        use ra_core::ui_protocol::ReasoningEffortLevel;
 
         let data_dir = tempfile::tempdir().unwrap();
         let sessions = std::sync::Arc::new(tokio::sync::Mutex::new(
-            octos_bus::SessionManager::open(data_dir.path()).unwrap(),
+            ra_bus::SessionManager::open(data_dir.path()).unwrap(),
         ));
         let topic_key =
             SessionKey::with_profile_topic(MAIN_PROFILE_ID, "api", "web-topic", "research");
@@ -6424,11 +6424,11 @@ mod tests {
         use crate::api::ui_protocol_reasoning_effort::{
             read_reasoning_effort, reasoning_effort_path, write_reasoning_effort,
         };
-        use octos_core::ui_protocol::ReasoningEffortLevel;
+        use ra_core::ui_protocol::ReasoningEffortLevel;
 
         let data_dir = tempfile::tempdir().unwrap();
         let sessions = std::sync::Arc::new(tokio::sync::Mutex::new(
-            octos_bus::SessionManager::open(data_dir.path()).unwrap(),
+            ra_bus::SessionManager::open(data_dir.path()).unwrap(),
         ));
         let topic_key =
             SessionKey::with_profile_topic(MAIN_PROFILE_ID, "api", "web-topic", "research");
@@ -6517,7 +6517,7 @@ mod tests {
     // were retired with the legacy `POST /api/chat` handler in the
     // cleanup follow-up to PR #908. The canonical-JSONL invariant is
     // now covered end-to-end by the `coding_multi_session` integration
-    // test (which drives the same `octos_bus::persist_message_through_canonical_path`
+    // test (which drives the same `ra_bus::persist_message_through_canonical_path`
     // call site) and by the WS UI Protocol handler's own unit tests.
 
     // ────────── M7.9 / W2 cancel + restart-from-node API tests ──────────
@@ -6530,15 +6530,15 @@ mod tests {
         tool_call_id: &str,
     ) -> (
         crate::session_actor::SessionTaskQueryStore,
-        Arc<octos_agent::TaskSupervisor>,
+        Arc<ra_agent::TaskSupervisor>,
         String,
     ) {
-        let supervisor = Arc::new(octos_agent::TaskSupervisor::new());
+        let supervisor = Arc::new(ra_agent::TaskSupervisor::new());
         let task_id = supervisor.register(tool_name, tool_call_id, Some(session_key));
         supervisor.mark_running(&task_id);
         let store = crate::session_actor::SessionTaskQueryStore::default();
-        let encoded = octos_bus::session::encode_path_component(session_key);
-        let key = octos_core::SessionKey::new(MAIN_PROFILE_ID, &encoded);
+        let encoded = ra_bus::session::encode_path_component(session_key);
+        let key = ra_core::SessionKey::new(MAIN_PROFILE_ID, &encoded);
         let tmp = tempfile::tempdir().unwrap();
         store.register(&key, &supervisor, tmp.path());
         (store, supervisor, task_id)
@@ -6588,13 +6588,13 @@ mod tests {
 
     #[tokio::test]
     async fn cancel_task_returns_409_when_already_terminal() {
-        let supervisor = Arc::new(octos_agent::TaskSupervisor::new());
+        let supervisor = Arc::new(ra_agent::TaskSupervisor::new());
         let task_id = supervisor.register("run_pipeline", "call-409", Some("session"));
         supervisor.mark_completed(&task_id, vec![]);
 
         let store = crate::session_actor::SessionTaskQueryStore::default();
-        let encoded = octos_bus::session::encode_path_component("session");
-        let key = octos_core::SessionKey::new(MAIN_PROFILE_ID, &encoded);
+        let encoded = ra_bus::session::encode_path_component("session");
+        let key = ra_core::SessionKey::new(MAIN_PROFILE_ID, &encoded);
         let tmp = tempfile::tempdir().unwrap();
         store.register(&key, &supervisor, tmp.path());
 
@@ -6627,14 +6627,14 @@ mod tests {
 
     #[tokio::test]
     async fn restart_task_from_node_returns_200_with_new_task_id() {
-        let supervisor = Arc::new(octos_agent::TaskSupervisor::new());
+        let supervisor = Arc::new(ra_agent::TaskSupervisor::new());
         let task_id = supervisor.register("run_pipeline", "call-restart", Some("session"));
         supervisor.mark_running(&task_id);
         supervisor.mark_failed(&task_id, "design phase failed".to_string());
 
         let store = crate::session_actor::SessionTaskQueryStore::default();
-        let encoded = octos_bus::session::encode_path_component("session");
-        let key = octos_core::SessionKey::new(MAIN_PROFILE_ID, &encoded);
+        let encoded = ra_bus::session::encode_path_component("session");
+        let key = ra_core::SessionKey::new(MAIN_PROFILE_ID, &encoded);
         let tmp = tempfile::tempdir().unwrap();
         store.register(&key, &supervisor, tmp.path());
 
@@ -6668,7 +6668,7 @@ mod tests {
         // task being left intact in the supervisor — the relaunch only
         // adds a successor in the `Spawned` state.
         let original = supervisor.get_task(&task_id).unwrap();
-        assert_eq!(original.status, octos_agent::TaskStatus::Failed);
+        assert_eq!(original.status, ra_agent::TaskStatus::Failed);
         let new_id = json["new_task_id"].as_str().unwrap();
         let successor = supervisor.get_task(new_id).unwrap();
         assert_eq!(successor.tool_name, "run_pipeline");

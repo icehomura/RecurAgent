@@ -95,13 +95,13 @@ struct BarrierLlm {
 }
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for BarrierLlm {
+impl ra_llm::LlmProvider for BarrierLlm {
     async fn chat(
         &self,
-        messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
+        messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
         self.seen
             .lock()
             .await
@@ -113,12 +113,12 @@ impl octos_llm::LlmProvider for BarrierLlm {
             self.entered.notify_one();
             self.release.notified().await;
         }
-        Ok(octos_llm::ChatResponse {
+        Ok(ra_llm::ChatResponse {
             content: Some("done".to_string()),
             reasoning_content: None,
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage::default(),
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage::default(),
             provider_index: None,
         })
     }
@@ -186,7 +186,7 @@ async fn should_report_cancelled_when_session_cancel_arrives_during_turn() {
 
     let entered = Arc::new(tokio::sync::Notify::new());
     let release = Arc::new(tokio::sync::Notify::new());
-    let llm: Arc<dyn octos_llm::LlmProvider> = Arc::new(BarrierLlm {
+    let llm: Arc<dyn ra_llm::LlmProvider> = Arc::new(BarrierLlm {
         calls: std::sync::atomic::AtomicUsize::new(0),
         entered: entered.clone(),
         release: release.clone(),
@@ -282,7 +282,7 @@ async fn should_report_end_turn_for_fresh_prompt_after_prior_turn_was_cancelled(
     let entered = Arc::new(tokio::sync::Notify::new());
     let release = Arc::new(tokio::sync::Notify::new());
     let seen: Arc<Mutex<Vec<Vec<String>>>> = Arc::new(Mutex::new(Vec::new()));
-    let llm: Arc<dyn octos_llm::LlmProvider> = Arc::new(BarrierLlm {
+    let llm: Arc<dyn ra_llm::LlmProvider> = Arc::new(BarrierLlm {
         calls: std::sync::atomic::AtomicUsize::new(0),
         entered: entered.clone(),
         release: release.clone(),
@@ -414,7 +414,7 @@ async fn should_reject_a_concurrent_prompt_on_the_same_session() {
 
     let entered = Arc::new(tokio::sync::Notify::new());
     let release = Arc::new(tokio::sync::Notify::new());
-    let llm: Arc<dyn octos_llm::LlmProvider> = Arc::new(BarrierLlm {
+    let llm: Arc<dyn ra_llm::LlmProvider> = Arc::new(BarrierLlm {
         calls: std::sync::atomic::AtomicUsize::new(0),
         entered: entered.clone(),
         release: release.clone(),

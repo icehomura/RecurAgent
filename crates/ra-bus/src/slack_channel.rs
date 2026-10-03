@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use eyre::{Result, WrapErr};
 use futures::{SinkExt, StreamExt};
-use octos_core::{InboundMessage, OutboundMessage};
+use ra_core::{InboundMessage, OutboundMessage};
 use reqwest::Client;
 use serde::Deserialize;
 use tokio::sync::mpsc;
@@ -339,7 +339,7 @@ impl Channel for SlackChannel {
                         }
                     }),
                     message_id: None,
-                    origin: octos_core::MessageOrigin::ExternalUser,
+                    origin: ra_core::MessageOrigin::ExternalUser,
                 };
 
                 if inbound_tx.send(inbound).await.is_err() {

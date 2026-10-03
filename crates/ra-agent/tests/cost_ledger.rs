@@ -20,19 +20,19 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use octos_agent::cost_ledger::{
+use ra_agent::cost_ledger::{
     BudgetProjection, CostAccountant, CostAttributionEvent, CostBudgetPolicy, CostLedger,
     PersistentCostLedger,
 };
-use octos_agent::harness_events::{HarnessCostAttributionEvent, HarnessEvent, HarnessEventPayload};
-use octos_agent::tools::Tool;
-use octos_agent::tools::mcp_agent::{
+use ra_agent::harness_events::{HarnessCostAttributionEvent, HarnessEvent, HarnessEventPayload};
+use ra_agent::tools::Tool;
+use ra_agent::tools::mcp_agent::{
     DispatchOutcome, DispatchRequest, DispatchResponse, McpAgentBackend,
 };
-use octos_agent::{SpawnTool, abi_schema};
-use octos_core::InboundMessage;
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_agent::{SpawnTool, abi_schema};
+use ra_core::InboundMessage;
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 
 // ── Mock backend ───────────────────────────────────────────────────────────
 
@@ -77,7 +77,7 @@ struct NoopLlm;
 impl LlmProvider for NoopLlm {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
+        _messages: &[ra_core::Message],
         _tools: &[ToolSpec],
         _config: &ChatConfig,
     ) -> eyre::Result<ChatResponse> {

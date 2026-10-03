@@ -1010,8 +1010,8 @@ impl SessionScope {
 
 /// Canonicalise a path, walking ancestors when the leaf doesn't exist
 /// yet (writes targeting new files inside an existing directory).
-/// Mirrors `octos_agent::tools::canonicalize_lossy` (and
-/// `octos_bus::file_handle::canonicalize_lossy`). Re-exported here so
+/// Mirrors `ra_agent::tools::canonicalize_lossy` (and
+/// `ra_bus::file_handle::canonicalize_lossy`). Re-exported here so
 /// `SessionScope::classify_canonical_path` and the canonicalize-then-skip
 /// helper in the CLI can share one implementation.
 ///

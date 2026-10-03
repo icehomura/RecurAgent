@@ -12,14 +12,14 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use octos_agent::summarizer::{
+use ra_agent::summarizer::{
     DEFAULT_LLM_SUMMARIZER_FAILURE_THRESHOLD, LlmIterativeSummarizer, Summarizer,
 };
-use octos_core::{
+use ra_core::{
     DecisionRecord, FileRecord, Message, MessageRole, SESSION_SUMMARY_SCHEMA_VERSION,
     STALE_DECISION_PREFIX, SessionSummary,
 };
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
 
 fn user(content: &str) -> Message {
     Message {

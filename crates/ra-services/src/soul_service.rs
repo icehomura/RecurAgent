@@ -7,7 +7,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use octos_core::SessionKey;
+use ra_core::SessionKey;
 
 const SOUL_FILENAME: &str = "soul.md";
 
@@ -16,7 +16,7 @@ fn soul_path(data_dir: &Path) -> PathBuf {
 }
 
 fn session_soul_dir(data_dir: &Path, session_key: &SessionKey) -> PathBuf {
-    let encoded_base = octos_bus::session::encode_path_component(session_key.base_key());
+    let encoded_base = ra_bus::session::encode_path_component(session_key.base_key());
     data_dir.join("users").join(encoded_base)
 }
 

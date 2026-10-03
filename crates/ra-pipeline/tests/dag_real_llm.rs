@@ -13,10 +13,10 @@
 
 use std::sync::Arc;
 
-use octos_llm::LlmProvider;
-use octos_llm::openai::OpenAIProvider;
-use octos_memory::EpisodeStore;
-use octos_pipeline::executor::{ExecutorConfig, PipelineExecutor};
+use ra_llm::LlmProvider;
+use ra_llm::openai::OpenAIProvider;
+use ra_memory::EpisodeStore;
+use ra_pipeline::executor::{ExecutorConfig, PipelineExecutor};
 use tempfile::TempDir;
 
 const TOPIC: &str = "The economic and environmental impacts of urban vertical farming.";
@@ -59,13 +59,13 @@ async fn make_executor(dir: &TempDir, dag: bool) -> PipelineExecutor {
         max_pipeline_fanout_total: None,
         checkpoint_store: None,
         hook_executor: None,
-        workspace_context: octos_pipeline::context::PipelineContext::default(),
-        host_context: octos_pipeline::host_context::PipelineHostContext::default(),
+        workspace_context: ra_pipeline::context::PipelineContext::default(),
+        host_context: ra_pipeline::host_context::PipelineHostContext::default(),
         embedder: None,
         catalog_dir: None,
         // #1607: pipeline validators run under a no-op sandbox in tests
         // (host-independent — command validators run the argv directly).
-        sandbox: octos_agent::SandboxConfig::default(),
+        sandbox: ra_agent::SandboxConfig::default(),
     };
     PipelineExecutor::new(config).with_dag_scheduler(dag)
 }

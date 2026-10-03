@@ -39,7 +39,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use octos_core::ui_protocol::BackgroundActivityEvent;
+use ra_core::ui_protocol::BackgroundActivityEvent;
 
 /// The installed human sink. Sync + `Send + Sync` so any producer (a watcher
 /// task, the outbox consumer, a blocking-pool sweep) can call it directly.
@@ -225,7 +225,7 @@ pub(crate) fn emit_background_activity(mut event: BackgroundActivityEvent) {
             None => return,
         }
     };
-    octos_core::truncate_utf8(&mut event.text, BACKGROUND_ACTIVITY_TEXT_CAP, " [...]");
+    ra_core::truncate_utf8(&mut event.text, BACKGROUND_ACTIVITY_TEXT_CAP, " [...]");
     let decision = {
         let key = cap_key(&event);
         let mut budgets = budget_slot()
@@ -279,7 +279,7 @@ pub(crate) fn now_ms_for_activity() -> i64 {
 /// attribution already in place. Keeping construction here means no producer
 /// can forget `session_id` or ship an unattributed line.
 pub(crate) fn background_activity(
-    session_id: &octos_core::SessionKey,
+    session_id: &ra_core::SessionKey,
     profile_id: Option<&str>,
     origin_kind: &str,
     origin_id: &str,
@@ -310,7 +310,7 @@ pub(crate) const ORIGIN_KIND_FLEET: &str = "fleet";
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::SessionKey;
+    use ra_core::SessionKey;
 
     fn event_for(session: &str, origin: &str) -> BackgroundActivityEvent {
         background_activity(

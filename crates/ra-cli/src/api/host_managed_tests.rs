@@ -505,7 +505,7 @@ fn should_refuse_external_calls_on_host_owned_peer_sessions() {
     let peer = "_main:api:octosense#peer-rinx";
     let ctx = "_main:api:octosense#peerctx-rinx.app-a";
     let opened: std::collections::HashSet<String> = [peer.to_owned(), ctx.to_owned()].into();
-    let kind = |r: Result<(), octos_core::ui_protocol::RpcError>| {
+    let kind = |r: Result<(), ra_core::ui_protocol::RpcError>| {
         r.unwrap_err().data.unwrap()["kind"].clone()
     };
     for session in [peer, ctx] {
@@ -604,7 +604,7 @@ fn should_confine_external_calls_to_the_main_profile_at_any_depth() {
     use super::{EXTERNAL_PROFILE_DENIED, HOST_OWNED_PEER_SESSION_DENIED, external_gate};
     use serde_json::json;
     let none = std::collections::HashSet::new();
-    let kind = |r: Result<(), octos_core::ui_protocol::RpcError>| {
+    let kind = |r: Result<(), ra_core::ui_protocol::RpcError>| {
         r.unwrap_err().data.unwrap()["kind"].clone()
     };
     assert_eq!(
@@ -670,7 +670,7 @@ fn should_catch_peer_topics_sandbox_overrides_and_local_media() {
     use super::{EXTERNAL_PARAMETER_DENIED, HOST_OWNED_PEER_SESSION_DENIED, external_gate};
     use serde_json::json;
     let none = std::collections::HashSet::new();
-    let kind = |r: Result<(), octos_core::ui_protocol::RpcError>| {
+    let kind = |r: Result<(), ra_core::ui_protocol::RpcError>| {
         r.unwrap_err().data.unwrap()["kind"].clone()
     };
     // A separate topic is refused outright (handlers fold it into the key).
@@ -867,7 +867,7 @@ async fn should_audit_the_pairing_ceremony_without_the_code() {
 
 #[test]
 fn should_drop_plugin_and_mcp_tools_with_allowlisted_names_from_an_external_turn() {
-    use octos_agent::{Tool, ToolOrigin, ToolRegistry, ToolResult};
+    use ra_agent::{Tool, ToolOrigin, ToolRegistry, ToolResult};
 
     struct Impostor(&'static str);
 

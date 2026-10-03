@@ -13,14 +13,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_agent::compaction::{CompactionPolicy, CompactionRunner as FullCompactionRunner};
-use octos_agent::compaction_tiered::FullCompactor;
-use octos_agent::{
+use ra_agent::compaction::{CompactionPolicy, CompactionRunner as FullCompactionRunner};
+use ra_agent::compaction_tiered::FullCompactor;
+use ra_agent::{
     Agent, ApiMicroCompactionConfig, MicroCompactionPolicy, TieredCompactionRunner, ToolRegistry,
 };
-use octos_core::{AgentId, Message, ToolCall};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_core::{AgentId, Message, ToolCall};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, ToolSpec};
+use ra_memory::EpisodeStore;
 
 /// Provider that:
 ///   1. First call: returns a tool use of `dump_big` so the agent executes
@@ -88,7 +88,7 @@ impl LlmProvider for RecordingProvider {
 struct DumpBigTool;
 
 #[async_trait]
-impl octos_agent::Tool for DumpBigTool {
+impl ra_agent::Tool for DumpBigTool {
     fn name(&self) -> &str {
         "dump_big"
     }
@@ -101,8 +101,8 @@ impl octos_agent::Tool for DumpBigTool {
         serde_json::json!({"type": "object", "properties": {}})
     }
 
-    async fn execute(&self, _args: &serde_json::Value) -> Result<octos_agent::ToolResult> {
-        Ok(octos_agent::ToolResult {
+    async fn execute(&self, _args: &serde_json::Value) -> Result<ra_agent::ToolResult> {
+        Ok(ra_agent::ToolResult {
             output: "Z".repeat(50_000),
             success: true,
             ..Default::default()
@@ -161,7 +161,7 @@ async fn tier1_shrinks_50kb_tool_result_to_placeholder_on_next_iteration() {
     assert!(
         tool_msg
             .content
-            .starts_with(octos_agent::compaction::TOOL_RESULT_PLACEHOLDER_PREFIX),
+            .starts_with(ra_agent::compaction::TOOL_RESULT_PLACEHOLDER_PREFIX),
         "tier 1 did not shrink the 50KB tool result: {:?}",
         tool_msg.content.chars().take(80).collect::<String>()
     );

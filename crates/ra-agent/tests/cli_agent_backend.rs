@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use octos_agent::tools::mcp_agent::{
+use ra_agent::tools::mcp_agent::{
     CliAgentBackend, DispatchOutcome, DispatchRequest, McpAgentBackend, McpAgentBackendConfig,
     build_backend_from_config,
 };

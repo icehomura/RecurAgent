@@ -5,7 +5,7 @@
 //! [`WorkspacePolicy`] with `validation.on_completion` declaring the
 //! built `index.html` as a required artifact. When the session's
 //! working directory is initialised with `write_workspace_policy`,
-//! [`octos_pipeline::RunPipelineTool::build_workspace_context`] reads
+//! [`ra_pipeline::RunPipelineTool::build_workspace_context`] reads
 //! that policy on every `run_pipeline` invocation and propagates the
 //! validator block to the pipeline executor. Pipeline completion fails
 //! if the built site entrypoint is missing — no new opt-in needed.
@@ -13,8 +13,8 @@ use crate::workflow_runtime::workflow_families::SiteTemplate;
 use crate::workflow_runtime::{
     WorkflowInstance, WorkflowKind, WorkflowLimits, WorkflowPhase, WorkflowTerminalOutput,
 };
-use octos_agent::workspace_policy::WorkspacePolicyWorkspace;
-use octos_agent::{
+use ra_agent::workspace_policy::WorkspacePolicyWorkspace;
+use ra_agent::{
     ValidationPolicy, WorkspaceArtifactsPolicy, WorkspacePolicy, WorkspacePolicyKind,
     WorkspaceSnapshotTrigger, WorkspaceTrackingPolicy, WorkspaceVersionControlPolicy,
     WorkspaceVersionControlProvider,
@@ -32,7 +32,7 @@ pub fn build_output_dir_for_template(template: &str) -> &'static str {
 pub fn workspace_policy_for_template_kind(template: SiteTemplate) -> WorkspacePolicy {
     let build_output_dir = build_output_dir_for_template_kind(template);
     WorkspacePolicy {
-        schema_version: octos_agent::WORKSPACE_POLICY_SCHEMA_VERSION,
+        schema_version: ra_agent::WORKSPACE_POLICY_SCHEMA_VERSION,
         workspace: WorkspacePolicyWorkspace {
             kind: WorkspacePolicyKind::Sites,
         },

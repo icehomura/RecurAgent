@@ -36,7 +36,7 @@ use axum::Extension;
 use axum::body::Body;
 use axum::extract::ConnectInfo;
 use axum::http::{HeaderMap, HeaderValue, Request, StatusCode};
-use octos_cli::api::{
+use ra_cli::api::{
     AppState, TestAuthIdentity, TestSessionMessagesPaginationParams, build_router,
     test_session_files, test_session_messages, test_session_workspace_contract,
 };
@@ -71,9 +71,9 @@ fn with_connect_info(mut req: Request<Body>, addr: SocketAddr) -> Request<Body> 
 /// can grant sessions for these ids) and the X-Profile-Id branch in
 /// `is_authorized_for_profile` can resolve sub-account parentage.
 fn build_state(_dir: &TempDir, profiles: &[(&str, Option<&str>)]) -> Arc<AppState> {
-    let store = Arc::new(octos_cli::profiles::ProfileStore::open_unified(_dir.path()).unwrap());
+    let store = Arc::new(ra_cli::profiles::ProfileStore::open_unified(_dir.path()).unwrap());
     for (id, parent) in profiles {
-        let profile = octos_cli::profiles::UserProfile {
+        let profile = ra_cli::profiles::UserProfile {
             id: (*id).into(),
             name: (*id).into(),
             enabled: true,
@@ -101,13 +101,13 @@ fn build_state(_dir: &TempDir, profiles: &[(&str, Option<&str>)]) -> Arc<AppStat
 /// `(profile_id, parent_id)` matching the `build_state` helper.
 fn build_state_with_users(
     dir: &TempDir,
-    users: &[(&str, &str, octos_cli::user_store::UserRole)],
+    users: &[(&str, &str, ra_cli::user_store::UserRole)],
     profiles: &[(&str, Option<&str>)],
-) -> (Arc<AppState>, Arc<octos_cli::otp::AuthManager>) {
+) -> (Arc<AppState>, Arc<ra_cli::otp::AuthManager>) {
     let profile_store =
-        Arc::new(octos_cli::profiles::ProfileStore::open_unified(dir.path()).unwrap());
+        Arc::new(ra_cli::profiles::ProfileStore::open_unified(dir.path()).unwrap());
     for (id, parent) in profiles {
-        let profile = octos_cli::profiles::UserProfile {
+        let profile = ra_cli::profiles::UserProfile {
             id: (*id).into(),
             name: (*id).into(),
             enabled: true,
@@ -121,9 +121,9 @@ fn build_state_with_users(
         profile_store.save(&profile).unwrap();
     }
 
-    let user_store = Arc::new(octos_cli::user_store::UserStore::open(dir.path()).unwrap());
+    let user_store = Arc::new(ra_cli::user_store::UserStore::open(dir.path()).unwrap());
     for (id, email, role) in users {
-        let user = octos_cli::user_store::User {
+        let user = ra_cli::user_store::User {
             id: (*id).into(),
             email: (*email).into(),
             name: (*id).into(),
@@ -136,8 +136,8 @@ fn build_state_with_users(
 
     // Use a static token so we don't need an SMTP send round-trip to
     // mint a session.
-    let auth_config = octos_cli::otp::DashboardAuthConfig {
-        smtp: Some(octos_cli::otp::SmtpConfig {
+    let auth_config = ra_cli::otp::DashboardAuthConfig {
+        smtp: Some(ra_cli::otp::SmtpConfig {
             host: "unused".into(),
             port: 587,
             username: "unused@example.com".into(),
@@ -148,7 +148,7 @@ fn build_state_with_users(
         allow_self_registration: false,
         static_tokens: vec!["e2e-static-bypass".into()],
     };
-    let auth_manager = Arc::new(octos_cli::otp::AuthManager::new(
+    let auth_manager = Arc::new(ra_cli::otp::AuthManager::new(
         Some(auth_config),
         user_store.clone(),
     ));
@@ -166,7 +166,7 @@ fn build_state_with_users(
 /// Mint a session token for `email` via the configured static-token
 /// bypass. Panics if the static token is not configured on the auth
 /// manager (test setup bug).
-async fn mint_session_token(mgr: &octos_cli::otp::AuthManager, email: &str) -> String {
+async fn mint_session_token(mgr: &ra_cli::otp::AuthManager, email: &str) -> String {
     mgr.verify_otp_with_registration(email, "e2e-static-bypass", false)
         .await
         .expect("verify must succeed under static-token bypass")
@@ -425,12 +425,12 @@ async fn authenticated_non_admin_with_cross_tenant_header_on_trusted_hop_is_403(
             (
                 "alice",
                 "alice@example.com",
-                octos_cli::user_store::UserRole::User,
+                ra_cli::user_store::UserRole::User,
             ),
             (
                 "bob",
                 "bob@example.com",
-                octos_cli::user_store::UserRole::User,
+                ra_cli::user_store::UserRole::User,
             ),
         ],
         &[("alice", None), ("bob", None)],
@@ -529,12 +529,12 @@ async fn authenticated_non_admin_with_cross_tenant_header_on_external_hop_is_str
             (
                 "alice",
                 "alice@example.com",
-                octos_cli::user_store::UserRole::User,
+                ra_cli::user_store::UserRole::User,
             ),
             (
                 "bob",
                 "bob@example.com",
-                octos_cli::user_store::UserRole::User,
+                ra_cli::user_store::UserRole::User,
             ),
         ],
         &[("alice", None), ("bob", None)],
@@ -594,12 +594,12 @@ async fn ws_upgrade_with_cross_tenant_header_on_trusted_hop_is_403() {
             (
                 "alice",
                 "alice@example.com",
-                octos_cli::user_store::UserRole::User,
+                ra_cli::user_store::UserRole::User,
             ),
             (
                 "bob",
                 "bob@example.com",
-                octos_cli::user_store::UserRole::User,
+                ra_cli::user_store::UserRole::User,
             ),
         ],
         &[("alice", None), ("bob", None)],
@@ -651,9 +651,9 @@ async fn build_state_with_sessions_for_tenant_b(
     session_id: &str,
 ) -> Arc<AppState> {
     let profile_store =
-        Arc::new(octos_cli::profiles::ProfileStore::open_unified(dir.path()).unwrap());
+        Arc::new(ra_cli::profiles::ProfileStore::open_unified(dir.path()).unwrap());
     for (id, parent) in profiles {
-        let profile = octos_cli::profiles::UserProfile {
+        let profile = ra_cli::profiles::UserProfile {
             id: (*id).into(),
             name: (*id).into(),
             enabled: true,
@@ -669,7 +669,7 @@ async fn build_state_with_sessions_for_tenant_b(
 
     let sessions_dir = dir.path().join("sessions");
     std::fs::create_dir_all(&sessions_dir).unwrap();
-    let manager = octos_bus::SessionManager::open(&sessions_dir).unwrap();
+    let manager = ra_bus::SessionManager::open(&sessions_dir).unwrap();
     let sessions = Arc::new(tokio::sync::Mutex::new(manager));
 
     // Persist tenant B's marker message under the canonical profiled
@@ -677,9 +677,9 @@ async fn build_state_with_sessions_for_tenant_b(
     // dedicated scope so the lock drops before we hand the manager to
     // the AppState (the helper holds an exclusive lock during seed).
     {
-        let key = octos_core::SessionKey::with_profile(tenant_b_id, "api", session_id);
+        let key = ra_core::SessionKey::with_profile(tenant_b_id, "api", session_id);
         let mut sess = sessions.lock().await;
-        sess.add_message(&key, octos_core::Message::user(TENANT_B_MARKER))
+        sess.add_message(&key, ra_core::Message::user(TENANT_B_MARKER))
             .await
             .unwrap();
     }
@@ -730,7 +730,7 @@ async fn should_reject_session_messages_cross_tenant_header_on_trusted_hop() {
     // short-circuit on the admin-role branch.
     let identity = Some(Extension(TestAuthIdentity::User {
         id: "alice".into(),
-        role: octos_cli::user_store::UserRole::User,
+        role: ra_cli::user_store::UserRole::User,
     }));
 
     // The strip-middleware Layer 1 isn't relevant here (we're calling
@@ -890,15 +890,15 @@ async fn should_reject_session_files_list_cross_tenant() {
     // returns 403 before any filesystem walk runs. The plant is
     // best-effort; the contract under test is `status == 403`
     // regardless of whether the plant path is reachable.
-    let bare_key = octos_core::SessionKey::new("api", session_id);
-    let encoded = octos_bus::session::encode_path_component(bare_key.base_key());
+    let bare_key = ra_core::SessionKey::new("api", session_id);
+    let encoded = ra_bus::session::encode_path_component(bare_key.base_key());
     let workspace = dir.path().join("users").join(&encoded).join("workspace");
     std::fs::create_dir_all(&workspace).unwrap();
     std::fs::write(workspace.join("tenant-b-leak-marker.txt"), b"leak").unwrap();
 
     let identity = Some(Extension(TestAuthIdentity::User {
         id: "alice".into(),
-        role: octos_cli::user_store::UserRole::User,
+        role: ra_cli::user_store::UserRole::User,
     }));
 
     let mut headers = HeaderMap::new();
@@ -955,7 +955,7 @@ async fn should_reject_session_workspace_get_cross_tenant() {
 
     let identity = Some(Extension(TestAuthIdentity::User {
         id: "alice".into(),
-        role: octos_cli::user_store::UserRole::User,
+        role: ra_cli::user_store::UserRole::User,
     }));
 
     let mut headers = HeaderMap::new();

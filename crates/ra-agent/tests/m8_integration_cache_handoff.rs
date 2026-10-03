@@ -14,13 +14,13 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use octos_agent::{
+use ra_agent::{
     ApiMicroCompactionConfig, FileStateCache, MicroCompactionPolicy, TieredCompactionRunner,
     compaction::{CompactionOutcome, CompactionPhase},
     compaction_tiered::FullCompactor,
 };
-use octos_bus::ReplacementStateRef;
-use octos_core::Message;
+use ra_bus::ReplacementStateRef;
+use ra_core::Message;
 
 #[test]
 fn resume_sanitize_recovered_refs_seed_file_state_cache() {
@@ -102,7 +102,7 @@ async fn read_file_does_not_return_file_unchanged_across_compaction_boundary() {
     // Populate the cache, run tier-3 clear, then a read_file on the
     // same file must NOT hit [FILE_UNCHANGED] — the clear at the
     // boundary guarantees the stale identity does not survive.
-    use octos_agent::tools::{ReadFileTool, Tool, ToolContext};
+    use ra_agent::tools::{ReadFileTool, Tool, ToolContext};
     use tempfile::TempDir;
 
     let dir = TempDir::new().unwrap();

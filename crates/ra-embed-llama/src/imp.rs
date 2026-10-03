@@ -1,4 +1,4 @@
-//! [`LlamaEmbedder`] — the `octos_llm::EmbeddingProvider` implementation.
+//! [`LlamaEmbedder`] — the `ra_llm::EmbeddingProvider` implementation.
 
 use std::num::NonZeroU32;
 use std::path::Path;
@@ -11,7 +11,7 @@ use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::{AddBos, LlamaModel};
-use octos_llm::EmbeddingProvider;
+use ra_llm::EmbeddingProvider;
 
 use crate::prompt::{batch_plan, l2_normalize, mrl_truncate, with_prompt};
 

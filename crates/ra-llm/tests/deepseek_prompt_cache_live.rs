@@ -14,9 +14,9 @@
 //!   DEEPSEEK_API_KEY=... cargo test -p ra-llm --test deepseek_prompt_cache_live -- --ignored --nocapture
 
 use chrono::Utc;
-use octos_core::{Message, MessageRole};
-use octos_llm::openai::OpenAIProvider;
-use octos_llm::{ChatConfig, LlmProvider, ToolSpec};
+use ra_core::{Message, MessageRole};
+use ra_llm::openai::OpenAIProvider;
+use ra_llm::{ChatConfig, LlmProvider, ToolSpec};
 
 fn msg(role: MessageRole, content: impl Into<String>) -> Message {
     Message {

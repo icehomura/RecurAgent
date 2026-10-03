@@ -14,7 +14,7 @@ pub fn truncate_button_text(text: &str, max: usize) -> String {
 /// 2 buttons per row, active session marked with `>> name <<`.
 /// Caps at 50 sessions to stay within Telegram limits.
 pub fn build_session_keyboard(
-    entries: &[octos_bus::SessionListEntry],
+    entries: &[ra_bus::SessionListEntry],
     active_topic: &str,
 ) -> serde_json::Value {
     let cap = entries.len().min(50);
@@ -52,7 +52,7 @@ pub fn build_session_keyboard(
 /// Build a markdown-formatted listing of sessions.
 /// Uses markdown syntax so `markdown_to_telegram_html` converts it properly for Telegram,
 /// while other channels display it as readable plain text.
-pub fn build_session_text(entries: &[octos_bus::SessionListEntry], active_topic: &str) -> String {
+pub fn build_session_text(entries: &[ra_bus::SessionListEntry], active_topic: &str) -> String {
     if entries.is_empty() {
         return "No sessions yet. Send a message to start one.".to_string();
     }

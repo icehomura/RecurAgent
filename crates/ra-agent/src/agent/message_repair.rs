@@ -1,6 +1,6 @@
 //! Message normalization, ordering repair, and tool pair validation.
 
-use octos_core::{Message, MessageRole};
+use ra_core::{Message, MessageRole};
 
 /// Sanitize a tool_call_id to contain only characters accepted by all providers.
 /// Some models (e.g. Moonshot/kimi) generate IDs like "admin_view_sessions:11"
@@ -604,7 +604,7 @@ mod tests {
             tool_calls: Some(
                 tool_ids
                     .iter()
-                    .map(|id| octos_core::ToolCall {
+                    .map(|id| ra_core::ToolCall {
                         id: id.to_string(),
                         name: "test_tool".to_string(),
                         arguments: serde_json::json!({}),
@@ -1025,13 +1025,13 @@ mod tests {
                 content: String::new(),
                 media: vec![],
                 tool_calls: Some(vec![
-                    octos_core::ToolCall {
+                    ra_core::ToolCall {
                         id: "dup_id".to_string(),
                         name: "tool_a".to_string(),
                         arguments: serde_json::json!({}),
                         metadata: None,
                     },
-                    octos_core::ToolCall {
+                    ra_core::ToolCall {
                         id: "dup_id".to_string(),
                         name: "tool_b".to_string(),
                         arguments: serde_json::json!({}),

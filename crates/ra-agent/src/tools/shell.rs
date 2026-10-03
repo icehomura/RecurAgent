@@ -596,8 +596,8 @@ pub fn tree_sovereignty_denial(
     ctx: &MainTreeSovereigntyContext,
 ) -> Option<String> {
     // Main-tree scope only: a fenced peer's clone is a DIFFERENT directory.
-    let cwd = octos_core::session_scope::canonicalize_lossy(effective_cwd);
-    let root = octos_core::session_scope::canonicalize_lossy(&ctx.main_tree_root);
+    let cwd = ra_core::session_scope::canonicalize_lossy(effective_cwd);
+    let root = ra_core::session_scope::canonicalize_lossy(&ctx.main_tree_root);
     if cwd != root {
         return None;
     }
@@ -1261,7 +1261,7 @@ impl Tool for ShellTool {
                 // Truncate if too long (reserve space for exit code suffix)
                 let exit_suffix = format!("\n\nExit code: {exit_code}");
                 const MAX_OUTPUT: usize = 50000;
-                octos_core::truncate_utf8(
+                ra_core::truncate_utf8(
                     &mut result_text,
                     MAX_OUTPUT - exit_suffix.len(),
                     "\n... (output truncated)",
@@ -2031,7 +2031,7 @@ mod tests {
     // behaviour) when the host has not.
     // -----------------------------------------------------------------------
 
-    fn ctx_with_scope(scope: octos_core::SessionScope) -> ToolContext {
+    fn ctx_with_scope(scope: ra_core::SessionScope) -> ToolContext {
         let mut ctx = ToolContext::zero();
         ctx.tool_id = "shell-with-scope".to_string();
         ctx.session_scope = Some(Arc::new(scope));
@@ -2067,7 +2067,7 @@ mod tests {
         // Both scope and ShellTool are constructed with the same
         // workspace (the production wiring), so the migration takes
         // effect and the child process sees the scope workspace.
-        let scope = octos_core::SessionScope::solo(canonical_workspace.clone(), vec![])
+        let scope = ra_core::SessionScope::solo(canonical_workspace.clone(), vec![])
             .expect("scope construction");
         let tool = ShellTool::new(&canonical_workspace);
         let ctx = ctx_with_scope(scope);
@@ -2106,7 +2106,7 @@ mod tests {
             .expect("canonicalise default scope workspace");
         assert_ne!(canonical_hinted, canonical_default_scope);
 
-        let scope = octos_core::SessionScope::solo(canonical_default_scope.clone(), vec![])
+        let scope = ra_core::SessionScope::solo(canonical_default_scope.clone(), vec![])
             .expect("scope construction");
         // ShellTool is rebound to the HINTED workspace, while the
         // scope still points at the default — exactly the M11
@@ -2503,7 +2503,7 @@ mod tests {
         // changes (it now sees the scope workspace), but the denylist is
         // command-string only so the verdict is unchanged.
         let scope_dir = tempfile::tempdir().unwrap();
-        let scope = octos_core::SessionScope::solo(scope_dir.path().to_path_buf(), vec![])
+        let scope = ra_core::SessionScope::solo(scope_dir.path().to_path_buf(), vec![])
             .expect("scope construction");
         let tool = ShellTool::new(std::env::temp_dir());
         let ctx = ctx_with_scope(scope);
@@ -2643,7 +2643,7 @@ impl ChangeReceipt {
 pub(crate) fn snapshot_dirty_paths(cwd: &Path) -> Option<Vec<String>> {
     // The agent can write this repo's `.git/config`; never let it choose
     // what the kernel's own `git status` runs (fsmonitor, filters, hooks).
-    let out = octos_core::agent_repo_git::agent_repo_git(cwd)
+    let out = ra_core::agent_repo_git::agent_repo_git(cwd)
         .args([
             "--no-optional-locks",
             "status",

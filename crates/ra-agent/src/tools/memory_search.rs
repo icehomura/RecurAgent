@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
-use octos_llm::EmbeddingProvider;
-use octos_memory::{RecallStore, RecordKind, SearchFilter, Trust};
+use ra_llm::EmbeddingProvider;
+use ra_memory::{RecallStore, RecordKind, SearchFilter, Trust};
 use serde::Deserialize;
 
 use super::{Tool, ToolResult};
@@ -60,7 +60,7 @@ pub(crate) fn parse_when(s: &str, end_of_day: bool) -> Result<chrono::DateTime<c
 
 /// Render hits for the model: compact, one record per entry, with the
 /// trust label so untrusted app content is never mistaken for guidance.
-pub(crate) fn render_hits(query: &str, hits: &[octos_memory::Hit], sources: &[String]) -> String {
+pub(crate) fn render_hits(query: &str, hits: &[ra_memory::Hit], sources: &[String]) -> String {
     let mut out = String::new();
     if hits.is_empty() {
         out.push_str(&format!(
@@ -206,7 +206,7 @@ impl Tool for MemorySearchTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_memory::{RecallConfig, Record};
+    use ra_memory::{RecallConfig, Record};
 
     fn store() -> Arc<RecallStore> {
         let dir = tempfile::tempdir().unwrap();
@@ -228,7 +228,7 @@ mod tests {
             "Meet at the trailhead at 9",
         );
         mail.fingerprint = "a".into();
-        let page = octos_memory::record_from_bank_page(
+        let page = ra_memory::record_from_bank_page(
             "sam-lee",
             "Sam Lee, hiking friend",
             chrono::Utc::now(),

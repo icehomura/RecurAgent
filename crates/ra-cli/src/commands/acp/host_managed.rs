@@ -12,16 +12,16 @@ use agent_client_protocol::{
     on_receive_request,
 };
 use eyre::Result;
-use octos_agent::{
+use ra_agent::{
     Agent, AgentConfig, ConversationResponse, IncompleteResponseError, ProgressEvent,
     ProgressReporter, Tool, ToolRegistry, ToolResult,
 };
-use octos_core::{AgentId, Message, MessageRole};
-use octos_llm::host::{
+use ra_core::{AgentId, Message, MessageRole};
+use ra_llm::host::{
     self, HostConfig, ModelRequest, ToolCallRequest, ToolCallResponse, ToolsListResponse,
 };
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, ToolSpec};
+use ra_memory::EpisodeStore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -216,7 +216,7 @@ struct HostProvider {
 impl LlmProvider for HostProvider {
     async fn chat(
         &self,
-        messages: &[octos_core::Message],
+        messages: &[ra_core::Message],
         tools: &[ToolSpec],
         config: &ChatConfig,
     ) -> Result<ChatResponse> {
@@ -233,10 +233,10 @@ impl LlmProvider for HostProvider {
 
     async fn chat_stream(
         &self,
-        messages: &[octos_core::Message],
+        messages: &[ra_core::Message],
         tools: &[ToolSpec],
         config: &ChatConfig,
-    ) -> Result<octos_llm::ChatStream> {
+    ) -> Result<ra_llm::ChatStream> {
         Ok(host::response_stream(
             self.chat(messages, tools, config).await?,
         ))
@@ -878,7 +878,7 @@ mod tests {
     use super::*;
     use agent_client_protocol::schema::ProtocolVersion;
     use agent_client_protocol::schema::v1::{ClientCapabilities, TextContent};
-    use octos_core::MessageRole;
+    use ra_core::MessageRole;
     use std::path::PathBuf;
     use std::sync::atomic::AtomicUsize;
 
@@ -925,7 +925,7 @@ mod tests {
             content: Some(content.into()),
             reasoning_content: None,
             tool_calls: Vec::new(),
-            stop_reason: octos_llm::StopReason::EndTurn,
+            stop_reason: ra_llm::StopReason::EndTurn,
             usage: Default::default(),
             provider_index: None,
         }
@@ -1068,13 +1068,13 @@ mod tests {
                     let mut result = response("done");
                     if index == 0 {
                         assert_eq!(req.0.tools[0].name, "echo");
-                        result.tool_calls.push(octos_core::ToolCall {
+                        result.tool_calls.push(ra_core::ToolCall {
                             id: "call-1".into(),
                             name: "echo".into(),
                             arguments: serde_json::json!({"text":"private tool input"}),
                             metadata: None,
                         });
-                        result.stop_reason = octos_llm::StopReason::ToolUse;
+                        result.stop_reason = ra_llm::StopReason::ToolUse;
                     } else if index == 1 {
                         assert!(
                             req.0
@@ -1532,7 +1532,7 @@ mod tests {
                 async move |req: ModelCall, responder, _cx: ConnectionTo<AcpAgentRole>| {
                     let mut result = response("partial answer");
                     if model_calls.fetch_add(1, Ordering::AcqRel) == 0 {
-                        result.stop_reason = octos_llm::StopReason::MaxTokens;
+                        result.stop_reason = ra_llm::StopReason::MaxTokens;
                     } else {
                         assert!(
                             req.0

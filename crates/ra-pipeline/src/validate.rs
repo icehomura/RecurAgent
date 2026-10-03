@@ -348,7 +348,7 @@ pub fn known_tool_names_with_plugins(
     plugin_require_signed: bool,
     referenced_tools: &[String],
 ) -> Vec<String> {
-    let builtins = octos_agent::ToolRegistry::with_builtins(working_dir).tool_names();
+    let builtins = ra_agent::ToolRegistry::with_builtins(working_dir).tool_names();
     if plugin_dirs.is_empty() {
         return builtins;
     }
@@ -375,12 +375,12 @@ pub fn known_tool_names_with_plugins(
     }
     // Real load = ground truth (signing-aware, skips broken installs), so
     // Rule 19 matches what the executor's plugin cache will register.
-    let mut registry = octos_agent::ToolRegistry::with_builtins(working_dir);
-    let _ = octos_agent::PluginLoader::load_into_with_options(
+    let mut registry = ra_agent::ToolRegistry::with_builtins(working_dir);
+    let _ = ra_agent::PluginLoader::load_into_with_options(
         &mut registry,
         plugin_dirs,
         &[],
-        octos_agent::PluginLoadOptions {
+        ra_agent::PluginLoadOptions {
             work_dir: None,
             synthesis_config: None,
             require_signed: plugin_require_signed,
@@ -1074,7 +1074,7 @@ fn tool_policy_entry_known(entry: &str, context: &ValidationContext) -> bool {
         return false;
     }
     if entry.starts_with("group:") {
-        return octos_agent::tools::policy::tool_group_info(entry).is_some();
+        return ra_agent::tools::policy::tool_group_info(entry).is_some();
     }
     if let Some(prefix) = entry.strip_suffix('*') {
         return context
@@ -1359,7 +1359,7 @@ fn default_known_tools() -> BTreeSet<String> {
     .into_iter()
     .map(str::to_string)
     .collect();
-    for group in octos_agent::tools::policy::TOOL_GROUPS {
+    for group in ra_agent::tools::policy::TOOL_GROUPS {
         tools.extend(group.tools.iter().map(|tool| (*tool).to_string()));
     }
     tools

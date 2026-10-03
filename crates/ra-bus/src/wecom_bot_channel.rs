@@ -14,7 +14,7 @@ use chrono::Utc;
 use eyre::{Result, WrapErr, bail};
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
-use octos_core::{InboundMessage, OutboundMessage};
+use ra_core::{InboundMessage, OutboundMessage};
 use serde_json::{Value, json};
 use tokio::sync::{Mutex, mpsc};
 use tokio_tungstenite::tungstenite::Message as WsMessage;
@@ -216,7 +216,7 @@ impl WeComBotChannel {
                 }
             }),
             message_id: Some(msg_id.to_string()),
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         })
     }
 

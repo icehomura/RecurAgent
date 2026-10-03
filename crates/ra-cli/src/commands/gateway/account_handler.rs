@@ -344,12 +344,12 @@ fn handle_account_update(
             }
             "sandbox-mode" => {
                 profile.config.sandbox.mode = match val {
-                    "auto" => octos_agent::SandboxMode::Auto,
-                    "macos" => octos_agent::SandboxMode::Macos,
-                    "docker" => octos_agent::SandboxMode::Docker,
-                    "bwrap" => octos_agent::SandboxMode::Bwrap,
-                    "landlock" => octos_agent::SandboxMode::Landlock,
-                    "appcontainer" => octos_agent::SandboxMode::AppContainer,
+                    "auto" => ra_agent::SandboxMode::Auto,
+                    "macos" => ra_agent::SandboxMode::Macos,
+                    "docker" => ra_agent::SandboxMode::Docker,
+                    "bwrap" => ra_agent::SandboxMode::Bwrap,
+                    "landlock" => ra_agent::SandboxMode::Landlock,
+                    "appcontainer" => ra_agent::SandboxMode::AppContainer,
                     _ => {
                         return format!(
                             "Invalid sandbox mode: {val}\nValid modes: auto, macos, docker, bwrap, landlock, appcontainer"
@@ -454,7 +454,7 @@ mod tests {
         let updated = store.get(&sub_id).expect("load sub").expect("sub exists");
         assert_eq!(
             updated.config.sandbox.mode,
-            octos_agent::SandboxMode::AppContainer
+            ra_agent::SandboxMode::AppContainer
         );
         assert!(updated.config.sandbox.enabled);
     }
@@ -479,7 +479,7 @@ mod tests {
         let updated = store.get(&sub_id).expect("load sub").expect("sub exists");
         assert_eq!(
             updated.config.sandbox.mode,
-            octos_agent::SandboxMode::Landlock
+            ra_agent::SandboxMode::Landlock
         );
         assert!(updated.config.sandbox.enabled);
     }

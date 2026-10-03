@@ -5,7 +5,7 @@ use async_trait::async_trait;
 /// JSONL line" loop. NOT a latency assertion: the loop breaks on content the
 /// instant the line appears, so a generous ceiling costs a passing run
 /// nothing, and a broken run (hook never fires) still fails — just later.
-/// Mirrors `octos_agent`'s `spawn_tests::BACKGROUND_DEADLINE`.
+/// Mirrors `ra_agent`'s `spawn_tests::BACKGROUND_DEADLINE`.
 const HOOK_DEADLINE: Duration = Duration::from_secs(60);
 
 /// #2053 — scale a test's WAITING budget on Windows, where the runners
@@ -30,16 +30,16 @@ fn waiting_budget(base: Duration) -> Duration {
     }
 }
 #[cfg(unix)]
-use octos_agent::{HookConfig, HookEvent};
-use octos_llm::{AdaptiveConfig, ChatConfig, ChatResponse, StopReason, TokenUsage, ToolSpec};
+use ra_agent::{HookConfig, HookEvent};
+use ra_llm::{AdaptiveConfig, ChatConfig, ChatResponse, StopReason, TokenUsage, ToolSpec};
 use std::sync::atomic::AtomicUsize;
 
 fn test_context_manager(key: &SessionKey) -> Arc<StdMutex<ContextManager>> {
     Arc::new(StdMutex::new(context_manager_from_history(key, &[])))
 }
 
-fn inbound_with(metadata: serde_json::Value, media: Vec<String>) -> octos_core::InboundMessage {
-    octos_core::InboundMessage {
+fn inbound_with(metadata: serde_json::Value, media: Vec<String>) -> ra_core::InboundMessage {
+    ra_core::InboundMessage {
         channel: "appui".into(),
         sender_id: "user".into(),
         chat_id: "c".into(),
@@ -48,7 +48,7 @@ fn inbound_with(metadata: serde_json::Value, media: Vec<String>) -> octos_core::
         media,
         metadata,
         message_id: None,
-        origin: octos_core::MessageOrigin::ExternalUser,
+        origin: ra_core::MessageOrigin::ExternalUser,
     }
 }
 
@@ -132,7 +132,7 @@ fn turn_ledger_sidecar_uses_session_hash_jsonl_name() {
 /// breaking a test the M17-B audit relies on.
 #[tokio::test]
 async fn delegate_tool_factory_routes_child_through_session_actor_context_manager() {
-    use octos_agent::tools::Tool;
+    use ra_agent::tools::Tool;
 
     let session_key = SessionKey::new("api", "delegate-factory-test");
     let parent_manager = test_context_manager(&session_key);
@@ -169,9 +169,9 @@ async fn delegate_tool_factory_routes_child_through_session_actor_context_manage
             .unwrap(),
     );
 
-    let tool = octos_agent::DelegateTool::new(llm, memory, work_dir.path().to_path_buf())
+    let tool = ra_agent::DelegateTool::new(llm, memory, work_dir.path().to_path_buf())
         .with_task_supervisor(
-            Arc::new(octos_agent::TaskSupervisor::new()),
+            Arc::new(ra_agent::TaskSupervisor::new()),
             session_key.to_string(),
         )
         .with_child_prompt_context_manager_factory(factory);
@@ -592,8 +592,8 @@ fn session_actor_child_context_factory_honours_explicit_child_session_key() {
 #[tokio::test]
 async fn spawn_child_context_fork_uses_pre_spawn_parent_snapshot() {
     use crate::context_manager::TranscriptItemKind;
-    use octos_agent::tools::Tool;
-    use octos_agent::tools::spawn::{ChildSessionLifecyclePayload, ChildSessionLifecycleSender};
+    use ra_agent::tools::Tool;
+    use ra_agent::tools::spawn::{ChildSessionLifecyclePayload, ChildSessionLifecycleSender};
 
     const PRE_SPAWN_CONTENT: &str = "pre-spawn user turn that triggered spawn";
     const POST_SPAWN_CONTENT: &str = "POST-SPAWN user message that MUST NOT leak";
@@ -616,7 +616,7 @@ async fn spawn_child_context_fork_uses_pre_spawn_parent_snapshot() {
     let parent_arc_for_factory = parent_arc.clone();
     let parent_session_key_for_factory = parent_session_key.clone();
     let data_dir_for_factory = data_dir.path().to_path_buf();
-    let factory: octos_agent::tools::spawn::ChildPromptContextManagerFactory =
+    let factory: ra_agent::tools::spawn::ChildPromptContextManagerFactory =
         Arc::new(move |request: ChildPromptContextRequest| {
             let (child_session_key, child_manager) = build_forked_child_context_for_session_actor(
                 &parent_arc_for_factory,
@@ -1022,7 +1022,7 @@ fn raw_tasks_for_session_returns_live_supervisor_tasks() {
     assert_eq!(task.id, task_id);
     assert_eq!(task.tool_name, "run_pipeline");
     assert_eq!(task.tool_call_id, "call-1");
-    assert_eq!(task.status, octos_agent::TaskStatus::Running);
+    assert_eq!(task.status, ra_agent::TaskStatus::Running);
     assert_eq!(returned_data_dir, &data_dir);
 
     // An unknown session has no live supervisor → empty replay.
@@ -1189,7 +1189,7 @@ fn store_reconciles_stale_cross_turn_copy_from_ledger() {
     let raw = store.raw_tasks_for_session(&session_key.to_string());
     assert!(
         !raw.iter()
-            .any(|(task, _)| task.id == t1 && task.status == octos_agent::TaskStatus::Running),
+            .any(|(task, _)| task.id == t1 && task.status == ra_agent::TaskStatus::Running),
         "t1's stale running copy must not surface after its owner completed it"
     );
     assert!(
@@ -1215,7 +1215,7 @@ fn store_reconciles_stale_cross_turn_copy_from_ledger() {
     // acting on sup2's stale running copy.
     assert!(matches!(
         store.cancel_task(&t1),
-        Err(octos_agent::TaskCancelError::AlreadyTerminal)
+        Err(ra_agent::TaskCancelError::AlreadyTerminal)
     ));
 }
 
@@ -1291,7 +1291,7 @@ fn session_task_query_store_hides_absolute_output_paths() {
     supervisor.mark_running(&task_id);
     supervisor.mark_runtime_state(
         &task_id,
-        octos_agent::TaskRuntimeState::DeliveringOutputs,
+        ra_agent::TaskRuntimeState::DeliveringOutputs,
         Some("send_file".to_string()),
     );
     supervisor.mark_completed(&task_id, vec![output.to_string_lossy().to_string()]);
@@ -1343,7 +1343,7 @@ fn session_task_query_store_exposes_parsed_workflow_runtime_detail() {
     supervisor.mark_running(&task_id);
     supervisor.mark_runtime_state(
         &task_id,
-        octos_agent::TaskRuntimeState::DeliveringOutputs,
+        ra_agent::TaskRuntimeState::DeliveringOutputs,
         Some(
             serde_json::json!({
                 "workflow_kind": "research_podcast",
@@ -1355,8 +1355,8 @@ fn session_task_query_store_exposes_parsed_workflow_runtime_detail() {
     supervisor.mark_completed(&task_id, vec![]);
     supervisor.mark_child_session_outcome(
         &task_id,
-        octos_agent::task_supervisor::ChildSessionTerminalState::Completed,
-        octos_agent::task_supervisor::ChildSessionJoinState::Joined,
+        ra_agent::task_supervisor::ChildSessionTerminalState::Completed,
+        ra_agent::task_supervisor::ChildSessionJoinState::Joined,
     );
 
     let store = SessionTaskQueryStore::default();
@@ -1398,7 +1398,7 @@ fn session_task_query_store_exposes_harness_progress_runtime_detail() {
         Some(task_ledger_path.to_str().unwrap()),
     );
     supervisor.mark_running(&task_id);
-    let event = octos_agent::HarnessEvent::progress(
+    let event = ra_agent::HarnessEvent::progress(
         "api:session",
         task_id.clone(),
         Some("deep_research"),
@@ -1422,7 +1422,7 @@ fn session_task_query_store_exposes_harness_progress_runtime_detail() {
     assert_eq!(tasks[0]["runtime_detail"]["session_id"], "api:session");
     assert_eq!(
         tasks[0]["runtime_detail"]["schema_version"],
-        serde_json::json!(octos_agent::abi_schema::HARNESS_PROGRESS_EVENT_SCHEMA_VERSION)
+        serde_json::json!(ra_agent::abi_schema::HARNESS_PROGRESS_EVENT_SCHEMA_VERSION)
     );
     assert_eq!(tasks[0]["runtime_detail"]["task_id"], task_id);
     assert_eq!(
@@ -1449,7 +1449,7 @@ fn session_task_query_store_projects_verifying_lifecycle_state() {
     supervisor.mark_running(&task_id);
     supervisor.mark_runtime_state(
         &task_id,
-        octos_agent::TaskRuntimeState::VerifyingOutputs,
+        ra_agent::TaskRuntimeState::VerifyingOutputs,
         Some(
             serde_json::json!({
                 "workflow_kind": "site",
@@ -1539,7 +1539,7 @@ fn mark_child_session_failed_marks_owning_task_when_supervisor_registered() {
     let updated = supervisor.get_task(&task_id).expect("task still tracked");
     assert_eq!(
         updated.status,
-        octos_agent::TaskStatus::Failed,
+        ra_agent::TaskStatus::Failed,
         "WorktreeMissing on a child session must mark the parent task failed"
     );
     assert!(
@@ -1864,8 +1864,8 @@ impl LlmProvider for StreamingMockProvider {
         // `try_with` fails open when no reporter is scoped (e.g. when
         // called outside the overflow's TASK_REPORTER scope).
         if !stream_chunk.is_empty() {
-            if let Ok(reporter) = octos_agent::TASK_REPORTER.try_with(|r| r.clone()) {
-                reporter.report(octos_agent::ProgressEvent::StreamChunk {
+            if let Ok(reporter) = ra_agent::TASK_REPORTER.try_with(|r| r.clone()) {
+                reporter.report(ra_agent::ProgressEvent::StreamChunk {
                     text: stream_chunk,
                     iteration: 1,
                 });
@@ -1913,7 +1913,7 @@ impl FakeSseChannel {
 }
 
 #[async_trait]
-impl octos_bus::Channel for FakeSseChannel {
+impl ra_bus::Channel for FakeSseChannel {
     fn name(&self) -> &str {
         &self.name
     }
@@ -2018,7 +2018,7 @@ fn make_inbound(content: &str) -> ActorMessage {
             media: vec![],
             metadata: serde_json::json!({}),
             message_id: None,
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         },
         image_media: vec![],
         attachment_media: vec![],
@@ -2037,7 +2037,7 @@ fn make_attachment_inbound(summary: &str, attachment_path: &str) -> ActorMessage
             media: vec![],
             metadata: serde_json::json!({}),
             message_id: None,
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         },
         image_media: vec![],
         attachment_media: vec![attachment_path.to_string()],
@@ -2087,7 +2087,7 @@ async fn setup_actor_with_mode(
         SessionManager::open(&dir.path().join("sessions")).unwrap(),
     ));
     let memory = Arc::new(EpisodeStore::open(dir.path().join("memory")).await.unwrap());
-    let tools = octos_agent::ToolRegistry::with_builtins(dir.path());
+    let tools = ra_agent::ToolRegistry::with_builtins(dir.path());
 
     let agent = Agent::new(AgentId::new("test-mode"), agent_provider, tools, memory).with_config(
         AgentConfig {
@@ -2173,7 +2173,7 @@ async fn build_unspawned_actor(
     usage_ledger: Option<Arc<PersistentUsageLedger>>,
 ) -> SessionActor {
     let memory = Arc::new(EpisodeStore::open(dir.path().join("memory")).await.unwrap());
-    let tools = octos_agent::ToolRegistry::with_builtins(dir.path());
+    let tools = ra_agent::ToolRegistry::with_builtins(dir.path());
     let provider: Arc<dyn LlmProvider> =
         Arc::new(ErrorMockProvider::new("unused-mock", "never called"));
     let agent =
@@ -2247,12 +2247,12 @@ fn conversation_response_with_usage(
     ConversationResponse {
         content: "done".to_string(),
         reasoning_content: None,
-        provider_metadata: Some(octos_llm::ProviderMetadata::new(
+        provider_metadata: Some(ra_llm::ProviderMetadata::new(
             "test-provider",
             model,
             None,
         )),
-        token_usage: octos_core::TokenUsage {
+        token_usage: ra_core::TokenUsage {
             input_tokens,
             output_tokens,
             ..Default::default()
@@ -2382,7 +2382,7 @@ async fn setup_actor_with_timeout(
         SessionManager::open(&dir.path().join("sessions")).unwrap(),
     ));
     let memory = Arc::new(EpisodeStore::open(dir.path().join("memory")).await.unwrap());
-    let tools = octos_agent::ToolRegistry::with_builtins(dir.path());
+    let tools = ra_agent::ToolRegistry::with_builtins(dir.path());
 
     let agent = Agent::new(AgentId::new("test-timeout"), agent_provider, tools, memory)
         .with_config(AgentConfig {
@@ -2781,7 +2781,7 @@ async fn test_session_actor_emits_resume_and_turn_end_hooks() {
         capture_hook(HookEvent::OnTurnEnd, &hook_log),
     ]));
     let memory = Arc::new(EpisodeStore::open(dir.path().join("memory")).await.unwrap());
-    let tools = octos_agent::ToolRegistry::with_builtins(dir.path());
+    let tools = ra_agent::ToolRegistry::with_builtins(dir.path());
     let agent = Agent::new(
         AgentId::new("test-hooks"),
         Arc::new(DelayedMockProvider::new(
@@ -2910,8 +2910,8 @@ async fn test_forced_background_turn_emits_turn_end_hook() {
     let (spawn_tx, _spawn_rx) = mpsc::channel::<InboundMessage>(32);
     let (out_tx, mut out_rx) = mpsc::channel(64);
 
-    let mut tools = octos_agent::ToolRegistry::with_builtins(dir.path());
-    tools.register(octos_agent::SpawnTool::new(
+    let mut tools = ra_agent::ToolRegistry::with_builtins(dir.path());
+    tools.register(ra_agent::SpawnTool::new(
         Arc::new(DelayedMockProvider::new(
             "forced-background-worker",
             vec![(Duration::ZERO, make_response("background complete"))],
@@ -3038,16 +3038,16 @@ async fn setup_actor_for_cron_regression(
     mpsc::Sender<ActorMessage>,
     mpsc::Receiver<OutboundMessage>,
     JoinHandle<()>,
-    Arc<octos_bus::CronService>,
+    Arc<ra_bus::CronService>,
 ) {
     let _session_mgr = Arc::new(Mutex::new(
         SessionManager::open(&dir.path().join("sessions")).unwrap(),
     ));
     let memory = Arc::new(EpisodeStore::open(dir.path().join("memory")).await.unwrap());
-    let mut tools = octos_agent::ToolRegistry::with_builtins(dir.path());
+    let mut tools = ra_agent::ToolRegistry::with_builtins(dir.path());
 
     let (cron_tx, _cron_rx) = mpsc::channel(64);
-    let cron_service = Arc::new(octos_bus::CronService::new(
+    let cron_service = Arc::new(ra_bus::CronService::new(
         dir.path().join("cron.json"),
         cron_tx,
     ));
@@ -3145,7 +3145,7 @@ async fn setup_speculative_actor(
         SessionManager::open(&dir.path().join("sessions")).unwrap(),
     ));
     let memory = Arc::new(EpisodeStore::open(dir.path().join("memory")).await.unwrap());
-    let tools = octos_agent::ToolRegistry::with_builtins(dir.path());
+    let tools = ra_agent::ToolRegistry::with_builtins(dir.path());
 
     let agent = Agent::new(AgentId::new("test-spec"), agent_provider, tools, memory).with_config(
         AgentConfig {
@@ -3239,7 +3239,7 @@ async fn setup_speculative_actor(
 async fn setup_speculative_actor_with_indicator(
     agent_provider: Arc<dyn LlmProvider>,
     router_providers: Vec<Arc<dyn LlmProvider>>,
-    status_channel: Arc<dyn octos_bus::Channel>,
+    status_channel: Arc<dyn ra_bus::Channel>,
     reply_channel: &str,
     dir: &tempfile::TempDir,
 ) -> (
@@ -3252,7 +3252,7 @@ async fn setup_speculative_actor_with_indicator(
         SessionManager::open(&dir.path().join("sessions")).unwrap(),
     ));
     let memory = Arc::new(EpisodeStore::open(dir.path().join("memory")).await.unwrap());
-    let tools = octos_agent::ToolRegistry::with_builtins(dir.path());
+    let tools = ra_agent::ToolRegistry::with_builtins(dir.path());
 
     let agent = Agent::new(AgentId::new("test-spec-api"), agent_provider, tools, memory)
         .with_config(AgentConfig {
@@ -3345,7 +3345,7 @@ fn make_inbound_api(content: &str, reply_channel: &str) -> ActorMessage {
             media: vec![],
             metadata: serde_json::json!({}),
             message_id: Some("client-msg-bravo".to_string()),
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         },
         image_media: vec![],
         attachment_media: vec![],
@@ -3422,7 +3422,7 @@ async fn test_cron_timezone_reset_regression_chinese_transcript() {
     assert_eq!(jobs[0].name, "drink-water");
     assert_eq!(jobs[0].timezone.as_deref(), Some("America/Los_Angeles"));
     let first_at_ms = match jobs[0].schedule {
-        octos_bus::CronSchedule::At { at_ms } => at_ms,
+        ra_bus::CronSchedule::At { at_ms } => at_ms,
         _ => panic!("expected one-time reminder"),
     };
     assert!(
@@ -3461,7 +3461,7 @@ async fn test_cron_timezone_reset_regression_chinese_transcript() {
     assert_eq!(jobs.len(), 2);
     let second = jobs.iter().find(|j| j.name == "stand-up").unwrap();
     let second_at_ms = match second.schedule {
-        octos_bus::CronSchedule::At { at_ms } => at_ms,
+        ra_bus::CronSchedule::At { at_ms } => at_ms,
         _ => panic!("expected one-time reminder"),
     };
     assert!(second_at_ms > first_at_ms);
@@ -3827,7 +3827,7 @@ async fn should_emit_session_result_for_overflow_user_message() {
                 "client_message_id": "client-msg-overflow-test",
             }),
             message_id: Some("client-msg-overflow-test".to_string()),
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         },
         image_media: vec![],
         attachment_media: vec![],
@@ -3952,7 +3952,7 @@ async fn should_emit_thread_id_on_every_event_for_speculative_overflow_pair() {
                 "client_message_id": primary_cmid,
             }),
             message_id: Some(primary_cmid.to_string()),
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         },
         image_media: vec![],
         attachment_media: vec![],
@@ -3977,7 +3977,7 @@ async fn should_emit_thread_id_on_every_event_for_speculative_overflow_pair() {
                 "client_message_id": overflow_cmid,
             }),
             message_id: Some(overflow_cmid.to_string()),
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         },
         image_media: vec![],
         attachment_media: vec![],
@@ -4270,7 +4270,7 @@ async fn should_emit_session_result_metadata_for_api_channel_overflow_when_alrea
         vec![(Duration::from_millis(500), make_response("unused"))],
     ));
 
-    let status_channel: Arc<dyn octos_bus::Channel> = Arc::new(FakeSseChannel::new("api"));
+    let status_channel: Arc<dyn ra_bus::Channel> = Arc::new(FakeSseChannel::new("api"));
     let (tx, mut rx, handle, _session_mgr) = setup_speculative_actor_with_indicator(
         agent_llm,
         vec![router_a, router_b],
@@ -4821,7 +4821,7 @@ async fn late_background_result_persists_with_originating_thread_id_not_derived_
     {
         let user_a =
             Message::user("Q1: kick off deep research").with_client_message_id(originating_cmid);
-        octos_bus::session::persist_message_through_canonical_path(
+        ra_bus::session::persist_message_through_canonical_path(
             dir.path(),
             &session_key,
             user_a,
@@ -4830,7 +4830,7 @@ async fn late_background_result_persists_with_originating_thread_id_not_derived_
         .expect("persist Q1");
         for cmid in later_cmids {
             let user = Message::user(format!("user msg {cmid}")).with_client_message_id(cmid);
-            octos_bus::session::persist_message_through_canonical_path(
+            ra_bus::session::persist_message_through_canonical_path(
                 dir.path(),
                 &session_key,
                 user,
@@ -5034,7 +5034,7 @@ async fn dispatch_background_result_carries_task_id_and_terminal_status() {
         task_id: Some("task-abc".to_string()),
         originating_client_message_id: None,
         tool_call_id: Some("tc-xyz".to_string()),
-        terminal_status: Some(octos_agent::TaskStatus::Failed),
+        terminal_status: Some(ra_agent::TaskStatus::Failed),
     };
 
     // Producer waits for an ack; receive the message and ack it.
@@ -5058,7 +5058,7 @@ async fn dispatch_background_result_carries_task_id_and_terminal_status() {
     };
     assert_eq!(task_id.as_deref(), Some("task-abc"));
     assert_eq!(tool_call_id.as_deref(), Some("tc-xyz"));
-    assert_eq!(terminal_status, Some(octos_agent::TaskStatus::Failed));
+    assert_eq!(terminal_status, Some(ra_agent::TaskStatus::Failed));
 
     // Ack so the producer returns rather than timing out.
     if let Some(ack) = ack {
@@ -5209,27 +5209,27 @@ impl LlmProvider for PartialReasoningProvider {
         messages: &[Message],
         tools: &[ToolSpec],
         config: &ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatStream> {
+    ) -> eyre::Result<ra_llm::ChatStream> {
         // The trait's compatibility default does not emit reasoning deltas.
         // Model a real reasoning-capable stream so the carrier is exercised.
         let response = self.chat(messages, tools, config).await?;
         let mut events = Vec::new();
         if let Some(reasoning) = response.reasoning_content {
-            events.push(octos_llm::StreamEvent::ReasoningDelta(reasoning));
+            events.push(ra_llm::StreamEvent::ReasoningDelta(reasoning));
         }
         if let Some(text) = response.content {
-            events.push(octos_llm::StreamEvent::TextDelta(text));
+            events.push(ra_llm::StreamEvent::TextDelta(text));
         }
         for (index, call) in response.tool_calls.into_iter().enumerate() {
-            events.push(octos_llm::StreamEvent::ToolCallDelta {
+            events.push(ra_llm::StreamEvent::ToolCallDelta {
                 index,
                 id: Some(call.id),
                 name: Some(call.name),
                 arguments_delta: call.arguments.to_string(),
             });
         }
-        events.push(octos_llm::StreamEvent::Usage(response.usage));
-        events.push(octos_llm::StreamEvent::Done(response.stop_reason));
+        events.push(ra_llm::StreamEvent::Usage(response.usage));
+        events.push(ra_llm::StreamEvent::Done(response.stop_reason));
         Ok(Box::pin(futures::stream::iter(events)))
     }
     fn model_id(&self) -> &str {
@@ -5247,7 +5247,7 @@ async fn assert_incomplete_gateway_turn_preserves_partial(mode: &str) {
     std::fs::write(&artifact, "actual partial artifact").unwrap();
     let mut tool_response = make_response("partial preamble");
     tool_response.stop_reason = StopReason::ToolUse;
-    tool_response.tool_calls = vec![octos_core::ToolCall {
+    tool_response.tool_calls = vec![ra_core::ToolCall {
         id: "partial-read-call".into(),
         name: "read_file".into(),
         arguments: serde_json::json!({"path": artifact}),
@@ -5284,7 +5284,7 @@ async fn assert_incomplete_gateway_turn_preserves_partial(mode: &str) {
         Agent::new(
             AgentId::new("partial-gateway"),
             gateway_provider,
-            octos_agent::ToolRegistry::with_builtins(dir.path()),
+            ra_agent::ToolRegistry::with_builtins(dir.path()),
             memory,
         )
         .with_config(AgentConfig {
@@ -5483,7 +5483,7 @@ impl LlmProvider for PersistFailureStreamProvider {
 }
 
 #[async_trait]
-impl octos_bus::Channel for PartialStreamChannel {
+impl ra_bus::Channel for PartialStreamChannel {
     fn name(&self) -> &str {
         "api"
     }
@@ -5554,7 +5554,7 @@ async fn streamed_incomplete_overflow_case(fail_final_persistence: bool) {
         Agent::new(
             AgentId::new("partial-stream"),
             provider,
-            octos_agent::ToolRegistry::with_builtins(dir.path()),
+            ra_agent::ToolRegistry::with_builtins(dir.path()),
             Arc::new(
                 EpisodeStore::open(dir.path().join("stream-memory"))
                     .await
@@ -5679,7 +5679,7 @@ async fn should_preserve_max_tokens_partial_in_silent_serial_failure_without_fak
                 "empty-partial",
                 vec![(Duration::ZERO, response)],
             )),
-            octos_agent::ToolRegistry::with_builtins(dir.path()),
+            ra_agent::ToolRegistry::with_builtins(dir.path()),
             Arc::new(
                 EpisodeStore::open(dir.path().join("empty-memory"))
                     .await
@@ -6026,7 +6026,7 @@ async fn primary_turn_completion_metadata_includes_committed_seq() {
         vec![(Duration::from_millis(500), make_response("unused"))],
     ));
 
-    let status_channel: Arc<dyn octos_bus::Channel> = Arc::new(FakeSseChannel::new("api"));
+    let status_channel: Arc<dyn ra_bus::Channel> = Arc::new(FakeSseChannel::new("api"));
     let (tx, mut rx, handle, _session_mgr) = setup_speculative_actor_with_indicator(
         agent_llm,
         vec![router_a, router_b],
@@ -6330,7 +6330,7 @@ async fn build_minimal_actor_factory(
         SessionManager::open(&dir.path().join("sessions")).unwrap(),
     ));
     let (out_tx, out_rx) = mpsc::channel(64);
-    let tools = octos_agent::ToolRegistry::with_builtins(dir.path());
+    let tools = ra_agent::ToolRegistry::with_builtins(dir.path());
     let (spawn_tx, _spawn_rx) = mpsc::channel(32);
 
     let factory = ActorFactory {
@@ -6367,7 +6367,7 @@ async fn build_minimal_actor_factory(
         session_timeout: Duration::from_secs(120),
         shutdown: Arc::new(AtomicBool::new(false)),
         cwd: dir.path().to_path_buf(),
-        sandbox_config: octos_agent::SandboxConfig::default(),
+        sandbox_config: ra_agent::SandboxConfig::default(),
         provider_policy: None,
         tool_policy: None,
         worker_prompt: None,
@@ -6385,7 +6385,7 @@ async fn build_minimal_actor_factory(
         plugin_extra_env: Vec::new(),
         plugin_require_signed: false,
         task_query_store,
-        subagent_output_router: Arc::new(octos_agent::SubAgentOutputRouter::new(
+        subagent_output_router: Arc::new(ra_agent::SubAgentOutputRouter::new(
             dir.path().join("subagent-outputs"),
         )),
     };
@@ -6408,7 +6408,7 @@ async fn test_dispatch_routes_by_profile_id() {
         media: vec![],
         metadata: serde_json::json!({}),
         message_id: None,
-        origin: octos_core::MessageOrigin::ExternalUser,
+        origin: ra_core::MessageOrigin::ExternalUser,
     };
 
     registry
@@ -6452,7 +6452,7 @@ async fn test_dispatch_routes_to_default_profile() {
         media: vec![],
         metadata: serde_json::json!({}),
         message_id: None,
-        origin: octos_core::MessageOrigin::ExternalUser,
+        origin: ra_core::MessageOrigin::ExternalUser,
     };
 
     registry
@@ -6506,7 +6506,7 @@ async fn peer_inbox_registry_registers_on_dispatch_and_purges_on_remove() {
         media: vec![],
         metadata: serde_json::json!({}),
         message_id: None,
-        origin: octos_core::MessageOrigin::ExternalUser,
+        origin: ra_core::MessageOrigin::ExternalUser,
     };
 
     registry
@@ -6551,7 +6551,7 @@ async fn peer_inbox_registry_registers_on_dispatch_and_purges_on_remove() {
             media: vec![],
             metadata: serde_json::json!({"origin": "peer_send_input"}),
             message_id: None,
-            origin: octos_core::MessageOrigin::Synthetic,
+            origin: ra_core::MessageOrigin::Synthetic,
         };
         tx.try_send(ActorMessage::Inbound {
             message: injected,
@@ -6591,7 +6591,7 @@ async fn test_dispatch_profile_and_main_create_separate_actors() {
         media: vec![],
         metadata: serde_json::json!({}),
         message_id: None,
-        origin: octos_core::MessageOrigin::ExternalUser,
+        origin: ra_core::MessageOrigin::ExternalUser,
     };
     registry
         .dispatch(DispatchParams {
@@ -6619,7 +6619,7 @@ async fn test_dispatch_profile_and_main_create_separate_actors() {
         media: vec![],
         metadata: serde_json::json!({}),
         message_id: None,
-        origin: octos_core::MessageOrigin::ExternalUser,
+        origin: ra_core::MessageOrigin::ExternalUser,
     };
     registry
         .dispatch(DispatchParams {
@@ -6669,7 +6669,7 @@ async fn test_cancel_matches_profile_scoped_actor_by_session_key() {
         media: vec![],
         metadata: serde_json::json!({}),
         message_id: None,
-        origin: octos_core::MessageOrigin::ExternalUser,
+        origin: ra_core::MessageOrigin::ExternalUser,
     };
     registry
         .dispatch(DispatchParams {
@@ -6762,7 +6762,7 @@ async fn test_persist_child_session_lifecycle_creates_child_history_and_terminal
     parent_handle
         .add_message(Message::assistant_with_thread(
             "Starting research",
-            octos_core::ThreadId::new("test-thread"),
+            ra_core::ThreadId::new("test-thread"),
         ))
         .await
         .unwrap();
@@ -6994,7 +6994,7 @@ fn should_not_allow_forced_workflow_when_inbound_is_synthetic() {
         media: vec![],
         metadata: serde_json::json!({ "_master_continuation": true }),
         message_id: None,
-        origin: octos_core::MessageOrigin::Synthetic,
+        origin: ra_core::MessageOrigin::Synthetic,
     };
     assert!(
         !forced_workflow_detection_allowed(&inbound, "telegram", &[], &[]),
@@ -7015,7 +7015,7 @@ fn should_allow_forced_workflow_for_external_user_research_request() {
         media: vec![],
         metadata: serde_json::json!({}),
         message_id: None,
-        origin: octos_core::MessageOrigin::ExternalUser,
+        origin: ra_core::MessageOrigin::ExternalUser,
     };
     assert!(forced_workflow_detection_allowed(
         &inbound,
@@ -7087,7 +7087,7 @@ async fn should_refresh_overflow_history_when_primary_finishes_quickly() {
         handle
             .add_message(Message::assistant_with_thread(
                 "hello, where to?",
-                octos_core::ThreadId::new("test-thread"),
+                ra_core::ThreadId::new("test-thread"),
             ))
             .await
             .expect("seed assistant");
@@ -7114,7 +7114,7 @@ async fn should_refresh_overflow_history_when_primary_finishes_quickly() {
         let _ = handle
             .add_message(Message::assistant_with_thread(
                 "Saratoga: 72°F sunny",
-                octos_core::ThreadId::new("test-thread"),
+                ra_core::ThreadId::new("test-thread"),
             ))
             .await;
     });
@@ -7161,7 +7161,7 @@ async fn should_fall_through_with_pre_primary_history_when_primary_slow() {
         handle
             .add_message(Message::assistant_with_thread(
                 "hello, where to?",
-                octos_core::ThreadId::new("test-thread"),
+                ra_core::ThreadId::new("test-thread"),
             ))
             .await
             .expect("seed assistant");
@@ -7217,7 +7217,7 @@ async fn should_return_immediately_when_assistant_already_landed() {
         handle
             .add_message(Message::assistant_with_thread(
                 "a",
-                octos_core::ThreadId::new("test-thread"),
+                ra_core::ThreadId::new("test-thread"),
             ))
             .await
             .expect("seed");
@@ -7296,7 +7296,7 @@ fn recovery_prompt_includes_tool_input_when_set() {
 /// production does from `set_on_failure_signal` / the unified terminal sink.
 fn enqueue_recovery_continuation(
     session_key: &SessionKey,
-    signal: &octos_agent::SpawnOnlyFailureSignal,
+    signal: &ra_agent::SpawnOnlyFailureSignal,
 ) {
     default_agent_orchestrator().enqueue_spawn_only_failure_continuation(
         session_key,
@@ -7309,8 +7309,8 @@ fn recovery_signal(
     task_id: &str,
     tool_name: &str,
     error: &str,
-) -> octos_agent::SpawnOnlyFailureSignal {
-    octos_agent::SpawnOnlyFailureSignal {
+) -> ra_agent::SpawnOnlyFailureSignal {
+    ra_agent::SpawnOnlyFailureSignal {
         task_id: task_id.into(),
         tool_name: tool_name.into(),
         tool_input: serde_json::json!({"voice": "yangmi"}),
@@ -7349,7 +7349,7 @@ async fn should_enqueue_synthetic_recovery_turn_with_error_message() {
 
     enqueue_recovery_continuation(
         &test_session_key(dir.path()),
-        &octos_agent::SpawnOnlyFailureSignal {
+        &ra_agent::SpawnOnlyFailureSignal {
             task_id: "task-rh-1".into(),
             tool_name: "fm_tts".into(),
             tool_input: serde_json::json!({"voice": "yangmi"}),
@@ -7461,7 +7461,7 @@ async fn background_result_does_not_auto_review_when_gate_disabled() {
         originating_thread_id: None,
         task_id: None,
         tool_call_id: None,
-        terminal_status: Some(octos_agent::TaskStatus::Completed),
+        terminal_status: Some(ra_agent::TaskStatus::Completed),
         ack: None,
     })
     .await
@@ -7852,9 +7852,9 @@ async fn actor_and_channel_persists_get_distinct_seqs_across_paths() {
                 // mirrors that.
                 let assistant = Message::assistant_with_thread(
                     format!("channel-{i}"),
-                    octos_core::ThreadId::new(format!("test-thread-{i}")),
+                    ra_core::ThreadId::new(format!("test-thread-{i}")),
                 );
-                octos_bus::session::persist_message_through_canonical_path(
+                ra_bus::session::persist_message_through_canonical_path(
                     &data_dir, &key, assistant,
                 )
                 .await
@@ -7898,10 +7898,10 @@ async fn actor_and_channel_persists_get_distinct_seqs_across_paths() {
 
 fn make_supervisor_task(
     id: &str,
-    status: octos_agent::TaskStatus,
-    runtime_state: octos_agent::TaskRuntimeState,
-) -> octos_agent::BackgroundTask {
-    octos_agent::BackgroundTask {
+    status: ra_agent::TaskStatus,
+    runtime_state: ra_agent::TaskRuntimeState,
+) -> ra_agent::BackgroundTask {
+    ra_agent::BackgroundTask {
         id: id.into(),
         tool_name: "search".into(),
         tool_call_id: "call-1".into(),
@@ -7949,8 +7949,8 @@ async fn terminal_task_status_survives_actor_inbox_backpressure() {
 
     let task = make_supervisor_task(
         "01900000-0000-7000-8000-0000000000aa",
-        octos_agent::TaskStatus::Completed,
-        octos_agent::TaskRuntimeState::Completed,
+        ra_agent::TaskStatus::Completed,
+        ra_agent::TaskRuntimeState::Completed,
     );
     forward_task_status_to_actor_inbox(
         &InProcessAgentOrchestrator::default(),
@@ -7990,8 +7990,8 @@ async fn non_terminal_task_status_drops_under_inbox_backpressure() {
 
     let task = make_supervisor_task(
         "01900000-0000-7000-8000-0000000000bb",
-        octos_agent::TaskStatus::Running,
-        octos_agent::TaskRuntimeState::ExecutingTool,
+        ra_agent::TaskStatus::Running,
+        ra_agent::TaskRuntimeState::ExecutingTool,
     );
     forward_task_status_to_actor_inbox(
         &InProcessAgentOrchestrator::default(),
@@ -8389,8 +8389,8 @@ async fn router_failover_event_pushes_bus_notice() {
     // forwarder's strict per-session filter accepts the event. In
     // production the gateway's agent call wraps in `with_router_context`
     // around `process_inbound`; the test mirrors that.
-    octos_llm::with_router_context(
-        octos_llm::RouterContext {
+    ra_llm::with_router_context(
+        ra_llm::RouterContext {
             session_id: Some(test_session_key(dir.path()).to_string()),
             turn_id: None,
         },
@@ -8446,8 +8446,8 @@ async fn router_failover_debounce_collapses_burst() {
 
     // Three rapid failovers within ~50ms — well inside the debounce
     // window — must produce at most one push.
-    octos_llm::with_router_context(
-        octos_llm::RouterContext {
+    ra_llm::with_router_context(
+        ra_llm::RouterContext {
             session_id: Some(test_session_key(dir.path()).to_string()),
             turn_id: None,
         },
@@ -8527,8 +8527,8 @@ async fn router_failover_filters_to_originating_session() {
 
     // Publish a failover stamped with a stranger session id. The
     // actor (session_key = "cli:test") must ignore it.
-    octos_llm::with_router_context(
-        octos_llm::RouterContext {
+    ra_llm::with_router_context(
+        ra_llm::RouterContext {
             session_id: Some("cli:other-session".to_string()),
             turn_id: None,
         },
@@ -8539,8 +8539,8 @@ async fn router_failover_filters_to_originating_session() {
     .await;
 
     // Then a same-session failover MUST get through.
-    octos_llm::with_router_context(
-        octos_llm::RouterContext {
+    ra_llm::with_router_context(
+        ra_llm::RouterContext {
             session_id: Some(test_session_key(dir.path()).to_string()),
             turn_id: None,
         },
@@ -8581,8 +8581,8 @@ async fn router_failover_filters_to_originating_session() {
 /// `mark_synth_ack_emitted` + `mark_failed`.
 fn wire_supervisor_to_continuation_queue(
     session_key: &SessionKey,
-) -> Arc<octos_agent::TaskSupervisor> {
-    let supervisor = Arc::new(octos_agent::TaskSupervisor::new());
+) -> Arc<ra_agent::TaskSupervisor> {
+    let supervisor = Arc::new(ra_agent::TaskSupervisor::new());
     let failure_session_key = session_key.clone();
     supervisor.set_on_failure_signal(move |signal| {
         enqueue_recovery_continuation(&failure_session_key, signal);
@@ -8972,7 +8972,7 @@ async fn user_turn_resets_consecutive_recovery_counter() {
             media: vec![],
             metadata: serde_json::json!({}),
             message_id: None,
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         },
         image_media: vec![],
         attachment_media: vec![],
@@ -9069,7 +9069,7 @@ fn build_gateway_session_scope_attaches_scope_for_per_profile_session() {
     // Sanity: pin that the test fixture matches the production
     // SPA path that routes through `runtime/session.rs`.
     assert!(
-        octos_core::is_safe_session_id(session_key.base_key()),
+        ra_core::is_safe_session_id(session_key.base_key()),
         "test fixture must use a safe SPA session id",
     );
     let scope = build_gateway_session_scope(Some("dspfac"), &data_dir, &session_key, &plugin_dirs)
@@ -9123,7 +9123,7 @@ fn build_gateway_session_scope_binds_tenant_for_unsafe_session_id() {
     let session_key = SessionKey::new("telegram", "12345");
     // Sanity: pin that this really is a channel-prefixed (unsafe) shape.
     assert!(
-        !octos_core::is_safe_session_id(session_key.base_key()),
+        !ra_core::is_safe_session_id(session_key.base_key()),
         "this test relies on channel-prefixed keys failing is_safe_session_id; \
              update the test if SessionKey's representation changes",
     );
@@ -9132,7 +9132,7 @@ fn build_gateway_session_scope_binds_tenant_for_unsafe_session_id() {
         .expect("channel-prefixed id now yields a tenant-bound scope");
     assert_eq!(scope.tenant_id(), Some("dspfac"));
     // Workspace is the real encoded on-disk path under the data dir.
-    let encoded = octos_bus::session::encode_path_component(session_key.base_key());
+    let encoded = ra_bus::session::encode_path_component(session_key.base_key());
     assert_eq!(
         scope.workspace(),
         tmp.path().join("users").join(&encoded).join("workspace"),
@@ -9182,7 +9182,7 @@ fn build_gateway_session_scope_drops_all_missing_plugin_dirs() {
 /// can't silently regress the boundary.
 #[test]
 fn build_gateway_session_scope_classifies_cross_profile_skill_dir_as_out_of_scope() {
-    use octos_core::PathClassification;
+    use ra_core::PathClassification;
 
     let root = tempfile::TempDir::new().unwrap();
 
@@ -9260,7 +9260,7 @@ struct SequencedApprovalProvider {
 }
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for SequencedApprovalProvider {
+impl ra_llm::LlmProvider for SequencedApprovalProvider {
     async fn chat(
         &self,
         messages: &[Message],
@@ -9287,7 +9287,7 @@ impl octos_llm::LlmProvider for SequencedApprovalProvider {
             } => ChatResponse {
                 content: None,
                 reasoning_content: None,
-                tool_calls: vec![octos_core::ToolCall {
+                tool_calls: vec![ra_core::ToolCall {
                     id: id.to_string(),
                     name: name.to_string(),
                     arguments,
@@ -9326,7 +9326,7 @@ struct ApprovalTestTool {
 }
 
 #[async_trait::async_trait]
-impl octos_agent::tools::Tool for ApprovalTestTool {
+impl ra_agent::tools::Tool for ApprovalTestTool {
     fn name(&self) -> &str {
         self.name
     }
@@ -9345,8 +9345,8 @@ impl octos_agent::tools::Tool for ApprovalTestTool {
     async fn execute(
         &self,
         _args: &serde_json::Value,
-    ) -> eyre::Result<octos_agent::tools::ToolResult> {
-        Ok(octos_agent::tools::ToolResult {
+    ) -> eyre::Result<ra_agent::tools::ToolResult> {
+        Ok(ra_agent::tools::ToolResult {
             output: self.output.to_string(),
             success: self.success,
             file_modified: self.file_modified.map(PathBuf::from),
@@ -9369,7 +9369,7 @@ impl ApprovalActorFixture {
         &self,
         pending: &PendingApproval,
         approved_by: &str,
-        result: &octos_agent::tools::ToolResult,
+        result: &ra_agent::tools::ToolResult,
     ) -> InboundMessage {
         build_approval_continuation_inbound(
             "matrix",
@@ -9390,23 +9390,23 @@ async fn setup_actor_with_approval_provider(
     extra_tools: Vec<ApprovalTestTool>,
 ) -> ApprovalActorFixture {
     let memory = Arc::new(EpisodeStore::open(dir.path().join("memory")).await.unwrap());
-    let mut tools = octos_agent::ToolRegistry::with_builtins(dir.path());
+    let mut tools = ra_agent::ToolRegistry::with_builtins(dir.path());
     for tool in extra_tools {
         tools.register(tool);
     }
     let observed_prompts = Arc::new(StdMutex::new(Vec::new()));
-    let provider: Arc<dyn octos_llm::LlmProvider> = Arc::new(SequencedApprovalProvider {
+    let provider: Arc<dyn ra_llm::LlmProvider> = Arc::new(SequencedApprovalProvider {
         calls: std::sync::atomic::AtomicUsize::new(0),
         steps,
         observed_prompts: Arc::clone(&observed_prompts),
     });
 
-    let rules = octos_agent::HumanApprovalRules::new(vec![octos_agent::ApprovalRule {
+    let rules = ra_agent::HumanApprovalRules::new(vec![ra_agent::ApprovalRule {
         tools: gated_tools.into_iter().map(str::to_string).collect(),
-        risk_level: octos_agent::ApprovalRiskLevel::Critical,
+        risk_level: ra_agent::ApprovalRiskLevel::Critical,
         authorized_approvers: vec!["@alice:localhost".to_string()],
         expires_in_secs: 300,
-        on_timeout: octos_agent::ApprovalTimeoutBehavior::Notify,
+        on_timeout: ra_agent::ApprovalTimeoutBehavior::Notify,
     }]);
 
     let agent = Agent::new(AgentId::new("approval-actor"), provider, tools, memory).with_config(
@@ -9522,7 +9522,7 @@ fn approval_inbound(content: &str, sender: &str, metadata: serde_json::Value) ->
             media: vec![],
             metadata,
             message_id: None,
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         },
         image_media: vec![],
         attachment_media: vec![],
@@ -9711,12 +9711,12 @@ async fn approved_tool_success_enqueues_internal_continuation_turn() {
 async fn approval_continuation_prompt_contains_facts_not_directives() {
     let dir = tempfile::tempdir().unwrap();
     let fixture = setup_actor_with_approval_provider(&dir, vec![], vec!["alpha"], vec![]).await;
-    let pending = octos_agent::HumanApprovalRules::new(vec![octos_agent::ApprovalRule {
+    let pending = ra_agent::HumanApprovalRules::new(vec![ra_agent::ApprovalRule {
         tools: vec!["alpha".to_string()],
-        risk_level: octos_agent::ApprovalRiskLevel::Critical,
+        risk_level: ra_agent::ApprovalRiskLevel::Critical,
         authorized_approvers: vec!["@alice:localhost".to_string()],
         expires_in_secs: 300,
-        on_timeout: octos_agent::ApprovalTimeoutBehavior::Notify,
+        on_timeout: ra_agent::ApprovalTimeoutBehavior::Notify,
     }])
     .draft_for_tool_call(
         "alpha",
@@ -9727,7 +9727,7 @@ async fn approval_continuation_prompt_contains_facts_not_directives() {
     .unwrap()
     .unwrap()
     .into_pending("!room:localhost", "@user:localhost");
-    let result = octos_agent::tools::ToolResult {
+    let result = ra_agent::tools::ToolResult {
         output: "plain output".to_string(),
         success: true,
         file_modified: Some(PathBuf::from("rust_slides.html")),
@@ -10217,12 +10217,12 @@ async fn should_reject_approval_response_when_sender_unauthorized() {
 async fn await_goal_task_row(
     ledger_path: &std::path::Path,
     task_id: &str,
-    probe: impl Fn(&octos_fleet::Task) -> bool,
+    probe: impl Fn(&ra_fleet::Task) -> bool,
     what: &str,
-) -> octos_fleet::Task {
+) -> ra_fleet::Task {
     for _ in 0..250 {
         if ledger_path.exists()
-            && let Ok(ledger) = octos_fleet::GoalLedger::open(ledger_path)
+            && let Ok(ledger) = ra_fleet::GoalLedger::open(ledger_path)
             && let Ok(Some(row)) = ledger.get_task(task_id)
             && probe(&row)
         {
@@ -10340,7 +10340,7 @@ mod obs_fallback_switch_48a {
     async fn spawn_forwarder(
         data_dir: &std::path::Path,
     ) -> (
-        tokio::sync::broadcast::Sender<octos_llm::adaptive::FailoverEvent>,
+        tokio::sync::broadcast::Sender<ra_llm::adaptive::FailoverEvent>,
         mpsc::Receiver<OutboundMessage>,
         tokio::task::JoinHandle<()>,
     ) {
@@ -10361,8 +10361,8 @@ mod obs_fallback_switch_48a {
         (tx, out_rx, handle)
     }
 
-    fn own_event(session: &str) -> octos_llm::adaptive::FailoverEvent {
-        octos_llm::adaptive::FailoverEvent {
+    fn own_event(session: &str) -> ra_llm::adaptive::FailoverEvent {
+        ra_llm::adaptive::FailoverEvent {
             from_provider: "a".into(),
             to_provider: "b".into(),
             reason: "quota".into(),
@@ -10696,16 +10696,16 @@ struct EmptyReplyVerifier;
 impl LlmProvider for EmptyReplyVerifier {
     async fn chat(
         &self,
-        _m: &[octos_core::Message],
-        _t: &[octos_llm::ToolSpec],
-        _c: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
-        Ok(octos_llm::ChatResponse {
+        _m: &[ra_core::Message],
+        _t: &[ra_llm::ToolSpec],
+        _c: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
+        Ok(ra_llm::ChatResponse {
             content: None,
             reasoning_content: Some("thinking…".to_owned()),
             tool_calls: Vec::new(),
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage {
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage {
                 input_tokens: 3,
                 output_tokens: 1,
                 ..Default::default()
@@ -10735,7 +10735,7 @@ async fn session_actor_sentinel_reports_verifier_failure_kind() {
 
     // Set an active goal for the session the actor will own.
     let orchestrator = crate::autonomy::agent_orchestrator::default_agent_orchestrator();
-    let key = octos_core::SessionKey("gap67-prof:api:gap67-actor".to_owned());
+    let key = ra_core::SessionKey("gap67-prof:api:gap67-actor".to_owned());
     orchestrator
         .set_goal(GoalSetRequest {
             session_id: key.clone(),
@@ -10755,11 +10755,11 @@ async fn session_actor_sentinel_reports_verifier_failure_kind() {
     // turn` reads the assistant tail, detects the claim, runs the wired
     // verifier (empty replies → empty_response, 2/2 attempts), refuses the
     // completion, and appends the structured system note.
-    let mut session_handle = octos_bus::session::SessionHandle::open(dir.path(), &key);
+    let mut session_handle = ra_bus::session::SessionHandle::open(dir.path(), &key);
     session_handle
         .session_mut()
         .messages
-        .push(octos_core::Message::assistant(
+        .push(ra_core::Message::assistant(
             "All tasks complete. <goal:complete>",
         ));
     let handle = Arc::new(tokio::sync::Mutex::new(session_handle));
@@ -10768,9 +10768,9 @@ async fn session_actor_sentinel_reports_verifier_failure_kind() {
     let (proxy_tx, _proxy_rx) = mpsc::channel(64);
     let (_inbox_tx, inbox_rx) = mpsc::channel(8);
     let (self_tx, _self_rx) = mpsc::channel(8);
-    let tools = octos_agent::ToolRegistry::with_builtins(dir.path());
+    let tools = ra_agent::ToolRegistry::with_builtins(dir.path());
     let memory = factory.memory.clone();
-    let agent = Arc::new(octos_agent::Agent::new(
+    let agent = Arc::new(ra_agent::Agent::new(
         AgentId::new("gap67-agent"),
         factory.llm.clone(),
         tools,
@@ -10800,7 +10800,7 @@ async fn session_actor_sentinel_reports_verifier_failure_kind() {
     // history via the canonical Display line.
     let guard = actor.session_handle.lock().await;
     let surfaced = guard.session().messages.iter().any(|m| {
-        m.role == octos_core::MessageRole::System
+        m.role == ra_core::MessageRole::System
             && m.content.contains("verifier empty_response (attempt 2/2)")
     });
     assert!(
@@ -10827,7 +10827,7 @@ async fn session_actor_replayed_failure_does_not_duplicate_durable_note() {
         build_minimal_actor_factory(&dir, task_store, Some("replay-note-prof".to_owned())).await;
 
     let orchestrator = crate::autonomy::agent_orchestrator::default_agent_orchestrator();
-    let key = octos_core::SessionKey("replay-note-prof:api:replay-note-actor".to_owned());
+    let key = ra_core::SessionKey("replay-note-prof:api:replay-note-actor".to_owned());
     orchestrator
         .set_goal(GoalSetRequest {
             session_id: key.clone(),
@@ -10845,16 +10845,16 @@ async fn session_actor_replayed_failure_does_not_duplicate_durable_note() {
     impl LlmProvider for EmptyReplyVerifier {
         async fn chat(
             &self,
-            _m: &[octos_core::Message],
-            _t: &[octos_llm::ToolSpec],
-            _c: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
-            Ok(octos_llm::ChatResponse {
+            _m: &[ra_core::Message],
+            _t: &[ra_llm::ToolSpec],
+            _c: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
+            Ok(ra_llm::ChatResponse {
                 content: None,
                 reasoning_content: Some("thinking…".to_owned()),
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage {
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage {
                     input_tokens: 3,
                     output_tokens: 1,
                     ..Default::default()
@@ -10871,20 +10871,20 @@ async fn session_actor_replayed_failure_does_not_duplicate_durable_note() {
     }
 
     // Actor with a claimed completion in its (durable-backed) history.
-    let mut session_handle = octos_bus::session::SessionHandle::open(dir.path(), &key);
+    let mut session_handle = ra_bus::session::SessionHandle::open(dir.path(), &key);
     session_handle
         .session_mut()
         .messages
-        .push(octos_core::Message::assistant(
+        .push(ra_core::Message::assistant(
             "All tasks complete. <goal:complete>",
         ));
     let handle = Arc::new(tokio::sync::Mutex::new(session_handle));
     let (proxy_tx, _proxy_rx) = mpsc::channel(64);
     let (_inbox_tx, inbox_rx) = mpsc::channel(8);
     let (self_tx, _self_rx) = mpsc::channel(8);
-    let tools = octos_agent::ToolRegistry::with_builtins(dir.path());
+    let tools = ra_agent::ToolRegistry::with_builtins(dir.path());
     let memory = factory.memory.clone();
-    let agent = Arc::new(octos_agent::Agent::new(
+    let agent = Arc::new(ra_agent::Agent::new(
         AgentId::new("replay-note-agent"),
         factory.llm.clone(),
         tools,
@@ -10902,14 +10902,14 @@ async fn session_actor_replayed_failure_does_not_duplicate_durable_note() {
     );
 
     // Count durable structured notes in the REAL session file.
-    let durable_note_count = |dir: &tempfile::TempDir, key: &octos_core::SessionKey| -> usize {
-        let handle = octos_bus::session::SessionHandle::open(dir.path(), key);
+    let durable_note_count = |dir: &tempfile::TempDir, key: &ra_core::SessionKey| -> usize {
+        let handle = ra_bus::session::SessionHandle::open(dir.path(), key);
         handle
             .session()
             .messages
             .iter()
             .filter(|m| {
-                m.role == octos_core::MessageRole::System
+                m.role == ra_core::MessageRole::System
                     && m.content.contains("goal completion not verified")
             })
             .count()
@@ -10944,7 +10944,7 @@ async fn session_actor_replayed_failure_does_not_duplicate_durable_note() {
             .messages
             .iter()
             .filter(|m| {
-                m.role == octos_core::MessageRole::System
+                m.role == ra_core::MessageRole::System
                     && m.content.contains("goal completion not verified")
             })
             .count();
@@ -10965,7 +10965,7 @@ async fn session_actor_new_evidence_failure_appends_fresh_note() {
         build_minimal_actor_factory(&dir, task_store, Some("fresh-note-prof".to_owned())).await;
 
     let orchestrator = crate::autonomy::agent_orchestrator::default_agent_orchestrator();
-    let key = octos_core::SessionKey("fresh-note-prof:api:fresh-note-actor".to_owned());
+    let key = ra_core::SessionKey("fresh-note-prof:api:fresh-note-actor".to_owned());
     orchestrator
         .set_goal(GoalSetRequest {
             session_id: key.clone(),
@@ -10985,16 +10985,16 @@ async fn session_actor_new_evidence_failure_appends_fresh_note() {
     impl LlmProvider for EmptyAlwaysVerifier {
         async fn chat(
             &self,
-            _m: &[octos_core::Message],
-            _t: &[octos_llm::ToolSpec],
-            _c: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
-            Ok(octos_llm::ChatResponse {
+            _m: &[ra_core::Message],
+            _t: &[ra_llm::ToolSpec],
+            _c: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
+            Ok(ra_llm::ChatResponse {
                 content: None,
                 reasoning_content: Some("thinking…".to_owned()),
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage {
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage {
                     input_tokens: 3,
                     output_tokens: 1,
                     ..Default::default()
@@ -11010,20 +11010,20 @@ async fn session_actor_new_evidence_failure_appends_fresh_note() {
         }
     }
 
-    let mut session_handle = octos_bus::session::SessionHandle::open(dir.path(), &key);
+    let mut session_handle = ra_bus::session::SessionHandle::open(dir.path(), &key);
     session_handle
         .session_mut()
         .messages
-        .push(octos_core::Message::assistant(
+        .push(ra_core::Message::assistant(
             "Step one done. <goal:complete>",
         ));
     let handle = Arc::new(tokio::sync::Mutex::new(session_handle));
     let (proxy_tx, _proxy_rx) = mpsc::channel(64);
     let (_inbox_tx, inbox_rx) = mpsc::channel(8);
     let (self_tx, _self_rx) = mpsc::channel(8);
-    let tools = octos_agent::ToolRegistry::with_builtins(dir.path());
+    let tools = ra_agent::ToolRegistry::with_builtins(dir.path());
     let memory = factory.memory.clone();
-    let agent = Arc::new(octos_agent::Agent::new(
+    let agent = Arc::new(ra_agent::Agent::new(
         AgentId::new("fresh-note-agent"),
         factory.llm.clone(),
         tools,
@@ -11040,14 +11040,14 @@ async fn session_actor_new_evidence_failure_appends_fresh_note() {
         Some(Arc::new(EmptyAlwaysVerifier)),
     );
 
-    let durable_note_count = |dir: &tempfile::TempDir, key: &octos_core::SessionKey| -> usize {
-        let handle = octos_bus::session::SessionHandle::open(dir.path(), key);
+    let durable_note_count = |dir: &tempfile::TempDir, key: &ra_core::SessionKey| -> usize {
+        let handle = ra_bus::session::SessionHandle::open(dir.path(), key);
         handle
             .session()
             .messages
             .iter()
             .filter(|m| {
-                m.role == octos_core::MessageRole::System
+                m.role == ra_core::MessageRole::System
                     && m.content.contains("goal completion not verified")
             })
             .count()
@@ -11064,7 +11064,7 @@ async fn session_actor_new_evidence_failure_appends_fresh_note() {
         let mut h = actor.session_handle.lock().await;
         h.session_mut()
             .messages
-            .push(octos_core::Message::assistant(
+            .push(ra_core::Message::assistant(
                 "Step two also done now. <goal:complete>",
             ));
     }
@@ -11106,17 +11106,17 @@ async fn session_actor_restart_with_ledger_verdict_but_missing_note_appends_it()
     impl LlmProvider for CountingEmptyVerifier {
         async fn chat(
             &self,
-            _m: &[octos_core::Message],
-            _t: &[octos_llm::ToolSpec],
-            _c: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+            _m: &[ra_core::Message],
+            _t: &[ra_llm::ToolSpec],
+            _c: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: None,
                 reasoning_content: Some("thinking…".to_owned()),
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage {
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage {
                     input_tokens: 3,
                     output_tokens: 1,
                     ..Default::default()
@@ -11134,7 +11134,7 @@ async fn session_actor_restart_with_ledger_verdict_but_missing_note_appends_it()
 
     let dir = tempfile::TempDir::new().expect("temp dir");
     let orchestrator = default_agent_orchestrator();
-    let key = octos_core::SessionKey("restart-note-prof:api:restart-note-actor".to_owned());
+    let key = ra_core::SessionKey("restart-note-prof:api:restart-note-actor".to_owned());
     orchestrator
         .set_goal(GoalSetRequest {
             session_id: key.clone(),
@@ -11186,21 +11186,21 @@ async fn session_actor_restart_with_ledger_verdict_but_missing_note_appends_it()
     // row is absent (the crash lost it). The wrapper replays the ledger
     // verdict (same goal + same evidence digest); the note must still be
     // appended.
-    let cmid = octos_core::ClientMessageId::new("restart-seed-cmid");
-    octos_bus::session::persist_message_through_canonical_path(
+    let cmid = ra_core::ClientMessageId::new("restart-seed-cmid");
+    ra_bus::session::persist_message_through_canonical_path(
         dir.path(),
         &key,
-        octos_core::Message::assistant_with_thread(claim, octos_core::ThreadId::rooted_at(&cmid)),
+        ra_core::Message::assistant_with_thread(claim, ra_core::ThreadId::rooted_at(&cmid)),
     )
     .await
     .expect("seed durable claim row");
-    let loaded = octos_bus::session::SessionHandle::open(dir.path(), &key);
+    let loaded = ra_bus::session::SessionHandle::open(dir.path(), &key);
     assert!(
         loaded
             .session()
             .messages
             .iter()
-            .any(|m| m.role == octos_core::MessageRole::Assistant && m.content == claim),
+            .any(|m| m.role == ra_core::MessageRole::Assistant && m.content == claim),
         "fresh reader loaded the durable claim row"
     );
     let handle = Arc::new(tokio::sync::Mutex::new(loaded));
@@ -11212,9 +11212,9 @@ async fn session_actor_restart_with_ledger_verdict_but_missing_note_appends_it()
     )
     .await;
 
-    let tools = octos_agent::ToolRegistry::with_builtins(dir.path());
+    let tools = ra_agent::ToolRegistry::with_builtins(dir.path());
     let memory = factory.memory.clone();
-    let agent = Arc::new(octos_agent::Agent::new(
+    let agent = Arc::new(ra_agent::Agent::new(
         AgentId::new("restart-note-agent"),
         factory.llm.clone(),
         tools,
@@ -11249,13 +11249,13 @@ async fn session_actor_restart_with_ledger_verdict_but_missing_note_appends_it()
     );
 
     // The durable session file must now carry the structured failure note.
-    let durable = octos_bus::session::SessionHandle::open(dir.path(), &key);
+    let durable = ra_bus::session::SessionHandle::open(dir.path(), &key);
     let notes = durable
         .session()
         .messages
         .iter()
         .filter(|m| {
-            m.role == octos_core::MessageRole::System
+            m.role == ra_core::MessageRole::System
                 && m.content.contains("goal completion not verified")
         })
         .count();
@@ -11284,17 +11284,17 @@ async fn session_actor_note_persist_failure_no_phantom_and_retry_recovers() {
     impl LlmProvider for CountingEmptyVerifier {
         async fn chat(
             &self,
-            _m: &[octos_core::Message],
-            _t: &[octos_llm::ToolSpec],
-            _c: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+            _m: &[ra_core::Message],
+            _t: &[ra_llm::ToolSpec],
+            _c: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: None,
                 reasoning_content: Some("thinking…".to_owned()),
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage {
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage {
                     input_tokens: 3,
                     output_tokens: 1,
                     ..Default::default()
@@ -11312,7 +11312,7 @@ async fn session_actor_note_persist_failure_no_phantom_and_retry_recovers() {
 
     let dir = tempfile::TempDir::new().expect("temp dir");
     let orchestrator = default_agent_orchestrator();
-    let key = octos_core::SessionKey("phantom-note-prof:api:phantom-note-actor".to_owned());
+    let key = ra_core::SessionKey("phantom-note-prof:api:phantom-note-actor".to_owned());
     orchestrator
         .set_goal(GoalSetRequest {
             session_id: key.clone(),
@@ -11329,11 +11329,11 @@ async fn session_actor_note_persist_failure_no_phantom_and_retry_recovers() {
 
     // Create the canonical JSONL on disk with the durable claim row, then
     // locate it (the tempdir hosts exactly one session).
-    let cmid = octos_core::ClientMessageId::new("seed-claim-cmid");
-    octos_bus::session::persist_message_through_canonical_path(
+    let cmid = ra_core::ClientMessageId::new("seed-claim-cmid");
+    ra_bus::session::persist_message_through_canonical_path(
         dir.path(),
         &key,
-        octos_core::Message::assistant_with_thread(claim, octos_core::ThreadId::rooted_at(&cmid)),
+        ra_core::Message::assistant_with_thread(claim, ra_core::ThreadId::rooted_at(&cmid)),
     )
     .await
     .expect("seed durable claim row");
@@ -11346,11 +11346,11 @@ async fn session_actor_note_persist_failure_no_phantom_and_retry_recovers() {
         Some("phantom-note-prof".to_owned()),
     )
     .await;
-    let session_handle = octos_bus::session::SessionHandle::open(dir.path(), &key);
+    let session_handle = ra_bus::session::SessionHandle::open(dir.path(), &key);
     let handle = Arc::new(tokio::sync::Mutex::new(session_handle));
-    let tools = octos_agent::ToolRegistry::with_builtins(dir.path());
+    let tools = ra_agent::ToolRegistry::with_builtins(dir.path());
     let memory = factory.memory.clone();
-    let agent = Arc::new(octos_agent::Agent::new(
+    let agent = Arc::new(ra_agent::Agent::new(
         AgentId::new("phantom-note-agent"),
         factory.llm.clone(),
         tools,
@@ -11398,7 +11398,7 @@ async fn session_actor_note_persist_failure_no_phantom_and_retry_recovers() {
             .messages
             .iter()
             .filter(|m| {
-                m.role == octos_core::MessageRole::System
+                m.role == ra_core::MessageRole::System
                     && m.content.contains("goal completion not verified")
             })
             .count();
@@ -11421,13 +11421,13 @@ async fn session_actor_note_persist_failure_no_phantom_and_retry_recovers() {
         calls_after_failure,
         "the recovery retry replays the ledger verdict — no extra provider call"
     );
-    let durable = octos_bus::session::SessionHandle::open(dir.path(), &key);
+    let durable = ra_bus::session::SessionHandle::open(dir.path(), &key);
     let notes = durable
         .session()
         .messages
         .iter()
         .filter(|m| {
-            m.role == octos_core::MessageRole::System
+            m.role == ra_core::MessageRole::System
                 && m.content.contains("goal completion not verified")
         })
         .count();
@@ -11473,16 +11473,16 @@ async fn session_actor_missing_ram_note_mirrors_existing_durable_row() {
     impl LlmProvider for EmptyAlwaysVerifier {
         async fn chat(
             &self,
-            _m: &[octos_core::Message],
-            _t: &[octos_llm::ToolSpec],
-            _c: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
-            Ok(octos_llm::ChatResponse {
+            _m: &[ra_core::Message],
+            _t: &[ra_llm::ToolSpec],
+            _c: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
+            Ok(ra_llm::ChatResponse {
                 content: None,
                 reasoning_content: Some("thinking…".to_owned()),
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage {
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage {
                     input_tokens: 3,
                     output_tokens: 1,
                     ..Default::default()
@@ -11500,7 +11500,7 @@ async fn session_actor_missing_ram_note_mirrors_existing_durable_row() {
 
     let dir = tempfile::TempDir::new().expect("temp dir");
     let orchestrator = default_agent_orchestrator();
-    let key = octos_core::SessionKey("ramfix-prof:api:ramfix-actor".to_owned());
+    let key = ra_core::SessionKey("ramfix-prof:api:ramfix-actor".to_owned());
     orchestrator
         .set_goal(GoalSetRequest {
             session_id: key.clone(),
@@ -11514,11 +11514,11 @@ async fn session_actor_missing_ram_note_mirrors_existing_durable_row() {
     let claim = "All tasks are complete. <goal:complete>";
 
     // Durable claim row (thread-stamped).
-    let cmid = octos_core::ClientMessageId::new("ramfix-seed-cmid");
-    octos_bus::session::persist_message_through_canonical_path(
+    let cmid = ra_core::ClientMessageId::new("ramfix-seed-cmid");
+    ra_bus::session::persist_message_through_canonical_path(
         dir.path(),
         &key,
-        octos_core::Message::assistant_with_thread(claim, octos_core::ThreadId::rooted_at(&cmid)),
+        ra_core::Message::assistant_with_thread(claim, ra_core::ThreadId::rooted_at(&cmid)),
     )
     .await
     .expect("seed durable claim row");
@@ -11527,7 +11527,7 @@ async fn session_actor_missing_ram_note_mirrors_existing_durable_row() {
     // note. A fresh open after that write would already include the note
     // and would not exercise RAM repair.
     let handle2 = Arc::new(tokio::sync::Mutex::new(
-        octos_bus::session::SessionHandle::open(dir.path(), &key),
+        ra_bus::session::SessionHandle::open(dir.path(), &key),
     ));
 
     // Phase 1: run the actor ONCE so the verdict lands in the ledger and
@@ -11538,11 +11538,11 @@ async fn session_actor_missing_ram_note_mirrors_existing_durable_row() {
         Some("ramfix-prof".to_owned()),
     )
     .await;
-    let session_handle = octos_bus::session::SessionHandle::open(dir.path(), &key);
+    let session_handle = ra_bus::session::SessionHandle::open(dir.path(), &key);
     let handle = Arc::new(tokio::sync::Mutex::new(session_handle));
-    let tools = octos_agent::ToolRegistry::with_builtins(dir.path());
+    let tools = ra_agent::ToolRegistry::with_builtins(dir.path());
     let memory = factory.memory.clone();
-    let agent = Arc::new(octos_agent::Agent::new(
+    let agent = Arc::new(ra_agent::Agent::new(
         AgentId::new("ramfix-agent"),
         factory.llm.clone(),
         tools,
@@ -11564,13 +11564,13 @@ async fn session_actor_missing_ram_note_mirrors_existing_durable_row() {
     actor
         .maybe_advance_goal_runtime_after_turn("ramfix-prof", None, std::time::Instant::now())
         .await;
-    let durable = octos_bus::session::SessionHandle::open(dir.path(), &key);
+    let durable = ra_bus::session::SessionHandle::open(dir.path(), &key);
     let disk_notes = durable
         .session()
         .messages
         .iter()
         .filter(|m| {
-            m.role == octos_core::MessageRole::System
+            m.role == ra_core::MessageRole::System
                 && m.content.contains("goal completion not verified")
         })
         .count();
@@ -11582,7 +11582,7 @@ async fn session_actor_missing_ram_note_mirrors_existing_durable_row() {
         assert!(stale.session().messages.iter().any(|m| m.content == claim));
         assert!(
             !stale.session().messages.iter().any(|m| {
-                m.role == octos_core::MessageRole::System
+                m.role == ra_core::MessageRole::System
                     && m.content.contains("goal completion not verified")
             }),
             "repair must start from a genuinely missing RAM note"
@@ -11590,10 +11590,10 @@ async fn session_actor_missing_ram_note_mirrors_existing_durable_row() {
     }
     let mut actor2 = crate::session_actor::tests::session_actor_for_goal_test(
         key.clone(),
-        Arc::new(octos_agent::Agent::new(
+        Arc::new(ra_agent::Agent::new(
             AgentId::new("ramfix-agent-2"),
             factory.llm.clone(),
-            octos_agent::ToolRegistry::with_builtins(dir.path()),
+            ra_agent::ToolRegistry::with_builtins(dir.path()),
             factory.memory.clone(),
         )),
         handle2,
@@ -11625,19 +11625,19 @@ async fn session_actor_missing_ram_note_mirrors_existing_durable_row() {
             .messages
             .iter()
             .filter(|m| {
-                m.role == octos_core::MessageRole::System
+                m.role == ra_core::MessageRole::System
                     && m.content.contains("goal completion not verified")
             })
             .count();
         assert_eq!(ram_notes, 1, "RAM mirrors the existing durable note");
     }
-    let durable2 = octos_bus::session::SessionHandle::open(dir.path(), &key);
+    let durable2 = ra_bus::session::SessionHandle::open(dir.path(), &key);
     let disk_notes2 = durable2
         .session()
         .messages
         .iter()
         .filter(|m| {
-            m.role == octos_core::MessageRole::System
+            m.role == ra_core::MessageRole::System
                 && m.content.contains("goal completion not verified")
         })
         .count();

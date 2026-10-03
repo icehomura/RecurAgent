@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use eyre::WrapErr;
-use octos_bus::ChannelManager;
+use ra_bus::ChannelManager;
 
 use super::settings_str;
 use crate::config::ChannelEntry;
@@ -40,7 +40,7 @@ pub fn register(
         .and_then(|v| v.as_u64())
         .unwrap_or(10000) as usize;
 
-    let email_config = octos_bus::email_channel::EmailConfig {
+    let email_config = ra_bus::email_channel::EmailConfig {
         imap_host,
         imap_port,
         smtp_host,
@@ -52,7 +52,7 @@ pub fn register(
         allowed_senders: entry.allowed_senders.clone(),
         max_body_chars,
     };
-    channel_mgr.register(Arc::new(octos_bus::EmailChannel::new(
+    channel_mgr.register(Arc::new(ra_bus::EmailChannel::new(
         email_config,
         shutdown.clone(),
     )));

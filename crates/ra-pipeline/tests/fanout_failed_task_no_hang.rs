@@ -26,29 +26,29 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use octos_core::TokenUsage;
-use octos_memory::EpisodeStore;
-use octos_pipeline::executor::{ExecutorConfig, PipelineExecutor};
-use octos_pipeline::graph::{HandlerKind, NodeOutcome, OutcomeStatus, PipelineNode};
-use octos_pipeline::handler::{Handler, HandlerContext, HandlerRegistry};
+use ra_core::TokenUsage;
+use ra_memory::EpisodeStore;
+use ra_pipeline::executor::{ExecutorConfig, PipelineExecutor};
+use ra_pipeline::graph::{HandlerKind, NodeOutcome, OutcomeStatus, PipelineNode};
+use ra_pipeline::handler::{Handler, HandlerContext, HandlerRegistry};
 use tempfile::TempDir;
 
 // --- Stub provider: never called (the injected handler replaces dispatch). ---
 struct StubProvider;
 
 #[async_trait]
-impl octos_llm::LlmProvider for StubProvider {
+impl ra_llm::LlmProvider for StubProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
-        Ok(octos_llm::ChatResponse {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
+        Ok(ra_llm::ChatResponse {
             content: Some("stub".into()),
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage::default(),
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage::default(),
             reasoning_content: None,
             provider_index: None,
         })
@@ -99,7 +99,7 @@ async fn make_executor(dir: &TempDir) -> PipelineExecutor {
     let config = ExecutorConfig {
         guards: Vec::new(),
         max_concurrent_llm_calls: None,
-        default_provider: Arc::new(StubProvider) as Arc<dyn octos_llm::LlmProvider>,
+        default_provider: Arc::new(StubProvider) as Arc<dyn ra_llm::LlmProvider>,
         provider_router: None,
         memory,
         working_dir: dir.path().to_path_buf(),
@@ -112,13 +112,13 @@ async fn make_executor(dir: &TempDir) -> PipelineExecutor {
         max_pipeline_fanout_total: None,
         checkpoint_store: None,
         hook_executor: None,
-        workspace_context: octos_pipeline::context::PipelineContext::default(),
-        host_context: octos_pipeline::host_context::PipelineHostContext::default(),
+        workspace_context: ra_pipeline::context::PipelineContext::default(),
+        host_context: ra_pipeline::host_context::PipelineHostContext::default(),
         embedder: None,
         catalog_dir: None,
         // #1607: pipeline validators run under a no-op sandbox in tests
         // (host-independent — command validators run the argv directly).
-        sandbox: octos_agent::SandboxConfig::default(),
+        sandbox: ra_agent::SandboxConfig::default(),
     };
     PipelineExecutor::new(config)
 }

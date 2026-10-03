@@ -35,7 +35,7 @@
 //!   session/ledger disk usage. The probe never opens the database itself
 //!   (see `store_lock_check` — `redb::Database::open` would stamp/repair).
 //! - `Sandbox`: which backend `SandboxMode::Auto` selects, via the runtime's
-//!   own probes (`octos_agent::sandbox::auto_sandbox_kind`).
+//!   own probes (`ra_agent::sandbox::auto_sandbox_kind`).
 //! - `Skills` / `MCP` / `Channels`: discovered skill manifests, MCP stdio
 //!   command PATH-resolution, configured gateway channels.
 //! - `Sessions` (Stage 4): a CONTENT-FREE inventory per store — counts,
@@ -62,11 +62,11 @@ use std::path::{Path, PathBuf};
 
 use clap::Args;
 use eyre::Result;
-use octos_core::ui_protocol::{
+use ra_core::ui_protocol::{
     UI_PROTOCOL_FEATURE_CONTEXT_SEMANTIC_CACHE_V1, UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2,
     UI_PROTOCOL_KNOWN_FEATURES, UI_PROTOCOL_V1, UiProtocolCapabilities,
 };
-use octos_diagnostics::{
+use ra_diagnostics::{
     Check, CheckStatus, InstallMethod, LocatedBinaries, ProductSpec, Reachability, Report,
     UpdatePlan, config_writability_check, data_writability_check, detect, locate, on_path_check,
     protocol_skew_check, reachability, shadow_check, terminal_checks, update_check,
@@ -146,7 +146,7 @@ impl Executable for DoctorCommand {
                 "ra",
                 env!("CARGO_PKG_VERSION"),
                 UI_PROTOCOL_V1,
-                octos_core::ui_protocol::UI_PROTOCOL_SCHEMA_VERSION,
+                ra_core::ui_protocol::UI_PROTOCOL_SCHEMA_VERSION,
             );
             println!("{}", serde_json::to_string_pretty(&bundle)?);
         } else {
@@ -603,7 +603,7 @@ fn config_parse_check(
 /// Provider resolution + API-key resolvability + endpoint reachability.
 ///
 /// Provider metadata (canonical name, aliases, key env var, default endpoint,
-/// keyless-ness) comes from [`octos_llm::registry`] — the SAME source the
+/// keyless-ness) comes from [`ra_llm::registry`] — the SAME source the
 /// runtime uses — so a `provider: "Ollama"` alias or Vertex's
 /// `VERTEX_SA_JSON` is reported exactly as the runtime resolves it (codex).
 ///
@@ -637,7 +637,7 @@ fn provider_checks(config: &crate::config::Config, with_network: bool) -> Vec<Ch
     };
 
     // Registry lookup: case-insensitive + alias-aware, same as the runtime.
-    let entry = octos_llm::registry::lookup(&provider);
+    let entry = ra_llm::registry::lookup(&provider);
     let canonical = entry.map(|e| e.name).unwrap_or(provider.as_str());
     let endpoint = config
         .base_url
@@ -848,7 +848,7 @@ fn local_server_checks(
             // The unified family's placeholder stands for "single-model server
             // that ignores the field" — never flag it.
             if let Some(model) = configured_model
-                .filter(|m| *m != octos_llm::local_discovery::PLACEHOLDER_MODEL)
+                .filter(|m| *m != ra_llm::local_discovery::PLACEHOLDER_MODEL)
             {
                 let loaded = models.iter().any(|id| local_model_matches(model, id));
                 if !loaded {
@@ -899,7 +899,7 @@ fn local_server_checks(
                     format!("could not list models: {error}"),
                     format!(
                         "is the server running? common local endpoints: {}",
-                        octos_llm::local_discovery::CANDIDATE_BASE_URLS.join(", ")
+                        ra_llm::local_discovery::CANDIDATE_BASE_URLS.join(", ")
                     ),
                 )
             });
@@ -1005,7 +1005,7 @@ fn probe_models(
             MAX_BODY_BYTES / 1024
         ));
     }
-    Ok(octos_llm::local_discovery::parse_models_response(&body))
+    Ok(ra_llm::local_discovery::parse_models_response(&body))
 }
 
 /// Guard an env-var NAME before it is echoed into report values / fix lines:
@@ -1805,7 +1805,7 @@ fn binary_on_path(dirs: &[PathBuf], name: &str) -> bool {
 }
 
 /// Which backend `SandboxMode::Auto` selects on this host — delegated to
-/// [`octos_agent::sandbox::auto_sandbox_kind`], the SAME probes the runtime
+/// [`ra_agent::sandbox::auto_sandbox_kind`], the SAME probes the runtime
 /// runs (a PATH-existence guess diverged from reality: runtime `bwrap_works`
 /// actually executes `bwrap --version`, and the Linux-container / Windows
 /// AppContainer fallbacks were invisible to a which-scan — codex). On Linux
@@ -1813,7 +1813,7 @@ fn binary_on_path(dirs: &[PathBuf], name: &str) -> bool {
 /// exception to doctor's no-spawn rule, mirroring exactly what serve/chat do
 /// at startup.
 fn sandbox_check() -> Check {
-    let (kind, sandboxed) = octos_agent::sandbox::auto_sandbox_kind();
+    let (kind, sandboxed) = ra_agent::sandbox::auto_sandbox_kind();
     if sandboxed {
         Check::pass(CAT_SANDBOX, "sandbox backend", format!("Auto → {kind}"))
     } else {
@@ -2123,7 +2123,7 @@ mod tests {
             .iter()
             .find(|c| c.name == "protocol skew")
             .expect("protocol skew check present");
-        assert_eq!(skew.status, octos_diagnostics::CheckStatus::Pass);
+        assert_eq!(skew.status, ra_diagnostics::CheckStatus::Pass);
         // Glyphs are present in the rendered output.
         assert!(text.contains("[✓]"));
     }
@@ -2343,8 +2343,8 @@ mod tests {
         assert_eq!(skills_check(empty.path()).status, CheckStatus::Pass);
     }
 
-    fn mcp_server(command: Option<&str>, url: Option<&str>) -> octos_agent::McpServerConfig {
-        octos_agent::McpServerConfig {
+    fn mcp_server(command: Option<&str>, url: Option<&str>) -> ra_agent::McpServerConfig {
+        ra_agent::McpServerConfig {
             command: command.map(String::from),
             args: Vec::new(),
             env: std::collections::HashMap::new(),
@@ -2827,7 +2827,7 @@ mod tests {
         let checks = local_server_checks(
             "local",
             Some(&base),
-            Some(octos_llm::local_discovery::PLACEHOLDER_MODEL),
+            Some(ra_llm::local_discovery::PLACEHOLDER_MODEL),
             None,
         );
         assert!(!checks.iter().any(|c| c.name == "local model configured"));

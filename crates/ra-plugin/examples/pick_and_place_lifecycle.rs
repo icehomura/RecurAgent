@@ -48,7 +48,7 @@
 //! cargo run --example pick_and_place_lifecycle -p ra-plugin
 //! ```
 
-use octos_plugin::{HardwareLifecycle, LifecycleExecutor, LifecyclePhase, LifecycleStep};
+use ra_plugin::{HardwareLifecycle, LifecycleExecutor, LifecyclePhase, LifecycleStep};
 
 /// Helper to construct a lifecycle step. In production, these come from
 /// the plugin's `manifest.json` under `hardware_lifecycle`.

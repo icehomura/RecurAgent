@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use octos_bus::{ChannelManager, CliChannel};
+use ra_bus::{ChannelManager, CliChannel};
 use tokio::sync::Notify;
 
 use crate::config::ChannelEntry;

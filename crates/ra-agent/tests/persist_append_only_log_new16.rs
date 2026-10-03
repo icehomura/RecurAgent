@@ -37,10 +37,10 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use octos_agent::{Agent, AgentConfig, ToolRegistry};
-use octos_core::{AgentId, Message, MessageRole, ToolCall};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_agent::{Agent, AgentConfig, ToolRegistry};
+use ra_core::{AgentId, Message, MessageRole, ToolCall};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 
 /// Mirrors the `MockLlmProvider` in `integration.rs` but exposes the

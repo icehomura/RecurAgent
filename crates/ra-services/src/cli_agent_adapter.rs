@@ -174,7 +174,7 @@ impl CliAgentProcess {
         // General inheritance stays: headless CLIs resolve provider
         // credentials from the parent environment.
         for key in config.env.keys() {
-            if octos_core::BLOCKED_ENV_VARS
+            if ra_core::BLOCKED_ENV_VARS
                 .iter()
                 .any(|blocked| key.eq_ignore_ascii_case(blocked))
             {
@@ -184,7 +184,7 @@ impl CliAgentProcess {
                 );
             }
         }
-        for blocked in octos_core::BLOCKED_ENV_VARS {
+        for blocked in ra_core::BLOCKED_ENV_VARS {
             command.env_remove(blocked);
         }
 

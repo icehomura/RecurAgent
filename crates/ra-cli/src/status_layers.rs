@@ -13,9 +13,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
-use octos_agent::TokenTracker;
-use octos_bus::Channel;
-use octos_core::{METADATA_SENDER_USER_ID, OutboundMessage};
+use ra_agent::TokenTracker;
+use ra_bus::Channel;
+use ra_core::{METADATA_SENDER_USER_ID, OutboundMessage};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, Notify};
 use tracing::warn;
@@ -214,7 +214,7 @@ impl UserStatusConfig {
     }
 
     fn config_path(data_dir: &Path, base_key: &str) -> PathBuf {
-        let encoded = octos_bus::session::encode_path_component(base_key);
+        let encoded = ra_bus::session::encode_path_component(base_key);
         data_dir
             .join("users")
             .join(encoded)
@@ -886,7 +886,7 @@ mod tests {
     use std::sync::Arc;
 
     use async_trait::async_trait;
-    use octos_core::{InboundMessage, METADATA_SENDER_USER_ID};
+    use ra_core::{InboundMessage, METADATA_SENDER_USER_ID};
     use tokio::sync::{Mutex, mpsc};
 
     #[derive(Default)]

@@ -26,7 +26,7 @@
 //! The runner is intentionally synchronous — callers that need async
 //! summarisers can drive them from their own [`FullCompactor`] impl.
 
-use octos_core::{Message, MessageRole};
+use ra_core::{Message, MessageRole};
 use serde::{Deserialize, Serialize};
 
 use crate::compaction::{
@@ -702,7 +702,7 @@ impl TieredCompactionRunner {
 mod tests {
     use super::*;
     use crate::compaction::{CompactionPolicy, CompactionRunner as FullCompactionRunner};
-    use octos_core::ToolCall;
+    use ra_core::ToolCall;
 
     fn user_msg(content: &str) -> Message {
         Message {

@@ -1,4 +1,4 @@
-use octos_agent::{
+use ra_agent::{
     ApprovalPolicy, EffectivePermissions, FilesystemScope, PermissionProfile, RuntimeMode,
     SandboxConfig, SandboxMode, ToolRegistry, create_sandbox,
 };

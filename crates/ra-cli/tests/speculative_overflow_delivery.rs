@@ -2,8 +2,8 @@
 //! wiring end-to-end.
 //!
 //! FA-11 root-caused two coupled defects. Defect B lives in
-//! [`octos_cli::session_actor`]: the speculative overflow task emitted its
-//! reply with empty metadata, so [`octos_bus::ApiChannel::send`] routed it
+//! [`ra_cli::session_actor`]: the speculative overflow task emitted its
+//! reply with empty metadata, so [`ra_bus::ApiChannel::send`] routed it
 //! only via the `pending[session_id]` channel — which was removed the
 //! moment the primary turn emitted its `_completion` marker. The reply was
 //! silently dropped and the client's bubble stayed stuck "streaming"
@@ -29,10 +29,10 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use octos_bus::Channel;
-use octos_bus::api_channel::ApiChannel;
-use octos_bus::session::SessionManager;
-use octos_core::OutboundMessage;
+use ra_bus::Channel;
+use ra_bus::api_channel::ApiChannel;
+use ra_bus::session::SessionManager;
+use ra_core::OutboundMessage;
 use tokio::sync::Mutex;
 
 fn test_sessions(dir: &std::path::Path) -> Arc<Mutex<SessionManager>> {

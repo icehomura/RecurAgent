@@ -34,9 +34,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use octos_agent::cost_ledger::CostAccountant;
-use octos_agent::workspace_policy::{Validator, WorkspacePolicy};
-use octos_llm::LlmProvider;
+use ra_agent::cost_ledger::CostAccountant;
+use ra_agent::workspace_policy::{Validator, WorkspacePolicy};
+use ra_llm::LlmProvider;
 
 /// Per-node validator overrides for pipelines.
 ///
@@ -160,11 +160,11 @@ impl std::fmt::Debug for PipelineContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_agent::WORKSPACE_POLICY_SCHEMA_VERSION;
-    use octos_agent::workspace_policy::{
+    use ra_agent::WORKSPACE_POLICY_SCHEMA_VERSION;
+    use ra_agent::workspace_policy::{
         ValidationPolicy, ValidatorPhaseKind, ValidatorSpec, WorkspacePolicy, WorkspacePolicyKind,
     };
-    use octos_agent::workspace_policy::{
+    use ra_agent::workspace_policy::{
         WorkspaceArtifactsPolicy, WorkspacePolicyWorkspace, WorkspaceSnapshotTrigger,
         WorkspaceTrackingPolicy, WorkspaceVersionControlPolicy, WorkspaceVersionControlProvider,
     };

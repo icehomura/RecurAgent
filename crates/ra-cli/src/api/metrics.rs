@@ -352,11 +352,11 @@ fn build_totals(samples: &[ParsedMetricSample]) -> BTreeMap<String, u64> {
         ),
         (
             "loop_errors".to_string(),
-            total_for_metric(samples, octos_agent::OCTOS_LOOP_ERROR_TOTAL),
+            total_for_metric(samples, ra_agent::OCTOS_LOOP_ERROR_TOTAL),
         ),
         (
             "loop_retries".to_string(),
-            total_for_metric(samples, octos_agent::OCTOS_LOOP_RETRY_TOTAL),
+            total_for_metric(samples, ra_agent::OCTOS_LOOP_RETRY_TOTAL),
         ),
     ])
 }
@@ -483,7 +483,7 @@ fn build_breakdowns(samples: &[ParsedMetricSample]) -> BTreeMap<String, Vec<Valu
             "loop_errors".to_string(),
             breakdown(
                 samples,
-                octos_agent::OCTOS_LOOP_ERROR_TOTAL,
+                ra_agent::OCTOS_LOOP_ERROR_TOTAL,
                 &["variant", "recovery"],
             ),
         ),
@@ -491,7 +491,7 @@ fn build_breakdowns(samples: &[ParsedMetricSample]) -> BTreeMap<String, Vec<Valu
             "loop_retries".to_string(),
             breakdown(
                 samples,
-                octos_agent::OCTOS_LOOP_RETRY_TOTAL,
+                ra_agent::OCTOS_LOOP_RETRY_TOTAL,
                 &["variant", "decision"],
             ),
         ),
@@ -511,12 +511,12 @@ pub struct OperatorContractCostSummary {
     pub cost_usd: f64,
 }
 
-/// Convert [`octos_agent::ContractCostRollup`] records into the
+/// Convert [`ra_agent::ContractCostRollup`] records into the
 /// serialized dashboard shape. The conversion is deliberately
 /// one-way so the API layer stays decoupled from the ledger crate's
 /// internal types.
 pub fn operator_contract_cost_summary(
-    rollups: &[octos_agent::ContractCostRollup],
+    rollups: &[ra_agent::ContractCostRollup],
 ) -> Vec<OperatorContractCostSummary> {
     rollups
         .iter()
@@ -957,7 +957,7 @@ pub fn record_routing_decision(tier: &str, lane: Option<&str>) {
 /// Decorator that records Prometheus metrics for progress events,
 /// then delegates to an inner reporter.
 pub struct MetricsReporter {
-    inner: Arc<dyn octos_agent::ProgressReporter>,
+    inner: Arc<dyn ra_agent::ProgressReporter>,
     /// Turn-cumulative counters at the last `CostUpdate` this reporter
     /// metered. `ra_llm_tokens_total` increments by the DELTA between
     /// successive events so responses that emit no cost update of their
@@ -970,7 +970,7 @@ pub struct MetricsReporter {
 }
 
 impl MetricsReporter {
-    pub fn new(inner: Arc<dyn octos_agent::ProgressReporter>) -> Self {
+    pub fn new(inner: Arc<dyn ra_agent::ProgressReporter>) -> Self {
         Self {
             inner,
             last_turn_input_tokens: std::sync::atomic::AtomicU32::new(0),
@@ -986,10 +986,10 @@ impl MetricsReporter {
     }
 }
 
-impl octos_agent::ProgressReporter for MetricsReporter {
-    fn report(&self, event: octos_agent::ProgressEvent) {
+impl ra_agent::ProgressReporter for MetricsReporter {
+    fn report(&self, event: ra_agent::ProgressEvent) {
         match &event {
-            octos_agent::ProgressEvent::ToolCompleted {
+            ra_agent::ProgressEvent::ToolCompleted {
                 name,
                 success,
                 duration,
@@ -997,7 +997,7 @@ impl octos_agent::ProgressReporter for MetricsReporter {
             } => {
                 record_tool_call(name, *success, duration.as_secs_f64());
             }
-            octos_agent::ProgressEvent::CostUpdate {
+            ra_agent::ProgressEvent::CostUpdate {
                 turn_input_tokens,
                 turn_output_tokens,
                 ..
@@ -1104,7 +1104,7 @@ ra_cost_attribution_total{model="claude-sonnet-4",outcome="success"} 1
 
     #[test]
     fn operator_contract_cost_summary_preserves_sort_order() {
-        use octos_agent::ContractCostRollup;
+        use ra_agent::ContractCostRollup;
         let rollups = vec![
             ContractCostRollup {
                 contract_id: "contract-B".into(),

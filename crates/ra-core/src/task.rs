@@ -126,7 +126,7 @@ pub struct GitState {
 ///
 /// See `docs/ra_HARNESS_ABI_VERSIONING.md` for the stable and experimental
 /// fields per version and the deprecation rules. The harness also exposes
-/// this constant as `octos_agent::TASK_RESULT_SCHEMA_VERSION`.
+/// this constant as `ra_agent::TASK_RESULT_SCHEMA_VERSION`.
 pub const TASK_RESULT_SCHEMA_VERSION: u32 = 1;
 
 fn default_task_result_schema_version() -> u32 {

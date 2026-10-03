@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use chrono::{DateTime, Utc};
-use octos_core::ui_protocol::ApprovalDecidedEvent;
+use ra_core::ui_protocol::ApprovalDecidedEvent;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -317,8 +317,8 @@ pub fn log_decision_tracing(event: &ApprovalDecidedEvent, tool_name: Option<&str
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::SessionKey;
-    use octos_core::ui_protocol::{ApprovalDecision, ApprovalId, TurnId};
+    use ra_core::SessionKey;
+    use ra_core::ui_protocol::{ApprovalDecision, ApprovalId, TurnId};
     use std::sync::atomic::{AtomicI64, Ordering};
 
     struct FixedClock {

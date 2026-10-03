@@ -158,9 +158,9 @@ impl Tool for WriteFileTool {
         // and get mangled; sizing every armed result under the cap makes the
         // tool's own cut the only cut.
         if self.window_armed() {
-            octos_core::truncate_utf8(
+            ra_core::truncate_utf8(
                 &mut result.output,
-                octos_core::tool_output_limit(self.name()),
+                ra_core::tool_output_limit(self.name()),
                 "",
             );
         }
@@ -287,7 +287,7 @@ impl WriteFileTool {
             // caller-controlled and can be arbitrarily long, and a refusal
             // that overflows the loop's output cap gets blind-truncated into
             // useless advice.
-            let shown_path = octos_core::truncated_utf8(&input.path, 200, "...");
+            let shown_path = ra_core::truncated_utf8(&input.path, 200, "...");
             let page_advice = "Page through it with read_file (offset/limit, or byte_offset \
                                for single lines too long for the line window) until you reach \
                                the end, then retry the write.";
@@ -391,9 +391,9 @@ impl WriteFileTool {
                 // drop debug_assert). shown_path is already bounded to ~200
                 // bytes, so this never actually cuts; it is the enforced
                 // backstop keeping the loop's blind cut off the advice.
-                let output = octos_core::truncated_utf8(
+                let output = ra_core::truncated_utf8(
                     &output,
-                    octos_core::tool_output_limit("write_file"),
+                    ra_core::tool_output_limit("write_file"),
                     "",
                 );
                 return Ok(ToolResult {
@@ -452,7 +452,7 @@ impl WriteFileTool {
                             {
                                 super::read_window::forget(session, &path);
                             }
-                            let shown_path = octos_core::truncated_utf8(&input.path, 200, "...");
+                            let shown_path = ra_core::truncated_utf8(&input.path, 200, "...");
                             return Ok(ToolResult {
                                 output: format!(
                                     "{} write_file refused: {} changed on disk between your read \
@@ -515,7 +515,7 @@ impl WriteFileTool {
                     // the tool-output cap (#2193 R4).
                     format!(
                         "failed to create directories: {}",
-                        octos_core::truncated_utf8(&parent.display().to_string(), 200, "…")
+                        ra_core::truncated_utf8(&parent.display().to_string(), 200, "…")
                     )
                 })?;
             }
@@ -539,7 +539,7 @@ impl WriteFileTool {
                             {
                                 super::read_window::forget(session, &path);
                             }
-                            let shown_path = octos_core::truncated_utf8(&input.path, 200, "...");
+                            let shown_path = ra_core::truncated_utf8(&input.path, 200, "...");
                             return Ok(ToolResult {
                                 output: format!(
                                     "{} write_file refused: {} changed on disk between your read \
@@ -632,7 +632,7 @@ impl WriteFileTool {
             output: format!(
                 "Successfully wrote {} lines to {}{}",
                 line_count,
-                octos_core::truncated_utf8(&input.path, 200, "..."),
+                ra_core::truncated_utf8(&input.path, 200, "..."),
                 format_note.unwrap_or_default()
             ),
             success: true,
@@ -830,7 +830,7 @@ mod tests {
     // Phase 2-C: SessionScope integration tests for WriteFileTool.
     // -----------------------------------------------------------------------
 
-    use octos_core::SessionScope;
+    use ra_core::SessionScope;
     use std::sync::Arc;
 
     fn ctx_with_scope(scope: SessionScope) -> ToolContext {
@@ -2113,10 +2113,10 @@ mod tests {
         assert!(
             refused.output.contains("[PARTIAL_VIEW_OVERWRITE]"),
             "still the typed refusal: {}",
-            octos_core::truncated_utf8(&refused.output, 200, "...")
+            ra_core::truncated_utf8(&refused.output, 200, "...")
         );
         assert!(
-            refused.output.len() <= octos_core::tool_output_limit("write_file"),
+            refused.output.len() <= ra_core::tool_output_limit("write_file"),
             "the refusal must clamp the path so the loop backstop cannot \
              mangle the advice: {} bytes",
             refused.output.len()

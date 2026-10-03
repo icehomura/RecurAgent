@@ -19,16 +19,16 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use octos_agent::compaction::{CompactionPhase, CompactionRunner};
-use octos_agent::workspace_policy::{
+use ra_agent::compaction::{CompactionPhase, CompactionRunner};
+use ra_agent::workspace_policy::{
     CompactionPolicy, CompactionSummarizerKind, WorkspaceArtifactsPolicy, WorkspacePolicy,
     WorkspacePolicyKind, WorkspacePolicyWorkspace, WorkspaceSnapshotTrigger,
     WorkspaceTrackingPolicy, WorkspaceVersionControlPolicy, WorkspaceVersionControlProvider,
 };
-use octos_agent::{Agent, COMPACTION_POLICY_SCHEMA_VERSION, WORKSPACE_POLICY_SCHEMA_VERSION};
-use octos_core::{AgentId, Message, MessageRole};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_agent::{Agent, COMPACTION_POLICY_SCHEMA_VERSION, WORKSPACE_POLICY_SCHEMA_VERSION};
+use ra_core::{AgentId, Message, MessageRole};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 
 fn system_msg(content: &str) -> Message {
     Message {
@@ -169,7 +169,7 @@ async fn build_agent() -> Agent {
             .expect("open episode store"),
     );
     let llm: Arc<dyn LlmProvider> = Arc::new(SpyLlm::new());
-    let tools = octos_agent::ToolRegistry::new();
+    let tools = ra_agent::ToolRegistry::new();
     Agent::new(AgentId::new("test-compaction-wiring"), llm, tools, memory)
 }
 

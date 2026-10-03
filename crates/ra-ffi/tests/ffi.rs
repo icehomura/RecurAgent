@@ -8,7 +8,7 @@
 use std::ffi::{CStr, CString};
 use std::ptr;
 
-use octos_ffi::{
+use ra_ffi::{
     RaRuntime, ra_embed, ra_embedding_model_ensure, ra_embedding_model_status,
     ra_last_error, ra_memory_load, ra_memory_search, ra_memory_stats,
     ra_memory_upsert, ra_run_task, ra_runtime_free, ra_runtime_new, ra_string_free,

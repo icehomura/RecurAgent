@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use eyre::WrapErr;
-use octos_bus::ChannelManager;
+use ra_bus::ChannelManager;
 
 use super::settings_str;
 use crate::config::ChannelEntry;
@@ -35,7 +35,7 @@ pub fn register(
         .unwrap_or(8650) as u16;
 
     channel_mgr.register(Arc::new(
-        octos_bus::DingTalkChannel::new(
+        ra_bus::DingTalkChannel::new(
             webhook_url,
             secret,
             entry.allowed_senders.clone(),

@@ -7,16 +7,16 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_core::{AgentId, Task, TaskContext, TaskKind, TokenUsage};
-use octos_llm::{
+use ra_core::{AgentId, Task, TaskContext, TaskKind, TokenUsage};
+use ra_llm::{
     ContextWindowOverride, EmbeddingProvider, LlmProvider, ProviderRouter,
     SemaphoreThrottledProvider,
 };
-use octos_memory::EpisodeStore;
+use ra_memory::EpisodeStore;
 use tracing::{info, warn};
 
-use octos_agent::progress::{ProgressEvent, ProgressReporter};
-use octos_agent::tools::{TOOL_CTX, Tool, ToolRegistry};
+use ra_agent::progress::{ProgressEvent, ProgressReporter};
+use ra_agent::tools::{TOOL_CTX, Tool, ToolRegistry};
 
 use crate::condition;
 use crate::graph::{HandlerKind, NodeOutcome, OutcomeStatus, PipelineNode};
@@ -54,7 +54,7 @@ pub(crate) struct CachedPluginRegistration {
 impl CachedPluginRegistration {
     /// Apply this cached registration onto a fresh per-node
     /// [`ToolRegistry`]. Mirrors the ordering used by
-    /// [`octos_agent::PluginLoader::load_into_with_options`] so the
+    /// [`ra_agent::PluginLoader::load_into_with_options`] so the
     /// observable registry state is identical to the legacy code path.
     pub(crate) fn apply_to(&self, registry: &mut ToolRegistry) {
         for tool in &self.tools {
@@ -88,11 +88,11 @@ fn build_cached_plugin_registration(
     // path) but operators who opt into `plugins.require_signed` on
     // their host config expect the pipeline cache to enforce the
     // same gate.
-    let load_result = octos_agent::PluginLoader::load_into_with_options(
+    let load_result = ra_agent::PluginLoader::load_into_with_options(
         &mut staging,
         plugin_dirs,
         &[],
-        octos_agent::PluginLoadOptions {
+        ra_agent::PluginLoadOptions {
             work_dir: None,
             synthesis_config: None,
             require_signed,
@@ -296,7 +296,7 @@ pub struct CodergenHandler {
     working_dir: PathBuf,
     provider_router: Option<Arc<ProviderRouter>>,
     llm_semaphore: Option<Arc<tokio::sync::Semaphore>>,
-    provider_policy: Option<octos_agent::ToolPolicy>,
+    provider_policy: Option<ra_agent::ToolPolicy>,
     plugin_dirs: Vec<PathBuf>,
     /// Section B (codex review P1.1): pipeline-level strict-signing
     /// policy. Defaults to `false` (legacy permissive path). When the
@@ -309,10 +309,10 @@ pub struct CodergenHandler {
     /// Declared compaction policy to propagate onto child Agents
     /// (coding-blue FA-7). `None` = legacy path, no compaction runner
     /// attached to the worker.
-    compaction_policy: Option<octos_agent::workspace_policy::CompactionPolicy>,
+    compaction_policy: Option<ra_agent::workspace_policy::CompactionPolicy>,
     /// Workspace policy backing the compaction runner — lets the runner
     /// resolve declared artifact names against glob patterns.
-    compaction_workspace: Option<octos_agent::workspace_policy::WorkspacePolicy>,
+    compaction_workspace: Option<ra_agent::workspace_policy::WorkspacePolicy>,
     /// Agent LLM provider used to construct
     /// `CompactionRunner::with_provider(...)`. Defaults to `self.llm`
     /// when unset so extractive compaction still works without the
@@ -353,7 +353,7 @@ pub struct CodergenHandler {
     /// workspace-declared `ValidatorSpec::Command` to this sandbox instead of
     /// running it directly on the host from a sandboxed pipeline. Defaults to
     /// `SandboxConfig::default()`; a no-op backend runs the argv directly.
-    sandbox: octos_agent::SandboxConfig,
+    sandbox: ra_agent::SandboxConfig,
 }
 
 impl CodergenHandler {
@@ -380,7 +380,7 @@ impl CodergenHandler {
             plugin_cache: Arc::new(OnceLock::new()),
             embedder: None,
             plugin_verified_cache_dir: None,
-            sandbox: octos_agent::SandboxConfig::default(),
+            sandbox: ra_agent::SandboxConfig::default(),
         }
     }
 
@@ -389,7 +389,7 @@ impl CodergenHandler {
     /// validator run by the worker Agent's project-root validator pass is
     /// confined to the session sandbox instead of executing on the host.
     /// `PipelineExecutor::build_codergen` calls this with `ExecutorConfig.sandbox`.
-    pub fn with_sandbox(mut self, sandbox: octos_agent::SandboxConfig) -> Self {
+    pub fn with_sandbox(mut self, sandbox: ra_agent::SandboxConfig) -> Self {
         self.sandbox = sandbox;
         self
     }
@@ -474,7 +474,7 @@ impl CodergenHandler {
         self
     }
 
-    pub fn with_provider_policy(mut self, policy: Option<octos_agent::ToolPolicy>) -> Self {
+    pub fn with_provider_policy(mut self, policy: Option<ra_agent::ToolPolicy>) -> Self {
         self.provider_policy = policy;
         self
     }
@@ -493,11 +493,11 @@ impl CodergenHandler {
     /// [`CompactionRunner::with_provider`] so LLM-iterative
     /// summarisation fires when declared.
     ///
-    /// [`CompactionRunner`]: octos_agent::compaction::CompactionRunner
-    /// [`CompactionRunner::with_provider`]: octos_agent::compaction::CompactionRunner::with_provider
+    /// [`CompactionRunner`]: ra_agent::compaction::CompactionRunner
+    /// [`CompactionRunner::with_provider`]: ra_agent::compaction::CompactionRunner::with_provider
     pub fn with_compaction_policy(
         mut self,
-        policy: Option<octos_agent::workspace_policy::CompactionPolicy>,
+        policy: Option<ra_agent::workspace_policy::CompactionPolicy>,
     ) -> Self {
         self.compaction_policy = policy;
         self
@@ -507,10 +507,10 @@ impl CodergenHandler {
     /// declared artifact names resolve against glob patterns. Consumed
     /// via [`Agent::with_compaction_workspace`].
     ///
-    /// [`Agent::with_compaction_workspace`]: octos_agent::Agent::with_compaction_workspace
+    /// [`Agent::with_compaction_workspace`]: ra_agent::Agent::with_compaction_workspace
     pub fn with_compaction_workspace(
         mut self,
-        workspace: Option<octos_agent::workspace_policy::WorkspacePolicy>,
+        workspace: Option<ra_agent::workspace_policy::WorkspacePolicy>,
     ) -> Self {
         self.compaction_workspace = workspace;
         self
@@ -522,7 +522,7 @@ impl CodergenHandler {
     /// summarisation ignores the provider entirely and LLM-iterative
     /// routes through the same Agent provider that serves the node.
     ///
-    /// [`CompactionRunner::with_provider`]: octos_agent::compaction::CompactionRunner::with_provider
+    /// [`CompactionRunner::with_provider`]: ra_agent::compaction::CompactionRunner::with_provider
     pub fn with_compaction_llm_provider(mut self, provider: Option<Arc<dyn LlmProvider>>) -> Self {
         self.compaction_llm_provider = provider;
         self
@@ -608,7 +608,7 @@ impl CodergenHandler {
                             "pipeline node provider resolved with fallbacks"
                         );
                     }
-                    Ok(octos_llm::FallbackProvider::wrap_with_router(
+                    Ok(ra_llm::FallbackProvider::wrap_with_router(
                         primary,
                         fallbacks,
                         router.clone(),
@@ -678,13 +678,13 @@ impl Handler for CodergenHandler {
         // prompt-inject a write). Derive permissions from the session sandbox so a
         // read-only session's workers get read-only file access.
         let permissions = if self.sandbox.workspace_write {
-            octos_agent::EffectivePermissions::workspace_write()
+            ra_agent::EffectivePermissions::workspace_write()
         } else {
-            octos_agent::EffectivePermissions::read_only()
+            ra_agent::EffectivePermissions::read_only()
         };
-        let mut tools = octos_agent::ToolRegistry::with_builtins_and_permissions(
+        let mut tools = ra_agent::ToolRegistry::with_builtins_and_permissions(
             &self.working_dir,
-            octos_agent::create_sandbox(&self.sandbox),
+            ra_agent::create_sandbox(&self.sandbox),
             permissions,
         );
 
@@ -712,12 +712,12 @@ impl Handler for CodergenHandler {
         let has_tools_attr = !node.tools.is_empty();
         let policy = if has_tools_attr && allowed.is_empty() {
             // Explicit tools="" → deny everything
-            octos_agent::ToolPolicy {
+            ra_agent::ToolPolicy {
                 deny: vec!["*".into()],
                 ..Default::default()
             }
         } else {
-            octos_agent::ToolPolicy {
+            ra_agent::ToolPolicy {
                 allow: allowed,
                 deny: vec![
                     "spawn".into(),
@@ -837,7 +837,7 @@ impl Handler for CodergenHandler {
         let max_tokens = node
             .max_output_tokens
             .or_else(|| Some(provider.max_output_tokens()));
-        let config = octos_agent::AgentConfig {
+        let config = ra_agent::AgentConfig {
             max_iterations: node.max_iterations.unwrap_or(30),
             max_timeout: node.timeout_secs.map(Duration::from_secs),
             save_episodes: false,
@@ -865,7 +865,7 @@ impl Handler for CodergenHandler {
             .ok()
             .flatten();
 
-        let mut worker = octos_agent::Agent::new(
+        let mut worker = ra_agent::Agent::new(
             worker_id.clone(),
             provider.clone(),
             tools,
@@ -917,7 +917,7 @@ impl Handler for CodergenHandler {
         // Phase 3-A plumbing follow-up (Phase 1 gap): propagate the
         // parent session's `SessionScope` snapshotted into
         // `PipelineHostContext::session_scope` (see
-        // `octos_pipeline::host_context::PipelineHostContext::from_tool_context`)
+        // `ra_pipeline::host_context::PipelineHostContext::from_tool_context`)
         // onto the per-node worker. Without this every pipeline-spawned
         // child Agent would observe `session_scope: None` and the
         // Phase-2 consumers (file tools, shell/spawn CWD, plugin tool
@@ -941,7 +941,7 @@ impl Handler for CodergenHandler {
                 .compaction_llm_provider
                 .clone()
                 .unwrap_or_else(|| provider.clone());
-            let runner = octos_agent::compaction::CompactionRunner::with_provider(
+            let runner = ra_agent::compaction::CompactionRunner::with_provider(
                 compaction_policy,
                 compaction_provider,
             );
@@ -1460,7 +1460,7 @@ fn compact_pipeline_instruction(
     let budget = half_context
         .min(context_window.saturating_sub(reserved))
         .max(512);
-    if octos_llm::context::estimate_tokens(input) <= budget {
+    if ra_llm::context::estimate_tokens(input) <= budget {
         return input.to_string();
     }
 
@@ -1479,7 +1479,7 @@ fn compact_pipeline_instruction(
         .collect();
     format!(
         "{head}\n\n[... pipeline input compacted: omitted approximately {} tokens ...]\n\n{tail}",
-        octos_llm::context::estimate_tokens(input).saturating_sub(budget)
+        ra_llm::context::estimate_tokens(input).saturating_sub(budget)
     )
 }
 
@@ -1488,8 +1488,8 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
 
-    use octos_agent::progress::{ProgressEvent, ProgressReporter};
-    use octos_agent::tools::{TOOL_CTX, ToolContext};
+    use ra_agent::progress::{ProgressEvent, ProgressReporter};
+    use ra_agent::tools::{TOOL_CTX, ToolContext};
 
     /// Capture reporter that stores every event so tests can assert which
     /// pieces of progress reached the parent SSE stream.
@@ -1571,10 +1571,10 @@ mod tests {
     impl LlmProvider for NamedMock {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             unreachable!("resolve_provider must not call chat()")
         }
         fn model_id(&self) -> &str {
@@ -2094,10 +2094,10 @@ mod tests {
         impl LlmProvider for DelayedProbeProvider {
             async fn chat(
                 &self,
-                _messages: &[octos_core::Message],
-                _tools: &[octos_llm::ToolSpec],
-                _config: &octos_llm::ChatConfig,
-            ) -> eyre::Result<octos_llm::ChatResponse> {
+                _messages: &[ra_core::Message],
+                _tools: &[ra_llm::ToolSpec],
+                _config: &ra_llm::ChatConfig,
+            ) -> eyre::Result<ra_llm::ChatResponse> {
                 unreachable!("sizing must not chat");
             }
 

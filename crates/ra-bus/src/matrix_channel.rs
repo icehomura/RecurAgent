@@ -18,7 +18,7 @@ use axum::response::IntoResponse;
 use axum::routing::{get, put};
 use chrono::Utc;
 use eyre::{Result, WrapErr};
-use octos_core::{InboundMessage, METADATA_SENDER_USER_ID, OutboundMessage};
+use ra_core::{InboundMessage, METADATA_SENDER_USER_ID, OutboundMessage};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use subtle::ConstantTimeEq;
@@ -1838,7 +1838,7 @@ async fn handle_transaction(
             media,
             metadata,
             message_id: event_id,
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         };
 
         if state.inbound_tx.send(inbound).await.is_err() {
@@ -2054,7 +2054,7 @@ async fn dispatch_allbots(
                 "org.ra.broadcast_source_event_id": source_event_id,
             }),
             message_id: source_event_id.map(str::to_string),
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         };
 
         state.inbound_tx.send(inbound).await.map_err(|_| {
@@ -2970,7 +2970,7 @@ pub const SWARM_SUPERVISOR_EVENT_SCHEMA_V1: &str = "ra.harness.event.v1";
 
 /// Typed harness event emitted into a swarm supervisor room.
 ///
-/// Mirrors the shape of `octos_agent::HarnessEvent` without depending on the
+/// Mirrors the shape of `ra_agent::HarnessEvent` without depending on the
 /// agent crate (ra-bus must stay sibling-free with ra-agent). Invariant 3
 /// of the M7.3 contract requires that serialization preserve `kind` and key
 /// summary fields — the `#[serde(tag = "kind", rename_all = "snake_case")]`
@@ -3217,7 +3217,7 @@ impl SwarmSupervisorState {
 
 /// Configuration inputs required to enable the swarm supervisor UI.
 ///
-/// Plumbed from [`crate::profiles::SwarmSupervisorConfig`](../../../octos_cli/profiles/struct.SwarmSupervisorConfig.html)
+/// Plumbed from [`crate::profiles::SwarmSupervisorConfig`](../../../ra_cli/profiles/struct.SwarmSupervisorConfig.html)
 /// in the CLI (ra-cli cannot be imported from ra-bus; callers pass the
 /// already-validated fields directly).
 #[derive(Clone, Debug)]

@@ -6,7 +6,7 @@
 //! sandboxed shell — can edit that repository's `.git/config` and `hooks/`,
 //! and those files decide which programs git runs. Unlike the workspace
 //! snapshot repos (which run through a private git dir, see
-//! `octos_agent::private_git`), these are the user's own repositories, so the
+//! `ra_agent::private_git`), these are the user's own repositories, so the
 //! user's global/system config (identity, LFS filters) must keep working.
 //!
 //! [`agent_repo_git`] therefore keeps global and system config but overrides

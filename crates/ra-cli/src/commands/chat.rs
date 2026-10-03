@@ -12,12 +12,12 @@ use clap::{Args, ValueEnum};
 use colored::Colorize;
 use eyre::{Result, WrapErr, eyre};
 #[cfg(any(feature = "api", test))]
-use octos_agent::{ToolApprovalDecision, ToolApprovalRequest, ToolApprovalRequester};
+use ra_agent::{ToolApprovalDecision, ToolApprovalRequest, ToolApprovalRequester};
 #[cfg(feature = "api")]
-use octos_agent::{UserQuestionOutcome, UserQuestionRequest, UserQuestionRequester};
+use ra_agent::{UserQuestionOutcome, UserQuestionRequest, UserQuestionRequester};
 #[cfg(feature = "api")]
-use octos_core::ui_protocol::UserQuestionAnswer;
-use octos_llm::{EmbeddingProvider, LlmProvider, OpenAIEmbedder};
+use ra_core::ui_protocol::UserQuestionAnswer;
+use ra_llm::{EmbeddingProvider, LlmProvider, OpenAIEmbedder};
 #[cfg(feature = "api")]
 use rustyline::DefaultEditor;
 
@@ -198,7 +198,7 @@ pub struct ChatCommand {
 }
 
 /// `--sandbox` choices, mirroring codex's sandbox modes and ra's
-/// [`PermissionProfile`](octos_agent::PermissionProfile).
+/// [`PermissionProfile`](ra_agent::PermissionProfile).
 ///
 /// `rename_all = "kebab-case"` makes the serde encoding (`"workspace-write"`,
 /// …) identical to clap's `ValueEnum` possible-value names, so the config
@@ -225,7 +225,7 @@ pub enum ChatApprovalMode {
 }
 
 /// `--effort` choices, mirroring claude/codex reasoning-effort tiers. Maps
-/// 1:1 to [`octos_llm::ReasoningEffort`]. For these single-word variants
+/// 1:1 to [`ra_llm::ReasoningEffort`]. For these single-word variants
 /// clap's default `ValueEnum` naming and serde's `kebab-case` agree
 /// (`none`/`low`/`medium`/`high`/`max`), so a `config.cli.chat.effort` round-trips
 /// losslessly — matching [`ChatSandboxMode`].
@@ -239,14 +239,14 @@ pub enum ChatEffort {
     Max,
 }
 
-impl From<ChatEffort> for octos_llm::ReasoningEffort {
+impl From<ChatEffort> for ra_llm::ReasoningEffort {
     fn from(effort: ChatEffort) -> Self {
         match effort {
-            ChatEffort::None => octos_llm::ReasoningEffort::Disabled,
-            ChatEffort::Low => octos_llm::ReasoningEffort::Low,
-            ChatEffort::Medium => octos_llm::ReasoningEffort::Medium,
-            ChatEffort::High => octos_llm::ReasoningEffort::High,
-            ChatEffort::Max => octos_llm::ReasoningEffort::Max,
+            ChatEffort::None => ra_llm::ReasoningEffort::Disabled,
+            ChatEffort::Low => ra_llm::ReasoningEffort::Low,
+            ChatEffort::Medium => ra_llm::ReasoningEffort::Medium,
+            ChatEffort::High => ra_llm::ReasoningEffort::High,
+            ChatEffort::Max => ra_llm::ReasoningEffort::Max,
         }
     }
 }
@@ -310,14 +310,14 @@ pub(crate) fn detach_route_on_provider_override(config: &mut Config, cli_provide
 ///     contradict the dangerous profile (which is always `never`).
 ///
 /// `ra chat` is inherently local single-user, so the dangerous profile is
-/// resolved through [`RuntimeMode::Solo`](octos_agent::RuntimeMode) — a
+/// resolved through [`RuntimeMode::Solo`](ra_agent::RuntimeMode) — a
 /// legitimate use of solo here, unlike the multi-tenant `serve` path.
 pub fn resolve_chat_permissions(
     yolo: bool,
     sandbox: Option<ChatSandboxMode>,
     approval: Option<ChatApprovalMode>,
-) -> Result<octos_agent::EffectivePermissions> {
-    use octos_agent::{ApprovalPolicy, EffectivePermissions, PermissionProfile, RuntimeMode};
+) -> Result<ra_agent::EffectivePermissions> {
+    use ra_agent::{ApprovalPolicy, EffectivePermissions, PermissionProfile, RuntimeMode};
 
     // Determine the requested profile, folding `--yolo` and `--sandbox`
     // together and rejecting contradictions.
@@ -601,7 +601,7 @@ fn prompt_for_cli_user_question(request: UserQuestionRequest) -> UserQuestionOut
 /// without stdin.
 #[cfg(any(feature = "api", test))]
 fn parse_question_selection(
-    question: &octos_core::ui_protocol::UserQuestion,
+    question: &ra_core::ui_protocol::UserQuestion,
     line: &str,
 ) -> (Vec<String>, bool) {
     let other_index = question.options.len() + 1;
@@ -662,8 +662,8 @@ const CHAT_PEER_TOOLS: &[&str] = &["peer_handoff", "peer_list", "peer_respond"];
 /// `Default` mode need no change (none of these names appear in either), and an
 /// EMPTY allow list is already pass-through, so both are left alone.
 #[cfg(any(feature = "api", test))]
-fn widen_allow_list(surface: &mut octos_agent::profile::ProfileTools, wanted: &[&str]) {
-    if let octos_agent::profile::ProfileTools::AllowList { tools } = surface {
+fn widen_allow_list(surface: &mut ra_agent::profile::ProfileTools, wanted: &[&str]) {
+    if let ra_agent::profile::ProfileTools::AllowList { tools } = surface {
         if !tools.is_empty() {
             for name in wanted {
                 if !tools.iter().any(|entry| entry == name) {
@@ -800,14 +800,14 @@ impl ChatCommand {
 ///    profile name or path using the same rules as the CLI arg).
 /// 3. Built-in `coding` profile — the behaviour-parity fallback.
 ///
-/// Returns the resolved [`octos_agent::profile::ProfileDefinition`] plus a
+/// Returns the resolved [`ra_agent::profile::ProfileDefinition`] plus a
 /// human-readable source label (`cli`, `symlink`, or `default`) suitable for
 /// inclusion in the `profile resolved: ...` log line.
 #[cfg(feature = "api")]
 pub(crate) fn resolve_profile(
     cli_arg: &Option<String>,
-) -> Result<(octos_agent::profile::ProfileDefinition, &'static str)> {
-    use octos_agent::profile::ProfileDefinition;
+) -> Result<(ra_agent::profile::ProfileDefinition, &'static str)> {
+    use ra_agent::profile::ProfileDefinition;
 
     if let Some(arg) = cli_arg.as_deref() {
         let (def, _) = ProfileDefinition::load(arg)
@@ -849,7 +849,7 @@ pub(crate) fn resolve_profile(
         }
     }
 
-    let (def, _) = octos_agent::profile::ProfileDefinition::load("coding")
+    let (def, _) = ra_agent::profile::ProfileDefinition::load("coding")
         .wrap_err("failed to load built-in coding profile")?;
     Ok((def, "default"))
 }
@@ -860,7 +860,7 @@ pub(crate) fn resolve_profile(
 /// and fallbacks — without a separate flat config or a duplicated key.
 ///
 /// Returns `Ok(None)` when no `--profile` is given, the arg is a path (a runtime
-/// [`octos_agent::profile::ProfileDefinition`] file, left to [`resolve_profile`]),
+/// [`ra_agent::profile::ProfileDefinition`] file, left to [`resolve_profile`]),
 /// or the id does not name a stored profile (e.g. a built-in runtime profile like
 /// `coding`) — leaving the caller on its normal config path. An explicit
 /// `--config` still takes precedence (handled by the caller), and CLI
@@ -906,7 +906,7 @@ pub(crate) fn resolve_provider_policy(
     config: &Config,
     provider_name: &str,
     model_id: &str,
-) -> Option<octos_agent::ToolPolicy> {
+) -> Option<ra_agent::ToolPolicy> {
     if config.tool_policy_by_provider.is_empty() {
         return None;
     }
@@ -929,7 +929,7 @@ pub(crate) fn resolve_provider_policy(
 /// (`embedding.auto_download = false` / `OCTOS_NO_MODEL_DOWNLOAD`). Without
 /// the model the runtime stays keyword-only.
 pub(crate) fn create_embedder(config: &Config) -> Option<Arc<dyn EmbeddingProvider>> {
-    let data_dir = octos_services::config_context::resolve_config_context(None).data_dir;
+    let data_dir = ra_services::config_context::resolve_config_context(None).data_dir;
     create_embedder_in(config, &data_dir)
 }
 
@@ -997,7 +997,7 @@ pub(crate) fn create_embedder_in(
             } else {
                 0
             };
-            match octos_embed_llama::LlamaEmbedder::from_model_file(path, n_gpu_layers) {
+            match ra_embed_llama::LlamaEmbedder::from_model_file(path, n_gpu_layers) {
                 Ok(mut e) => {
                     if let Some(d) = cfg.dimensions {
                         e = e.with_output_dim(d as usize);
@@ -1059,7 +1059,7 @@ pub(crate) fn create_embedder_in(
         // the registry's default endpoint — otherwise the request goes to
         // api.openai.com with the other provider's key/model (codex R8).
         if let Some(url) =
-            octos_llm::registry::lookup(&cfg.provider).and_then(|e| e.default_base_url)
+            ra_llm::registry::lookup(&cfg.provider).and_then(|e| e.default_base_url)
         {
             e = e.with_base_url(url);
         }
@@ -1068,10 +1068,10 @@ pub(crate) fn create_embedder_in(
         e = e.with_model(model);
     }
     if let Some(dimensions) = cfg.dimensions {
-        if dimensions as usize != octos_memory::EPISODIC_INDEX_DIMENSION {
+        if dimensions as usize != ra_memory::EPISODIC_INDEX_DIMENSION {
             tracing::warn!(
                 dimensions,
-                index = octos_memory::EPISODIC_INDEX_DIMENSION,
+                index = ra_memory::EPISODIC_INDEX_DIMENSION,
                 "embedding.dimensions differs from the episodic index dimension — \
                  vectors will be dropped to BM25-only"
             );
@@ -1094,14 +1094,14 @@ pub(crate) fn create_embedder_in(
         if supports_dimensions {
             tracing::info!(
                 model = %e.model(),
-                pinned = octos_memory::EPISODIC_INDEX_DIMENSION,
+                pinned = ra_memory::EPISODIC_INDEX_DIMENSION,
                 "pinning custom embedding model to the episodic index dimension"
             );
-            e = e.with_dimensions(octos_memory::EPISODIC_INDEX_DIMENSION as u32);
+            e = e.with_dimensions(ra_memory::EPISODIC_INDEX_DIMENSION as u32);
         } else {
             tracing::warn!(
                 model = %e.model(),
-                index = octos_memory::EPISODIC_INDEX_DIMENSION,
+                index = ra_memory::EPISODIC_INDEX_DIMENSION,
                 "custom embedding model without `dimensions`: native size unknown — \
                  vectors that are not index-sized will be dropped to BM25-only; set \
                  embedding.dimensions if the provider supports it"
@@ -1115,7 +1115,7 @@ pub(crate) fn create_embedder_in(
 #[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
-    use octos_core::SessionScope;
+    use ra_core::SessionScope;
 
     /// A profile-derived config carrying a full openai route.
     fn openai_route_config() -> Config {
@@ -1260,7 +1260,7 @@ mod tests {
 
     // ---- yolo GAP #3: chat permission flags → EffectivePermissions ----
 
-    use octos_agent::{ApprovalPolicy, PermissionProfile};
+    use ra_agent::{ApprovalPolicy, PermissionProfile};
 
     #[test]
     fn should_yield_danger_full_access_when_yolo_flag_set() {
@@ -1386,7 +1386,7 @@ mod tests {
 
     #[test]
     fn should_map_chat_effort_to_reasoning_effort() {
-        use octos_llm::ReasoningEffort;
+        use ra_llm::ReasoningEffort;
         assert_eq!(
             ReasoningEffort::from(ChatEffort::None),
             ReasoningEffort::Disabled
@@ -1482,7 +1482,7 @@ mod tests {
         let chat = Wrap::try_parse_from(["prog", "--effort", "none"])
             .expect("none should be a valid effort")
             .chat;
-        let effort = octos_llm::ReasoningEffort::from(chat.effort.unwrap());
+        let effort = ra_llm::ReasoningEffort::from(chat.effort.unwrap());
         assert_eq!(
             serde_json::to_value(effort).unwrap(),
             serde_json::json!("none")
@@ -1523,7 +1523,7 @@ mod tests {
     #[cfg(feature = "api")]
     fn should_preserve_failed_turn_partial_in_json_without_claiming_success() {
         use crate::commands::oup_session::{OupTurnFailure, OupTurnResult};
-        use octos_core::ui_protocol::{EnvelopeTokenUsage, TurnTerminalError};
+        use ra_core::ui_protocol::{EnvelopeTokenUsage, TurnTerminalError};
         for text in ["actual partial\n\"quoted\"", "", "  "] {
             let error = eyre::Report::from(OupTurnFailure {
                 terminal_error: Some(TurnTerminalError {
@@ -1599,8 +1599,8 @@ mod tests {
 
     // ---- #1570: [y/s/N] approval prompt + numbered user-question prompt ----
 
-    fn q(multi: bool, allow_free_text: bool) -> octos_core::ui_protocol::UserQuestion {
-        use octos_core::ui_protocol::{UserQuestion, UserQuestionOption};
+    fn q(multi: bool, allow_free_text: bool) -> ra_core::ui_protocol::UserQuestion {
+        use ra_core::ui_protocol::{UserQuestion, UserQuestionOption};
         UserQuestion {
             header: "H".into(),
             question: "Which?".into(),
@@ -1843,10 +1843,10 @@ pub fn create_provider_with_api_type(
         return create_custom_provider(config, model, base_url, api_type);
     }
 
-    let entry = octos_llm::registry::lookup(name).ok_or_else(|| {
+    let entry = ra_llm::registry::lookup(name).ok_or_else(|| {
         eyre::eyre!(
             "unknown provider: {name}. Valid: {}",
-            octos_llm::registry::all_names().join(", ")
+            ra_llm::registry::all_names().join(", ")
         )
     })?;
 
@@ -1890,9 +1890,9 @@ pub fn create_provider_with_api_type(
                 .into()
         });
         let mut provider =
-            octos_llm::anthropic::AnthropicProvider::new(&key, &m).with_base_url(&url);
+            ra_llm::anthropic::AnthropicProvider::new(&key, &m).with_base_url(&url);
         if let Some(t) = llm_timeout_secs {
-            let c = llm_connect_timeout_secs.unwrap_or(octos_llm::DEFAULT_LLM_CONNECT_TIMEOUT_SECS);
+            let c = llm_connect_timeout_secs.unwrap_or(ra_llm::DEFAULT_LLM_CONNECT_TIMEOUT_SECS);
             provider = provider.with_http_timeout(t, c);
         }
         return Ok(Arc::new(provider));
@@ -1910,13 +1910,13 @@ pub fn create_provider_with_api_type(
                     entry.name
                 )
             })?;
-        let mut provider = octos_llm::openai_responses::OpenAIResponsesProvider::new(&key, &m)
+        let mut provider = ra_llm::openai_responses::OpenAIResponsesProvider::new(&key, &m)
             .with_response_continuation(true);
         if let Some(url) = base_url.as_ref() {
             provider = provider.with_base_url(url.as_str());
         }
         if let Some(t) = llm_timeout_secs {
-            let c = llm_connect_timeout_secs.unwrap_or(octos_llm::DEFAULT_LLM_CONNECT_TIMEOUT_SECS);
+            let c = llm_connect_timeout_secs.unwrap_or(ra_llm::DEFAULT_LLM_CONNECT_TIMEOUT_SECS);
             provider = provider.with_http_timeout(t, c);
         }
         let provider: Arc<dyn LlmProvider> = Arc::new(provider);
@@ -1927,11 +1927,11 @@ pub fn create_provider_with_api_type(
             let timeout = match (llm_timeout_secs, llm_connect_timeout_secs) {
                 (None, None) => None,
                 (t, c) => Some((
-                    t.unwrap_or(octos_llm::DEFAULT_LLM_TIMEOUT_SECS),
-                    c.unwrap_or(octos_llm::DEFAULT_LLM_CONNECT_TIMEOUT_SECS),
+                    t.unwrap_or(ra_llm::DEFAULT_LLM_TIMEOUT_SECS),
+                    c.unwrap_or(ra_llm::DEFAULT_LLM_CONNECT_TIMEOUT_SECS),
                 )),
             };
-            return Ok(octos_llm::LocalContextProbe::new(
+            return Ok(ra_llm::LocalContextProbe::new(
                 provider,
                 url,
                 Some(key),
@@ -1941,7 +1941,7 @@ pub fn create_provider_with_api_type(
         return Ok(provider);
     }
 
-    let params = octos_llm::registry::CreateParams {
+    let params = ra_llm::registry::CreateParams {
         api_key,
         model,
         base_url,
@@ -1973,13 +1973,13 @@ fn create_custom_provider(
 
     match api_type.unwrap_or("openai") {
         "openai" => {
-            let mut provider = octos_llm::openai::OpenAIProvider::new(&key, model)
+            let mut provider = ra_llm::openai::OpenAIProvider::new(&key, model)
                 .with_base_url(&base_url)
                 .with_provider_label("custom");
             let http_timeout = llm_timeout_secs.map(|t| {
                 (
                     t,
-                    llm_connect_timeout_secs.unwrap_or(octos_llm::DEFAULT_LLM_CONNECT_TIMEOUT_SECS),
+                    llm_connect_timeout_secs.unwrap_or(ra_llm::DEFAULT_LLM_CONNECT_TIMEOUT_SECS),
                 )
             });
             if let Some((t, c)) = http_timeout {
@@ -1987,7 +1987,7 @@ fn create_custom_provider(
             }
             // This factory bypasses the registry. Preserve the same runtime
             // context discovery as the openai/local registry paths.
-            Ok(octos_llm::LocalContextProbe::new(
+            Ok(ra_llm::LocalContextProbe::new(
                 Arc::new(provider),
                 &base_url,
                 Some(key),
@@ -1995,7 +1995,7 @@ fn create_custom_provider(
             ))
         }
         "anthropic" => {
-            let mut provider = octos_llm::anthropic::AnthropicProvider::new(key, model)
+            let mut provider = ra_llm::anthropic::AnthropicProvider::new(key, model)
                 .with_base_url(&base_url)
                 // #2194: label stays "custom" (its logical identity for
                 // adaptive-lane / QoS matching); the Anthropic cache rate is
@@ -2004,7 +2004,7 @@ fn create_custom_provider(
                 .with_provider_label("custom");
             if let Some(t) = llm_timeout_secs {
                 let c =
-                    llm_connect_timeout_secs.unwrap_or(octos_llm::DEFAULT_LLM_CONNECT_TIMEOUT_SECS);
+                    llm_connect_timeout_secs.unwrap_or(ra_llm::DEFAULT_LLM_CONNECT_TIMEOUT_SECS);
                 provider = provider.with_http_timeout(t, c);
             }
             Ok(Arc::new(provider))
@@ -2046,7 +2046,7 @@ mod chat_goal_tests {
     /// `--goals`). The allow list must be widened for exactly the goal tools.
     #[test]
     fn should_keep_goal_tools_when_the_profile_surface_is_an_allow_list() {
-        use octos_agent::profile::ProfileTools;
+        use ra_agent::profile::ProfileTools;
         let coding = ProfileTools::AllowList {
             tools: vec![
                 "group:fs".to_owned(),
@@ -2098,7 +2098,7 @@ mod chat_goal_tests {
 mod chat_peer_tests {
     use super::*;
     use clap::Parser as _;
-    use octos_agent::profile::ProfileTools;
+    use ra_agent::profile::ProfileTools;
 
     #[derive(clap::Parser)]
     struct TestCli {
@@ -2236,7 +2236,7 @@ mod custom_provider_tests {
         assert_eq!(provider.model_id(), "qwen3.8-27b");
         assert_eq!(
             provider.provider_metadata().cache_lane,
-            octos_llm::CacheLane::Residual
+            ra_llm::CacheLane::Residual
         );
     }
 
@@ -2256,9 +2256,9 @@ mod custom_provider_tests {
         // #2194 R4: a custom OpenAI endpoint keeps the "custom" identity AND the
         // residual cache lane (full-rate reads) — NOT the Anthropic 0.1x bucket.
         let meta = provider.provider_metadata();
-        assert_eq!(meta.cache_lane, octos_llm::CacheLane::Residual);
+        assert_eq!(meta.cache_lane, ra_llm::CacheLane::Residual);
         assert_eq!(
-            octos_llm::pricing::cache_rates_for_lane(meta.cache_lane).read_multiplier,
+            ra_llm::pricing::cache_rates_for_lane(meta.cache_lane).read_multiplier,
             1.0,
             "custom + api_type=openai must price cache reads at the residual rate",
         );
@@ -2285,11 +2285,11 @@ mod custom_provider_tests {
         let meta = provider.provider_metadata();
         assert_eq!(
             meta.cache_lane,
-            octos_llm::CacheLane::Anthropic,
+            ra_llm::CacheLane::Anthropic,
             "custom + api_type=anthropic must carry the Anthropic cache lane",
         );
         assert_eq!(
-            octos_llm::pricing::cache_rates_for_lane(meta.cache_lane).read_multiplier,
+            ra_llm::pricing::cache_rates_for_lane(meta.cache_lane).read_multiplier,
             0.1,
             "and therefore price cache reads at 0.1x, not the 1.0x residual",
         );

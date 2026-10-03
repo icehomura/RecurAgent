@@ -35,7 +35,7 @@ use tokio::process::Command;
 
 /// Environment variables blocked inside lifecycle step execution.
 ///
-/// Mirrors `octos_core::BLOCKED_ENV_VARS`. The two lists MUST stay in sync —
+/// Mirrors `ra_core::BLOCKED_ENV_VARS`. The two lists MUST stay in sync —
 /// the `blocked_env_vars_match_core_canonical_list` test in
 /// `tests/lifecycle_sandbox.rs` compares the exported constants directly. If
 /// you add or remove a variable here, update the canonical core list too.
@@ -205,7 +205,7 @@ pub struct PhaseResult {
 
 /// Wraps a shell command into a sandboxed [`Command`].
 ///
-/// Mirrors `octos_agent::sandbox::Sandbox` but lives here so the plugin SDK
+/// Mirrors `ra_agent::sandbox::Sandbox` but lives here so the plugin SDK
 /// doesn't need a runtime dependency on the agent crate. Implementations
 /// MUST NOT spawn the child themselves — the executor spawns the returned
 /// [`Command`] so it can attach the required env sanitization and
@@ -258,7 +258,7 @@ impl std::fmt::Display for SafePolicyDenial {
 impl std::error::Error for SafePolicyDenial {}
 
 /// Mirrors `SafePolicy::default().check()` deny patterns from
-/// `octos_agent::policy`. See `ra-agent/src/policy.rs` for the full
+/// `ra_agent::policy`. See `ra-agent/src/policy.rs` for the full
 /// rationale. The deny list here is intentionally short: `rm -rf /`,
 /// `dd if=`, `mkfs`, fork bomb, `chmod -R 777 /`. Defense in depth, not a
 /// security boundary — real isolation comes from the [`Sandbox`] layer.

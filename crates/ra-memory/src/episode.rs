@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
-use octos_core::{AgentId, TaskId};
+use ra_core::{AgentId, TaskId};
 use serde::{Deserialize, Serialize};
 
 /// An episode is a summary of a completed task.

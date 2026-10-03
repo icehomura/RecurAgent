@@ -4,7 +4,7 @@
 //! credentials, a destination URL, an account identity, or caller-defined labels.
 //! A host must enforce its policy on every request, including compaction calls.
 
-use octos_core::Message;
+use ra_core::Message;
 use serde::{Deserialize, Serialize};
 
 use crate::{ChatConfig, ToolSpec};

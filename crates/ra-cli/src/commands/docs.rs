@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use clap::Args;
 use eyre::Result;
-use octos_agent::ToolRegistry;
+use ra_agent::ToolRegistry;
 
 use super::Executable;
 

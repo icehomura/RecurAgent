@@ -16,7 +16,7 @@
 //! No SSE wire path remains in the chat transport — every chat client
 //! talks to `/api/ui-protocol/ws` exclusively.
 
-use octos_agent::{ProgressEvent, ProgressReporter};
+use ra_agent::{ProgressEvent, ProgressReporter};
 use tokio::sync::broadcast;
 
 /// Producer iteration identity, opaque to clients. It does not depend on how
@@ -123,9 +123,9 @@ pub(crate) fn event_to_json(event: &ProgressEvent, thread_id: Option<&str>) -> s
             // because producers are not trustworthy about size (a failing
             // tool emits unbounded `e.to_string()`).
             if !output_preview.is_empty() {
-                value["output_preview"] = serde_json::json!(octos_core::truncated_utf8(
+                value["output_preview"] = serde_json::json!(ra_core::truncated_utf8(
                     output_preview,
-                    octos_core::ui_protocol::ENVELOPE_TOOL_OUTPUT_PREVIEW_MAX,
+                    ra_core::ui_protocol::ENVELOPE_TOOL_OUTPUT_PREVIEW_MAX,
                     "…",
                 ));
             }
@@ -196,7 +196,7 @@ pub(crate) fn event_to_json(event: &ProgressEvent, thread_id: Option<&str>) -> s
         } => {
             serde_json::json!({
                 "type": "agent_progress",
-                "message": octos_agent::progress::agent_progress_message(
+                "message": ra_agent::progress::agent_progress_message(
                     *iteration,
                     *active_tokens,
                     *elapsed,
@@ -360,7 +360,7 @@ mod tests {
         let preview = json["output_preview"].as_str().expect("preview");
         assert!(
             preview.chars().count()
-                <= octos_core::ui_protocol::ENVELOPE_TOOL_OUTPUT_PREVIEW_MAX + 1,
+                <= ra_core::ui_protocol::ENVELOPE_TOOL_OUTPUT_PREVIEW_MAX + 1,
             "preview must be bounded, got {} chars",
             preview.chars().count()
         );

@@ -20,7 +20,7 @@
 
 use async_trait::async_trait;
 use eyre::{Result, eyre};
-use octos_core::ui_protocol::{UserQuestion, UserQuestionOption};
+use ra_core::ui_protocol::{UserQuestion, UserQuestionOption};
 use serde_json::{Value, json};
 
 use super::{
@@ -395,7 +395,7 @@ impl Tool for AskUserQuestionTool {
 mod tests {
     use super::*;
     use crate::tools::{UserQuestionRequest as Req, UserQuestionRequester};
-    use octos_core::ui_protocol::UserQuestionAnswer;
+    use ra_core::ui_protocol::UserQuestionAnswer;
     use std::sync::Arc;
     use std::sync::Mutex;
 

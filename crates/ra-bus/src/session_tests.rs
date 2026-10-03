@@ -31,7 +31,7 @@ async fn scoped_commit_observers_follow_storage_roots_for_managers_and_handles()
     assert_eq!(a.load(Ordering::SeqCst), 1);
     assert_eq!(b.load(Ordering::SeqCst), 1);
 }
-use octos_core::MessageRole;
+use ra_core::MessageRole;
 use tempfile::TempDir;
 
 fn make_message(role: MessageRole, content: &str) -> Message {
@@ -2918,7 +2918,7 @@ fn test_child_session_key_derivation_is_stable() {
 /// disk state is touched until the caller rewrites.
 #[test]
 fn should_sanitize_loaded_messages_in_place() {
-    use octos_core::ToolCall;
+    use ra_core::ToolCall;
 
     let tmp = TempDir::new().unwrap();
     let key = SessionKey::new("api", "resume-test");
@@ -3137,7 +3137,7 @@ fn session_actor_does_not_continue_with_unsanitized_transcript_on_worktree_missi
         role: MessageRole::Assistant,
         content: String::new(),
         media: vec![],
-        tool_calls: Some(vec![octos_core::ToolCall {
+        tool_calls: Some(vec![ra_core::ToolCall {
             id: "unresolved-1".into(),
             name: "shell".into(),
             arguments: serde_json::json!({}),
@@ -4031,12 +4031,12 @@ async fn should_not_migrate_legacy_file_when_exporting_transcript() {
 #[tokio::test]
 async fn system_note_once_same_id_returns_original_row_without_duplicate() {
     let dir = tempfile::TempDir::new().expect("temp dir");
-    let key = octos_core::SessionKey("noteonce-prof:api:same-id".to_owned());
+    let key = ra_core::SessionKey("noteonce-prof:api:same-id".to_owned());
 
     let first = persist_system_note_once_through_canonical_path(
         dir.path(),
         &key,
-        octos_core::Message::system("note A"),
+        ra_core::Message::system("note A"),
         "goal-verifier-note:v1:g1:d1",
     )
     .await
@@ -4047,7 +4047,7 @@ async fn system_note_once_same_id_returns_original_row_without_duplicate() {
     let second = persist_system_note_once_through_canonical_path(
         dir.path(),
         &key,
-        octos_core::Message::system("note A-prime"),
+        ra_core::Message::system("note A-prime"),
         "goal-verifier-note:v1:g1:d1",
     )
     .await
@@ -4061,7 +4061,7 @@ async fn system_note_once_same_id_returns_original_row_without_duplicate() {
         .messages
         .iter()
         .filter(|m| {
-            m.role == octos_core::MessageRole::System
+            m.role == ra_core::MessageRole::System
                 && m.client_message_id.as_deref() == Some("goal-verifier-note:v1:g1:d1")
         })
         .count();
@@ -4072,13 +4072,13 @@ async fn system_note_once_same_id_returns_original_row_without_duplicate() {
 #[tokio::test]
 async fn system_note_once_distinct_ids_append_independently() {
     let dir = tempfile::TempDir::new().expect("temp dir");
-    let key = octos_core::SessionKey("noteonce-prof:api:distinct-ids".to_owned());
+    let key = ra_core::SessionKey("noteonce-prof:api:distinct-ids".to_owned());
     for id in ["g1:d1", "g1:d2", "g2:d1"] {
         let note_id = format!("goal-verifier-note:v1:{id}");
         persist_system_note_once_through_canonical_path(
             dir.path(),
             &key,
-            octos_core::Message::system(format!("note {id}")),
+            ra_core::Message::system(format!("note {id}")),
             &note_id,
         )
         .await
@@ -4097,7 +4097,7 @@ async fn system_note_once_distinct_ids_append_independently() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn system_note_once_concurrent_same_id_single_durable_row() {
     let dir = tempfile::TempDir::new().expect("temp dir");
-    let key = octos_core::SessionKey("noteonce-prof:api:concurrent".to_owned());
+    let key = ra_core::SessionKey("noteonce-prof:api:concurrent".to_owned());
     let data_dir = dir.path().to_path_buf();
     let mut joins = Vec::new();
     for i in 0..8 {
@@ -4107,7 +4107,7 @@ async fn system_note_once_concurrent_same_id_single_durable_row() {
             persist_system_note_once_through_canonical_path(
                 &data_dir,
                 &key,
-                octos_core::Message::system(format!("concurrent {i}")),
+                ra_core::Message::system(format!("concurrent {i}")),
                 "goal-verifier-note:v1:g1:d1",
             )
             .await
@@ -4122,7 +4122,7 @@ async fn system_note_once_concurrent_same_id_single_durable_row() {
         .messages
         .iter()
         .filter(|m| {
-            m.role == octos_core::MessageRole::System
+            m.role == ra_core::MessageRole::System
                 && m.client_message_id.as_deref() == Some("goal-verifier-note:v1:g1:d1")
         })
         .count();
@@ -4134,9 +4134,9 @@ async fn system_note_once_concurrent_same_id_single_durable_row() {
 #[tokio::test]
 async fn system_note_once_bad_header_fails_closed_file_untouched() {
     let dir = tempfile::TempDir::new().expect("temp dir");
-    let key = octos_core::SessionKey("noteonce-prof:api:bad-header".to_owned());
+    let key = ra_core::SessionKey("noteonce-prof:api:bad-header".to_owned());
     // Seed a valid session, then corrupt the meta line.
-    persist_message_through_canonical_path(dir.path(), &key, octos_core::Message::user("seed"))
+    persist_message_through_canonical_path(dir.path(), &key, ra_core::Message::user("seed"))
         .await
         .expect("seed");
     let users_dir = dir.path().join("users");
@@ -4155,7 +4155,7 @@ async fn system_note_once_bad_header_fails_closed_file_untouched() {
     let result = persist_system_note_once_through_canonical_path(
         dir.path(),
         &key,
-        octos_core::Message::system("note"),
+        ra_core::Message::system("note"),
         "goal-verifier-note:v1:g1:d1",
     )
     .await;
@@ -4169,8 +4169,8 @@ async fn system_note_once_bad_header_fails_closed_file_untouched() {
 #[tokio::test]
 async fn system_note_once_bad_body_line_fails_closed() {
     let dir = tempfile::TempDir::new().expect("temp dir");
-    let key = octos_core::SessionKey("noteonce-prof:api:bad-body".to_owned());
-    persist_message_through_canonical_path(dir.path(), &key, octos_core::Message::user("seed"))
+    let key = ra_core::SessionKey("noteonce-prof:api:bad-body".to_owned());
+    persist_message_through_canonical_path(dir.path(), &key, ra_core::Message::user("seed"))
         .await
         .expect("seed");
     let users_dir = dir.path().join("users");
@@ -4183,7 +4183,7 @@ async fn system_note_once_bad_body_line_fails_closed() {
     let result = persist_system_note_once_through_canonical_path(
         dir.path(),
         &key,
-        octos_core::Message::system("note"),
+        ra_core::Message::system("note"),
         "goal-verifier-note:v1:g1:d1",
     )
     .await;
@@ -4195,8 +4195,8 @@ async fn system_note_once_bad_body_line_fails_closed() {
 #[tokio::test]
 async fn system_note_once_missing_trailing_newline_fails_closed() {
     let dir = tempfile::TempDir::new().expect("temp dir");
-    let key = octos_core::SessionKey("noteonce-prof:api:no-newline".to_owned());
-    persist_message_through_canonical_path(dir.path(), &key, octos_core::Message::user("seed"))
+    let key = ra_core::SessionKey("noteonce-prof:api:no-newline".to_owned());
+    persist_message_through_canonical_path(dir.path(), &key, ra_core::Message::user("seed"))
         .await
         .expect("seed");
     let users_dir = dir.path().join("users");
@@ -4207,7 +4207,7 @@ async fn system_note_once_missing_trailing_newline_fails_closed() {
     let result = persist_system_note_once_through_canonical_path(
         dir.path(),
         &key,
-        octos_core::Message::system("note"),
+        ra_core::Message::system("note"),
         "goal-verifier-note:v1:g1:d1",
     )
     .await;
@@ -4238,8 +4238,8 @@ fn find_first_jsonl(users_dir: &std::path::Path) -> Option<std::path::PathBuf> {
 #[tokio::test]
 async fn system_note_once_meta_only_no_newline_fails_closed_bytes_unchanged() {
     let dir = tempfile::TempDir::new().expect("temp dir");
-    let key = octos_core::SessionKey("noteonce-prof:api:meta-nonl".to_owned());
-    persist_message_through_canonical_path(dir.path(), &key, octos_core::Message::user("seed"))
+    let key = ra_core::SessionKey("noteonce-prof:api:meta-nonl".to_owned());
+    persist_message_through_canonical_path(dir.path(), &key, ra_core::Message::user("seed"))
         .await
         .expect("seed");
     let users_dir = dir.path().join("users");
@@ -4253,7 +4253,7 @@ async fn system_note_once_meta_only_no_newline_fails_closed_bytes_unchanged() {
     let result = persist_system_note_once_through_canonical_path(
         dir.path(),
         &key,
-        octos_core::Message::system("note"),
+        ra_core::Message::system("note"),
         "goal-verifier-note:v1:g1:d1",
     )
     .await;
@@ -4269,8 +4269,8 @@ async fn system_note_once_meta_only_no_newline_fails_closed_bytes_unchanged() {
 #[tokio::test]
 async fn system_note_once_invalid_utf8_fails_closed_bytes_unchanged() {
     let dir = tempfile::TempDir::new().expect("temp dir");
-    let key = octos_core::SessionKey("noteonce-prof:api:bad-utf8".to_owned());
-    persist_message_through_canonical_path(dir.path(), &key, octos_core::Message::user("seed"))
+    let key = ra_core::SessionKey("noteonce-prof:api:bad-utf8".to_owned());
+    persist_message_through_canonical_path(dir.path(), &key, ra_core::Message::user("seed"))
         .await
         .expect("seed");
     let users_dir = dir.path().join("users");
@@ -4285,14 +4285,14 @@ async fn system_note_once_invalid_utf8_fails_closed_bytes_unchanged() {
     bytes[offset] = 0xFF;
     let lossy = String::from_utf8_lossy(&bytes);
     let body = lossy.lines().nth(1).expect("message line");
-    assert!(serde_json::from_str::<octos_core::Message>(body).is_ok());
+    assert!(serde_json::from_str::<ra_core::Message>(body).is_ok());
     std::fs::write(&canonical, &bytes).expect("invalid utf8 body");
     let before = std::fs::read(&canonical).expect("bytes before");
 
     let result = persist_system_note_once_through_canonical_path(
         dir.path(),
         &key,
-        octos_core::Message::system("note"),
+        ra_core::Message::system("note"),
         "goal-verifier-note:v1:g1:d1",
     )
     .await;
@@ -4306,8 +4306,8 @@ async fn system_note_once_invalid_utf8_fails_closed_bytes_unchanged() {
 #[tokio::test]
 async fn system_note_once_target_is_directory_fails_closed() {
     let dir = tempfile::TempDir::new().expect("temp dir");
-    let key = octos_core::SessionKey("noteonce-prof:api:target-dir".to_owned());
-    persist_message_through_canonical_path(dir.path(), &key, octos_core::Message::user("seed"))
+    let key = ra_core::SessionKey("noteonce-prof:api:target-dir".to_owned());
+    persist_message_through_canonical_path(dir.path(), &key, ra_core::Message::user("seed"))
         .await
         .expect("seed");
     let users_dir = dir.path().join("users");
@@ -4319,7 +4319,7 @@ async fn system_note_once_target_is_directory_fails_closed() {
     let result = persist_system_note_once_through_canonical_path(
         dir.path(),
         &key,
-        octos_core::Message::system("note"),
+        ra_core::Message::system("note"),
         "goal-verifier-note:v1:g1:d1",
     )
     .await;
@@ -4340,7 +4340,7 @@ async fn system_note_once_target_is_directory_fails_closed() {
 #[tokio::test]
 async fn system_note_once_zero_byte_file_recovers_and_stays_idempotent() {
     let dir = tempfile::TempDir::new().expect("temp dir");
-    let key = octos_core::SessionKey("noteonce-prof:api:empty-file".to_owned());
+    let key = ra_core::SessionKey("noteonce-prof:api:empty-file".to_owned());
     let canonical = SessionHandle::open(dir.path(), &key).session_path();
     std::fs::create_dir_all(canonical.parent().unwrap()).expect("parent");
     std::fs::write(&canonical, []).expect("real empty canonical file");
@@ -4349,7 +4349,7 @@ async fn system_note_once_zero_byte_file_recovers_and_stays_idempotent() {
     let first = persist_system_note_once_through_canonical_path(
         dir.path(),
         &key,
-        octos_core::Message::system("recovered note"),
+        ra_core::Message::system("recovered note"),
         id,
     )
     .await
@@ -4357,7 +4357,7 @@ async fn system_note_once_zero_byte_file_recovers_and_stays_idempotent() {
     let second = persist_system_note_once_through_canonical_path(
         dir.path(),
         &key,
-        octos_core::Message::system("must not replace"),
+        ra_core::Message::system("must not replace"),
         id,
     )
     .await

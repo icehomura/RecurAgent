@@ -3,7 +3,7 @@ use crate::tools::ToolRegistry;
 
 #[test]
 fn normalize_plan_maps_codex_shape_and_assigns_ids() {
-    use octos_core::ui_protocol::PlanItemStatus;
+    use ra_core::ui_protocol::PlanItemStatus;
     let args = json!({
         "explanation": "Building memory panel…",
         "plan": [

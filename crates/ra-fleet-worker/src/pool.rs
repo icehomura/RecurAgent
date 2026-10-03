@@ -39,9 +39,9 @@ use eyre::{Result, eyre};
 use tokio::sync::{Mutex, Semaphore};
 use tokio::task::JoinHandle;
 
-use octos_agent::TokenTracker;
-use octos_core::safe_filename;
-use octos_fleet::{
+use ra_agent::TokenTracker;
+use ra_core::safe_filename;
+use ra_fleet::{
     AcceptanceVerdict, ChildResultSnapshot, ChildStatus, Fleet, FleetKernelStore, LaunchOutcome,
 };
 
@@ -184,7 +184,7 @@ impl FleetWorkerPool {
     async fn rollback_prepared_checkout(cleanup: Option<WorktreeCleanup>) {
         if let Some(wt) = cleanup {
             let _ = tokio::task::spawn_blocking(move || {
-                octos_core::remove_checkout_keep_branch(&wt.repo_root, &wt.work_root, &wt.checkout);
+                ra_core::remove_checkout_keep_branch(&wt.repo_root, &wt.work_root, &wt.checkout);
             })
             .await;
         }
@@ -298,7 +298,7 @@ impl FleetWorkerPool {
         let is_repo = match &repo_root {
             Some(root) => {
                 let root = root.clone();
-                tokio::task::spawn_blocking(move || octos_core::probe_git_repo(&root))
+                tokio::task::spawn_blocking(move || ra_core::probe_git_repo(&root))
                     .await
                     .map_err(|e| eyre!("preflight: repo probe join failed: {e}"))?
                     .map_err(|e| {
@@ -344,7 +344,7 @@ impl FleetWorkerPool {
                 let wd = working_dir.clone();
                 let work_root = self.cfg.workspace_root.clone();
                 let prepared = tokio::task::spawn_blocking(move || {
-                    octos_core::prepare_fleet_worktree(&root, &work_root, &branch, &wd)
+                    ra_core::prepare_fleet_worktree(&root, &work_root, &branch, &wd)
                 })
                 .await
                 .map_err(|e| eyre!("preflight: worktree prep join failed: {e}"))?
@@ -553,7 +553,7 @@ impl FleetWorkerPool {
                 if matches!(outcome, AttemptOutcome::Completed { .. }) {
                     if let Some(wt) = worktree {
                         let _ = tokio::task::spawn_blocking(move || {
-                            octos_core::remove_checkout_keep_branch(
+                            ra_core::remove_checkout_keep_branch(
                                 &wt.repo_root,
                                 &wt.work_root,
                                 &wt.checkout,
@@ -780,7 +780,7 @@ impl Drop for LaunchGuard {
             // blocking the next attempt's re-add.
             if let Some(wt) = worktree {
                 let _ = tokio::task::spawn_blocking(move || {
-                    octos_core::remove_checkout_keep_branch(
+                    ra_core::remove_checkout_keep_branch(
                         &wt.repo_root,
                         &wt.work_root,
                         &wt.checkout,
@@ -1399,7 +1399,7 @@ mod tests {
         let work = TempDir::new().unwrap();
         let checkout = work.path().join("f1").join("a");
         // Simulate the leftover of a dead attempt: branch + checkout present.
-        octos_core::prepare_fleet_worktree(repo.path(), work.path(), "fleet/f1/a", &checkout)
+        ra_core::prepare_fleet_worktree(repo.path(), work.path(), "fleet/f1/a", &checkout)
             .expect("pre-create a leftover worktree");
         assert!(checkout.exists(), "leftover checkout present");
 
@@ -1900,7 +1900,7 @@ mod tests {
         let rev = fleet.view().await.unwrap().revision;
         let out = fleet
             .apply_edit(
-                octos_fleet::PlanEdit::SetGrant {
+                ra_fleet::PlanEdit::SetGrant {
                     task_id: "a".into(),
                     grant: host_grant(),
                 },
@@ -1910,7 +1910,7 @@ mod tests {
             .await
             .unwrap();
         assert!(
-            matches!(out, octos_fleet::PlanMutateOutcome::Mutated { .. }),
+            matches!(out, ra_fleet::PlanMutateOutcome::Mutated { .. }),
             "SetGrant must apply to the Blocked task, got {out:?}",
         );
 
@@ -2149,7 +2149,7 @@ mod tests {
                 {
                     let _ = Fleet::bind(bump_store.clone(), "f1".to_string())
                         .apply_edit(
-                            octos_fleet::PlanEdit::Retitle {
+                            ra_fleet::PlanEdit::Retitle {
                                 task_id: "a".into(),
                                 title: "narrowed".into(),
                                 detail: "concurrent replan".into(),

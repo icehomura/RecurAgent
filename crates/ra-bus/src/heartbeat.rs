@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use chrono::Utc;
-use octos_core::InboundMessage;
+use ra_core::InboundMessage;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tracing::{debug, info, warn};
@@ -106,7 +106,7 @@ impl HeartbeatService {
                 "deliver_to_chat_id": "heartbeat",
             }),
             message_id: None,
-            origin: octos_core::MessageOrigin::Synthetic,
+            origin: ra_core::MessageOrigin::Synthetic,
         };
 
         if let Err(e) = self.inbound_tx.send(msg).await {

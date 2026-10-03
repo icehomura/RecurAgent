@@ -6,8 +6,8 @@ use axum::extract::ws::{WebSocketUpgrade, rejection::WebSocketUpgradeRejection};
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, Uri};
 use axum::response::{IntoResponse, Response};
-use octos_agent::bridge::work_secret::WorkSecretValidationError;
-use octos_core::SessionKey;
+use ra_agent::bridge::work_secret::WorkSecretValidationError;
+use ra_core::SessionKey;
 
 use super::AppState;
 

@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use async_trait::async_trait;
 use chrono::Utc;
 use eyre::{Result, WrapErr};
-use octos_core::{InboundMessage, OutboundMessage};
+use ra_core::{InboundMessage, OutboundMessage};
 use reqwest::Client as HttpClient;
 use serenity::Client;
 use serenity::all::{
@@ -136,7 +136,7 @@ impl EventHandler for Handler {
                 "guild_id": msg.guild_id.map(|g| g.to_string()),
             }),
             message_id: Some(msg.id.to_string()),
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         };
 
         if let Err(e) = self.inbound_tx.send(inbound).await {

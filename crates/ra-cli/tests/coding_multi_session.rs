@@ -23,10 +23,10 @@
 //! that `chat_sync_via_session_runtime` did (and the WS `turn/start`
 //! pipeline still does today): resolve the per-session
 //! [`SessionRuntime`] from the cache (constructing it on first use),
-//! run [`octos_agent::Agent::process_message`] against the session-
+//! run [`ra_agent::Agent::process_message`] against the session-
 //! bound workspace, and persist the response through the canonical
 //! per-user JSONL via
-//! [`octos_bus::persist_message_through_canonical_path`]. Every
+//! [`ra_bus::persist_message_through_canonical_path`]. Every
 //! invariant the original test cared about — `workspace_hint`
 //! forwarding, `ToolRegistry` isolation, per-session JSONL writes,
 //! per-session `.ra-workspace.toml` policy files — still surfaces
@@ -56,7 +56,7 @@
 //!    B's own workspace is wired correctly.
 //! 5. Assert independent canonical JSONL chat history files exist
 //!    under each session's `user_key` directory.
-//!    → exercises `octos_bus::persist_message_through_canonical_path`
+//!    → exercises `ra_bus::persist_message_through_canonical_path`
 //!    writing per-session paths derived from `SessionKey`.
 //! 6. Assert per-session `.ra-workspace.toml` files exist at
 //!    `repo-A/.ra-workspace.toml` AND `repo-B/.ra-workspace.toml`.
@@ -70,10 +70,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use octos_cli::api::AppState;
-use octos_cli::runtime::ProfileRuntime;
-use octos_core::{MAIN_PROFILE_ID, Message, MessageRole, SessionKey, ToolCall};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_cli::api::AppState;
+use ra_cli::runtime::ProfileRuntime;
+use ra_core::{MAIN_PROFILE_ID, Message, MessageRole, SessionKey, ToolCall};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
 use serde_json::json;
 use tempfile::TempDir;
 
@@ -90,7 +90,7 @@ use tempfile::TempDir;
 ///   single `read_file` tool call whose `path` argument is parsed from
 ///   the last user message of the form `read_file:<path>`. The agent
 ///   loop will execute the call against the session's workspace-bound
-///   [`octos_agent::ToolRegistry`] and re-enter the LLM with the tool
+///   [`ra_agent::ToolRegistry`] and re-enter the LLM with the tool
 ///   result appended — that second pass takes the first branch above.
 ///
 /// This is the minimal shape needed to drive a `read_file` turn
@@ -169,38 +169,38 @@ impl LlmProvider for ReadFileStubLlm {
 }
 
 /// Construct a `ProfileRuntime` wired to the stub LLM and a fresh
-/// builtin [`octos_agent::ToolRegistry`] (which includes `read_file`).
+/// builtin [`ra_agent::ToolRegistry`] (which includes `read_file`).
 async fn make_m11g_profile(profile_id: &str, data_dir: &std::path::Path) -> Arc<ProfileRuntime> {
     std::fs::create_dir_all(data_dir).expect("profile data dir");
     let memory = Arc::new(
-        octos_memory::EpisodeStore::open(data_dir)
+        ra_memory::EpisodeStore::open(data_dir)
             .await
             .expect("episode store"),
     );
     let memory_store = Arc::new(
-        octos_memory::MemoryStore::open(data_dir)
+        ra_memory::MemoryStore::open(data_dir)
             .await
             .expect("memory store"),
     );
     let tool_config = Arc::new(
-        octos_agent::ToolConfigStore::open(data_dir)
+        ra_agent::ToolConfigStore::open(data_dir)
             .await
             .expect("tool config store"),
     );
-    let sandbox = octos_agent::SandboxConfig::default();
-    let base_tools = octos_agent::ToolRegistry::with_builtins_and_sandbox(
+    let sandbox = ra_agent::SandboxConfig::default();
+    let base_tools = ra_agent::ToolRegistry::with_builtins_and_sandbox(
         data_dir,
-        octos_agent::create_sandbox(&sandbox),
+        ra_agent::create_sandbox(&sandbox),
     );
     let recall = Arc::new(
-        octos_memory::RecallStore::open(data_dir, octos_memory::RecallConfig::default())
+        ra_memory::RecallStore::open(data_dir, ra_memory::RecallConfig::default())
             .expect("recall store"),
     );
     Arc::new(ProfileRuntime {
         profile_id: profile_id.to_string(),
         data_dir: data_dir.to_path_buf(),
         session_store_root: None,
-        config: octos_cli::config::Config::default(),
+        config: ra_cli::config::Config::default(),
         snapshots: None,
         llm: Arc::new(ReadFileStubLlm),
         goal_verifier_llm: None,
@@ -227,11 +227,11 @@ async fn make_m11g_profile(profile_id: &str, data_dir: &std::path::Path) -> Arc<
         review_config: None,
         human_approval_rules: None,
         system_prompt: "test-system-prompt".to_string(),
-        prompt_parts: octos_cli::commands::gateway::prompt::GatewayPromptParts {
+        prompt_parts: ra_cli::commands::gateway::prompt::GatewayPromptParts {
             pre_memory: "test-system-prompt".to_string(),
             post_memory: String::new(),
         },
-        voice: octos_cli::config::VoiceConfig::default(),
+        voice: ra_cli::config::VoiceConfig::default(),
         memory,
         memory_store,
         recall,
@@ -295,7 +295,7 @@ async fn drive_turn(
     };
     for msg in &response.messages {
         let _ =
-            octos_bus::persist_message_through_canonical_path(&data_dir, &session_key, msg.clone())
+            ra_bus::persist_message_through_canonical_path(&data_dir, &session_key, msg.clone())
                 .await;
     }
     // Drop any stale `SessionManager` cache entry so a follow-up read
@@ -422,23 +422,23 @@ async fn coding_agent_two_sessions_isolated_workspaces() {
 
     // 7. Independent canonical chat history JSONLs under each
     //    session's user_key directory. Layout follows
-    //    `octos_bus::persist_message_through_canonical_path` →
+    //    `ra_bus::persist_message_through_canonical_path` →
     //    `<data_dir>/users/<encoded base_key>/sessions/<encoded topic>.jsonl`.
     //    Both files must exist AND contain their respective session's
     //    user prompts — proving the persistence layer is correctly
     //    scoped per `SessionKey`.
-    let encoded_a = octos_bus::session::encode_path_component(key_a.base_key());
-    let encoded_b = octos_bus::session::encode_path_component(key_b.base_key());
+    let encoded_a = ra_bus::session::encode_path_component(key_a.base_key());
+    let encoded_b = ra_bus::session::encode_path_component(key_b.base_key());
     // `SessionHandle::topic_filename` falls back to `"default"` when
     // the key carries no `#topic` suffix, so a `with_profile_topic(.., "")`
     // key lands in `default.jsonl`. Replicate that here.
     let topic_filename_a = format!(
         "{}.jsonl",
-        octos_bus::session::encode_path_component(key_a.topic().unwrap_or("default"))
+        ra_bus::session::encode_path_component(key_a.topic().unwrap_or("default"))
     );
     let topic_filename_b = format!(
         "{}.jsonl",
-        octos_bus::session::encode_path_component(key_b.topic().unwrap_or("default"))
+        ra_bus::session::encode_path_component(key_b.topic().unwrap_or("default"))
     );
     let jsonl_a: PathBuf = profile_data_dir
         .join("users")
@@ -495,8 +495,8 @@ async fn coding_agent_two_sessions_isolated_workspaces() {
     //    `write_workspace_policy_if_absent`). This is the M11 fix for
     //    the live "workspace policy not found" failure surfaced by the
     //    yangmi voice-clone incident on 2026-05-10.
-    let policy_a = repo_a.join(octos_agent::WORKSPACE_POLICY_FILE);
-    let policy_b = repo_b.join(octos_agent::WORKSPACE_POLICY_FILE);
+    let policy_a = repo_a.join(ra_agent::WORKSPACE_POLICY_FILE);
+    let policy_b = repo_b.join(ra_agent::WORKSPACE_POLICY_FILE);
     assert!(
         policy_a.exists(),
         "session A `.ra-workspace.toml` must exist at {} after `SessionRuntime::bootstrap`",

@@ -7,7 +7,7 @@
 //!   registry (the crux: a worker that provably cannot park or fan out);
 //! - [`run_attempt`] — the per-attempt executor that runs one plan task
 //!   under a hard deadline, gates it on acceptance criteria, and records
-//!   the real outcome to the [`octos_fleet::FleetKernelStore`];
+//!   the real outcome to the [`ra_fleet::FleetKernelStore`];
 //! - [`FleetWorkerPool`] — the bounded pool that launches a ready task and
 //!   runs its attempt under global + per-fleet concurrency permits.
 //!
@@ -55,13 +55,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use eyre::Result;
-use octos_agent::sandbox::Sandbox;
-use octos_agent::tools::write_grant::WriteGrantViolationSink;
-use octos_agent::{Agent, AgentConfig, ToolRegistry};
-use octos_core::AgentId;
-use octos_fleet::WorkerGrant;
-use octos_llm::LlmProvider;
-use octos_memory::EpisodeStore;
+use ra_agent::sandbox::Sandbox;
+use ra_agent::tools::write_grant::WriteGrantViolationSink;
+use ra_agent::{Agent, AgentConfig, ToolRegistry};
+use ra_core::AgentId;
+use ra_fleet::WorkerGrant;
+use ra_llm::LlmProvider;
+use ra_memory::EpisodeStore;
 
 pub use closed_registry::{ALLOWED, build_fleet_worker_registry};
 pub use escalate::{EscalateTool, EscalationSlot};
@@ -166,7 +166,7 @@ impl AgentFactory {
     /// with a real sandbox factory.
     #[cfg(test)]
     pub fn for_testing(llm: Arc<dyn LlmProvider>, memory: Arc<EpisodeStore>) -> Self {
-        use octos_agent::sandbox::NoSandbox;
+        use ra_agent::sandbox::NoSandbox;
         Self::new(
             llm,
             memory,
@@ -213,7 +213,7 @@ impl AgentFactory {
     /// an EXPLICIT, caller-owned `sandbox` instance and a per-command shell
     /// timeout ceiling of `max_shell_timeout_secs`. Threading the instance
     /// (rather than re-invoking the factory) is what lets the agent and the
-    /// acceptance-gate [`octos_agent::ValidatorRunner`] share one sandbox.
+    /// acceptance-gate [`ra_agent::ValidatorRunner`] share one sandbox.
     ///
     /// Returns `Err` for an incoherent grant (unknown tool / web tool without a
     /// network grant) — validated at parse too, so this is defense-in-depth.
@@ -292,7 +292,7 @@ impl AgentFactory {
 mod tests {
     use super::*;
     use crate::testutil::{SuccessProvider, fresh_memory};
-    use octos_agent::sandbox::NoSandbox;
+    use ra_agent::sandbox::NoSandbox;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tokio::process::Command;
 

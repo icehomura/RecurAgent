@@ -14,7 +14,7 @@
 //! connection that registered the set and waits for `peer/tool/result`
 //! (bounded by the set's call timeout; on timeout or turn interrupt it sends
 //! `peer/tool/cancel`). Risk gating happens in
-//! [`octos_agent::HostRoutedTool`] before the host is asked. Every call is
+//! [`ra_agent::HostRoutedTool`] before the host is asked. Every call is
 //! appended to `peers/<slug>/tool_audit.jsonl`.
 
 use std::collections::HashMap;
@@ -22,11 +22,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
-use octos_agent::{
+use ra_agent::{
     HostRoutedTool, HostToolAudit, HostToolCall, HostToolCallOutcome, HostToolCaller,
     HostToolConfirm, HostToolDecl, HostToolRisk, HostToolRouter, OccurrenceClaim, ToolRegistry,
 };
-use octos_core::SessionKey;
+use ra_core::SessionKey;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -40,12 +40,12 @@ pub(crate) const TOOL_AUDIT_LEAF: &str = "tool_audit.jsonl";
 
 /// Server → host: run an app tool.
 pub(crate) const PEER_TOOL_CALL_NOTIFICATION: &str =
-    octos_core::ui_protocol::methods::PEER_TOOL_CALL;
+    ra_core::ui_protocol::methods::PEER_TOOL_CALL;
 /// Server → host: stop a call the kernel no longer waits for.
 pub(crate) const PEER_TOOL_CANCEL_NOTIFICATION: &str =
-    octos_core::ui_protocol::methods::PEER_TOOL_CANCEL;
+    ra_core::ui_protocol::methods::PEER_TOOL_CANCEL;
 /// Server → host: the system agent's input for a host-owned peer.
-pub(crate) const PEER_INPUT_NOTIFICATION: &str = octos_core::ui_protocol::methods::PEER_INPUT;
+pub(crate) const PEER_INPUT_NOTIFICATION: &str = ra_core::ui_protocol::methods::PEER_INPUT;
 
 pub(crate) const MAX_APP_TOOLS: usize = 64;
 pub(crate) const MAX_GENERIC_TOOLS: usize = 256;
@@ -310,7 +310,7 @@ pub(crate) fn build_tool_set(
         }
         // A host tool never takes a kernel tool's name: the model, the audit
         // and every name-based filter must be able to tell them apart.
-        if octos_agent::tools::RESERVED_BUILTIN_TOOL_NAMES.contains(&model_name.as_str()) {
+        if ra_agent::tools::RESERVED_BUILTIN_TOOL_NAMES.contains(&model_name.as_str()) {
             return Err(format!(
                 "tool '{}' would be seen by the model as the kernel tool '{model_name}'",
                 tool.name
@@ -1356,7 +1356,7 @@ pub(crate) fn deliver_peer_input(
             ));
         }
     }
-    let turn_id = octos_core::ui_protocol::TurnId::new();
+    let turn_id = ra_core::ui_protocol::TurnId::new();
     HUB.input_turns
         .lock()
         .unwrap_or_else(|p| p.into_inner())
@@ -2174,7 +2174,7 @@ pub(crate) fn register_host_approval(approval_id: &str, route_key: String) {
 /// longer knows its host (after a restart or an eviction). Every other
 /// approval is decided by [`host_approval_visible`].
 pub(crate) fn host_approval_event_visible(
-    event: &octos_core::ui_protocol::ApprovalRequestedEvent,
+    event: &ra_core::ui_protocol::ApprovalRequestedEvent,
     connection: u64,
 ) -> bool {
     let key = HOST_APPROVALS
@@ -2186,7 +2186,7 @@ pub(crate) fn host_approval_event_visible(
         Some(key) => route_connection_by_key(&key) == Some(connection),
         None => {
             event.approval_kind.as_deref()
-                != Some(octos_core::ui_protocol::approval_kinds::HOST_TOOL)
+                != Some(ra_core::ui_protocol::approval_kinds::HOST_TOOL)
         }
     }
 }

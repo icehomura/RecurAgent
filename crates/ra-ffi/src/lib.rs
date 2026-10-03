@@ -48,19 +48,19 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use libc::c_char;
-use octos_agent::{
+use ra_agent::{
     Agent, AgentConfig, ConversationResponse, GlobTool, GrepTool, IncompleteResponseError,
     ListDirTool, MemoryLoadTool, MemorySearchTool, ReadFileTool, ShellTool, ToolRegistry,
     WriteFileTool,
 };
-use octos_cli::commands::chat::create_provider_with_api_type;
-use octos_cli::config::Config;
-use octos_cli::embed_model;
-use octos_core::{AgentId, MessageRole};
+use ra_cli::commands::chat::create_provider_with_api_type;
+use ra_cli::config::Config;
+use ra_cli::embed_model;
+use ra_core::{AgentId, MessageRole};
 #[cfg(feature = "embed-llama")]
-use octos_llm::EmbeddingProvider;
-use octos_llm::LlmProvider;
-use octos_memory::{
+use ra_llm::EmbeddingProvider;
+use ra_llm::LlmProvider;
+use ra_memory::{
     DEFAULT_RECALL_DIMENSION, EpisodeStore, MemoryStore, RecallConfig, RecallStore, Record,
     RecordKind, SearchFilter, Trust,
 };
@@ -200,7 +200,7 @@ fn canonical_provider_name(provider: &str) -> String {
     if provider == "custom" {
         return "custom".to_string();
     }
-    octos_llm::registry::lookup(provider)
+    ra_llm::registry::lookup(provider)
         .map(|entry| entry.name.to_string())
         .unwrap_or_else(|| provider.to_string())
 }
@@ -328,7 +328,7 @@ pub struct TaskBrief {
 
 /// Input of [`RaRuntime::memory_upsert`] / `ra_memory_upsert`.
 ///
-/// Each record is the wire form of `octos_memory::Record`: `id`, `kind`
+/// Each record is the wire form of `ra_memory::Record`: `id`, `kind`
 /// (`"document"` | `"episode"`), `source`, `timestamp` (RFC3339), `title`,
 /// `abstract`, optional `parent` / `body` / `fingerprint`. Other `Record`
 /// fields are ignored or overwritten (`trust` → untrusted, counters reset).
@@ -541,7 +541,7 @@ pub struct RaRuntime {
     /// `pub` so hosts (and the uniffi facade) can tell which mode they got.
     pub embedding_configured: bool,
     #[cfg(feature = "embed-llama")]
-    embedder: Option<Arc<octos_embed_llama::LlamaEmbedder>>,
+    embedder: Option<Arc<ra_embed_llama::LlamaEmbedder>>,
     /// The RESOLVED plaintext key the provider was built with — from whatever
     /// source (env_vars-injected `api_key`, `api_key_env` process var, default
     /// env var, or auth store; see `runtime_new_impl`). Retained ONLY to
@@ -1010,12 +1010,12 @@ impl RaRuntime {
     /// The runtime's embedder as a shared `EmbeddingProvider`, when the
     /// `embed-llama` feature is on and a model was configured; `None`
     /// otherwise (the memory tools then rank BM25-only).
-    fn embedding_provider(&self) -> Option<Arc<dyn octos_llm::EmbeddingProvider>> {
+    fn embedding_provider(&self) -> Option<Arc<dyn ra_llm::EmbeddingProvider>> {
         #[cfg(feature = "embed-llama")]
         {
             self.embedder
                 .clone()
-                .map(|e| e as Arc<dyn octos_llm::EmbeddingProvider>)
+                .map(|e| e as Arc<dyn ra_llm::EmbeddingProvider>)
         }
         #[cfg(not(feature = "embed-llama"))]
         {
@@ -1178,10 +1178,10 @@ fn guard<T>(default: T, ctx: &'static str, body: impl FnOnce() -> T) -> T {
 }
 
 #[cfg(feature = "embed-llama")]
-fn build_embedder(path: &Path) -> Result<Arc<octos_embed_llama::LlamaEmbedder>, CoreError> {
+fn build_embedder(path: &Path) -> Result<Arc<ra_embed_llama::LlamaEmbedder>, CoreError> {
     // n_gpu_layers = 0 -> CPU; hosts wanting Metal/CUDA build the
     // corresponding feature which changes the linked backend.
-    let embedder = octos_embed_llama::LlamaEmbedder::from_model_file(path, 0).map_err(|e| {
+    let embedder = ra_embed_llama::LlamaEmbedder::from_model_file(path, 0).map_err(|e| {
         CoreError::Embed(format!(
             "failed to load embedding model '{}': {e}",
             path.display()
@@ -1195,7 +1195,7 @@ fn build_embedder(path: &Path) -> Result<Arc<octos_embed_llama::LlamaEmbedder>, 
 #[cfg(feature = "embed-llama")]
 struct ResolvedEmbedder {
     /// `None` = keyword-only (no path configured and no default model).
-    embedder: Option<Arc<octos_embed_llama::LlamaEmbedder>>,
+    embedder: Option<Arc<ra_embed_llama::LlamaEmbedder>>,
     /// The `RecallConfig::embedder_id` that pins stored vectors to the model:
     /// `llamacpp/<path>` for an explicit path,
     /// [`embed_model::DEFAULT_MODEL_ID`] for the default model, empty when
@@ -1743,8 +1743,8 @@ mod tests {
         dir
     }
 
-    fn cred(token: &str, provider: &str) -> octos_cli::auth::AuthCredential {
-        octos_cli::auth::AuthCredential {
+    fn cred(token: &str, provider: &str) -> ra_cli::auth::AuthCredential {
+        ra_cli::auth::AuthCredential {
             access_token: token.to_string(),
             refresh_token: None,
             expires_at: None,
@@ -1856,11 +1856,11 @@ mod tests {
         let dir = tmp_auth_dir();
         let token = "canon-token-abc123XYZ";
         {
-            let mut store = octos_cli::auth::AuthStore::at(&dir).unwrap();
+            let mut store = ra_cli::auth::AuthStore::at(&dir).unwrap();
             store.set("dashscope", cred(token, "dashscope")).unwrap();
         }
 
-        let store = octos_cli::auth::AuthStore::at(&dir).unwrap();
+        let store = ra_cli::auth::AuthStore::at(&dir).unwrap();
         // The alias spelling misses the canonically-keyed credential...
         assert!(store.get("qwen").is_none());
         // ...but the canonical name the FFI now resolves under hits it.
@@ -1890,12 +1890,12 @@ mod tests {
         let dir = tmp_auth_dir();
         let token = "authstore-only-tok-42abc";
         {
-            let mut store = octos_cli::auth::AuthStore::at(&dir).unwrap();
+            let mut store = ra_cli::auth::AuthStore::at(&dir).unwrap();
             store.set("dashscope", cred(token, "dashscope")).unwrap();
         }
 
         // Resolve ONCE (simulating runtime_new_impl's single read).
-        let resolved = octos_cli::auth::AuthStore::at(&dir)
+        let resolved = ra_cli::auth::AuthStore::at(&dir)
             .unwrap()
             .get(&canonical_provider_name("qwen"))
             .map(|c| c.access_token.clone());

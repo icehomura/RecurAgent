@@ -20,7 +20,7 @@
 use std::path::Path;
 use std::process::ExitCode;
 
-use octos_plugin::{PluginManifest, ValidationProfile};
+use ra_plugin::{PluginManifest, ValidationProfile};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();

@@ -181,7 +181,7 @@ fn resolve_bridge_from_profile() -> Result<BridgeConfig, String> {
     })
 }
 
-/// Mirrors `octos_cli::api::smart_home_bridge::resolve_bridge_config`
+/// Mirrors `ra_cli::api::smart_home_bridge::resolve_bridge_config`
 /// exactly: an explicit `token` wins; otherwise `token_env` is looked up in
 /// the profile's OWN `config.env_vars` map (never the OS process
 /// environment).

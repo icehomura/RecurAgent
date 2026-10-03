@@ -1,6 +1,6 @@
 //! Generic, product-agnostic local checks: terminal environment, config/data
 //! directory writability, and the protocol-skew **adapter** over the pure
-//! `octos_core::ui_protocol` comparator.
+//! `ra_core::ui_protocol` comparator.
 //!
 //! No network here (Stage 1). The terminal checks are ported from octoscode's
 //! `doctor.rs`; the writability checks take their directories as parameters so
@@ -8,7 +8,7 @@
 
 use std::path::Path;
 
-use octos_core::ui_protocol::{
+use ra_core::ui_protocol::{
     ProtocolCompat, UI_PROTOCOL_SCHEMA_VERSION, UI_PROTOCOL_V1, UiProtocolCapabilities,
     compare_protocol,
 };
@@ -262,7 +262,7 @@ where
 mod tests {
     use super::*;
     use crate::report::CheckStatus;
-    use octos_core::ui_protocol::{
+    use ra_core::ui_protocol::{
         UI_PROTOCOL_FEATURE_APPROVAL_TYPED_V1, UI_PROTOCOL_FEATURE_USER_QUESTION_V1,
     };
 

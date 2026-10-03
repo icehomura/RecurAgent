@@ -9,12 +9,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use octos_agent::validators::{
+use ra_agent::validators::{
     VALIDATOR_RESULT_SCHEMA_VERSION, ValidatorInvocation, ValidatorLedger, ValidatorPhase,
     ValidatorRunner, ValidatorStatus,
 };
-use octos_agent::workspace_policy::{Validator, ValidatorPhaseKind, ValidatorSpec};
-use octos_agent::{Tool, ToolRegistry, ToolResult};
+use ra_agent::workspace_policy::{Validator, ValidatorPhaseKind, ValidatorSpec};
+use ra_agent::{Tool, ToolRegistry, ToolResult};
 use serde_json::{Value, json};
 use tempfile::tempdir;
 
@@ -170,7 +170,7 @@ async fn windows_command_validator_fails_closed_when_appcontainer_helper_vanishe
     let dir = tempdir().unwrap();
     let marker = dir.path().join("bare-host-spawn-marker");
     let runner = ValidatorRunner::new(registry_with_tools(), dir.path().to_path_buf())
-        .with_sandbox(Arc::new(octos_agent::sandbox::AppContainerSandbox {
+        .with_sandbox(Arc::new(ra_agent::sandbox::AppContainerSandbox {
             allow_network: false,
             read_allow_paths: vec![],
             profile_name: None,
@@ -590,8 +590,8 @@ async fn should_strip_blocked_env_vars_from_command_validator_child() {
 
 #[tokio::test]
 async fn should_block_spawn_task_contract_when_required_validator_fails() {
-    use octos_agent::workspace_contract::{SpawnTaskContractResult, enforce_spawn_task_contract};
-    use octos_agent::workspace_policy::{
+    use ra_agent::workspace_contract::{SpawnTaskContractResult, enforce_spawn_task_contract};
+    use ra_agent::workspace_policy::{
         Validator, ValidatorPhaseKind, ValidatorSpec, WorkspacePolicy, WorkspaceSpawnTaskPolicy,
         write_workspace_policy,
     };
@@ -642,7 +642,7 @@ async fn should_block_spawn_task_contract_when_required_validator_fails() {
         &[],
         UNIX_EPOCH,
         None,
-        Arc::new(octos_agent::sandbox::NoSandbox),
+        Arc::new(ra_agent::sandbox::NoSandbox),
     )
     .await;
 
@@ -672,8 +672,8 @@ async fn should_block_spawn_task_contract_when_required_validator_fails() {
 
 #[tokio::test]
 async fn should_not_block_spawn_task_contract_when_optional_validator_fails() {
-    use octos_agent::workspace_contract::{SpawnTaskContractResult, enforce_spawn_task_contract};
-    use octos_agent::workspace_policy::{
+    use ra_agent::workspace_contract::{SpawnTaskContractResult, enforce_spawn_task_contract};
+    use ra_agent::workspace_policy::{
         Validator, ValidatorPhaseKind, ValidatorSpec, WorkspacePolicy, WorkspaceSpawnTaskPolicy,
         write_workspace_policy,
     };
@@ -721,7 +721,7 @@ async fn should_not_block_spawn_task_contract_when_optional_validator_fails() {
         &[],
         UNIX_EPOCH,
         None,
-        Arc::new(octos_agent::sandbox::NoSandbox),
+        Arc::new(ra_agent::sandbox::NoSandbox),
     )
     .await;
 
@@ -743,9 +743,9 @@ async fn should_not_block_spawn_task_contract_when_optional_validator_fails() {
 
 #[tokio::test]
 async fn should_reflect_required_validator_fail_in_inspect_ready_flag() {
-    use octos_agent::workspace_git::WorkspaceProjectKind;
-    use octos_agent::workspace_git::inspect_workspace_contract_at_root;
-    use octos_agent::workspace_policy::{
+    use ra_agent::workspace_git::WorkspaceProjectKind;
+    use ra_agent::workspace_git::inspect_workspace_contract_at_root;
+    use ra_agent::workspace_policy::{
         Validator, ValidatorPhaseKind, ValidatorSpec, WorkspacePolicy, write_workspace_policy,
     };
 
@@ -787,7 +787,7 @@ async fn should_reflect_required_validator_fail_in_inspect_ready_flag() {
     // Persist a Pass outcome for the gate and re-inspect.
     let ledger_path = repo.join(".ra").join("validator_outcomes.jsonl");
     let ledger = ValidatorLedger::open(&ledger_path).unwrap();
-    let outcome = octos_agent::validators::ValidatorOutcome {
+    let outcome = ra_agent::validators::ValidatorOutcome {
         schema_version: VALIDATOR_RESULT_SCHEMA_VERSION,
         validator_id: "gate".into(),
         phase: ValidatorPhase::Completion,
@@ -864,15 +864,15 @@ async fn should_bind_files_to_send_to_artifact_for_mofa_slides_contract() {
     // The contract must now bind the reported PPTX into a named artifact so
     // `resolve_artifacts` produces a populated `ActionContext` and the typed
     // MagicBytes(Pptx) validator runs against real artifact paths.
-    use octos_agent::workspace_contract::{SpawnTaskContractResult, enforce_spawn_task_contract};
-    use octos_agent::workspace_policy::WorkspacePolicy;
+    use ra_agent::workspace_contract::{SpawnTaskContractResult, enforce_spawn_task_contract};
+    use ra_agent::workspace_policy::WorkspacePolicy;
     use std::time::UNIX_EPOCH;
 
     let dir = tempdir().unwrap();
     // Write the default session policy unmodified — this is the policy the
     // bundled mofa_slides spawn task runs against today.
     let policy = WorkspacePolicy::for_session();
-    octos_agent::workspace_policy::write_workspace_policy(dir.path(), &policy).unwrap();
+    ra_agent::workspace_policy::write_workspace_policy(dir.path(), &policy).unwrap();
 
     // Lay down a real PPTX-shaped file under the slides plugin's typical
     // output path so the MagicBytes(Pptx) validator declared on the
@@ -899,7 +899,7 @@ async fn should_bind_files_to_send_to_artifact_for_mofa_slides_contract() {
         &files_to_send,
         UNIX_EPOCH,
         None,
-        Arc::new(octos_agent::sandbox::NoSandbox),
+        Arc::new(ra_agent::sandbox::NoSandbox),
     )
     .await;
 

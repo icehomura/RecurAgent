@@ -5,7 +5,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use octos_agent::bridge::work_secret::WorkSecret;
+use ra_agent::bridge::work_secret::WorkSecret;
 
 fn run_octos(args: &[&str], data_dir: &Path) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_octos"))

@@ -8,10 +8,10 @@
 
 use std::time::{Duration, Instant};
 
-use octos_llm::anthropic::AnthropicProvider;
-use octos_llm::gemini::GeminiProvider;
-use octos_llm::openai::OpenAIProvider;
-use octos_llm::{ChatConfig, LlmProvider, ToolSpec};
+use ra_llm::anthropic::AnthropicProvider;
+use ra_llm::gemini::GeminiProvider;
+use ra_llm::openai::OpenAIProvider;
+use ra_llm::{ChatConfig, LlmProvider, ToolSpec};
 use serde::Serialize;
 
 // ── Synthetic tool definitions ──────────────────────────────────
@@ -589,8 +589,8 @@ async fn test_stability_at_tool_count(
     let tool_specs: Vec<ToolSpec> = tools.to_vec();
     let config = ChatConfig::default();
 
-    let messages = vec![octos_core::Message {
-        role: octos_core::MessageRole::User,
+    let messages = vec![ra_core::Message {
+        role: ra_core::MessageRole::User,
         content: "What is the weather in Tokyo?".to_string(),
         media: vec![],
         tool_calls: None,
@@ -682,8 +682,8 @@ async fn test_quality(provider: &dyn LlmProvider) -> QualityResult {
 
     let mut correct_selections = 0;
     for (query, expected_tool) in &selection_tests {
-        let messages = vec![octos_core::Message {
-            role: octos_core::MessageRole::User,
+        let messages = vec![ra_core::Message {
+            role: ra_core::MessageRole::User,
             content: query.to_string(),
             media: vec![],
             tool_calls: None,
@@ -713,8 +713,8 @@ async fn test_quality(provider: &dyn LlmProvider) -> QualityResult {
 
     let mut false_positives = 0;
     for query in &no_tool_tests {
-        let messages = vec![octos_core::Message {
-            role: octos_core::MessageRole::User,
+        let messages = vec![ra_core::Message {
+            role: ra_core::MessageRole::User,
             content: query.to_string(),
             media: vec![],
             tool_calls: None,
@@ -755,8 +755,8 @@ async fn test_quality(provider: &dyn LlmProvider) -> QualityResult {
     let mut correct_args = 0;
     let total_args = arg_tests.len();
     for (query, expected_tool, required_fields) in &arg_tests {
-        let messages = vec![octos_core::Message {
-            role: octos_core::MessageRole::User,
+        let messages = vec![ra_core::Message {
+            role: ra_core::MessageRole::User,
             content: query.to_string(),
             media: vec![],
             tool_calls: None,
@@ -797,8 +797,8 @@ async fn test_stress(provider: &dyn LlmProvider) -> StressResult {
 
     // Parallel tool calls: ask for 3 things at once
     let parallel_query = "Get the weather in Tokyo, Paris, and London simultaneously";
-    let messages = vec![octos_core::Message {
-        role: octos_core::MessageRole::User,
+    let messages = vec![ra_core::Message {
+        role: ra_core::MessageRole::User,
         content: parallel_query.to_string(),
         media: vec![],
         tool_calls: None,
@@ -849,8 +849,8 @@ async fn test_stress(provider: &dyn LlmProvider) -> StressResult {
         }),
     )];
 
-    let complex_messages = vec![octos_core::Message {
-        role: octos_core::MessageRole::User,
+    let complex_messages = vec![ra_core::Message {
+        role: ra_core::MessageRole::User,
         content: "Deploy a web service called 'myapp' using image nginx:latest on port 8080 with 3 replicas, a health check on /health every 30s, and CPU limit of 2 cores".to_string(),
         media: vec![],
         tool_calls: None,
@@ -890,8 +890,8 @@ async fn test_stress(provider: &dyn LlmProvider) -> StressResult {
     // Rapid fire: 5 calls in quick succession
     let mut rapid_successes = 0;
     for _ in 0..5 {
-        let messages = vec![octos_core::Message {
-            role: octos_core::MessageRole::User,
+        let messages = vec![ra_core::Message {
+            role: ra_core::MessageRole::User,
             content: "What is the weather in Berlin?".to_string(),
             media: vec![],
             tool_calls: None,

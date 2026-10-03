@@ -14,8 +14,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use octos_plugin::gating;
-use octos_plugin::manifest::{PluginManifest, PluginType};
+use ra_plugin::gating;
+use ra_plugin::manifest::{PluginManifest, PluginType};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();

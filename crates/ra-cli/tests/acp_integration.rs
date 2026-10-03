@@ -25,7 +25,7 @@ use agent_client_protocol::schema::v1::{
 use agent_client_protocol::{Client, ConnectionTo};
 
 use async_trait::async_trait;
-use octos_cli::commands::{OctosAcpAgentTransport, TestAgentFactory};
+use ra_cli::commands::{OctosAcpAgentTransport, TestAgentFactory};
 use tokio::sync::Mutex;
 
 /// A canned LLM that always returns the same assistant text and ends the turn —
@@ -35,19 +35,19 @@ struct MockLlm {
 }
 
 #[async_trait]
-impl octos_llm::LlmProvider for MockLlm {
+impl ra_llm::LlmProvider for MockLlm {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
-        Ok(octos_llm::ChatResponse {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
+        Ok(ra_llm::ChatResponse {
             content: Some(self.reply.clone()),
             reasoning_content: None,
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage::default(),
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage::default(),
             provider_index: None,
         })
     }
@@ -75,13 +75,13 @@ struct RecordingLlm {
 }
 
 #[async_trait]
-impl octos_llm::LlmProvider for RecordingLlm {
+impl ra_llm::LlmProvider for RecordingLlm {
     async fn chat(
         &self,
-        messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
+        messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
         let idx = self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.seen
             .lock()
@@ -92,12 +92,12 @@ impl octos_llm::LlmProvider for RecordingLlm {
             .get(idx)
             .cloned()
             .unwrap_or_else(|| format!("reply-{idx}"));
-        Ok(octos_llm::ChatResponse {
+        Ok(ra_llm::ChatResponse {
             content: Some(reply),
             reasoning_content: None,
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage::default(),
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage::default(),
             provider_index: None,
         })
     }
@@ -161,7 +161,7 @@ async fn should_stream_assistant_message_and_end_turn_when_driven_through_acp_in
     std::fs::create_dir_all(&memory_dir).unwrap();
 
     let reply = "Hello from ra ACP";
-    let llm: Arc<dyn octos_llm::LlmProvider> = Arc::new(MockLlm {
+    let llm: Arc<dyn ra_llm::LlmProvider> = Arc::new(MockLlm {
         reply: reply.to_string(),
     });
     let factory = TestAgentFactory::new(llm, memory_dir, cwd.clone());
@@ -267,7 +267,7 @@ async fn should_accumulate_conversation_history_across_multiple_prompts() {
 
     // Distinct, greppable replies so we can assert turn-1 content survives.
     let seen: Arc<Mutex<Vec<Vec<String>>>> = Arc::new(Mutex::new(Vec::new()));
-    let llm: Arc<dyn octos_llm::LlmProvider> = Arc::new(RecordingLlm {
+    let llm: Arc<dyn ra_llm::LlmProvider> = Arc::new(RecordingLlm {
         seen: seen.clone(),
         replies: vec![
             "ASSISTANT_ONE".to_string(),
@@ -497,7 +497,7 @@ async fn should_restore_a_conversation_through_session_load() {
 
     // First transport: one turn, then await its complete server teardown.
     let seen_one: Arc<Mutex<Vec<Vec<String>>>> = Arc::new(Mutex::new(Vec::new()));
-    let llm_one: Arc<dyn octos_llm::LlmProvider> = Arc::new(RecordingLlm {
+    let llm_one: Arc<dyn ra_llm::LlmProvider> = Arc::new(RecordingLlm {
         seen: seen_one.clone(),
         replies: vec!["REMEMBER_THIS".to_string()],
         calls: std::sync::atomic::AtomicUsize::new(0),
@@ -546,7 +546,7 @@ async fn should_restore_a_conversation_through_session_load() {
 
     // Second transport: same store and id, after the first owner has exited.
     let seen_two: Arc<Mutex<Vec<Vec<String>>>> = Arc::new(Mutex::new(Vec::new()));
-    let llm_two: Arc<dyn octos_llm::LlmProvider> = Arc::new(RecordingLlm {
+    let llm_two: Arc<dyn ra_llm::LlmProvider> = Arc::new(RecordingLlm {
         seen: seen_two.clone(),
         replies: vec!["SECOND_REPLY".to_string()],
         calls: std::sync::atomic::AtomicUsize::new(0),
@@ -625,7 +625,7 @@ async fn should_replay_stored_history_as_session_updates_on_load() {
     std::fs::create_dir_all(&memory_dir).unwrap();
 
     // First transport: one persisted turn, then await server teardown.
-    let llm_one: Arc<dyn octos_llm::LlmProvider> = Arc::new(MockLlm {
+    let llm_one: Arc<dyn ra_llm::LlmProvider> = Arc::new(MockLlm {
         reply: "REMEMBER_THIS".to_string(),
     });
     let factory_one = TestAgentFactory::new(llm_one, memory_dir.clone(), cwd.clone())
@@ -671,7 +671,7 @@ async fn should_replay_stored_history_as_session_updates_on_load() {
     let session_id = first_result.expect("first session");
 
     // Second transport: same store, recording every replayed session/update.
-    let llm_two: Arc<dyn octos_llm::LlmProvider> = Arc::new(MockLlm {
+    let llm_two: Arc<dyn ra_llm::LlmProvider> = Arc::new(MockLlm {
         reply: "SECOND_REPLY".to_string(),
     });
     let factory_two =
@@ -743,7 +743,7 @@ async fn should_not_evict_a_live_session_on_reload() {
     std::fs::create_dir_all(&memory_dir).unwrap();
 
     let seen: Arc<Mutex<Vec<Vec<String>>>> = Arc::new(Mutex::new(Vec::new()));
-    let llm: Arc<dyn octos_llm::LlmProvider> = Arc::new(RecordingLlm {
+    let llm: Arc<dyn ra_llm::LlmProvider> = Arc::new(RecordingLlm {
         seen: seen.clone(),
         replies: vec!["FIRST".to_string(), "SECOND".to_string()],
         calls: std::sync::atomic::AtomicUsize::new(0),
@@ -825,8 +825,8 @@ async fn should_sanitize_stored_history_when_loading_a_session() {
     std::fs::create_dir_all(&memory_dir).unwrap();
 
     let session_id = agent_client_protocol::schema::v1::SessionId::new("ra-seeded");
-    let key = octos_core::SessionKey::with_profile(
-        octos_core::MAIN_PROFILE_ID,
+    let key = ra_core::SessionKey::with_profile(
+        ra_core::MAIN_PROFILE_ID,
         "acp",
         session_id.0.as_ref(),
     );
@@ -836,8 +836,8 @@ async fn should_sanitize_stored_history_when_loading_a_session() {
     // assistant row. All thread-stamped so the fail-closed write path accepts
     // them.
     {
-        let mut mgr = octos_bus::session::SessionManager::open(&sessions_dir).expect("open store");
-        let msg = |role: octos_core::MessageRole, content: &str| octos_core::Message {
+        let mut mgr = ra_bus::session::SessionManager::open(&sessions_dir).expect("open store");
+        let msg = |role: ra_core::MessageRole, content: &str| ra_core::Message {
             role,
             content: content.into(),
             media: vec![],
@@ -848,11 +848,11 @@ async fn should_sanitize_stored_history_when_loading_a_session() {
             thread_id: Some("t-seed".into()),
             timestamp: chrono::Utc::now(),
         };
-        mgr.add_message(&key, msg(octos_core::MessageRole::User, "SEED_USER"))
+        mgr.add_message(&key, msg(ra_core::MessageRole::User, "SEED_USER"))
             .await
             .expect("user row");
-        let mut ghost = msg(octos_core::MessageRole::Assistant, "");
-        ghost.tool_calls = Some(vec![octos_core::ToolCall {
+        let mut ghost = msg(ra_core::MessageRole::Assistant, "");
+        ghost.tool_calls = Some(vec![ra_core::ToolCall {
             id: "ghost-call".into(),
             name: "shell".into(),
             arguments: serde_json::json!({}),
@@ -861,19 +861,19 @@ async fn should_sanitize_stored_history_when_loading_a_session() {
         mgr.add_message(&key, ghost)
             .await
             .expect("ghost tool-call row");
-        mgr.add_message(&key, msg(octos_core::MessageRole::Assistant, "   "))
+        mgr.add_message(&key, msg(ra_core::MessageRole::Assistant, "   "))
             .await
             .expect("whitespace row");
         mgr.add_message(
             &key,
-            msg(octos_core::MessageRole::Assistant, "SEED_ASSISTANT"),
+            msg(ra_core::MessageRole::Assistant, "SEED_ASSISTANT"),
         )
         .await
         .expect("assistant row");
     }
 
     let seen: Arc<Mutex<Vec<Vec<String>>>> = Arc::new(Mutex::new(Vec::new()));
-    let llm: Arc<dyn octos_llm::LlmProvider> = Arc::new(RecordingLlm {
+    let llm: Arc<dyn ra_llm::LlmProvider> = Arc::new(RecordingLlm {
         seen: seen.clone(),
         replies: vec!["AFTER_LOAD".to_string()],
         calls: std::sync::atomic::AtomicUsize::new(0),

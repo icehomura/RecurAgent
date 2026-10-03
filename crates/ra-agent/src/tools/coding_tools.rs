@@ -64,7 +64,7 @@ fn next_exec_session_id() -> String {
 
 fn truncate_output(mut output: String, max_bytes: usize) -> String {
     let cap = max_bytes.max(256);
-    octos_core::truncate_utf8(&mut output, cap, "\n... (output truncated)");
+    ra_core::truncate_utf8(&mut output, cap, "\n... (output truncated)");
     output
 }
 
@@ -849,8 +849,8 @@ macro_rules! simple_codex_tool {
 /// typed [`UiPlanRecord`]. Accepts item text under `step` / `title` / `content`
 /// and tolerates a few status spellings; assigns a stable 1-based `id` when the
 /// caller doesn't supply one so downstream clients can re-render in place.
-pub(crate) fn normalize_plan(args: &Value, now_ms: i64) -> octos_core::ui_protocol::UiPlanRecord {
-    use octos_core::ui_protocol::{PlanItemStatus, UiPlanItem, UiPlanRecord};
+pub(crate) fn normalize_plan(args: &Value, now_ms: i64) -> ra_core::ui_protocol::UiPlanRecord {
+    use ra_core::ui_protocol::{PlanItemStatus, UiPlanItem, UiPlanRecord};
     let items = args
         .get("plan")
         .or_else(|| args.get("items"))
@@ -2940,7 +2940,7 @@ impl Tool for ViewImageTool {
             Err(format!(
                 "{byte_length} bytes is over the {MAX_MODEL_IMAGE_BYTES}-byte limit for showing an image to the model; downscale it"
             ))
-        } else if !octos_llm::vision::is_image(&resolved.to_string_lossy()) {
+        } else if !ra_llm::vision::is_image(&resolved.to_string_lossy()) {
             Err("the file needs a .png, .jpg, .jpeg, .gif or .webp extension to be shown to the model".to_string())
         } else {
             Ok(())
@@ -3133,7 +3133,7 @@ impl Tool for ViewVideoTool {
             Err(format!(
                 "{byte_length} bytes is over the {MAX_MODEL_VIDEO_BYTES}-byte limit for showing a video to the model; trim or downscale it"
             ))
-        } else if !octos_llm::vision::is_video(&resolved.to_string_lossy()) {
+        } else if !ra_llm::vision::is_video(&resolved.to_string_lossy()) {
             Err("the file needs a .mp4, .m4v, .mov, .mkv or .webm extension to be shown to the model".to_string())
         } else {
             Ok(())
@@ -3251,10 +3251,10 @@ fn read_image_header_no_follow(
     // so a host symlink like `C:\tmp\link.png -> C:\secret\real.png`
     // doesn't quietly follow on Windows.
     match workspace_root {
-        // The walk lives in `octos_llm::vision` (#2480): the request build
+        // The walk lives in `ra_llm::vision` (#2480): the request build
         // re-runs the exact same walk on the same paths, so it must have one
         // canonical implementation.
-        Some(root) => octos_llm::vision::reject_symlink_ancestors(resolved, root)?,
+        Some(root) => ra_llm::vision::reject_symlink_ancestors(resolved, root)?,
         None => reject_leaf_symlink(resolved)?,
     }
 

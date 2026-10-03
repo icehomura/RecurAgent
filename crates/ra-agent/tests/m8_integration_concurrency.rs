@@ -18,11 +18,11 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use octos_agent::{
+use ra_agent::{
     CheckBackgroundTasksTool, ConcurrencyClass, McpServerConfig, SpawnTool, Tool,
     plugins::PluginTool,
 };
-use octos_memory::EpisodeStore;
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 
 #[tokio::test]
@@ -57,7 +57,7 @@ fn task_control_tools_are_exclusive() {
     // (send_to_agent, cancel_task, relaunch_task) are referenced in
     // the swarm profile but have no Tool implementation today; if/when
     // they land they will need their own concurrency_class override.
-    let supervisor = Arc::new(octos_agent::TaskSupervisor::new());
+    let supervisor = Arc::new(ra_agent::TaskSupervisor::new());
     let check = CheckBackgroundTasksTool::new(supervisor, "api:test");
     assert_eq!(
         check.concurrency_class(),
@@ -74,7 +74,7 @@ fn plugin_with_exclusive_manifest_serializes_with_other_exclusive_tools_in_batch
     // declaration into the trait method so the M8.8 scheduler sees
     // Exclusive and serialises the batch alongside other exclusive
     // tools (e.g. native `spawn`, `edit_file`).
-    let exclusive_def = octos_agent::plugins::PluginToolDef {
+    let exclusive_def = ra_agent::plugins::PluginToolDef {
         name: "exclusive_plugin".into(),
         description: "test".into(),
         input_schema: serde_json::json!({"type": "object"}),
@@ -102,7 +102,7 @@ fn plugin_with_no_concurrency_declaration_defaults_to_safe() {
     // Backward-compat: existing skills (without the new field) must
     // continue to register as Safe. Most bundled skills are read-only
     // (weather, news, time, deep-search) so Safe is the right default.
-    let safe_def = octos_agent::plugins::PluginToolDef {
+    let safe_def = ra_agent::plugins::PluginToolDef {
         name: "safe_plugin".into(),
         description: "test".into(),
         input_schema: serde_json::json!({"type": "object"}),
@@ -154,7 +154,7 @@ fn existing_app_skills_continue_to_register_after_field_addition() {
     // either tool defs or mcpServers entries) must keep parsing and
     // registering exactly as before. This pins the JSON-shape
     // contract for both wrappers.
-    let legacy_plugin: octos_agent::plugins::PluginToolDef = serde_json::from_str(
+    let legacy_plugin: ra_agent::plugins::PluginToolDef = serde_json::from_str(
         r#"{"name": "weather", "description": "lookup", "input_schema": {"type": "object"}}"#,
     )
     .unwrap();
@@ -214,19 +214,19 @@ impl MockProvider {
 }
 
 #[async_trait]
-impl octos_llm::LlmProvider for MockProvider {
+impl ra_llm::LlmProvider for MockProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
-        Ok(octos_llm::ChatResponse {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
+        Ok(ra_llm::ChatResponse {
             content: Some("ok".into()),
             reasoning_content: None,
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage::default(),
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage::default(),
             provider_index: None,
         })
     }

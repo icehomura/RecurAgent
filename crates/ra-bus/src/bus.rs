@@ -1,6 +1,6 @@
 //! Message bus with typed handles for inbound/outbound routing.
 
-use octos_core::{InboundMessage, OutboundMessage};
+use ra_core::{InboundMessage, OutboundMessage};
 use tokio::sync::mpsc;
 
 const CHANNEL_SIZE: usize = 4096;
@@ -101,7 +101,7 @@ mod tests {
             media: vec![],
             metadata: serde_json::json!({}),
             message_id: None,
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         }
     }
 

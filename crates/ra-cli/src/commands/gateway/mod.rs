@@ -15,7 +15,7 @@ use std::path::PathBuf;
 
 use clap::Args;
 use eyre::{Result, WrapErr};
-use octos_core::{MAIN_PROFILE_ID, SessionKey};
+use ra_core::{MAIN_PROFILE_ID, SessionKey};
 use tracing::warn;
 
 use super::Executable;
@@ -29,8 +29,8 @@ pub(crate) use prompt::build_system_prompt;
 #[cfg(all(test, feature = "matrix"))]
 use {
     crate::session_actor::SnapshotToolRegistryFactory,
-    octos_agent::{AgentConfig, ToolRegistry},
-    octos_bus::{ActiveSessionStore, ChannelManager, CronService, SessionManager},
+    ra_agent::{AgentConfig, ToolRegistry},
+    ra_bus::{ActiveSessionStore, ChannelManager, CronService, SessionManager},
     profile_factory::ProfileActorFactoryBuilder,
     std::sync::Arc,
     std::sync::atomic::{AtomicBool, AtomicUsize},
@@ -185,9 +185,9 @@ impl GatewayCommand {
 mod tests {
     use super::*;
     use chrono::Utc;
-    use octos_agent::ToolConfigStore;
-    use octos_bus::BotManager;
-    use octos_memory::{EpisodeStore, MemoryStore};
+    use ra_agent::ToolConfigStore;
+    use ra_bus::BotManager;
+    use ra_memory::{EpisodeStore, MemoryStore};
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
     use tokio::sync::{Mutex, RwLock, mpsc};
@@ -222,7 +222,7 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let project_dir = dir.path().join("ra-home");
         std::fs::create_dir_all(&project_dir).unwrap();
-        let _ = octos_agent::bootstrap::bootstrap_bundled_skills(&project_dir);
+        let _ = ra_agent::bootstrap::bootstrap_bundled_skills(&project_dir);
 
         #[allow(unsafe_code)]
         unsafe {
@@ -284,9 +284,9 @@ mod tests {
             tool_config,
             memory,
             recall: Arc::new(
-                octos_memory::RecallStore::open(
+                ra_memory::RecallStore::open(
                     &project_dir,
-                    octos_memory::RecallConfig::default(),
+                    ra_memory::RecallConfig::default(),
                 )
                 .unwrap(),
             ),
@@ -299,7 +299,7 @@ mod tests {
             tool_registry_factory: Arc::new(SnapshotToolRegistryFactory::new(ToolRegistry::new())),
             pipeline_factory: None,
             max_history: Arc::new(AtomicUsize::new(50)),
-            session_timeout_secs: octos_agent::DEFAULT_SESSION_TIMEOUT_SECS,
+            session_timeout_secs: ra_agent::DEFAULT_SESSION_TIMEOUT_SECS,
             shutdown: Arc::new(AtomicBool::new(false)),
             cwd: project_dir.clone(),
             provider_policy: None,
@@ -310,9 +310,9 @@ mod tests {
             queue_mode: crate::config::QueueMode::Followup,
             plugin_prompt_fragments: vec![],
             no_retry: false,
-            sandbox_config: octos_agent::SandboxConfig::default(),
+            sandbox_config: ra_agent::SandboxConfig::default(),
             task_query_store: crate::session_actor::SessionTaskQueryStore::default(),
-            subagent_output_router: Arc::new(octos_agent::SubAgentOutputRouter::new(
+            subagent_output_router: Arc::new(ra_agent::SubAgentOutputRouter::new(
                 base_data_dir.join("subagent-out"),
             )),
             host_plugins: Default::default(),
@@ -496,10 +496,10 @@ mod tests {
         assert_eq!(settings.access_token.as_deref(), Some("syt_token"));
         assert!(settings.password.is_none());
         assert_eq!(settings.rooms, vec!["!a:matrix.org", "!b:matrix.org"]);
-        assert_eq!(settings.auto_join, octos_bus::MatrixAutoJoin::Off);
+        assert_eq!(settings.auto_join, ra_bus::MatrixAutoJoin::Off);
         assert_eq!(
             settings.group_policy,
-            octos_bus::MatrixGroupPolicy::Allowlist
+            ra_bus::MatrixGroupPolicy::Allowlist
         );
         assert!(settings.require_mention);
     }
@@ -539,7 +539,7 @@ mod tests {
 
         let settings = MatrixUserChannelSettings::from_entry(&entry).unwrap();
 
-        assert_eq!(settings.auto_join, octos_bus::MatrixAutoJoin::Allowlist);
+        assert_eq!(settings.auto_join, ra_bus::MatrixAutoJoin::Allowlist);
         assert_eq!(
             settings.auto_join_allowlist,
             vec![
@@ -547,7 +547,7 @@ mod tests {
                 "#support:matrix.org".to_string()
             ]
         );
-        assert_eq!(settings.group_policy, octos_bus::MatrixGroupPolicy::Open);
+        assert_eq!(settings.group_policy, ra_bus::MatrixGroupPolicy::Open);
         assert!(!settings.require_mention);
     }
 
@@ -577,7 +577,7 @@ mod tests {
         let settings = MatrixUserChannelSettings::from_entry(&entry).unwrap();
         assert_eq!(
             settings.mention_policy,
-            octos_bus::MatrixMentionPolicy::Strict
+            ra_bus::MatrixMentionPolicy::Strict
         );
 
         let entry = matrix_entry(serde_json::json!({
@@ -588,7 +588,7 @@ mod tests {
         let settings = MatrixUserChannelSettings::from_entry(&entry).unwrap();
         assert_eq!(
             settings.mention_policy,
-            octos_bus::MatrixMentionPolicy::Open
+            ra_bus::MatrixMentionPolicy::Open
         );
 
         let entry = matrix_entry(serde_json::json!({
@@ -599,7 +599,7 @@ mod tests {
         let settings = MatrixUserChannelSettings::from_entry(&entry).unwrap();
         assert_eq!(
             settings.mention_policy,
-            octos_bus::MatrixMentionPolicy::Open
+            ra_bus::MatrixMentionPolicy::Open
         );
     }
 
@@ -622,7 +622,7 @@ mod tests {
         let settings = MatrixUserChannelSettings::from_entry(&entry).unwrap();
         assert_eq!(
             settings.mention_policy,
-            octos_bus::MatrixMentionPolicy::Strict
+            ra_bus::MatrixMentionPolicy::Strict
         );
         let logs = capture.contents();
         assert!(
@@ -640,7 +640,7 @@ mod tests {
         let settings = MatrixUserChannelSettings::from_entry(&entry).unwrap();
         assert_eq!(
             settings.mention_policy,
-            octos_bus::MatrixMentionPolicy::Strict
+            ra_bus::MatrixMentionPolicy::Strict
         );
         assert_eq!(
             capture
@@ -800,7 +800,7 @@ mod tests {
         store.save(&sub).unwrap();
 
         let channel = Arc::new(
-            octos_bus::MatrixChannel::new(
+            ra_bus::MatrixChannel::new(
                 "http://localhost:6167",
                 "as-token",
                 "hs-token",
@@ -818,7 +818,7 @@ mod tests {
                 "@bot_weatherbot:localhost",
                 &sub.id,
                 "@alice:localhost",
-                octos_bus::BotVisibility::Private,
+                ra_bus::BotVisibility::Private,
             )
             .await
             .unwrap();
@@ -897,7 +897,7 @@ mod tests {
         store.save(&sub).unwrap();
 
         let channel = Arc::new(
-            octos_bus::MatrixChannel::new(
+            ra_bus::MatrixChannel::new(
                 "http://localhost:6167",
                 "as-token",
                 "hs-token",
@@ -915,7 +915,7 @@ mod tests {
                 "@bot_weatherbot:localhost",
                 &sub.id,
                 "@alice:localhost",
-                octos_bus::BotVisibility::Public,
+                ra_bus::BotVisibility::Public,
             )
             .await
             .unwrap();
@@ -981,7 +981,7 @@ mod tests {
         store.save(&sub).unwrap();
 
         let channel = Arc::new(
-            octos_bus::MatrixChannel::new(
+            ra_bus::MatrixChannel::new(
                 "http://localhost:6167",
                 "as-token",
                 "hs-token",
@@ -1000,7 +1000,7 @@ mod tests {
                 "@bot_weatherbot:localhost",
                 &sub.id,
                 "@alice:localhost",
-                octos_bus::BotVisibility::Private,
+                ra_bus::BotVisibility::Private,
             )
             .await
             .unwrap();

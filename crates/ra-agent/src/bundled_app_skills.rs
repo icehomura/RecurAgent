@@ -58,7 +58,7 @@ pub const BUNDLED_APP_SKILLS: &[(&str, &str, &str, &str)] = &[
     // Voice cloning is handled by mofa-fm.
     // pipeline-guard removed — its before_tool_call hook was a category
     // mismatch for correctness-critical logic. The model-assignment work it
-    // did is now in-process at `octos_pipeline::model_assignment` (see
+    // did is now in-process at `ra_pipeline::model_assignment` (see
     // `book/src/skill-development.md` "Before You Start: Skill vs. Workspace
     // Contract" for the rubric and PR #962 for the inline replacement).
     (

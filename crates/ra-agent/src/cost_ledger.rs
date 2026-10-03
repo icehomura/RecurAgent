@@ -5,7 +5,7 @@
 //! artifact) records a [`CostAttributionEvent`] in the ledger. Operators
 //! get a durable per-contract audit trail tying spend back to the
 //! supervisor session, the contract, the model, token volume, and a USD
-//! projection via [`octos_llm::pricing`].
+//! projection via [`ra_llm::pricing`].
 //!
 //! The ledger is schema-versioned via
 //! [`COST_ATTRIBUTION_SCHEMA_VERSION`](crate::abi_schema::COST_ATTRIBUTION_SCHEMA_VERSION).
@@ -106,7 +106,7 @@ pub struct CostAttributionEvent {
     /// Completion / output tokens reported by the sub-agent.
     pub tokens_out: u32,
     /// Projected USD cost at record time. Computed via
-    /// [`octos_llm::pricing::model_pricing`] when available; falls back
+    /// [`ra_llm::pricing::model_pricing`] when available; falls back
     /// to 0.0 for unknown models so the record still lands.
     pub cost_usd: f64,
     /// Record creation timestamp (RFC3339 UTC).
@@ -187,10 +187,10 @@ impl CostAttributionEvent {
 /// Project a USD cost using the declared model rate and a tokens-in
 /// estimate. Returns `Some(0.0)` when the model is known but both token
 /// counts are zero (operators can still distinguish that from an
-/// unknown model by checking the [`octos_llm::pricing::model_pricing`]
+/// unknown model by checking the [`ra_llm::pricing::model_pricing`]
 /// return value directly). Returns `None` for unknown models.
 pub fn project_cost_usd(model: &str, tokens_in: u32, tokens_out: u32) -> Option<f64> {
-    octos_llm::pricing::model_pricing(model).map(|pricing| pricing.cost(tokens_in, tokens_out))
+    ra_llm::pricing::model_pricing(model).map(|pricing| pricing.cost(tokens_in, tokens_out))
 }
 
 /// Generate a UUIDv7-like, time-sortable, globally unique id without
@@ -463,7 +463,7 @@ impl CostLedger for PersistentCostLedger {
 /// # Example
 ///
 /// ```
-/// use octos_agent::cost_ledger::CostBudgetPolicy;
+/// use ra_agent::cost_ledger::CostBudgetPolicy;
 /// let policy = CostBudgetPolicy::default()
 ///     .with_per_dispatch_usd(0.50)
 ///     .with_per_contract_usd(5.00);

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use eyre::Result;
-use octos_llm::ToolSpec;
+use ra_llm::ToolSpec;
 
 use crate::policy::EffectivePermissions;
 use crate::policy::FilesystemScope;
@@ -3059,7 +3059,7 @@ mod profile_filter_tests {
     #[test]
     fn should_retain_only_mofa_slides_when_slides_session_filter_runs() {
         // Pins the wiring in session_actor.rs::spawn slides branch:
-        // `tools.retain(octos_agent::keep_tool_in_slides_session)` must
+        // `tools.retain(ra_agent::keep_tool_in_slides_session)` must
         // evict every fake mofa skill except `mofa_slides`, and must NOT
         // evict the unrelated tools (read_file, shell, etc.).
         //

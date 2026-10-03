@@ -28,11 +28,11 @@ fn effective_upload_tenant_is_never_none_and_matches_upload_stamp() {
     // NEVER None — so the download gate actually fires (codex pre-merge P1).
     assert_eq!(
         effective_upload_tenant(None, None),
-        octos_core::MAIN_PROFILE_ID
+        ra_core::MAIN_PROFILE_ID
     );
     assert_eq!(
         effective_upload_tenant(Some(""), None),
-        octos_core::MAIN_PROFILE_ID
+        ra_core::MAIN_PROFILE_ID
     );
 }
 
@@ -92,7 +92,7 @@ fn assistant_tool_call_message(tool_name: &str, arguments: serde_json::Value) ->
         role: MessageRole::Assistant,
         content: String::new(),
         media: vec![],
-        tool_calls: Some(vec![octos_core::ToolCall {
+        tool_calls: Some(vec![ra_core::ToolCall {
             id: format!("call-{tool_name}"),
             name: tool_name.to_string(),
             arguments,
@@ -1145,7 +1145,7 @@ async fn actor_persist_to_per_user(
     if message.thread_id.is_none()
         && matches!(
             message.role,
-            octos_core::MessageRole::Assistant | octos_core::MessageRole::Tool
+            ra_core::MessageRole::Assistant | ra_core::MessageRole::Tool
         )
     {
         message.thread_id = handle
@@ -1153,7 +1153,7 @@ async fn actor_persist_to_per_user(
             .messages
             .iter()
             .rev()
-            .find(|m| matches!(m.role, octos_core::MessageRole::User))
+            .find(|m| matches!(m.role, ra_core::MessageRole::User))
             .and_then(|user| {
                 user.thread_id
                     .clone()
@@ -1766,7 +1766,7 @@ async fn replay_committed_session_results_replays_only_newer_assistant_messages(
                 &key,
                 Message::assistant_with_thread(
                     "first result",
-                    octos_core::ThreadId::new("test-thread"),
+                    ra_core::ThreadId::new("test-thread"),
                 ),
             )
             .await
@@ -1776,7 +1776,7 @@ async fn replay_committed_session_results_replays_only_newer_assistant_messages(
                 &key,
                 Message::assistant_with_thread(
                     "✓ report completed — file delivered",
-                    octos_core::ThreadId::new("test-thread"),
+                    ra_core::ThreadId::new("test-thread"),
                 ),
             )
             .await
@@ -1835,7 +1835,7 @@ async fn replay_committed_session_results_without_since_seq_replays_all_assistan
                 &key,
                 Message::assistant_with_thread(
                     "first result",
-                    octos_core::ThreadId::new("test-thread"),
+                    ra_core::ThreadId::new("test-thread"),
                 ),
             )
             .await
@@ -2009,7 +2009,7 @@ async fn replay_committed_session_results_skips_empty_assistant_tool_trace_messa
                 &key,
                 Message::assistant_with_thread(
                     "John Ternus is Apple's SVP of hardware engineering.",
-                    octos_core::ThreadId::new("test-thread"),
+                    ra_core::ThreadId::new("test-thread"),
                 ),
             )
             .await
@@ -2068,7 +2068,7 @@ async fn replay_committed_session_results_skips_empty_assistant_tool_trace_messa
                 &key,
                 Message::assistant_with_thread(
                     "好的，已记住你的时区为 PDT（America/Los_Angeles）。",
-                    octos_core::ThreadId::new("test-thread"),
+                    ra_core::ThreadId::new("test-thread"),
                 ),
             )
             .await
@@ -3540,7 +3540,7 @@ async fn send_bg_notification_skips_duplicate_persist_when_history_is_already_wr
             &key,
             Message::assistant_with_thread(
                 "✓ fm_tts completed — file delivered",
-                octos_core::ThreadId::new("test-thread"),
+                ra_core::ThreadId::new("test-thread"),
             ),
         )
         .await
@@ -3739,7 +3739,7 @@ async fn session_messages_full_source_reads_from_disk_snapshot() {
                 &key,
                 Message::assistant_with_thread(
                     "first result",
-                    octos_core::ThreadId::new("test-thread"),
+                    ra_core::ThreadId::new("test-thread"),
                 ),
             )
             .await
@@ -3749,7 +3749,7 @@ async fn session_messages_full_source_reads_from_disk_snapshot() {
                 &key,
                 Message::assistant_with_thread(
                     "second result",
-                    octos_core::ThreadId::new("test-thread"),
+                    ra_core::ThreadId::new("test-thread"),
                 ),
             )
             .await
@@ -3809,7 +3809,7 @@ async fn session_messages_default_source_returns_recent_window_with_absolute_seq
         manager
             .add_message_with_seq(
                 &key,
-                Message::assistant_with_thread("two", octos_core::ThreadId::new("test-thread-1")),
+                Message::assistant_with_thread("two", ra_core::ThreadId::new("test-thread-1")),
             )
             .await
             .unwrap();
@@ -3820,7 +3820,7 @@ async fn session_messages_default_source_returns_recent_window_with_absolute_seq
         manager
             .add_message_with_seq(
                 &key,
-                Message::assistant_with_thread("four", octos_core::ThreadId::new("test-thread-2")),
+                Message::assistant_with_thread("four", ra_core::ThreadId::new("test-thread-2")),
             )
             .await
             .unwrap();
@@ -4030,14 +4030,14 @@ async fn rapid_fire_bound_turn_overrides_stale_ids_for_persist_edit_and_raw_sse(
     // `assistant_with_thread` constructor — codex's PR-A type-system
     // enforcement. The persist must produce a row pinned to A.
     let mut sessions = ch.sessions.lock().await;
-    let session_key = octos_core::SessionKey::new("api", "chat-rapid-bound");
+    let session_key = ra_core::SessionKey::new("api", "chat-rapid-bound");
     // Seed the session with three siblings so the legacy
     // "derive from most-recent user" walk would find C — the bug
     // shape the bound path beats.
     for cmid in ["A", "B", "C"] {
-        let user = octos_core::Message::user_with_cmid(
+        let user = ra_core::Message::user_with_cmid(
             format!("question-{cmid}"),
-            octos_core::ClientMessageId::new(cmid),
+            ra_core::ClientMessageId::new(cmid),
         );
         sessions
             .add_message(&session_key, user)
@@ -4045,7 +4045,7 @@ async fn rapid_fire_bound_turn_overrides_stale_ids_for_persist_edit_and_raw_sse(
             .expect("user persist");
     }
     let assistant_for_a =
-        octos_core::Message::assistant_with_thread("answer for A", octos_core::ThreadId::new("A"));
+        ra_core::Message::assistant_with_thread("answer for A", ra_core::ThreadId::new("A"));
     sessions
         .add_message(&session_key, assistant_for_a)
         .await
@@ -4058,7 +4058,7 @@ async fn rapid_fire_bound_turn_overrides_stale_ids_for_persist_edit_and_raw_sse(
         .messages
         .iter()
         .rev()
-        .find(|m| matches!(m.role, octos_core::MessageRole::Assistant))
+        .find(|m| matches!(m.role, ra_core::MessageRole::Assistant))
         .expect("assistant present");
     assert_eq!(
         assistant_row.thread_id.as_deref(),

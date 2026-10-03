@@ -14,7 +14,7 @@
 //! full-trust grant — `FsGrant::Host` AND `NetworkGrant::Full` (the pool gate;
 //! projected fresh per attempt). This removes the trust GRADIENT that made the
 //! parked design fragile: full FS write (the sandbox's `repo_git_write` — see
-//! [`octos_agent::sandbox::SandboxConfig::repo_git_write`]) lets a worker bridge
+//! [`ra_agent::sandbox::SandboxConfig::repo_git_write`]) lets a worker bridge
 //! ANY lesser network fence (host `AF_UNIX` sockets survive `--unshare-net`; a
 //! planted `.git` filter runs on a controller git op), so a `Host-FS +
 //! restricted-network` worker is NOT truly isolated. Rather than fence deeper

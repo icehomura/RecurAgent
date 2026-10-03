@@ -21,7 +21,7 @@
 //! 6. After all sub-contracts reach terminal state, runs the aggregate
 //!    M4.3 validator (if one is configured).
 //! 7. Emits the typed
-//!    [`HarnessEventPayload::SwarmDispatch`](octos_agent::harness_events::HarnessEventPayload::SwarmDispatch)
+//!    [`HarnessEventPayload::SwarmDispatch`](ra_agent::harness_events::HarnessEventPayload::SwarmDispatch)
 //!    event and increments
 //!    `ra_swarm_dispatch_total{topology,outcome}`.
 
@@ -31,19 +31,19 @@ use std::sync::{Arc, Mutex};
 
 use eyre::Result;
 use metrics::counter;
-use octos_agent::harness_events::{HarnessEvent, HarnessSwarmDispatchEvent};
-use octos_agent::tools::mcp_agent::{
+use ra_agent::harness_events::{HarnessEvent, HarnessSwarmDispatchEvent};
+use ra_agent::tools::mcp_agent::{
     DispatchContextContract, DispatchOutcome, DispatchRequest, McpAgentBackend, record_dispatch,
 };
-use octos_agent::validators::{
+use ra_agent::validators::{
     ValidatorInvocation, ValidatorOutcome, ValidatorPhase, ValidatorRunner,
 };
-use octos_agent::workspace_policy::Validator;
-use octos_agent::{HarnessEventPayload, SWARM_DISPATCH_SCHEMA_VERSION};
+use ra_agent::workspace_policy::Validator;
+use ra_agent::{HarnessEventPayload, SWARM_DISPATCH_SCHEMA_VERSION};
 use tokio::task::JoinSet;
 use tracing::{debug, warn};
 
-use octos_agent::cost_ledger::{CostAccountant, CostAttributionEvent, project_cost_usd};
+use ra_agent::cost_ledger::{CostAccountant, CostAttributionEvent, project_cost_usd};
 
 use crate::gate::enforce_or_outcome;
 use crate::ledger::{CostLedger, NoopCostLedger, SwarmCostAttribution};
@@ -52,7 +52,7 @@ use crate::result::{
     AggregateArtifact, SubtaskOutcome, SubtaskStatus, SwarmOutcomeKind, SwarmResult,
 };
 use crate::topology::{ContractSpec, MAX_CONTRACTS_PER_DISPATCH, SwarmTopology};
-use octos_agent::DispatchPolicy;
+use ra_agent::DispatchPolicy;
 
 /// Maximum number of retry rounds the primitive performs before
 /// surfacing a partial result. Bounded per invariant 5 so a flaky
@@ -170,7 +170,7 @@ pub struct Swarm {
     event_sink: Arc<dyn SwarmEventSink>,
     /// Review A F-004: optional cost-accountant reservation gate. When
     /// wired, the primitive calls
-    /// [`CostAccountant::reserve`](octos_agent::cost_ledger::CostAccountant::reserve)
+    /// [`CostAccountant::reserve`](ra_agent::cost_ledger::CostAccountant::reserve)
     /// before dispatch and [`ReservationHandle::commit`] on success,
     /// matching the TOCTOU-safe pattern the spawn tool uses. Absence
     /// keeps the legacy pre-fix behaviour so integration tests and
@@ -178,7 +178,7 @@ pub struct Swarm {
     cost_budget: Option<SwarmCostBudget>,
     /// M7 req 7: pre-dispatch policy gate. Surfaces the same gate
     /// *shape* the native
-    /// [`octos_agent::tools::ToolRegistry::execute_with_context`] path
+    /// [`ra_agent::tools::ToolRegistry::execute_with_context`] path
     /// applies (tool policy, approval, sandbox-required, env), so
     /// MCP/CLI/native backends can be brought to parity. The set of
     /// gates *actually active* is whatever the caller wired into the
@@ -629,7 +629,7 @@ impl Swarm {
         let outcomes = validator.runner.run_all(&invocation, &scoped).await;
         let failed_required: Option<&ValidatorOutcome> = outcomes
             .iter()
-            .find(|o| o.required && o.status != octos_agent::validators::ValidatorStatus::Pass);
+            .find(|o| o.required && o.status != ra_agent::validators::ValidatorStatus::Pass);
         if let Some(failure) = failed_required {
             outcome.status = SubtaskStatus::TerminalFailed;
             let reason = format!(
@@ -796,7 +796,7 @@ impl SwarmBuilder {
     /// M7 req 7: wire a [`DispatchPolicy`] gate that runs before every
     /// `McpAgentBackend::dispatch` call. The policy exposes the same
     /// gate shape the native
-    /// [`octos_agent::tools::ToolRegistry::execute_with_context`] path
+    /// [`ra_agent::tools::ToolRegistry::execute_with_context`] path
     /// applies (tool policy, approval, sandbox-required, env). Whether
     /// each gate is active depends on what the caller put into the
     /// passed [`DispatchPolicy`] — see
@@ -1130,7 +1130,7 @@ fn build_event(result: &SwarmResult, context: &SwarmContext) -> HarnessEvent {
     };
 
     HarnessEvent {
-        schema: octos_agent::HARNESS_EVENT_SCHEMA_V1.to_string(),
+        schema: ra_agent::HARNESS_EVENT_SCHEMA_V1.to_string(),
         payload: HarnessEventPayload::SwarmDispatch { data: event },
     }
 }
@@ -1204,7 +1204,7 @@ mod tests {
     async fn dispatch_once_populates_m17c_context_contract_fields() {
         use crate::topology::ContractSpec;
         use async_trait::async_trait;
-        use octos_agent::tools::mcp_agent::{DispatchOutcome, DispatchResponse};
+        use ra_agent::tools::mcp_agent::{DispatchOutcome, DispatchResponse};
         use std::sync::Mutex;
 
         #[derive(Default)]

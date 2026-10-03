@@ -18,10 +18,10 @@ use tempfile::tempdir;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use octos_agent::permissions::SafetyTier;
-use octos_agent::plugins::{PluginLoader, activate_skill, register_http_skills_on_startup};
-use octos_agent::tools::ToolRegistry;
-use octos_agent::tools::robot_groups;
+use ra_agent::permissions::SafetyTier;
+use ra_agent::plugins::{PluginLoader, activate_skill, register_http_skills_on_startup};
+use ra_agent::tools::ToolRegistry;
+use ra_agent::tools::robot_groups;
 
 #[tokio::test]
 async fn startup_pass_registers_http_tools_from_catalog() {

@@ -9,7 +9,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use chrono::Utc;
 use eyre::{Result, WrapErr};
-use octos_core::{InboundMessage, OutboundMessage};
+use ra_core::{InboundMessage, OutboundMessage};
 use reqwest::Client;
 use teloxide::prelude::*;
 use teloxide::types::{
@@ -437,7 +437,7 @@ impl Channel for TelegramChannel {
                             media,
                             metadata: serde_json::json!({}),
                             message_id: Some(msg.id.0.to_string()),
-                            origin: octos_core::MessageOrigin::ExternalUser,
+                            origin: ra_core::MessageOrigin::ExternalUser,
                         };
 
                         if inbound_tx.send(inbound).await.is_err() {
@@ -487,7 +487,7 @@ impl Channel for TelegramChannel {
                                 "callback_message_id": message_id,
                             }),
                             message_id: None,
-                            origin: octos_core::MessageOrigin::ExternalUser,
+                            origin: ra_core::MessageOrigin::ExternalUser,
                         };
 
                         if inbound_tx.send(inbound).await.is_err() {

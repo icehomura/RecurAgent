@@ -9,15 +9,15 @@ use std::collections::HashSet;
 use tokio::process::Command;
 
 // The provider-secret machinery (the injection denylist, the heuristic, AND the
-// runtime-registered-secret registry) lives in `octos_core::env_hygiene` (the
+// runtime-registered-secret registry) lives in `ra_core::env_hygiene` (the
 // bottom crate), so it is the SINGLE source consulted by BOTH this subprocess
 // sanitiser AND ra-core's controller-side git sanitiser. A name registered
 // via `register_secret_env_names` (re-exported unchanged at
-// `octos_agent::register_secret_env_names`) is therefore stripped from EVERY
+// `ra_agent::register_secret_env_names`) is therefore stripped from EVERY
 // spawned subprocess — sandboxed worker git ops AND controller-side git ops.
 use crate::sandbox::BLOCKED_ENV_VARS;
-pub use octos_core::register_secret_env_names;
-use octos_core::{is_registered_secret_env_name, is_secret_env_name};
+pub use ra_core::register_secret_env_names;
+use ra_core::{is_registered_secret_env_name, is_secret_env_name};
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct EnvAllowlist {

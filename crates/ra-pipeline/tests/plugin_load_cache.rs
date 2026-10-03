@@ -19,25 +19,25 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use octos_pipeline::CodergenHandler;
+use ra_pipeline::CodergenHandler;
 use sha2::{Digest, Sha256};
 
 #[allow(dead_code)]
 struct MockProvider;
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for MockProvider {
+impl ra_llm::LlmProvider for MockProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
-        Ok(octos_llm::ChatResponse {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
+        Ok(ra_llm::ChatResponse {
             content: Some("ok".into()),
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage::default(),
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage::default(),
             reasoning_content: None,
             provider_index: None,
         })
@@ -50,9 +50,9 @@ impl octos_llm::LlmProvider for MockProvider {
     }
 }
 
-async fn temp_episode_store() -> Arc<octos_memory::EpisodeStore> {
+async fn temp_episode_store() -> Arc<ra_memory::EpisodeStore> {
     let dir = tempfile::tempdir().unwrap();
-    Arc::new(octos_memory::EpisodeStore::open(dir.path()).await.unwrap())
+    Arc::new(ra_memory::EpisodeStore::open(dir.path()).await.unwrap())
 }
 
 /// Create a sham plugin under `plugins_root` named `name`. The plugin
@@ -117,7 +117,7 @@ async fn pipeline_plugin_load_is_cached_across_nodes() {
     create_stub_plugin(plugins_root.path(), "stub-beta");
 
     let handler = CodergenHandler::new(
-        Arc::new(MockProvider) as Arc<dyn octos_llm::LlmProvider>,
+        Arc::new(MockProvider) as Arc<dyn ra_llm::LlmProvider>,
         temp_episode_store().await,
         working_dir.path().to_path_buf(),
         Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -211,7 +211,7 @@ async fn cached_plugin_registration_exposes_loaded_tools() {
     create_stub_plugin(plugins_root.path(), "stub-beta");
 
     let handler = CodergenHandler::new(
-        Arc::new(MockProvider) as Arc<dyn octos_llm::LlmProvider>,
+        Arc::new(MockProvider) as Arc<dyn ra_llm::LlmProvider>,
         temp_episode_store().await,
         working_dir.path().to_path_buf(),
         Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -235,7 +235,7 @@ async fn cached_plugin_registration_exposes_loaded_tools() {
 async fn empty_plugin_dirs_is_a_no_op_fast_path() {
     let working_dir = tempfile::tempdir().unwrap();
     let handler = CodergenHandler::new(
-        Arc::new(MockProvider) as Arc<dyn octos_llm::LlmProvider>,
+        Arc::new(MockProvider) as Arc<dyn ra_llm::LlmProvider>,
         temp_episode_store().await,
         working_dir.path().to_path_buf(),
         Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -259,7 +259,7 @@ async fn cached_load_is_at_least_an_order_of_magnitude_faster() {
     }
 
     let handler = CodergenHandler::new(
-        Arc::new(MockProvider) as Arc<dyn octos_llm::LlmProvider>,
+        Arc::new(MockProvider) as Arc<dyn ra_llm::LlmProvider>,
         temp_episode_store().await,
         working_dir.path().to_path_buf(),
         Arc::new(std::sync::atomic::AtomicBool::new(false)),

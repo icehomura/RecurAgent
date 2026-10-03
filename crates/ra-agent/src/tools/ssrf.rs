@@ -1,11 +1,11 @@
 //! Shared SSRF (Server-Side Request Forgery) protection.
 //!
-//! A thin agent-facing adapter over `octos_research::net` — the one SSRF
+//! A thin agent-facing adapter over `ra_research::net` — the one SSRF
 //! implementation in the workspace (host/IP classification, fail-closed DNS
 //! validation, per-hop pinned fetching). Used by the `browser` and
 //! `site_crawl` tools and the MCP remote dispatcher; `web_fetch` takes its
 //! fleet allowlist gate ([`check_host_allowlist`]) from here and its URL
-//! safety directly from `octos_research::net`.
+//! safety directly from `ra_research::net`.
 
 use std::net::{IpAddr, SocketAddr};
 
@@ -16,7 +16,7 @@ pub(crate) struct SsrfCheckResult {
     /// Resolved socket addresses — empty ONLY when the host was a literal
     /// IP (already validated, nothing to pin). A DNS-resolved host always
     /// carries at least one pinned address: an empty DNS answer fails
-    /// closed in `octos_research::net` (`validate_answer_set`) instead of
+    /// closed in `ra_research::net` (`validate_answer_set`) instead of
     /// skipping the pin.
     pub resolved_addrs: Vec<SocketAddr>,
 }
@@ -24,7 +24,7 @@ pub(crate) struct SsrfCheckResult {
 /// Validate a URL against SSRF protections: checks scheme, hostname, and DNS resolution.
 /// Returns `Ok(SsrfCheckResult)` if the URL is safe, `Err(error_message)` if blocked.
 ///
-/// A thin adapter over [`octos_research::net::check_url`], keeping this
+/// A thin adapter over [`ra_research::net::check_url`], keeping this
 /// module's agent-facing contract: the legacy error messages the tools
 /// surface (and their tests pin), and an empty pin set for literal-IP
 /// hosts. Fails closed: DNS lookup failures are treated as blocked (prevents
@@ -36,7 +36,7 @@ pub(crate) async fn check_ssrf_with_addrs(url: &str) -> Result<SsrfCheckResult, 
         .host_str()
         .ok_or_else(|| "URL has no host".to_string())?;
 
-    let (checked_host, resolved_addrs) = octos_research::net::check_url(url)
+    let (checked_host, resolved_addrs) = ra_research::net::check_url(url)
         .await
         .map_err(|e| map_check_url_error(&e, host))?;
 
@@ -50,7 +50,7 @@ pub(crate) async fn check_ssrf_with_addrs(url: &str) -> Result<SsrfCheckResult, 
     Ok(SsrfCheckResult { resolved_addrs })
 }
 
-/// Map [`octos_research::net::check_url`]'s errors onto this module's
+/// Map [`ra_research::net::check_url`]'s errors onto this module's
 /// agent-facing messages — the strings the tools surface to the model and
 /// their tests pin. `check_url` has a closed error vocabulary, so the
 /// mapping is exact-match with a passthrough for anything unrecognized
@@ -108,7 +108,7 @@ pub(crate) async fn check_ssrf(url: &str) -> Option<String> {
 /// Subdomain matching uses the label boundary (`.`) so `example.com` does NOT
 /// admit `notexample.com` or `example.com.evil.tld`.
 ///
-/// [`WorkerGrant::validate`]: octos_fleet::WorkerGrant::validate
+/// [`WorkerGrant::validate`]: ra_fleet::WorkerGrant::validate
 pub(crate) fn check_host_allowlist(host: &str, allowlist: Option<&[String]>) -> Result<(), String> {
     let Some(allowlist) = allowlist else {
         return Ok(()); // unrestricted
@@ -128,8 +128,8 @@ pub(crate) fn check_host_allowlist(host: &str, allowlist: Option<&[String]>) -> 
 }
 
 // IP/host classification is shared with the research tools (deep-search,
-// deep-crawl): one implementation in `octos_research::net`.
-pub use octos_research::net::{is_private_host, is_private_ip};
+// deep-crawl): one implementation in `ra_research::net`.
+pub use ra_research::net::{is_private_host, is_private_ip};
 
 #[cfg(test)]
 mod tests {
@@ -355,7 +355,7 @@ mod tests {
             "not-a-url",
         ] {
             let adapter = check_ssrf_with_addrs(url).await.err();
-            let shared = octos_research::net::check_url(url).await.err();
+            let shared = ra_research::net::check_url(url).await.err();
             assert_eq!(
                 adapter.is_some(),
                 shared.is_some(),

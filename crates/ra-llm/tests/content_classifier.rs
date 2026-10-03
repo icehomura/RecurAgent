@@ -5,7 +5,7 @@
 //! the adaptive router can use to bias model selection. These tests lock
 //! down the acceptance invariants in issue #493 (M6.6).
 
-use octos_llm::{ClassificationDecision, ContentClassifier, ModelTier, RoutingConfig};
+use ra_llm::{ClassificationDecision, ContentClassifier, ModelTier, RoutingConfig};
 
 fn default_config() -> RoutingConfig {
     RoutingConfig {

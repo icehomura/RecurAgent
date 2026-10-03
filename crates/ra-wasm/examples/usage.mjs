@@ -23,7 +23,7 @@ import init, {
   session_key_with_topic,
   ui_protocol_version,
   max_text_frame_bytes,
-} from "../pkg/octos_wasm.js";
+} from "../pkg/ra_wasm.js";
 
 async function main() {
   await init(); // loads .wasm and installs the panic hook (start())

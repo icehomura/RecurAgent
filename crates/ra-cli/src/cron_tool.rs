@@ -8,8 +8,8 @@ use async_trait::async_trait;
 use chrono::{Local, Utc};
 use eyre::{Result, WrapErr};
 use iana_time_zone::get_timezone;
-use octos_agent::tools::{Tool, ToolResult};
-use octos_bus::{CronMode, CronOrigin, CronPayload, CronSchedule, CronService};
+use ra_agent::tools::{Tool, ToolResult};
+use ra_bus::{CronMode, CronOrigin, CronPayload, CronSchedule, CronService};
 use regex::Regex;
 use serde::Deserialize;
 
@@ -594,7 +594,7 @@ fn format_schedule_for_display(schedule: &CronSchedule) -> String {
     }
 }
 
-fn job_matches_context(job: &octos_bus::CronJob, channel: &str, chat_id: &str) -> bool {
+fn job_matches_context(job: &ra_bus::CronJob, channel: &str, chat_id: &str) -> bool {
     job.payload.channel.as_deref() == Some(channel)
         && job.payload.chat_id.as_deref() == Some(chat_id)
 }
@@ -993,7 +993,7 @@ mod tests {
 
     fn make_service(
         dir: &std::path::Path,
-    ) -> (Arc<CronService>, mpsc::Receiver<octos_core::InboundMessage>) {
+    ) -> (Arc<CronService>, mpsc::Receiver<ra_core::InboundMessage>) {
         let (tx, rx) = mpsc::channel(64);
         let service = Arc::new(CronService::new(dir.join("cron.json"), tx));
         (service, rx)

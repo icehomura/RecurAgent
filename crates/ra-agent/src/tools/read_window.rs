@@ -22,7 +22,7 @@
 //!    enter the context are the FORMATTED bytes, and that is what this budget
 //!    counts (the execution loop's cap counts `String::len()` of the same
 //!    string).
-//! 2. That loop cap — `octos_core::tool_output_limit("read_file")` = 50,000 —
+//! 2. That loop cap — `ra_core::tool_output_limit("read_file")` = 50,000 —
 //!    is a blind head/tail backstop (#2124). The whole point of an advising
 //!    window is that the tool's own cut is the ONLY cut, so the window plus
 //!    its footer must provably fit under the loop cap. 50 * 1024 = 51,200
@@ -41,7 +41,7 @@
 //! pi's answer to a line larger than the window is a `sed | head -c` shell
 //! fallback. That is self-defeating under OUR constraints, twice over: the
 //! shell tool's own output cap is 30,000 bytes
-//! (`octos_core::tool_output_limit("shell")`), so the advised `head -c 49152`
+//! (`ra_core::tool_output_limit("shell")`), so the advised `head -c 49152`
 //! can never arrive intact; and the loop sanitizer redacts exactly the
 //! content giant lines are made of (base64 data URIs, long hex —
 //! `sanitize.rs`), so what survives the cap is then redacted. Hence the
@@ -555,10 +555,10 @@ mod tests {
         // reads again and mangling footers — this tripwire makes that a
         // test failure instead of a silent regression.
         assert!(
-            WINDOW_MAX_BYTES + FOOTER_RESERVE <= octos_core::tool_output_limit("read_file"),
+            WINDOW_MAX_BYTES + FOOTER_RESERVE <= ra_core::tool_output_limit("read_file"),
             "WINDOW_MAX_BYTES ({WINDOW_MAX_BYTES}) + FOOTER_RESERVE ({FOOTER_RESERVE}) must fit \
              under tool_output_limit(\"read_file\") ({})",
-            octos_core::tool_output_limit("read_file")
+            ra_core::tool_output_limit("read_file")
         );
     }
 

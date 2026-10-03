@@ -5,7 +5,7 @@
 //! dedicated helper makes the behavior easier to exercise in isolation without
 //! booting the full agent loop.
 
-use octos_core::Message;
+use ra_core::Message;
 
 use super::Agent;
 use super::message_repair::{
@@ -90,9 +90,9 @@ mod tests {
 
     use async_trait::async_trait;
     use eyre::Result;
-    use octos_core::{AgentId, MessageRole, ToolCall};
-    use octos_llm::{ChatConfig, ChatResponse, LlmProvider, ToolSpec};
-    use octos_memory::EpisodeStore;
+    use ra_core::{AgentId, MessageRole, ToolCall};
+    use ra_llm::{ChatConfig, ChatResponse, LlmProvider, ToolSpec};
+    use ra_memory::EpisodeStore;
     use std::sync::Arc;
     use std::time::Instant;
     use tempfile::TempDir;

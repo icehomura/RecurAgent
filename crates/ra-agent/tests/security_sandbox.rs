@@ -438,22 +438,22 @@ fn should_restrict_reads_when_configured() {
     // Note: macOS SBPL with subpath-only reads prevents even `sh` from starting
     // (needs mach-lookup, dyld shared cache access, etc.), so we test the profile
     // generation rather than live execution with restricted reads.
-    let config = octos_agent::SandboxConfig {
+    let config = ra_agent::SandboxConfig {
         allow_toolchains: true,
         enabled: true,
-        mode: octos_agent::sandbox::SandboxMode::Macos,
+        mode: ra_agent::sandbox::SandboxMode::Macos,
         fail_closed: false,
         allow_network: false,
         workspace_write: true,
         repo_git_write: None,
-        docker: octos_agent::sandbox::DockerConfig::default(),
+        docker: ra_agent::sandbox::DockerConfig::default(),
         read_allow_paths: vec!["/usr".into(), "/opt/custom".into()],
         write_allow_globs: None,
         profile_name: None,
         build_cache_slot: None,
         read_only_view: None,
     };
-    let sandbox = octos_agent::create_sandbox(&config);
+    let sandbox = ra_agent::create_sandbox(&config);
     let dir = tempfile::tempdir().unwrap();
     let cmd = sandbox.wrap_command("echo test", dir.path());
     let args: Vec<String> = cmd
@@ -526,7 +526,7 @@ fn should_block_network_when_denied() {
 
 #[test]
 fn should_reject_absolute_paths() {
-    use octos_agent::tools::resolve_path;
+    use ra_agent::tools::resolve_path;
     let base = Path::new("/home/user/workspace");
     assert!(resolve_path(base, "/etc/passwd").is_err());
     assert!(resolve_path(base, "/tmp/evil").is_err());
@@ -534,7 +534,7 @@ fn should_reject_absolute_paths() {
 
 #[test]
 fn should_reject_path_traversal() {
-    use octos_agent::tools::resolve_path;
+    use ra_agent::tools::resolve_path;
     let base = Path::new("/home/user/workspace");
     assert!(resolve_path(base, "../../etc/passwd").is_err());
     assert!(resolve_path(base, "src/../../etc/passwd").is_err());
@@ -543,7 +543,7 @@ fn should_reject_path_traversal() {
 
 #[test]
 fn should_allow_relative_paths_within_workspace() {
-    use octos_agent::tools::resolve_path;
+    use ra_agent::tools::resolve_path;
     let dir = tempfile::tempdir().unwrap();
     let base = dir.path();
 
@@ -557,7 +557,7 @@ fn should_allow_relative_paths_within_workspace() {
 
 #[test]
 fn should_normalize_dot_dot_without_escaping() {
-    use octos_agent::tools::resolve_path;
+    use ra_agent::tools::resolve_path;
     let dir = tempfile::tempdir().unwrap();
     let base = dir.path();
 
@@ -582,7 +582,7 @@ fn should_reject_symlink_in_read_no_follow() {
 
     // read_no_follow should fail on symlink
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let result = rt.block_on(octos_agent::tools::read_no_follow(&link));
+    let result = rt.block_on(ra_agent::tools::read_no_follow(&link));
     assert!(result.is_err(), "read_no_follow should reject symlinks");
 }
 
@@ -598,7 +598,7 @@ fn should_reject_symlink_in_write_no_follow() {
     symlink(&target, &link).unwrap();
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let result = rt.block_on(octos_agent::tools::write_no_follow(&link, b"overwrite"));
+    let result = rt.block_on(ra_agent::tools::write_no_follow(&link, b"overwrite"));
     assert!(result.is_err(), "write_no_follow should reject symlinks");
 
     // Original file should be unchanged
@@ -610,7 +610,7 @@ fn should_reject_symlink_in_write_no_follow() {
 
 #[test]
 fn should_block_private_ips() {
-    use octos_agent::tools::ssrf::is_private_ip;
+    use ra_agent::tools::ssrf::is_private_ip;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
     // Private ranges
@@ -631,7 +631,7 @@ fn should_block_private_ips() {
 
 #[test]
 fn should_block_private_hosts() {
-    use octos_agent::tools::ssrf::is_private_host;
+    use ra_agent::tools::ssrf::is_private_host;
 
     assert!(is_private_host("localhost"));
     assert!(is_private_host("localhost."));
@@ -646,7 +646,7 @@ fn should_block_private_hosts() {
 
 #[test]
 fn should_have_all_critical_blocked_env_vars() {
-    use octos_agent::sandbox::BLOCKED_ENV_VARS;
+    use ra_agent::sandbox::BLOCKED_ENV_VARS;
 
     let critical = &[
         "LD_PRELOAD",
@@ -667,13 +667,13 @@ fn should_have_all_critical_blocked_env_vars() {
 
 #[test]
 fn should_block_dangerous_docker_cwd() {
-    use octos_agent::sandbox::DockerConfig;
+    use ra_agent::sandbox::DockerConfig;
 
     // Test via the actual sandbox module
-    let sb = octos_agent::sandbox::create_sandbox(&octos_agent::SandboxConfig {
+    let sb = ra_agent::sandbox::create_sandbox(&ra_agent::SandboxConfig {
         allow_toolchains: true,
         enabled: true,
-        mode: octos_agent::sandbox::SandboxMode::Docker,
+        mode: ra_agent::sandbox::SandboxMode::Docker,
         fail_closed: false,
         allow_network: false,
         workspace_write: true,

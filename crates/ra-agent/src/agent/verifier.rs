@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use eyre::Result;
-use octos_core::{Message, MessageRole};
-use octos_llm::{ChatConfig, Lane, LaneContext, LlmProvider, ResponseFormat, ToolChoice};
+use ra_core::{Message, MessageRole};
+use ra_llm::{ChatConfig, Lane, LaneContext, LlmProvider, ResponseFormat, ToolChoice};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tracing::warn;
@@ -350,7 +350,7 @@ fn compact_intent(intent: &str) -> String {
     if trimmed.is_empty() {
         return "(not stated)".to_string();
     }
-    octos_core::truncated_utf8(trimmed, 160, "...")
+    ra_core::truncated_utf8(trimmed, 160, "...")
 }
 
 fn classify_tool_result(success: Option<bool>, result: &str) -> Option<ErrorClass> {
@@ -534,7 +534,7 @@ impl Agent {
             },
         ];
         let verifier_config = verifier_chat_config();
-        let response = octos_llm::with_lane_context(
+        let response = ra_llm::with_lane_context(
             config.lane_context.clone(),
             config.provider.chat(&messages, &[], &verifier_config),
         )
@@ -550,7 +550,7 @@ impl Agent {
         turn.record_llm_usage(
             &response.usage,
             tracker,
-            octos_llm::pricing::model_pricing(&verifier_metadata.model).map(|p| {
+            ra_llm::pricing::model_pricing(&verifier_metadata.model).map(|p| {
                 p.cost_with_cache_for_metadata(
                     &verifier_metadata,
                     response.usage.input_tokens,
@@ -592,7 +592,7 @@ fn verifier_chat_config() -> ChatConfig {
         // (below any cacheable minimum); the breakpoint-marked last user
         // block carries the rolling TurnLedger, which differs every round —
         // a cache write here is never read back.
-        cache_retention: octos_llm::CacheRetention::None,
+        cache_retention: ra_llm::CacheRetention::None,
         ..Default::default()
     }
 }
@@ -603,7 +603,7 @@ fn verifier_prompt(ledger: &TurnLedger, proposed_answer: Option<&str>) -> String
         .map(|answer| {
             format!(
                 "\n\nProposed answer:\n{}",
-                octos_core::truncated_utf8(answer, 1200, "...")
+                ra_core::truncated_utf8(answer, 1200, "...")
             )
         })
         .unwrap_or_default();
@@ -752,7 +752,7 @@ mod tests {
         let config = verifier_chat_config();
         assert_eq!(
             config.cache_retention,
-            octos_llm::CacheRetention::None,
+            ra_llm::CacheRetention::None,
             "verifier verdict calls must not request cache writes"
         );
         match config.response_format {

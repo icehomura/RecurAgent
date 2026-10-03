@@ -1,7 +1,7 @@
 //! RP05 acceptance tests: realtime heartbeat + sensor context injection
 //! wired to the agent loop.
 //!
-//! These tests exercise the public surface exported from `octos_agent`. They
+//! These tests exercise the public surface exported from `ra_agent`. They
 //! do NOT touch the LLM provider (all providers are mocks) and do not sleep
 //! in real time: stall detection uses the `Heartbeat::force_stall_for_test`
 //! helper so the suite stays fast.
@@ -13,13 +13,13 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_agent::{
+use ra_agent::{
     Agent, AgentConfig, AgentError, Heartbeat, HeartbeatState, RealtimeConfig, RealtimeController,
     RealtimeHookEnricher, SensorContextInjector, SensorSnapshot, SensorSource, ToolRegistry,
 };
-use octos_core::{AgentId, Message};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_core::{AgentId, Message};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, ToolSpec};
+use ra_memory::EpisodeStore;
 
 // ---------- Shared helpers ----------
 
@@ -83,7 +83,7 @@ impl LlmProvider for ToolLoopProvider {
             Ok(ChatResponse {
                 content: None,
                 reasoning_content: None,
-                tool_calls: vec![octos_core::ToolCall {
+                tool_calls: vec![ra_core::ToolCall {
                     id: format!("call_noop_{call}"),
                     name: "noop".into(),
                     // Vary the args per call so the #1765 doom-loop guard
@@ -120,7 +120,7 @@ impl LlmProvider for ToolLoopProvider {
 struct NoopTool;
 
 #[async_trait]
-impl octos_agent::Tool for NoopTool {
+impl ra_agent::Tool for NoopTool {
     fn name(&self) -> &str {
         "noop"
     }
@@ -133,8 +133,8 @@ impl octos_agent::Tool for NoopTool {
         serde_json::json!({"type": "object", "properties": {}})
     }
 
-    async fn execute(&self, _args: &serde_json::Value) -> Result<octos_agent::ToolResult> {
-        Ok(octos_agent::ToolResult {
+    async fn execute(&self, _args: &serde_json::Value) -> Result<ra_agent::ToolResult> {
+        Ok(ra_agent::ToolResult {
             output: "ok".into(),
             success: true,
             ..Default::default()
@@ -388,7 +388,7 @@ async fn should_degrade_silently_when_sensor_source_stalls() {
 
 #[tokio::test]
 async fn should_attach_sensor_snapshot_to_hook_domain_data() {
-    use octos_agent::{HookEvent, HookPayload, HookPayloadEnricher};
+    use ra_agent::{HookEvent, HookPayload, HookPayloadEnricher};
 
     let bus = MockBus::with_snaps(vec![SensorSnapshot {
         sensor_id: "force_torque".into(),

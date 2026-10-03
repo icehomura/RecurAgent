@@ -17,8 +17,8 @@
 use std::collections::HashMap;
 use std::sync::{Mutex, RwLock};
 
-use octos_core::SessionKey;
-use octos_core::ui_protocol::{ApprovalDecision, ApprovalScopeEntry, TurnId, approval_scopes};
+use ra_core::SessionKey;
+use ra_core::ui_protocol::{ApprovalDecision, ApprovalScopeEntry, TurnId, approval_scopes};
 
 /// Recognised scope kinds; unknown strings collapse to `ApproveOnce` per the
 /// open-registry rule (caller should fall back to a normal `approval/requested`

@@ -14,22 +14,22 @@
 //!    enforcement — concurrent subtasks could blow past the caller's
 //!    per-contract cap. A `SwarmCostBudget` wired through `with_cost_budget`
 //!    now funnels every subtask through
-//!    [`CostAccountant::reserve`](octos_agent::cost_ledger::CostAccountant::reserve)
+//!    [`CostAccountant::reserve`](ra_agent::cost_ledger::CostAccountant::reserve)
 //!    so concurrent dispatches see each other's outstanding projections.
 
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use octos_agent::cost_ledger::{
+use ra_agent::cost_ledger::{
     CostAccountant, CostBudgetPolicy, CostLedger, PersistentCostLedger,
 };
-use octos_agent::tools::mcp_agent::{
+use ra_agent::tools::mcp_agent::{
     DispatchOutcome, DispatchRequest, DispatchResponse, McpAgentBackend,
 };
-use octos_agent::validators::{ValidatorInvocation, ValidatorPhase, ValidatorRunner};
-use octos_agent::workspace_policy::{Validator, ValidatorPhaseKind, ValidatorSpec};
-use octos_swarm::{
+use ra_agent::validators::{ValidatorInvocation, ValidatorPhase, ValidatorRunner};
+use ra_agent::workspace_policy::{Validator, ValidatorPhaseKind, ValidatorSpec};
+use ra_swarm::{
     AggregateValidator, ContractSpec, Swarm, SwarmBudget, SwarmContext, SwarmCostBudget,
     SwarmOutcomeKind, SwarmTopology,
 };
@@ -100,7 +100,7 @@ fn aggregate_validator(
     workspace_dir: &std::path::Path,
     validators: Vec<Validator>,
 ) -> AggregateValidator {
-    let tools = Arc::new(octos_agent::tools::ToolRegistry::new());
+    let tools = Arc::new(ra_agent::tools::ToolRegistry::new());
     let runner = ValidatorRunner::new(tools, workspace_dir.to_path_buf());
     let invocation = ValidatorInvocation {
         phase: ValidatorPhase::Completion,
@@ -166,7 +166,7 @@ async fn should_run_completion_validators_in_swarm_subtask() {
         result.outcome
     );
     for outcome in &result.per_task_outcomes {
-        assert_eq!(outcome.status, octos_swarm::SubtaskStatus::TerminalFailed);
+        assert_eq!(outcome.status, ra_swarm::SubtaskStatus::TerminalFailed);
         let error = outcome
             .error
             .as_deref()
@@ -215,7 +215,7 @@ async fn should_pass_swarm_subtask_when_required_validator_satisfied() {
     assert_eq!(result.outcome, SwarmOutcomeKind::Success);
     assert_eq!(result.completed_subtasks, 2);
     for outcome in &result.per_task_outcomes {
-        assert_eq!(outcome.status, octos_swarm::SubtaskStatus::Completed);
+        assert_eq!(outcome.status, ra_swarm::SubtaskStatus::Completed);
     }
 }
 
@@ -279,11 +279,11 @@ async fn should_use_reserve_api_for_budget_isolation_in_swarm() {
 
     // The budget MUST reject at least one subtask; the pre-fix swarm
     // would have admitted all three.
-    let breached: Vec<&octos_swarm::SubtaskOutcome> = result
+    let breached: Vec<&ra_swarm::SubtaskOutcome> = result
         .per_task_outcomes
         .iter()
         .filter(|outcome| {
-            outcome.status == octos_swarm::SubtaskStatus::TerminalFailed
+            outcome.status == ra_swarm::SubtaskStatus::TerminalFailed
                 && outcome.last_dispatch_outcome == "budget_breach"
         })
         .collect();

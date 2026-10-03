@@ -388,7 +388,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         // M7.9 / W2 — task supervisor exposure (kept REST). NOT an AppUI
         // duplicate of the WS `task/cancel` method: this is the channel/CLI
         // task-cancel path, also backed by the ra-bus API channel
-        // (crates/octos-bus/src/api_channel.rs). See octos#1371 + spec §11.
+        // (crates/ra-bus/src/api_channel.rs). See octos#1371 + spec §11.
         .route("/api/tasks/{task_id}/cancel", post(handlers::cancel_task))
         .route(
             "/api/tasks/{task_id}/restart-from-node",

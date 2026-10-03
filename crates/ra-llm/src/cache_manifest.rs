@@ -1,6 +1,6 @@
 //! Redacted fingerprints of the provider-normalized, cache-relevant prompt.
 //!
-//! Provider APIs serialize the same [`octos_core::Message`] differently. A
+//! Provider APIs serialize the same [`ra_core::Message`] differently. A
 //! cache invariant measured before that conversion can therefore be a false
 //! positive. Providers build these manifests from their final request structs
 //! after normalization, while deliberately excluding transport controls such

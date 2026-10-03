@@ -12,8 +12,8 @@
 //! ```no_run
 //! use std::collections::HashMap;
 //! use std::path::PathBuf;
-//! use octos_plugin::discovery::{PluginSource, discover_plugins};
-//! use octos_plugin::types::PluginOrigin;
+//! use ra_plugin::discovery::{PluginSource, discover_plugins};
+//! use ra_plugin::types::PluginOrigin;
 //!
 //! let sources = vec![
 //!     PluginSource {

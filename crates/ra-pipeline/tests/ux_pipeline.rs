@@ -23,11 +23,11 @@ use std::io::Write as IoWrite;
 use std::sync::Arc;
 use std::time::Instant;
 
-use octos_core::{InboundMessage, Message, MessageRole, OutboundMessage};
-use octos_llm::openai::OpenAIProvider;
-use octos_llm::{ChatConfig, LlmProvider};
-use octos_memory::EpisodeStore;
-use octos_pipeline::executor::{ExecutorConfig, PipelineExecutor};
+use ra_core::{InboundMessage, Message, MessageRole, OutboundMessage};
+use ra_llm::openai::OpenAIProvider;
+use ra_llm::{ChatConfig, LlmProvider};
+use ra_memory::EpisodeStore;
+use ra_pipeline::executor::{ExecutorConfig, PipelineExecutor};
 use tempfile::TempDir;
 use tokio::sync::mpsc;
 
@@ -66,13 +66,13 @@ async fn make_config(provider: Arc<dyn LlmProvider>, dir: &TempDir) -> ExecutorC
         max_concurrent_llm_calls: None,
         checkpoint_store: None,
         hook_executor: None,
-        workspace_context: octos_pipeline::context::PipelineContext::default(),
-        host_context: octos_pipeline::host_context::PipelineHostContext::default(),
+        workspace_context: ra_pipeline::context::PipelineContext::default(),
+        host_context: ra_pipeline::host_context::PipelineHostContext::default(),
         embedder: None,
         catalog_dir: None,
         // #1607: pipeline validators run under a no-op sandbox in tests
         // (host-independent — command validators run the argv directly).
-        sandbox: octos_agent::SandboxConfig::default(),
+        sandbox: ra_agent::SandboxConfig::default(),
     }
 }
 
@@ -613,8 +613,8 @@ async fn test_05_write_then_read_chain() {
 
 #[tokio::test]
 async fn test_06_send_file_basic() {
-    use octos_agent::Tool;
-    use octos_agent::tools::SendFileTool;
+    use ra_agent::Tool;
+    use ra_agent::tools::SendFileTool;
 
     let (tx, mut rx) = mpsc::channel::<OutboundMessage>(16);
     let tool = SendFileTool::with_context(tx, "telegram", "chat123");
@@ -652,8 +652,8 @@ async fn test_06_send_file_basic() {
 
 #[tokio::test]
 async fn test_06_send_file_multiple_types() {
-    use octos_agent::Tool;
-    use octos_agent::tools::SendFileTool;
+    use ra_agent::Tool;
+    use ra_agent::tools::SendFileTool;
 
     let dir = TempDir::new().unwrap();
     let (tx, mut rx) = mpsc::channel::<OutboundMessage>(16);
@@ -691,8 +691,8 @@ async fn test_06_send_file_multiple_types() {
 
 #[tokio::test]
 async fn test_06_send_file_nonexistent() {
-    use octos_agent::Tool;
-    use octos_agent::tools::SendFileTool;
+    use ra_agent::Tool;
+    use ra_agent::tools::SendFileTool;
 
     let (tx, _rx) = mpsc::channel::<OutboundMessage>(16);
     let tool = SendFileTool::with_context(tx, "telegram", "chat123");
@@ -715,8 +715,8 @@ async fn test_06_send_file_nonexistent() {
 
 #[tokio::test]
 async fn test_06_send_file_sandbox_escape() {
-    use octos_agent::Tool;
-    use octos_agent::tools::SendFileTool;
+    use ra_agent::Tool;
+    use ra_agent::tools::SendFileTool;
 
     let sandbox = TempDir::new().unwrap();
 
@@ -798,8 +798,8 @@ async fn test_06_send_file_sandbox_escape() {
 
 #[tokio::test]
 async fn test_06_send_file_no_context() {
-    use octos_agent::Tool;
-    use octos_agent::tools::SendFileTool;
+    use ra_agent::Tool;
+    use ra_agent::tools::SendFileTool;
 
     let (tx, _rx) = mpsc::channel::<OutboundMessage>(16);
     let tool = SendFileTool::new(tx); // No channel/chat_id set
@@ -842,7 +842,7 @@ async fn test_07_inbound_message_carries_media() {
         ],
         metadata: serde_json::json!({}),
         message_id: None,
-        origin: octos_core::MessageOrigin::ExternalUser,
+        origin: ra_core::MessageOrigin::ExternalUser,
     };
 
     assert_eq!(msg.media.len(), 2);
@@ -1557,8 +1557,8 @@ async fn test_19_translate_uploaded_file() {
 
 #[tokio::test]
 async fn test_20_send_file_after_write() {
-    use octos_agent::Tool;
-    use octos_agent::tools::SendFileTool;
+    use ra_agent::Tool;
+    use ra_agent::tools::SendFileTool;
 
     let dir = TempDir::new().unwrap();
 
@@ -1601,8 +1601,8 @@ async fn test_20_send_file_after_write() {
 
 #[tokio::test]
 async fn test_21_send_multiple_files() {
-    use octos_agent::Tool;
-    use octos_agent::tools::SendFileTool;
+    use ra_agent::Tool;
+    use ra_agent::tools::SendFileTool;
 
     let dir = TempDir::new().unwrap();
 
@@ -1665,7 +1665,7 @@ async fn test_22_inbound_media_to_agent_message() {
         media: vec!["/tmp/media/document.pdf".into()],
         metadata: serde_json::json!({}),
         message_id: Some("msg-123".into()),
-        origin: octos_core::MessageOrigin::ExternalUser,
+        origin: ra_core::MessageOrigin::ExternalUser,
     };
 
     // Verify the message carries all necessary info
@@ -1709,7 +1709,7 @@ async fn test_22_inbound_media_empty_content_gets_placeholder() {
         media: vec!["/tmp/media/photo.jpg".into()],
         metadata: serde_json::json!({}),
         message_id: None,
-        origin: octos_core::MessageOrigin::ExternalUser,
+        origin: ra_core::MessageOrigin::ExternalUser,
     };
 
     let content = if inbound.content.is_empty() && !inbound.media.is_empty() {
@@ -1729,8 +1729,8 @@ async fn test_22_inbound_media_empty_content_gets_placeholder() {
 
 #[tokio::test]
 async fn test_23_send_large_file() {
-    use octos_agent::Tool;
-    use octos_agent::tools::SendFileTool;
+    use ra_agent::Tool;
+    use ra_agent::tools::SendFileTool;
 
     let dir = TempDir::new().unwrap();
 

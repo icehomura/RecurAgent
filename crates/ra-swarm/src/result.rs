@@ -8,8 +8,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use octos_agent::tools::mcp_agent::DispatchOutcome;
-use octos_agent::validators::ValidatorOutcome;
+use ra_agent::tools::mcp_agent::DispatchOutcome;
+use ra_agent::validators::ValidatorOutcome;
 use serde::{Deserialize, Serialize};
 
 use crate::topology::SwarmTopology;
@@ -248,7 +248,7 @@ fn build_aggregate(outcomes: &[SubtaskOutcome]) -> AggregateArtifact {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_agent::tools::mcp_agent::DispatchOutcome;
+    use ra_agent::tools::mcp_agent::DispatchOutcome;
     use std::num::NonZeroUsize;
 
     #[test]

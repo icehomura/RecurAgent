@@ -5,7 +5,7 @@
 //! conservative fallback when the catalog hasn't been loaded or doesn't contain
 //! the requested model.
 
-use octos_core::Message;
+use ra_core::Message;
 use std::collections::HashMap;
 use std::sync::RwLock;
 
@@ -241,7 +241,7 @@ pub(crate) fn estimate_tool_tokens(tool: &crate::types::ToolSpec) -> u32 {
 /// system block, per-message content-block framing, cache-control metadata)
 /// that this base does not model.
 pub fn estimate_request_tokens_base(
-    messages: &[octos_core::Message],
+    messages: &[ra_core::Message],
     tools: &[crate::types::ToolSpec],
 ) -> u32 {
     messages
@@ -267,9 +267,9 @@ pub trait RouteResizer: Send + Sync {
     /// cannot.
     async fn refit(
         &self,
-        messages: &[octos_core::Message],
+        messages: &[ra_core::Message],
         window: u32,
-    ) -> Option<Vec<octos_core::Message>>;
+    ) -> Option<Vec<ra_core::Message>>;
 }
 
 tokio::task_local! {
@@ -303,10 +303,10 @@ fn current_route_resizer() -> Option<std::sync::Arc<dyn RouteResizer>> {
 /// so the route is skipped exactly as before.
 async fn mechanical_route_refit(
     provider: &std::sync::Arc<dyn crate::provider::LlmProvider>,
-    messages: &[octos_core::Message],
+    messages: &[ra_core::Message],
     tools: &[crate::types::ToolSpec],
-) -> Option<Vec<octos_core::Message>> {
-    use octos_core::MessageRole;
+) -> Option<Vec<ra_core::Message>> {
+    use ra_core::MessageRole;
     let last = messages.len().checked_sub(1)?;
     // Leading system messages are always kept.
     let sys_end = messages
@@ -331,7 +331,7 @@ async fn mechanical_route_refit(
             split += 1;
             continue;
         }
-        let mut candidate: Vec<octos_core::Message> = messages[..sys_end].to_vec();
+        let mut candidate: Vec<ra_core::Message> = messages[..sys_end].to_vec();
         candidate.extend_from_slice(&messages[split..]);
         if route_fits_request(provider, &candidate, tools).await {
             // #2143 review (item 4): re-fitting silently drops history — the
@@ -365,9 +365,9 @@ async fn mechanical_route_refit(
 /// `None` means "skip this route" — the pre-#2143 behavior.
 pub(crate) async fn refit_for_route(
     provider: &std::sync::Arc<dyn crate::provider::LlmProvider>,
-    messages: &[octos_core::Message],
+    messages: &[ra_core::Message],
     tools: &[crate::types::ToolSpec],
-) -> Option<Vec<octos_core::Message>> {
+) -> Option<Vec<ra_core::Message>> {
     if let Some(resizer) = current_route_resizer() {
         let window = provider.context_window();
         if let Some(refit) = resizer.refit(messages, window).await
@@ -384,7 +384,7 @@ pub(crate) enum RouteDecision {
     /// The request fits as-is; dispatch the original messages.
     Fits,
     /// The request was re-fitted for this route; dispatch these instead.
-    Refit(Vec<octos_core::Message>),
+    Refit(Vec<ra_core::Message>),
     /// The route cannot serve this request even after a re-fit; skip it.
     Skip,
 }
@@ -395,7 +395,7 @@ pub(crate) enum RouteDecision {
 /// at the dispatch funnel.
 pub(crate) async fn decide_route(
     provider: &std::sync::Arc<dyn crate::provider::LlmProvider>,
-    messages: &[octos_core::Message],
+    messages: &[ra_core::Message],
     tools: &[crate::types::ToolSpec],
 ) -> RouteDecision {
     if route_fits_request(provider, messages, tools).await {
@@ -420,7 +420,7 @@ pub(crate) async fn decide_route(
 /// than trying the next lane.
 pub(crate) async fn route_fits_request(
     provider: &std::sync::Arc<dyn crate::provider::LlmProvider>,
-    messages: &[octos_core::Message],
+    messages: &[ra_core::Message],
     tools: &[crate::types::ToolSpec],
 ) -> bool {
     provider.ensure_ready().await;
@@ -448,7 +448,7 @@ mod tests {
         impl crate::provider::LlmProvider for Tiny {
             async fn chat(
                 &self,
-                _m: &[octos_core::Message],
+                _m: &[ra_core::Message],
                 _t: &[crate::types::ToolSpec],
                 _c: &crate::config::ChatConfig,
             ) -> eyre::Result<crate::types::ChatResponse> {
@@ -463,7 +463,7 @@ mod tests {
         }
         let provider: Arc<dyn crate::provider::LlmProvider> =
             Arc::new(crate::ContextWindowOverride::new(Arc::new(Tiny), 2_000));
-        let msg = [octos_core::Message::user("hi")];
+        let msg = [ra_core::Message::user("hi")];
         let fat_tool = crate::types::ToolSpec {
             name: "big".into(),
             description: "d".into(),
@@ -491,7 +491,7 @@ mod tests {
         impl crate::provider::LlmProvider for Heavy {
             async fn chat(
                 &self,
-                _m: &[octos_core::Message],
+                _m: &[ra_core::Message],
                 _t: &[crate::types::ToolSpec],
                 _c: &crate::config::ChatConfig,
             ) -> eyre::Result<crate::types::ChatResponse> {
@@ -505,7 +505,7 @@ mod tests {
             }
             fn estimate_request_tokens(
                 &self,
-                messages: &[octos_core::Message],
+                messages: &[ra_core::Message],
                 tools: &[crate::types::ToolSpec],
             ) -> u32 {
                 // A big request envelope the flat estimator would miss.
@@ -517,7 +517,7 @@ mod tests {
         impl crate::provider::LlmProvider for Light {
             async fn chat(
                 &self,
-                _m: &[octos_core::Message],
+                _m: &[ra_core::Message],
                 _t: &[crate::types::ToolSpec],
                 _c: &crate::config::ChatConfig,
             ) -> eyre::Result<crate::types::ChatResponse> {
@@ -530,7 +530,7 @@ mod tests {
                 "local"
             }
         }
-        let msg = [octos_core::Message::user("hi")];
+        let msg = [ra_core::Message::user("hi")];
         // Window 2000: the tiny message alone would fit, but Heavy's +3000
         // envelope pushes the request over — proving the estimate reaches the
         // guard through RetryProvider(ContextWindowOverride(..)).
@@ -555,7 +555,7 @@ mod tests {
     /// turns dropped, system + recent kept) and SERVED, instead of skipped.
     #[tokio::test]
     async fn decide_route_refits_when_trimming_makes_it_fit() {
-        use octos_core::{Message, MessageRole};
+        use ra_core::{Message, MessageRole};
         use std::sync::Arc;
         struct Tiny;
         #[async_trait::async_trait]
@@ -609,7 +609,7 @@ mod tests {
     /// re-fit, so the route is still SKIPPED (no regression, no orphaning).
     #[tokio::test]
     async fn decide_route_skips_when_the_tail_alone_overflows() {
-        use octos_core::Message;
+        use ra_core::Message;
         use std::sync::Arc;
         struct Tiny;
         #[async_trait::async_trait]
@@ -890,7 +890,7 @@ mod tests {
     #[test]
     fn test_estimate_message_tokens() {
         let msg = Message {
-            role: octos_core::MessageRole::User,
+            role: ra_core::MessageRole::User,
             content: "Hello, how are you today?".to_string(),
             media: vec![],
             tool_calls: None,

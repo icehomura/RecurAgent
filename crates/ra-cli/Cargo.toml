@@ -84,7 +84,7 @@ tempfile = { workspace = true }
 base64 = { workspace = true }
 # #1057: `onboarding/workspace_probe` parses `workspace_policy.toml` to
 # surface presence + parse errors during TUI onboarding. The probe re-uses
-# `octos_agent::workspace_policy::WorkspacePolicy` as the canonical schema
+# `ra_agent::workspace_policy::WorkspacePolicy` as the canonical schema
 # and only needs the `toml` deserializer entry point here.
 toml = { workspace = true }
 # `ra acp` speaks the Agent Client Protocol (Zed editor <-> agent standard)
@@ -176,7 +176,7 @@ embed-llama-metal = ["embed-llama", "ra-embed-llama/metal"]
 embed-llama-cuda = ["embed-llama", "ra-embed-llama/cuda"]
 # `matrix` is pulled in unconditionally: the `/api/my/profile/matrix/*`
 # handlers and the admin dashboard's Matrix invite UI reference matrix-only
-# types (e.g. `octos_bus::MatrixInviteStore`), so the API cannot compile
+# types (e.g. `ra_bus::MatrixInviteStore`), so the API cannot compile
 # without it.
 api = ["dep:axum", "dep:tower-http", "dep:tokio-util", "dep:futures", "dep:tokio-tungstenite", "dep:rustls", "dep:rustls-native-certs", "dep:rust-embed", "dep:metrics-exporter-prometheus", "dep:lettre", "dep:rand", "dep:sysinfo", "dep:subtle", "ra-bus/api", "matrix"]
 admin-bot = ["dep:teloxide", "dep:futures", "api"]

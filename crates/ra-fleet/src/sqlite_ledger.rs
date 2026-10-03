@@ -3062,7 +3062,7 @@ mod tests {
     /// #2068 — the wall-clock dimension round-trips through the durable row.
     /// `AutonomyGoalRecord.time_used_seconds` is charged by every accountant
     /// and persisted to the supervisor store, but the ledger carried no time
-    /// column at all, so the `octos_fleet::Goal` conversion had nowhere to
+    /// column at all, so the `ra_fleet::Goal` conversion had nowhere to
     /// put it: every goal's wall-clock spend was non-durable.
     #[test]
     fn should_round_trip_time_used_seconds_when_a_goal_row_is_written() {

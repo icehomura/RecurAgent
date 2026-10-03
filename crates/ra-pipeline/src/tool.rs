@@ -1,4 +1,4 @@
-//! RunPipelineTool — implements `octos_agent::Tool` to expose pipeline execution.
+//! RunPipelineTool — implements `ra_agent::Tool` to expose pipeline execution.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -6,17 +6,17 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
-use octos_agent::cost_ledger::CostAccountant;
-use octos_agent::{Tool, ToolPolicy, ToolResult};
-use octos_llm::{EmbeddingProvider, LlmProvider, ProviderRouter};
-use octos_memory::EpisodeStore;
+use ra_agent::cost_ledger::CostAccountant;
+use ra_agent::{Tool, ToolPolicy, ToolResult};
+use ra_llm::{EmbeddingProvider, LlmProvider, ProviderRouter};
+use ra_memory::EpisodeStore;
 use serde::Deserialize;
 
 use crate::context::PipelineContext;
 use crate::discovery::PipelineDiscovery;
 use crate::executor::{ExecutorConfig, PipelineExecutor, PipelineResult, PipelineStatusBridge};
 use crate::run_dir::{PipelineRunSummary, RunDir};
-use octos_core::{SessionScope, TokenUsage};
+use ra_core::{SessionScope, TokenUsage};
 
 /// #1020 / M17-B — reason string stamped onto every pipeline run's
 /// `summary.json` because pipeline workers do not yet propagate the
@@ -26,7 +26,7 @@ pub const PIPELINE_EXTERNAL_CONTEXT_UNMANAGED_REASON: &str =
     "pipeline workers don't yet propagate ContextManager (M17-B)";
 
 /// Gap 4.1 — the sanctioned generic pipeline name. Bundled into the binary
-/// via `octos_agent::bundled_pipelines` and used as the no-discovery fallback
+/// via `ra_agent::bundled_pipelines` and used as the no-discovery fallback
 /// for the `run_pipeline` `pipeline` arg enum so the advertised choices are
 /// never empty even before bootstrap has written the `.dot`.
 const FALLBACK_PIPELINE_NAME: &str = "deep_research";
@@ -77,7 +77,7 @@ fn ir_authoring_default() -> bool {
 /// happy-path invariant; the fallback preserves legacy behaviour as a
 /// safety net.
 ///
-/// [`ToolContext::session_scope`]: octos_agent::tools::ToolContext::session_scope
+/// [`ToolContext::session_scope`]: ra_agent::tools::ToolContext::session_scope
 /// [`PipelineHostContext::session_scope`]: crate::host_context::PipelineHostContext::session_scope
 pub(crate) fn resolve_pipeline_working_dir(
     tool_working_dir: &std::path::Path,
@@ -134,7 +134,7 @@ pub struct RunPipelineTool {
     ///
     /// Without this set, worker `Agent` instances spawned per pipeline node
     /// SKIP episodic memory recall entirely (the no-embedder branch in
-    /// `octos_agent::agent::memory`): BM25-only keyword recall within a single
+    /// `ra_agent::agent::memory`): BM25-only keyword recall within a single
     /// shared workspace can't discriminate on-task from cross-task episodes, so
     /// it would leak stale unrelated memory. The gateway / serve runtimes own
     /// the embedder; this lets the orchestrator propagate it down to pipeline
@@ -151,7 +151,7 @@ pub struct RunPipelineTool {
     /// [`ExecutorConfig`] so the pipeline's terminal / per-node command
     /// validators run confined instead of on the host. Defaults to
     /// `SandboxConfig::default()` (no-op on a host without a backend).
-    sandbox: octos_agent::SandboxConfig,
+    sandbox: ra_agent::SandboxConfig,
 }
 
 impl RunPipelineTool {
@@ -179,14 +179,14 @@ impl RunPipelineTool {
             contract_id: None,
             embedder: None,
             ir_enabled: ir_authoring_default(),
-            sandbox: octos_agent::SandboxConfig::default(),
+            sandbox: ra_agent::SandboxConfig::default(),
         }
     }
 
     /// #1607: thread the session sandbox onto the pipeline executor so
     /// terminal / per-node `Command` validators run confined. Mirrors
     /// `SpawnTool::with_sandbox` / `DelegateTool::with_sandbox`.
-    pub fn with_sandbox(mut self, sandbox: octos_agent::SandboxConfig) -> Self {
+    pub fn with_sandbox(mut self, sandbox: ra_agent::SandboxConfig) -> Self {
         self.sandbox = sandbox;
         self
     }
@@ -201,11 +201,11 @@ impl RunPipelineTool {
     }
 
     /// NEW-06 fix: attach an embedder that the pipeline executor will
-    /// propagate onto every per-node worker [`octos_agent::Agent`].
+    /// propagate onto every per-node worker [`ra_agent::Agent`].
     ///
     /// When set, the worker's "Relevant Past Experiences" memory recall
     /// runs the modality-aware hybrid path that applies
-    /// [`octos_agent::agent::memory::MIN_EPISODE_SIMILARITY`] BEFORE
+    /// [`ra_agent::agent::memory::MIN_EPISODE_SIMILARITY`] BEFORE
     /// injecting episodes into the worker's prompt. Without it, workers
     /// fell back to the unfiltered cwd-only path in
     /// `EpisodeStore::find_relevant` and pulled in cross-domain
@@ -297,8 +297,8 @@ impl RunPipelineTool {
     fn read_workspace_policy_for_session(
         &self,
         candidate: &std::path::Path,
-    ) -> Option<octos_agent::workspace_policy::WorkspacePolicy> {
-        match octos_agent::workspace_policy::read_workspace_policy(candidate) {
+    ) -> Option<ra_agent::workspace_policy::WorkspacePolicy> {
+        match ra_agent::workspace_policy::read_workspace_policy(candidate) {
             Ok(policy) => policy,
             Err(error) => {
                 tracing::warn!(
@@ -409,7 +409,7 @@ impl RunPipelineTool {
             return Ok(ResolvedPipeline::Dot(dot));
         }
         // 2. Bundled IR — the canonical, audited rebuild.
-        if let Some(ir) = octos_agent::bundled_pipelines::bundled_ir(name) {
+        if let Some(ir) = ra_agent::bundled_pipelines::bundled_ir(name) {
             return Ok(ResolvedPipeline::Ir(ir.to_string()));
         }
         // 3. Embedded bundled DOT (discovery full search + embedded bytes).
@@ -420,7 +420,7 @@ impl RunPipelineTool {
 
     /// Resolve a pipeline by name/path via on-disk discovery first, falling
     /// back to the EMBEDDED bundled `.dot` bytes (compiled into the binary
-    /// via `octos_agent::bundled_pipelines`) when discovery cannot find it.
+    /// via `ra_agent::bundled_pipelines`) when discovery cannot find it.
     ///
     /// Gap 4.1 NIT 2 — the `run_pipeline` enum advertises the sanctioned
     /// `deep_research` name unconditionally (it is bundled into the binary).
@@ -463,7 +463,7 @@ impl RunPipelineTool {
                 // (when an installed copy exists, discovery now resolves both
                 // forms and this branch is never reached → installed-wins).
                 let want = crate::discovery::pipeline_name_stem(name_or_path.trim());
-                for &(file_name, dot) in octos_agent::bundled_pipelines::BUNDLED_PIPELINES {
+                for &(file_name, dot) in ra_agent::bundled_pipelines::BUNDLED_PIPELINES {
                     let stem = file_name.strip_suffix(".dot").unwrap_or(file_name);
                     if want == stem {
                         tracing::info!(
@@ -977,7 +977,7 @@ impl Tool for RunPipelineTool {
         // constructing fresh per-run handles. Falls back to whatever
         // self holds when the tool is invoked outside of a session
         // (e.g. unit tests).
-        let host_context = octos_agent::tools::TOOL_CTX
+        let host_context = ra_agent::tools::TOOL_CTX
             .try_with(crate::host_context::PipelineHostContext::from_tool_context)
             .unwrap_or_default();
 
@@ -1148,7 +1148,7 @@ impl Tool for RunPipelineTool {
                 // *after* the dispatch returns; on timeout the awaiting
                 // future is dropped before either fires and the children
                 // stay as `state: "running"` forever.
-                let host_context = octos_agent::tools::TOOL_CTX
+                let host_context = ra_agent::tools::TOOL_CTX
                     .try_with(crate::host_context::PipelineHostContext::from_tool_context)
                     .unwrap_or_default();
                 cascade_fail_orphan_node_tasks(&host_context, timeout_secs);
@@ -2058,7 +2058,7 @@ mod tests {
     /// breaks the M17-B acceptance bullet for `run_pipeline`.
     #[test]
     fn build_pipeline_run_summary_stamps_external_context_unmanaged_marker() {
-        use octos_core::TokenUsage;
+        use ra_core::TokenUsage;
         let result = PipelineResult {
             output: "ok".into(),
             success: true,
@@ -2099,7 +2099,7 @@ mod tests {
     /// trail satisfies the M17-B evidence requirement at runtime.
     #[test]
     fn emit_external_context_unmanaged_summary_writes_marker_to_disk() {
-        use octos_core::TokenUsage;
+        use ra_core::TokenUsage;
         use tempfile::TempDir;
 
         let dir = TempDir::new().unwrap();
@@ -2404,7 +2404,7 @@ mod tests {
     /// `mark_failed` path handles parent-level transition.
     #[test]
     fn cascade_fail_orphan_node_tasks_marks_all_active_children_failed() {
-        use octos_agent::task_supervisor::TaskSupervisor;
+        use ra_agent::task_supervisor::TaskSupervisor;
         use std::sync::Arc;
 
         let supervisor = Arc::new(TaskSupervisor::new());
@@ -2501,7 +2501,7 @@ mod tests {
     /// so we never mass-fail unrelated tasks.
     #[test]
     fn cascade_fail_orphan_node_tasks_noop_without_parent_tcid() {
-        use octos_agent::task_supervisor::TaskSupervisor;
+        use ra_agent::task_supervisor::TaskSupervisor;
         use std::sync::Arc;
 
         let supervisor = Arc::new(TaskSupervisor::new());
@@ -2575,7 +2575,7 @@ mod tests {
     /// dashboards / debugging tooling lose correlation.
     #[test]
     fn pipeline_timeout_output_matches_cascade_failed_child_error_text() {
-        use octos_agent::task_supervisor::TaskSupervisor;
+        use ra_agent::task_supervisor::TaskSupervisor;
         use std::sync::Arc;
 
         let supervisor = Arc::new(TaskSupervisor::new());
@@ -2789,13 +2789,13 @@ mod tests {
 
     struct StubProvider;
     #[async_trait]
-    impl octos_llm::LlmProvider for StubProvider {
+    impl ra_llm::LlmProvider for StubProvider {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> Result<octos_llm::ChatResponse> {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> Result<ra_llm::ChatResponse> {
             unimplemented!("pre-flight never calls the provider")
         }
         fn model_id(&self) -> &str {
@@ -3072,7 +3072,7 @@ mod tests {
         FOOTER_BUDGET_BYTES, MAX_FRAME_BUDGET_BYTES, bound_footer, compute_result_ceiling,
     };
     use crate::graph::NodeSummary;
-    use octos_core::TokenUsage;
+    use ra_core::TokenUsage;
 
     /// Build the per-node footer lines exactly as `execute()` does, so the
     /// test exercises the SAME assembly path the producer ships.

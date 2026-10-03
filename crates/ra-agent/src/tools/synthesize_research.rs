@@ -10,8 +10,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
-use octos_core::TokenUsage;
-use octos_llm::LlmProvider;
+use ra_core::TokenUsage;
+use ra_llm::LlmProvider;
 use serde::Deserialize;
 use tracing::info;
 

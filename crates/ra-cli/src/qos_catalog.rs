@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use octos_llm::{
+use ra_llm::{
     AdaptiveConfig, AdaptiveMode, AdaptiveRouter, BaselineEntry, ContextWindowOverride,
     LlmProvider, ModelCatalogEntry, ProviderChain, QosCatalog, RetryProvider,
 };
@@ -198,7 +198,7 @@ pub(crate) fn merge_qos_catalog(base: &QosCatalog, overlay: &QosCatalog) -> QosC
 /// metrics exporter). `runtime_qos_catalog` is the catalog that was
 /// (a) materialized from the live router export when available, or
 /// (b) derived from the cold-start seed otherwise; it has already been
-/// pushed into `octos_llm::context` and `octos_llm::pricing` and
+/// pushed into `ra_llm::context` and `ra_llm::pricing` and
 /// persisted to `model_catalog.json` before this struct is returned.
 pub(crate) struct AdaptiveProviderBundle {
     pub llm: Arc<dyn LlmProvider>,
@@ -243,8 +243,8 @@ pub(crate) enum ExporterMode {
 ///    `load_seed_qos_catalog`.
 /// 5. Materializes the runtime QoS catalog (preferring the live
 ///    router export over the cold-start seed) and seeds
-///    `octos_llm::context::seed_from_catalog` +
-///    `octos_llm::pricing::seed_pricing_catalog`.
+///    `ra_llm::context::seed_from_catalog` +
+///    `ra_llm::pricing::seed_pricing_catalog`.
 /// 6. Persists `model_catalog.json` next to `data_dir`.
 /// 7. When `exporter == ExporterMode::Spawn` and an `AdaptiveRouter`
 ///    exists, spawns a tokio task that re-writes `model_catalog.json`
@@ -336,7 +336,7 @@ pub(crate) fn build_adaptive_provider_chain(
             // overrides when an `adaptive_routing.auto_escalation` block
             // exists. (Merge note: ar_config is already &AdaptiveRoutingConfig
             // here — the outer `if adaptive_enabled` ensures Some.)
-            router.set_auto_escalation_config(octos_llm::AutoEscalationConfig::from(
+            router.set_auto_escalation_config(ra_llm::AutoEscalationConfig::from(
                 &ar_config.auto_escalation,
             ));
             adaptive_router_ref = Some(router.clone());
@@ -444,13 +444,13 @@ pub(crate) fn build_adaptive_provider_chain(
             .iter()
             .map(|m| (m.provider.clone(), m.context_window, m.max_output))
             .collect();
-        octos_llm::context::seed_from_catalog(&ctx_entries);
+        ra_llm::context::seed_from_catalog(&ctx_entries);
         let price_entries: Vec<(String, f64, f64)> = catalog
             .models
             .iter()
             .map(|m| (m.provider.clone(), m.cost_in, m.cost_out))
             .collect();
-        octos_llm::pricing::seed_pricing_catalog(&price_entries);
+        ra_llm::pricing::seed_pricing_catalog(&price_entries);
         let to_persist = match &persist_base {
             Some(base) => merge_qos_catalog(base, catalog),
             None => catalog.clone(),
@@ -496,7 +496,7 @@ pub(crate) fn derive_cold_start_qos_catalog(
     config: &AdaptiveConfig,
     qos_ranking: bool,
 ) -> QosCatalog {
-    octos_llm::derive_cold_start_catalog(entries, config, qos_ranking)
+    ra_llm::derive_cold_start_catalog(entries, config, qos_ranking)
 }
 
 pub(crate) fn load_seed_qos_catalog(data_dir: &Path) -> Option<QosCatalog> {
@@ -554,7 +554,7 @@ pub(crate) fn materialize_runtime_qos_catalog(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_llm::ModelType;
+    use ra_llm::ModelType;
     use tempfile::tempdir;
 
     fn sample_catalog(scores: [f64; 2]) -> QosCatalog {
@@ -819,8 +819,8 @@ mod tests {
     ///       context_window, model_type) instead of bare defaults;
     ///   (c) `provider_baseline.json` is loaded from `data_dir` when
     ///       present (non-cold-start path), and the latency/stability
-    ///       values it carries show up in `octos_llm::context` /
-    ///       `octos_llm::pricing` seeding through the exported
+    ///       values it carries show up in `ra_llm::context` /
+    ///       `ra_llm::pricing` seeding through the exported
     ///       catalog;
     ///   (d) a deliberately-broken third fallback gets skipped via
     ///       `warn!` without taking the helper down;
@@ -830,8 +830,8 @@ mod tests {
     #[test]
     fn build_adaptive_provider_chain_seeds_qos_plumbing_end_to_end() {
         use crate::config::{AdaptiveRoutingConfig, Config, FallbackModel};
-        use octos_core::Message;
-        use octos_llm::{ChatConfig, ChatResponse, LlmProvider, ToolSpec};
+        use ra_core::Message;
+        use ra_llm::{ChatConfig, ChatResponse, LlmProvider, ToolSpec};
         use std::sync::Arc;
 
         struct StubProvider;
@@ -1115,8 +1115,8 @@ mod tests {
     #[test]
     fn build_adaptive_provider_chain_respects_disabled_flag() {
         use crate::config::{AdaptiveRoutingConfig, Config, FallbackModel};
-        use octos_core::Message;
-        use octos_llm::{ChatConfig, ChatResponse, LlmProvider, ToolSpec};
+        use ra_core::Message;
+        use ra_llm::{ChatConfig, ChatResponse, LlmProvider, ToolSpec};
         use std::sync::Arc;
 
         struct StubProvider;
@@ -1180,8 +1180,8 @@ mod tests {
     #[test]
     fn build_adaptive_provider_chain_defaults_off_when_config_absent() {
         use crate::config::{Config, FallbackModel};
-        use octos_core::Message;
-        use octos_llm::{ChatConfig, ChatResponse, LlmProvider, ToolSpec};
+        use ra_core::Message;
+        use ra_llm::{ChatConfig, ChatResponse, LlmProvider, ToolSpec};
         use std::sync::Arc;
 
         struct StubProvider;
@@ -1241,8 +1241,8 @@ mod tests {
     #[test]
     fn context_window_override_wins_through_the_assembled_stack() {
         use crate::config::Config;
-        use octos_core::Message;
-        use octos_llm::{ChatConfig, ChatResponse, LlmProvider, ToolSpec};
+        use ra_core::Message;
+        use ra_llm::{ChatConfig, ChatResponse, LlmProvider, ToolSpec};
         use std::sync::Arc;
 
         // A backend that advertises a large window (stands in for the probed

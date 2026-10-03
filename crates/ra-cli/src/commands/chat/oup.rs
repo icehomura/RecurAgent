@@ -3,7 +3,7 @@
 use super::*;
 use crate::commands::oup_text::AssistantTextProjection;
 
-use octos_core::ui_protocol::{
+use ra_core::ui_protocol::{
     ApprovalDecision, ApprovalRespondParams, PayloadV2, TurnInterruptParams, UiCommand,
     UiNotification, UserQuestionRespondParams,
 };
@@ -216,7 +216,7 @@ impl ChatCommand {
             .map(|dir| dir.path().to_owned())
             .unwrap_or_else(|| ctx.data_dir.clone());
         let mut profile =
-            stored_profile.unwrap_or_else(|| local_profile(octos_core::MAIN_PROFILE_ID, &config));
+            stored_profile.unwrap_or_else(|| local_profile(ra_core::MAIN_PROFILE_ID, &config));
         profile.config.env_vars = config.env_vars.clone();
         profile.config.gateway.max_iterations = config.max_iterations;
         let profile_id = profile.id.clone();
@@ -248,9 +248,9 @@ impl ChatCommand {
             orchestrator.configure_supervisor_store(runtime.data_dir.join("supervisor"))?;
         }
         let session_key = if self.goals {
-            octos_core::SessionKey(chat_goal_session_key(&profile_id))
+            ra_core::SessionKey(chat_goal_session_key(&profile_id))
         } else {
-            octos_core::SessionKey::with_profile(
+            ra_core::SessionKey::with_profile(
                 &profile_id,
                 "cli",
                 &uuid::Uuid::now_v7().to_string(),

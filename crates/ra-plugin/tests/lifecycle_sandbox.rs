@@ -15,7 +15,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use octos_plugin::{
+use ra_plugin::{
     HardwareLifecycle, LifecycleExecutor, LifecyclePhase, LifecycleStep, NoSandbox, Sandbox,
     StepOutcome, is_safe_shell_command,
 };
@@ -406,8 +406,8 @@ async fn pick_and_place_lifecycle_example_runs_end_to_end() {
 #[test]
 fn blocked_env_vars_match_core_canonical_list() {
     assert_eq!(
-        octos_plugin::BLOCKED_ENV_VARS,
-        octos_core::BLOCKED_ENV_VARS,
+        ra_plugin::BLOCKED_ENV_VARS,
+        ra_core::BLOCKED_ENV_VARS,
         "ra-plugin BLOCKED_ENV_VARS drifted from ra-core's canonical list. \
          Update both constants together."
     );

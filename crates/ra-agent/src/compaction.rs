@@ -23,10 +23,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Utc;
-use octos_core::{Message, MessageRole};
-use octos_llm::ChatConfig;
-use octos_llm::LlmProvider;
-use octos_llm::context::{estimate_message_tokens, estimate_tokens};
+use ra_core::{Message, MessageRole};
+use ra_llm::ChatConfig;
+use ra_llm::LlmProvider;
+use ra_llm::context::{estimate_message_tokens, estimate_tokens};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
@@ -1099,7 +1099,7 @@ pub fn repo_label_from_path(path: &Path) -> String {
 }
 
 /// Byte cap on the preserved-plan block (bytes, matching
-/// `octos_core::truncate_utf8` semantics): the plan is a checklist, not a
+/// `ra_core::truncate_utf8` semantics): the plan is a checklist, not a
 /// transcript — anything longer is a model mis-using update_plan.
 const PLAN_SNAPSHOT_MAX_BYTES: usize = 1500;
 /// Byte cap on a single checklist title — argument-derived text is
@@ -1148,11 +1148,11 @@ fn render_plan_checklist(args: &serde_json::Value) -> Option<String> {
         if title.is_empty() {
             continue;
         }
-        octos_core::truncate_utf8(&mut title, PLAN_TITLE_MAX_BYTES, "…");
+        ra_core::truncate_utf8(&mut title, PLAN_TITLE_MAX_BYTES, "…");
         let marker = match item.status {
-            octos_core::ui_protocol::PlanItemStatus::Completed => "[x]",
-            octos_core::ui_protocol::PlanItemStatus::InProgress => "[>]",
-            octos_core::ui_protocol::PlanItemStatus::Pending => "[ ]",
+            ra_core::ui_protocol::PlanItemStatus::Completed => "[x]",
+            ra_core::ui_protocol::PlanItemStatus::InProgress => "[>]",
+            ra_core::ui_protocol::PlanItemStatus::Pending => "[ ]",
         };
         body.push_str("- ");
         body.push_str(marker);
@@ -1239,7 +1239,7 @@ fn prepend_plan_block(summary: String, plan: Option<String>, max_plan_bytes: usi
         return summary;
     };
     let summary = strip_plan_blocks(&summary);
-    octos_core::truncate_utf8(
+    ra_core::truncate_utf8(
         &mut plan,
         max_plan_bytes.clamp(200, PLAN_SNAPSHOT_MAX_BYTES),
         "\n… (plan truncated)",
@@ -1368,7 +1368,7 @@ pub fn llm_compaction_summary_with_budget(
             temperature: Some(0.2),
             // One-shot: the transcript is summarized exactly once and its
             // prefix never replayed, so cache writes would be pure premium.
-            cache_retention: octos_llm::CacheRetention::None,
+            cache_retention: ra_llm::CacheRetention::None,
             ..Default::default()
         };
         let request = vec![
@@ -1457,7 +1457,7 @@ mod tests {
         let tool = Message::tool_with_thread(
             "file contents",
             "call_1",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         );
 
         let rendered = render_transcript(&[assistant, tool]);
@@ -1476,7 +1476,7 @@ mod tests {
         assert!(std::str::from_utf8(capped.as_bytes()).is_ok());
     }
     use super::*;
-    use octos_core::ToolCall;
+    use ra_core::ToolCall;
     use std::time::Duration;
 
     struct CompactionMockProvider {
@@ -1489,19 +1489,19 @@ mod tests {
         async fn chat(
             &self,
             messages: &[Message],
-            _tools: &[octos_llm::ToolSpec],
+            _tools: &[ra_llm::ToolSpec],
             _config: &ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             if let Some(captured) = &self.captured_messages {
                 *captured.lock().unwrap_or_else(|error| error.into_inner()) = messages.to_vec();
             }
             match &self.result {
-                Ok(content) => Ok(octos_llm::ChatResponse {
+                Ok(content) => Ok(ra_llm::ChatResponse {
                     content: Some(content.clone()),
                     reasoning_content: None,
                     tool_calls: Vec::new(),
-                    stop_reason: octos_llm::StopReason::EndTurn,
-                    usage: octos_llm::TokenUsage::default(),
+                    stop_reason: ra_llm::StopReason::EndTurn,
+                    usage: ra_llm::TokenUsage::default(),
                     provider_index: None,
                 }),
                 Err(message) => Err(eyre::eyre!("{message}")),
@@ -1511,9 +1511,9 @@ mod tests {
         async fn chat_stream(
             &self,
             _messages: &[Message],
-            _tools: &[octos_llm::ToolSpec],
+            _tools: &[ra_llm::ToolSpec],
             _config: &ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatStream> {
+        ) -> eyre::Result<ra_llm::ChatStream> {
             unimplemented!("mock does not stream")
         }
 
@@ -1563,10 +1563,10 @@ mod tests {
 
         let request = captured.lock().unwrap_or_else(|error| error.into_inner());
         assert_eq!(request.len(), 2);
-        assert_eq!(request[0].role, octos_core::MessageRole::System);
+        assert_eq!(request[0].role, ra_core::MessageRole::System);
         assert!(request[0].content.contains("discarded historical prefix"));
         assert!(request[0].content.contains("retained CURRENT task"));
-        assert_eq!(request[1].role, octos_core::MessageRole::User);
+        assert_eq!(request[1].role, ra_core::MessageRole::User);
         assert_eq!(
             request[1].content.matches("<message index=").count(),
             discarded_old_prefix.len(),
@@ -1602,7 +1602,7 @@ mod tests {
     /// Captures the `ChatConfig` the summary call sends so the cache-economics
     /// contract is pinned at the call site, not just in the provider.
     struct RetentionProbeProvider {
-        seen: Arc<std::sync::Mutex<Option<octos_llm::CacheRetention>>>,
+        seen: Arc<std::sync::Mutex<Option<ra_llm::CacheRetention>>>,
     }
 
     #[async_trait::async_trait]
@@ -1610,16 +1610,16 @@ mod tests {
         async fn chat(
             &self,
             _messages: &[Message],
-            _tools: &[octos_llm::ToolSpec],
+            _tools: &[ra_llm::ToolSpec],
             config: &ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             *self.seen.lock().unwrap() = Some(config.cache_retention);
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: Some("one-shot summary".into()),
                 reasoning_content: None,
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: None,
             })
         }
@@ -1627,9 +1627,9 @@ mod tests {
         async fn chat_stream(
             &self,
             _messages: &[Message],
-            _tools: &[octos_llm::ToolSpec],
+            _tools: &[ra_llm::ToolSpec],
             _config: &ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatStream> {
+        ) -> eyre::Result<ra_llm::ChatStream> {
             unimplemented!("probe does not stream")
         }
 
@@ -1656,7 +1656,7 @@ mod tests {
         assert!(out.is_some(), "probe provider returns a summary");
         assert_eq!(
             *seen.lock().unwrap(),
-            Some(octos_llm::CacheRetention::None),
+            Some(ra_llm::CacheRetention::None),
             "one-shot compaction summaries must not request cache writes"
         );
     }
@@ -2140,7 +2140,7 @@ mod tests {
 
     /// #2132 helper: a message carrying an update_plan tool call.
     fn plan_message(steps: serde_json::Value) -> Message {
-        use octos_core::ToolCall;
+        use ra_core::ToolCall;
         let mut msg = Message::assistant("");
         msg.tool_calls = Some(vec![ToolCall {
             id: "c1".into(),
@@ -2205,7 +2205,7 @@ mod tests {
     /// arguments are untrusted.
     #[test]
     fn should_skip_degenerate_plans_and_recover_stringified_arguments() {
-        use octos_core::ToolCall;
+        use ra_core::ToolCall;
         let mut stringified = Message::assistant("");
         stringified.tool_calls = Some(vec![ToolCall {
             id: "c1".into(),

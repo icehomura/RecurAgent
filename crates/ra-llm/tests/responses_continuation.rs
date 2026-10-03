@@ -1,7 +1,7 @@
 use futures::StreamExt;
-use octos_core::Message;
-use octos_llm::openai_responses::OpenAIResponsesProvider;
-use octos_llm::{ChatConfig, LlmProvider, RouterContext, StreamEvent, with_router_context};
+use ra_core::Message;
+use ra_llm::openai_responses::OpenAIResponsesProvider;
+use ra_llm::{ChatConfig, LlmProvider, RouterContext, StreamEvent, with_router_context};
 use serde_json::{Value, json};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, Request, ResponseTemplate};
@@ -103,7 +103,7 @@ async fn continuation_never_crosses_sessions_edits_compaction_or_settings() {
             "compaction" => messages = vec![Message::user("Compacted summary")],
             "settings" => config.max_tokens = Some(123),
             "anonymous" => context = RouterContext::default(),
-            "one_shot" => config.cache_retention = octos_llm::CacheRetention::None,
+            "one_shot" => config.cache_retention = ra_llm::CacheRetention::None,
             _ => unreachable!(),
         }
         with_router_context(context, provider.chat(&messages, &[], &config))
@@ -304,7 +304,7 @@ async fn standard_tool_events_keep_parallel_calls_separate_and_replay_explicitly
         with_router_context(scope("one"), provider.chat_stream(&initial(), &[], &config))
             .await
             .unwrap();
-    let mut accumulator = octos_llm::StreamAccumulator::new();
+    let mut accumulator = ra_llm::StreamAccumulator::new();
     while let Some(event) = stream.next().await {
         accumulator.process(&event);
     }

@@ -1,5 +1,5 @@
 //! M8 parity: snapshot of the parent session's shared resources picked
-//! up via [`octos_agent::tools::TOOL_CTX`] when a `run_pipeline` tool
+//! up via [`ra_agent::tools::TOOL_CTX`] when a `run_pipeline` tool
 //! call enters the executor.
 //!
 //! The pipeline historically constructed sub-agents in isolation —
@@ -19,13 +19,13 @@
 
 use std::sync::Arc;
 
-use octos_agent::cost_ledger::CostAccountant;
-use octos_agent::file_state_cache::FileStateCache;
-use octos_agent::subagent_output::SubAgentOutputRouter;
-use octos_agent::subagent_summary::AgentSummaryGenerator;
-use octos_agent::task_supervisor::TaskSupervisor;
-use octos_agent::tools::ToolContext;
-use octos_core::SessionScope;
+use ra_agent::cost_ledger::CostAccountant;
+use ra_agent::file_state_cache::FileStateCache;
+use ra_agent::subagent_output::SubAgentOutputRouter;
+use ra_agent::subagent_summary::AgentSummaryGenerator;
+use ra_agent::task_supervisor::TaskSupervisor;
+use ra_agent::tools::ToolContext;
+use ra_core::SessionScope;
 
 /// Shared resources inherited from the parent session by a pipeline
 /// run. Each field is independently optional so legacy callers stay on

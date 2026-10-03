@@ -57,7 +57,7 @@ pub const AGENT_TOKEN: &str = "ra-research";
 /// their own behalf (provider APIs, robots.txt, page reads). It names the
 /// software and where to learn about it, instead of posing as a desktop
 /// browser.
-pub const USER_AGENT: &str = "octos-research/1.0 (+https://github.com/octos-org/octos)";
+pub const USER_AGENT: &str = "ra-research/1.0 (+https://github.com/octos-org/octos)";
 
 /// Environment variable for results-page search: the metasearch's engines
 /// that read search engines' own pages (DuckDuckGo, Bing, Bing News, Brave,
@@ -91,7 +91,7 @@ pub fn respect_robots(lookup: impl Fn(&str) -> Option<String>) -> bool {
 
 /// Person's-browser mode for engines that render pages in a real browser
 /// (`google_cse`): `off` (default) | `auto` | `window` | `headless`. See
-/// `octos_research::browser` (feature `browser`).
+/// `ra_research::browser` (feature `browser`).
 pub const BROWSER_ENV: &str = "OCTOS_BROWSER";
 
 /// Shown with results whenever a search used the person's browser (and

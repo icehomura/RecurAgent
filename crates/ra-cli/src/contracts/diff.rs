@@ -59,8 +59,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use octos_core::SessionKey;
-use octos_core::ui_protocol::{
+use ra_core::SessionKey;
+use ra_core::ui_protocol::{
     DiffPreview, DiffPreviewFile, DiffPreviewFileStatus, DiffPreviewGetParams,
     DiffPreviewGetResult, DiffPreviewGetStatus, DiffPreviewHunk, DiffPreviewLine,
     DiffPreviewLineKind, DiffPreviewSource, PreviewId, RpcError, TurnId, UiFileMutationNotice,
@@ -1141,7 +1141,7 @@ fn diff_preview_not_found_error(params: &DiffPreviewGetParams) -> RpcError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::ui_protocol::{
+    use ra_core::ui_protocol::{
         DiffPreviewFile, DiffPreviewFileStatus, DiffPreviewHunk, DiffPreviewLine,
         DiffPreviewLineKind, TurnId, UiFileMutationNotice,
     };

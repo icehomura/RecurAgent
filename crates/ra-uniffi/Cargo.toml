@@ -13,7 +13,7 @@ description = "uniffi bindings (idiomatic Python/Swift/Kotlin from one Rust defi
 # staticlib -> a `.a` for hosts that static-link (e.g. iOS).
 # rlib      -> lets this crate's own Rust tests exercise the wrapped surface.
 crate-type = ["cdylib", "staticlib", "rlib"]
-name = "octos_uniffi"
+name = "ra_uniffi"
 
 # uniffi-bindgen CLI: generates the foreign-language bindings from the built
 # library metadata (no UDL — everything is proc-macro). Invoke as, e.g.:

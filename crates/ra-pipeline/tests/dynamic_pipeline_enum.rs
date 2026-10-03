@@ -11,24 +11,24 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use octos_agent::Tool;
-use octos_pipeline::RunPipelineTool;
+use ra_agent::Tool;
+use ra_pipeline::RunPipelineTool;
 
 struct MockProvider;
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for MockProvider {
+impl ra_llm::LlmProvider for MockProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
-        Ok(octos_llm::ChatResponse {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
+        Ok(ra_llm::ChatResponse {
             content: Some("ok".into()),
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage::default(),
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage::default(),
             reasoning_content: None,
             provider_index: None,
         })
@@ -43,9 +43,9 @@ impl octos_llm::LlmProvider for MockProvider {
 
 async fn make_tool_with_data(working: &std::path::Path, data: &std::path::Path) -> RunPipelineTool {
     let memory_dir = data.join("episodes");
-    let memory = Arc::new(octos_memory::EpisodeStore::open(&memory_dir).await.unwrap());
+    let memory = Arc::new(ra_memory::EpisodeStore::open(&memory_dir).await.unwrap());
     RunPipelineTool::new(
-        Arc::new(MockProvider) as Arc<dyn octos_llm::LlmProvider>,
+        Arc::new(MockProvider) as Arc<dyn ra_llm::LlmProvider>,
         memory,
         PathBuf::from(working),
         PathBuf::from(data),
@@ -189,16 +189,16 @@ async fn pipeline_enum_includes_octos_home_pipelines() {
 /// and the node cannot do its job at runtime.
 fn registered_tool_names() -> std::collections::HashSet<String> {
     let mut names: std::collections::HashSet<String> =
-        octos_agent::ToolRegistry::with_builtins(std::env::temp_dir())
+        ra_agent::ToolRegistry::with_builtins(std::env::temp_dir())
             .tool_names()
             .into_iter()
             .collect();
 
     // Bundled plugin (app-skill + platform-skill) tools the pipeline
     // worker loads via plugin_dirs. Parse each manifest's `tools[].name`.
-    let manifests = octos_agent::bundled_app_skills::BUNDLED_APP_SKILLS
+    let manifests = ra_agent::bundled_app_skills::BUNDLED_APP_SKILLS
         .iter()
-        .chain(octos_agent::bundled_app_skills::PLATFORM_SKILLS.iter())
+        .chain(ra_agent::bundled_app_skills::PLATFORM_SKILLS.iter())
         .map(|&(_, _, _, manifest_json)| manifest_json);
     for manifest_json in manifests {
         let manifest: serde_json::Value =
@@ -219,7 +219,7 @@ fn registered_tool_names() -> std::collections::HashSet<String> {
 /// the handler turns into a `ToolPolicy.allow` list — anything not
 /// registered is unreachable at runtime.
 fn dot_tool_references(dot: &str) -> std::collections::BTreeSet<String> {
-    let graph = octos_pipeline::parser::parse_dot(dot).expect("bundled .dot must parse");
+    let graph = ra_pipeline::parser::parse_dot(dot).expect("bundled .dot must parse");
     let mut refs = std::collections::BTreeSet::new();
     for node in graph.nodes.values() {
         for tool in &node.tools {
@@ -250,7 +250,7 @@ fn every_bundled_dot_tool_reference_is_registered() {
         registered.len()
     );
 
-    for &(file_name, dot) in octos_agent::bundled_pipelines::BUNDLED_PIPELINES {
+    for &(file_name, dot) in ra_agent::bundled_pipelines::BUNDLED_PIPELINES {
         let refs = dot_tool_references(dot);
         let unregistered: Vec<&String> = refs.iter().filter(|r| !registered.contains(*r)).collect();
         assert!(
@@ -276,7 +276,7 @@ async fn chat_path_bootstrap_dir_equals_search_dir() {
     let data = tempfile::tempdir().unwrap();
 
     // chat.rs bootstraps the bundle into `data_dir`.
-    let written = octos_agent::bootstrap::bootstrap_bundled_pipelines(data.path());
+    let written = ra_agent::bootstrap::bootstrap_bundled_pipelines(data.path());
     assert!(written >= 1, "bootstrap must write at least deep_research");
 
     // chat.rs builds the tool with `with_bundled_pipelines_root(data_dir)`.
@@ -306,7 +306,7 @@ async fn gateway_path_installed_wins_and_bundled_discovers() {
     let data = tempfile::tempdir().unwrap();
     let octos_home = tempfile::tempdir().unwrap();
 
-    octos_agent::bootstrap::bootstrap_bundled_pipelines(octos_home.path());
+    ra_agent::bootstrap::bootstrap_bundled_pipelines(octos_home.path());
 
     // No install yet: bundled must resolve.
     {
@@ -454,7 +454,7 @@ async fn standalone_gateway_child_profile_roots_pipeline_at_bootstrap_dir() {
     let session_data_wrong = tempfile::tempdir().unwrap();
 
     // Gateway bootstraps the bundled pipelines into effective_octos_home.
-    octos_agent::bootstrap::bootstrap_bundled_pipelines(effective_octos_home);
+    ra_agent::bootstrap::bootstrap_bundled_pipelines(effective_octos_home);
 
     // Operator installs a GLOBAL deep_research under effective_octos_home/skills.
     let global_skill = effective_octos_home.join("skills").join("mofa-research");
@@ -529,7 +529,7 @@ async fn corrupt_installed_pipeline_is_not_masked_by_bundled_fallback() {
     // Bootstrap the bundled fallback so the embedded bytes ARE available — the
     // whole point is that the fallback exists yet must NOT mask the broken
     // install.
-    octos_agent::bootstrap::bootstrap_bundled_pipelines(octos_home.path());
+    ra_agent::bootstrap::bootstrap_bundled_pipelines(octos_home.path());
 
     // Install a copy of the SAME pipeline name that discovery can LOCATE but
     // not READ: a directory named `deep_research.dot` (extension scan matches,
@@ -608,25 +608,25 @@ async fn coincidental_non_dot_path_does_not_block_bundled_fallback() {
     );
 }
 
-/// Cross-crate guard: every pipeline bundled by `octos_agent` must parse and
+/// Cross-crate guard: every pipeline bundled by `ra_agent` must parse and
 /// validate clean against THIS crate's parser/validator — otherwise
 /// `pre_flight_validate` would reject the bundled fallback the moment the
 /// model named it.
 #[test]
 fn bundled_pipelines_parse_and_validate_clean() {
-    for &(file_name, dot) in octos_agent::bundled_pipelines::BUNDLED_PIPELINES {
-        let graph = octos_pipeline::parser::parse_dot(dot)
+    for &(file_name, dot) in ra_agent::bundled_pipelines::BUNDLED_PIPELINES {
+        let graph = ra_pipeline::parser::parse_dot(dot)
             .unwrap_or_else(|e| panic!("bundled pipeline '{file_name}' fails to parse: {e}"));
         // Main's validate-before-execute (#1374) split the API: `validate()`
         // now returns a pass/fail `Result`, while `diagnostics()` returns the
         // full diagnostic list this guard inspects for error-severity entries.
-        let diags = octos_pipeline::validate::diagnostics(&graph);
+        let diags = ra_pipeline::validate::diagnostics(&graph);
         assert!(
-            !octos_pipeline::validate::has_errors(&diags),
+            !ra_pipeline::validate::has_errors(&diags),
             "bundled pipeline '{file_name}' has validation errors: {:?}",
             diags
                 .iter()
-                .filter(|d| d.severity == octos_pipeline::validate::Severity::Error)
+                .filter(|d| d.severity == ra_pipeline::validate::Severity::Error)
                 .collect::<Vec<_>>()
         );
     }
@@ -642,7 +642,7 @@ async fn bootstrap_then_discover_deep_research_end_to_end() {
     let data = tempfile::tempdir().unwrap();
     let octos_home = tempfile::tempdir().unwrap();
 
-    let written = octos_agent::bootstrap::bootstrap_bundled_pipelines(octos_home.path());
+    let written = ra_agent::bootstrap::bootstrap_bundled_pipelines(octos_home.path());
     assert!(written >= 1, "bootstrap must write at least deep_research");
 
     let tool = make_tool_with_data(working.path(), data.path())

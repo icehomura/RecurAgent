@@ -37,8 +37,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, OnceLock};
 
 use chrono::Utc;
-use octos_core::SessionKey;
-use octos_core::ui_protocol::{
+use ra_core::SessionKey;
+use ra_core::ui_protocol::{
     ApprovalDecidedEvent, ApprovalDecision, ApprovalId, PeerStagedEvent, RpcError,
     UserQuestionRespondParams,
 };
@@ -174,7 +174,7 @@ pub(crate) fn peer_wire_registry() -> &'static PeerWireRegistry {
 /// while the peer is still working, which is the defect.
 pub(crate) struct PeerTaskBinding {
     task_id: String,
-    _liveness: octos_agent::TaskLivenessLease,
+    _liveness: ra_agent::TaskLivenessLease,
 }
 
 #[derive(Default)]
@@ -208,7 +208,7 @@ impl PeerTaskRegistry {
             return;
         }
         let binding = PeerTaskBinding {
-            _liveness: octos_agent::TaskLivenessLease::new(task_id.clone()),
+            _liveness: ra_agent::TaskLivenessLease::new(task_id.clone()),
             task_id,
         };
         map.insert(key, binding);
@@ -258,7 +258,7 @@ pub(crate) fn peer_task_registry() -> &'static PeerTaskRegistry {
 #[cfg(any(feature = "api", test))]
 #[cfg_attr(feature = "api", allow(dead_code))]
 pub(crate) fn bind_peer_supervised_task(
-    supervisor: &octos_agent::TaskSupervisor,
+    supervisor: &ra_agent::TaskSupervisor,
     registry_key: String,
     master_session: &str,
 ) -> Option<String> {
@@ -279,7 +279,7 @@ pub(crate) fn bind_peer_supervised_task(
 #[cfg(any(feature = "api", test))]
 #[cfg_attr(not(any(feature = "api", test)), allow(dead_code))]
 pub(crate) fn bind_peer_supervised_task_with_workspace_strict(
-    supervisor: &octos_agent::TaskSupervisor,
+    supervisor: &ra_agent::TaskSupervisor,
     registry_key: String,
     master_session: &str,
     master_workspace_scope: Option<&str>,
@@ -294,7 +294,7 @@ pub(crate) fn bind_peer_supervised_task_with_workspace_strict(
             peer_task_registry().bind(registry_key, task_id.clone());
             Ok(Some(task_id))
         }
-        Err(octos_agent::RegisterTaskError::WorkspacePersistFailed { source, .. }) => {
+        Err(ra_agent::RegisterTaskError::WorkspacePersistFailed { source, .. }) => {
             Err(std::io::Error::other(source))
         }
         // Cap/parent-terminal refusals: the supervisor refused the
@@ -331,7 +331,7 @@ pub(crate) fn workspace_scope_encode(root: &std::path::Path) -> Option<String> {
 /// later reused). Returns the retired task id.
 #[cfg(any(feature = "api", test))]
 pub(crate) fn retire_peer_supervised_task(
-    supervisor: &octos_agent::TaskSupervisor,
+    supervisor: &ra_agent::TaskSupervisor,
     profile_id: &str,
     slug: &str,
 ) -> Option<String> {
@@ -389,7 +389,7 @@ pub(crate) fn persist_peer_task_id_binding(peers_root: &Path, slug: &str, task_i
 /// is durable; Missing task-id can therefore never masquerade as legacy.
 #[cfg(any(feature = "api", test))]
 pub(crate) fn bind_staged_peer_supervised_task(
-    supervisor: &octos_agent::TaskSupervisor,
+    supervisor: &ra_agent::TaskSupervisor,
     registry_key: String,
     master_session: &str,
     workspace_scope: Option<&str>,
@@ -497,11 +497,11 @@ pub(crate) fn bind_staged_peer_supervised_task(
 /// rows whose `parent_session_key` names another master are refused. When the
 /// leaf exists it is authoritative and this fallback never runs.
 pub(crate) fn adopt_parked_peer_tasks_with_results(
-    supervisor: &octos_agent::TaskSupervisor,
+    supervisor: &ra_agent::TaskSupervisor,
     expected_profile: &str,
     expected_master_session: &str,
     profile_data_dir: &Path,
-    restored: &[octos_agent::BackgroundTask],
+    restored: &[ra_agent::BackgroundTask],
 ) -> usize {
     use peer_io::PeerFileRead;
 
@@ -511,7 +511,7 @@ pub(crate) fn adopt_parked_peer_tasks_with_results(
     // for its twin; leave ALL such candidates Parked until identity is known.
     let mut candidates_by_wire_key = HashMap::<&str, usize>::new();
     for task in restored.iter().filter(|task| {
-        task.tool_name == "peer_handoff" && task.status == octos_agent::TaskStatus::Parked
+        task.tool_name == "peer_handoff" && task.status == ra_agent::TaskStatus::Parked
     }) {
         *candidates_by_wire_key
             .entry(&task.tool_call_id)
@@ -519,7 +519,7 @@ pub(crate) fn adopt_parked_peer_tasks_with_results(
     }
     let mut adopted = 0usize;
     for task in restored {
-        if task.tool_name != "peer_handoff" || task.status != octos_agent::TaskStatus::Parked {
+        if task.tool_name != "peer_handoff" || task.status != ra_agent::TaskStatus::Parked {
             continue;
         }
         let Some(slug) = task
@@ -756,7 +756,7 @@ pub(crate) const PEER_SLUG_MAX_BYTES: usize = 64;
 /// `[A-Za-z0-9_%-]`, so any of the above is illegitimate. Called at the TOP of
 /// the `peer_close` / `peer_send_input` callbacks (after resolving a name to a
 /// slug) before any path join or wire-key op. Mirrors
-/// `octos_core::session_scope::is_safe_session_id`, hardened for cross-platform.
+/// `ra_core::session_scope::is_safe_session_id`, hardened for cross-platform.
 pub(crate) fn peer_slug_is_safe(slug: &str) -> bool {
     if slug.is_empty() || slug.len() > PEER_SLUG_MAX_BYTES {
         return false;
@@ -1742,8 +1742,8 @@ pub(crate) mod build_cache_peer {
     ) -> Result<Option<Slot>, RpcError> {
         let owner = super::BuildCacheTurnOwner {
             generation: 0,
-            session: octos_core::SessionKey("fixture".into()),
-            turn: octos_core::ui_protocol::TurnId::new(),
+            session: ra_core::SessionKey("fixture".into()),
+            turn: ra_core::ui_protocol::TurnId::new(),
         };
         let view = slot_for_owned_turn(peers_root, workspace_root, slug, &owner)?;
         Ok(view.and_then(|_| {
@@ -1795,14 +1795,14 @@ pub(crate) struct BuildCacheSlotRegistry {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct BuildCacheTurnOwner {
     pub session: SessionKey,
-    pub turn: octos_core::ui_protocol::TurnId,
+    pub turn: ra_core::ui_protocol::TurnId,
     /// Server dispatch identity; transport pins its state allocation while referenced.
     pub generation: usize,
 }
 
 pub(crate) struct BuildCacheSlotView {
     pub path: PathBuf,
-    pub usage: octos_agent::tools::BuildCacheUsage,
+    pub usage: ra_agent::tools::BuildCacheUsage,
 }
 
 enum BuildCacheSlotState {
@@ -1820,7 +1820,7 @@ fn build_cache_owned_error() -> RpcError {
 struct BuildCacheSlotEntry {
     state: BuildCacheSlotState,
     slot: Slot,
-    usage: octos_agent::tools::BuildCacheUsage,
+    usage: ra_agent::tools::BuildCacheUsage,
 }
 
 impl BuildCacheSlotEntry {
@@ -1974,8 +1974,8 @@ impl BuildCacheSlotRegistry {
         &self,
         key: String,
         slot: Slot,
-    ) -> octos_agent::tools::BuildCacheUsage {
-        let usage = octos_agent::tools::BuildCacheUsage::default();
+    ) -> ra_agent::tools::BuildCacheUsage {
+        let usage = ra_agent::tools::BuildCacheUsage::default();
         let incoming = BuildCacheSlotEntry {
             slot,
             usage: usage.clone(),
@@ -2012,7 +2012,7 @@ impl BuildCacheSlotRegistry {
     }
 
     #[cfg(test)]
-    pub(crate) fn usage(&self, key: &str) -> Option<octos_agent::tools::BuildCacheUsage> {
+    pub(crate) fn usage(&self, key: &str) -> Option<ra_agent::tools::BuildCacheUsage> {
         self.by_key
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -2059,7 +2059,7 @@ mod build_cache_peer_tests {
         let owner = BuildCacheTurnOwner {
             generation: 0,
             session: SessionKey("owner".into()),
-            turn: octos_core::ui_protocol::TurnId::new(),
+            turn: ra_core::ui_protocol::TurnId::new(),
         };
         registry.reserve_staged("claim", &owner).unwrap();
         let incoming = build_cache_peer::acquire_for_staging(
@@ -2857,7 +2857,7 @@ pub(crate) fn reserve_peer_dir(
             dashed.push('-');
         }
     }
-    let base = octos_core::safe_filename(dashed.trim_matches('-'));
+    let base = ra_core::safe_filename(dashed.trim_matches('-'));
     let mut base = base.chars().take(40).collect::<String>();
     if base.is_empty() {
         base = "peer".to_owned();
@@ -3761,8 +3761,8 @@ pub(crate) fn build_peer_handoff_callback(
     available_lanes: Vec<String>,
     handoffs_this_turn: Arc<AtomicU32>,
     emit_staged: Arc<dyn Fn(PeerStagedEvent) + Send + Sync>,
-) -> octos_agent::PeerHandoffCallback {
-    Arc::new(move |request: octos_agent::PeerHandoffRequest| {
+) -> ra_agent::PeerHandoffCallback {
+    Arc::new(move |request: ra_agent::PeerHandoffRequest| {
         if handoffs_this_turn.fetch_add(1, Ordering::SeqCst) >= PEER_HANDOFFS_PER_TURN_MAX {
             return Err(format!(
                 "peer handoff limit reached for this turn ({PEER_HANDOFFS_PER_TURN_MAX})"
@@ -3881,7 +3881,7 @@ pub(crate) fn build_peer_handoff_callback(
             worktree_branch: staged.worktree_branch.clone(),
             profile_id: profile_id.clone(),
         });
-        Ok(octos_agent::PeerHandoffStaged {
+        Ok(ra_agent::PeerHandoffStaged {
             slug: staged.slug,
             topic: staged.topic,
             brief_path: staged.brief_path.to_string_lossy().into_owned(),
@@ -4156,9 +4156,9 @@ pub(crate) fn peer_trusted_session(profile_id: &str, slug: &str) -> Option<Sessi
 /// order; a mismatched count/label surfaces the store's typed error rather than
 /// resolving incorrectly.
 pub(crate) fn peer_respond_build_answers(
-    req_answers: &[octos_agent::PeerRespondAnswer],
-    questions: &[octos_core::ui_protocol::UserQuestion],
-) -> Vec<octos_core::ui_protocol::UserQuestionAnswer> {
+    req_answers: &[ra_agent::PeerRespondAnswer],
+    questions: &[ra_core::ui_protocol::UserQuestion],
+) -> Vec<ra_core::ui_protocol::UserQuestionAnswer> {
     req_answers
         .iter()
         .enumerate()
@@ -4171,14 +4171,14 @@ pub(crate) fn peer_respond_build_answers(
                             .iter()
                             .find(|option| option.label.eq_ignore_ascii_case(text))
                     }) {
-                        return octos_core::ui_protocol::UserQuestionAnswer {
+                        return ra_core::ui_protocol::UserQuestionAnswer {
                             selected_labels: vec![option.label.clone()],
                             free_text: None,
                         };
                     }
                 }
             }
-            octos_core::ui_protocol::UserQuestionAnswer {
+            ra_core::ui_protocol::UserQuestionAnswer {
                 selected_labels: answer.selected_labels.clone(),
                 free_text: answer.free_text.clone(),
             }
@@ -4202,7 +4202,7 @@ pub(crate) fn peer_respond_resolve(
     profile_id: &str,
     contracts: &UiProtocolContractStores,
     on_approval_decided: &dyn Fn(&ApprovalDecidedEvent, Option<&str>),
-    req: octos_agent::PeerRespondRequest,
+    req: ra_agent::PeerRespondRequest,
 ) -> Result<(), String> {
     // Resolve NAME/slug → real slug (names are the primary address).
     let slug = resolve_peer_name_to_slug(peers_root, &req.slug).ok_or_else(|| {
@@ -4296,7 +4296,7 @@ pub(crate) fn peer_respond_resolve(
             let approval_id: ApprovalId =
                 serde_json::from_value(serde_json::Value::String(target.id.clone()))
                     .map_err(|_| format!("peer '{slug}' pending id is malformed"))?;
-            let params = octos_core::ui_protocol::ApprovalRespondParams {
+            let params = ra_core::ui_protocol::ApprovalRespondParams {
                 session_id: peer_session,
                 approval_id,
                 decision: ApprovalDecision::from(decision.to_owned()),
@@ -4342,7 +4342,7 @@ pub(crate) fn peer_respond_resolve(
                     .collect::<Vec<_>>()
                     .join("; ")
             );
-            let question_id: octos_core::ui_protocol::QuestionId =
+            let question_id: ra_core::ui_protocol::QuestionId =
                 serde_json::from_value(serde_json::Value::String(target.id.clone()))
                     .map_err(|_| format!("peer '{slug}' pending id is malformed"))?;
             // #new-P2-#2 — map each answer against the STORED request's questions
@@ -5048,7 +5048,7 @@ pub(crate) fn build_peer_list_callback(
     available_lanes: Vec<String>,
     contracts: Arc<UiProtocolContractStores>,
     profile_id: String,
-) -> octos_agent::PeerListCallback {
+) -> ra_agent::PeerListCallback {
     Arc::new(move || {
         // task-evo-peer-turn-status — serve KNOWS its profile; pass it so the
         // lifetime projection validates registry_key against the real one.
@@ -5419,7 +5419,7 @@ mod issue_2236_build_cache_tests {
         let owner = BuildCacheTurnOwner {
             generation: 0,
             session: SessionKey("first".into()),
-            turn: octos_core::ui_protocol::TurnId::new(),
+            turn: ra_core::ui_protocol::TurnId::new(),
         };
         let first = build_cache_peer::slot_for_owned_turn(&root, &staged.cwd, &staged.slug, &owner)
             .unwrap()
@@ -5428,7 +5428,7 @@ mod issue_2236_build_cache_tests {
         let second = BuildCacheTurnOwner {
             generation: 0,
             session: SessionKey("second".into()),
-            turn: octos_core::ui_protocol::TurnId::new(),
+            turn: ra_core::ui_protocol::TurnId::new(),
         };
         assert!(
             build_cache_peer::slot_for_owned_turn(&root, &staged.cwd, &staged.slug, &second)
@@ -5675,7 +5675,7 @@ mod peer_task_registry_tests {
             std::fs::write(peer.join("brief.md"), "brief").unwrap();
             std::fs::write(peer.join("originator"), &master).unwrap();
             std::fs::write(peer.join("result.md"), "stale prior turn result").unwrap();
-            let supervisor = octos_agent::TaskSupervisor::new();
+            let supervisor = ra_agent::TaskSupervisor::new();
             let ledger = data.path().join("tasks.jsonl");
             supervisor.enable_persistence(&ledger).unwrap();
             let key = peer_wire_key(&profile, "auditor");
@@ -5702,7 +5702,7 @@ mod peer_task_registry_tests {
             }
             peer_task_registry().take(&key);
             drop(supervisor);
-            let boot = octos_agent::TaskSupervisor::new();
+            let boot = ra_agent::TaskSupervisor::new();
             let adopt_supervisor = boot.clone();
             let adopt_profile = profile.clone();
             let adopt_master = master.clone();
@@ -5719,7 +5719,7 @@ mod peer_task_registry_tests {
             enable_peer_task_persistence(&boot, &ledger, &peers_root, &profile, &master).unwrap();
             assert_eq!(
                 boot.get_task(&id).unwrap().status,
-                octos_agent::TaskStatus::Parked,
+                ra_agent::TaskStatus::Parked,
                 "{lifetime} lifetime must not be completed by stale result.md"
             );
         }
@@ -5733,7 +5733,7 @@ mod peer_task_registry_tests {
         std::fs::create_dir_all(&peer).unwrap();
         std::fs::write(peer.join("brief.md"), "brief").unwrap();
         std::fs::write(peer.join("result.md"), "result").unwrap();
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         let ledger = data.path().join("tasks.jsonl");
         supervisor.enable_persistence(&ledger).unwrap();
         let key = peer_wire_key("identity-roundtrip", "durable");
@@ -5760,7 +5760,7 @@ mod peer_task_registry_tests {
             Some(id.as_str())
         );
         supervisor.mark_parked(&id, "orphaned across restart".into());
-        let boot = octos_agent::TaskSupervisor::new();
+        let boot = ra_agent::TaskSupervisor::new();
         boot.enable_persistence(&ledger).unwrap();
         std::fs::remove_file(peer.join(PEER_TASK_ID_LEAF)).unwrap();
         assert_eq!(
@@ -5802,7 +5802,7 @@ mod peer_task_registry_tests {
         );
         assert_eq!(
             boot.get_task(&id).unwrap().status,
-            octos_agent::TaskStatus::Completed
+            ra_agent::TaskStatus::Completed
         );
     }
 
@@ -5828,7 +5828,7 @@ mod peer_task_registry_tests {
                     ),
                     _ => std::fs::create_dir(&path).unwrap(),
                 }
-                let supervisor = octos_agent::TaskSupervisor::new();
+                let supervisor = ra_agent::TaskSupervisor::new();
                 let id = supervisor.register(
                     "peer_handoff",
                     &peer_wire_key("unsafe-identity", "unsafe-identity"),
@@ -5848,7 +5848,7 @@ mod peer_task_registry_tests {
                 );
                 assert_eq!(
                     supervisor.get_task(&id).unwrap().status,
-                    octos_agent::TaskStatus::Parked
+                    ra_agent::TaskStatus::Parked
                 );
             }
         }
@@ -5861,7 +5861,7 @@ mod peer_task_registry_tests {
         let peer = peers_root.join("gate-write-fail");
         std::fs::create_dir_all(peer.join("task-id-state")).unwrap();
         std::fs::write(peer.join("brief.md"), "brief").unwrap();
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         let ledger = data.path().join("tasks.jsonl");
         supervisor.enable_persistence(&ledger).unwrap();
         let key = peer_wire_key("identity-gate-fail", "gate-write-fail");
@@ -5879,7 +5879,7 @@ mod peer_task_registry_tests {
         );
         assert!(supervisor.get_all_tasks().is_empty());
         assert!(peer_task_registry().take(&key).is_none());
-        let boot = octos_agent::TaskSupervisor::new();
+        let boot = ra_agent::TaskSupervisor::new();
         boot.enable_persistence(&ledger).unwrap();
         assert!(boot.get_all_tasks().is_empty(), "no durable half-bound row");
     }
@@ -5894,7 +5894,7 @@ mod peer_task_registry_tests {
         std::fs::create_dir_all(peer.join(PEER_TASK_ID_LEAF)).unwrap();
         std::fs::write(peer.join("brief.md"), "brief").unwrap();
         std::fs::write(peer.join("result.md"), "result").unwrap();
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         let ledger = data.path().join("tasks.jsonl");
         supervisor.enable_persistence(&ledger).unwrap();
         let key = peer_wire_key("identity-write-fail", "id-write-fail");
@@ -5920,7 +5920,7 @@ mod peer_task_registry_tests {
         );
         supervisor.mark_parked(&id, "orphaned across restart".into());
         std::fs::remove_dir(peer.join(PEER_TASK_ID_LEAF)).unwrap();
-        let boot = octos_agent::TaskSupervisor::new();
+        let boot = ra_agent::TaskSupervisor::new();
         boot.enable_persistence(&ledger).unwrap();
         assert_eq!(
             adopt_parked_peer_tasks_with_results(
@@ -5935,7 +5935,7 @@ mod peer_task_registry_tests {
         );
         assert_eq!(
             boot.get_task(&id).unwrap().status,
-            octos_agent::TaskStatus::Parked
+            ra_agent::TaskStatus::Parked
         );
     }
 
@@ -5945,7 +5945,7 @@ mod peer_task_registry_tests {
         std::fs::create_dir_all(&peer).unwrap();
         std::fs::write(peer.join("brief.md"), "brief").unwrap();
         std::fs::write(peer.join("result.md"), "findings").unwrap();
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         let id = supervisor.register(
             "peer_handoff",
             &peer_wire_key("invalid-identity", "invalid"),
@@ -5966,7 +5966,7 @@ mod peer_task_registry_tests {
         );
         assert_eq!(
             supervisor.get_task(&id).unwrap().status,
-            octos_agent::TaskStatus::Parked
+            ra_agent::TaskStatus::Parked
         );
     }
 
@@ -6004,7 +6004,7 @@ mod peer_task_registry_tests {
         std::fs::write(peer.join("brief.md"), "brief").unwrap();
         std::fs::write(peer.join("result.md"), "shared result").unwrap();
         std::fs::write(peer.join("originator"), "legacy:master").unwrap();
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         let ids: Vec<_> = (0..2)
             .map(|_| {
                 let id = supervisor.register(
@@ -6032,7 +6032,7 @@ mod peer_task_registry_tests {
             for id in &ids {
                 assert_eq!(
                     supervisor.get_task(id).unwrap().status,
-                    octos_agent::TaskStatus::Parked
+                    ra_agent::TaskStatus::Parked
                 );
             }
         }
@@ -6050,7 +6050,7 @@ mod peer_task_registry_tests {
         );
         assert_eq!(
             supervisor.get_task(&ids[1]).unwrap().status,
-            octos_agent::TaskStatus::Parked
+            ra_agent::TaskStatus::Parked
         );
     }
 
@@ -6073,7 +6073,7 @@ mod peer_task_registry_tests {
         let peers_root = data_dir.join("peers");
 
         // Staging turn: register two peer rows over the shared ledger.
-        let staging = octos_agent::TaskSupervisor::new();
+        let staging = ra_agent::TaskSupervisor::new();
         staging.enable_persistence(&ledger).unwrap();
         let done_id =
             bind_peer_supervised_task(&staging, peer_wire_key("adopt-a", "done"), "adopt-a:local")
@@ -6096,7 +6096,7 @@ mod peer_task_registry_tests {
         // Next boot: restore over the shared ledger, then the orphan sweep's
         // verdict — both rows parked as cross-restart orphans (their workers
         // are not in the fresh live-set).
-        let restored_boot = octos_agent::TaskSupervisor::new();
+        let restored_boot = ra_agent::TaskSupervisor::new();
         restored_boot.enable_persistence(&ledger).unwrap();
         restored_boot.mark_parked(&done_id, "orphaned across restart".to_string());
         restored_boot.mark_parked(&pending_id, "orphaned across restart".to_string());
@@ -6114,7 +6114,7 @@ mod peer_task_registry_tests {
 
         assert_eq!(adopted, 1, "only the peer WITH a result may be adopted");
         let done = restored_boot.get_task(&done_id).expect("done row");
-        assert_eq!(done.status, octos_agent::TaskStatus::Completed);
+        assert_eq!(done.status, ra_agent::TaskStatus::Completed);
         assert_eq!(
             done.output_files,
             vec![
@@ -6129,7 +6129,7 @@ mod peer_task_registry_tests {
         let pending = restored_boot.get_task(&pending_id).expect("pending row");
         assert_eq!(
             pending.status,
-            octos_agent::TaskStatus::Parked,
+            ra_agent::TaskStatus::Parked,
             "no result.md ⇒ stays Parked; the client may still adopt it"
         );
 
@@ -6166,7 +6166,7 @@ mod peer_task_registry_tests {
         // sweep, both with results already on the blackboard. Only `honest`
         // got the registration-time task-id binding; `forged` is legacy
         // staging (no task-id leaf).
-        let staging = octos_agent::TaskSupervisor::new();
+        let staging = ra_agent::TaskSupervisor::new();
         staging.enable_persistence(&ledger).unwrap();
         let honest_id = bind_peer_supervised_task(
             &staging,
@@ -6189,7 +6189,7 @@ mod peer_task_registry_tests {
         std::fs::write(peers_root.join("honest").join("task-id"), &honest_id).unwrap();
 
         // Next boot: restore + park exactly like the orphan sweep.
-        let boot = octos_agent::TaskSupervisor::new();
+        let boot = ra_agent::TaskSupervisor::new();
         boot.enable_persistence(&ledger).unwrap();
         boot.mark_parked(&honest_id, "orphaned across restart".to_string());
         boot.mark_parked(&forged_id, "orphaned across restart".to_string());
@@ -6224,7 +6224,7 @@ mod peer_task_registry_tests {
         );
         assert_eq!(
             boot.get_task(&honest_id).unwrap().status,
-            octos_agent::TaskStatus::Parked,
+            ra_agent::TaskStatus::Parked,
         );
         // Restore the truthful binding for the remaining checks.
         std::fs::write(peers_root.join("honest").join("task-id"), &honest_id).unwrap();
@@ -6285,11 +6285,11 @@ mod peer_task_registry_tests {
         );
         assert_eq!(
             boot.get_task(&honest_id).unwrap().status,
-            octos_agent::TaskStatus::Completed,
+            ra_agent::TaskStatus::Completed,
         );
         assert_eq!(
             boot.get_task(&forged_id).unwrap().status,
-            octos_agent::TaskStatus::Completed,
+            ra_agent::TaskStatus::Completed,
         );
     }
 
@@ -6300,7 +6300,7 @@ mod peer_task_registry_tests {
         let dir = tempfile::TempDir::new().unwrap();
         let data_dir = dir.path().join("profile");
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         // A profile id MAY contain colons (gateway keys are
         // `profile:channel:chat`), so the split is on the LAST `:peer:`;
         // here the tail is a traversal attempt that must fail the slug gate.
@@ -6325,7 +6325,7 @@ mod peer_task_registry_tests {
         );
         assert_eq!(
             supervisor.get_task(&task_id).unwrap().status,
-            octos_agent::TaskStatus::Parked,
+            ra_agent::TaskStatus::Parked,
         );
     }
 
@@ -6339,7 +6339,7 @@ mod peer_task_registry_tests {
     /// covered; the call site that fills it was not.
     #[test]
     fn peer_staging_binds_a_supervised_task_keyed_to_the_master_session() {
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         let master = "wiring-a:local:tui";
         let key = peer_wire_key("wiring-a", "auditor");
 
@@ -6382,7 +6382,7 @@ mod peer_task_registry_tests {
         let dir = tempfile::TempDir::new().unwrap();
         let ledger = dir.path().join("tasks.jsonl");
 
-        let staging_turn = octos_agent::TaskSupervisor::new();
+        let staging_turn = ra_agent::TaskSupervisor::new();
         staging_turn.enable_persistence(&ledger).unwrap();
         let key = peer_wire_key("sweep-a", "auditor");
         let task_id = bind_peer_supervised_task(&staging_turn, key, "sweep-a:local:tui")
@@ -6391,7 +6391,7 @@ mod peer_task_registry_tests {
         // The master takes further turns while the peer works. Each one
         // rebuilds a supervisor over the same ledger and sweeps.
         for _ in 0..3 {
-            let next_turn = octos_agent::TaskSupervisor::new();
+            let next_turn = ra_agent::TaskSupervisor::new();
             next_turn.enable_persistence(&ledger).unwrap();
             let row = next_turn.get_task(&task_id).expect("peer row restored");
             assert_ne!(
@@ -6411,19 +6411,19 @@ mod peer_task_registry_tests {
     /// from a sweep it should no longer be exempt from.
     #[test]
     fn peer_retirement_releases_the_liveness_lease() {
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         let key = peer_wire_key("sweep-b", "auditor");
         let task_id = bind_peer_supervised_task(&supervisor, key, "sweep-b:local:tui")
             .expect("staging must bind");
         assert!(
-            octos_agent::task_is_live(&task_id),
+            ra_agent::task_is_live(&task_id),
             "a staged peer holds a liveness lease"
         );
 
         retire_peer_supervised_task(&supervisor, "sweep-b", "auditor");
 
         assert!(
-            !octos_agent::task_is_live(&task_id),
+            !ra_agent::task_is_live(&task_id),
             "closing a peer must release its lease, not leak it"
         );
     }
@@ -6436,7 +6436,7 @@ mod peer_task_registry_tests {
     /// late second `mark_completed` could land on an unrelated task.
     #[test]
     fn peer_close_retires_the_supervised_task_exactly_once() {
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         let key = peer_wire_key("wiring-b", "auditor");
         let task_id = bind_peer_supervised_task(&supervisor, key, "wiring-b:local:tui")
             .expect("staging must bind");
@@ -6469,7 +6469,7 @@ mod peer_task_registry_tests {
     /// the task stays active across turns and dies only on close.
     #[test]
     fn a_peer_supervised_task_survives_many_turns_and_dies_only_on_close() {
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         let key = peer_wire_key("wiring-c", "auditor");
         let task_id = bind_peer_supervised_task(&supervisor, key, "wiring-c:local:tui")
             .expect("staging must bind");
@@ -6629,7 +6629,7 @@ mod peer_task_registry_tests {
     #[cfg(any(feature = "api", test))]
     #[test]
     fn strict_workspace_binding_surfaces_write_failure_without_binding() {
-        use octos_agent::TaskSupervisor;
+        use ra_agent::TaskSupervisor;
 
         // No persistence path: the write is trivially Ok; the task binds.
         let supervisor = TaskSupervisor::new();

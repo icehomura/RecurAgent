@@ -18,7 +18,7 @@ use std::io::Write as _;
 use std::os::unix::fs::PermissionsExt;
 use std::sync::Arc;
 
-use octos_agent::{
+use ra_agent::{
     HookConfig, HookEvent, HookExecutor, HookPayload, HookPayloadEnricher, HookResult,
 };
 

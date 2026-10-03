@@ -12,8 +12,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use chrono::Utc;
-use octos_core::{Message, MessageRole};
-use octos_llm::{ChatConfig, LlmProvider, ToolChoice};
+use ra_core::{Message, MessageRole};
+use ra_llm::{ChatConfig, LlmProvider, ToolChoice};
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
@@ -227,7 +227,7 @@ impl PersonaService {
             sampling_params: None,
             // One-shot persona generation; the prompt is never replayed
             // within a cache TTL, so skip cache writes.
-            cache_retention: octos_llm::CacheRetention::None,
+            cache_retention: ra_llm::CacheRetention::None,
             prompt_cache_context: None,
             media_scope_root: None,
         };
@@ -395,7 +395,7 @@ impl PersonaService {
             sampling_params: None,
             // One-shot status-words generation; never replayed within a
             // cache TTL, so skip cache writes.
-            cache_retention: octos_llm::CacheRetention::None,
+            cache_retention: ra_llm::CacheRetention::None,
             prompt_cache_context: None,
             media_scope_root: None,
         };

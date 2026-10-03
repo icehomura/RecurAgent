@@ -8,11 +8,11 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
-use octos_core::ui_protocol::{
+use ra_core::ui_protocol::{
     OutputCursor, RpcError, TaskOutputReadLimitation, TaskOutputReadParams, TaskOutputReadResult,
     TaskOutputReadSource, methods,
 };
-use octos_core::{SessionKey, TaskId};
+use ra_core::{SessionKey, TaskId};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -26,7 +26,7 @@ const TASK_LEDGER_SCHEMA_MAX: u32 = 1;
 struct PersistedTaskRecord {
     #[serde(default)]
     schema_version: u32,
-    task: octos_agent::BackgroundTask,
+    task: ra_agent::BackgroundTask,
 }
 
 pub(crate) async fn read_task_output(
@@ -49,7 +49,7 @@ fn read_task_output_from_data_dir(
     data_dir: &Path,
     params: TaskOutputReadParams,
 ) -> Result<TaskOutputReadResult, RpcError> {
-    if !octos_bus::SessionHandle::session_exists(data_dir, &params.session_id) {
+    if !ra_bus::SessionHandle::session_exists(data_dir, &params.session_id) {
         return Err(session_not_found_error(&params.session_id));
     }
 
@@ -61,12 +61,12 @@ fn read_task_output_from_data_dir(
 }
 
 pub(crate) fn task_state_path(data_dir: &Path, session_id: &SessionKey) -> PathBuf {
-    let encoded_base = octos_bus::session::encode_path_component(session_id.base_key());
+    let encoded_base = ra_bus::session::encode_path_component(session_id.base_key());
     let topic = session_id
         .topic()
         .filter(|topic| !topic.is_empty())
         .unwrap_or("default");
-    let encoded_topic = octos_bus::session::encode_path_component(topic);
+    let encoded_topic = ra_bus::session::encode_path_component(topic);
 
     data_dir
         .join("users")
@@ -79,7 +79,7 @@ fn read_latest_task_snapshot(
     ledger_path: &Path,
     session_id: &SessionKey,
     task_id: &TaskId,
-) -> Result<Option<octos_agent::BackgroundTask>, RpcError> {
+) -> Result<Option<ra_agent::BackgroundTask>, RpcError> {
     let file = match File::open(ledger_path) {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -125,7 +125,7 @@ fn read_latest_task_snapshot(
 fn project_task_output(
     data_dir: &Path,
     params: TaskOutputReadParams,
-    task: &octos_agent::BackgroundTask,
+    task: &ra_agent::BackgroundTask,
 ) -> TaskOutputReadResult {
     let task_status = task.status.as_str().to_owned();
     let runtime_state = serde_label(&task.runtime_state);
@@ -177,7 +177,7 @@ fn project_task_output(
 }
 
 fn projection_text(
-    task: &octos_agent::BackgroundTask,
+    task: &ra_agent::BackgroundTask,
     task_status: &str,
     runtime_state: &str,
     lifecycle_state: &str,
@@ -283,7 +283,7 @@ where
 }
 
 fn task_response_path(data_dir: &Path, path: &str) -> String {
-    octos_bus::file_handle::encode_profile_file_handle(data_dir, Path::new(path))
+    ra_bus::file_handle::encode_profile_file_handle(data_dir, Path::new(path))
         .unwrap_or_else(|| path.to_owned())
 }
 
@@ -326,10 +326,10 @@ fn task_not_found_error(session_id: &SessionKey, task_id: &TaskId) -> RpcError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_bus::SessionManager;
-    use octos_core::Message;
-    use octos_core::ui_protocol::TaskOutputReadParams;
-    use octos_core::ui_protocol::rpc_error_codes;
+    use ra_bus::SessionManager;
+    use ra_core::Message;
+    use ra_core::ui_protocol::TaskOutputReadParams;
+    use ra_core::ui_protocol::rpc_error_codes;
 
     fn params(session_id: &SessionKey, task_id: &TaskId) -> TaskOutputReadParams {
         TaskOutputReadParams {
@@ -351,8 +351,8 @@ mod tests {
     fn persisted_task(
         data_dir: &Path,
         session_id: &SessionKey,
-    ) -> (TaskId, octos_agent::TaskSupervisor) {
-        let supervisor = octos_agent::TaskSupervisor::new();
+    ) -> (TaskId, ra_agent::TaskSupervisor) {
+        let supervisor = ra_agent::TaskSupervisor::new();
         supervisor
             .enable_persistence(task_state_path(data_dir, session_id))
             .expect("enable task persistence");
@@ -360,7 +360,7 @@ mod tests {
         supervisor.mark_running(&task_id);
         supervisor.mark_runtime_state(
             &task_id,
-            octos_agent::TaskRuntimeState::DeliveringOutputs,
+            ra_agent::TaskRuntimeState::DeliveringOutputs,
             Some(
                 json!({
                     "workflow_kind": "coding",

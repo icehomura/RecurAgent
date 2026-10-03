@@ -1,6 +1,6 @@
 //! Fleet-kernel outbox consumer → keeper wake (PR 4a).
 //!
-//! A background consumer that claims durable [`octos_fleet`] outbox events
+//! A background consumer that claims durable [`ra_fleet`] outbox events
 //! (`ChildDone` / `FleetDrained`) and turns each into a **keeper
 //! continuation** on the fleet's controller session — reusing the same
 //! pull-model wake machinery (`MasterContinuationScheduler`) that
@@ -38,8 +38,8 @@
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use octos_core::SessionKey;
-use octos_fleet::{AckOutcome, Fleet, FleetEventKind, FleetKernelStore, FleetStatus};
+use ra_core::SessionKey;
+use ra_fleet::{AckOutcome, Fleet, FleetEventKind, FleetKernelStore, FleetStatus};
 use tokio::time::MissedTickBehavior;
 
 use super::agent_orchestrator::{
@@ -116,9 +116,9 @@ async fn render_fleet_snapshot(
                 .iter()
                 .map(|t| {
                     let verdict = match &t.verdict {
-                        Some(octos_fleet::AcceptanceVerdict::Accepted { .. }) => " → accepted",
-                        Some(octos_fleet::AcceptanceVerdict::Rejected { .. }) => " → rejected",
-                        Some(octos_fleet::AcceptanceVerdict::Terminated { .. }) => " → terminated",
+                        Some(ra_fleet::AcceptanceVerdict::Accepted { .. }) => " → accepted",
+                        Some(ra_fleet::AcceptanceVerdict::Rejected { .. }) => " → rejected",
+                        Some(ra_fleet::AcceptanceVerdict::Terminated { .. }) => " → terminated",
                         None => "",
                     };
                     format!("- {}: {} [{:?}]{}", t.task_id, t.title, t.status, verdict)
@@ -510,7 +510,7 @@ mod tests {
     use crate::autonomy::master_continuation_scheduler::{
         MasterContinuationEnqueueOutcome, MasterContinuationScheduler, QueuedMasterContinuation,
     };
-    use octos_fleet::{FleetBudget, OutboxEvent, SCHEMA_VERSION, TaskSpec};
+    use ra_fleet::{FleetBudget, OutboxEvent, SCHEMA_VERSION, TaskSpec};
 
     async fn test_store() -> (tempfile::TempDir, FleetKernelStore) {
         let dir = tempfile::TempDir::new().expect("temp dir");
@@ -536,7 +536,7 @@ mod tests {
             detail: format!("detail {id}"),
             deps: deps.iter().map(|s| (*s).to_owned()).collect(),
             acceptance: Vec::new(),
-            grant: octos_fleet::WorkerGrant::minimal(),
+            grant: ra_fleet::WorkerGrant::minimal(),
         }
     }
 
@@ -1426,7 +1426,7 @@ mod tests {
             .await
             .expect("launch");
         assert!(
-            matches!(outcome, octos_fleet::LaunchOutcome::Launched { .. }),
+            matches!(outcome, ra_fleet::LaunchOutcome::Launched { .. }),
             "t1 should launch: {outcome:?}"
         );
 
@@ -1581,7 +1581,7 @@ mod tests {
                 .unwrap()
                 .unwrap()
                 .status;
-            if status == octos_fleet::FleetStatus::Cancelled {
+            if status == ra_fleet::FleetStatus::Cancelled {
                 break;
             }
             assert!(

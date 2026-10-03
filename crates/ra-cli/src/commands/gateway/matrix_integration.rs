@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
-use octos_bus::ChannelManager;
+use ra_bus::ChannelManager;
 use tracing::warn;
 
 #[cfg(feature = "matrix")]
@@ -169,9 +169,9 @@ impl MatrixChannelSettings {
         &self,
         shutdown: Arc<AtomicBool>,
         data_dir: &std::path::Path,
-    ) -> Arc<octos_bus::MatrixChannel> {
+    ) -> Arc<ra_bus::MatrixChannel> {
         Arc::new(
-            octos_bus::MatrixChannel::new(
+            ra_bus::MatrixChannel::new(
                 &self.homeserver,
                 &self.as_token,
                 &self.hs_token,
@@ -191,11 +191,11 @@ impl MatrixChannelSettings {
 
 #[cfg(feature = "matrix")]
 fn get_or_create_matrix_channel(
-    matrix_channel: &mut Option<Arc<octos_bus::MatrixChannel>>,
+    matrix_channel: &mut Option<Arc<ra_bus::MatrixChannel>>,
     settings: &MatrixChannelSettings,
     shutdown: &Arc<AtomicBool>,
     data_dir: &std::path::Path,
-) -> Arc<octos_bus::MatrixChannel> {
+) -> Arc<ra_bus::MatrixChannel> {
     if let Some(channel) = matrix_channel.clone() {
         channel
     } else {
@@ -208,11 +208,11 @@ fn get_or_create_matrix_channel(
 #[cfg(feature = "matrix")]
 pub(super) fn register_matrix_channel(
     channel_mgr: &mut ChannelManager,
-    matrix_channel: &mut Option<Arc<octos_bus::MatrixChannel>>,
+    matrix_channel: &mut Option<Arc<ra_bus::MatrixChannel>>,
     settings: &MatrixChannelSettings,
     shutdown: &Arc<AtomicBool>,
     data_dir: &std::path::Path,
-) -> Arc<octos_bus::MatrixChannel> {
+) -> Arc<ra_bus::MatrixChannel> {
     let channel = get_or_create_matrix_channel(matrix_channel, settings, shutdown, data_dir);
     channel_mgr.register(channel.clone());
     channel
@@ -231,11 +231,11 @@ pub(super) struct MatrixUserChannelSettings {
     pub(super) password: Option<String>,
     pub(super) device_name: Option<String>,
     pub(super) rooms: Vec<String>,
-    pub(super) auto_join: octos_bus::MatrixAutoJoin,
+    pub(super) auto_join: ra_bus::MatrixAutoJoin,
     pub(super) auto_join_allowlist: Vec<String>,
-    pub(super) group_policy: octos_bus::MatrixGroupPolicy,
+    pub(super) group_policy: ra_bus::MatrixGroupPolicy,
     pub(super) require_mention: bool,
-    pub(super) mention_policy: octos_bus::MatrixMentionPolicy,
+    pub(super) mention_policy: ra_bus::MatrixMentionPolicy,
     pub(super) allowed_senders: Vec<String>,
 }
 
@@ -289,13 +289,13 @@ impl MatrixUserChannelSettings {
         };
 
         let auto_join = opt_any(&[MATRIX_SETTING_AUTO_JOIN, MATRIX_SETTING_AUTO_JOIN_CAMEL])
-            .map(|raw| octos_bus::MatrixAutoJoin::parse(&raw))
+            .map(|raw| ra_bus::MatrixAutoJoin::parse(&raw))
             .unwrap_or_default();
         let group_policy = opt_any(&[
             MATRIX_SETTING_GROUP_POLICY,
             MATRIX_SETTING_GROUP_POLICY_CAMEL,
         ])
-        .map(|raw| octos_bus::MatrixGroupPolicy::parse(&raw))
+        .map(|raw| ra_bus::MatrixGroupPolicy::parse(&raw))
         .unwrap_or_default();
         let require_mention = entry
             .settings
@@ -314,7 +314,7 @@ impl MatrixUserChannelSettings {
                     "unrecognized matrix mention_policy; falling back to strict"
                 );
             }
-            octos_bus::MatrixMentionPolicy::parse(&raw)
+            ra_bus::MatrixMentionPolicy::parse(&raw)
         })
         .unwrap_or_default();
 
@@ -346,9 +346,9 @@ impl MatrixUserChannelSettings {
         shutdown: Arc<AtomicBool>,
         data_dir: &std::path::Path,
         channel_index: usize,
-    ) -> Arc<octos_bus::MatrixUserChannel> {
+    ) -> Arc<ra_bus::MatrixUserChannel> {
         Arc::new(
-            octos_bus::MatrixUserChannel::new(
+            ra_bus::MatrixUserChannel::new(
                 &self.homeserver,
                 self.user_id.clone(),
                 self.access_token.clone(),
@@ -364,7 +364,7 @@ impl MatrixUserChannelSettings {
                 shutdown,
             )
             .with_channel_index(channel_index)
-            .with_invite_store(octos_bus::MatrixInviteStore::for_profile_data_dir(data_dir)),
+            .with_invite_store(ra_bus::MatrixInviteStore::for_profile_data_dir(data_dir)),
         )
     }
 }
@@ -376,7 +376,7 @@ pub(super) fn register_matrix_user_channel(
     shutdown: &Arc<AtomicBool>,
     data_dir: &std::path::Path,
     channel_index: usize,
-) -> Arc<octos_bus::MatrixUserChannel> {
+) -> Arc<ra_bus::MatrixUserChannel> {
     let channel = settings.build_channel(shutdown.clone(), data_dir, channel_index);
     channel_mgr.register(channel.clone());
     channel
@@ -389,21 +389,21 @@ pub(super) fn register_matrix_user_channel(
 #[cfg(feature = "matrix")]
 pub(super) struct GatewayBotManager {
     pub(super) store: Arc<crate::profiles::ProfileStore>,
-    pub(super) channel: Arc<octos_bus::MatrixChannel>,
+    pub(super) channel: Arc<ra_bus::MatrixChannel>,
     pub(super) parent_profile_id: String,
-    pub(super) cron_service: Arc<octos_bus::CronService>,
+    pub(super) cron_service: Arc<ra_bus::CronService>,
 }
 
 #[cfg(feature = "matrix")]
 #[async_trait]
-impl octos_bus::BotManager for GatewayBotManager {
+impl ra_bus::BotManager for GatewayBotManager {
     async fn create_bot(
         &self,
         username: &str,
         name: &str,
         system_prompt: Option<&str>,
         sender: &str,
-        visibility: octos_bus::BotVisibility,
+        visibility: ra_bus::BotVisibility,
     ) -> eyre::Result<String> {
         use crate::profiles::GatewaySettings;
 
@@ -478,8 +478,8 @@ impl octos_bus::BotManager for GatewayBotManager {
         }
 
         let visibility_label = match visibility {
-            octos_bus::BotVisibility::Public => "public",
-            octos_bus::BotVisibility::Private => "private",
+            ra_bus::BotVisibility::Public => "public",
+            ra_bus::BotVisibility::Private => "private",
         };
 
         Ok(format!(
@@ -574,7 +574,7 @@ impl octos_bus::BotManager for GatewayBotManager {
                 .unwrap_or_else(|| format!("`{matrix_id}`"));
 
             match entry.visibility {
-                octos_bus::BotVisibility::Public => {
+                ra_bus::BotVisibility::Public => {
                     let suffix = if entry.owner == sender {
                         " (yours)"
                     } else {
@@ -586,7 +586,7 @@ impl octos_bus::BotManager for GatewayBotManager {
                         public_lines.push(format!("• {display_name}{suffix}"));
                     }
                 }
-                octos_bus::BotVisibility::Private => {
+                ra_bus::BotVisibility::Private => {
                     if entry.owner == sender {
                         private_lines.push(format!("• {display_name}"));
                     }

@@ -52,7 +52,7 @@ pub(crate) fn reviewer_notes_paths(data_dir: &Path, session_id: &str) -> (PathBu
 /// `<cwd>/.ra/<profile>/sessions/…` that the running session actually
 /// writes (jsonl transcripts). Resolved through the SAME path helpers
 /// the runtime uses (`runtime::session::project_sessions_root` +
-/// `octos_bus::session::encode_path_component`) — never a hand-built
+/// `ra_bus::session::encode_path_component`) — never a hand-built
 /// encoding. Also accepts inbox state (a session that has notes/locks
 /// from goal or monitor activity is equally real).
 pub(crate) fn session_has_persistent_state(
@@ -63,15 +63,15 @@ pub(crate) fn session_has_persistent_state(
 ) -> bool {
     // Primary source: the runtime session store (jsonl transcripts).
     let sessions_root = crate::runtime::session::project_sessions_root(cwd, profile_id);
-    let key = octos_core::SessionKey(session_id.to_owned());
+    let key = ra_core::SessionKey(session_id.to_owned());
     let base_key = key.base_key();
-    let encoded_base = octos_bus::session::encode_path_component(base_key);
+    let encoded_base = ra_bus::session::encode_path_component(base_key);
     let topic = key.topic().unwrap_or("default");
-    let encoded_topic = octos_bus::session::encode_path_component(topic);
+    let encoded_topic = ra_bus::session::encode_path_component(topic);
     // Flat layout: <root>/sessions/<key>.jsonl
     let flat = sessions_root.join("sessions").join(format!(
         "{}.jsonl",
-        octos_bus::session::encode_path_component(session_id)
+        ra_bus::session::encode_path_component(session_id)
     ));
     if flat.exists() {
         return true;
@@ -221,7 +221,7 @@ impl Executable for SteerCommand {
                 // best-effort accelerator, never the correctness path.
                 crate::autonomy::agent_orchestrator::default_agent_orchestrator()
                     .enqueue_steer_continuation(
-                        &octos_core::SessionKey(self.session.clone()),
+                        &ra_core::SessionKey(self.session.clone()),
                         super::obs::DEFAULT_PROFILE_ID,
                     );
                 Ok(())
@@ -283,14 +283,14 @@ mod tests {
         let session = "ra:local:tui#coding";
         // Reproduce the runtime's real write path through the SAME helpers.
         let root = crate::runtime::session::project_sessions_root(&cwd, "ra");
-        let key = octos_core::SessionKey(session.to_owned());
+        let key = ra_core::SessionKey(session.to_owned());
         let transcript = root
             .join("sessions")
-            .join(octos_bus::session::encode_path_component(key.base_key()))
+            .join(ra_bus::session::encode_path_component(key.base_key()))
             .join("sessions")
             .join(format!(
                 "{}.jsonl",
-                octos_bus::session::encode_path_component(key.topic().unwrap_or("default"))
+                ra_bus::session::encode_path_component(key.topic().unwrap_or("default"))
             ));
         std::fs::create_dir_all(transcript.parent().expect("parent")).expect("mkdir");
         std::fs::write(&transcript, "{}\n").expect("seed transcript");
@@ -316,7 +316,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let session = "seq:local:tui#coding";
         let orchestrator = crate::autonomy::agent_orchestrator::default_agent_orchestrator();
-        let key = octos_core::SessionKey(session.to_owned());
+        let key = ra_core::SessionKey(session.to_owned());
 
         // Append TWO steers back-to-back (same file, likely same mtime
         // granularity).
@@ -356,12 +356,12 @@ mod tests {
         // CLI-side queue (writes notes + marker under the instance inbox).
         append_reviewer_steer(temp.path(), session, "读黑板第 7 条").expect("queue");
         let orchestrator = crate::autonomy::agent_orchestrator::default_agent_orchestrator();
-        let key = octos_core::SessionKey(session.to_owned());
+        let key = ra_core::SessionKey(session.to_owned());
         // The PRODUCTION profile id is "ra" (NOT MAIN_PROFILE_ID
         // "_main") — sweeping under it must enqueue.
         assert_ne!(
             "ra",
-            octos_core::MAIN_PROFILE_ID,
+            ra_core::MAIN_PROFILE_ID,
             "regression guard: the dead door was MAIN_PROFILE_ID != runtime profile"
         );
         let before = orchestrator.pending_steer_continuation_count_for_test(&key, "ra");
@@ -442,7 +442,7 @@ mod tests {
         append_reviewer_steer(temp.path(), session, "读黑板第 7 条").expect("queue steer");
         // Serve side: the sweep picks it up into a continuation.
         let orchestrator = crate::autonomy::agent_orchestrator::default_agent_orchestrator();
-        let key = octos_core::SessionKey(session.to_owned());
+        let key = ra_core::SessionKey(session.to_owned());
         let before = orchestrator.pending_steer_continuation_count_for_test(&key, "ra");
         orchestrator.steer_inbox_sweep(temp.path(), "ra");
         let after = orchestrator.pending_steer_continuation_count_for_test(&key, "ra");
@@ -463,7 +463,7 @@ mod tests {
     #[test]
     fn olp_ctrl_steer_wakes_and_receipts_enqueue() {
         let orchestrator = crate::autonomy::agent_orchestrator::default_agent_orchestrator();
-        let session = octos_core::SessionKey("steer-test:local:master".into());
+        let session = ra_core::SessionKey("steer-test:local:master".into());
         assert!(
             !orchestrator.has_pending_steer_continuation_for_test(&session, "ra"),
             "no steer continuation queued before the wake"

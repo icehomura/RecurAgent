@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use octos_research::metasearch::{
+use ra_research::metasearch::{
     Config, EngineStatus, Fetch, FetchFuture, HttpRequest, HttpResponse, Metasearch, Registry,
     SearchRequest,
 };
@@ -130,7 +130,7 @@ async fn replay(engine: &str, case: &Path) {
         .collect();
     req.since = r["since"]
         .as_str()
-        .map(|s| octos_research::date::Since::parse(s, now).unwrap());
+        .map(|s| ra_research::date::Since::parse(s, now).unwrap());
 
     let resp = ms.search(&req).await;
     let name = case.display();
@@ -181,7 +181,7 @@ async fn replay(engine: &str, case: &Path) {
     }
     assert!(
         sent.headers
-            .contains(&("user-agent".into(), octos_research::USER_AGENT.into())),
+            .contains(&("user-agent".into(), ra_research::USER_AGENT.into())),
         "{name}: identifiable User-Agent"
     );
 

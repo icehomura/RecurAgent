@@ -3,8 +3,8 @@
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use octos_core::ToolCall;
-use octos_llm::{ChatResponse, StopReason};
+use ra_core::ToolCall;
+use ra_llm::{ChatResponse, StopReason};
 use regex::Regex;
 
 use super::Agent;
@@ -145,7 +145,7 @@ impl Agent {
     /// "stream error" substring under some rendering but is explicitly
     /// non-retryable so the model can self-correct on its next turn).
     pub(super) fn is_retryable_stream_error(err: &eyre::Report) -> bool {
-        if let Some(stream_err) = err.downcast_ref::<octos_llm::StreamError>() {
+        if let Some(stream_err) = err.downcast_ref::<ra_llm::StreamError>() {
             return stream_err.is_retryable();
         }
         let msg = err.to_string().to_lowercase();
@@ -168,8 +168,8 @@ impl Agent {
     /// re-truncate). Distinct from a genuinely malformed call.
     pub(super) fn is_truncated_tool_call_error(err: &eyre::Report) -> bool {
         matches!(
-            err.downcast_ref::<octos_llm::StreamError>(),
-            Some(octos_llm::StreamError::TruncatedToolCall { .. })
+            err.downcast_ref::<ra_llm::StreamError>(),
+            Some(ra_llm::StreamError::TruncatedToolCall { .. })
         )
     }
 }
@@ -447,7 +447,7 @@ fn strip_code_fence(input: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_llm::{ChatResponse, StopReason, TokenUsage as LlmTokenUsage};
+    use ra_llm::{ChatResponse, StopReason, TokenUsage as LlmTokenUsage};
 
     fn make_response(
         content: Option<&str>,
@@ -829,7 +829,7 @@ mod tests {
 
     #[test]
     fn is_retryable_stream_error_idle_timeout_is_typed_retryable() {
-        let typed = octos_llm::StreamError::IdleTimeout { idle_secs: 180 };
+        let typed = ra_llm::StreamError::IdleTimeout { idle_secs: 180 };
         let err = eyre::Report::new(typed);
         assert!(
             Agent::is_retryable_stream_error(&err),
@@ -839,7 +839,7 @@ mod tests {
 
     #[test]
     fn is_retryable_stream_error_malformed_args_is_typed_not_retryable() {
-        let typed = octos_llm::StreamError::MalformedArgs {
+        let typed = ra_llm::StreamError::MalformedArgs {
             tool_id: "call_0".to_string(),
             tool_name: "mofa_slides".to_string(),
             error: "EOF while parsing a string at column 4123".to_string(),
@@ -856,7 +856,7 @@ mod tests {
 
     #[test]
     fn is_retryable_stream_error_incomplete_is_typed_retryable() {
-        let typed = octos_llm::StreamError::Incomplete {
+        let typed = ra_llm::StreamError::Incomplete {
             detail: "stream ended without Done".to_string(),
         };
         let err = eyre::Report::new(typed);
@@ -865,7 +865,7 @@ mod tests {
 
     #[test]
     fn is_retryable_stream_error_transport_is_typed_retryable() {
-        let typed = octos_llm::StreamError::Transport {
+        let typed = ra_llm::StreamError::Transport {
             detail: "broken pipe".to_string(),
         };
         let err = eyre::Report::new(typed);

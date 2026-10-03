@@ -10,7 +10,7 @@
 
 use std::time::Duration;
 
-use octos_research::browser::PersonBrowser;
+use ra_research::browser::PersonBrowser;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {

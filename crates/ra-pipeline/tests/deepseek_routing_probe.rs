@@ -25,13 +25,13 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use octos_agent::Tool;
-use octos_agent::{WebFetchTool, WebSearchTool};
-use octos_core::Message;
-use octos_llm::openai::OpenAIProvider;
-use octos_llm::{ChatConfig, LlmProvider, ToolChoice, ToolSpec};
-use octos_memory::EpisodeStore;
-use octos_pipeline::RunPipelineTool;
+use ra_agent::Tool;
+use ra_agent::{WebFetchTool, WebSearchTool};
+use ra_core::Message;
+use ra_llm::openai::OpenAIProvider;
+use ra_llm::{ChatConfig, LlmProvider, ToolChoice, ToolSpec};
+use ra_memory::EpisodeStore;
+use ra_pipeline::RunPipelineTool;
 
 /// The pre-change NON-IR `run_pipeline` description (parent of the steering
 /// commit). Hardcoded so the A/B runs in a single binary without rebuilding.

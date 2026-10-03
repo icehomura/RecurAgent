@@ -12,7 +12,7 @@ use crate::builtin_skills::BUILTIN_SKILLS;
 /// Crate-agnostic skill selection filter.
 ///
 /// This is the lowered form of the CLI's per-profile skill-selection layer
-/// (`octos_cli::profiles::ProfileSkillsConfig`). It is intentionally free of
+/// (`ra_cli::profiles::ProfileSkillsConfig`). It is intentionally free of
 /// any CLI dependency so both the [`SkillsLoader`] (prompt / content injection)
 /// and the plugin loader (tool specs) can consult the same selection decision.
 ///

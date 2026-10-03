@@ -16,10 +16,10 @@
 //! cargo run --example inspection_safety -p ra-agent
 //! ```
 
-use octos_agent::permissions::SafetyTier;
-use octos_agent::tools::ToolPolicy;
-use octos_agent::tools::policy::PolicyDecision;
-use octos_agent::tools::robot_groups::{self, RobotToolRegistry};
+use ra_agent::permissions::SafetyTier;
+use ra_agent::tools::ToolPolicy;
+use ra_agent::tools::policy::PolicyDecision;
+use ra_agent::tools::robot_groups::{self, RobotToolRegistry};
 
 fn main() -> eyre::Result<()> {
     // Step 1: the robot integrator declares which tools sit at which tier.

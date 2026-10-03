@@ -23,13 +23,13 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_agent::{
+use ra_agent::{
     Agent, AgentConfig, Heartbeat, HeartbeatState, RealtimeConfig, RealtimeController,
     SensorContextInjector, SensorSnapshot, SensorSource,
 };
-use octos_core::{AgentId, Message};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_core::{AgentId, Message};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, ToolSpec};
+use ra_memory::EpisodeStore;
 
 /// Mock provider that returns `EndTurn` after `turns_before_end` iterations.
 /// Captures the system prompt each call so the example can show the injected
@@ -144,7 +144,7 @@ async fn main() -> Result<()> {
         turns_before_end: 1,
         last_system_prompt: Mutex::new(String::new()),
     });
-    let tools = octos_agent::ToolRegistry::new();
+    let tools = ra_agent::ToolRegistry::new();
     let agent = Agent::new(
         AgentId::new("demo-realtime"),
         provider.clone(),

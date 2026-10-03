@@ -56,8 +56,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use octos_bus::SessionManager;
-use octos_core::SessionKey;
+use ra_bus::SessionManager;
+use ra_core::SessionKey;
 use tokio::sync::Mutex;
 
 use crate::commands::gateway::prompt::{CLIENT_HANDLED_COMMANDS, SERVER_STATE_COMMANDS};
@@ -194,7 +194,7 @@ async fn handle_new(ctx: &SlashCommandContext, name_arg: &str) -> String {
         return handle_clear(ctx).await;
     }
 
-    if let Err(reason) = octos_bus::validate_topic_name(name_arg) {
+    if let Err(reason) = ra_bus::validate_topic_name(name_arg) {
         return format!("Invalid session name: {reason}");
     }
 
@@ -269,7 +269,7 @@ async fn handle_new(ctx: &SlashCommandContext, name_arg: &str) -> String {
         let profile_id = ctx
             .profile_id
             .clone()
-            .unwrap_or_else(|| octos_core::MAIN_PROFILE_ID.to_string());
+            .unwrap_or_else(|| ra_core::MAIN_PROFILE_ID.to_string());
         match crate::project_templates::scaffold_site_project(
             &workspace_root,
             &profile_id,
@@ -297,7 +297,7 @@ async fn handle_new(ctx: &SlashCommandContext, name_arg: &str) -> String {
 /// `runtime::session::resolve_workspace_root`'s fallback so the slash
 /// helper and the per-session tool registry agree on the same root.
 fn default_workspace_root_for(data_dir: &std::path::Path, session_id: &SessionKey) -> PathBuf {
-    let encoded_base = octos_bus::session::encode_path_component(session_id.base_key());
+    let encoded_base = ra_bus::session::encode_path_component(session_id.base_key());
     data_dir.join("users").join(encoded_base).join("workspace")
 }
 
@@ -319,7 +319,7 @@ fn unknown_command_help() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::Message;
+    use ra_core::Message;
     use tempfile::TempDir;
 
     /// Build a fresh, isolated context. Returns the tempdir handle so
@@ -379,7 +379,7 @@ mod tests {
             .unwrap();
         assert!(reply.contains("demo"));
 
-        let encoded = octos_bus::session::encode_path_component(key.base_key());
+        let encoded = ra_bus::session::encode_path_component(key.base_key());
         let project = tmp
             .path()
             .join("users")

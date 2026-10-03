@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use octos_core::{SessionKey, ui_protocol::TurnId};
+use ra_core::{SessionKey, ui_protocol::TurnId};
 
 // Longer than the bridge's 30s RPC timeout so one reconnect + idempotent retry
 // cannot lose a still-valid proof, while remaining short-lived.

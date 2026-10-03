@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use octos_core::TokenUsage;
+use ra_core::TokenUsage;
 use serde::{Deserialize, Serialize};
 
 /// A parsed, typed pipeline graph ready for execution.

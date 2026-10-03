@@ -4,7 +4,7 @@ use std::path::{Component, Path, PathBuf};
 
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
-use octos_core::OutboundMessage;
+use ra_core::OutboundMessage;
 use serde::Deserialize;
 use tokio::sync::mpsc;
 
@@ -225,7 +225,7 @@ impl Tool for SendFileTool {
                 // hint. Subsequent extras still get covered by the
                 // legacy allowlist below.
                 let profile_hint = self.extra_allowed_dirs.first().map(PathBuf::as_path);
-                match octos_bus::file_handle::resolve_tool_path(
+                match ra_bus::file_handle::resolve_tool_path(
                     base_dir,
                     profile_hint,
                     &input.file_path,
@@ -254,8 +254,8 @@ impl Tool for SendFileTool {
             let canonical_base =
                 std::fs::canonicalize(base_dir).unwrap_or_else(|_| base_dir.clone());
             let tmp_dir = std::fs::canonicalize("/tmp").unwrap_or_else(|_| PathBuf::from("/tmp"));
-            let upload_root = std::fs::canonicalize(octos_bus::file_handle::temp_upload_root())
-                .unwrap_or_else(|_| octos_bus::file_handle::temp_upload_root());
+            let upload_root = std::fs::canonicalize(ra_bus::file_handle::temp_upload_root())
+                .unwrap_or_else(|_| ra_bus::file_handle::temp_upload_root());
             let extra_canonical: Vec<PathBuf> = self
                 .extra_allowed_dirs
                 .iter()
@@ -856,7 +856,7 @@ mod tests {
         // Plant a same-basename file under the upload tmpdir. The
         // resolver's bare-basename branch (step 4 of `resolve_tool_path`)
         // would prefer this over the workspace file if we let it run.
-        let upload_root = octos_bus::file_handle::temp_upload_root();
+        let upload_root = ra_bus::file_handle::temp_upload_root();
         std::fs::create_dir_all(&upload_root).unwrap();
         let upload_name = format!(
             "report-{}-{}.pdf",

@@ -73,7 +73,7 @@ impl Tool for WebFetchTool {
                 "Fetch a URL and extract its content as markdown or plain text. Output beyond \
                  {} bytes is truncated with a '[N bytes omitted]' middle marker, regardless of \
                  max_chars.",
-                octos_core::tool_output_limit("web_fetch")
+                ra_core::tool_output_limit("web_fetch")
             )
         });
         &DESCRIPTION
@@ -199,7 +199,7 @@ impl Tool for WebFetchTool {
             body
         };
 
-        octos_core::truncate_utf8(&mut content, max_chars, "\n\n... (content truncated)");
+        ra_core::truncate_utf8(&mut content, max_chars, "\n\n... (content truncated)");
 
         let mut output = format!("URL: {final_url}\n");
         if final_url != input.url {
@@ -221,7 +221,7 @@ impl Tool for WebFetchTool {
 /// Redirects are followed manually with SSRF validation on each hop.
 /// DNS failures are treated as blocked (fail-closed).
 ///
-/// The hop loop itself is `octos_research::net::pinned_get` — the one
+/// The hop loop itself is `ra_research::net::pinned_get` — the one
 /// pinned-fetch loop in the workspace, shared with the research readers.
 /// This wrapper adds the PR A fleet grant's host allowlist, checked BEFORE
 /// any DNS or socket on every hop, and the tool's own User-Agent.
@@ -230,9 +230,9 @@ async fn ssrf_safe_fetch(
     host_allowlist: Option<&[String]>,
 ) -> Result<reqwest::Response, String> {
     let check_allowlist = move |host: &str| super::ssrf::check_host_allowlist(host, host_allowlist);
-    octos_research::net::pinned_get(
+    ra_research::net::pinned_get(
         initial_url,
-        octos_research::net::PinnedFetch {
+        ra_research::net::PinnedFetch {
             timeout: Duration::from_secs(30),
             user_agent: "ra/0.1 (web-fetch-tool)",
             pre_check: Some(&check_allowlist),
@@ -373,7 +373,7 @@ mod tests {
             "var pagetype = 'weather';".repeat(1000),
         );
         let mut text = extract_text(&html);
-        octos_core::truncate_utf8(&mut text, 120, "[truncated]");
+        ra_core::truncate_utf8(&mut text, 120, "[truncated]");
         assert_eq!(text, "Shanghai forecast Published 2026-09-11: light rain.");
     }
 
@@ -589,7 +589,7 @@ mod tests {
     fn should_state_truncation_contract_in_description_when_web_fetch() {
         let tool = WebFetchTool::new();
         let desc = tool.description();
-        let limit = octos_core::tool_output_limit("web_fetch");
+        let limit = ra_core::tool_output_limit("web_fetch");
         assert!(
             desc.contains(&limit.to_string()),
             "description must carry the real output cap ({limit}): {desc}"

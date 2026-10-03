@@ -43,7 +43,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use octos_llm::ProviderRouter;
+use ra_llm::ProviderRouter;
 use serde::Deserialize;
 
 use crate::graph::{HandlerKind, PipelineGraph};
@@ -61,7 +61,7 @@ struct ModelCatalog {
     models: Vec<CatalogEntry>,
 }
 
-/// One row in the model catalog. Matches `octos_llm::QosCatalog` rows
+/// One row in the model catalog. Matches `ra_llm::QosCatalog` rows
 /// modulo serialization-only fields (the LLM crate's authoritative type
 /// is what gets serialized here; this is a permissive parse-side mirror).
 #[derive(Debug, Deserialize, Clone)]
@@ -620,22 +620,22 @@ mod tests {
     struct LaneStub(&'static str);
 
     #[async_trait::async_trait]
-    impl octos_llm::LlmProvider for LaneStub {
+    impl ra_llm::LlmProvider for LaneStub {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             unreachable!("assignment must not call chat()")
         }
 
         async fn chat_stream(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatStream> {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatStream> {
             unreachable!("assignment must not call chat_stream()")
         }
 

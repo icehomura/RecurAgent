@@ -5,7 +5,7 @@
 //! or (`output: "items"`) the structured items document, which is also always
 //! written as `items.json` next to the pages.
 //!
-//! Pages are read politely through the shared `octos_research::reader`: an
+//! Pages are read politely through the shared `ra_research::reader`: an
 //! identifiable User-Agent, at least 1s between requests to one host, one
 //! backoff on 429/503 honouring `Retry-After`, a body-size cap, SSRF checks
 //! with DNS pinning on every hop, and a real browser only to render JS-heavy
@@ -72,7 +72,7 @@ struct Input {
     #[serde(default)]
     output: Option<String>,
     #[serde(default)]
-    lang: octos_research::OneOrMany,
+    lang: ra_research::OneOrMany,
     #[serde(default)]
     query_by_lang: std::collections::BTreeMap<String, String>,
     #[serde(default)]
@@ -96,7 +96,7 @@ struct PageRead {
     /// article was found.
     content: String,
     final_url: String,
-    meta: octos_research::extract::PageMeta,
+    meta: ra_research::extract::PageMeta,
     rendered: bool,
     fetched_at: String,
 }
@@ -245,12 +245,12 @@ impl Tool for DeepSearchTool {
         }
 
         // Extract URLs from search results, then apply the domain controls.
-        let mut skipped: Vec<octos_research::SkippedUrl> = Vec::new();
-        let mut cap = octos_research::DomainCap::new(filters.max_per_domain);
+        let mut skipped: Vec<ra_research::SkippedUrl> = Vec::new();
+        let mut cap = ra_research::DomainCap::new(filters.max_per_domain);
         let mut urls = Vec::new();
         let mut seen = std::collections::HashSet::new();
         for url in extract_urls(&search_result.output) {
-            if !seen.insert(octos_research::urls::dedup_key(&url)) {
+            if !seen.insert(ra_research::urls::dedup_key(&url)) {
                 continue;
             }
             if let Err(reason) = filters.check_domain(&url) {
@@ -305,7 +305,7 @@ impl Tool for DeepSearchTool {
         let mut saved_count = 0u32;
         let mut saved_files = Vec::new();
         let mut failed_files: Vec<String> = Vec::new();
-        let mut items: Vec<octos_research::ResearchItem> = Vec::new();
+        let mut items: Vec<ra_research::ResearchItem> = Vec::new();
         for (i, (url, page)) in urls.iter().zip(pages.iter()).enumerate() {
             let filename = format!("{:02}_{}.md", i + 1, host_slug(url));
             let filepath = dir.join(&filename);
@@ -349,7 +349,7 @@ impl Tool for DeepSearchTool {
                             .unwrap_or_default(),
                     ));
                     output.push_str(&format!("_Full content: {}_\n\n", filepath.display()));
-                    let preview = octos_research::text::truncate_chars(
+                    let preview = ra_research::text::truncate_chars(
                         &page.content,
                         INLINE_CHARS_PER_PAGE,
                         "\n... (truncated, use read_file for full content)",
@@ -381,7 +381,7 @@ impl Tool for DeepSearchTool {
 
         // Structured items (always written).
         let items_path = dir.join("items.json");
-        let mut doc = octos_research::ItemsDocument::new(&input.query, filters.to_json());
+        let mut doc = ra_research::ItemsDocument::new(&input.query, filters.to_json());
         doc.items = items;
         doc.skipped = skipped;
         doc.items_file = Some(items_path.display().to_string());
@@ -416,8 +416,8 @@ fn invalid_input(msg: &str) -> ToolResult {
     }
 }
 
-fn skip(url: &str, reason: &str) -> octos_research::SkippedUrl {
-    octos_research::SkippedUrl::new(url, reason)
+fn skip(url: &str, reason: &str) -> ra_research::SkippedUrl {
+    ra_research::SkippedUrl::new(url, reason)
 }
 
 fn one_line(s: &str) -> String {
@@ -427,12 +427,12 @@ fn one_line(s: &str) -> String {
         .replace("---", "—")
 }
 
-fn build_filters(input: &Input) -> std::result::Result<octos_research::Filters, String> {
+fn build_filters(input: &Input) -> std::result::Result<ra_research::Filters, String> {
     let since = match input.since.as_deref().map(str::trim) {
         None | Some("") => None,
-        Some(s) => Some(octos_research::date::Since::parse(s, chrono::Utc::now())?),
+        Some(s) => Some(ra_research::date::Since::parse(s, chrono::Utc::now())?),
     };
-    octos_research::Filters::new(
+    ra_research::Filters::new(
         input.lang.clone().into_vec(),
         since,
         input.domains_allow.clone(),
@@ -447,13 +447,13 @@ fn page_item(
     page: &PageRead,
     citation: usize,
     file: &str,
-) -> octos_research::ResearchItem {
-    let canonical = octos_research::urls::canonicalize(
+) -> ra_research::ResearchItem {
+    let canonical = ra_research::urls::canonicalize(
         page.meta.canonical.as_deref().unwrap_or(&page.final_url),
     );
-    let domain = octos_research::urls::domain_of(&canonical).unwrap_or_default();
-    let summary = octos_research::item::extractive_summary(&page.content, 400);
-    octos_research::ResearchItem {
+    let domain = ra_research::urls::domain_of(&canonical).unwrap_or_default();
+    let summary = ra_research::item::extractive_summary(&page.content, 400);
+    ra_research::ResearchItem {
         title: page.meta.title.clone().unwrap_or_else(|| url.to_string()),
         source: page
             .meta
@@ -464,9 +464,9 @@ fn page_item(
         lang: page.meta.lang.clone(),
         published: page.meta.published.clone(),
         summary_kind: if summary.is_empty() {
-            octos_research::SummaryKind::None
+            ra_research::SummaryKind::None
         } else {
-            octos_research::SummaryKind::Extractive
+            ra_research::SummaryKind::Extractive
         },
         summary,
         snippet: page.meta.excerpt.clone().unwrap_or_default(),
@@ -474,7 +474,7 @@ fn page_item(
         provider: "web_search".to_string(),
         engines: Vec::new(),
         score: None,
-        kind: octos_research::ItemKind::Article,
+        kind: ra_research::ItemKind::Article,
         read: true,
         rendered: page.rendered,
         citation: Some(citation),
@@ -491,15 +491,15 @@ fn emit_deep_research_progress(phase: &str, message: &str, progress: Option<f64>
     }
 }
 
-/// The shared polite reader (`octos_research::reader`): SSRF check + DNS
+/// The shared polite reader (`ra_research::reader`): SSRF check + DNS
 /// pinning on every hop, per-host spacing, 429/503 backoff, size caps,
 /// robots.txt when the operator enabled it, and
 /// post-render SSRF re-validation. The browser renderer (feature `browser`)
 /// also blocks private destinations inside Chrome.
-fn research_reader() -> octos_research::reader::Reader {
+fn research_reader() -> ra_research::reader::Reader {
     #[cfg(feature = "browser")]
-    let renderer: Option<octos_research::reader::Renderer> = Some(std::sync::Arc::new(
-        |url: String| -> octos_research::reader::RenderFuture {
+    let renderer: Option<ra_research::reader::Renderer> = Some(std::sync::Arc::new(
+        |url: String| -> ra_research::reader::RenderFuture {
             Box::pin(async move {
                 render_page(&url, RENDER_BOUND)
                     .await
@@ -508,15 +508,15 @@ fn research_reader() -> octos_research::reader::Reader {
         },
     ));
     #[cfg(not(feature = "browser"))]
-    let renderer: Option<octos_research::reader::Renderer> = None;
-    octos_research::reader::Reader::new(octos_research::reader::ReaderConfig {
+    let renderer: Option<ra_research::reader::Renderer> = None;
+    ra_research::reader::Reader::new(ra_research::reader::ReaderConfig {
         host_interval: HOST_INTERVAL,
         timeout: DEEP_SEARCH_FETCH_TIMEOUT,
         max_page_bytes: MAX_PAGE_BYTES,
         keep_html: false,
         // Operator setting, default off (maintainer decision: personal
         // assistant reads on the person's behalf).
-        respect_robots: octos_research::respect_robots(|k| std::env::var(k).ok()),
+        respect_robots: ra_research::respect_robots(|k| std::env::var(k).ok()),
         fallback_text: Some(html_to_markdown),
         renderer,
         ..Default::default()
@@ -533,12 +533,12 @@ fn html_to_markdown(html: &str) -> String {
 /// SSRF blocks, 403/500, transport, no main text) propagate so the caller
 /// records an error artifact for the skipped source.
 async fn read_page(
-    reader: &octos_research::reader::Reader,
+    reader: &ra_research::reader::Reader,
     url: &str,
     max_chars: usize,
 ) -> Result<PageRead> {
     let page = reader.read(url).await.map_err(|err| {
-        use octos_research::ReadFailure::{Robots, RobotsUnreachable};
+        use ra_research::ReadFailure::{Robots, RobotsUnreachable};
         if matches!(err.reason, Robots | RobotsUnreachable) {
             eyre::eyre!("skipped: {err} (robots.txt)")
         } else {
@@ -546,7 +546,7 @@ async fn read_page(
         }
     })?;
     // Characters, not bytes: a byte cap gives CJK pages a third of the room.
-    let content = octos_research::text::truncate_chars(&page.text, max_chars, "\n... (truncated)");
+    let content = ra_research::text::truncate_chars(&page.text, max_chars, "\n... (truncated)");
     Ok(PageRead {
         content,
         final_url: page.final_url,
@@ -566,13 +566,13 @@ const RENDER_BOUND: Duration = Duration::from_secs(45);
 ///
 /// SSRF: every request Chrome makes (the document, each redirect hop,
 /// subresources) is paused via the CDP Fetch domain and only continued if
-/// its destination passes `octos_research::net::check_url` (no private,
+/// its destination passes `ra_research::net::check_url` (no private,
 /// loopback, link-local/metadata or reserved address; DNS fail-closed).
 /// A blocked document request fails the render. The main-frame navigation
 /// chain is returned so the shared reader re-validates it before any HTML
 /// is extracted.
 #[cfg(feature = "browser")]
-async fn render_page(url: &str, bound: Duration) -> Result<octos_research::reader::Rendered> {
+async fn render_page(url: &str, bound: Duration) -> Result<ra_research::reader::Rendered> {
     use chromiumoxide::browser::{Browser, BrowserConfig};
     use chromiumoxide::cdp::browser_protocol::fetch::{
         ContinueRequestParams, EnableParams, EventRequestPaused, FailRequestParams, RequestPattern,
@@ -628,7 +628,7 @@ async fn render_page(url: &str, bound: Duration) -> Result<octos_research::reade
             tasks.push(tokio::spawn(async move {
                 while let Some(ev) = paused.next().await {
                     let url = ev.request.url.clone();
-                    if octos_research::net::check_url(&url).await.is_ok()
+                    if ra_research::net::check_url(&url).await.is_ok()
                         || url.starts_with("data:")
                         || url.starts_with("blob:")
                     {
@@ -689,7 +689,7 @@ async fn render_page(url: &str, bound: Duration) -> Result<octos_research::reade
             // A check that clears itself in a real browser ("Just a
             // moment…", "正在进行安全检测…"): wait for it, up to ~10 s.
             for _ in 0..5 {
-                if !octos_research::access::is_interstitial(&html) {
+                if !ra_research::access::is_interstitial(&html) {
                     break;
                 }
                 tokio::time::sleep(Duration::from_secs(2)).await;
@@ -726,7 +726,7 @@ async fn render_page(url: &str, bound: Duration) -> Result<octos_research::reade
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .clone();
-        Ok(octos_research::reader::Rendered {
+        Ok(ra_research::reader::Rendered {
             final_url,
             html,
             navigations,
@@ -882,7 +882,7 @@ mod tests {
         let page = PageRead {
             content: "Negotiators from nearly 200 countries agreed on a draft text late on Thursday night. More follows.".into(),
             final_url: "https://apnews.com/article/x?utm_source=feed".into(),
-            meta: octos_research::extract::PageMeta {
+            meta: ra_research::extract::PageMeta {
                 title: Some("Climate summit ends with draft deal".into()),
                 site_name: Some("AP News".into()),
                 lang: Some("en".into()),
@@ -898,7 +898,7 @@ mod tests {
         assert_eq!(item.domain, "apnews.com");
         assert_eq!(item.published.as_deref(), Some("2026-09-25T21:40:00Z"));
         assert_eq!(item.citation, Some(2));
-        assert_eq!(item.summary_kind, octos_research::SummaryKind::Extractive);
+        assert_eq!(item.summary_kind, ra_research::SummaryKind::Extractive);
         let v = serde_json::to_value(&item).unwrap();
         assert_eq!(v["summary_kind"], "extractive");
     }
@@ -939,7 +939,7 @@ mod tests {
         // metadata endpoint: the shared reader must refuse it before any
         // extraction, whatever the renderer returned.
         let reader = research_reader();
-        let rendered = octos_research::reader::Rendered {
+        let rendered = ra_research::reader::Rendered {
             final_url: "http://169.254.169.254/latest/meta-data/".into(),
             html: format!("<html><body><p>{}</p></body></html>", "secret ".repeat(80)),
             navigations: vec!["http://93.184.216.34/start".into()],
@@ -949,7 +949,7 @@ mod tests {
             .accept_rendered("http://93.184.216.34/start", rendered)
             .await
             .unwrap_err();
-        assert_eq!(err.reason, octos_research::ReadFailure::Blocked, "{err}");
+        assert_eq!(err.reason, ra_research::ReadFailure::Blocked, "{err}");
         // And a private URL is never fetched at all.
         let err = read_page(&reader, "http://169.254.169.254/latest/meta-data/", 1000)
             .await

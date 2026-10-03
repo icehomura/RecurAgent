@@ -14,7 +14,7 @@
 
 #![cfg(feature = "api")]
 
-use octos_cli::commands::acp::{AcpCommand, DEFAULT_MAX_ITERATIONS, SessionAgentFactory};
+use ra_cli::commands::acp::{AcpCommand, DEFAULT_MAX_ITERATIONS, SessionAgentFactory};
 use tempfile::TempDir;
 
 /// The factory builds from a provider name alone — no key, no network.

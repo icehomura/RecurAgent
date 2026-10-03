@@ -152,7 +152,7 @@ impl ParsedDiagnostics {
         } else {
             line
         };
-        octos_core::truncate_utf8(&mut line, MAX_LINE_BYTES, "…");
+        ra_core::truncate_utf8(&mut line, MAX_LINE_BYTES, "…");
         if !seen.insert(line.clone()) {
             return;
         }

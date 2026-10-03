@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_agent::tools::{Tool, ToolResult};
-use octos_llm::{LlmProvider, ProviderChain, RetryProvider, SwappableProvider};
+use ra_agent::tools::{Tool, ToolResult};
+use ra_llm::{LlmProvider, ProviderChain, RetryProvider, SwappableProvider};
 use serde::Deserialize;
 use tracing::info;
 
@@ -153,7 +153,7 @@ impl SwitchModelTool {
         lines.push(String::new());
         lines.push("## Other Providers (can switch to)".to_string());
         lines.push(String::new());
-        for entry in octos_llm::registry::all_entries() {
+        for entry in ra_llm::registry::all_entries() {
             let key_status = if let Some(env_var) = entry.api_key_env {
                 if std::env::var(env_var).is_ok() {
                     "ready"
@@ -194,7 +194,7 @@ impl SwitchModelTool {
         // Detect provider from model name if not explicitly given
         let provider_name = match input
             .provider
-            .or_else(|| octos_llm::registry::detect_provider(&model_name).map(String::from))
+            .or_else(|| ra_llm::registry::detect_provider(&model_name).map(String::from))
         {
             Some(name) => name,
             None => {
@@ -210,7 +210,7 @@ impl SwitchModelTool {
         };
 
         // Look up provider entry
-        let entry = match octos_llm::registry::lookup(&provider_name) {
+        let entry = match ra_llm::registry::lookup(&provider_name) {
             Some(e) => e,
             None => {
                 return ToolResult {

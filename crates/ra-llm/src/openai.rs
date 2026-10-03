@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
 use futures::StreamExt;
-use octos_core::{Message, MessageRole};
+use ra_core::{Message, MessageRole};
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -548,7 +548,7 @@ impl OpenAIProvider {
                 openai_messages.push(media_turn(&mut pending_media, &mut pending_notes));
             }
             let role = m.role.as_str();
-            // Convert tool_calls from octos_core format to OpenAI format
+            // Convert tool_calls from ra_core format to OpenAI format
             let tool_calls = m.tool_calls.as_ref().map(|tcs| {
                 tcs.iter()
                     .map(|tc| OpenAIToolCall {
@@ -1021,7 +1021,7 @@ impl LlmProvider for OpenAIProvider {
             .tool_calls
             .unwrap_or_default()
             .into_iter()
-            .map(|tc| octos_core::ToolCall {
+            .map(|tc| ra_core::ToolCall {
                 id: tc.id,
                 name: tc.function.name,
                 arguments: serde_json::from_str(&tc.function.arguments).unwrap_or_default(),
@@ -1751,7 +1751,7 @@ mod tests {
     use super::*;
     use crate::config::ChatConfig;
     use crate::provider::LlmProvider;
-    use octos_core::{Message, MessageRole};
+    use ra_core::{Message, MessageRole};
 
     #[test]
     fn provider_normalized_manifest_proves_same_epoch_append_only_prefix() {
@@ -2975,7 +2975,7 @@ mod tests {
             timestamp: chrono::Utc::now(),
         };
         let mut assistant = mk(MessageRole::Assistant, "");
-        assistant.tool_calls = Some(vec![octos_core::ToolCall {
+        assistant.tool_calls = Some(vec![ra_core::ToolCall {
             id: "call_1".into(),
             name: "view_image".into(),
             arguments: serde_json::json!({"path": "grab.png"}),
@@ -3008,7 +3008,7 @@ mod tests {
         msgs.push(mk(MessageRole::Assistant, "a red circle"));
         msgs.push(mk(MessageRole::User, "and the size?"));
         let mut assistant = mk(MessageRole::Assistant, "");
-        assistant.tool_calls = Some(vec![octos_core::ToolCall {
+        assistant.tool_calls = Some(vec![ra_core::ToolCall {
             id: "call_2".into(),
             name: "shell".into(),
             arguments: serde_json::json!({"cmd": "file grab.png"}),
@@ -3060,7 +3060,7 @@ mod tests {
             timestamp: chrono::Utc::now(),
         };
         let mut assistant = mk(MessageRole::Assistant, "");
-        assistant.tool_calls = Some(vec![octos_core::ToolCall {
+        assistant.tool_calls = Some(vec![ra_core::ToolCall {
             id: "call_1".into(),
             name: "view_image".into(),
             arguments: serde_json::json!({"path": "img.png"}),
@@ -3360,7 +3360,7 @@ mod cache_usage_tests {
 
     use super::*;
     use crate::config::ChatConfig;
-    use octos_core::{Message, MessageRole};
+    use ra_core::{Message, MessageRole};
 
     fn reasoning_usage_cases() -> Vec<(serde_json::Value, u32)> {
         use serde_json::json;
@@ -3636,7 +3636,7 @@ mod prompt_cache_affinity_tests {
 
 #[cfg(test)]
 mod lane_attributed_operational_errors {
-    use octos_core::Message;
+    use ra_core::Message;
     use wiremock::matchers::method;
     use wiremock::{Mock, MockServer, ResponseTemplate};
 

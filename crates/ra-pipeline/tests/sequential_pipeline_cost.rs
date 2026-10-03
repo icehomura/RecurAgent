@@ -5,14 +5,14 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_agent::cost_ledger::{CostAccountant, CostLedger, PersistentCostLedger};
-use octos_core::TokenUsage;
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage as LlmTokenUsage};
-use octos_memory::EpisodeStore;
-use octos_pipeline::context::PipelineContext;
-use octos_pipeline::executor::{ExecutorConfig, PipelineExecutor};
-use octos_pipeline::handler::HandlerContext;
-use octos_pipeline::{
+use ra_agent::cost_ledger::{CostAccountant, CostLedger, PersistentCostLedger};
+use ra_core::TokenUsage;
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage as LlmTokenUsage};
+use ra_memory::EpisodeStore;
+use ra_pipeline::context::PipelineContext;
+use ra_pipeline::executor::{ExecutorConfig, PipelineExecutor};
+use ra_pipeline::handler::HandlerContext;
+use ra_pipeline::{
     Handler, HandlerKind, HandlerRegistry, NodeOutcome, NoopHandler, OutcomeStatus, PipelineNode,
 };
 use tokio::time::timeout;
@@ -62,8 +62,8 @@ struct MockProvider;
 impl LlmProvider for MockProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
         _config: &ChatConfig,
     ) -> Result<ChatResponse> {
         Ok(ChatResponse {
@@ -114,12 +114,12 @@ fn config(
             .with_cost_accountant(accountant)
             .with_contract_id(CONTRACT_ID)
             .with_projected_usd(0.01),
-        host_context: octos_pipeline::host_context::PipelineHostContext::default(),
+        host_context: ra_pipeline::host_context::PipelineHostContext::default(),
         embedder: None,
         catalog_dir: None,
         // #1607: pipeline validators run under a no-op sandbox in tests
         // (host-independent — command validators run the argv directly).
-        sandbox: octos_agent::SandboxConfig::default(),
+        sandbox: ra_agent::SandboxConfig::default(),
     }
 }
 

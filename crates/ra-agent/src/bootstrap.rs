@@ -26,7 +26,7 @@ pub const PLATFORM_SKILLS_DIR: &str = "platform-skills";
 ///
 /// Gap 4.1 BLOCKER 3 (installed-wins precedence): the bundled `.dot` files
 /// live in their OWN directory, deliberately SEPARATE from the user-pipeline
-/// dir (`<root>/pipelines`). `octos_pipeline::discovery::PipelineDiscovery`
+/// dir (`<root>/pipelines`). `ra_pipeline::discovery::PipelineDiscovery`
 /// searches this dir at the LOWEST precedence (after every installed-skill /
 /// installed-pipeline location), so an installed `deep_research.dot` — whether
 /// in `<data>/pipelines`, `<data>/skills/<x>/`, `<octos_home>/skills/<x>/`, or

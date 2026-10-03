@@ -7,8 +7,8 @@
 //! - Chrome/Chromium installed on the system
 //! - Network access
 
-use octos_agent::Tool;
-use octos_agent::tools::browser::BrowserTool;
+use ra_agent::Tool;
+use ra_agent::tools::browser::BrowserTool;
 use serde_json::json;
 
 /// Helper: execute a browser action and return (output, success)

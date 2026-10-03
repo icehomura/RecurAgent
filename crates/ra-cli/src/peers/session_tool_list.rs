@@ -24,8 +24,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
 
-use octos_agent::ToolRegistry;
-use octos_core::SessionKey;
+use ra_agent::ToolRegistry;
+use ra_core::SessionKey;
 use serde::{Deserialize, Serialize};
 
 use super::peer_io;

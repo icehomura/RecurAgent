@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use async_trait::async_trait;
 use chrono::Utc;
 use eyre::{Result, WrapErr};
-use octos_core::{InboundMessage, OutboundMessage};
+use ra_core::{InboundMessage, OutboundMessage};
 use reqwest::Client;
 use tokio::sync::mpsc;
 use tracing::{info, warn};
@@ -413,7 +413,7 @@ impl Channel for TwilioChannel {
                     }
                 }),
                 message_id: None,
-                origin: octos_core::MessageOrigin::ExternalUser,
+                origin: ra_core::MessageOrigin::ExternalUser,
             };
 
             let _ = state.inbound_tx.send(inbound).await;

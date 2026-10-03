@@ -6,7 +6,7 @@
 //! `GET /devices`, `POST /devices/{id}` (form-encoded), `POST
 //! /cameras/{id}/stream` (form-encoded), `POST /cameras/{id}/stop`.
 //!
-//! This deliberately does not route through `octos_agent::tools::ssrf`: that
+//! This deliberately does not route through `ra_agent::tools::ssrf`: that
 //! guard exists to stop the LLM agent being tricked into fetching
 //! attacker-chosen internal URLs via `web_fetch`/`browser` tool calls. A
 //! smart-home bridge URL is admin-configured (typed into the profile's own

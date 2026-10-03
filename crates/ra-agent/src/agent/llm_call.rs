@@ -3,9 +3,9 @@
 use std::time::{Duration, Instant};
 
 use eyre::Result;
-use octos_core::Message;
-use octos_core::TokenUsage;
-use octos_llm::{
+use ra_core::Message;
+use ra_core::TokenUsage;
+use ra_llm::{
     ChatConfig, ChatResponse, LlmCallPolicy, StopReason, ToolSpec, record_prompt_cache_usage,
     with_prompt_cache_observation_context,
 };
@@ -185,7 +185,7 @@ impl Agent {
         // provider slot that produced it (see the return-value doc above).
         let mut retry_spend: Option<f64> = None;
 
-        let fail_fast = octos_llm::current_llm_call_policy() == LlmCallPolicy::FailFast;
+        let fail_fast = ra_llm::current_llm_call_policy() == LlmCallPolicy::FailFast;
         let retry_max = if fail_fast { 0 } else { Self::LLM_RETRY_MAX };
 
         // #1712: after a truncated tool call (the turn hit the output cap
@@ -241,7 +241,7 @@ impl Agent {
                     .await
                 {
                     Ok(r) => r,
-                    Err(_elapsed) => Err(octos_llm::LlmError::timeout(format!(
+                    Err(_elapsed) => Err(ra_llm::LlmError::timeout(format!(
                         "voice overall deadline exceeded after {}s",
                         self.config.voice_overall_deadline.as_secs()
                     ))
@@ -712,13 +712,13 @@ mod tests {
 
     use async_trait::async_trait;
     use futures::stream;
-    use octos_core::{AgentId, Message};
-    use octos_llm::{
+    use ra_core::{AgentId, Message};
+    use ra_llm::{
         ChatConfig, ChatResponse, ChatStream, LlmCallPolicy, LlmError, LlmErrorKind, LlmProvider,
         PromptCacheContext, ProviderChain, SemanticCheckpointReport, StopReason, StreamEvent,
         TokenUsage as LlmTokenUsage, ToolSpec, with_llm_call_policy,
     };
-    use octos_memory::EpisodeStore;
+    use ra_memory::EpisodeStore;
 
     use super::super::Agent;
     use super::super::turn_state::LoopTurnState;
@@ -1154,7 +1154,7 @@ mod tests {
         // never from repricing the cumulative tokens at the current model.
         let mut turn = turn();
         turn.record_usage(
-            &octos_core::TokenUsage {
+            &ra_core::TokenUsage {
                 input_tokens: 5_000,
                 output_tokens: 1_000,
                 ..Default::default()
@@ -1223,7 +1223,7 @@ mod tests {
                 &[],
                 &ChatConfig::default(),
                 1,
-                &octos_core::TokenUsage::default(),
+                &ra_core::TokenUsage::default(),
                 &mut turn(),
             )
             .await
@@ -1251,7 +1251,7 @@ mod tests {
             .with_parent_session_key("semantic-session")
             .with_prompt_cache_epoch_id("epoch-after-compaction");
         let mut tool_request = Message::assistant("");
-        tool_request.tool_calls = Some(vec![octos_core::ToolCall {
+        tool_request.tool_calls = Some(vec![ra_core::ToolCall {
             id: "call-read".to_string(),
             name: "read".to_string(),
             arguments: serde_json::json!({"path": "README.md"}),
@@ -1263,7 +1263,7 @@ mod tests {
             Message::tool_with_thread(
                 "old README contents",
                 "call-read",
-                octos_core::ThreadId::new("thread-semantic"),
+                ra_core::ThreadId::new("thread-semantic"),
             ),
             Message::assistant("inspection complete"),
         ];
@@ -1274,7 +1274,7 @@ mod tests {
                 &[],
                 &ChatConfig::default(),
                 1,
-                &octos_core::TokenUsage::default(),
+                &ra_core::TokenUsage::default(),
                 &mut turn(),
             )
             .await
@@ -1291,7 +1291,7 @@ mod tests {
             Message::tool_with_thread(
                 "new README contents",
                 "call-read",
-                octos_core::ThreadId::new("thread-semantic"),
+                ra_core::ThreadId::new("thread-semantic"),
             ),
             Message::assistant("inspection complete"),
         ];
@@ -1301,7 +1301,7 @@ mod tests {
                 &[],
                 &ChatConfig::default(),
                 2,
-                &octos_core::TokenUsage::default(),
+                &ra_core::TokenUsage::default(),
                 &mut turn(),
             )
             .await
@@ -1369,7 +1369,7 @@ mod tests {
                     &[],
                     &ChatConfig::default(),
                     1,
-                    &octos_core::TokenUsage::default(),
+                    &ra_core::TokenUsage::default(),
                     &mut turn(),
                 )
                 .await
@@ -1417,7 +1417,7 @@ mod tests {
                 &[],
                 &config,
                 1,
-                &octos_core::TokenUsage::default(),
+                &ra_core::TokenUsage::default(),
                 &mut turn(),
             )
             .await;
@@ -1461,7 +1461,7 @@ mod tests {
                     &[],
                     &ChatConfig::default(),
                     1,
-                    &octos_core::TokenUsage::default(),
+                    &ra_core::TokenUsage::default(),
                     &mut turn(),
                 )
                 .await
@@ -1501,7 +1501,7 @@ mod tests {
                     &[],
                     &ChatConfig::default(),
                     1,
-                    &octos_core::TokenUsage::default(),
+                    &ra_core::TokenUsage::default(),
                     &mut turn(),
                 )
                 .await
@@ -1539,7 +1539,7 @@ mod tests {
                     &[],
                     &ChatConfig::default(),
                     1,
-                    &octos_core::TokenUsage::default(),
+                    &ra_core::TokenUsage::default(),
                     &mut turn(),
                 )
                 .await

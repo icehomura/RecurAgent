@@ -6,7 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
 use ignore::WalkBuilder;
-use octos_core::{PathClassification, SessionScope};
+use ra_core::{PathClassification, SessionScope};
 use regex::RegexBuilder;
 use serde::Deserialize;
 
@@ -76,7 +76,7 @@ fn default_limit() -> usize {
 /// `GREP_MAX_LINE_LENGTH` (`packages/coding-agent/src/core/tools/truncate.ts`).
 ///
 /// Without this, one minified-JS line consumes the whole grep output budget
-/// (`octos_core::tool_output_limit("grep")`) blind: the backstop head/tail cut
+/// (`ra_core::tool_output_limit("grep")`) blind: the backstop head/tail cut
 /// then elides every later match while the model sees mostly one giant line.
 const GREP_MAX_LINE_LENGTH: usize = 500;
 
@@ -116,7 +116,7 @@ impl Tool for GrepTool {
                  specific directory. Output is truncated beyond {} bytes (middle elided) and \
                  each matched line beyond {GREP_MAX_LINE_LENGTH} chars, so prefer narrow \
                  patterns and path/file_pattern filters over broad sweeps.",
-                octos_core::tool_output_limit("grep")
+                ra_core::tool_output_limit("grep")
             )
         });
         &DESCRIPTION
@@ -320,7 +320,7 @@ fn run_grep(
 ) -> Result<(Vec<String>, usize)> {
     // Canonical form of the resolved search root. Used by the per-entry scope
     // guard to exempt the legitimately-rooted upload file (see below).
-    let canonical_search_root = octos_core::canonicalize_lossy(&search_root);
+    let canonical_search_root = ra_core::canonicalize_lossy(&search_root);
     // The exemption is for a search root that is itself outside the scope
     // (the resolved upload file). A search root inside the scope never
     // exempts an out-of-scope entry below it: a request context searching
@@ -412,7 +412,7 @@ fn run_grep(
                 scope.classify_canonical_path(path),
                 PathClassification::OutOfScope
             ) && !(search_root_out_of_scope
-                && octos_core::canonicalize_lossy(path).starts_with(&canonical_search_root))
+                && ra_core::canonicalize_lossy(path).starts_with(&canonical_search_root))
             {
                 continue;
             }
@@ -787,7 +787,7 @@ mod tests {
         // `up/...` handle to the real upload path, grep's per-entry OutOfScope
         // filter must NOT drop it — otherwise grep resolves the handle then
         // silently returns "No matches" for a file the user uploaded.
-        let upload_root = octos_bus::file_handle::temp_upload_root();
+        let upload_root = ra_bus::file_handle::temp_upload_root();
         std::fs::create_dir_all(&upload_root).unwrap();
         let uploaded = upload_root.join(format!("g-{}-insight.md", std::process::id()));
         std::fs::write(
@@ -796,7 +796,7 @@ mod tests {
         )
         .unwrap();
         let handle =
-            octos_bus::file_handle::encode_tmp_upload_handle(&uploaded, Some("insight.md"))
+            ra_bus::file_handle::encode_tmp_upload_handle(&uploaded, Some("insight.md"))
                 .expect("encode upload handle");
 
         // Workspace is unrelated to the upload tmpdir.
@@ -843,7 +843,7 @@ mod tests {
         // symlink whose target sits under the GLOBAL upload tmpdir must still be
         // dropped — otherwise a scoped session could read arbitrary uploads
         // (other tenants' files) by planting a symlink in its own workspace.
-        let upload_root = octos_bus::file_handle::temp_upload_root();
+        let upload_root = ra_bus::file_handle::temp_upload_root();
         std::fs::create_dir_all(&upload_root).unwrap();
         let secret = upload_root.join(format!("s-{}-secret.md", std::process::id()));
         std::fs::write(
@@ -1161,7 +1161,7 @@ mod tests {
     fn should_state_truncation_contract_in_description_when_grep() {
         let tool = GrepTool::new(std::path::Path::new("."));
         let desc = tool.description();
-        let limit = octos_core::tool_output_limit("grep");
+        let limit = ra_core::tool_output_limit("grep");
         assert!(
             desc.contains(&limit.to_string()),
             "description must carry the real output cap ({limit}): {desc}"

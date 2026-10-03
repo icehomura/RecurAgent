@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use eyre::{Result, WrapErr};
-use octos_memory::{EpisodeStore, MemoryStore, RecallStore};
+use ra_memory::{EpisodeStore, MemoryStore, RecallStore};
 
 use super::ProfileRuntime;
 
@@ -207,7 +207,7 @@ async fn open_bundle(profile: &ProfileRuntime, root: &Path) -> Result<Arc<Bundle
     let dimension = profile
         .embedder
         .as_ref()
-        .map_or(octos_memory::EPISODIC_INDEX_DIMENSION, |e| e.dimension());
+        .map_or(ra_memory::EPISODIC_INDEX_DIMENSION, |e| e.dimension());
     let episodes = Arc::new(
         EpisodeStore::open_with_dimension(&key, dimension)
             .await
@@ -254,41 +254,41 @@ pub(crate) async fn erase_memory_namespace(data_dir: &Path, namespace: &str) -> 
 /// replaced (a policy-denied tool stays absent), and `memory_note` is removed
 /// when the stores are not served by the refresh pipeline.
 pub(crate) fn rebind_memory_tools(
-    tools: &mut octos_agent::ToolRegistry,
+    tools: &mut ra_agent::ToolRegistry,
     memory: &SessionMemory,
-    embedder: Option<Arc<dyn octos_llm::EmbeddingProvider>>,
+    embedder: Option<Arc<dyn ra_llm::EmbeddingProvider>>,
 ) {
     if tools.get_tool("recall_memory").is_some() {
         tools.register(
-            octos_agent::RecallMemoryTool::new(memory.memory_store.clone())
+            ra_agent::RecallMemoryTool::new(memory.memory_store.clone())
                 .with_recall(memory.recall.clone(), embedder.clone()),
         );
     }
     if tools.get_tool("memory_search").is_some() {
-        tools.register(octos_agent::MemorySearchTool::new(
+        tools.register(ra_agent::MemorySearchTool::new(
             memory.recall.clone(),
             embedder.clone(),
         ));
     }
     if tools.get_tool("memory_load").is_some() {
-        tools.register(octos_agent::MemoryLoadTool::new(
+        tools.register(ra_agent::MemoryLoadTool::new(
             memory.recall.clone(),
             memory.memory_store.clone(),
         ));
     }
     if tools.get_tool("save_memory").is_some() {
-        tools.register(octos_agent::SaveMemoryTool::new(
+        tools.register(ra_agent::SaveMemoryTool::new(
             memory.memory_store.clone(),
         ));
     }
     if tools.get_tool("record_memory_use").is_some() {
-        tools.register(octos_agent::RecordMemoryUseTool::new(
+        tools.register(ra_agent::RecordMemoryUseTool::new(
             memory.memory_store.clone(),
         ));
     }
     if memory.refresh_enabled {
         if tools.get_tool("memory_note").is_some() {
-            tools.register(octos_agent::MemoryNoteTool::new(
+            tools.register(ra_agent::MemoryNoteTool::new(
                 memory.memory_store.clone(),
             ));
         }

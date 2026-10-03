@@ -16,7 +16,7 @@ fn read_input() -> String {
 
 fn main() {
     let json = read_input();
-    match octos_pipeline::compose::compose_l2(&json) {
+    match ra_pipeline::compose::compose_l2(&json) {
         Ok(g) => println!("OK\t{}\t{}", g.nodes.len(), g.edges.len()),
         Err(e) => {
             print!("FAIL");

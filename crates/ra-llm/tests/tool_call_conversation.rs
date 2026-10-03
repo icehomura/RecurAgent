@@ -9,11 +9,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
-use octos_core::{Message, MessageRole, ToolCall};
-use octos_llm::anthropic::AnthropicProvider;
-use octos_llm::gemini::GeminiProvider;
-use octos_llm::openai::OpenAIProvider;
-use octos_llm::{AdaptiveConfig, AdaptiveRouter, ChatConfig, LlmProvider, ToolSpec};
+use ra_core::{Message, MessageRole, ToolCall};
+use ra_llm::anthropic::AnthropicProvider;
+use ra_llm::gemini::GeminiProvider;
+use ra_llm::openai::OpenAIProvider;
+use ra_llm::{AdaptiveConfig, AdaptiveRouter, ChatConfig, LlmProvider, ToolSpec};
 
 // ---------------------------------------------------------------------------
 // Extensive tool definitions — exercises complex schemas, nested objects,

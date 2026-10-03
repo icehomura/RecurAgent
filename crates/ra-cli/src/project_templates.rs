@@ -4,8 +4,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use octos_agent::{WorkspaceProjectKind, initialize_and_commit, write_workspace_policy};
-use octos_core::SessionKey;
+use ra_agent::{WorkspaceProjectKind, initialize_and_commit, write_workspace_policy};
+use ra_core::SessionKey;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 

@@ -2,7 +2,7 @@
 
 use std::time::Instant;
 
-use octos_core::TokenUsage;
+use ra_core::TokenUsage;
 
 use super::activity::LoopActivityState;
 use super::budget::BudgetStop;
@@ -173,7 +173,7 @@ impl LoopTurnState {
     /// provider-only semantic checkpoint report is not an additive counter.
     pub(crate) fn record_llm_usage(
         &mut self,
-        usage: &octos_llm::TokenUsage,
+        usage: &ra_llm::TokenUsage,
         tracker: Option<&TokenTracker>,
         estimated_cost_usd: Option<f64>,
     ) {
@@ -292,7 +292,7 @@ mod tests {
 
     #[test]
     fn should_carry_usage_and_preserve_inner_error_when_attached() {
-        use octos_llm::LlmError;
+        use ra_llm::LlmError;
         // A Report built FROM an LlmError, mirroring the loop's LLM bail.
         let report: eyre::Report = LlmError::rate_limited(Some(2)).into();
         let original = report.to_string();

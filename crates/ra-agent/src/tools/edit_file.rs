@@ -563,7 +563,7 @@ mod tests {
     // Phase 2-C: SessionScope integration tests for EditFileTool.
     // -----------------------------------------------------------------------
 
-    use octos_core::SessionScope;
+    use ra_core::SessionScope;
     use std::sync::Arc;
 
     fn ctx_with_scope(scope: SessionScope) -> ToolContext {

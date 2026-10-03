@@ -5,7 +5,7 @@ use super::*;
 use crate::api::coding_tool_contract;
 use crate::approvals_audit::{ApprovalsAuditConfig, ApprovalsAuditLog};
 use crate::user_store::UserRole;
-use octos_core::ui_protocol::{
+use ra_core::ui_protocol::{
     ApprovalDecision, ApprovalId, ApprovalRespondParams, ApprovalRespondStatus, DiffPreview,
     DiffPreviewFile, DiffPreviewFileStatus, DiffPreviewGetParams, DiffPreviewGetStatus,
     DiffPreviewHunk, DiffPreviewLine, DiffPreviewLineKind, DiffPreviewSource, PreviewId,
@@ -310,10 +310,10 @@ fn spec_section6_catalog_lists_every_advertised_method() {
         .expect("UI Protocol spec §6 must be followed by a `## ` section heading");
     let section6 = &rest[..end];
 
-    let missing: Vec<&str> = octos_core::ui_protocol::UI_PROTOCOL_COMMAND_METHODS
+    let missing: Vec<&str> = ra_core::ui_protocol::UI_PROTOCOL_COMMAND_METHODS
         .iter()
-        .chain(octos_core::ui_protocol::UI_PROTOCOL_NOTIFICATION_METHODS.iter())
-        .chain(octos_core::ui_protocol::UI_PROTOCOL_FIRST_SERVER_METHODS.iter())
+        .chain(ra_core::ui_protocol::UI_PROTOCOL_NOTIFICATION_METHODS.iter())
+        .chain(ra_core::ui_protocol::UI_PROTOCOL_FIRST_SERVER_METHODS.iter())
         .chain(APPUI_EXTRA_METHODS.iter())
         .copied()
         .filter(|method| !catalog_lists(section6, method))
@@ -337,13 +337,13 @@ async fn compaction_started_precedes_completed_in_lifecycle_batch() {
     // and the started event reports the pre-compaction estimate.
     struct TinyContextProvider;
     #[async_trait::async_trait]
-    impl octos_llm::LlmProvider for TinyContextProvider {
+    impl ra_llm::LlmProvider for TinyContextProvider {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             unreachable!("compaction never calls the provider")
         }
         fn model_id(&self) -> &str {
@@ -361,8 +361,8 @@ async fn compaction_started_precedes_completed_in_lifecycle_batch() {
     let session: SessionKey = SessionKey("full:api:compact".to_string());
     let mut history = Vec::new();
     for i in 0..40 {
-        history.push(octos_core::Message {
-            role: octos_core::MessageRole::User,
+        history.push(ra_core::Message {
+            role: ra_core::MessageRole::User,
             content: format!("padding message {i}: {}", "x".repeat(400)),
             media: vec![],
             tool_calls: None,
@@ -374,7 +374,7 @@ async fn compaction_started_precedes_completed_in_lifecycle_batch() {
         });
     }
 
-    let provider: Arc<dyn octos_llm::LlmProvider> = Arc::new(TinyContextProvider);
+    let provider: Arc<dyn ra_llm::LlmProvider> = Arc::new(TinyContextProvider);
     let (_messages, _manager, notifications, _registration) = appui_context_history_for_agent(
         dir.path(),
         &session,
@@ -412,13 +412,13 @@ async fn compaction_started_precedes_completed_in_lifecycle_batch() {
 /// unreachable because the deterministic summarizer never calls the model.
 struct OpenSnapshotTinyProvider;
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for OpenSnapshotTinyProvider {
+impl ra_llm::LlmProvider for OpenSnapshotTinyProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
         unreachable!("open-snapshot compaction never calls the provider")
     }
     fn model_id(&self) -> &str {
@@ -432,10 +432,10 @@ impl octos_llm::LlmProvider for OpenSnapshotTinyProvider {
     }
 }
 
-fn open_snapshot_padding_history(messages: usize) -> Vec<octos_core::Message> {
+fn open_snapshot_padding_history(messages: usize) -> Vec<ra_core::Message> {
     (0..messages)
-        .map(|i| octos_core::Message {
-            role: octos_core::MessageRole::User,
+        .map(|i| ra_core::Message {
+            role: ra_core::MessageRole::User,
             content: format!("padding message {i}: {}", "x".repeat(4000)),
             media: vec![],
             tool_calls: None,
@@ -460,7 +460,7 @@ async fn session_open_snapshot_compacts_oversized_context() {
     let dir = tempfile::tempdir().unwrap();
     let session: SessionKey = SessionKey("full:api:open-compact".to_string());
     let history = open_snapshot_padding_history(60);
-    let provider: Arc<dyn octos_llm::LlmProvider> = Arc::new(OpenSnapshotTinyProvider);
+    let provider: Arc<dyn ra_llm::LlmProvider> = Arc::new(OpenSnapshotTinyProvider);
     let threshold = appui_context_compact_threshold_tokens(provider.as_ref());
 
     let (_value, context_state, events) =
@@ -522,7 +522,7 @@ async fn session_open_snapshot_leaves_small_context_untouched() {
     let dir = tempfile::tempdir().unwrap();
     let session: SessionKey = SessionKey("full:api:open-small".to_string());
     let history = open_snapshot_padding_history(1);
-    let provider: Arc<dyn octos_llm::LlmProvider> = Arc::new(OpenSnapshotTinyProvider);
+    let provider: Arc<dyn ra_llm::LlmProvider> = Arc::new(OpenSnapshotTinyProvider);
 
     let (_value, context_state, events) =
         appui_context_open_snapshot(dir.path(), &session, &history, Some(&provider));
@@ -560,13 +560,13 @@ async fn session_open_snapshot_waits_for_runtime_window_before_compacting() {
 
     struct ReadyProvider(AtomicBool);
     #[async_trait::async_trait]
-    impl octos_llm::LlmProvider for ReadyProvider {
+    impl ra_llm::LlmProvider for ReadyProvider {
         async fn chat(
             &self,
             _messages: &[Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             unreachable!("session/open must not generate a response")
         }
         async fn ensure_ready(&self) {
@@ -588,7 +588,7 @@ async fn session_open_snapshot_waits_for_runtime_window_before_compacting() {
         }
     }
 
-    let provider: Arc<dyn octos_llm::LlmProvider> = Arc::new(ReadyProvider(AtomicBool::new(false)));
+    let provider: Arc<dyn ra_llm::LlmProvider> = Arc::new(ReadyProvider(AtomicBool::new(false)));
     let dir = tempfile::tempdir().unwrap();
     let profile = "open-probed-window";
     let (state, profile_runtime) =
@@ -854,7 +854,7 @@ fn profile_local_create_make_default_persists_pointer() {
     // default pointer.
     let created = create_or_get_local_solo_profile(
         &state,
-        octos_core::ui_protocol::ProfileLocalCreateParams {
+        ra_core::ui_protocol::ProfileLocalCreateParams {
             requested_id: Some("glm".into()),
             name: String::new(),
             username: String::new(),
@@ -872,7 +872,7 @@ fn profile_local_create_make_default_persists_pointer() {
     // A later create WITHOUT make_default must not steal the default.
     let other = create_or_get_local_solo_profile(
         &state,
-        octos_core::ui_protocol::ProfileLocalCreateParams {
+        ra_core::ui_protocol::ProfileLocalCreateParams {
             requested_id: Some("deepseek".into()),
             name: String::new(),
             username: String::new(),
@@ -1256,7 +1256,7 @@ async fn llm_select_does_not_abandon_running_skill_action_jobs() {
         .expect("profile exists");
     let profile_data_dir = profile_store.resolve_data_dir(&profile);
     let session_id = SessionKey("web-running-skill-action".into());
-    let supervisor = Arc::new(octos_agent::TaskSupervisor::new());
+    let supervisor = Arc::new(ra_agent::TaskSupervisor::new());
     supervisor
         .enable_persistence(ui_protocol_task_output::task_state_path(
             &profile_data_dir,
@@ -1278,7 +1278,7 @@ async fn llm_select_does_not_abandon_running_skill_action_jobs() {
         )
         .into_value(),
     );
-    let _guard = octos_agent::TaskTerminalGuard::new(Arc::clone(&supervisor), task_id.clone());
+    let _guard = ra_agent::TaskTerminalGuard::new(Arc::clone(&supervisor), task_id.clone());
     supervisor.mark_running(&task_id);
 
     raw_profile_llm_select(
@@ -1725,7 +1725,7 @@ async fn llm_upsert_round_trips_typed_inference_fields() {
     assert_eq!(primary.context_window, Some(16384));
     assert_eq!(
         primary.reasoning_effort,
-        Some(octos_llm::ReasoningEffort::High)
+        Some(ra_llm::ReasoningEffort::High)
     );
     assert!(primary.model_hints.as_ref().unwrap().uses_completion_tokens);
 
@@ -1869,7 +1869,7 @@ async fn llm_upsert_keeps_inference_params_per_model_without_leakage() {
     assert_eq!(llm.fallbacks[0].temperature, Some(0.9));
     assert_eq!(
         llm.fallbacks[0].reasoning_effort,
-        Some(octos_llm::ReasoningEffort::Max)
+        Some(ra_llm::ReasoningEffort::Max)
     );
     assert_eq!(llm.fallbacks[0].context_window, None, "no cross-model leak");
 }
@@ -3525,7 +3525,7 @@ fn catalog_result_sourced_from_registry_and_canonical_catalog() {
 fn local_profile_state_with_sessions(dir: &Path) -> Arc<AppState> {
     Arc::new(AppState {
         sessions: Some(Arc::new(tokio::sync::Mutex::new(
-            octos_bus::SessionManager::open(dir).expect("session manager"),
+            ra_bus::SessionManager::open(dir).expect("session manager"),
         ))),
         ..local_profile_state(dir)
     })
@@ -3535,8 +3535,8 @@ fn local_profile_params(
     name: &str,
     username: &str,
     email: &str,
-) -> octos_core::ui_protocol::ProfileLocalCreateParams {
-    octos_core::ui_protocol::ProfileLocalCreateParams {
+) -> ra_core::ui_protocol::ProfileLocalCreateParams {
+    ra_core::ui_protocol::ProfileLocalCreateParams {
         requested_id: None,
         name: name.into(),
         username: username.into(),
@@ -4034,7 +4034,7 @@ fn stdio_durable_send_waits_for_capacity_instead_of_backpressure_drop() {
         send_notification_durable(
             &send_ws,
             send_ledger.as_ref(),
-            UiNotification::Warning(octos_core::ui_protocol::WarningEvent {
+            UiNotification::Warning(ra_core::ui_protocol::WarningEvent {
                 session_id: send_session_id,
                 turn_id: Some(send_turn_id),
                 code: "test".into(),
@@ -5019,7 +5019,7 @@ fn should_honor_requested_id_when_present_without_username_or_email() {
 
     let result = create_or_get_local_solo_profile(
         &state,
-        octos_core::ui_protocol::ProfileLocalCreateParams {
+        ra_core::ui_protocol::ProfileLocalCreateParams {
             requested_id: Some("glm".into()),
             ..Default::default()
         },
@@ -5064,7 +5064,7 @@ fn should_suffix_requested_id_on_collision() {
     let mk = |state: &AppState| {
         create_or_get_local_solo_profile(
             state,
-            octos_core::ui_protocol::ProfileLocalCreateParams {
+            ra_core::ui_protocol::ProfileLocalCreateParams {
                 requested_id: Some("glm".into()),
                 ..Default::default()
             },
@@ -5089,7 +5089,7 @@ fn should_normalize_requested_id_into_slug() {
 
     let result = create_or_get_local_solo_profile(
         &state,
-        octos_core::ui_protocol::ProfileLocalCreateParams {
+        ra_core::ui_protocol::ProfileLocalCreateParams {
             requested_id: Some("My GLM!!".into()),
             ..Default::default()
         },
@@ -5107,7 +5107,7 @@ fn should_generate_id_when_requested_id_and_username_absent() {
     // from the name when that yields a free slug.
     let named = create_or_get_local_solo_profile(
         &state,
-        octos_core::ui_protocol::ProfileLocalCreateParams {
+        ra_core::ui_protocol::ProfileLocalCreateParams {
             name: "Robo".into(),
             ..Default::default()
         },
@@ -5121,7 +5121,7 @@ fn should_generate_id_when_requested_id_and_username_absent() {
     // generated id.
     let empty = create_or_get_local_solo_profile(
         &state,
-        octos_core::ui_protocol::ProfileLocalCreateParams::default(),
+        ra_core::ui_protocol::ProfileLocalCreateParams::default(),
     )
     .expect("generated create from empty params");
     assert!(empty.created);
@@ -5146,7 +5146,7 @@ fn should_avoid_reserved_id_when_requested_id_is_reserved_channel_name() {
     // profile id; the server falls back to a generated id instead.
     let result = create_or_get_local_solo_profile(
         &state,
-        octos_core::ui_protocol::ProfileLocalCreateParams {
+        ra_core::ui_protocol::ProfileLocalCreateParams {
             requested_id: Some("slack".into()),
             ..Default::default()
         },
@@ -5154,7 +5154,7 @@ fn should_avoid_reserved_id_when_requested_id_is_reserved_channel_name() {
     .expect("reserved requested_id falls back to a generated id");
     assert!(result.created);
     assert_ne!(result.profile_id, "slack");
-    assert!(!octos_core::is_reserved_channel_name(&result.profile_id));
+    assert!(!ra_core::is_reserved_channel_name(&result.profile_id));
 }
 
 #[test]
@@ -5166,7 +5166,7 @@ fn should_fall_back_to_generated_when_requested_id_is_pathological() {
     // to fall back on, the server generates a valid id rather than erroring.
     let result = create_or_get_local_solo_profile(
         &state,
-        octos_core::ui_protocol::ProfileLocalCreateParams {
+        ra_core::ui_protocol::ProfileLocalCreateParams {
             requested_id: Some("!!!".into()),
             ..Default::default()
         },
@@ -5222,7 +5222,7 @@ fn should_reserve_requested_id_atomically_under_concurrency() {
                     barrier.wait();
                     create_or_get_local_solo_profile(
                         &state,
-                        octos_core::ui_protocol::ProfileLocalCreateParams {
+                        ra_core::ui_protocol::ProfileLocalCreateParams {
                             requested_id: Some("glm".into()),
                             ..Default::default()
                         },
@@ -5292,7 +5292,7 @@ fn should_disambiguate_synthesized_email_on_collision() {
 
     let result = create_or_get_local_solo_profile(
         &state,
-        octos_core::ui_protocol::ProfileLocalCreateParams {
+        ra_core::ui_protocol::ProfileLocalCreateParams {
             requested_id: Some("glm".into()),
             ..Default::default()
         },
@@ -5351,7 +5351,7 @@ fn should_keep_synthesized_email_local_part_within_64_bytes() {
 
     let result = create_or_get_local_solo_profile(
         &state,
-        octos_core::ui_protocol::ProfileLocalCreateParams {
+        ra_core::ui_protocol::ProfileLocalCreateParams {
             requested_id: Some(base.clone()),
             ..Default::default()
         },
@@ -5403,7 +5403,7 @@ fn should_reject_when_provided_email_belongs_to_another_user() {
 
     let err = create_or_get_local_solo_profile(
         &state,
-        octos_core::ui_protocol::ProfileLocalCreateParams {
+        ra_core::ui_protocol::ProfileLocalCreateParams {
             requested_id: Some("glm".into()),
             email: "taken@example.com".into(),
             ..Default::default()
@@ -5571,7 +5571,7 @@ fn workspace_probe_surfaces_workspace_policy_parse_error() {
     let workspace = dir.path().join("repo");
     std::fs::create_dir_all(&workspace).expect("workspace dir");
     std::fs::write(
-        workspace.join(octos_agent::workspace_policy::WORKSPACE_POLICY_FILE),
+        workspace.join(ra_agent::workspace_policy::WORKSPACE_POLICY_FILE),
         "this is = not [valid toml",
     )
     .expect("write malformed policy");
@@ -5611,7 +5611,7 @@ fail_on_error = false
 ignore = []
 "#;
     std::fs::write(
-        workspace.join(octos_agent::workspace_policy::WORKSPACE_POLICY_FILE),
+        workspace.join(ra_agent::workspace_policy::WORKSPACE_POLICY_FILE),
         policy,
     )
     .expect("write valid policy");
@@ -6423,7 +6423,7 @@ fn session_workspace_allowed_returns_cwd_runtime_unavailable_when_profile_unknow
 
 #[test]
 fn permission_profile_handlers_are_server_owned_and_reject_danger_outside_local() {
-    use octos_core::ui_protocol::{
+    use ra_core::ui_protocol::{
         PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
         PermissionProfileSetParams, PermissionProfileUpdate,
     };
@@ -6440,7 +6440,7 @@ fn permission_profile_handlers_are_server_owned_and_reject_danger_outside_local(
     let session_id = SessionKey("local:permission-profile-test".into());
     let listed = permission_profile_list_result(
         &local,
-        octos_core::ui_protocol::PermissionProfileListParams {
+        ra_core::ui_protocol::PermissionProfileListParams {
             session_id: session_id.clone(),
         },
     );
@@ -6457,7 +6457,7 @@ fn permission_profile_handlers_are_server_owned_and_reject_danger_outside_local(
     };
     let tenant_list = permission_profile_list_result(
         &tenant,
-        octos_core::ui_protocol::PermissionProfileListParams {
+        ra_core::ui_protocol::PermissionProfileListParams {
             session_id: session_id.clone(),
         },
     );
@@ -6546,7 +6546,7 @@ fn permission_profile_handlers_are_server_owned_and_reject_danger_outside_local(
 /// operator opts in, the same request succeeds.
 #[test]
 fn danger_full_access_requires_solo_opt_in_on_local_server() {
-    use octos_core::ui_protocol::{
+    use ra_core::ui_protocol::{
         PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
         PermissionProfileSetParams, PermissionProfileUpdate,
     };
@@ -6582,7 +6582,7 @@ fn danger_full_access_requires_solo_opt_in_on_local_server() {
     // The list must not advertise a dead option either.
     let listed = permission_profile_list_result(
         &local_no_solo,
-        octos_core::ui_protocol::PermissionProfileListParams {
+        ra_core::ui_protocol::PermissionProfileListParams {
             session_id: session_id.clone(),
         },
     );
@@ -6616,7 +6616,7 @@ fn danger_full_access_requires_solo_opt_in_on_local_server() {
 
     let listed_solo = permission_profile_list_result(
         &local_solo,
-        octos_core::ui_protocol::PermissionProfileListParams {
+        ra_core::ui_protocol::PermissionProfileListParams {
             session_id: session_id.clone(),
         },
     );
@@ -6637,7 +6637,7 @@ fn danger_full_access_requires_solo_opt_in_on_local_server() {
 /// runtime even if a selection was somehow persisted.
 #[test]
 fn effective_permissions_rejects_danger_without_solo_opt_in() {
-    use octos_core::ui_protocol::{
+    use ra_core::ui_protocol::{
         PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
         PermissionProfileSelection,
     };
@@ -6651,7 +6651,7 @@ fn effective_permissions_rejects_danger_without_solo_opt_in() {
             mode: Mode::DangerFullAccess,
             network: Network::Allow,
         },
-        Some(octos_agent::ApprovalPolicy::Never),
+        Some(ra_agent::ApprovalPolicy::Never),
     );
 
     let local_no_solo = AppState::empty_for_tests();
@@ -6672,7 +6672,7 @@ fn effective_permissions_rejects_danger_without_solo_opt_in() {
     assert!(permissions.is_dangerous());
     assert_eq!(
         permissions.approval_policy,
-        octos_agent::ApprovalPolicy::Never
+        ra_agent::ApprovalPolicy::Never
     );
     // The session key is unique to this test, so the process-global store
     // holds no cross-test state — no explicit cleanup needed.
@@ -6685,7 +6685,7 @@ fn effective_permissions_rejects_danger_without_solo_opt_in() {
 /// must tighten just like `tenant`/`cloud` and reject DangerFullAccess.
 #[test]
 fn permission_profile_set_local_override_tightens_gate_on_local_server() {
-    use octos_core::ui_protocol::{
+    use ra_core::ui_protocol::{
         PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
         PermissionProfileSetParams, PermissionProfileUpdate,
     };
@@ -6785,7 +6785,7 @@ fn permission_profile_set_local_override_tightens_gate_on_local_server() {
 /// the relaxed path.
 #[test]
 fn unrecognized_runtime_mode_override_fails_closed_on_local_server() {
-    use octos_core::ui_protocol::{
+    use ra_core::ui_protocol::{
         PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
         PermissionProfileSetParams, PermissionProfileUpdate,
     };
@@ -6878,7 +6878,7 @@ fn unrecognized_runtime_mode_override_fails_closed_on_local_server() {
 /// `_main:api:tenant-demo` (2nd slot there is `api`, not `tenant`).
 #[test]
 fn danger_full_access_rejected_for_non_cloud_tenant_per_1162() {
-    use octos_core::ui_protocol::{
+    use ra_core::ui_protocol::{
         PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
         PermissionProfileSetParams, PermissionProfileUpdate,
     };
@@ -6991,7 +6991,7 @@ fn danger_full_access_rejected_for_non_cloud_tenant_per_1162() {
 /// from the list on a Local server; solo-scoped sessions keep it.
 #[test]
 fn danger_full_access_omitted_from_list_for_tenant_scoped_session_per_1162() {
-    use octos_core::ui_protocol::{PermissionProfileListParams, PermissionProfileMode as Mode};
+    use ra_core::ui_protocol::{PermissionProfileListParams, PermissionProfileMode as Mode};
 
     // yolo GAP #1: the "solo-scoped session keeps danger in the list"
     // assertion requires the `--solo` opt-in to be on.
@@ -7045,7 +7045,7 @@ fn danger_full_access_omitted_from_list_for_tenant_scoped_session_per_1162() {
 /// channel before treating the 2nd segment as structural.
 #[test]
 fn danger_full_access_chat_id_text_does_not_trigger_tenant_gate_per_1162() {
-    use octos_core::ui_protocol::{
+    use ra_core::ui_protocol::{
         PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
         PermissionProfileSetParams, PermissionProfileUpdate,
     };
@@ -7106,7 +7106,7 @@ fn danger_full_access_chat_id_text_does_not_trigger_tenant_gate_per_1162() {
         // tenant signal.
         let listing = permission_profile_list_result(
             &local,
-            octos_core::ui_protocol::PermissionProfileListParams {
+            ra_core::ui_protocol::PermissionProfileListParams {
                 session_id: session_id.clone(),
             },
         );
@@ -7129,7 +7129,7 @@ fn danger_full_access_chat_id_text_does_not_trigger_tenant_gate_per_1162() {
 /// test (no override + Local server → accepts danger_full_access).
 #[test]
 fn danger_full_access_session_scope_gate_does_not_drift_existing_behavior_per_1162() {
-    use octos_core::ui_protocol::{
+    use ra_core::ui_protocol::{
         PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
         PermissionProfileSetParams, PermissionProfileUpdate,
     };
@@ -7356,7 +7356,7 @@ fn gateway_task_list_proxy_rejects_non_array_snapshot() {
         .expect_err("non-array gateway task response should fail closed");
     assert_eq!(
         error.code,
-        octos_core::ui_protocol::rpc_error_codes::INTERNAL_ERROR
+        ra_core::ui_protocol::rpc_error_codes::INTERNAL_ERROR
     );
 }
 
@@ -7453,7 +7453,7 @@ async fn session_list_cwd_root_honors_flag_and_capability() {
     // session/open before resolving a root (proven here by the no-runtime
     // rejection — see `session_list_cwd_root_gates_path_and_namespaces_by_profile`
     // for the safe-path happy case + banned-path rejection).
-    use octos_core::ui_protocol::SessionListParams;
+    use ra_core::ui_protocol::SessionListParams;
 
     let tmp = tempfile::tempdir().unwrap();
     let cwd = tmp.path().join("proj");
@@ -7569,7 +7569,7 @@ async fn session_list_cwd_root_gates_path_and_namespaces_by_profile() {
     // per-project, per-PROFILE store `<cwd>/.ra/<profile_id>` (so two
     // profiles sharing a cwd can't read each other's transcripts), and a
     // banned system path is rejected by the shared safety gate.
-    use octos_core::ui_protocol::SessionListParams;
+    use ra_core::ui_protocol::SessionListParams;
 
     let tmp = tempfile::tempdir().unwrap();
     let state = session_list_state_with_dev_runtime(tmp.path()).await;
@@ -7615,7 +7615,7 @@ async fn session_list_cwd_root_should_honor_requested_profile_when_connection_is
     // install with only a `dev` profile — failed with
     // `cwd_runtime_unavailable`, so the history browser never saw the
     // transcripts that session/open had written under `<cwd>/.ra/dev`.
-    use octos_core::ui_protocol::SessionListParams;
+    use ra_core::ui_protocol::SessionListParams;
 
     let tmp = tempfile::tempdir().unwrap();
     let state = session_list_state_with_dev_runtime(tmp.path()).await;
@@ -7669,7 +7669,7 @@ async fn session_list_cwd_root_should_reject_requested_profile_outside_authentic
     // `profile_id` naming another profile is a scope violation (mirrors
     // `validate_authenticated_session_scope` for session/open), while
     // restating the connection's own profile is fine.
-    use octos_core::ui_protocol::SessionListParams;
+    use ra_core::ui_protocol::SessionListParams;
 
     let tmp = tempfile::tempdir().unwrap();
     let state = session_list_state_with_dev_runtime(tmp.path()).await;
@@ -7736,7 +7736,7 @@ fn session_list_result_should_attest_scope_only_when_the_listing_was_scoped() {
 
 #[tokio::test]
 async fn launch_resolve_activates_empty_folder_then_resumes_after_store_exists() {
-    use octos_core::ui_protocol::{LaunchDecisionKind, LaunchResolveParams};
+    use ra_core::ui_protocol::{LaunchDecisionKind, LaunchResolveParams};
 
     let tmp = tempfile::tempdir().unwrap();
     let profile = crate::profiles::UserProfile {
@@ -7827,7 +7827,7 @@ async fn launch_resolve_activates_empty_folder_then_resumes_after_store_exists()
 /// derived default.
 #[tokio::test]
 async fn launch_resolve_prefers_persisted_default_profile() {
-    use octos_core::ui_protocol::{LaunchDecisionKind, LaunchResolveParams};
+    use ra_core::ui_protocol::{LaunchDecisionKind, LaunchResolveParams};
 
     let tmp = tempfile::tempdir().unwrap();
     // The default-profile pointer lives in its own ra home; each profile
@@ -7929,7 +7929,7 @@ async fn launch_resolve_uses_stored_profiles_without_a_loaded_runtime() {
     // through to `activate` (Resume/CrossProfile unreachable) and a
     // zero-profile machine gets a spurious `cwd_runtime_unavailable` instead
     // of `NoProfile`. `state.profiles` stays empty for the WHOLE test.
-    use octos_core::ui_protocol::{LaunchDecisionKind, LaunchResolveParams};
+    use ra_core::ui_protocol::{LaunchDecisionKind, LaunchResolveParams};
 
     let tmp = tempfile::tempdir().unwrap();
     let home = tmp.path().join("home");
@@ -8573,7 +8573,7 @@ async fn stdio_disconnect_releases_client_commands_declared_on_it() {
         json!({
             "jsonrpc": "2.0",
             "id": "open",
-            "method": octos_core::ui_protocol::methods::SESSION_OPEN,
+            "method": ra_core::ui_protocol::methods::SESSION_OPEN,
             "params": {
                 "session_id": session_id,
                 "profile_id": "coding",
@@ -8727,7 +8727,7 @@ async fn session_open_writes_active_profile_marker_only_with_flag_and_cwd() {
             id,
             &profile_data_dir,
             Arc::new(M11EStubLlm),
-            octos_agent::SandboxConfig::default(),
+            ra_agent::SandboxConfig::default(),
         )
         .await;
         profiles.insert(id.to_string(), runtime);
@@ -8735,7 +8735,7 @@ async fn session_open_writes_active_profile_marker_only_with_flag_and_cwd() {
     let state = Arc::new(AppState {
         profiles,
         sessions: Some(Arc::new(tokio::sync::Mutex::new(
-            octos_bus::SessionManager::open(dir.path()).expect("session manager"),
+            ra_bus::SessionManager::open(dir.path()).expect("session manager"),
         ))),
         session_cache: Arc::new(
             crate::runtime::SessionRuntimeCache::new(4, std::time::Duration::from_secs(60))
@@ -9045,23 +9045,23 @@ fn panel_user_profile(id: &str) -> crate::profiles::UserProfile {
     }
 }
 
-fn panel_cron_job(id: &str, enabled: bool) -> octos_bus::CronJob {
-    octos_bus::CronJob {
+fn panel_cron_job(id: &str, enabled: bool) -> ra_bus::CronJob {
+    ra_bus::CronJob {
         id: id.into(),
         name: format!("job {id}"),
         enabled,
-        schedule: octos_bus::CronSchedule::Every {
+        schedule: ra_bus::CronSchedule::Every {
             every_ms: 1_800_000,
         },
-        payload: octos_bus::CronPayload {
+        payload: ra_bus::CronPayload {
             message: "check the queue".into(),
             deliver: false,
             channel: Some("system".into()),
             chat_id: None,
-            mode: octos_bus::CronMode::Agent,
+            mode: ra_bus::CronMode::Agent,
         },
         state: Default::default(),
-        origin: octos_bus::CronOrigin::default(),
+        origin: ra_bus::CronOrigin::default(),
         created_at_ms: 1,
         delete_after_run: false,
         timezone: None,
@@ -9084,7 +9084,7 @@ async fn memory_and_cron_rpc_methods_forward_rest_panel_bodies() {
     profile_store.save(&profile).unwrap();
     let data_dir = profile_store.resolve_data_dir(&profile);
 
-    let mem = octos_memory::MemoryStore::open(&data_dir).await.unwrap();
+    let mem = ra_memory::MemoryStore::open(&data_dir).await.unwrap();
     mem.write_long_term("# MEMORY\n\n- remembers things\n")
         .await
         .unwrap();
@@ -9093,7 +9093,7 @@ async fn memory_and_cron_rpc_methods_forward_rest_panel_bodies() {
         .unwrap();
 
     tokio::fs::create_dir_all(&data_dir).await.unwrap();
-    let cron_store = octos_bus::CronStore {
+    let cron_store = ra_bus::CronStore {
         version: 1,
         jobs: vec![panel_cron_job("job-1", false)],
     };
@@ -9275,7 +9275,7 @@ async fn memory_rpc_methods_declare_truncation_when_over_budget() {
         "# whale\n{}",
         "e".repeat(MEMORY_RPC_ENTITY_CONTENT_BUDGET + 4096)
     );
-    let mem = octos_memory::MemoryStore::open(&data_dir).await.unwrap();
+    let mem = ra_memory::MemoryStore::open(&data_dir).await.unwrap();
     mem.write_long_term(&long_term).await.unwrap();
     mem.write_entity("whale", &entity_page).await.unwrap();
 
@@ -9872,7 +9872,7 @@ struct CaptureActionTool {
 }
 
 #[async_trait::async_trait]
-impl octos_agent::Tool for CaptureActionTool {
+impl ra_agent::Tool for CaptureActionTool {
     fn name(&self) -> &str {
         "source_import"
     }
@@ -9885,9 +9885,9 @@ impl octos_agent::Tool for CaptureActionTool {
         json!({"type": "object"})
     }
 
-    async fn execute(&self, args: &Value) -> eyre::Result<octos_agent::ToolResult> {
+    async fn execute(&self, args: &Value) -> eyre::Result<ra_agent::ToolResult> {
         self.calls.lock().unwrap().push(args.clone());
-        Ok(octos_agent::ToolResult {
+        Ok(ra_agent::ToolResult {
             success: true,
             output: "captured".to_string(),
             ..Default::default()
@@ -9900,7 +9900,7 @@ struct SourceMetadataActionTool {
 }
 
 #[async_trait::async_trait]
-impl octos_agent::Tool for SourceMetadataActionTool {
+impl ra_agent::Tool for SourceMetadataActionTool {
     fn name(&self) -> &str {
         "source_import"
     }
@@ -9913,9 +9913,9 @@ impl octos_agent::Tool for SourceMetadataActionTool {
         json!({"type": "object"})
     }
 
-    async fn execute(&self, args: &Value) -> eyre::Result<octos_agent::ToolResult> {
+    async fn execute(&self, args: &Value) -> eyre::Result<ra_agent::ToolResult> {
         self.calls.lock().unwrap().push(args.clone());
-        Ok(octos_agent::ToolResult {
+        Ok(ra_agent::ToolResult {
             success: true,
             output: "source imported".to_string(),
             structured_metadata: Some(json!({
@@ -9933,7 +9933,7 @@ impl octos_agent::Tool for SourceMetadataActionTool {
 struct ContextAwareActionTool;
 
 #[async_trait::async_trait]
-impl octos_agent::Tool for ContextAwareActionTool {
+impl ra_agent::Tool for ContextAwareActionTool {
     fn name(&self) -> &str {
         "context_aware_action"
     }
@@ -9946,21 +9946,21 @@ impl octos_agent::Tool for ContextAwareActionTool {
         json!({"type": "object"})
     }
 
-    async fn execute(&self, args: &Value) -> eyre::Result<octos_agent::ToolResult> {
-        self.execute_with_context(&octos_agent::tools::ToolContext::zero(), args)
+    async fn execute(&self, args: &Value) -> eyre::Result<ra_agent::ToolResult> {
+        self.execute_with_context(&ra_agent::tools::ToolContext::zero(), args)
             .await
     }
 
     async fn execute_with_context(
         &self,
-        ctx: &octos_agent::tools::ToolContext,
+        ctx: &ra_agent::tools::ToolContext,
         _args: &Value,
-    ) -> eyre::Result<octos_agent::ToolResult> {
+    ) -> eyre::Result<ra_agent::ToolResult> {
         let typed_scope_is_present = ctx.session_scope.is_some();
-        let task_local_scope_is_present = octos_agent::tools::TOOL_CTX
+        let task_local_scope_is_present = ra_agent::tools::TOOL_CTX
             .try_with(|scoped| scoped.session_scope.is_some())
             .unwrap_or(false);
-        let approval_requester = octos_agent::tools::TOOL_APPROVAL_CTX
+        let approval_requester = ra_agent::tools::TOOL_APPROVAL_CTX
             .try_with(Clone::clone)
             .ok();
         let approval_was_granted = match approval_requester {
@@ -9982,7 +9982,7 @@ impl octos_agent::Tool for ContextAwareActionTool {
             None => false,
         };
         let success = typed_scope_is_present && task_local_scope_is_present && approval_was_granted;
-        Ok(octos_agent::ToolResult {
+        Ok(ra_agent::ToolResult {
             success,
             output: if success {
                 "context available".to_string()
@@ -10000,9 +10000,9 @@ async fn skill_action_contract_fixture_loads_invokes_and_returns_artifact_envelo
     let fixture_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../e2e/fixtures/compat-test-skill");
     let fixture_root = fixture_dir.parent().unwrap();
-    let mut registry = octos_agent::ToolRegistry::new();
+    let mut registry = ra_agent::ToolRegistry::new();
     let loaded =
-        octos_agent::PluginLoader::load_into(&mut registry, &[fixture_root.to_path_buf()], &[])
+        ra_agent::PluginLoader::load_into(&mut registry, &[fixture_root.to_path_buf()], &[])
             .expect("load reproducible skill action fixture");
     let records = trusted_skill_action_records(&loaded.loaded_actions, &registry, None, &[]);
     assert!(
@@ -10049,7 +10049,7 @@ async fn skill_action_contract_fixture_loads_invokes_and_returns_artifact_envelo
 struct ApproveActionRequester;
 
 #[async_trait::async_trait]
-impl octos_agent::ToolApprovalRequester for ApproveActionRequester {
+impl ra_agent::ToolApprovalRequester for ApproveActionRequester {
     async fn request_approval(&self, _request: ToolApprovalRequest) -> ToolApprovalDecision {
         ToolApprovalDecision::Approve
     }
@@ -10057,20 +10057,20 @@ impl octos_agent::ToolApprovalRequester for ApproveActionRequester {
 
 #[tokio::test]
 async fn skill_action_tool_call_should_preserve_session_scope_and_approval_bridge() {
-    let mut registry = octos_agent::ToolRegistry::new();
+    let mut registry = ra_agent::ToolRegistry::new();
     registry.register(ContextAwareActionTool);
     let workspace = tempfile::tempdir().unwrap();
     let execution_context = SkillActionExecutionContext {
-        tool_context: octos_agent::tools::ToolContext {
+        tool_context: ra_agent::tools::ToolContext {
             tool_id: "document.generate".to_string(),
             session_scope: Some(Arc::new(
-                octos_core::session_scope::SessionScope::solo(
+                ra_core::session_scope::SessionScope::solo(
                     workspace.path().to_path_buf(),
                     Vec::new(),
                 )
                 .unwrap(),
             )),
-            ..octos_agent::tools::ToolContext::zero()
+            ..ra_agent::tools::ToolContext::zero()
         },
         approval_requester: Some(Arc::new(ApproveActionRequester)),
     };
@@ -10122,7 +10122,7 @@ async fn appui_skill_action_should_not_list_or_invoke_on_disk_only_manifest() {
         profile_id,
         &profile_data_dir,
         Arc::new(M11EStubLlm),
-        octos_agent::SandboxConfig::default(),
+        ra_agent::SandboxConfig::default(),
     )
     .await;
     Arc::get_mut(&mut profile_runtime)
@@ -10136,7 +10136,7 @@ async fn appui_skill_action_should_not_list_or_invoke_on_disk_only_manifest() {
     let state = Arc::new(AppState {
         profiles,
         sessions: Some(Arc::new(tokio::sync::Mutex::new(
-            octos_bus::SessionManager::open(dir.path()).unwrap(),
+            ra_bus::SessionManager::open(dir.path()).unwrap(),
         ))),
         ..AppState::empty_for_tests()
     });
@@ -10220,11 +10220,11 @@ async fn appui_skill_action_lists_and_invokes_canonical_profile_action() {
         profile_id,
         &profile_data_dir,
         Arc::new(M11EStubLlm),
-        octos_agent::SandboxConfig::default(),
+        ra_agent::SandboxConfig::default(),
     )
     .await;
     let runtime = Arc::get_mut(&mut profile_runtime).unwrap();
-    let load_result = octos_agent::PluginLoader::load_into(
+    let load_result = ra_agent::PluginLoader::load_into(
         Arc::get_mut(&mut runtime.tool_specs).unwrap(),
         std::slice::from_ref(&skills_dir),
         &[],
@@ -10239,7 +10239,7 @@ async fn appui_skill_action_lists_and_invokes_canonical_profile_action() {
     let state = Arc::new(AppState {
         profiles,
         sessions: Some(Arc::new(tokio::sync::Mutex::new(
-            octos_bus::SessionManager::open(dir.path()).unwrap(),
+            ra_bus::SessionManager::open(dir.path()).unwrap(),
         ))),
         ..AppState::empty_for_tests()
     });
@@ -10355,13 +10355,13 @@ fn skill_action_should_resolve_unqualified_id_only_when_exactly_one_matches() {
 #[tokio::test]
 async fn skill_action_file_each_materializes_uploads_and_invokes_declared_tool() {
     let workspace = tempfile::tempdir().unwrap();
-    let upload_dir = octos_bus::file_handle::temp_upload_root().join("tenant-a");
+    let upload_dir = ra_bus::file_handle::temp_upload_root().join("tenant-a");
     std::fs::create_dir_all(&upload_dir).unwrap();
     let uploaded = upload_dir.join(format!("{}-report.md", uuid::Uuid::new_v4()));
     std::fs::write(&uploaded, "# Report\n\nNotebook source body\n").unwrap();
     let handle =
-        octos_bus::file_handle::encode_tmp_upload_handle(&uploaded, Some("report.md")).unwrap();
-    let action: octos_agent::plugins::SkillActionDef = serde_json::from_value(json!({
+        ra_bus::file_handle::encode_tmp_upload_handle(&uploaded, Some("report.md")).unwrap();
+    let action: ra_agent::plugins::SkillActionDef = serde_json::from_value(json!({
         "id": "source.import",
         "label": "Add source",
         "binding": {
@@ -10374,7 +10374,7 @@ async fn skill_action_file_each_materializes_uploads_and_invokes_declared_tool()
     }))
     .unwrap();
     let calls = Arc::new(StdMutex::new(Vec::new()));
-    let mut registry = octos_agent::ToolRegistry::new();
+    let mut registry = ra_agent::ToolRegistry::new();
     registry.register(CaptureActionTool {
         calls: calls.clone(),
     });
@@ -10410,7 +10410,7 @@ async fn skill_action_file_each_materializes_uploads_and_invokes_declared_tool()
 #[test]
 fn skill_action_rejects_arguments_that_do_not_match_input_schema() {
     let workspace = tempfile::tempdir().unwrap();
-    let action: octos_agent::plugins::SkillActionDef = serde_json::from_value(json!({
+    let action: ra_agent::plugins::SkillActionDef = serde_json::from_value(json!({
         "id": "report.generate",
         "label": "Generate report",
         "input_schema": {
@@ -10421,7 +10421,7 @@ fn skill_action_rejects_arguments_that_do_not_match_input_schema() {
         "binding": {"type": "tool", "tool": "source_import"}
     }))
     .unwrap();
-    let mut registry = octos_agent::ToolRegistry::new();
+    let mut registry = ra_agent::ToolRegistry::new();
     registry.register(CaptureActionTool {
         calls: Arc::new(StdMutex::new(Vec::new())),
     });
@@ -10455,7 +10455,7 @@ fn skill_action_rejects_arguments_that_do_not_match_input_schema() {
 #[test]
 fn skill_action_allows_undeclared_arguments_only_when_schema_opts_in() {
     let workspace = tempfile::tempdir().unwrap();
-    let action: octos_agent::plugins::SkillActionDef = serde_json::from_value(json!({
+    let action: ra_agent::plugins::SkillActionDef = serde_json::from_value(json!({
         "id": "generic.run",
         "label": "Run generic action",
         "input_schema": {
@@ -10466,7 +10466,7 @@ fn skill_action_allows_undeclared_arguments_only_when_schema_opts_in() {
         "binding": {"type": "tool", "tool": "source_import"}
     }))
     .unwrap();
-    let mut registry = octos_agent::ToolRegistry::new();
+    let mut registry = ra_agent::ToolRegistry::new();
     registry.register(CaptureActionTool {
         calls: Arc::new(StdMutex::new(Vec::new())),
     });
@@ -10485,7 +10485,7 @@ fn skill_action_allows_undeclared_arguments_only_when_schema_opts_in() {
 #[test]
 fn skill_action_file_each_rejects_caller_owned_binding_argument() {
     let workspace = tempfile::tempdir().unwrap();
-    let action: octos_agent::plugins::SkillActionDef = serde_json::from_value(json!({
+    let action: ra_agent::plugins::SkillActionDef = serde_json::from_value(json!({
         "id": "source.import",
         "label": "Add source",
         "input_schema": {
@@ -10504,7 +10504,7 @@ fn skill_action_file_each_rejects_caller_owned_binding_argument() {
         }
     }))
     .unwrap();
-    let mut registry = octos_agent::ToolRegistry::new();
+    let mut registry = ra_agent::ToolRegistry::new();
     registry.register(CaptureActionTool {
         calls: Arc::new(StdMutex::new(Vec::new())),
     });
@@ -10524,7 +10524,7 @@ fn skill_action_file_each_rejects_caller_owned_binding_argument() {
 fn skill_action_workspace_relative_rejects_paths_outside_workspace() {
     let workspace = tempfile::tempdir().unwrap();
     std::fs::write(workspace.path().join("notes.md"), "safe").unwrap();
-    let action: octos_agent::plugins::SkillActionDef = serde_json::from_value(json!({
+    let action: ra_agent::plugins::SkillActionDef = serde_json::from_value(json!({
         "id": "source.import",
         "label": "Add source",
         "input_schema": {
@@ -10541,7 +10541,7 @@ fn skill_action_workspace_relative_rejects_paths_outside_workspace() {
         }
     }))
     .unwrap();
-    let mut registry = octos_agent::ToolRegistry::new();
+    let mut registry = ra_agent::ToolRegistry::new();
     registry.register(CaptureActionTool {
         calls: Arc::new(StdMutex::new(Vec::new())),
     });
@@ -10572,13 +10572,13 @@ fn skill_action_workspace_relative_rejects_paths_outside_workspace() {
 #[tokio::test]
 async fn skill_action_file_each_materializes_image_uploads_as_workspace_paths() {
     let workspace = tempfile::tempdir().unwrap();
-    let upload_dir = octos_bus::file_handle::temp_upload_root().join("tenant-a");
+    let upload_dir = ra_bus::file_handle::temp_upload_root().join("tenant-a");
     std::fs::create_dir_all(&upload_dir).unwrap();
     let uploaded = upload_dir.join(format!("{}-photo.jpg", uuid::Uuid::new_v4()));
     std::fs::write(&uploaded, b"\xff\xd8\xff\xe0image").unwrap();
     let handle =
-        octos_bus::file_handle::encode_tmp_upload_handle(&uploaded, Some("photo.jpg")).unwrap();
-    let action: octos_agent::plugins::SkillActionDef = serde_json::from_value(json!({
+        ra_bus::file_handle::encode_tmp_upload_handle(&uploaded, Some("photo.jpg")).unwrap();
+    let action: ra_agent::plugins::SkillActionDef = serde_json::from_value(json!({
         "id": "source.import",
         "label": "Add source",
         "binding": {
@@ -10591,7 +10591,7 @@ async fn skill_action_file_each_materializes_image_uploads_as_workspace_paths() 
     }))
     .unwrap();
     let calls = Arc::new(StdMutex::new(Vec::new()));
-    let mut registry = octos_agent::ToolRegistry::new();
+    let mut registry = ra_agent::ToolRegistry::new();
     registry.register(CaptureActionTool {
         calls: calls.clone(),
     });
@@ -10617,13 +10617,13 @@ async fn skill_action_file_each_materializes_image_uploads_as_workspace_paths() 
 #[tokio::test]
 async fn skill_action_file_each_defaults_to_raw_file_paths() {
     let workspace = tempfile::tempdir().unwrap();
-    let upload_dir = octos_bus::file_handle::temp_upload_root().join("tenant-a");
+    let upload_dir = ra_bus::file_handle::temp_upload_root().join("tenant-a");
     std::fs::create_dir_all(&upload_dir).unwrap();
     let uploaded = upload_dir.join(format!("{}-photo.jpg", uuid::Uuid::new_v4()));
     std::fs::write(&uploaded, b"\xff\xd8\xff\xe0image").unwrap();
     let handle =
-        octos_bus::file_handle::encode_tmp_upload_handle(&uploaded, Some("photo.jpg")).unwrap();
-    let action: octos_agent::plugins::SkillActionDef = serde_json::from_value(json!({
+        ra_bus::file_handle::encode_tmp_upload_handle(&uploaded, Some("photo.jpg")).unwrap();
+    let action: ra_agent::plugins::SkillActionDef = serde_json::from_value(json!({
         "id": "vision.inspect",
         "label": "Inspect image",
         "binding": {
@@ -10635,7 +10635,7 @@ async fn skill_action_file_each_defaults_to_raw_file_paths() {
     }))
     .unwrap();
     let calls = Arc::new(StdMutex::new(Vec::new()));
-    let mut registry = octos_agent::ToolRegistry::new();
+    let mut registry = ra_agent::ToolRegistry::new();
     registry.register(CaptureActionTool {
         calls: calls.clone(),
     });
@@ -10666,7 +10666,7 @@ async fn background_skill_action_file_each_returns_one_job_per_file() {
     let workspace = tempfile::tempdir().unwrap();
     let profile_data = tempfile::tempdir().unwrap();
     let session_id = SessionKey("local:background-actions".into());
-    let action: octos_agent::plugins::SkillActionDef = serde_json::from_value(json!({
+    let action: ra_agent::plugins::SkillActionDef = serde_json::from_value(json!({
         "id": "source.import",
         "label": "Add source",
         "execution": "background",
@@ -10679,7 +10679,7 @@ async fn background_skill_action_file_each_returns_one_job_per_file() {
     }))
     .unwrap();
     let calls = Arc::new(StdMutex::new(Vec::new()));
-    let mut registry = octos_agent::ToolRegistry::new();
+    let mut registry = ra_agent::ToolRegistry::new();
     registry.register(CaptureActionTool {
         calls: calls.clone(),
     });
@@ -10737,7 +10737,7 @@ async fn background_skill_action_file_each_returns_one_job_per_file() {
 #[test]
 fn background_skill_action_rejects_oversized_file_batch() {
     let workspace = tempfile::tempdir().unwrap();
-    let action: octos_agent::plugins::SkillActionDef = serde_json::from_value(json!({
+    let action: ra_agent::plugins::SkillActionDef = serde_json::from_value(json!({
         "id": "source.import",
         "label": "Add source",
         "execution": "background",
@@ -10754,7 +10754,7 @@ fn background_skill_action_rejects_oversized_file_batch() {
         }
     }))
     .unwrap();
-    let mut registry = octos_agent::ToolRegistry::new();
+    let mut registry = ra_agent::ToolRegistry::new();
     registry.register(CaptureActionTool {
         calls: Arc::new(StdMutex::new(Vec::new())),
     });
@@ -10778,7 +10778,7 @@ async fn background_skill_action_job_records_success_result() {
     let workspace = tempfile::tempdir().unwrap();
     let profile_data = tempfile::tempdir().unwrap();
     let session_id = SessionKey("local:background-action-result".into());
-    let action: octos_agent::plugins::SkillActionDef = serde_json::from_value(json!({
+    let action: ra_agent::plugins::SkillActionDef = serde_json::from_value(json!({
         "id": "source.import",
         "label": "Add source",
         "execution": "background",
@@ -10791,7 +10791,7 @@ async fn background_skill_action_job_records_success_result() {
     }))
     .unwrap();
     let calls = Arc::new(StdMutex::new(Vec::new()));
-    let mut registry = octos_agent::ToolRegistry::new();
+    let mut registry = ra_agent::ToolRegistry::new();
     registry.register(SourceMetadataActionTool {
         calls: calls.clone(),
     });
@@ -10871,7 +10871,7 @@ async fn background_skill_action_job_records_success_result() {
 async fn background_skill_action_cancelled_before_start_does_not_execute_tool() {
     let workspace = tempfile::tempdir().unwrap();
     let session_id = SessionKey("local:background-action-cancel".into());
-    let action: octos_agent::plugins::SkillActionDef = serde_json::from_value(json!({
+    let action: ra_agent::plugins::SkillActionDef = serde_json::from_value(json!({
         "id": "report.generate",
         "label": "Generate report",
         "execution": "background",
@@ -10879,7 +10879,7 @@ async fn background_skill_action_cancelled_before_start_does_not_execute_tool() 
     }))
     .unwrap();
     let calls = Arc::new(StdMutex::new(Vec::new()));
-    let mut registry = octos_agent::ToolRegistry::new();
+    let mut registry = ra_agent::ToolRegistry::new();
     registry.register(CaptureActionTool {
         calls: Arc::clone(&calls),
     });
@@ -10914,7 +10914,7 @@ fn skill_action_result_exposes_only_session_scoped_artifacts() {
     std::fs::create_dir_all(artifact.parent().unwrap()).unwrap();
     std::fs::write(&artifact, b"# Quiz").unwrap();
     let outside = tempfile::NamedTempFile::new().unwrap();
-    let result = octos_agent::ToolResult {
+    let result = ra_agent::ToolResult {
         success: true,
         files_to_send: vec![artifact, outside.path().to_path_buf()],
         ..Default::default()
@@ -11583,7 +11583,7 @@ async fn newly_configured_local_profile_allows_session_open_cwd_validation() {
 /// `runtime_policy_stamp_exposes_effective_permission_fields`.
 #[test]
 fn dangerous_default_permissions_resolves_without_an_explicit_choice() {
-    use octos_core::ui_protocol::{
+    use ra_core::ui_protocol::{
         PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
     };
 
@@ -11600,7 +11600,7 @@ fn dangerous_default_permissions_resolves_without_an_explicit_choice() {
     assert_eq!(resolved.selection.network, Network::Allow);
     assert_eq!(
         resolved.approval_policy,
-        Some(octos_agent::ApprovalPolicy::Never)
+        Some(ra_agent::ApprovalPolicy::Never)
     );
 
     // Danger flag off, Local, solo -> the NETWORK-ON default: Workspace-Write
@@ -11641,7 +11641,7 @@ fn dangerous_default_permissions_resolves_without_an_explicit_choice() {
 
 #[test]
 fn runtime_policy_stamp_exposes_effective_permission_fields() {
-    use octos_core::ui_protocol::{
+    use ra_core::ui_protocol::{
         PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
         PermissionProfileSelection as Selection,
     };
@@ -11656,7 +11656,7 @@ fn runtime_policy_stamp_exposes_effective_permission_fields() {
             mode: Mode::DangerFullAccess,
             network: Network::Allow,
         },
-        Some(octos_agent::ApprovalPolicy::Never),
+        Some(ra_agent::ApprovalPolicy::Never),
     );
 
     let stamp = runtime_policy_stamp_for_profile(&state, "ada", Some(&session_id), None);
@@ -11881,7 +11881,7 @@ fn ledger_event_cursor_covers_every_cursor_bearing_variant() {
             context_state: None,
             cursor: Some(cursor.clone()),
             panes: None,
-            capabilities: octos_core::ui_protocol::UiProtocolCapabilities::first_server_slice(),
+            capabilities: ra_core::ui_protocol::UiProtocolCapabilities::first_server_slice(),
             reasoning_effort: None,
             accepted_client_commands: None,
         }));
@@ -12040,7 +12040,7 @@ fn build_turn_session_result_from_done_matches_cursor_seq_without_tool_rows() {
 #[test]
 fn task_output_read_decodes_protocol_params() {
     let session_id = SessionKey("local:test".into());
-    let task_id = octos_core::TaskId::new();
+    let task_id = ra_core::TaskId::new();
     let request = RpcRequest::new(
         "task-output-1",
         methods::TASK_OUTPUT_READ,
@@ -12065,7 +12065,7 @@ fn task_output_read_decodes_protocol_params() {
 #[test]
 fn task_artifact_commands_decode_protocol_params() {
     let session_id = SessionKey("local:test".into());
-    let task_id = octos_core::TaskId::new();
+    let task_id = ra_core::TaskId::new();
     let features = ConnectionUiFeatures {
         harness_task_artifacts: true,
         header_present: true,
@@ -12126,7 +12126,7 @@ fn task_artifact_commands_decode_protocol_params() {
 fn slides_topic_retain_evicts_sibling_mofa_tools_on_ws_turn_path() {
     use async_trait::async_trait;
     use eyre::Result;
-    use octos_agent::tools::{Tool, ToolResult};
+    use ra_agent::tools::{Tool, ToolResult};
     use serde_json::Value;
 
     struct NameOnlyTool(&'static str);
@@ -12148,7 +12148,7 @@ fn slides_topic_retain_evicts_sibling_mofa_tools_on_ws_turn_path() {
     }
 
     let temp = tempfile::tempdir().expect("tempdir");
-    let mut registry = octos_agent::ToolRegistry::with_builtins(temp.path());
+    let mut registry = ra_agent::ToolRegistry::with_builtins(temp.path());
 
     // Register the full `mofa_*` plugin surface a fleet host
     // typically loads from the `mofa-slides` and sibling skill
@@ -12194,7 +12194,7 @@ fn slides_topic_retain_evicts_sibling_mofa_tools_on_ws_turn_path() {
     );
     // Mirror the production wiring at `run_standalone_turn`. RFC-0
     // (#1289): no `activate("group:media")` — deferral was removed.
-    registry.retain(octos_agent::keep_tool_in_slides_session);
+    registry.retain(ra_agent::keep_tool_in_slides_session);
 
     // `mofa_slides` survives — it is the canonical slides skill.
     assert!(
@@ -12246,7 +12246,7 @@ fn slides_topic_retain_evicts_sibling_mofa_tools_on_ws_turn_path() {
 fn non_slides_topic_leaves_mofa_tools_visible_on_ws_turn_path() {
     use async_trait::async_trait;
     use eyre::Result;
-    use octos_agent::tools::{Tool, ToolResult};
+    use ra_agent::tools::{Tool, ToolResult};
     use serde_json::Value;
 
     struct NameOnlyTool(&'static str);
@@ -12268,7 +12268,7 @@ fn non_slides_topic_leaves_mofa_tools_visible_on_ws_turn_path() {
     }
 
     let temp = tempfile::tempdir().expect("tempdir");
-    let mut registry = octos_agent::ToolRegistry::with_builtins(temp.path());
+    let mut registry = ra_agent::ToolRegistry::with_builtins(temp.path());
     for name in ["mofa_slides", "mofa_list_styles", "mofa_site"] {
         registry.register(NameOnlyTool(name));
     }
@@ -12339,7 +12339,7 @@ fn ws_turn_handler_registers_supervisor_with_task_query_store() {
 
     // Mirror the WS path: build a parent registry the same way
     // SessionRuntime does, then snapshot it for the per-turn slot.
-    let parent = octos_agent::ToolRegistry::with_builtins(temp.path());
+    let parent = ra_agent::ToolRegistry::with_builtins(temp.path());
     let mut tool_registry = parent.snapshot_excluding(&[]);
 
     // Step 1: stamp the per-turn snapshot with the session key so
@@ -12407,7 +12407,7 @@ fn ws_turn_handler_registers_supervisor_with_task_query_store() {
 #[test]
 fn ws_turn_snapshot_is_constrained_by_reapplied_tool_policy() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let parent = octos_agent::ToolRegistry::with_builtins(temp.path());
+    let parent = ra_agent::ToolRegistry::with_builtins(temp.path());
     // The per-turn snapshot, exactly as run_standalone_turn builds it.
     let mut tool_registry = parent.snapshot_excluding(&[]);
 
@@ -12426,8 +12426,8 @@ fn ws_turn_snapshot_is_constrained_by_reapplied_tool_policy() {
     // Register a real per-session tool AFTER the snapshot — the exact class of
     // tool `run_standalone_turn` adds (send_file / peer_* / spawn) and that used
     // to bypass the profile policy.
-    let (out_tx, _out_rx) = mpsc::channel::<octos_core::OutboundMessage>(1);
-    tool_registry.register(octos_agent::SendFileTool::new(out_tx));
+    let (out_tx, _out_rx) = mpsc::channel::<ra_core::OutboundMessage>(1);
+    tool_registry.register(ra_agent::SendFileTool::new(out_tx));
     assert!(
         tool_registry.tool_names().iter().any(|n| n == "send_file"),
         "send_file must be present after being registered onto the per-turn snapshot",
@@ -12435,7 +12435,7 @@ fn ws_turn_snapshot_is_constrained_by_reapplied_tool_policy() {
 
     // Re-apply an allow-list that OMITS send_file — what the fix now does with
     // `session_runtime.profile.tool_policy` after registering session tools.
-    let policy = octos_agent::ToolPolicy {
+    let policy = ra_agent::ToolPolicy {
         allow: vec![keep.clone()],
         ..Default::default()
     };
@@ -12497,7 +12497,7 @@ async fn ws_turn_supervisor_routes_spawn_only_failure_to_master_continuation_que
     let temp = tempfile::tempdir().expect("tempdir");
 
     // Mirror the WS path: per-turn registry built from snapshot.
-    let parent = octos_agent::ToolRegistry::with_builtins(temp.path());
+    let parent = ra_agent::ToolRegistry::with_builtins(temp.path());
     let mut tool_registry = parent.snapshot_excluding(&[]);
     tool_registry.set_session_key(session_id.to_string());
     let task_supervisor = tool_registry.supervisor();
@@ -12733,7 +12733,7 @@ async fn peer_send_input_with_a_reused_tool_call_id_queues_on_each_turn() {
     assert_eq!(retry, PeerSendInputEnqueueOutcome::Duplicate);
     assert_eq!(
         retry.into_callback_result(slug),
-        Ok(octos_agent::PeerSendInputDelivery::AlreadyQueued),
+        Ok(ra_agent::PeerSendInputDelivery::AlreadyQueued),
         "a genuine retry is not reported as a fresh send"
     );
     // The peer runs the first input (dequeue starts the recent-claim window).
@@ -12756,7 +12756,7 @@ async fn peer_send_input_with_a_reused_tool_call_id_queues_on_each_turn() {
     );
     assert_eq!(
         second.into_callback_result(slug),
-        Ok(octos_agent::PeerSendInputDelivery::Queued)
+        Ok(ra_agent::PeerSendInputDelivery::Queued)
     );
     let drained =
         orchestrator.drain_ready_continuations_for_session(&peer_key, profile_id, idle(), 8);
@@ -13807,7 +13807,7 @@ fn peer_send_input_persist_failure_maps_to_error_not_success() {
     );
     assert_eq!(
         PeerSendInputEnqueueOutcome::Duplicate.into_callback_result("slugz"),
-        Ok(octos_agent::PeerSendInputDelivery::AlreadyQueued),
+        Ok(ra_agent::PeerSendInputDelivery::AlreadyQueued),
         "a retry is a success, but reported as already queued"
     );
 }
@@ -14148,7 +14148,7 @@ async fn ws_turn_supervisor_orphan_sweep_failures_reach_recovery_callback() {
     let ledger_path = temp.path().join("task_ledger.jsonl");
 
     // Build a per-turn registry exactly like the WS path.
-    let parent = octos_agent::ToolRegistry::with_builtins(temp.path());
+    let parent = ra_agent::ToolRegistry::with_builtins(temp.path());
     let mut tool_registry = parent.snapshot_excluding(&[]);
     tool_registry.set_session_key(session_id.to_string());
     let task_supervisor = tool_registry.supervisor();
@@ -14198,7 +14198,7 @@ async fn ws_turn_supervisor_orphan_sweep_failures_reach_recovery_callback() {
     let reaped = task_supervisor
         .get_task(&task_id)
         .expect("orphaned task must still be tracked after sweep");
-    assert_eq!(reaped.status, octos_agent::TaskStatus::Failed);
+    assert_eq!(reaped.status, ra_agent::TaskStatus::Failed);
 
     assert_eq!(
         default_agent_orchestrator()
@@ -14215,7 +14215,7 @@ async fn ws_turn_supervisor_orphan_sweep_failures_reach_recovery_callback() {
 #[test]
 fn coding_tool_status_distinguishes_registered_hidden_tools_from_missing_tools() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let mut registry = octos_agent::ToolRegistry::with_builtins(temp.path());
+    let mut registry = ra_agent::ToolRegistry::with_builtins(temp.path());
     registry.set_context_filter(vec!["read".into()]);
 
     let visible = model_visible_tool_names(Some(&registry));
@@ -14432,7 +14432,7 @@ fn risk_default_is_unspecified_when_manifest_silent() {
 
     assert_eq!(
         event.risk.as_deref(),
-        Some(octos_core::ui_protocol::RISK_UNSPECIFIED),
+        Some(ra_core::ui_protocol::RISK_UNSPECIFIED),
         "manifest-silent tools must surface as `unspecified`, not `medium`"
     );
     clear_tool_risk_registry_for_test();
@@ -14477,7 +14477,7 @@ fn tool_emitted_risk_is_ignored_in_favor_of_manifest() {
     harden_progress_emitted_approval(&mut silent);
     assert_eq!(
         silent.risk.as_deref(),
-        Some(octos_core::ui_protocol::RISK_UNSPECIFIED)
+        Some(ra_core::ui_protocol::RISK_UNSPECIFIED)
     );
     clear_tool_risk_registry_for_test();
 }
@@ -14924,7 +14924,7 @@ fn server_supported_methods_are_route_complete() {
     let turn_id = TurnId::new();
     let approval_id = ApprovalId::new();
     let preview_id = PreviewId::new();
-    let task_id = octos_core::TaskId::new();
+    let task_id = ra_core::TaskId::new();
 
     for request in [
         RpcRequest::new(
@@ -15012,8 +15012,8 @@ fn server_supported_methods_are_route_complete() {
 
 fn appui_task_state_with_running_task(
     session_id: &SessionKey,
-) -> (Arc<AppState>, Arc<octos_agent::TaskSupervisor>, TaskId) {
-    let supervisor = Arc::new(octos_agent::TaskSupervisor::new());
+) -> (Arc<AppState>, Arc<ra_agent::TaskSupervisor>, TaskId) {
+    let supervisor = Arc::new(ra_agent::TaskSupervisor::new());
     let task_id = supervisor.register(
         "run_pipeline",
         "call-appui-task",
@@ -15159,7 +15159,7 @@ fn appui_task_artifacts_project_task_output_files() {
     let output_path = output_dir.join("summary.md");
     std::fs::write(&output_path, "# report\n").expect("write output file");
 
-    let supervisor = Arc::new(octos_agent::TaskSupervisor::new());
+    let supervisor = Arc::new(ra_agent::TaskSupervisor::new());
     let task_id = supervisor.register(
         "run_pipeline",
         "call-appui-artifact",
@@ -15334,7 +15334,7 @@ async fn appui_task_cancel_uses_supervisor_cancel_path() {
     let task = supervisor
         .get_task(&task_id.to_string())
         .expect("task remains queryable");
-    assert_eq!(task.status, octos_agent::TaskStatus::Cancelled);
+    assert_eq!(task.status, ra_agent::TaskStatus::Cancelled);
 }
 
 #[tokio::test]
@@ -15393,7 +15393,7 @@ fn malformed_approval_params_return_invalid_params_not_unsupported() {
 
     assert_eq!(
         error.code,
-        octos_core::ui_protocol::rpc_error_codes::INVALID_PARAMS
+        ra_core::ui_protocol::rpc_error_codes::INVALID_PARAMS
     );
     assert!(error.message.contains(methods::APPROVAL_RESPOND));
 }
@@ -15420,7 +15420,7 @@ fn known_approval_returns_typed_json_rpc_result() {
         serde_json::to_value(outcome.result).expect("serialize result"),
     );
 
-    assert_eq!(frame.jsonrpc, octos_core::ui_protocol::JSON_RPC_VERSION);
+    assert_eq!(frame.jsonrpc, ra_core::ui_protocol::JSON_RPC_VERSION);
     assert_eq!(frame.id, "approval-1");
     assert_eq!(frame.result["approval_id"], json!(approval_id));
     assert_eq!(frame.result["accepted"], json!(true));
@@ -15478,7 +15478,7 @@ fn missing_and_not_pending_approval_return_typed_json_rpc_errors() {
         .expect_err("missing approval should fail");
     let frame = RpcErrorResponse::new(Some("approval-missing".into()), missing);
 
-    assert_eq!(frame.jsonrpc, octos_core::ui_protocol::JSON_RPC_VERSION);
+    assert_eq!(frame.jsonrpc, ra_core::ui_protocol::JSON_RPC_VERSION);
     assert_eq!(frame.id.as_deref(), Some("approval-missing"));
     assert_eq!(frame.error.code, rpc_error_codes::UNKNOWN_APPROVAL_ID);
     assert_eq!(
@@ -16044,7 +16044,7 @@ fn rejects_invalid_rpc_request_json() {
     let error = parse_rpc_request("{").expect_err("parse error");
     assert_eq!(
         error.code,
-        octos_core::ui_protocol::rpc_error_codes::PARSE_ERROR
+        ra_core::ui_protocol::rpc_error_codes::PARSE_ERROR
     );
 }
 
@@ -16086,7 +16086,7 @@ fn null_id_envelope_is_rejected_with_parse_error() {
     let err = parse_ws_text_frame(frame).expect_err("null id must reject");
     assert_eq!(
         err.code,
-        octos_core::ui_protocol::rpc_error_codes::PARSE_ERROR
+        ra_core::ui_protocol::rpc_error_codes::PARSE_ERROR
     );
     assert!(
         err.message.contains("null"),
@@ -16103,7 +16103,7 @@ fn numeric_id_envelope_is_rejected_with_parse_error() {
     let err = parse_ws_text_frame(frame).expect_err("numeric id must reject");
     assert_eq!(
         err.code,
-        octos_core::ui_protocol::rpc_error_codes::PARSE_ERROR
+        ra_core::ui_protocol::rpc_error_codes::PARSE_ERROR
     );
 }
 
@@ -16158,10 +16158,10 @@ fn goal_updated_notification(
     profile_id: Option<&str>,
     objective: &str,
 ) -> UiNotification {
-    UiNotification::SessionGoalUpdated(octos_core::ui_protocol::SessionGoalUpdatedEvent {
+    UiNotification::SessionGoalUpdated(ra_core::ui_protocol::SessionGoalUpdatedEvent {
         session_id: session_id.clone(),
         profile_id: profile_id.map(ToOwned::to_owned),
-        goal: octos_core::ui_protocol::UiGoalRecord {
+        goal: ra_core::ui_protocol::UiGoalRecord {
             profile_id: profile_id.map(ToOwned::to_owned),
             goal_id: format!("goal-{objective}"),
             objective: objective.to_owned(),
@@ -16181,7 +16181,7 @@ fn goal_updated_notification(
 /// `"goal": null`, so the nested record is absent and the top-level
 /// `profile_id` is the only scope the frame carries.
 fn goal_cleared_notification(session_id: &SessionKey, profile_id: Option<&str>) -> UiNotification {
-    UiNotification::SessionGoalCleared(octos_core::ui_protocol::SessionGoalClearedEvent {
+    UiNotification::SessionGoalCleared(ra_core::ui_protocol::SessionGoalClearedEvent {
         session_id: session_id.clone(),
         profile_id: profile_id.map(ToOwned::to_owned),
         cleared: true,
@@ -16208,7 +16208,7 @@ async fn drain_session_open_frames(rx: &mut mpsc::Receiver<WsMessage>) -> Vec<Va
         let value: Value = serde_json::from_str(text).expect("json frame");
         let opened = value.get("id").is_none()
             && value.get("method").and_then(Value::as_str)
-                == Some(octos_core::ui_protocol::methods::SESSION_OPEN);
+                == Some(ra_core::ui_protocol::methods::SESSION_OPEN);
         frames.push(value);
         if opened {
             return frames;
@@ -16222,7 +16222,7 @@ fn replayed_goal_objectives(frames: &[Value]) -> Vec<String> {
         .iter()
         .filter(|frame| {
             frame.get("method").and_then(Value::as_str)
-                == Some(octos_core::ui_protocol::methods::SESSION_GOAL_UPDATED)
+                == Some(ra_core::ui_protocol::methods::SESSION_GOAL_UPDATED)
         })
         .map(|frame| {
             frame["params"]["goal"]["objective"]
@@ -16239,7 +16239,7 @@ fn replayed_cleared_profiles(frames: &[Value]) -> Vec<Value> {
         .iter()
         .filter(|frame| {
             frame.get("method").and_then(Value::as_str)
-                == Some(octos_core::ui_protocol::methods::SESSION_GOAL_CLEARED)
+                == Some(ra_core::ui_protocol::methods::SESSION_GOAL_CLEARED)
         })
         .map(|frame| frame["params"]["profile_id"].clone())
         .collect()
@@ -16322,7 +16322,7 @@ async fn should_retain_only_same_profile_goal_events_when_open_session_result_re
         .map(|event| ledger_event_method(&event.event))
         .collect();
     assert!(
-        !retained.contains(&octos_core::ui_protocol::methods::SESSION_GOAL_CLEARED),
+        !retained.contains(&ra_core::ui_protocol::methods::SESSION_GOAL_CLEARED),
         "profile-b `session/goal/cleared` must not survive the retain filter: {retained:?}"
     );
     let objectives: Vec<String> = outcome
@@ -16438,7 +16438,7 @@ async fn should_drop_cross_profile_goal_frames_when_connection_scopes_another_pr
         .expect("alpha's own live goal frame must still be forwarded");
     assert_eq!(
         live.get("method").and_then(Value::as_str),
-        Some(octos_core::ui_protocol::methods::SESSION_GOAL_UPDATED),
+        Some(ra_core::ui_protocol::methods::SESSION_GOAL_UPDATED),
         "the only live goal frame alpha may see is its own: {live}"
     );
     assert_eq!(
@@ -16557,7 +16557,7 @@ async fn should_replay_main_and_legacy_goal_frames_when_connection_is_unprofiled
     let mut live_objectives: Vec<String> = Vec::new();
     while let Some(frame) = next_frame_within(&mut rx, 500).await {
         if frame.get("method").and_then(Value::as_str)
-            == Some(octos_core::ui_protocol::methods::SESSION_GOAL_UPDATED)
+            == Some(ra_core::ui_protocol::methods::SESSION_GOAL_UPDATED)
         {
             live_objectives.push(
                 frame["params"]["goal"]["objective"]
@@ -16587,11 +16587,11 @@ fn loop_updated_notification_without_top_level_profile(
     record_profile_id: Option<&str>,
     loop_id: &str,
 ) -> UiNotification {
-    UiNotification::LoopUpdated(octos_core::ui_protocol::LoopUpdatedEvent {
+    UiNotification::LoopUpdated(ra_core::ui_protocol::LoopUpdatedEvent {
         session_id: session_id.clone(),
         profile_id: None,
         loop_id: Some(loop_id.to_owned()),
-        loop_state: octos_core::ui_protocol::UiLoopRecord {
+        loop_state: ra_core::ui_protocol::UiLoopRecord {
             loop_id: loop_id.to_owned(),
             session_id: session_id.clone(),
             profile_id: record_profile_id.map(ToOwned::to_owned),
@@ -16617,11 +16617,11 @@ fn monitor_updated_notification(
     profile_id: Option<&str>,
     monitor_id: &str,
 ) -> UiNotification {
-    UiNotification::MonitorUpdated(octos_core::ui_protocol::MonitorUpdatedEvent {
+    UiNotification::MonitorUpdated(ra_core::ui_protocol::MonitorUpdatedEvent {
         session_id: session_id.clone(),
         profile_id: profile_id.map(ToOwned::to_owned),
         monitor_id: Some(monitor_id.to_owned()),
-        monitor_state: octos_core::ui_protocol::UiMonitorRecord {
+        monitor_state: ra_core::ui_protocol::UiMonitorRecord {
             monitor_id: monitor_id.to_owned(),
             session_id: session_id.clone(),
             profile_id: profile_id.map(ToOwned::to_owned),
@@ -16660,11 +16660,11 @@ fn monitor_expired_notification(
     record_profile_id: Option<&str>,
     monitor_id: &str,
 ) -> UiNotification {
-    UiNotification::MonitorExpired(octos_core::ui_protocol::MonitorExpiredEvent {
+    UiNotification::MonitorExpired(ra_core::ui_protocol::MonitorExpiredEvent {
         session_id: session_id.clone(),
         profile_id: top_profile_id.map(ToOwned::to_owned),
         monitor_id: monitor_id.to_owned(),
-        monitor_state: Some(octos_core::ui_protocol::UiMonitorRecord {
+        monitor_state: Some(ra_core::ui_protocol::UiMonitorRecord {
             monitor_id: monitor_id.to_owned(),
             session_id: session_id.clone(),
             profile_id: record_profile_id.map(ToOwned::to_owned),
@@ -17021,14 +17021,14 @@ async fn should_drop_cross_profile_loop_and_monitor_frames_when_connection_scope
         .filter_map(|frame| {
             let method = frame.get("method").and_then(Value::as_str)?;
             match method {
-                octos_core::ui_protocol::methods::LOOP_UPDATED => Some((
+                ra_core::ui_protocol::methods::LOOP_UPDATED => Some((
                     method.to_owned(),
                     frame["params"]["loop"]["loop_id"]
                         .as_str()
                         .unwrap_or_default()
                         .to_owned(),
                 )),
-                octos_core::ui_protocol::methods::MONITOR_UPDATED => Some((
+                ra_core::ui_protocol::methods::MONITOR_UPDATED => Some((
                     method.to_owned(),
                     frame["params"]["monitor"]["monitor_id"]
                         .as_str()
@@ -17043,11 +17043,11 @@ async fn should_drop_cross_profile_loop_and_monitor_frames_when_connection_scope
         replayed,
         vec![
             (
-                octos_core::ui_protocol::methods::LOOP_UPDATED.to_owned(),
+                ra_core::ui_protocol::methods::LOOP_UPDATED.to_owned(),
                 "loop-alpha".to_owned()
             ),
             (
-                octos_core::ui_protocol::methods::MONITOR_UPDATED.to_owned(),
+                ra_core::ui_protocol::methods::MONITOR_UPDATED.to_owned(),
                 "monitor-alpha".to_owned()
             ),
         ],
@@ -17057,7 +17057,7 @@ async fn should_drop_cross_profile_loop_and_monitor_frames_when_connection_scope
     // Live forwarder: `loop/fired` and `monitor/fired` are stamped at the
     // scheduler drain, so they always carry a concrete top-level profile.
     ledger.append_notification(UiNotification::LoopFired(
-        octos_core::ui_protocol::LoopFiredEvent {
+        ra_core::ui_protocol::LoopFiredEvent {
             session_id: session_id.clone(),
             profile_id: Some("beta".to_owned()),
             loop_id: "loop-beta".to_owned(),
@@ -17068,7 +17068,7 @@ async fn should_drop_cross_profile_loop_and_monitor_frames_when_connection_scope
         },
     ));
     ledger.append_notification(UiNotification::MonitorFired(
-        octos_core::ui_protocol::MonitorFiredEvent {
+        ra_core::ui_protocol::MonitorFiredEvent {
             session_id: session_id.clone(),
             profile_id: Some("beta".to_owned()),
             monitor_id: "monitor-beta".to_owned(),
@@ -17078,7 +17078,7 @@ async fn should_drop_cross_profile_loop_and_monitor_frames_when_connection_scope
         },
     ));
     ledger.append_notification(UiNotification::MonitorFired(
-        octos_core::ui_protocol::MonitorFiredEvent {
+        ra_core::ui_protocol::MonitorFiredEvent {
             session_id: session_id.clone(),
             profile_id: Some("alpha".to_owned()),
             monitor_id: "monitor-alpha".to_owned(),
@@ -17093,7 +17093,7 @@ async fn should_drop_cross_profile_loop_and_monitor_frames_when_connection_scope
         .expect("alpha's own live monitor frame must still be forwarded");
     assert_eq!(
         live.get("method").and_then(Value::as_str),
-        Some(octos_core::ui_protocol::methods::MONITOR_FIRED),
+        Some(ra_core::ui_protocol::methods::MONITOR_FIRED),
         "the only live autonomy frame alpha may see is its own: {live}"
     );
     assert_eq!(live["params"]["monitor_id"], json!("monitor-alpha"));
@@ -17172,7 +17172,7 @@ async fn should_scope_each_forwarder_independently_when_one_connection_pumps_two
     let mut delivered: Vec<(String, String)> = Vec::new();
     while let Some(frame) = next_frame_within(&mut rx, 500).await {
         if frame.get("method").and_then(Value::as_str)
-            == Some(octos_core::ui_protocol::methods::SESSION_GOAL_UPDATED)
+            == Some(ra_core::ui_protocol::methods::SESSION_GOAL_UPDATED)
         {
             delivered.push((
                 frame["params"]["session_id"]
@@ -17287,7 +17287,7 @@ async fn should_drop_cross_profile_session_opened_frames_when_connection_scopes_
         .filter(|frame| {
             frame.get("id").is_none()
                 && frame.get("method").and_then(Value::as_str)
-                    == Some(octos_core::ui_protocol::methods::SESSION_OPEN)
+                    == Some(ra_core::ui_protocol::methods::SESSION_OPEN)
         })
         .collect();
     assert_eq!(
@@ -17353,7 +17353,7 @@ async fn should_drop_cross_profile_background_activity_frames_when_connection_sc
     };
 
     let activity = |profile_id: &str, text: &str| {
-        UiNotification::BackgroundActivity(octos_core::ui_protocol::BackgroundActivityEvent {
+        UiNotification::BackgroundActivity(ra_core::ui_protocol::BackgroundActivityEvent {
             session_id: session_id.clone(),
             profile_id: Some(profile_id.to_owned()),
             origin_kind: "monitor".to_owned(),
@@ -17402,7 +17402,7 @@ async fn should_drop_cross_profile_background_activity_frames_when_connection_sc
         .iter()
         .filter(|frame| {
             frame.get("method").and_then(Value::as_str)
-                == Some(octos_core::ui_protocol::methods::BACKGROUND_ACTIVITY)
+                == Some(ra_core::ui_protocol::methods::BACKGROUND_ACTIVITY)
         })
         .map(|frame| {
             frame["params"]["text"]
@@ -17426,7 +17426,7 @@ async fn should_drop_cross_profile_background_activity_frames_when_connection_sc
         .expect("alpha's own live activity must still be forwarded");
     assert_eq!(
         live.get("method").and_then(Value::as_str),
-        Some(octos_core::ui_protocol::methods::BACKGROUND_ACTIVITY),
+        Some(ra_core::ui_protocol::methods::BACKGROUND_ACTIVITY),
         "the only live activity frame alpha may see is its own: {live}"
     );
     assert_eq!(live["params"]["text"], json!("alpha live log line"));
@@ -17485,7 +17485,7 @@ async fn should_deliver_routed_profile_frames_when_the_connection_scope_is_not_a
     };
 
     let monitor_fired = |monitor_id: &str| {
-        UiNotification::MonitorFired(octos_core::ui_protocol::MonitorFiredEvent {
+        UiNotification::MonitorFired(ra_core::ui_protocol::MonitorFiredEvent {
             session_id: session_id.clone(),
             profile_id: Some("beta".to_owned()),
             monitor_id: monitor_id.to_owned(),
@@ -17495,7 +17495,7 @@ async fn should_deliver_routed_profile_frames_when_the_connection_scope_is_not_a
         })
     };
     let activity = |text: &str| {
-        UiNotification::BackgroundActivity(octos_core::ui_protocol::BackgroundActivityEvent {
+        UiNotification::BackgroundActivity(ra_core::ui_protocol::BackgroundActivityEvent {
             session_id: session_id.clone(),
             profile_id: Some("beta".to_owned()),
             origin_kind: "monitor".to_owned(),
@@ -17554,15 +17554,15 @@ async fn should_deliver_routed_profile_frames_when_the_connection_scope_is_not_a
         .filter_map(|frame| frame.get("method").and_then(Value::as_str))
         .collect();
     assert!(
-        methods.contains(&octos_core::ui_protocol::methods::MONITOR_FIRED),
+        methods.contains(&ra_core::ui_protocol::methods::MONITOR_FIRED),
         "the connection's own routed monitor/fired must be replayed: {methods:?}"
     );
     assert!(
-        methods.contains(&octos_core::ui_protocol::methods::BACKGROUND_ACTIVITY),
+        methods.contains(&ra_core::ui_protocol::methods::BACKGROUND_ACTIVITY),
         "background/activity has no other delivery path and must be replayed: {methods:?}"
     );
     assert!(
-        methods.contains(&octos_core::ui_protocol::methods::SESSION_GOAL_UPDATED),
+        methods.contains(&ra_core::ui_protocol::methods::SESSION_GOAL_UPDATED),
         "the connection's own routed goal frame must be replayed: {methods:?}"
     );
 
@@ -17573,7 +17573,7 @@ async fn should_deliver_routed_profile_frames_when_the_connection_scope_is_not_a
         .expect("a routed admin connection must keep receiving its own live frames");
     assert_eq!(
         live.get("method").and_then(Value::as_str),
-        Some(octos_core::ui_protocol::methods::BACKGROUND_ACTIVITY),
+        Some(ra_core::ui_protocol::methods::BACKGROUND_ACTIVITY),
     );
     assert_eq!(live["params"]["text"], json!("live log line"));
 
@@ -17618,7 +17618,7 @@ async fn should_deliver_later_profile_frames_when_an_unscoped_connection_opened_
     };
 
     let beta_activity = |text: &str| {
-        UiNotification::BackgroundActivity(octos_core::ui_protocol::BackgroundActivityEvent {
+        UiNotification::BackgroundActivity(ra_core::ui_protocol::BackgroundActivityEvent {
             session_id: session_a.clone(),
             profile_id: Some("beta".to_owned()),
             origin_kind: "monitor".to_owned(),
@@ -17700,7 +17700,7 @@ async fn should_deliver_later_profile_frames_when_an_unscoped_connection_opened_
     );
     assert_eq!(
         live.get("method").and_then(Value::as_str),
-        Some(octos_core::ui_protocol::methods::BACKGROUND_ACTIVITY),
+        Some(ra_core::ui_protocol::methods::BACKGROUND_ACTIVITY),
     );
     assert_eq!(live["params"]["text"], json!("live log line"));
 
@@ -17731,7 +17731,7 @@ async fn should_deliver_later_profile_frames_when_an_unscoped_connection_opened_
     let mut replayed: Vec<String> = Vec::new();
     while let Some(frame) = next_frame_within(&mut rx, 500).await {
         if frame.get("method").and_then(Value::as_str)
-            == Some(octos_core::ui_protocol::methods::BACKGROUND_ACTIVITY)
+            == Some(ra_core::ui_protocol::methods::BACKGROUND_ACTIVITY)
         {
             replayed.push(
                 frame["params"]["text"]
@@ -17770,7 +17770,7 @@ fn session_scope_rejects_cross_profile_session_id() {
 
     assert_eq!(
         error.code,
-        octos_core::ui_protocol::rpc_error_codes::INVALID_PARAMS
+        ra_core::ui_protocol::rpc_error_codes::INVALID_PARAMS
     );
     assert_eq!(
         error
@@ -17806,7 +17806,7 @@ fn session_scope_rejects_cross_profile_open_param() {
 
     assert_eq!(
         error.code,
-        octos_core::ui_protocol::rpc_error_codes::INVALID_PARAMS
+        ra_core::ui_protocol::rpc_error_codes::INVALID_PARAMS
     );
     assert_eq!(
         error
@@ -18083,7 +18083,7 @@ fn prompt_text_requires_non_empty_text_input() {
 fn state_with_sessions(data_dir: &std::path::Path) -> Arc<AppState> {
     Arc::new(AppState {
         sessions: Some(Arc::new(tokio::sync::Mutex::new(
-            octos_bus::SessionManager::open(data_dir).expect("session manager"),
+            ra_bus::SessionManager::open(data_dir).expect("session manager"),
         ))),
         ..AppState::empty_for_tests()
     })
@@ -18309,7 +18309,7 @@ async fn session_open_rejects_after_cursor_from_other_stream() {
 
     assert_eq!(
         error.code,
-        octos_core::ui_protocol::rpc_error_codes::CURSOR_INVALID
+        ra_core::ui_protocol::rpc_error_codes::CURSOR_INVALID
     );
     assert_eq!(
         error.data.as_ref().and_then(|data| data.get("kind")),
@@ -18372,7 +18372,7 @@ async fn session_open_rejects_stale_after_cursor() {
 
     assert_eq!(
         error.code,
-        octos_core::ui_protocol::rpc_error_codes::CURSOR_OUT_OF_RANGE
+        ra_core::ui_protocol::rpc_error_codes::CURSOR_OUT_OF_RANGE
     );
     assert_eq!(
         error.data.as_ref().and_then(|data| data.get("kind")),
@@ -18439,7 +18439,7 @@ fn sample_pending_question(
     question_id: QuestionId,
     turn_id: TurnId,
 ) -> UserQuestionRequestedEvent {
-    use octos_core::ui_protocol::{UserQuestion, UserQuestionOption};
+    use ra_core::ui_protocol::{UserQuestion, UserQuestionOption};
     UserQuestionRequestedEvent::new(
         session_id,
         question_id,
@@ -18545,7 +18545,7 @@ async fn session_open_pending_question_filtered_out_without_capability() {
 
 #[test]
 fn plan_updated_gated_by_plan_todos_capability() {
-    use octos_core::ui_protocol::{PlanUpdatedEvent, UiPlanRecord};
+    use ra_core::ui_protocol::{PlanUpdatedEvent, UiPlanRecord};
     let event =
         UiProtocolLedgerEvent::Notification(UiNotification::PlanUpdated(PlanUpdatedEvent {
             session_id: SessionKey("local:test".into()),
@@ -18575,8 +18575,8 @@ fn background_activity_for(
     session_id: &SessionKey,
     origin_id: &str,
     text: &str,
-) -> octos_core::ui_protocol::BackgroundActivityEvent {
-    octos_core::ui_protocol::BackgroundActivityEvent {
+) -> ra_core::ui_protocol::BackgroundActivityEvent {
+    ra_core::ui_protocol::BackgroundActivityEvent {
         session_id: session_id.clone(),
         profile_id: Some("main".into()),
         origin_kind: "monitor".into(),
@@ -18701,7 +18701,7 @@ async fn should_replay_background_activity_on_the_owning_session_when_a_client_r
 /// shared session stream — on the live broadcast OR reconnect replay.
 #[test]
 fn monitor_notifications_gated_by_monitor_runtime_capability() {
-    use octos_core::ui_protocol::{MonitorFiredEvent, MonitorUpdatedEvent, UiMonitorRecord};
+    use ra_core::ui_protocol::{MonitorFiredEvent, MonitorUpdatedEvent, UiMonitorRecord};
     let record = UiMonitorRecord {
         monitor_id: "monitor_01".into(),
         session_id: SessionKey("local:test".into()),
@@ -18743,7 +18743,7 @@ fn monitor_notifications_gated_by_monitor_runtime_capability() {
             fired_at_ms: Some(0),
         }));
     let expired = UiProtocolLedgerEvent::Notification(UiNotification::MonitorExpired(
-        octos_core::ui_protocol::MonitorExpiredEvent {
+        ra_core::ui_protocol::MonitorExpiredEvent {
             session_id: SessionKey("local:test".into()),
             profile_id: Some("main".into()),
             monitor_id: "monitor_01".into(),
@@ -18954,7 +18954,7 @@ async fn session_hydrate_returns_pending_question_for_negotiated_client() {
     // #3 (hydrate path): a reconnecting client that requests the
     // pending-approvals section and negotiated `user_question.v1` gets the
     // pending structured question back in `pending_questions`.
-    use octos_core::ui_protocol::hydrate_sections;
+    use ra_core::ui_protocol::hydrate_sections;
     let temp = tempfile::tempdir().expect("tempdir");
     let state = state_with_sessions(temp.path());
     let ledger = Arc::new(UiProtocolLedger::new(16));
@@ -19008,7 +19008,7 @@ async fn session_hydrate_returns_pending_question_for_negotiated_client() {
 async fn session_hydrate_omits_pending_question_without_capability() {
     // #3/#4: a client lacking `user_question.v1` must not receive the
     // `pending_questions` section at all (omitted, not `null`).
-    use octos_core::ui_protocol::hydrate_sections;
+    use ra_core::ui_protocol::hydrate_sections;
     let temp = tempfile::tempdir().expect("tempdir");
     let state = state_with_sessions(temp.path());
     let ledger = Arc::new(UiProtocolLedger::new(16));
@@ -19371,7 +19371,7 @@ async fn session_open_result_advertises_intersection_when_header_subset() {
         capabilities
             .supported_methods
             .iter()
-            .any(|method| method == octos_core::ui_protocol::methods::SESSION_OPEN)
+            .any(|method| method == ra_core::ui_protocol::methods::SESSION_OPEN)
     );
     // Capability-gated methods (task-control RPCs behind
     // harness.task_control.v1) must not leak when the gating feature
@@ -19381,14 +19381,14 @@ async fn session_open_result_advertises_intersection_when_header_subset() {
         !capabilities
             .supported_methods
             .iter()
-            .any(|method| method == octos_core::ui_protocol::methods::TASK_LIST),
+            .any(|method| method == ra_core::ui_protocol::methods::TASK_LIST),
         "task/list must be gated by harness.task_control.v1"
     );
     assert!(
         !capabilities
             .supported_methods
             .iter()
-            .any(|method| method == octos_core::ui_protocol::methods::TASK_CANCEL),
+            .any(|method| method == ra_core::ui_protocol::methods::TASK_CANCEL),
         "task/cancel must be gated by harness.task_control.v1"
     );
     assert!(
@@ -19690,19 +19690,19 @@ fn aux_rest_to_ws_v1_negotiated_capabilities_include_only_when_requested() {
     let capabilities = features.negotiated_capabilities();
     assert!(capabilities.supports_feature(UI_PROTOCOL_FEATURE_AUXILIARY_REST_TO_WS_V1));
     for method in [
-        octos_core::ui_protocol::methods::SESSION_LIST,
-        octos_core::ui_protocol::methods::SESSION_SNAPSHOT,
-        octos_core::ui_protocol::methods::SESSION_MESSAGES_PAGE,
-        octos_core::ui_protocol::methods::SESSION_STATUS_GET,
-        octos_core::ui_protocol::methods::SESSION_FILES_LIST,
-        octos_core::ui_protocol::methods::SESSION_TASKS_LIST,
-        octos_core::ui_protocol::methods::SESSION_WORKSPACE_GET,
-        octos_core::ui_protocol::methods::SESSION_TITLE_SET,
-        octos_core::ui_protocol::methods::SESSION_DELETE,
-        octos_core::ui_protocol::methods::SYSTEM_STATUS_GET,
-        octos_core::ui_protocol::methods::CONTENT_LIST,
-        octos_core::ui_protocol::methods::CONTENT_DELETE,
-        octos_core::ui_protocol::methods::CONTENT_BULK_DELETE,
+        ra_core::ui_protocol::methods::SESSION_LIST,
+        ra_core::ui_protocol::methods::SESSION_SNAPSHOT,
+        ra_core::ui_protocol::methods::SESSION_MESSAGES_PAGE,
+        ra_core::ui_protocol::methods::SESSION_STATUS_GET,
+        ra_core::ui_protocol::methods::SESSION_FILES_LIST,
+        ra_core::ui_protocol::methods::SESSION_TASKS_LIST,
+        ra_core::ui_protocol::methods::SESSION_WORKSPACE_GET,
+        ra_core::ui_protocol::methods::SESSION_TITLE_SET,
+        ra_core::ui_protocol::methods::SESSION_DELETE,
+        ra_core::ui_protocol::methods::SYSTEM_STATUS_GET,
+        ra_core::ui_protocol::methods::CONTENT_LIST,
+        ra_core::ui_protocol::methods::CONTENT_DELETE,
+        ra_core::ui_protocol::methods::CONTENT_BULK_DELETE,
     ] {
         assert!(
             capabilities.supports_method(method),
@@ -19725,13 +19725,13 @@ fn aux_rest_to_ws_v1_negotiated_capabilities_omit_when_not_requested() {
     let capabilities = features.negotiated_capabilities();
     assert!(!capabilities.supports_feature(UI_PROTOCOL_FEATURE_AUXILIARY_REST_TO_WS_V1));
     for method in [
-        octos_core::ui_protocol::methods::SESSION_LIST,
-        octos_core::ui_protocol::methods::SESSION_SNAPSHOT,
-        octos_core::ui_protocol::methods::SESSION_MESSAGES_PAGE,
-        octos_core::ui_protocol::methods::SYSTEM_STATUS_GET,
-        octos_core::ui_protocol::methods::CONTENT_LIST,
-        octos_core::ui_protocol::methods::CONTENT_DELETE,
-        octos_core::ui_protocol::methods::CONTENT_BULK_DELETE,
+        ra_core::ui_protocol::methods::SESSION_LIST,
+        ra_core::ui_protocol::methods::SESSION_SNAPSHOT,
+        ra_core::ui_protocol::methods::SESSION_MESSAGES_PAGE,
+        ra_core::ui_protocol::methods::SYSTEM_STATUS_GET,
+        ra_core::ui_protocol::methods::CONTENT_LIST,
+        ra_core::ui_protocol::methods::CONTENT_DELETE,
+        ra_core::ui_protocol::methods::CONTENT_BULK_DELETE,
     ] {
         assert!(
             !capabilities.supports_method(method),
@@ -19791,12 +19791,12 @@ fn projection_envelope_v2_is_strictly_negotiated_and_off_by_default() {
 #[test]
 fn projection_envelope_method_in_notification_methods_list() {
     assert!(
-        octos_core::ui_protocol::UI_PROTOCOL_NOTIFICATION_METHODS
-            .contains(&octos_core::ui_protocol::methods::PROJECTION_ENVELOPE),
+        ra_core::ui_protocol::UI_PROTOCOL_NOTIFICATION_METHODS
+            .contains(&ra_core::ui_protocol::methods::PROJECTION_ENVELOPE),
         "projection/envelope must be reserved in the notification methods list"
     );
     assert_eq!(
-        octos_core::ui_protocol::methods::PROJECTION_ENVELOPE,
+        ra_core::ui_protocol::methods::PROJECTION_ENVELOPE,
         "projection/envelope"
     );
 }
@@ -19836,7 +19836,7 @@ async fn raw_ephemeral_helper_refuses_envelope_superseded_method() {
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         send_raw_notification_ephemeral(
             &ws,
-            octos_core::ui_protocol::methods::MESSAGE_DELTA,
+            ra_core::ui_protocol::methods::MESSAGE_DELTA,
             json!({"text": "should be refused"}),
         )
     }));
@@ -20746,18 +20746,18 @@ fn aux_rest_to_ws_v1_route_rpc_rejects_methods_when_feature_not_negotiated() {
     assert!(features.header_present);
     assert!(!features.auxiliary_rest_to_ws_v1);
     for method in [
-        octos_core::ui_protocol::methods::SESSION_LIST,
-        octos_core::ui_protocol::methods::SESSION_SNAPSHOT,
-        octos_core::ui_protocol::methods::SESSION_DELETE,
-        octos_core::ui_protocol::methods::SYSTEM_STATUS_GET,
-        octos_core::ui_protocol::methods::CONTENT_LIST,
+        ra_core::ui_protocol::methods::SESSION_LIST,
+        ra_core::ui_protocol::methods::SESSION_SNAPSHOT,
+        ra_core::ui_protocol::methods::SESSION_DELETE,
+        ra_core::ui_protocol::methods::SYSTEM_STATUS_GET,
+        ra_core::ui_protocol::methods::CONTENT_LIST,
     ] {
         let request = RpcRequest::<Value>::new("req-1", method, Value::Null);
         let result = route_rpc_command(request, features);
         let err = result.expect_err("aux method must be rejected without feature");
         assert_eq!(
             err.code,
-            octos_core::ui_protocol::rpc_error_codes::METHOD_NOT_SUPPORTED,
+            ra_core::ui_protocol::rpc_error_codes::METHOD_NOT_SUPPORTED,
             "{method} must reject with METHOD_NOT_SUPPORTED"
         );
     }
@@ -20776,11 +20776,11 @@ fn aux_rest_to_ws_v1_route_rpc_accepts_methods_when_feature_negotiated() {
     assert!(features.auxiliary_rest_to_ws_v1);
     for (method, params) in [
         (
-            octos_core::ui_protocol::methods::SESSION_LIST,
+            ra_core::ui_protocol::methods::SESSION_LIST,
             Value::Object(serde_json::Map::new()),
         ),
         (
-            octos_core::ui_protocol::methods::SYSTEM_STATUS_GET,
+            ra_core::ui_protocol::methods::SYSTEM_STATUS_GET,
             Value::Object(serde_json::Map::new()),
         ),
     ] {
@@ -20814,19 +20814,19 @@ fn aux_rest_to_ws_v1_route_rpc_rejects_methods_with_no_feature_header_at_all() {
         "no header → auxiliary.rest_to_ws.v1 must be false"
     );
     for method in [
-        octos_core::ui_protocol::methods::SESSION_LIST,
-        octos_core::ui_protocol::methods::SESSION_SNAPSHOT,
-        octos_core::ui_protocol::methods::SESSION_MESSAGES_PAGE,
-        octos_core::ui_protocol::methods::SESSION_STATUS_GET,
-        octos_core::ui_protocol::methods::SESSION_FILES_LIST,
-        octos_core::ui_protocol::methods::SESSION_TASKS_LIST,
-        octos_core::ui_protocol::methods::SESSION_WORKSPACE_GET,
-        octos_core::ui_protocol::methods::SESSION_TITLE_SET,
-        octos_core::ui_protocol::methods::SESSION_DELETE,
-        octos_core::ui_protocol::methods::SYSTEM_STATUS_GET,
-        octos_core::ui_protocol::methods::CONTENT_LIST,
-        octos_core::ui_protocol::methods::CONTENT_DELETE,
-        octos_core::ui_protocol::methods::CONTENT_BULK_DELETE,
+        ra_core::ui_protocol::methods::SESSION_LIST,
+        ra_core::ui_protocol::methods::SESSION_SNAPSHOT,
+        ra_core::ui_protocol::methods::SESSION_MESSAGES_PAGE,
+        ra_core::ui_protocol::methods::SESSION_STATUS_GET,
+        ra_core::ui_protocol::methods::SESSION_FILES_LIST,
+        ra_core::ui_protocol::methods::SESSION_TASKS_LIST,
+        ra_core::ui_protocol::methods::SESSION_WORKSPACE_GET,
+        ra_core::ui_protocol::methods::SESSION_TITLE_SET,
+        ra_core::ui_protocol::methods::SESSION_DELETE,
+        ra_core::ui_protocol::methods::SYSTEM_STATUS_GET,
+        ra_core::ui_protocol::methods::CONTENT_LIST,
+        ra_core::ui_protocol::methods::CONTENT_DELETE,
+        ra_core::ui_protocol::methods::CONTENT_BULK_DELETE,
     ] {
         let request = RpcRequest::<Value>::new("req-no-header", method, Value::Null);
         let result = route_rpc_command(request, features);
@@ -20834,7 +20834,7 @@ fn aux_rest_to_ws_v1_route_rpc_rejects_methods_with_no_feature_header_at_all() {
             result.expect_err("aux method must be rejected when no feature header was sent at all");
         assert_eq!(
             err.code,
-            octos_core::ui_protocol::rpc_error_codes::METHOD_NOT_SUPPORTED,
+            ra_core::ui_protocol::rpc_error_codes::METHOD_NOT_SUPPORTED,
             "{method} must reject with METHOD_NOT_SUPPORTED even with no header",
         );
     }
@@ -20866,7 +20866,7 @@ fn advertised_capabilities_include_session_btw() {
         capabilities
             .supported_methods
             .iter()
-            .any(|method| method == octos_core::ui_protocol::methods::SESSION_BTW),
+            .any(|method| method == ra_core::ui_protocol::methods::SESSION_BTW),
         "session/btw must be advertised so clients can gate /btw; got {:?}",
         capabilities.supported_methods
     );
@@ -21022,16 +21022,16 @@ async fn session_btw_rejects_second_aside_while_first_in_flight() {
 async fn session_btw_answers_via_provider_with_no_tools() {
     struct BtwStubProvider;
     #[async_trait::async_trait]
-    impl octos_llm::LlmProvider for BtwStubProvider {
+    impl ra_llm::LlmProvider for BtwStubProvider {
         async fn chat(
             &self,
-            messages: &[octos_core::Message],
-            tools: &[octos_llm::ToolSpec],
-            config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+            messages: &[ra_core::Message],
+            tools: &[ra_llm::ToolSpec],
+            config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             assert!(tools.is_empty(), "btw aside must offer NO tools");
             assert!(
-                matches!(config.tool_choice, octos_llm::ToolChoice::None),
+                matches!(config.tool_choice, ra_llm::ToolChoice::None),
                 "btw aside must force tool_choice=None"
             );
             let prompt = &messages.last().expect("user prompt").content;
@@ -21043,12 +21043,12 @@ async fn session_btw_answers_via_provider_with_no_tools() {
                 prompt.contains("hello"),
                 "transcript tail must reach the provider; got {prompt}"
             );
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: Some("Refactoring the parser; tests are running.".into()),
                 reasoning_content: None,
                 tool_calls: vec![],
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: None,
             })
         }
@@ -21140,15 +21140,15 @@ fn btw_live_draft_is_turn_scoped() {
 async fn session_btw_reads_draft_only_for_a_non_terminal_turn() {
     struct DraftProbeProvider;
     #[async_trait::async_trait]
-    impl octos_llm::LlmProvider for DraftProbeProvider {
+    impl ra_llm::LlmProvider for DraftProbeProvider {
         async fn chat(
             &self,
-            messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+            messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             let prompt = messages.last().expect("prompt").content.clone();
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: Some(if prompt.contains("PAXOS-DRAFT-TAIL") {
                     "saw-draft".into()
                 } else {
@@ -21156,8 +21156,8 @@ async fn session_btw_reads_draft_only_for_a_non_terminal_turn() {
                 }),
                 reasoning_content: None,
                 tool_calls: vec![],
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: None,
             })
         }
@@ -21294,19 +21294,19 @@ async fn session_btw_reads_draft_only_for_a_non_terminal_turn() {
 async fn session_btw_folds_topic_into_the_session_key() {
     struct TopicStubProvider;
     #[async_trait::async_trait]
-    impl octos_llm::LlmProvider for TopicStubProvider {
+    impl ra_llm::LlmProvider for TopicStubProvider {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
-            Ok(octos_llm::ChatResponse {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
+            Ok(ra_llm::ChatResponse {
                 content: Some("scoped answer".into()),
                 reasoning_content: None,
                 tool_calls: vec![],
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: None,
             })
         }
@@ -21396,8 +21396,8 @@ fn raw_method_is_dispatched_distinguishes_raw_from_typed() {
         APPUI_METHOD_REVIEW_START,
         APPUI_METHOD_SESSION_STATUS_READ,
         APPUI_METHOD_PROFILE_LLM_UPSERT,
-        octos_core::ui_protocol::methods::SESSION_GOAL_SET,
-        octos_core::ui_protocol::methods::LOOP_CREATE,
+        ra_core::ui_protocol::methods::SESSION_GOAL_SET,
+        ra_core::ui_protocol::methods::LOOP_CREATE,
     ] {
         assert!(
             raw_method_is_dispatched(method, false),
@@ -21406,11 +21406,11 @@ fn raw_method_is_dispatched_distinguishes_raw_from_typed() {
     }
     // Typed (routed through route_rpc_command + `validate_session_ingress_command_scope`):
     for method in [
-        octos_core::ui_protocol::methods::TURN_START,
-        octos_core::ui_protocol::methods::SESSION_LIST,
-        octos_core::ui_protocol::methods::SESSION_HYDRATE,
-        octos_core::ui_protocol::methods::SESSION_MESSAGES_PAGE,
-        octos_core::ui_protocol::methods::SESSION_STATUS_GET,
+        ra_core::ui_protocol::methods::TURN_START,
+        ra_core::ui_protocol::methods::SESSION_LIST,
+        ra_core::ui_protocol::methods::SESSION_HYDRATE,
+        ra_core::ui_protocol::methods::SESSION_MESSAGES_PAGE,
+        ra_core::ui_protocol::methods::SESSION_STATUS_GET,
         APPUI_METHOD_CLIENT_HELLO,
     ] {
         assert!(
@@ -21420,11 +21420,11 @@ fn raw_method_is_dispatched_distinguishes_raw_from_typed() {
     }
     // Content methods are raw ONLY on stdio; never on a (non-stdio) ingress socket.
     assert!(raw_method_is_dispatched(
-        octos_core::ui_protocol::methods::CONTENT_LIST,
+        ra_core::ui_protocol::methods::CONTENT_LIST,
         true
     ));
     assert!(!raw_method_is_dispatched(
-        octos_core::ui_protocol::methods::CONTENT_LIST,
+        ra_core::ui_protocol::methods::CONTENT_LIST,
         false
     ));
 }
@@ -21465,24 +21465,24 @@ fn raw_method_is_dispatched_covers_full_raw_surface() {
         APPUI_METHOD_ONBOARDING_WORKSPACE_CREATE,
         APPUI_METHOD_SERVER_SHUTDOWN,
         // Autonomy (session/goal/*, loop/*, agent/*, task/artifact/*):
-        octos_core::ui_protocol::methods::SESSION_GOAL_GET,
-        octos_core::ui_protocol::methods::SESSION_GOAL_SET,
-        octos_core::ui_protocol::methods::SESSION_GOAL_CLEAR,
-        octos_core::ui_protocol::methods::LOOP_CREATE,
-        octos_core::ui_protocol::methods::LOOP_LIST,
-        octos_core::ui_protocol::methods::LOOP_PAUSE,
-        octos_core::ui_protocol::methods::LOOP_RESUME,
-        octos_core::ui_protocol::methods::LOOP_DELETE,
-        octos_core::ui_protocol::methods::LOOP_FIRE_NOW,
-        octos_core::ui_protocol::methods::AGENT_LIST,
-        octos_core::ui_protocol::methods::AGENT_STATUS_READ,
-        octos_core::ui_protocol::methods::AGENT_OUTPUT_READ,
-        octos_core::ui_protocol::methods::AGENT_ARTIFACT_LIST,
-        octos_core::ui_protocol::methods::AGENT_ARTIFACT_READ,
-        octos_core::ui_protocol::methods::AGENT_INTERRUPT,
-        octos_core::ui_protocol::methods::AGENT_CLOSE,
-        octos_core::ui_protocol::methods::TASK_ARTIFACT_LIST,
-        octos_core::ui_protocol::methods::TASK_ARTIFACT_READ,
+        ra_core::ui_protocol::methods::SESSION_GOAL_GET,
+        ra_core::ui_protocol::methods::SESSION_GOAL_SET,
+        ra_core::ui_protocol::methods::SESSION_GOAL_CLEAR,
+        ra_core::ui_protocol::methods::LOOP_CREATE,
+        ra_core::ui_protocol::methods::LOOP_LIST,
+        ra_core::ui_protocol::methods::LOOP_PAUSE,
+        ra_core::ui_protocol::methods::LOOP_RESUME,
+        ra_core::ui_protocol::methods::LOOP_DELETE,
+        ra_core::ui_protocol::methods::LOOP_FIRE_NOW,
+        ra_core::ui_protocol::methods::AGENT_LIST,
+        ra_core::ui_protocol::methods::AGENT_STATUS_READ,
+        ra_core::ui_protocol::methods::AGENT_OUTPUT_READ,
+        ra_core::ui_protocol::methods::AGENT_ARTIFACT_LIST,
+        ra_core::ui_protocol::methods::AGENT_ARTIFACT_READ,
+        ra_core::ui_protocol::methods::AGENT_INTERRUPT,
+        ra_core::ui_protocol::methods::AGENT_CLOSE,
+        ra_core::ui_protocol::methods::TASK_ARTIFACT_LIST,
+        ra_core::ui_protocol::methods::TASK_ARTIFACT_READ,
     ];
     for method in raw_methods {
         assert!(
@@ -21496,17 +21496,17 @@ fn raw_method_is_dispatched_covers_full_raw_surface() {
 fn session_ingress_callable_method_matches_the_deny_surfaces() {
     // Session-scoped typed methods an ingress credential CAN call:
     for m in [
-        octos_core::ui_protocol::methods::TURN_START,
-        octos_core::ui_protocol::methods::SESSION_HYDRATE,
-        octos_core::ui_protocol::methods::SESSION_MESSAGES_PAGE,
-        octos_core::ui_protocol::methods::SESSION_STATUS_GET,
+        ra_core::ui_protocol::methods::TURN_START,
+        ra_core::ui_protocol::methods::SESSION_HYDRATE,
+        ra_core::ui_protocol::methods::SESSION_MESSAGES_PAGE,
+        ra_core::ui_protocol::methods::SESSION_STATUS_GET,
     ] {
         assert!(session_ingress_callable_method(m), "{m} must stay callable");
     }
     // Raw surface — denied wholesale (mirrors the deny gate):
     for m in [
-        octos_core::ui_protocol::methods::SESSION_GOAL_SET,
-        octos_core::ui_protocol::methods::LOOP_CREATE,
+        ra_core::ui_protocol::methods::SESSION_GOAL_SET,
+        ra_core::ui_protocol::methods::LOOP_CREATE,
         APPUI_METHOD_PROFILE_LLM_UPSERT,
         APPUI_METHOD_SESSION_STATUS_READ,
     ] {
@@ -21518,24 +21518,24 @@ fn session_ingress_callable_method_matches_the_deny_surfaces() {
     // Global typed methods `validate_session_ingress_command_scope` rejects:
     for m in [
         APPUI_METHOD_PROFILE_LOCAL_CREATE,
-        octos_core::ui_protocol::methods::SESSION_LIST,
-        octos_core::ui_protocol::methods::SYSTEM_STATUS_GET,
-        octos_core::ui_protocol::methods::CONTENT_LIST,
-        octos_core::ui_protocol::methods::CONTENT_DELETE,
-        octos_core::ui_protocol::methods::CONTENT_BULK_DELETE,
-        octos_core::ui_protocol::methods::MEMORY_OVERVIEW,
-        octos_core::ui_protocol::methods::MEMORY_ENTITY,
-        octos_core::ui_protocol::methods::MEMORY_SEARCH,
-        octos_core::ui_protocol::methods::MEMORY_LOAD,
-        octos_core::ui_protocol::methods::MEMORY_INGEST,
-        octos_core::ui_protocol::methods::CRON_LIST,
-        octos_core::ui_protocol::methods::CRON_TOGGLE,
-        octos_core::ui_protocol::methods::SESSION_FORK,
-        octos_core::ui_protocol::methods::SMART_HOME_STATUS_GET,
-        octos_core::ui_protocol::methods::SMART_HOME_DEVICE_LIST,
-        octos_core::ui_protocol::methods::SMART_HOME_DEVICE_COMMAND,
-        octos_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_START,
-        octos_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_STOP,
+        ra_core::ui_protocol::methods::SESSION_LIST,
+        ra_core::ui_protocol::methods::SYSTEM_STATUS_GET,
+        ra_core::ui_protocol::methods::CONTENT_LIST,
+        ra_core::ui_protocol::methods::CONTENT_DELETE,
+        ra_core::ui_protocol::methods::CONTENT_BULK_DELETE,
+        ra_core::ui_protocol::methods::MEMORY_OVERVIEW,
+        ra_core::ui_protocol::methods::MEMORY_ENTITY,
+        ra_core::ui_protocol::methods::MEMORY_SEARCH,
+        ra_core::ui_protocol::methods::MEMORY_LOAD,
+        ra_core::ui_protocol::methods::MEMORY_INGEST,
+        ra_core::ui_protocol::methods::CRON_LIST,
+        ra_core::ui_protocol::methods::CRON_TOGGLE,
+        ra_core::ui_protocol::methods::SESSION_FORK,
+        ra_core::ui_protocol::methods::SMART_HOME_STATUS_GET,
+        ra_core::ui_protocol::methods::SMART_HOME_DEVICE_LIST,
+        ra_core::ui_protocol::methods::SMART_HOME_DEVICE_COMMAND,
+        ra_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_START,
+        ra_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_STOP,
     ] {
         assert!(
             !session_ingress_callable_method(m),
@@ -21548,12 +21548,12 @@ fn session_ingress_callable_method_matches_the_deny_surfaces() {
 fn filter_capabilities_for_session_ingress_keeps_only_callable_methods() {
     let mut caps = UiProtocolCapabilities::new(
         &[
-            octos_core::ui_protocol::methods::SESSION_MESSAGES_PAGE, // keep (session-scoped)
-            octos_core::ui_protocol::methods::TURN_START,            // keep (session-scoped)
-            octos_core::ui_protocol::methods::SESSION_LIST,          // drop (global typed)
-            octos_core::ui_protocol::methods::SYSTEM_STATUS_GET,     // drop (global typed)
+            ra_core::ui_protocol::methods::SESSION_MESSAGES_PAGE, // keep (session-scoped)
+            ra_core::ui_protocol::methods::TURN_START,            // keep (session-scoped)
+            ra_core::ui_protocol::methods::SESSION_LIST,          // drop (global typed)
+            ra_core::ui_protocol::methods::SYSTEM_STATUS_GET,     // drop (global typed)
             APPUI_METHOD_PROFILE_LLM_UPSERT,                         // drop (raw)
-            octos_core::ui_protocol::methods::SESSION_GOAL_SET,      // drop (raw)
+            ra_core::ui_protocol::methods::SESSION_GOAL_SET,      // drop (raw)
         ],
         &[],
     );
@@ -21561,8 +21561,8 @@ fn filter_capabilities_for_session_ingress_keeps_only_callable_methods() {
     assert_eq!(
         caps.supported_methods,
         vec![
-            octos_core::ui_protocol::methods::SESSION_MESSAGES_PAGE.to_string(),
-            octos_core::ui_protocol::methods::TURN_START.to_string(),
+            ra_core::ui_protocol::methods::SESSION_MESSAGES_PAGE.to_string(),
+            ra_core::ui_protocol::methods::TURN_START.to_string(),
         ]
     );
 }
@@ -21585,9 +21585,9 @@ fn session_opened_notification_capabilities_are_filtered_for_ingress() {
             panes: None,
             capabilities: UiProtocolCapabilities::new(
                 &[
-                    octos_core::ui_protocol::methods::SESSION_MESSAGES_PAGE,
+                    ra_core::ui_protocol::methods::SESSION_MESSAGES_PAGE,
                     APPUI_METHOD_PROFILE_LLM_UPSERT,
-                    octos_core::ui_protocol::methods::SESSION_LIST,
+                    ra_core::ui_protocol::methods::SESSION_LIST,
                 ],
                 &[],
             ),
@@ -21604,7 +21604,7 @@ fn session_opened_notification_capabilities_are_filtered_for_ingress() {
     };
     assert_eq!(
         opened.capabilities.supported_methods,
-        vec![octos_core::ui_protocol::methods::SESSION_MESSAGES_PAGE.to_string()],
+        vec![ra_core::ui_protocol::methods::SESSION_MESSAGES_PAGE.to_string()],
         "raw/global methods must be filtered from the SessionOpened notification"
     );
 }
@@ -21627,12 +21627,12 @@ fn legacy_header_present_gates_still_accept_methods_with_no_feature_header() {
     let features = ConnectionUiFeatures::from_headers_and_query(&headers, None);
     assert!(!features.header_present);
     for method in [
-        octos_core::ui_protocol::methods::SESSION_HYDRATE,
-        octos_core::ui_protocol::methods::THREAD_GRAPH_GET,
-        octos_core::ui_protocol::methods::TURN_STATE_GET,
-        octos_core::ui_protocol::methods::TASK_LIST,
-        octos_core::ui_protocol::methods::TASK_CANCEL,
-        octos_core::ui_protocol::methods::TASK_RESTART_FROM_NODE,
+        ra_core::ui_protocol::methods::SESSION_HYDRATE,
+        ra_core::ui_protocol::methods::THREAD_GRAPH_GET,
+        ra_core::ui_protocol::methods::TURN_STATE_GET,
+        ra_core::ui_protocol::methods::TASK_LIST,
+        ra_core::ui_protocol::methods::TASK_CANCEL,
+        ra_core::ui_protocol::methods::TASK_RESTART_FROM_NODE,
     ] {
         let request = RpcRequest::<Value>::new("req-legacy", method, Value::Null);
         let result = route_rpc_command(request, features);
@@ -21642,7 +21642,7 @@ fn legacy_header_present_gates_still_accept_methods_with_no_feature_header() {
         if let Err(err) = result {
             assert_ne!(
                 err.code,
-                octos_core::ui_protocol::rpc_error_codes::METHOD_NOT_SUPPORTED,
+                ra_core::ui_protocol::rpc_error_codes::METHOD_NOT_SUPPORTED,
                 "{method} must NOT be rejected by capability gate when no header sent",
             );
         }
@@ -21659,14 +21659,14 @@ fn legacy_header_present_gates_still_accept_methods_with_no_feature_header() {
 async fn rest_status_to_rpc_error_404_session_context_echoes_session_id() {
     let context = RestResourceContext::session("sess-abc");
     let err = rest_status_to_rpc_error(
-        octos_core::ui_protocol::methods::SESSION_MESSAGES_PAGE,
+        ra_core::ui_protocol::methods::SESSION_MESSAGES_PAGE,
         axum::http::StatusCode::NOT_FOUND,
         Some("session not found".into()),
         &context,
     );
     assert_eq!(
         err.code,
-        octos_core::ui_protocol::rpc_error_codes::UNKNOWN_SESSION,
+        ra_core::ui_protocol::rpc_error_codes::UNKNOWN_SESSION,
     );
     let data = err.data.as_ref().expect("typed error data");
     assert_eq!(
@@ -21693,14 +21693,14 @@ async fn rest_status_to_rpc_error_404_session_context_echoes_session_id() {
 async fn rest_status_to_rpc_error_404_resource_context_uses_not_found_slot() {
     let context = RestResourceContext::resource("content", "c-42");
     let err = rest_status_to_rpc_error(
-        octos_core::ui_protocol::methods::CONTENT_DELETE,
+        ra_core::ui_protocol::methods::CONTENT_DELETE,
         axum::http::StatusCode::NOT_FOUND,
         None,
         &context,
     );
     assert_eq!(
         err.code,
-        octos_core::ui_protocol::rpc_error_codes::RESOURCE_NOT_FOUND,
+        ra_core::ui_protocol::rpc_error_codes::RESOURCE_NOT_FOUND,
         "non-session 404 must NOT collapse to UNKNOWN_SESSION",
     );
     let data = err.data.as_ref().expect("typed error data");
@@ -21722,14 +21722,14 @@ async fn rest_status_to_rpc_error_404_resource_context_uses_not_found_slot() {
 async fn rest_status_to_rpc_error_503_maps_to_runtime_not_ready() {
     let context = RestResourceContext::session("sess-503");
     let err = rest_status_to_rpc_error(
-        octos_core::ui_protocol::methods::SESSION_MESSAGES_PAGE,
+        ra_core::ui_protocol::methods::SESSION_MESSAGES_PAGE,
         axum::http::StatusCode::SERVICE_UNAVAILABLE,
         Some("Sessions not available".into()),
         &context,
     );
     assert_eq!(
         err.code,
-        octos_core::ui_protocol::rpc_error_codes::RUNTIME_NOT_READY,
+        ra_core::ui_protocol::rpc_error_codes::RUNTIME_NOT_READY,
     );
     let data = err.data.as_ref().expect("typed error data");
     assert_eq!(data.get("rest_status").and_then(Value::as_u64), Some(503));
@@ -21743,7 +21743,7 @@ async fn rest_status_to_rpc_error_503_maps_to_runtime_not_ready() {
 #[test]
 fn content_bulk_delete_max_ids_constant_is_mirrored_from_core() {
     assert_eq!(
-        octos_core::ui_protocol::CONTENT_BULK_DELETE_MAX_IDS,
+        ra_core::ui_protocol::CONTENT_BULK_DELETE_MAX_IDS,
         256,
         "bulk-delete cap is documented at 256 in the ADR; bump both sides if changed",
     );
@@ -21803,7 +21803,7 @@ fn runtime_unavailable_errors_are_typed_for_protocol_clients() {
 
     assert_eq!(
         error.code,
-        octos_core::ui_protocol::rpc_error_codes::INTERNAL_ERROR
+        ra_core::ui_protocol::rpc_error_codes::INTERNAL_ERROR
     );
     assert_eq!(
         error.data.as_ref().and_then(|data| data.get("kind")),
@@ -21831,19 +21831,19 @@ fn held_data_dir_lock_yields_a_clear_actionable_error() {
     // "failed to bootstrap ProfileRuntime for profile 'alan': failed to open
     // episode store for profile 'alan'" — the cause, the path, and every hint
     // about what to do were dropped by the `{error}` (non-alternate) format.
-    let report = eyre::Report::new(octos_memory::EpisodeStoreLocked {
+    let report = eyre::Report::new(ra_memory::EpisodeStoreLocked {
         path: std::path::PathBuf::from("/Users/dev/.ra/profiles/alan/data/episodes.redb"),
     })
     .wrap_err("failed to open episode store for profile 'alan'");
     assert!(
-        octos_memory::is_episode_store_locked(&report),
+        ra_memory::is_episode_store_locked(&report),
         "lock contention must be detected through the eyre wrap chain"
     );
 
     let error = data_dir_locked_error("alan", &report);
     assert_eq!(
         error.code,
-        octos_core::ui_protocol::rpc_error_codes::INTERNAL_ERROR
+        ra_core::ui_protocol::rpc_error_codes::INTERNAL_ERROR
     );
     assert_eq!(
         error.data.as_ref().and_then(|d| d.get("kind")),
@@ -21878,7 +21878,7 @@ fn non_lock_bootstrap_error_is_not_misclassified_as_data_dir_locked() {
     let report = eyre::eyre!("No LLM provider configured")
         .wrap_err("failed to bootstrap ProfileRuntime for profile 'alan'");
     assert!(
-        !octos_memory::is_episode_store_locked(&report),
+        !ra_memory::is_episode_store_locked(&report),
         "an unrelated bootstrap failure must not be reported as lock contention"
     );
 }
@@ -22373,7 +22373,7 @@ async fn interrupt_cancels_running_spawn_only_tasks_for_session() {
     // interrupt path calls `cancel_session_spawn_only_tasks`, which fires
     // each task's supervisor cancel token so the detached worker drops its
     // in-flight pipeline future at the next poll.
-    let supervisor = octos_agent::TaskSupervisor::new();
+    let supervisor = ra_agent::TaskSupervisor::new();
     let session_id = SessionKey("api:profile/local:owned".into());
     let session_key = session_id.to_string();
 
@@ -22401,25 +22401,25 @@ async fn interrupt_cancels_running_spawn_only_tasks_for_session() {
     // which fires their cancel tokens.
     assert!(matches!(
         supervisor.get_task(&running_a).map(|t| t.status),
-        Some(octos_agent::TaskStatus::Cancelled)
+        Some(ra_agent::TaskStatus::Cancelled)
     ));
     assert!(supervisor.cancel_token(&running_a).is_cancelled());
     assert!(matches!(
         supervisor.get_task(&running_b).map(|t| t.status),
-        Some(octos_agent::TaskStatus::Cancelled)
+        Some(ra_agent::TaskStatus::Cancelled)
     ));
     assert!(supervisor.cancel_token(&running_b).is_cancelled());
 
     // The completed task is left intact (still `Completed`, not clobbered).
     assert!(matches!(
         supervisor.get_task(&done).map(|t| t.status),
-        Some(octos_agent::TaskStatus::Completed)
+        Some(ra_agent::TaskStatus::Completed)
     ));
 
     // A different session's running task is untouched by this interrupt.
     assert!(matches!(
         supervisor.get_task(&other_running).map(|t| t.status),
-        Some(octos_agent::TaskStatus::Running)
+        Some(ra_agent::TaskStatus::Running)
     ));
     assert!(!supervisor.cancel_token(&other_running).is_cancelled());
 }
@@ -23548,8 +23548,8 @@ async fn m14_codex_tool_call_dual_emits_raw_and_envelope() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&workspace).expect("temp workspace");
-    let registry = octos_agent::ToolRegistry::with_builtins(&workspace);
-    let mut ctx = octos_agent::tools::ToolContext::zero();
+    let registry = ra_agent::ToolRegistry::with_builtins(&workspace);
+    let mut ctx = ra_agent::tools::ToolContext::zero();
     let supervisor = registry.supervisor();
     ctx.task_supervisor = Some(supervisor);
     let session_id = SessionKey("local:test".into());
@@ -23629,7 +23629,7 @@ async fn m14_codex_tool_call_dual_emits_raw_and_envelope() {
                     &envelope.envelope.payload,
                     PayloadV2::ToolEnd {
                         tool_call_id,
-                        status: octos_core::ui_protocol::EnvelopeToolEndStatus::Complete,
+                        status: ra_core::ui_protocol::EnvelopeToolEndStatus::Complete,
                         ..
                     } if tool_call_id == &call_id
                 )
@@ -23643,7 +23643,7 @@ async fn m14_codex_tool_call_dual_emits_raw_and_envelope() {
 /// while a completed/errored turn keeps the folded total.
 #[test]
 fn interrupted_goal_charge_falls_back_to_tracker_only_when_interrupted_with_zero_folded() {
-    let tracker = octos_agent::TokenTracker::new();
+    let tracker = ra_agent::TokenTracker::new();
     tracker
         .input_tokens
         .store(1_000, std::sync::atomic::Ordering::Relaxed);
@@ -24251,7 +24251,7 @@ async fn send_error_logged_for_durable_notifications() {
     let first = send_notification_durable(
         &ws,
         &ledger,
-        UiNotification::TurnStarted(octos_core::ui_protocol::TurnStartedEvent {
+        UiNotification::TurnStarted(ra_core::ui_protocol::TurnStartedEvent {
             session_id: session_id.clone(),
             turn_id: turn_id.clone(),
             timestamp: Utc::now(),
@@ -24265,7 +24265,7 @@ async fn send_error_logged_for_durable_notifications() {
     let second = send_notification_durable(
         &ws,
         &ledger,
-        UiNotification::Warning(octos_core::ui_protocol::WarningEvent {
+        UiNotification::Warning(ra_core::ui_protocol::WarningEvent {
             session_id: session_id.clone(),
             turn_id: Some(turn_id.clone()),
             code: "test".into(),
@@ -24337,7 +24337,7 @@ async fn approval_request_backpressure_cancels_pending_runtime_waiter() {
         .expect_err("late response should see typed cancellation");
     assert_eq!(
         late_response.code,
-        octos_core::ui_protocol::rpc_error_codes::APPROVAL_CANCELLED
+        ra_core::ui_protocol::rpc_error_codes::APPROVAL_CANCELLED
     );
     assert_eq!(
         late_response.data.as_ref().unwrap()["reason"],
@@ -24388,7 +24388,7 @@ async fn approval_request_closed_ws_keeps_pending_runtime_waiter() {
     };
 
     let approval_task = tokio::spawn(async move {
-        <UiProtocolApprovalRequester as octos_agent::ToolApprovalRequester>::request_approval(
+        <UiProtocolApprovalRequester as ra_agent::ToolApprovalRequester>::request_approval(
             &requester,
             ToolApprovalRequest {
                 tool_id: "shell-1".into(),
@@ -24480,7 +24480,7 @@ async fn dropped_approval_waiter_cancels_pending_entry() {
     };
 
     let approval_task = tokio::spawn(async move {
-        <UiProtocolApprovalRequester as octos_agent::ToolApprovalRequester>::request_approval(
+        <UiProtocolApprovalRequester as ra_agent::ToolApprovalRequester>::request_approval(
             &requester,
             ToolApprovalRequest {
                 tool_id: "shell-1".into(),
@@ -24888,7 +24888,7 @@ async fn slow_client_does_not_wedge_other_connections() {
         let res = send_notification_durable(
             &ws_b,
             &ledger,
-            UiNotification::Warning(octos_core::ui_protocol::WarningEvent {
+            UiNotification::Warning(ra_core::ui_protocol::WarningEvent {
                 session_id: session_id.clone(),
                 turn_id: Some(turn_id.clone()),
                 code: "tick".into(),
@@ -24910,7 +24910,7 @@ async fn slow_client_does_not_wedge_other_connections() {
     let _ = send_notification_durable(
         &ws_a,
         &ledger,
-        UiNotification::Warning(octos_core::ui_protocol::WarningEvent {
+        UiNotification::Warning(ra_core::ui_protocol::WarningEvent {
             session_id,
             turn_id: Some(turn_id),
             code: "tick".into(),
@@ -24941,7 +24941,7 @@ async fn bounded_channel_full_emits_replay_lossy() {
         let _ = send_notification_durable(
             &ws,
             &ledger,
-            UiNotification::Warning(octos_core::ui_protocol::WarningEvent {
+            UiNotification::Warning(ra_core::ui_protocol::WarningEvent {
                 session_id: session_id.clone(),
                 turn_id: Some(turn_id.clone()),
                 code: "tick".into(),
@@ -24993,8 +24993,8 @@ fn replay_lossy_method_is_registered_in_core_protocol() {
     // must be wired into the core protocol's notification list and
     // dispatch table. Catches "added the variant but forgot the entry"
     // regressions.
-    let methods = octos_core::ui_protocol::UI_PROTOCOL_NOTIFICATION_METHODS;
-    assert!(methods.contains(&octos_core::ui_protocol::methods::REPLAY_LOSSY));
+    let methods = ra_core::ui_protocol::UI_PROTOCOL_NOTIFICATION_METHODS;
+    assert!(methods.contains(&ra_core::ui_protocol::methods::REPLAY_LOSSY));
 
     let event = UiNotification::ReplayLossy(ReplayLossyEvent {
         session_id: SessionKey("local:test".into()),
@@ -25007,7 +25007,7 @@ fn replay_lossy_method_is_registered_in_core_protocol() {
     let frame = event
         .into_rpc_notification()
         .expect("serialize replay_lossy");
-    assert_eq!(frame.method, octos_core::ui_protocol::methods::REPLAY_LOSSY);
+    assert_eq!(frame.method, ra_core::ui_protocol::methods::REPLAY_LOSSY);
     assert_eq!(frame.params["dropped_count"], json!(7));
     assert_eq!(frame.params["last_durable_cursor"]["seq"], json!(42));
 }
@@ -25020,7 +25020,7 @@ fn replay_lossy_method_is_registered_in_core_protocol() {
 fn audit_log_records_every_decision() {
     // Mirrors what `handle_approval_respond` does. Verifies one
     // JSON-Lines entry per decision and that no payload bodies leak.
-    use octos_core::ui_protocol::ApprovalRequestedEvent;
+    use ra_core::ui_protocol::ApprovalRequestedEvent;
 
     let temp = tempfile::tempdir().expect("tempdir");
     let log = ApprovalsAuditLog::new(temp.path(), ApprovalsAuditConfig::default());
@@ -25075,7 +25075,7 @@ fn audit_log_records_every_decision() {
 #[tokio::test]
 async fn reconnect_after_decision_replays_decided_event() {
     use chrono::Utc;
-    use octos_core::ui_protocol::{ApprovalDecidedEvent, ApprovalRequestedEvent};
+    use ra_core::ui_protocol::{ApprovalDecidedEvent, ApprovalRequestedEvent};
 
     let temp = tempfile::tempdir().expect("tempdir");
     let state = state_with_sessions(temp.path());
@@ -25181,10 +25181,10 @@ async fn reconnect_after_decision_replays_decided_event() {
 
 fn make_background_task(
     id: &str,
-    status: octos_agent::TaskStatus,
-    runtime_state: octos_agent::TaskRuntimeState,
-) -> octos_agent::BackgroundTask {
-    octos_agent::BackgroundTask {
+    status: ra_agent::TaskStatus,
+    runtime_state: ra_agent::TaskRuntimeState,
+) -> ra_agent::BackgroundTask {
+    ra_agent::BackgroundTask {
         id: id.into(),
         tool_name: "search".into(),
         tool_call_id: "call-1".into(),
@@ -25234,8 +25234,8 @@ async fn terminal_task_update_survives_backpressure() {
 
     let task = make_background_task(
         "01900000-0000-7000-8000-0000000000aa",
-        octos_agent::TaskStatus::Completed,
-        octos_agent::TaskRuntimeState::Completed,
+        ra_agent::TaskStatus::Completed,
+        ra_agent::TaskRuntimeState::Completed,
     );
     forward_task_progress_to_channel(&tx, &dropped, &task, None);
 
@@ -25282,8 +25282,8 @@ async fn non_terminal_update_drops_under_backpressure_and_increments_counter() {
 
     let task = make_background_task(
         "01900000-0000-7000-8000-0000000000bb",
-        octos_agent::TaskStatus::Running,
-        octos_agent::TaskRuntimeState::ExecutingTool,
+        ra_agent::TaskStatus::Running,
+        ra_agent::TaskRuntimeState::ExecutingTool,
     );
     forward_task_progress_to_channel(&tx, &dropped, &task, None);
 
@@ -25319,8 +25319,8 @@ async fn task_update_fast_path_when_channel_has_capacity() {
 
     let task = make_background_task(
         "01900000-0000-7000-8000-0000000000cc",
-        octos_agent::TaskStatus::Failed,
-        octos_agent::TaskRuntimeState::Failed,
+        ra_agent::TaskStatus::Failed,
+        ra_agent::TaskRuntimeState::Failed,
     );
     forward_task_progress_to_channel(&tx, &dropped, &task, None);
 
@@ -25358,8 +25358,8 @@ async fn terminal_agent_update_reaches_ledger_when_progress_channel_gone() {
     // outlived its turn and only NOW went terminal.
     let task = make_background_task(
         "01900000-0000-7000-8000-0000000000fc",
-        octos_agent::TaskStatus::Failed,
-        octos_agent::TaskRuntimeState::Failed,
+        ra_agent::TaskStatus::Failed,
+        ra_agent::TaskRuntimeState::Failed,
     );
 
     // The per-turn path (best-effort, will silently drop since rx is gone)
@@ -25409,8 +25409,8 @@ async fn durable_terminal_mirror_skips_non_terminal_snapshots() {
 
     let task = make_background_task(
         "01900000-0000-7000-8000-0000000000bb",
-        octos_agent::TaskStatus::Running,
-        octos_agent::TaskRuntimeState::ExecutingTool,
+        ra_agent::TaskStatus::Running,
+        ra_agent::TaskRuntimeState::ExecutingTool,
     );
     forward_terminal_agent_update_durable(&ws, &ledger, &task, None);
 
@@ -25465,7 +25465,7 @@ async fn successful_spawn_only_completion_via_on_change_queues_autonomous_reentr
     // turn's session_key, no child_session_key, terminal Completed with
     // a delivered synthesis artifact.
     let now = chrono::Utc::now();
-    let task = octos_agent::BackgroundTask {
+    let task = ra_agent::BackgroundTask {
         id: "01900000-0000-7000-8000-00000000re01".into(),
         tool_name: "run_pipeline".into(),
         // Empty tool_call_id: ID-less providers (deepseek/kimi) stream
@@ -25478,8 +25478,8 @@ async fn successful_spawn_only_completion_via_on_change_queues_autonomous_reentr
         child_joined_at: None,
         child_failure_action: None,
         task_ledger_path: None,
-        status: octos_agent::TaskStatus::Completed,
-        runtime_state: octos_agent::TaskRuntimeState::Completed,
+        status: ra_agent::TaskStatus::Completed,
+        runtime_state: ra_agent::TaskRuntimeState::Completed,
         runtime_detail: None,
         started_at: now,
         updated_at: now,
@@ -25572,17 +25572,17 @@ fn unified_terminal_test_task(
     id: &str,
     session: &SessionKey,
     tool_call_id: &str,
-    status: octos_agent::TaskStatus,
+    status: ra_agent::TaskStatus,
     error: Option<&str>,
-) -> octos_agent::BackgroundTask {
+) -> ra_agent::BackgroundTask {
     let now = chrono::Utc::now();
     let runtime_state = match status {
-        octos_agent::TaskStatus::Completed => octos_agent::TaskRuntimeState::Completed,
-        octos_agent::TaskStatus::Failed => octos_agent::TaskRuntimeState::Failed,
-        octos_agent::TaskStatus::Cancelled => octos_agent::TaskRuntimeState::Cancelled,
-        _ => octos_agent::TaskRuntimeState::ExecutingTool,
+        ra_agent::TaskStatus::Completed => ra_agent::TaskRuntimeState::Completed,
+        ra_agent::TaskStatus::Failed => ra_agent::TaskRuntimeState::Failed,
+        ra_agent::TaskStatus::Cancelled => ra_agent::TaskRuntimeState::Cancelled,
+        _ => ra_agent::TaskRuntimeState::ExecutingTool,
     };
-    octos_agent::BackgroundTask {
+    ra_agent::BackgroundTask {
         id: id.into(),
         tool_name: "mofa_slides".into(),
         tool_call_id: tool_call_id.into(),
@@ -25629,13 +25629,13 @@ async fn unified_terminal_sink_failure_with_ack_queues_recovery_under_profile() 
         "01900000-0000-7000-8000-0000000fa001",
         &session_id,
         "call-unified-ack",
-        octos_agent::TaskStatus::Failed,
+        ra_agent::TaskStatus::Failed,
         Some("plugin exited 137 (sigkill). available: a, b, c"),
     );
-    let event = octos_agent::TerminalEvent {
+    let event = ra_agent::TerminalEvent {
         task: task.clone(),
         synth_ack_emitted: true,
-        outcome: octos_agent::TerminalOutcome::Failed(octos_agent::SpawnOnlyFailureSignal {
+        outcome: ra_agent::TerminalOutcome::Failed(ra_agent::SpawnOnlyFailureSignal {
             task_id: task.id.clone(),
             tool_name: task.tool_name.clone(),
             tool_input: task.tool_input.clone().unwrap(),
@@ -25702,13 +25702,13 @@ async fn unified_terminal_sink_failure_without_ack_suppresses_recovery() {
         "01900000-0000-7000-8000-0000000fa002",
         &session_id,
         "call-unified-noack",
-        octos_agent::TaskStatus::Failed,
+        ra_agent::TaskStatus::Failed,
         Some("sibling tool already errored"),
     );
-    let event = octos_agent::TerminalEvent {
+    let event = ra_agent::TerminalEvent {
         task: task.clone(),
         synth_ack_emitted: false,
-        outcome: octos_agent::TerminalOutcome::Failed(octos_agent::SpawnOnlyFailureSignal {
+        outcome: ra_agent::TerminalOutcome::Failed(ra_agent::SpawnOnlyFailureSignal {
             task_id: task.id.clone(),
             tool_name: task.tool_name.clone(),
             tool_input: task.tool_input.clone().unwrap(),
@@ -25750,13 +25750,13 @@ async fn unified_terminal_sink_success_queues_child_completed_under_profile() {
         "01900000-0000-7000-8000-0000000fa003",
         &session_id,
         String::new().as_str(),
-        octos_agent::TaskStatus::Completed,
+        ra_agent::TaskStatus::Completed,
         None,
     );
-    let event = octos_agent::TerminalEvent {
+    let event = ra_agent::TerminalEvent {
         task,
         synth_ack_emitted: false,
-        outcome: octos_agent::TerminalOutcome::Completed,
+        outcome: ra_agent::TerminalOutcome::Completed,
     };
 
     // Idempotent: two terminal marks collapse to one continuation.
@@ -25799,10 +25799,10 @@ async fn unified_terminal_sink_success_queues_child_completed_under_profile() {
 
 fn prg_state_with_session(
     session_id: &SessionKey,
-    seed: impl FnOnce(&mut octos_bus::Session),
+    seed: impl FnOnce(&mut ra_bus::Session),
 ) -> Arc<AppState> {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let manager = octos_bus::SessionManager::open(tmp.path()).expect("session manager open");
+    let manager = ra_bus::SessionManager::open(tmp.path()).expect("session manager open");
     let manager = Arc::new(tokio::sync::Mutex::new(manager));
     // Seed by directly mutating in-memory session.
     {
@@ -25822,7 +25822,7 @@ fn prg_state_with_session(
     // tmp is dropped when state drops; tests don't observe disk
 }
 
-fn prg_seed_user_assistant(session: &mut octos_bus::Session) {
+fn prg_seed_user_assistant(session: &mut ra_bus::Session) {
     let now = Utc::now();
     session.messages.push(Message {
         role: MessageRole::User,
@@ -25857,7 +25857,7 @@ async fn prg_state_with_persisted_turns(
     turns: usize,
 ) -> (Arc<AppState>, tempfile::TempDir) {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let manager = octos_bus::SessionManager::open(tmp.path()).expect("session manager open");
+    let manager = ra_bus::SessionManager::open(tmp.path()).expect("session manager open");
     let manager = Arc::new(tokio::sync::Mutex::new(manager));
     {
         let mut guard = manager.lock().await;
@@ -25959,7 +25959,7 @@ async fn session_rollback_drops_last_turn_and_returns_trimmed_thread() {
 async fn session_rollback_rows_carry_tool_call_identity() {
     let session_id = SessionKey("local:rollback-tool-identity".into());
     let tmp = tempfile::tempdir().expect("tempdir");
-    let manager = octos_bus::SessionManager::open(tmp.path()).expect("session manager open");
+    let manager = ra_bus::SessionManager::open(tmp.path()).expect("session manager open");
     let manager = Arc::new(tokio::sync::Mutex::new(manager));
     {
         let mut guard = manager.lock().await;
@@ -26235,7 +26235,7 @@ async fn session_rollback_excludes_dropped_turns_from_thread_turns() {
     let turn_drop = TurnId::new(); // turn 2 -> thread "t2" (rolled back)
     for (turn_id, thread_id, seq) in [(&turn_keep, "t1", 1_u64), (&turn_drop, "t2", 3_u64)] {
         let _ = ledger.append_notification(UiNotification::TurnStarted(
-            octos_core::ui_protocol::TurnStartedEvent {
+            ra_core::ui_protocol::TurnStartedEvent {
                 session_id: session_id.clone(),
                 turn_id: turn_id.clone(),
                 timestamp: Utc::now(),
@@ -26317,7 +26317,7 @@ async fn session_fork_copies_full_history_by_default() {
         None,
         None,
         "fk1".into(),
-        octos_core::ui_protocol::SessionForkParams {
+        ra_core::ui_protocol::SessionForkParams {
             session_id: session_id.clone(),
             new_chat_id: "fork-child".into(),
             copy_messages: None,
@@ -26358,7 +26358,7 @@ async fn session_fork_copies_only_requested_tail() {
         None,
         None,
         "fk2".into(),
-        octos_core::ui_protocol::SessionForkParams {
+        ra_core::ui_protocol::SessionForkParams {
             session_id: session_id.clone(),
             new_chat_id: "tail-child".into(),
             copy_messages: Some(2),
@@ -26391,7 +26391,7 @@ async fn session_fork_unknown_session_errors() {
         None,
         None,
         "fk3".into(),
-        octos_core::ui_protocol::SessionForkParams {
+        ra_core::ui_protocol::SessionForkParams {
             session_id: SessionKey("local:never-created".into()),
             new_chat_id: "child".into(),
             copy_messages: None,
@@ -26424,7 +26424,7 @@ async fn session_fork_refuses_existing_child_key() {
             None,
             None,
             id.into(),
-            octos_core::ui_protocol::SessionForkParams {
+            ra_core::ui_protocol::SessionForkParams {
                 session_id: session_id.clone(),
                 new_chat_id: "same-child".into(),
                 copy_messages: None,
@@ -26462,7 +26462,7 @@ async fn session_fork_rejects_invalid_chat_id() {
         None,
         None,
         "fk4".into(),
-        octos_core::ui_protocol::SessionForkParams {
+        ra_core::ui_protocol::SessionForkParams {
             session_id: session_id.clone(),
             new_chat_id: "../escape".into(),
             copy_messages: None,
@@ -26512,7 +26512,7 @@ async fn session_fork_raw_spa_parent_yields_raw_child() {
         None,
         None,
         "fk-raw".into(),
-        octos_core::ui_protocol::SessionForkParams {
+        ra_core::ui_protocol::SessionForkParams {
             session_id: session_id.clone(),
             new_chat_id: "web-456".into(),
             copy_messages: None,
@@ -26570,7 +26570,7 @@ async fn session_fork_concurrent_same_child_one_wins() {
                 None,
                 None,
                 id,
-                octos_core::ui_protocol::SessionForkParams {
+                ra_core::ui_protocol::SessionForkParams {
                     session_id: parent,
                     new_chat_id: "contested".into(),
                     copy_messages: None,
@@ -26615,7 +26615,7 @@ async fn session_fork_enforces_connection_scope() {
         Some("tenant-b"),
         None,
         "fk5".into(),
-        octos_core::ui_protocol::SessionForkParams {
+        ra_core::ui_protocol::SessionForkParams {
             session_id: session_id.clone(),
             new_chat_id: "stolen".into(),
             copy_messages: None,
@@ -26704,16 +26704,16 @@ async fn session_hydrate_returns_full_chat_state() {
 /// message, the assistant's tool calls (empty text), one result per call,
 /// then the answer.
 fn tool_turn_rows(turn: &str, calls: &[(&str, &str)], start: DateTime<Utc>) -> Vec<Message> {
-    let thread = || octos_core::ThreadId(turn.into());
+    let thread = || ra_core::ThreadId(turn.into());
     let mut rows = vec![Message::user_rooting_thread(
         format!("{turn}: go"),
-        octos_core::ClientMessageId(turn.into()),
+        ra_core::ClientMessageId(turn.into()),
     )];
     let mut call = Message::assistant_with_thread("", thread());
     call.tool_calls = Some(
         calls
             .iter()
-            .map(|(id, name)| octos_core::ToolCall {
+            .map(|(id, name)| ra_core::ToolCall {
                 id: (*id).into(),
                 name: (*name).into(),
                 arguments: json!({ "text": "the draft" }),
@@ -26870,7 +26870,7 @@ async fn should_name_each_tool_row_by_its_nearest_call_when_call_ids_repeat() {
         let mut orphan = Message::tool_with_thread(
             "result of a call from a dropped segment",
             "call-gone",
-            octos_core::ThreadId("turn-old".into()),
+            ra_core::ThreadId("turn-old".into()),
         );
         orphan.timestamp = start;
         session.messages.push(orphan);
@@ -26923,18 +26923,18 @@ async fn should_name_each_tool_row_by_its_nearest_call_when_call_ids_repeat() {
 async fn should_keep_background_identity_when_mixed_store_merge_reindexes_the_row() {
     let dir = tempfile::tempdir().unwrap();
     let session_id = SessionKey("mixed-store-background-identity".into());
-    let mut manager = octos_bus::SessionManager::open(dir.path()).unwrap();
+    let mut manager = ra_bus::SessionManager::open(dir.path()).unwrap();
     let start = Utc::now() - chrono::Duration::minutes(10);
     for index in 0..52 {
         let mut message = if index % 2 == 0 {
             Message::user_rooting_thread(
                 format!("seed user {index}"),
-                octos_core::ClientMessageId(format!("seed-{}", index / 2)),
+                ra_core::ClientMessageId(format!("seed-{}", index / 2)),
             )
         } else {
             Message::assistant_with_thread(
                 format!("seed final {index}"),
-                octos_core::ThreadId(format!("seed-{}", index / 2)),
+                ra_core::ThreadId(format!("seed-{}", index / 2)),
             )
         };
         message.timestamp = start + chrono::Duration::seconds(index);
@@ -26962,10 +26962,10 @@ async fn should_keep_background_identity_when_mixed_store_merge_reindexes_the_ro
             .unwrap();
     }
     let observer = message_commit_observer(ledger.clone());
-    octos_bus::session::set_scoped_message_commit_observer(dir.path(), &observer);
+    ra_bus::session::set_scoped_message_commit_observer(dir.path(), &observer);
     let parent = "mixed-parent";
     let mut background =
-        Message::assistant_with_thread("same completion body", octos_core::ThreadId(parent.into()));
+        Message::assistant_with_thread("same completion body", ra_core::ThreadId(parent.into()));
     background.timestamp = start + chrono::Duration::seconds(100);
     background.media = vec!["result.md".into()];
     let original_id = format!(
@@ -26984,7 +26984,7 @@ async fn should_keep_background_identity_when_mixed_store_merge_reindexes_the_ro
                     media: background.media.clone(),
                 },
             )),
-            octos_bus::persist_message_through_canonical_path(
+            ra_bus::persist_message_through_canonical_path(
                 dir.path(),
                 &session_id,
                 background.clone(),
@@ -26996,12 +26996,12 @@ async fn should_keep_background_identity_when_mixed_store_merge_reindexes_the_ro
 
     let mut user = Message::user_rooting_thread(
         "start background",
-        octos_core::ClientMessageId(parent.into()),
+        ra_core::ClientMessageId(parent.into()),
     );
     user.timestamp = start + chrono::Duration::seconds(90);
-    let mut call = Message::assistant_with_thread("", octos_core::ThreadId(parent.into()));
+    let mut call = Message::assistant_with_thread("", ra_core::ThreadId(parent.into()));
     call.timestamp = start + chrono::Duration::seconds(91);
-    call.tool_calls = Some(vec![octos_core::ToolCall {
+    call.tool_calls = Some(vec![ra_core::ToolCall {
         id: "mixed-spawn".into(),
         name: "spawn".into(),
         arguments: json!({}),
@@ -27010,7 +27010,7 @@ async fn should_keep_background_identity_when_mixed_store_merge_reindexes_the_ro
     let mut tool = Message::tool_with_thread(
         "Spawned background task",
         "mixed-spawn",
-        octos_core::ThreadId(parent.into()),
+        ra_core::ThreadId(parent.into()),
     );
     tool.timestamp = start + chrono::Duration::seconds(92);
     for message in [user, call, tool] {
@@ -27019,7 +27019,7 @@ async fn should_keep_background_identity_when_mixed_store_merge_reindexes_the_ro
     // Equal text from a distinct autonomous turn is a distinct canonical row.
     let mut continuation = Message::assistant_with_thread(
         background.content.clone(),
-        octos_core::ThreadId("independent-continuation".into()),
+        ra_core::ThreadId("independent-continuation".into()),
     );
     continuation.timestamp = start + chrono::Duration::seconds(101);
     continuation.media = background.media.clone();
@@ -27086,11 +27086,11 @@ async fn should_keep_background_identity_when_mixed_store_merge_reindexes_the_ro
         let mut sessions = state.sessions.as_ref().unwrap().lock().await;
         let mut user = Message::user_rooting_thread(
             "T23 after cold client",
-            octos_core::ClientMessageId("mixed-t23".into()),
+            ra_core::ClientMessageId("mixed-t23".into()),
         );
         user.timestamp = start + chrono::Duration::seconds(102);
         let mut answer =
-            Message::assistant_with_thread("T23 final", octos_core::ThreadId("mixed-t23".into()));
+            Message::assistant_with_thread("T23 final", ra_core::ThreadId("mixed-t23".into()));
         answer.timestamp = start + chrono::Duration::seconds(103);
         sessions.add_message(&session_id, user).await.unwrap();
         sessions.add_message(&session_id, answer).await.unwrap();
@@ -27139,9 +27139,9 @@ async fn should_keep_background_identity_when_mixed_store_merge_reindexes_the_ro
 fn should_rebind_hydrate_identity_only_with_unique_scoped_canonical_provenance() {
     let session = SessionKey("hydrate-identity-provenance".into());
     let mut message =
-        Message::assistant_with_thread("shared body", octos_core::ThreadId("owned-turn".into()));
+        Message::assistant_with_thread("shared body", ra_core::ThreadId("owned-turn".into()));
     message.media = vec!["owned-result.md".into()];
-    let notification = octos_core::ui_protocol::EnvelopeV2Notification {
+    let notification = ra_core::ui_protocol::EnvelopeV2Notification {
         session_id: session.clone(),
         topic: None,
         envelope: EnvelopeV2 {
@@ -27275,8 +27275,8 @@ fn should_rebind_hydrate_identity_only_with_unique_scoped_canonical_provenance()
 async fn should_reject_recomputed_hydrate_id_when_its_typed_owner_contradicts_the_row() {
     let session = SessionKey("hydrate-recomputed-owner".into());
     let message =
-        Message::assistant_with_thread("same body", octos_core::ThreadId("new-owner".into()));
-    let reference = octos_core::ui_protocol::EnvelopeV2Notification {
+        Message::assistant_with_thread("same body", ra_core::ThreadId("new-owner".into()));
+    let reference = ra_core::ui_protocol::EnvelopeV2Notification {
         session_id: session.clone(),
         topic: None,
         envelope: EnvelopeV2 {
@@ -27368,19 +27368,19 @@ async fn check_spawn_only_sent_file_hydration(file_count: usize) {
 
     struct MediaModel(std::sync::atomic::AtomicUsize);
     #[async_trait::async_trait]
-    impl octos_llm::LlmProvider for MediaModel {
+    impl ra_llm::LlmProvider for MediaModel {
         async fn chat(
             &self,
             _messages: &[Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             let first = self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0;
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: Some("MEDIA-PARENT-ACK".into()),
                 reasoning_content: None,
                 tool_calls: if first {
-                    vec![octos_core::ToolCall {
+                    vec![ra_core::ToolCall {
                         id: "actual-spawn-media-call".into(),
                         name: "media_fixture".into(),
                         arguments: json!({}),
@@ -27390,9 +27390,9 @@ async fn check_spawn_only_sent_file_hydration(file_count: usize) {
                     vec![]
                 },
                 stop_reason: if first {
-                    octos_llm::StopReason::ToolUse
+                    ra_llm::StopReason::ToolUse
                 } else {
-                    octos_llm::StopReason::EndTurn
+                    ra_llm::StopReason::EndTurn
                 },
                 usage: Default::default(),
                 provider_index: None,
@@ -27465,12 +27465,12 @@ async fn check_spawn_only_sent_file_hydration(file_count: usize) {
     let session = OupSession::open(
         state.clone(),
         SessionKey::with_profile(
-            octos_core::MAIN_PROFILE_ID,
+            ra_core::MAIN_PROFILE_ID,
             "acp",
             &uuid::Uuid::now_v7().to_string(),
         ),
         workspace.path(),
-        octos_agent::EffectivePermissions::workspace_write(),
+        ra_agent::EffectivePermissions::workspace_write(),
     )
     .await
     .unwrap();
@@ -27587,7 +27587,7 @@ async fn check_spawn_only_sent_file_hydration(file_count: usize) {
     let runtime = state
         .session_cache
         .get_or_init(
-            &state.profiles[octos_core::MAIN_PROFILE_ID],
+            &state.profiles[ra_core::MAIN_PROFILE_ID],
             session.session_id.clone(),
             Some(workspace.path().to_owned()),
         )
@@ -27600,7 +27600,7 @@ async fn check_spawn_only_sent_file_hydration(file_count: usize) {
         for offset in 1..=2 {
             let mut earlier = Message::user_rooting_thread(
                 format!("earlier media seed {offset}"),
-                octos_core::ClientMessageId(format!("media-seed-{offset}")),
+                ra_core::ClientMessageId(format!("media-seed-{offset}")),
             );
             earlier.timestamp = timestamp - chrono::Duration::seconds(offset);
             manager
@@ -27614,7 +27614,7 @@ async fn check_spawn_only_sent_file_hydration(file_count: usize) {
     let (shifted_index, _) = verify_history(&shifted, &canonical_id, &canonical_media);
     assert_eq!(shifted_index, original_index + 2);
     let key = session.session_id.clone();
-    let old_memory = Arc::downgrade(&state.profiles[octos_core::MAIN_PROFILE_ID].memory);
+    let old_memory = Arc::downgrade(&state.profiles[ra_core::MAIN_PROFILE_ID].memory);
     session.close().await.unwrap();
     drop(session);
     drop(runtime);
@@ -27641,7 +27641,7 @@ async fn check_spawn_only_sent_file_hydration(file_count: usize) {
         reopened_factory.oup_state().await.unwrap(),
         key,
         workspace.path(),
-        octos_agent::EffectivePermissions::workspace_write(),
+        ra_agent::EffectivePermissions::workspace_write(),
     )
     .await
     .unwrap();
@@ -27808,7 +27808,7 @@ async fn session_hydrate_atomically_consistent_snapshot_and_cursor() {
     // Append two notifications to the ledger so there's something to
     // bound.
     let _ = ledger.append_notification(UiNotification::Warning(
-        octos_core::ui_protocol::WarningEvent {
+        ra_core::ui_protocol::WarningEvent {
             session_id: session_id.clone(),
             turn_id: None,
             code: "test".into(),
@@ -27816,7 +27816,7 @@ async fn session_hydrate_atomically_consistent_snapshot_and_cursor() {
         },
     ));
     let _ = ledger.append_notification(UiNotification::Warning(
-        octos_core::ui_protocol::WarningEvent {
+        ra_core::ui_protocol::WarningEvent {
             session_id: session_id.clone(),
             turn_id: None,
             code: "test".into(),
@@ -28003,7 +28003,7 @@ async fn turn_state_get_falls_back_to_durable_projection_for_evicted() {
     // Append a turn/started + turn/completed to the ledger so the
     // projection has truth without anything in the registry.
     let _ = ledger.append_notification(UiNotification::TurnStarted(
-        octos_core::ui_protocol::TurnStartedEvent {
+        ra_core::ui_protocol::TurnStartedEvent {
             session_id: session_id.clone(),
             turn_id: turn_id.clone(),
             timestamp: Utc::now(),
@@ -28064,7 +28064,7 @@ fn turn_state_projection_from_turn_scoped_snapshot_matches_full_snapshot() {
         text: "noise".into(),
     }));
     ledger.append_notification(UiNotification::TurnStarted(
-        octos_core::ui_protocol::TurnStartedEvent {
+        ra_core::ui_protocol::TurnStartedEvent {
             session_id: session_id.clone(),
             turn_id: turn_a.clone(),
             timestamp: Utc::now(),
@@ -28090,7 +28090,7 @@ fn turn_state_projection_from_turn_scoped_snapshot_matches_full_snapshot() {
         partial_result: None,
     }));
     ledger.append_notification(UiNotification::TurnStarted(
-        octos_core::ui_protocol::TurnStartedEvent {
+        ra_core::ui_protocol::TurnStartedEvent {
             session_id: session_id.clone(),
             turn_id: turn_b.clone(),
             timestamp: Utc::now(),
@@ -28149,7 +28149,7 @@ async fn session_hydrate_rejects_unknown_session() {
     // must reject the request rather than auto-create or return an
     // empty hydrate.
     let tmp = tempfile::tempdir().expect("tempdir");
-    let manager = octos_bus::SessionManager::open(tmp.path()).expect("open");
+    let manager = ra_bus::SessionManager::open(tmp.path()).expect("open");
     let state = Arc::new(AppState {
         sessions: Some(Arc::new(tokio::sync::Mutex::new(manager))),
         ..AppState::empty_for_tests()
@@ -28626,7 +28626,7 @@ async fn message_commit_observer_runs_after_each_commit_in_order() {
     // make `observed.len()` exceed 3 (the `message_commit_observer_test_lock`
     // only serialises observer-MUTATING tests, not every committer).
     let filter_key = "local:persisted-order";
-    let prev = octos_bus::set_message_commit_observer(Some(Arc::new(move |key, message, seq| {
+    let prev = ra_bus::set_message_commit_observer(Some(Arc::new(move |key, message, seq| {
         if key.0 != filter_key {
             return;
         }
@@ -28637,7 +28637,7 @@ async fn message_commit_observer_runs_after_each_commit_in_order() {
     })));
 
     let tmp = tempfile::tempdir().expect("tempdir");
-    let mut manager = octos_bus::SessionManager::open(tmp.path()).expect("session manager open");
+    let mut manager = ra_bus::SessionManager::open(tmp.path()).expect("session manager open");
     let session_id = SessionKey(filter_key.into());
     for content in ["one", "two", "three"] {
         let msg = Message {
@@ -28667,7 +28667,7 @@ async fn message_commit_observer_runs_after_each_commit_in_order() {
     assert_eq!(observed[2].1.content, "three");
 
     // Restore the previous observer (None for clean tests).
-    octos_bus::set_message_commit_observer(prev);
+    ra_bus::set_message_commit_observer(prev);
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -28693,10 +28693,10 @@ async fn message_commit_observer_is_not_retroactive_after_installation() {
     // Save the global observer (e.g. the process-wide ledger
     // observer installed by sibling tests via `event_ledger`) so we
     // can restore it on exit.
-    let prev = octos_bus::set_message_commit_observer(None);
+    let prev = ra_bus::set_message_commit_observer(None);
 
     let tmp = tempfile::tempdir().expect("tempdir");
-    let mut manager = octos_bus::SessionManager::open(tmp.path()).expect("session manager open");
+    let mut manager = ra_bus::SessionManager::open(tmp.path()).expect("session manager open");
     let session_id = SessionKey("local:persisted-failure".into());
 
     // First commit — observer NOT installed, so no event recorded.
@@ -28721,7 +28721,7 @@ async fn message_commit_observer_is_not_retroactive_after_installation() {
     // exactly one event (the second), not two. Filter to this test's
     // session id so a concurrent suite committer (the observer is
     // process-global) cannot inflate the count past 1.
-    octos_bus::set_message_commit_observer(Some(Arc::new(move |key, _message, _seq| {
+    ra_bus::set_message_commit_observer(Some(Arc::new(move |key, _message, _seq| {
         if key.0 != "local:persisted-failure" {
             return;
         }
@@ -28749,7 +28749,7 @@ async fn message_commit_observer_is_not_retroactive_after_installation() {
         "observer must only see commits that ran while it was installed"
     );
 
-    octos_bus::set_message_commit_observer(prev);
+    ra_bus::set_message_commit_observer(prev);
 }
 
 /// M9-γ-7 (issue #844): `is_metadata_only_assistant_row` is the
@@ -28834,7 +28834,7 @@ async fn metadata_only_commits_emit_one_v2_assistant_persisted_row() {
     let mut subscriber = ledger.subscribe(&session_id);
 
     let tmp = tempfile::tempdir().expect("tempdir");
-    let mut manager = octos_bus::SessionManager::open(tmp.path()).expect("session manager open");
+    let mut manager = ra_bus::SessionManager::open(tmp.path()).expect("session manager open");
 
     // Simulate the agent loop's commits: 2 metadata-only assistant
     // rows (intermediate iterations whose only payload was
@@ -28846,7 +28846,7 @@ async fn metadata_only_commits_emit_one_v2_assistant_persisted_row() {
         content: content.into(),
         media: vec![],
         tool_calls: if with_tool_calls {
-            Some(vec![octos_core::ToolCall {
+            Some(vec![ra_core::ToolCall {
                 id: format!("tc-{}", uuid::Uuid::now_v7()),
                 name: "shell".into(),
                 arguments: serde_json::json!({}),
@@ -28920,7 +28920,7 @@ async fn metadata_only_commits_emit_one_v2_assistant_persisted_row() {
 
     // Restore the global observer slot to None so subsequent tests
     // see a clean state.
-    octos_bus::set_message_commit_observer(None);
+    ra_bus::set_message_commit_observer(None);
 }
 
 /// PR F (M8.10 thread-binding chain `#649 → #740`): every progress
@@ -28930,14 +28930,14 @@ async fn metadata_only_commits_emit_one_v2_assistant_persisted_row() {
 /// heuristics — the exact wire-side leak PR F closes.
 #[tokio::test]
 async fn bounded_channel_reporter_emits_typed_thread_id_on_progress_events() {
-    use octos_agent::ProgressReporter;
+    use ra_agent::ProgressReporter;
 
     let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(8);
     let dropped = Arc::new(AtomicU64::new(0));
 
     let reporter = BoundedChannelReporter::new(tx, dropped.clone())
         .with_thread_id(Some("turn-pr-f-A".to_string()));
-    reporter.report(octos_agent::ProgressEvent::Thinking { iteration: 0 });
+    reporter.report(ra_agent::ProgressEvent::Thinking { iteration: 0 });
 
     let event = rx.try_recv().expect("event must be available");
     let parsed: serde_json::Value = serde_json::from_str(&event).expect("valid json");
@@ -28949,7 +28949,7 @@ async fn bounded_channel_reporter_emits_typed_thread_id_on_progress_events() {
     // Without binding, `thread_id` must be absent (legacy compat).
     let (tx2, mut rx2) = tokio::sync::mpsc::channel::<String>(8);
     let unbound = BoundedChannelReporter::new(tx2, dropped);
-    unbound.report(octos_agent::ProgressEvent::Thinking { iteration: 1 });
+    unbound.report(ra_agent::ProgressEvent::Thinking { iteration: 1 });
     let event = rx2.try_recv().expect("event must be available");
     let parsed: serde_json::Value = serde_json::from_str(&event).expect("valid json");
     assert!(
@@ -29050,7 +29050,7 @@ fn features_for_v2_delivery() -> ConnectionUiFeatures {
 /// Used by the capability-gate tests to assert legacy clients never
 /// see the new envelope and new clients always do.
 fn file_attached_for(session: &SessionKey) -> UiNotification {
-    UiNotification::FileAttached(octos_core::ui_protocol::FileAttachedEvent {
+    UiNotification::FileAttached(ra_core::ui_protocol::FileAttachedEvent {
         session_id: session.clone(),
         topic: session.topic().map(ToOwned::to_owned),
         turn_id: TurnId::new(),
@@ -29447,10 +29447,10 @@ fn capability_filter_routes_context_lifecycle_gating() {
 // ========================================================================
 
 fn projection_envelope_v2_event_for(session: &SessionKey) -> UiNotification {
-    UiNotification::EnvelopeV2(octos_core::ui_protocol::EnvelopeV2Notification {
+    UiNotification::EnvelopeV2(ra_core::ui_protocol::EnvelopeV2Notification {
         session_id: session.clone(),
         topic: None,
-        envelope: octos_core::ui_protocol::EnvelopeV2 {
+        envelope: ra_core::ui_protocol::EnvelopeV2 {
             thread_id: "thread-v2".into(),
             seq: 1,
             cursor: Some(UiCursor {
@@ -29459,7 +29459,7 @@ fn projection_envelope_v2_event_for(session: &SessionKey) -> UiNotification {
             }),
             turn_id: "turn-v2".into(),
             client_message_id: None,
-            payload: octos_core::ui_protocol::PayloadV2::AssistantDelta {
+            payload: ra_core::ui_protocol::PayloadV2::AssistantDelta {
                 text: "v2".into(),
                 assistant_segment_id: "turn-v2:assistant:1".into(),
             },
@@ -30299,7 +30299,7 @@ async fn background_result_sender_persists_contract_verified_media_row() {
     std::fs::write(&mp3_path, b"ID3 issue-889 regression").expect("mp3 fixture");
 
     let sessions = Arc::new(tokio::sync::Mutex::new(
-        octos_bus::SessionManager::open(tmp.path()).expect("session manager"),
+        ra_bus::SessionManager::open(tmp.path()).expect("session manager"),
     ));
     let session_id = SessionKey("dspfac:api:m11h-yangmi-issue-889".into());
     let thread_id = "turn-issue-889";
@@ -30342,7 +30342,7 @@ async fn background_result_sender_persists_contract_verified_media_row() {
         persisted_seq,
     );
 
-    let handle = octos_bus::SessionHandle::open(tmp.path(), &session_id);
+    let handle = ra_bus::SessionHandle::open(tmp.path(), &session_id);
     let history = handle.session().messages.clone();
     assert_eq!(history.len(), 1, "one background completion row");
     let row = &history[0];
@@ -30408,7 +30408,7 @@ async fn synth_ack_not_persisted_to_jsonl_when_spawn_only() {
     let mut subscriber = ledger.subscribe(&session_id);
 
     let tmp = tempfile::tempdir().expect("tempdir");
-    let mut manager = octos_bus::SessionManager::open(tmp.path()).expect("session manager open");
+    let mut manager = ra_bus::SessionManager::open(tmp.path()).expect("session manager open");
 
     // Step 1: persist the iter-1 LLM reply (preamble + tool_calls)
     // exactly as the production persist loop at ui_protocol.rs
@@ -30419,7 +30419,7 @@ async fn synth_ack_not_persisted_to_jsonl_when_spawn_only() {
         role: MessageRole::Assistant,
         content: preamble_text.clone(),
         media: vec![],
-        tool_calls: Some(vec![octos_core::ToolCall {
+        tool_calls: Some(vec![ra_core::ToolCall {
             id: "tc-run_pipeline-1".into(),
             name: "run_pipeline".into(),
             arguments: serde_json::json!({}),
@@ -30518,7 +30518,7 @@ async fn synth_ack_not_persisted_to_jsonl_when_spawn_only() {
 
     // Restore the global observer slot to None so subsequent tests
     // see a clean state.
-    octos_bus::set_message_commit_observer(None);
+    ra_bus::set_message_commit_observer(None);
 }
 
 /// Fleet-UX soak round-2 NEW-03 follow-up (2026-05-23): a unit
@@ -30644,7 +30644,7 @@ async fn synth_ack_skip_invariants_hold_for_each_spawn_only_tool_name() {
 
         let tmp = tempfile::tempdir().expect("tempdir");
         let mut manager =
-            octos_bus::SessionManager::open(tmp.path()).expect("session manager open");
+            ra_bus::SessionManager::open(tmp.path()).expect("session manager open");
 
         // Step 1: the iter-1 preamble assistant row WITH a
         // spawn_only tool call — this row is always persisted (the
@@ -30654,7 +30654,7 @@ async fn synth_ack_skip_invariants_hold_for_each_spawn_only_tool_name() {
             role: MessageRole::Assistant,
             content: preamble_text.clone(),
             media: vec![],
-            tool_calls: Some(vec![octos_core::ToolCall {
+            tool_calls: Some(vec![ra_core::ToolCall {
                 id: format!("tc-{tool_name}-1"),
                 name: tool_name.to_string(),
                 arguments: serde_json::json!({}),
@@ -30780,7 +30780,7 @@ async fn synth_ack_skip_invariants_hold_for_each_spawn_only_tool_name() {
         );
 
         // Restore the global observer slot between iterations.
-        octos_bus::set_message_commit_observer(None);
+        ra_bus::set_message_commit_observer(None);
         drop(_guard);
     }
 }
@@ -31018,13 +31018,13 @@ struct SegmentIdentityProvider {
 }
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for SegmentIdentityProvider {
+impl ra_llm::LlmProvider for SegmentIdentityProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
         let index = self.next.fetch_add(1, Ordering::SeqCst) as usize;
         let texts = [
             " ",
@@ -31035,11 +31035,11 @@ impl octos_llm::LlmProvider for SegmentIdentityProvider {
         let text = texts
             .get(index)
             .ok_or_else(|| eyre::eyre!("identity script exhausted"))?;
-        Ok(octos_llm::ChatResponse {
+        Ok(ra_llm::ChatResponse {
             content: Some((*text).into()),
             reasoning_content: None,
             tool_calls: if index < 3 {
-                vec![octos_core::ToolCall {
+                vec![ra_core::ToolCall {
                     id: format!("tool-{index}"),
                     name: "read_file".into(),
                     arguments: json!({"path": format!("marker-{index}")}),
@@ -31049,11 +31049,11 @@ impl octos_llm::LlmProvider for SegmentIdentityProvider {
                 vec![]
             },
             stop_reason: if index < 3 {
-                octos_llm::StopReason::ToolUse
+                ra_llm::StopReason::ToolUse
             } else {
-                octos_llm::StopReason::EndTurn
+                ra_llm::StopReason::EndTurn
             },
-            usage: octos_llm::TokenUsage {
+            usage: ra_llm::TokenUsage {
                 input_tokens: 1,
                 output_tokens: 1,
                 ..Default::default()
@@ -31074,8 +31074,8 @@ async fn assert_batched_assistant_commits_keep_iteration_identity(progress_mode:
     let dir = tempfile::tempdir().unwrap();
     let ledger = Arc::new(UiProtocolLedger::new(128));
     let observer = message_commit_observer(ledger.clone());
-    octos_bus::session::set_scoped_message_commit_observer(dir.path(), &observer);
-    let mut manager = octos_bus::SessionManager::open(dir.path()).unwrap();
+    ra_bus::session::set_scoped_message_commit_observer(dir.path(), &observer);
+    let mut manager = ra_bus::SessionManager::open(dir.path()).unwrap();
     let session = SessionKey(format!("batched-assistant-identity-{streamed}"));
     let turn_id = TurnId::new();
     let turn = turn_id.0.to_string();
@@ -31084,21 +31084,21 @@ async fn assert_batched_assistant_commits_keep_iteration_identity(progress_mode:
         std::fs::write(dir.path().join(format!("marker-{index}")), "fixture").unwrap();
     }
     let memory = Arc::new(
-        octos_memory::EpisodeStore::open(dir.path().join("memory"))
+        ra_memory::EpisodeStore::open(dir.path().join("memory"))
             .await
             .unwrap(),
     );
     let (tx, mut rx) = tokio::sync::mpsc::channel(if progress_mode == 2 { 1 } else { 256 });
     let progress_dropped = Arc::new(AtomicU64::new(0));
-    let agent = octos_agent::Agent::new(
-        octos_core::AgentId::new("identity-test"),
+    let agent = ra_agent::Agent::new(
+        ra_core::AgentId::new("identity-test"),
         Arc::new(SegmentIdentityProvider {
             next: AtomicU64::new(0),
         }),
-        octos_agent::ToolRegistry::with_builtins(dir.path()),
+        ra_agent::ToolRegistry::with_builtins(dir.path()),
         memory,
     )
-    .with_config(octos_agent::AgentConfig {
+    .with_config(ra_agent::AgentConfig {
         save_episodes: false,
         ..Default::default()
     })
@@ -31673,12 +31673,12 @@ async fn supervisor_sink_ledgers_terminal_agent_updates_only() {
 
     // Non-terminal: delivered live, but must NOT be appended durably.
     sink.emit_supervisor_event(
-        octos_core::ui_protocol::methods::AGENT_UPDATED,
+        ra_core::ui_protocol::methods::AGENT_UPDATED,
         agent_json("running"),
     );
     // Terminal: must be appended to the durable ledger.
     sink.emit_supervisor_event(
-        octos_core::ui_protocol::methods::AGENT_UPDATED,
+        ra_core::ui_protocol::methods::AGENT_UPDATED,
         agent_json("failed"),
     );
 
@@ -31690,7 +31690,7 @@ async fn supervisor_sink_ledgers_terminal_agent_updates_only() {
             .expect("ws open");
         assert_eq!(
             frame_method(&frame).as_deref(),
-            Some(octos_core::ui_protocol::methods::AGENT_UPDATED),
+            Some(ra_core::ui_protocol::methods::AGENT_UPDATED),
             "live delivery must be preserved for {expected_status}"
         );
     }
@@ -31807,13 +31807,13 @@ async fn live_forwarder_survives_broadcast_lag_and_keeps_pumping() {
 struct M11EStubLlm;
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for M11EStubLlm {
+impl ra_llm::LlmProvider for M11EStubLlm {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
         unreachable!("M11EStubLlm should not be invoked from M11-E acceptance tests")
     }
 
@@ -31829,31 +31829,31 @@ impl octos_llm::LlmProvider for M11EStubLlm {
 async fn make_m11e_profile_with_llm_and_sandbox(
     profile_id: &str,
     data_dir: &std::path::Path,
-    llm: Arc<dyn octos_llm::LlmProvider>,
-    sandbox: octos_agent::SandboxConfig,
+    llm: Arc<dyn ra_llm::LlmProvider>,
+    sandbox: ra_agent::SandboxConfig,
 ) -> Arc<crate::runtime::ProfileRuntime> {
     std::fs::create_dir_all(data_dir).expect("profile data dir");
     let memory = Arc::new(
-        octos_memory::EpisodeStore::open(data_dir)
+        ra_memory::EpisodeStore::open(data_dir)
             .await
             .expect("episode store"),
     );
     let memory_store = Arc::new(
-        octos_memory::MemoryStore::open(data_dir)
+        ra_memory::MemoryStore::open(data_dir)
             .await
             .expect("memory store"),
     );
     let tool_config = Arc::new(
-        octos_agent::ToolConfigStore::open(data_dir)
+        ra_agent::ToolConfigStore::open(data_dir)
             .await
             .expect("tool config store"),
     );
-    let base_tools = octos_agent::ToolRegistry::with_builtins_and_sandbox(
+    let base_tools = ra_agent::ToolRegistry::with_builtins_and_sandbox(
         data_dir,
-        octos_agent::create_sandbox(&sandbox),
+        ra_agent::create_sandbox(&sandbox),
     );
     let recall = Arc::new(
-        octos_memory::RecallStore::open(data_dir, octos_memory::RecallConfig::default())
+        ra_memory::RecallStore::open(data_dir, ra_memory::RecallConfig::default())
             .expect("recall store"),
     );
     Arc::new(crate::runtime::ProfileRuntime {
@@ -31924,13 +31924,13 @@ async fn state_with_profile(
 async fn state_with_profile_llm(
     data_dir: &std::path::Path,
     profile_id: &str,
-    llm: Arc<dyn octos_llm::LlmProvider>,
+    llm: Arc<dyn ra_llm::LlmProvider>,
 ) -> (Arc<AppState>, Arc<crate::runtime::ProfileRuntime>) {
     state_with_profile_llm_and_sandbox(
         data_dir,
         profile_id,
         llm,
-        octos_agent::SandboxConfig::default(),
+        ra_agent::SandboxConfig::default(),
     )
     .await
 }
@@ -31938,13 +31938,13 @@ async fn state_with_profile_llm(
 async fn state_with_profile_llm_and_sandbox(
     data_dir: &std::path::Path,
     profile_id: &str,
-    llm: Arc<dyn octos_llm::LlmProvider>,
-    sandbox: octos_agent::SandboxConfig,
+    llm: Arc<dyn ra_llm::LlmProvider>,
+    sandbox: ra_agent::SandboxConfig,
 ) -> (Arc<AppState>, Arc<crate::runtime::ProfileRuntime>) {
     std::fs::create_dir_all(data_dir).expect("data dir");
 
     let sessions = Arc::new(tokio::sync::Mutex::new(
-        octos_bus::SessionManager::open(data_dir).expect("session manager"),
+        ra_bus::SessionManager::open(data_dir).expect("session manager"),
     ));
 
     let profile_data_dir = data_dir.join("profiles").join(profile_id).join("data");
@@ -32011,7 +32011,7 @@ async fn cold_scope_admission_case(case: &str) {
             expected_stream = format!("{}\u{0}~cwd-{scope}", session.0);
             expected_workspace = Some(cwd.clone());
             if case != "missing-open" {
-                let opened: octos_core::ui_protocol::SessionOpened = serde_json::from_value(json!({
+                let opened: ra_core::ui_protocol::SessionOpened = serde_json::from_value(json!({
                     "session_id": session,
                     "active_profile_id": if case == "foreign-profile" { "another-profile" } else { &profile },
                     "workspace_root": if case == "missing-cwd" { None } else { Some(cwd.to_string_lossy().into_owned()) },
@@ -32143,7 +32143,7 @@ async fn cold_scope_admission_case(case: &str) {
                         .into_owned(),
                 ),
                 sandbox: None,
-                after: Some(octos_core::ui_protocol::UiCursor {
+                after: Some(ra_core::ui_protocol::UiCursor {
                     stream: expected_stream.clone(),
                     seq: 6,
                 }),
@@ -32293,7 +32293,7 @@ async fn wait_for_pending_count(master: &SessionKey, profile: &str, expected: us
 
 #[tokio::test]
 async fn real_peer_approval_park_wakes_originator() {
-    use octos_agent::ToolApprovalRequester as _;
+    use ra_agent::ToolApprovalRequester as _;
     let temp = tempfile::tempdir().unwrap();
     let profile = "tenant-wake-rt-appr";
     let (state, runtime) = state_with_profile(temp.path(), profile).await;
@@ -32318,7 +32318,7 @@ async fn real_peer_approval_park_wakes_originator() {
         turn_id: turn_id.clone(),
         features: ConnectionUiFeatures::default(),
     };
-    let request = octos_agent::ToolApprovalRequest {
+    let request = ra_agent::ToolApprovalRequest {
         tool_id: "call-1".to_owned(),
         tool_name: "shell".to_owned(),
         title: "Run a shell command".to_owned(),
@@ -32361,12 +32361,12 @@ async fn real_peer_approval_park_wakes_originator() {
         .approvals
         .cancel_pending_for_turn(&session_id, &turn_id, "test-teardown");
     let decision = handle.await.unwrap();
-    assert_eq!(decision, octos_agent::ToolApprovalDecision::Deny);
+    assert_eq!(decision, ra_agent::ToolApprovalDecision::Deny);
 }
 
 #[tokio::test]
 async fn real_auto_resolved_approval_does_not_wake() {
-    use octos_agent::ToolApprovalRequester as _;
+    use ra_agent::ToolApprovalRequester as _;
     let temp = tempfile::tempdir().unwrap();
     let profile = "tenant-wake-rt-auto";
     let (state, runtime) = state_with_profile(temp.path(), profile).await;
@@ -32402,7 +32402,7 @@ async fn real_auto_resolved_approval_does_not_wake() {
         turn_id: turn_id.clone(),
         features: ConnectionUiFeatures::default(),
     };
-    let request = octos_agent::ToolApprovalRequest {
+    let request = ra_agent::ToolApprovalRequest {
         tool_id: "call-1".to_owned(),
         tool_name: "shell".to_owned(),
         title: "Run a shell command".to_owned(),
@@ -32416,7 +32416,7 @@ async fn real_auto_resolved_approval_does_not_wake() {
     let decision = requester.request_approval(request).await;
     assert_eq!(
         decision,
-        octos_agent::ToolApprovalDecision::Approve,
+        ra_agent::ToolApprovalDecision::Approve,
         "the scope policy must auto-approve",
     );
 
@@ -32431,7 +32431,7 @@ async fn real_auto_resolved_approval_does_not_wake() {
 
 #[tokio::test]
 async fn real_peer_question_park_wakes_originator() {
-    use octos_agent::UserQuestionRequester as _;
+    use ra_agent::UserQuestionRequester as _;
     let temp = tempfile::tempdir().unwrap();
     let profile = "tenant-wake-rt-q";
     let (state, runtime) = state_with_profile(temp.path(), profile).await;
@@ -32455,7 +32455,7 @@ async fn real_peer_question_park_wakes_originator() {
         session_id: session_id.clone(),
         turn_id: turn_id.clone(),
     };
-    let request = octos_agent::UserQuestionRequest {
+    let request = ra_agent::UserQuestionRequest {
         questions: Vec::new(),
         title: "Pick a datastore".to_owned(),
         body: "Postgres or SQLite?".to_owned(),
@@ -32491,7 +32491,7 @@ async fn real_peer_question_park_wakes_originator() {
         .user_questions
         .cancel_pending_for_turn(&session_id, &turn_id, "test-teardown");
     let outcome = handle.await.unwrap();
-    assert_eq!(outcome, octos_agent::UserQuestionOutcome::Cancelled);
+    assert_eq!(outcome, ra_agent::UserQuestionOutcome::Cancelled);
 }
 
 // ---- #1842 — close-while-parked: a CLOSED peer must not park ----------------
@@ -32618,8 +32618,8 @@ async fn should_interrupt_the_peers_in_flight_turn_when_peer_close_runs() {
 /// value the production wiring captures onto the requester.
 #[tokio::test]
 async fn should_refuse_a_peer_park_when_the_peer_is_closed_under_a_raw_client_session() {
-    use octos_agent::ToolApprovalRequester as _;
-    use octos_agent::UserQuestionRequester as _;
+    use ra_agent::ToolApprovalRequester as _;
+    use ra_agent::UserQuestionRequester as _;
     let temp = tempfile::tempdir().unwrap();
     let profile = "tenant-1842-gate";
     let (state, runtime) = state_with_profile(temp.path(), profile).await;
@@ -32658,7 +32658,7 @@ async fn should_refuse_a_peer_park_when_the_peer_is_closed_under_a_raw_client_se
     };
     let decision = tokio::time::timeout(
         std::time::Duration::from_secs(3),
-        requester.request_approval(octos_agent::ToolApprovalRequest {
+        requester.request_approval(ra_agent::ToolApprovalRequest {
             tool_id: "call-1".to_owned(),
             tool_name: "shell".to_owned(),
             title: "Run a shell command".to_owned(),
@@ -32673,7 +32673,7 @@ async fn should_refuse_a_peer_park_when_the_peer_is_closed_under_a_raw_client_se
     .expect("a CLOSED peer must never PARK — it must fail closed immediately");
     assert_eq!(
         decision,
-        octos_agent::ToolApprovalDecision::Deny,
+        ra_agent::ToolApprovalDecision::Deny,
         "a refused park fails closed, exactly like the close sweep's cancel"
     );
     assert!(
@@ -32697,7 +32697,7 @@ async fn should_refuse_a_peer_park_when_the_peer_is_closed_under_a_raw_client_se
     };
     let outcome = tokio::time::timeout(
         std::time::Duration::from_secs(3),
-        questioner.request_user_question(octos_agent::UserQuestionRequest {
+        questioner.request_user_question(ra_agent::UserQuestionRequest {
             questions: Vec::new(),
             title: "Pick a datastore".to_owned(),
             body: "Postgres or SQLite?".to_owned(),
@@ -32705,7 +32705,7 @@ async fn should_refuse_a_peer_park_when_the_peer_is_closed_under_a_raw_client_se
     )
     .await
     .expect("a CLOSED peer must never PARK on a question either");
-    assert_eq!(outcome, octos_agent::UserQuestionOutcome::Cancelled);
+    assert_eq!(outcome, ra_agent::UserQuestionOutcome::Cancelled);
     assert!(
         contracts
             .user_questions
@@ -32789,7 +32789,7 @@ async fn should_cancel_a_registered_peer_park_when_the_close_lands_after_it_regi
 /// process and `peer/prepare` could restage a peer that can never ask anything.
 #[tokio::test]
 async fn should_allow_a_peer_park_again_when_the_closed_peer_is_restaged() {
-    use octos_agent::ToolApprovalRequester as _;
+    use ra_agent::ToolApprovalRequester as _;
     let temp = tempfile::tempdir().unwrap();
     let profile = "tenant-1842-restage";
     let (state, runtime) = state_with_profile(temp.path(), profile).await;
@@ -32863,7 +32863,7 @@ async fn should_allow_a_peer_park_again_when_the_closed_peer_is_restaged() {
     };
     let park = tokio::spawn(async move {
         requester
-            .request_approval(octos_agent::ToolApprovalRequest {
+            .request_approval(ra_agent::ToolApprovalRequest {
                 tool_id: "call-1".to_owned(),
                 tool_name: "shell".to_owned(),
                 title: "Run a shell command".to_owned(),
@@ -32889,7 +32889,7 @@ async fn should_allow_a_peer_park_again_when_the_closed_peer_is_restaged() {
         .cancel_pending_for_turn(&session_id, &turn_id, "test-teardown");
     assert_eq!(
         park.await.unwrap(),
-        octos_agent::ToolApprovalDecision::Deny,
+        ra_agent::ToolApprovalDecision::Deny,
         "teardown cancel still fails closed"
     );
 }
@@ -32911,13 +32911,13 @@ impl AppuiContinuationLlm {
 }
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for AppuiContinuationLlm {
+impl ra_llm::LlmProvider for AppuiContinuationLlm {
     async fn chat(
         &self,
         messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
         self.call_count.fetch_add(1, Ordering::Relaxed);
         if let Some(prompt) = messages
             .iter()
@@ -32929,12 +32929,12 @@ impl octos_llm::LlmProvider for AppuiContinuationLlm {
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .push(prompt.content.clone());
         }
-        Ok(octos_llm::ChatResponse {
+        Ok(ra_llm::ChatResponse {
             content: Some(self.response.clone()),
             reasoning_content: None,
             tool_calls: Vec::new(),
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage {
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage {
                 input_tokens: 12,
                 output_tokens: 4,
                 ..Default::default()
@@ -33115,7 +33115,7 @@ async fn terminal_integrity_embedded_boot_reserves_foreground_admission() {
         state,
         session_id,
         temp.path(),
-        octos_agent::EffectivePermissions::workspace_write(),
+        ra_agent::EffectivePermissions::workspace_write(),
     )
     .await
     .unwrap();
@@ -33327,7 +33327,7 @@ fn session_sandbox_requires_negotiated_feature() {
     let err = validate_requested_session_sandbox(
         ConnectionUiFeatures::default(),
         &params,
-        &octos_agent::SandboxConfig::default(),
+        &ra_agent::SandboxConfig::default(),
     )
     .expect_err("sandbox override must require feature negotiation");
     assert_eq!(
@@ -33360,9 +33360,9 @@ fn session_sandbox_can_narrow_network_but_not_widen() {
         }),
         after: None,
     };
-    let inherited = octos_agent::SandboxConfig {
+    let inherited = ra_agent::SandboxConfig {
         allow_network: true,
-        ..octos_agent::SandboxConfig::default()
+        ..ra_agent::SandboxConfig::default()
     };
 
     let narrowed = validate_requested_session_sandbox(features, &params, &inherited)
@@ -33386,7 +33386,7 @@ fn session_sandbox_can_narrow_network_but_not_widen() {
     let err = validate_requested_session_sandbox(
         features,
         &widening,
-        &octos_agent::SandboxConfig::default(),
+        &ra_agent::SandboxConfig::default(),
     )
     .expect_err("network:true widens a network-denied profile");
     assert_eq!(
@@ -33412,9 +33412,9 @@ fn session_sandbox_read_paths_must_stay_within_profile_allowlist() {
         header_present: true,
         ..ConnectionUiFeatures::default()
     };
-    let inherited = octos_agent::SandboxConfig {
+    let inherited = ra_agent::SandboxConfig {
         read_allow_paths: vec![allowed.to_string_lossy().into_owned()],
-        ..octos_agent::SandboxConfig::default()
+        ..ra_agent::SandboxConfig::default()
     };
 
     let narrowed = SessionOpenParams {
@@ -33468,9 +33468,9 @@ async fn session_sandbox_open_override_materializes_distinct_session_policies() 
         temp.path(),
         "m11-session-sandbox",
         Arc::new(M11EStubLlm),
-        octos_agent::SandboxConfig {
+        ra_agent::SandboxConfig {
             allow_network: true,
-            ..octos_agent::SandboxConfig::default()
+            ..ra_agent::SandboxConfig::default()
         },
     )
     .await;
@@ -34355,7 +34355,7 @@ fn default_native_review_specs_use_backend_reviewer_template() {
     assert!(
         specs
             .iter()
-            .all(|spec| spec.role == octos_agent::ROLE_REVIEWER),
+            .all(|spec| spec.role == ra_agent::ROLE_REVIEWER),
         "built-in review/start specialists must resolve through the M14-C reviewer role template"
     );
 }
@@ -34445,13 +34445,13 @@ struct Wave4AStubProvider {
 }
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for Wave4AStubProvider {
+impl ra_llm::LlmProvider for Wave4AStubProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
         Err(eyre::eyre!("stub not callable in tests"))
     }
     fn model_id(&self) -> &str {
@@ -34469,7 +34469,7 @@ impl octos_llm::LlmProvider for Wave4AStubProvider {
 /// breaker map carries the same keys.
 #[test]
 fn build_router_status_event_captures_current_router_snapshot() {
-    let router = Arc::new(octos_llm::AdaptiveRouter::new(
+    let router = Arc::new(ra_llm::AdaptiveRouter::new(
         vec![
             Arc::new(Wave4AStubProvider {
                 name: "zai",
@@ -34481,9 +34481,9 @@ fn build_router_status_event_captures_current_router_snapshot() {
             }),
         ],
         &[],
-        octos_llm::AdaptiveConfig::default(),
+        ra_llm::AdaptiveConfig::default(),
     ));
-    router.set_mode(octos_llm::AdaptiveMode::Lane);
+    router.set_mode(ra_llm::AdaptiveMode::Lane);
 
     let session_id = SessionKey("local:wave4a-test".into());
     let event = build_router_status_event(&session_id, &router);
@@ -34526,7 +34526,7 @@ fn build_router_status_event_captures_current_router_snapshot() {
 /// the core `router_set_mode_command_round_trips` test.
 #[tokio::test]
 async fn router_set_mode_handler_dispatches_to_router() {
-    let router = Arc::new(octos_llm::AdaptiveRouter::new(
+    let router = Arc::new(ra_llm::AdaptiveRouter::new(
         vec![
             Arc::new(Wave4AStubProvider {
                 name: "p1",
@@ -34538,15 +34538,15 @@ async fn router_set_mode_handler_dispatches_to_router() {
             }),
         ],
         &[],
-        octos_llm::AdaptiveConfig::default(),
+        ra_llm::AdaptiveConfig::default(),
     ));
-    assert_eq!(router.mode(), octos_llm::AdaptiveMode::Off);
-    router.set_mode(octos_llm::AdaptiveMode::Hedge);
-    assert_eq!(router.mode(), octos_llm::AdaptiveMode::Hedge);
-    router.set_mode(octos_llm::AdaptiveMode::Lane);
-    assert_eq!(router.mode(), octos_llm::AdaptiveMode::Lane);
-    router.set_mode(octos_llm::AdaptiveMode::Off);
-    assert_eq!(router.mode(), octos_llm::AdaptiveMode::Off);
+    assert_eq!(router.mode(), ra_llm::AdaptiveMode::Off);
+    router.set_mode(ra_llm::AdaptiveMode::Hedge);
+    assert_eq!(router.mode(), ra_llm::AdaptiveMode::Hedge);
+    router.set_mode(ra_llm::AdaptiveMode::Lane);
+    assert_eq!(router.mode(), ra_llm::AdaptiveMode::Lane);
+    router.set_mode(ra_llm::AdaptiveMode::Off);
+    assert_eq!(router.mode(), ra_llm::AdaptiveMode::Off);
 }
 
 /// Wave4-A: the failover broadcast subscriber receives events
@@ -34554,7 +34554,7 @@ async fn router_set_mode_handler_dispatches_to_router() {
 /// reshaped into the wire form expected by the API layer.
 #[tokio::test]
 async fn router_failover_subscriber_receives_events_with_session_id() {
-    let router = Arc::new(octos_llm::AdaptiveRouter::new(
+    let router = Arc::new(ra_llm::AdaptiveRouter::new(
         vec![
             Arc::new(Wave4AStubProvider {
                 name: "p1",
@@ -34566,7 +34566,7 @@ async fn router_failover_subscriber_receives_events_with_session_id() {
             }),
         ],
         &[],
-        octos_llm::AdaptiveConfig {
+        ra_llm::AdaptiveConfig {
             // This assertion exercises the primary-to-fallback event, not
             // the default 10% probe that can legitimately start on p2.
             probe_probability: 0.0,
@@ -34583,9 +34583,9 @@ async fn router_failover_subscriber_receives_events_with_session_id() {
     // fails. Since the stub provider always errors, both
     // providers fail; chat() returns an error. But the failover
     // attempt itself publishes one event.
-    use octos_llm::LlmProvider as _;
+    use ra_llm::LlmProvider as _;
     let messages = vec![Message::user("hi")];
-    let cfg = octos_llm::ChatConfig::default();
+    let cfg = ra_llm::ChatConfig::default();
     let _ = router.chat(&messages, &[], &cfg).await;
 
     let event = tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv())
@@ -34609,7 +34609,7 @@ async fn router_failover_subscriber_receives_events_with_session_id() {
 
 #[test]
 fn runtime_error_envelope_surfaces_harness_message_for_quota() {
-    let llm = octos_llm::LlmError::from_status_with_label(
+    let llm = ra_llm::LlmError::from_status_with_label(
         403,
         r#"{"error":{"type":"insufficient_quota","message":"out of credits"}}"#,
         "MiniMax-M2.5-highspeed",
@@ -34634,7 +34634,7 @@ fn runtime_error_envelope_surfaces_harness_message_for_quota() {
 
 #[test]
 fn runtime_error_envelope_surfaces_harness_message_for_auth() {
-    let llm = octos_llm::LlmError::from_status_with_label(401, "Unauthorized", "openai/gpt-4");
+    let llm = ra_llm::LlmError::from_status_with_label(401, "Unauthorized", "openai/gpt-4");
     let report: eyre::Report = llm.into();
     let wire = super::classify_runtime_error_message(&report);
     assert!(
@@ -34649,7 +34649,7 @@ fn runtime_error_envelope_surfaces_harness_message_for_auth() {
 
 #[test]
 fn runtime_error_envelope_surfaces_harness_message_for_bad_request() {
-    let llm = octos_llm::LlmError::from_status_with_label(
+    let llm = ra_llm::LlmError::from_status_with_label(
         400,
         "reasoning_content missing in assistant tool call message",
         "deepseek/v4-pro",
@@ -35522,7 +35522,7 @@ async fn over_cap_rpc_result_sends_minimal_same_id_error_not_dropped() {
     );
     assert_eq!(
         parsed["error"]["code"],
-        octos_core::ui_protocol::rpc_error_codes::INTERNAL_ERROR
+        ra_core::ui_protocol::rpc_error_codes::INTERNAL_ERROR
     );
     assert!(
         parsed["error"]["message"].is_string(),
@@ -35594,7 +35594,7 @@ fn minimal_rpc_error_frame_is_tiny_valid_and_same_id() {
     assert_eq!(parsed["id"], id);
     assert_eq!(
         parsed["error"]["code"],
-        octos_core::ui_protocol::rpc_error_codes::INTERNAL_ERROR
+        ra_core::ui_protocol::rpc_error_codes::INTERNAL_ERROR
     );
     assert_eq!(
         parsed["error"]["message"],
@@ -35710,8 +35710,8 @@ async fn send_minimal_rpc_error_fallback_huge_id_closes_1011_and_fails_no_loop()
 /// touch the other's.
 #[test]
 fn per_turn_snapshot_creates_fresh_dispatcher() {
-    use octos_agent::tools::{MakeTypeEntry, Tool, ToolRegistry};
-    use octos_agent::{MofaDescribeContentTypeTool, MofaMakeTool};
+    use ra_agent::tools::{MakeTypeEntry, Tool, ToolRegistry};
+    use ra_agent::{MofaDescribeContentTypeTool, MofaMakeTool};
 
     // Build the parent session registry: register the dispatcher
     // pair seeded with one entry. This mirrors what the loader
@@ -35724,8 +35724,8 @@ fn per_turn_snapshot_creates_fresh_dispatcher() {
     let parent_describe = MofaDescribeContentTypeTool::new();
     parent_describe.register_or_replace(entry.clone());
 
-    let parent_dispatcher_arc: Arc<dyn octos_agent::tools::Tool> = Arc::new(parent_dispatcher);
-    let parent_describe_arc: Arc<dyn octos_agent::tools::Tool> = Arc::new(parent_describe);
+    let parent_dispatcher_arc: Arc<dyn ra_agent::tools::Tool> = Arc::new(parent_dispatcher);
+    let parent_describe_arc: Arc<dyn ra_agent::tools::Tool> = Arc::new(parent_describe);
     parent.register_arc(parent_dispatcher_arc.clone());
     parent.register_arc(parent_describe_arc.clone());
 
@@ -36096,17 +36096,17 @@ fn cleanup_of_one_peer_must_not_destroy_a_sibling_fence() {
 /// whose topic is `peer-<slug>` — a peer must never see the tool at all.
 #[test]
 fn peer_handoff_wiring_skipped_for_peer_topics() {
-    let peer = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "peer-ci-fix");
+    let peer = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "peer-ci-fix");
     assert!(!peer_handoff_allowed_for_session(&peer));
 
-    let plain = octos_core::SessionKey::with_profile("dev", "local", "tui");
+    let plain = ra_core::SessionKey::with_profile("dev", "local", "tui");
     assert!(peer_handoff_allowed_for_session(&plain));
 
-    let other_topic = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let other_topic = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     assert!(peer_handoff_allowed_for_session(&other_topic));
 
     // Only the `peer-` PREFIX gates; a topic merely containing it stays on.
-    let contains = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "my-peer-x");
+    let contains = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "my-peer-x");
     assert!(peer_handoff_allowed_for_session(&contains));
 }
 
@@ -36121,7 +36121,7 @@ fn peer_handoff_callback_caps_at_four_and_emits_staged_events() {
     let workspace = tmp.path().join("work");
     std::fs::create_dir_all(&workspace).unwrap();
 
-    let originating = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let originating = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let emitted: Arc<StdMutex<Vec<PeerStagedEvent>>> = Arc::new(StdMutex::new(Vec::new()));
     let emitted_sink = emitted.clone();
     let callback = build_peer_handoff_callback(
@@ -36135,7 +36135,7 @@ fn peer_handoff_callback_caps_at_four_and_emits_staged_events() {
     );
 
     for n in 1..=PEER_HANDOFFS_PER_TURN_MAX {
-        let staged = callback(octos_agent::PeerHandoffRequest {
+        let staged = callback(ra_agent::PeerHandoffRequest {
             brief: format!("Lane {n}: fix the flaky bus test."),
             // Unique per iteration — named peers reject duplicates.
             name: format!("Lane {n}"),
@@ -36154,7 +36154,7 @@ fn peer_handoff_callback_caps_at_four_and_emits_staged_events() {
         );
     }
 
-    let err = callback(octos_agent::PeerHandoffRequest {
+    let err = callback(ra_agent::PeerHandoffRequest {
         brief: "One too many.".to_owned(),
         name: "One too many".to_owned(),
         worktree: Some(false),
@@ -36201,7 +36201,7 @@ fn peer_handoff_callback_caps_at_four_and_emits_staged_events() {
 /// so there is no recursion hazard for a depth guard to contain.
 #[test]
 fn peer_gather_allowed_for_peer_sessions_unlike_handoff() {
-    let peer = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "peer-ci-fix");
+    let peer = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "peer-ci-fix");
     assert!(
         !peer_handoff_allowed_for_session(&peer),
         "handoff keeps its depth-1 guard"
@@ -36211,7 +36211,7 @@ fn peer_gather_allowed_for_peer_sessions_unlike_handoff() {
         "peers CAN gather sibling results off the blackboard"
     );
 
-    let plain = octos_core::SessionKey::with_profile("dev", "local", "tui");
+    let plain = ra_core::SessionKey::with_profile("dev", "local", "tui");
     assert!(peer_handoff_allowed_for_session(&plain));
     assert!(peer_gather_allowed_for_session(&plain));
 }
@@ -36526,7 +36526,7 @@ async fn peer_terminal_wake_should_not_wake_master_when_gathered_peer_is_closed(
     std::fs::write(dir.join("brief.md"), "Read the marker").unwrap();
     std::fs::write(dir.join("originator"), &master.0).unwrap();
     std::fs::write(dir.join("result.md"), "Actual peer result").unwrap();
-    let supervisor = octos_agent::TaskSupervisor::new();
+    let supervisor = ra_agent::TaskSupervisor::new();
     supervisor.set_on_change(|task| {
         crate::autonomy::agent_orchestrator::upsert_background_task_agent(
             task,
@@ -36561,7 +36561,7 @@ async fn peer_terminal_wake_should_not_wake_master_when_gathered_peer_is_closed(
     assert!(peer_is_closed(&root, slug));
     assert_eq!(
         supervisor.get_task(&task_id).unwrap().status,
-        octos_agent::TaskStatus::Completed
+        ra_agent::TaskStatus::Completed
     );
     evaluate_and_enqueue_fleet_synthesis(profile, &root, &master.0, &master).await;
     let pending = default_agent_orchestrator().drain_ready_continuations_for_session(
@@ -37211,7 +37211,7 @@ fn peer_close_callback_emits_closed_event_on_success_only() {
     let event = &events[0];
     assert_eq!(
         event.session_id,
-        octos_core::SessionKey(owner.to_owned()),
+        ra_core::SessionKey(owner.to_owned()),
         "event routes to the ORIGINATING (owner) session"
     );
     assert_eq!(event.topic, format!("peer-{slug}"), "closed peer's topic");
@@ -37241,9 +37241,9 @@ fn peer_close_resolves_open_goal_escalations_in_ledger() {
     // `model_goal_record_peer_escalation`; seeded directly here).
     let ledger_dir = tmp.path().join("goal-ledgers");
     std::fs::create_dir_all(&ledger_dir).unwrap();
-    let ledger = octos_fleet::GoalLedger::open(ledger_dir.join("g-close.db")).unwrap();
+    let ledger = ra_fleet::GoalLedger::open(ledger_dir.join("g-close.db")).unwrap();
     ledger
-        .upsert_goal(&octos_fleet::Goal {
+        .upsert_goal(&ra_fleet::Goal {
             goal_id: "g-close".to_owned(),
             objective: "test".to_owned(),
             status: "active".to_owned(),
@@ -37257,7 +37257,7 @@ fn peer_close_resolves_open_goal_escalations_in_ledger() {
         })
         .unwrap();
     ledger
-        .append_escalation(&octos_fleet::Escalation {
+        .append_escalation(&ra_fleet::Escalation {
             escalation_id: "esc-close-1".to_owned(),
             goal_id: "g-close".to_owned(),
             task_id: None,
@@ -38014,7 +38014,7 @@ fn peer_originator_recorded_by_handoff_callback() {
     let peers_root = tmp.path().join("data").join("peers");
     let workspace = tmp.path().join("work");
     std::fs::create_dir_all(&workspace).unwrap();
-    let originating = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let originating = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let callback = build_peer_handoff_callback(
         peers_root.clone(),
         workspace,
@@ -38024,7 +38024,7 @@ fn peer_originator_recorded_by_handoff_callback() {
         Arc::new(AtomicU32::new(0)),
         Arc::new(|_event| {}),
     );
-    let staged = callback(octos_agent::PeerHandoffRequest {
+    let staged = callback(ra_agent::PeerHandoffRequest {
         brief: "Fix the flaky bus test.".to_owned(),
         name: "CI Fix".to_owned(),
         worktree: Some(false),
@@ -38048,8 +38048,8 @@ fn peer_originator_recorded_by_handoff_callback() {
 // WITHOUT touching the predicate (zero-cost short-circuit).
 // ----------------------------------------------------------------------------
 
-fn handoff_request(name: &str, worktree: Option<bool>) -> octos_agent::PeerHandoffRequest {
-    octos_agent::PeerHandoffRequest {
+fn handoff_request(name: &str, worktree: Option<bool>) -> ra_agent::PeerHandoffRequest {
+    ra_agent::PeerHandoffRequest {
         brief: format!("Task for {name}."),
         name: name.to_owned(),
         worktree,
@@ -38090,11 +38090,11 @@ fn handoff_callback_for(
     peers_root: std::path::PathBuf,
     workspace: std::path::PathBuf,
     profile_id: &str,
-) -> octos_agent::PeerHandoffCallback {
+) -> ra_agent::PeerHandoffCallback {
     build_peer_handoff_callback(
         peers_root,
         workspace,
-        octos_core::SessionKey::with_profile_topic(profile_id, "local", "tui", "coding"),
+        ra_core::SessionKey::with_profile_topic(profile_id, "local", "tui", "coding"),
         profile_id.to_owned(),
         Vec::new(),
         Arc::new(AtomicU32::new(0)),
@@ -38363,7 +38363,7 @@ fn dual_goal_peer_fenced_and_cross_goal_checkout_refused() {
     // refused. The context mirrors what `install_main_tree_sovereignty`'s
     // provider closure hands the shell tool: the same tree root, a live
     // non-default branch read, the scanned owner, the caller's goal.
-    use octos_agent::tools::shell::{MainTreeSovereigntyContext, tree_sovereignty_denial};
+    use ra_agent::tools::shell::{MainTreeSovereigntyContext, tree_sovereignty_denial};
     let goal_02_ctx = MainTreeSovereigntyContext {
         main_tree_root: workspace.clone(),
         main_tree_branch: Some("feat/goal-01-stream".to_owned()),
@@ -38528,8 +38528,8 @@ fn stage_and_open_peer(
     peers_root: &std::path::Path,
     profile_id: &str,
     name: &str,
-    originator: &octos_core::SessionKey,
-) -> (String, octos_core::SessionKey) {
+    originator: &ra_core::SessionKey,
+) -> (String, ra_core::SessionKey) {
     std::fs::create_dir_all(peers_root).unwrap();
     let workspace = peers_root.parent().unwrap().join("work");
     std::fs::create_dir_all(&workspace).unwrap();
@@ -38542,7 +38542,7 @@ fn stage_and_open_peer(
         Arc::new(AtomicU32::new(0)),
         Arc::new(|_event| {}),
     );
-    let slug = callback(octos_agent::PeerHandoffRequest {
+    let slug = callback(ra_agent::PeerHandoffRequest {
         brief: "do the work".to_owned(),
         name: name.to_owned(),
         worktree: Some(false),
@@ -38553,7 +38553,7 @@ fn stage_and_open_peer(
     })
     .expect("stage peer")
     .slug;
-    let peer_key = octos_core::SessionKey::with_profile_topic(
+    let peer_key = ra_core::SessionKey::with_profile_topic(
         profile_id,
         "api",
         "tab",
@@ -38563,7 +38563,7 @@ fn stage_and_open_peer(
     (slug, peer_key)
 }
 
-fn approval_event(session: &octos_core::SessionKey, id: &ApprovalId) -> ApprovalRequestedEvent {
+fn approval_event(session: &ra_core::SessionKey, id: &ApprovalId) -> ApprovalRequestedEvent {
     ApprovalRequestedEvent::generic(
         session.clone(),
         id.clone(),
@@ -38575,9 +38575,9 @@ fn approval_event(session: &octos_core::SessionKey, id: &ApprovalId) -> Approval
 }
 
 fn question_event(
-    session: &octos_core::SessionKey,
+    session: &ra_core::SessionKey,
     id: &QuestionId,
-    questions: Vec<octos_core::ui_protocol::UserQuestion>,
+    questions: Vec<ra_core::ui_protocol::UserQuestion>,
 ) -> UserQuestionRequestedEvent {
     UserQuestionRequestedEvent {
         session_id: session.clone(),
@@ -38590,8 +38590,8 @@ fn question_event(
     }
 }
 
-fn one_free_text_question() -> Vec<octos_core::ui_protocol::UserQuestion> {
-    vec![octos_core::ui_protocol::UserQuestion {
+fn one_free_text_question() -> Vec<ra_core::ui_protocol::UserQuestion> {
+    vec![ra_core::ui_protocol::UserQuestion {
         header: "DB".to_owned(),
         question: "Which database?".to_owned(),
         options: Vec::new(),
@@ -38602,13 +38602,13 @@ fn one_free_text_question() -> Vec<octos_core::ui_protocol::UserQuestion> {
 
 /// A strict CHOICE question (options, NO free text) — a string answer MUST map
 /// to a label or the store rejects it (`free_text_not_allowed`).
-fn choice_question(question: &str, options: &[&str]) -> octos_core::ui_protocol::UserQuestion {
-    octos_core::ui_protocol::UserQuestion {
+fn choice_question(question: &str, options: &[&str]) -> ra_core::ui_protocol::UserQuestion {
+    ra_core::ui_protocol::UserQuestion {
         header: question.to_owned(),
         question: question.to_owned(),
         options: options
             .iter()
-            .map(|l| octos_core::ui_protocol::UserQuestionOption {
+            .map(|l| ra_core::ui_protocol::UserQuestionOption {
                 label: (*l).to_owned(),
                 description: String::new(),
             })
@@ -38618,8 +38618,8 @@ fn choice_question(question: &str, options: &[&str]) -> octos_core::ui_protocol:
     }
 }
 
-fn approve_req(slug: &str, id: Option<&str>) -> octos_agent::PeerRespondRequest {
-    octos_agent::PeerRespondRequest {
+fn approve_req(slug: &str, id: Option<&str>) -> ra_agent::PeerRespondRequest {
+    ra_agent::PeerRespondRequest {
         slug: slug.to_owned(),
         id: id.map(ToOwned::to_owned),
         decision: Some("approve".to_owned()),
@@ -38627,15 +38627,15 @@ fn approve_req(slug: &str, id: Option<&str>) -> octos_agent::PeerRespondRequest 
     }
 }
 
-fn answer_req(slug: &str, texts: &[&str]) -> octos_agent::PeerRespondRequest {
-    octos_agent::PeerRespondRequest {
+fn answer_req(slug: &str, texts: &[&str]) -> ra_agent::PeerRespondRequest {
+    ra_agent::PeerRespondRequest {
         slug: slug.to_owned(),
         id: None,
         decision: None,
         answers: Some(
             texts
                 .iter()
-                .map(|t| octos_agent::PeerRespondAnswer {
+                .map(|t| ra_agent::PeerRespondAnswer {
                     selected_labels: Vec::new(),
                     free_text: Some((*t).to_owned()),
                 })
@@ -38655,7 +38655,7 @@ fn no_decided_sink() -> impl Fn(&ApprovalDecidedEvent, Option<&str>) {
 fn peer_parks_visible_via_store_without_any_filesystem_marker() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let master = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let master = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let (slug, peer_key) = stage_and_open_peer(&peers_root, "prof-vis", "vis", &master);
 
     let contracts = Arc::new(UiProtocolContractStores::default());
@@ -38688,7 +38688,7 @@ fn peer_parks_visible_via_store_without_any_filesystem_marker() {
 fn peer_list_lists_each_pending_id_from_store() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let master = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let master = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let (_slug, peer_key) = stage_and_open_peer(&peers_root, "prof-list", "listy", &master);
 
     let contracts = Arc::new(UiProtocolContractStores::default());
@@ -38721,7 +38721,7 @@ fn peer_list_lists_each_pending_id_from_store() {
 fn peer_respond_resolves_pending_approval_approve() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let master = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let master = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let (slug, peer_key) = stage_and_open_peer(&peers_root, "prof-approve", "approve", &master);
 
     let contracts = UiProtocolContractStores::default();
@@ -38762,7 +38762,7 @@ fn peer_respond_resolves_pending_approval_approve() {
 fn peer_respond_resolves_pending_approval_deny() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let master = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let master = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let (slug, peer_key) = stage_and_open_peer(&peers_root, "prof-deny", "deny", &master);
 
     let contracts = UiProtocolContractStores::default();
@@ -38777,7 +38777,7 @@ fn peer_respond_resolves_pending_approval_deny() {
         "prof-deny",
         &contracts,
         &no_decided_sink(),
-        octos_agent::PeerRespondRequest {
+        ra_agent::PeerRespondRequest {
             slug: slug.clone(),
             id: None,
             decision: Some("deny".to_owned()),
@@ -38812,7 +38812,7 @@ fn bind_peer_to_host(peers_root: &std::path::Path, slug: &str) {
 fn peer_respond_refuses_a_host_owned_peers_approval() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let system = octos_core::SessionKey::with_profile_topic("dev", "api", "octosense", "system");
+    let system = ra_core::SessionKey::with_profile_topic("dev", "api", "octosense", "system");
     let (slug, peer_key) = stage_and_open_peer(&peers_root, "prof-hostappr", "rinx", &system);
     bind_peer_to_host(&peers_root, &slug);
 
@@ -38842,7 +38842,7 @@ fn peer_respond_refuses_a_host_owned_peers_approval() {
             "prof-hostappr",
             &contracts,
             &sink,
-            octos_agent::PeerRespondRequest {
+            ra_agent::PeerRespondRequest {
                 slug: slug.clone(),
                 id: id.map(ToOwned::to_owned),
                 decision: Some(decision.to_owned()),
@@ -38885,7 +38885,7 @@ fn peer_respond_refuses_a_host_owned_peers_approval() {
 fn peer_respond_answers_a_host_owned_peers_question_beside_a_parked_approval() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let system = octos_core::SessionKey::with_profile_topic("dev", "api", "octosense", "system");
+    let system = ra_core::SessionKey::with_profile_topic("dev", "api", "octosense", "system");
     let (slug, peer_key) = stage_and_open_peer(&peers_root, "prof-hostq", "rinx", &system);
     bind_peer_to_host(&peers_root, &slug);
 
@@ -38920,7 +38920,7 @@ fn peer_respond_answers_a_host_owned_peers_question_beside_a_parked_approval() {
 fn peer_respond_still_resolves_an_ordinary_peers_approval() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let master = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let master = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let (slug, peer_key) = stage_and_open_peer(&peers_root, "prof-ordappr", "ordinary", &master);
 
     let contracts = Arc::new(UiProtocolContractStores::default());
@@ -38952,7 +38952,7 @@ fn peer_respond_still_resolves_an_ordinary_peers_approval() {
 fn peer_respond_resolves_pending_question_answer() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let master = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let master = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let (slug, peer_key) = stage_and_open_peer(&peers_root, "prof-q", "q", &master);
 
     let contracts = UiProtocolContractStores::default();
@@ -38984,7 +38984,7 @@ fn peer_respond_resolves_pending_question_answer() {
 fn peer_respond_multi_question_choice_maps_string_answers_to_labels() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let master = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let master = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let (slug, peer_key) = stage_and_open_peer(&peers_root, "prof-multi", "multi", &master);
 
     let contracts = UiProtocolContractStores::default();
@@ -39021,7 +39021,7 @@ fn peer_respond_multi_question_choice_maps_string_answers_to_labels() {
 fn peer_respond_requires_id_when_multiple_pending() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let master = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let master = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let (slug, peer_key) = stage_and_open_peer(&peers_root, "prof-many", "many", &master);
 
     let contracts = UiProtocolContractStores::default();
@@ -39071,13 +39071,13 @@ fn peer_respond_requires_id_when_multiple_pending() {
 fn peer_respond_cannot_target_another_peers_pending() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let master = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let master = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let (slug, _attacker_key) = stage_and_open_peer(&peers_root, "prof-atk", "attacker", &master);
 
     let contracts = UiProtocolContractStores::default();
     // A DIFFERENT victim peer with a live pending approval under ITS own key.
     let victim_key =
-        octos_core::SessionKey::with_profile_topic("prof-atk", "api", "tab", "peer-victim");
+        ra_core::SessionKey::with_profile_topic("prof-atk", "api", "tab", "peer-victim");
     let victim_id = ApprovalId::new();
     let mut victim_rx = contracts
         .approvals
@@ -39110,7 +39110,7 @@ fn peer_respond_cannot_target_another_peers_pending() {
 fn peer_respond_unknown_id_leaves_other_pending_intact() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let master = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let master = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let (slug, peer_key) = stage_and_open_peer(&peers_root, "prof-unk", "unk", &master);
 
     let contracts = UiProtocolContractStores::default();
@@ -39143,7 +39143,7 @@ fn peer_respond_unknown_id_leaves_other_pending_intact() {
 fn peer_respond_rejects_non_originator() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let master = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let master = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let (slug, peer_key) = stage_and_open_peer(&peers_root, "prof-auth", "auth", &master);
 
     let contracts = UiProtocolContractStores::default();
@@ -39170,7 +39170,7 @@ fn peer_respond_rejects_non_originator() {
 fn peer_respond_errors_when_not_awaiting_input() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let master = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let master = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let (slug, _key) = stage_and_open_peer(&peers_root, "prof-idle", "idle", &master);
 
     let contracts = UiProtocolContractStores::default();
@@ -39191,7 +39191,7 @@ fn peer_respond_errors_when_not_awaiting_input() {
 fn peer_respond_rejects_wrong_response_kind() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let master = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let master = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let (slug, peer_key) = stage_and_open_peer(&peers_root, "prof-kind", "kind", &master);
 
     let contracts = UiProtocolContractStores::default();
@@ -39218,7 +39218,7 @@ fn peer_respond_rejects_wrong_response_kind() {
 fn peer_respond_errors_when_peer_not_open() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let master = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let master = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     // Stage but do NOT open (no wire registration): craft the slug manually.
     std::fs::create_dir_all(&peers_root).unwrap();
     let workspace = peers_root.parent().unwrap().join("work");
@@ -39232,7 +39232,7 @@ fn peer_respond_errors_when_peer_not_open() {
         Arc::new(AtomicU32::new(0)),
         Arc::new(|_e| {}),
     );
-    let slug = cb(octos_agent::PeerHandoffRequest {
+    let slug = cb(ra_agent::PeerHandoffRequest {
         brief: "x".to_owned(),
         name: "notopen".to_owned(),
         worktree: Some(false),
@@ -39263,7 +39263,7 @@ fn peer_respond_errors_when_peer_not_open() {
 fn peer_close_cancels_pending_from_store() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let master = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let master = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let (slug, peer_key) = stage_and_open_peer(&peers_root, "prof-close", "closing", &master);
 
     let contracts = UiProtocolContractStores::default();
@@ -39293,7 +39293,7 @@ fn peer_close_cancels_pending_from_store() {
 /// entry (the peer_respond production sink calls this alongside the emit).
 #[test]
 fn audit_approval_decided_writes_durable_entry() {
-    use octos_core::ui_protocol::ApprovalRequestedEvent;
+    use ra_core::ui_protocol::ApprovalRequestedEvent;
     let temp = tempfile::tempdir().unwrap();
     let contracts = UiProtocolContractStores::default();
     let session_id = SessionKey("dev:peer-audit".into());
@@ -39341,8 +39341,8 @@ fn audit_approval_decided_writes_durable_entry() {
 /// peer_close — never registered on a peer session.
 #[test]
 fn peer_respond_depth_guard_excludes_peer_sessions() {
-    let peer = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "peer-alpha");
-    let master = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let peer = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "peer-alpha");
+    let master = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     assert!(
         !peer_handoff_allowed_for_session(&peer),
         "peer_respond (gated on this predicate) must NOT be registered on a peer session"
@@ -39361,7 +39361,7 @@ fn peer_handoff_callback_records_valid_model_lane() {
     let peers_root = tmp.path().join("data").join("peers");
     let workspace = tmp.path().join("work");
     std::fs::create_dir_all(&workspace).unwrap();
-    let originating = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let originating = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let callback = build_peer_handoff_callback(
         peers_root.clone(),
         workspace,
@@ -39372,7 +39372,7 @@ fn peer_handoff_callback_records_valid_model_lane() {
         Arc::new(|_event| {}),
     );
 
-    let staged = callback(octos_agent::PeerHandoffRequest {
+    let staged = callback(ra_agent::PeerHandoffRequest {
         brief: "Synthesize the peers' findings.".to_owned(),
         name: "Synth".to_owned(),
         worktree: Some(false),
@@ -39404,7 +39404,7 @@ fn peer_handoff_callback_notes_unknown_model_lane_but_still_stages() {
     let peers_root = tmp.path().join("data").join("peers");
     let workspace = tmp.path().join("work");
     std::fs::create_dir_all(&workspace).unwrap();
-    let originating = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let originating = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let callback = build_peer_handoff_callback(
         peers_root.clone(),
         workspace,
@@ -39415,7 +39415,7 @@ fn peer_handoff_callback_notes_unknown_model_lane_but_still_stages() {
         Arc::new(|_event| {}),
     );
 
-    let staged = callback(octos_agent::PeerHandoffRequest {
+    let staged = callback(ra_agent::PeerHandoffRequest {
         brief: "Grind the grunt work.".to_owned(),
         name: "Grunt".to_owned(),
         worktree: Some(false),
@@ -39541,7 +39541,7 @@ fn zai_lane_peer_handoff_hit_records_and_resolves_zai_glm52() {
         .iter()
         .map(|sp| sp.key.clone())
         .collect();
-    let originating = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let originating = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let callback = build_peer_handoff_callback(
         peers_root.clone(),
         workspace,
@@ -39552,7 +39552,7 @@ fn zai_lane_peer_handoff_hit_records_and_resolves_zai_glm52() {
         Arc::new(|_event| {}),
     );
 
-    let staged = callback(octos_agent::PeerHandoffRequest {
+    let staged = callback(ra_agent::PeerHandoffRequest {
         brief: "Synthesize with GLM-5.2.".to_owned(),
         name: "Zai Synth".to_owned(),
         worktree: Some(false),
@@ -39629,7 +39629,7 @@ fn zai_lane_peer_handoff_miss_warns_and_falls_back_to_primary() {
     let workspace = tmp.path().join("work");
     std::fs::create_dir_all(&workspace).unwrap();
     // Only cheap/strong configured — NO zai lane in the profile.
-    let originating = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let originating = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     let callback = build_peer_handoff_callback(
         peers_root.clone(),
         workspace,
@@ -39640,7 +39640,7 @@ fn zai_lane_peer_handoff_miss_warns_and_falls_back_to_primary() {
         Arc::new(|_event| {}),
     );
 
-    let staged = callback(octos_agent::PeerHandoffRequest {
+    let staged = callback(ra_agent::PeerHandoffRequest {
         brief: "Request a lane the profile never configured.".to_owned(),
         name: "Zai Miss".to_owned(),
         worktree: Some(false),
@@ -39793,10 +39793,10 @@ fn s3_zai_lane_real_three_layer_probe() {
 /// provider and return the reply text plus the billed token usage. Kept
 /// separate so the probe body reads as the three acceptance layers.
 fn run_zai_real_call(
-    provider: &Arc<dyn octos_llm::LlmProvider>,
-) -> (String, octos_llm::TokenUsage) {
-    use octos_core::Message;
-    use octos_llm::ChatConfig;
+    provider: &Arc<dyn ra_llm::LlmProvider>,
+) -> (String, ra_llm::TokenUsage) {
+    use ra_core::Message;
+    use ra_llm::ChatConfig;
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -39820,12 +39820,12 @@ fn run_zai_real_call(
 /// accepts a `peer-<slug>` topic.
 #[test]
 fn peer_lane_resolution_skips_non_peer_session() {
-    let plain = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let plain = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     assert!(
         peer_slug_and_profile(&plain).is_none(),
         "a non-peer session is never a lane target"
     );
-    let peer = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "peer-synth");
+    let peer = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "peer-synth");
     assert_eq!(peer_slug_and_profile(&peer), Some(("dev", "synth")));
 }
 
@@ -40057,7 +40057,7 @@ async fn peer_originator_recorded_by_prepare_when_session_id_present() {
 
     let cwd = tmp.path().join("project");
     std::fs::create_dir_all(&cwd).unwrap();
-    let originating = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let originating = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
 
     let result = raw_peer_prepare(
         &state,
@@ -40118,7 +40118,7 @@ fn peer_results_ready_note_fires_once_per_new_result() {
     let dir = peers_root.join("alpha");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("brief.md"), "brief").unwrap();
-    let originating = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let originating = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     std::fs::write(dir.join("originator"), originating.to_string()).unwrap();
     std::fs::write(dir.join("result.md"), "first result").unwrap();
 
@@ -40165,14 +40165,14 @@ fn peer_results_ready_note_scopes_to_the_originating_session() {
     let dir = peers_root.join("alpha");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("brief.md"), "brief").unwrap();
-    let originating = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let originating = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     std::fs::write(dir.join("originator"), originating.to_string()).unwrap();
     std::fs::write(dir.join("result.md"), "done").unwrap();
 
     // The guard short-circuits on the topic BEFORE any originator match: a
     // peer dir naming a peer session as its originator still nudges nobody.
     let peer_session =
-        octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "peer-beta");
+        ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "peer-beta");
     let peer_owned = peers_root.join("beta-child");
     std::fs::create_dir_all(&peer_owned).unwrap();
     std::fs::write(peer_owned.join("brief.md"), "brief").unwrap();
@@ -40180,7 +40180,7 @@ fn peer_results_ready_note_scopes_to_the_originating_session() {
     std::fs::write(peer_owned.join("result.md"), "done").unwrap();
     assert_eq!(peer_results_ready_note(&peers_root, &peer_session), None);
 
-    let other = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "other");
+    let other = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "other");
     assert_eq!(peer_results_ready_note(&peers_root, &other), None);
     assert!(
         !dir.join(".notified").exists(),
@@ -40204,7 +40204,7 @@ fn peer_results_ready_note_scopes_to_the_originating_session() {
 fn peer_results_ready_note_caps_named_slugs() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("peers");
-    let originating = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let originating = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     for i in 1..=6 {
         let dir = peers_root.join(format!("lane-{i}"));
         std::fs::create_dir_all(&dir).unwrap();
@@ -40603,7 +40603,7 @@ async fn peer_resources_follow_cold_and_dynamic_profile_runtime() {
         &profile.id,
         &data_dir,
         Arc::new(M11EStubLlm),
-        octos_agent::SandboxConfig::default(),
+        ra_agent::SandboxConfig::default(),
     )
     .await;
     let key = dynamic_profile_runtime_key(&state, &profile.id).unwrap();
@@ -40793,7 +40793,7 @@ async fn peer_fleet_result_writer_and_gather_roundtrip() {
     // Result writer: a peer-topic session with a staged dir gets result.md;
     // an unstaged peer topic writes nothing (no dir creation).
     let peer_key =
-        octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "peer-lens-review-2");
+        ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "peer-lens-review-2");
     let first_turn = TurnId::new();
     write_peer_result_if_peer_session(
         &state,
@@ -40829,7 +40829,7 @@ async fn peer_fleet_result_writer_and_gather_roundtrip() {
         "turns.txt first line should be '1 completed'"
     );
     let ghost_key =
-        octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "peer-never-staged");
+        ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "peer-never-staged");
     write_peer_result_if_peer_session(
         &state,
         &ghost_key,
@@ -40844,7 +40844,7 @@ async fn peer_fleet_result_writer_and_gather_roundtrip() {
         "an unstaged peer topic must not create directories"
     );
     // A non-peer topic is a no-op.
-    let coding_key = octos_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
+    let coding_key = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "coding");
     write_peer_result_if_peer_session(
         &state,
         &coding_key,
@@ -40863,8 +40863,8 @@ async fn peer_fleet_result_writer_and_gather_roundtrip() {
     crate::peers::turn_origin::record_turn_origin(
         &peer_key,
         &second_turn,
-        octos_core::ui_protocol::TurnOrigin {
-            kind: octos_core::ui_protocol::TurnOriginKind::Person,
+        ra_core::ui_protocol::TurnOrigin {
+            kind: ra_core::ui_protocol::TurnOriginKind::Person,
             label: None,
         },
     );
@@ -41030,11 +41030,11 @@ async fn recv_rpc_response_with_id(
 fn synthetic_active_turn(
     turn_id: &TurnId,
     steerable: bool,
-) -> (ActiveTurn, Option<octos_agent::SharedSteerBuffer>) {
+) -> (ActiveTurn, Option<ra_agent::SharedSteerBuffer>) {
     // The receiver drops here — nothing interrupts these synthetic turns.
     let (interrupt_tx, _interrupt_rx) = mpsc::channel::<()>(1);
-    let buffer: Option<octos_agent::SharedSteerBuffer> =
-        steerable.then(|| Arc::new(octos_agent::SteerBuffer::default()));
+    let buffer: Option<ra_agent::SharedSteerBuffer> =
+        steerable.then(|| Arc::new(ra_agent::SteerBuffer::default()));
     let dummy_handle = tokio::spawn(async {});
     (
         ActiveTurn {
@@ -41511,13 +41511,13 @@ async fn should_refuse_with_typed_turn_in_progress_when_turn_start_collides() {
 /// attached to.
 #[tokio::test(flavor = "current_thread")]
 async fn should_report_active_turn_on_session_list_when_a_turn_is_live() {
-    use octos_core::ui_protocol::SessionListParams;
+    use ra_core::ui_protocol::SessionListParams;
 
     let busy = SessionKey::with_profile(MAIN_PROFILE_ID, "api", "list-busy");
     let idle = SessionKey::with_profile(MAIN_PROFILE_ID, "api", "list-idle");
 
     let temp = tempfile::tempdir().expect("tempdir");
-    let manager = octos_bus::SessionManager::open(temp.path()).expect("session manager open");
+    let manager = ra_bus::SessionManager::open(temp.path()).expect("session manager open");
     let manager = Arc::new(TokioMutex::new(manager));
     {
         let mut guard = manager.lock().await;
@@ -41606,13 +41606,13 @@ struct GatedSteerLlm {
 }
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for GatedSteerLlm {
+impl ra_llm::LlmProvider for GatedSteerLlm {
     async fn chat(
         &self,
         messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
         self.observed
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -41630,12 +41630,12 @@ impl octos_llm::LlmProvider for GatedSteerLlm {
         } else {
             "second answer"
         };
-        Ok(octos_llm::ChatResponse {
+        Ok(ra_llm::ChatResponse {
             content: Some(content.to_string()),
             reasoning_content: None,
             tool_calls: Vec::new(),
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage {
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage {
                 input_tokens: 8,
                 output_tokens: 4,
                 ..Default::default()
@@ -42058,13 +42058,13 @@ fn voice_admission_methods_require_explicit_feature_negotiation() {
 
 #[test]
 fn background_skill_actions_require_the_job_capability() {
-    let sync: octos_agent::plugins::SkillActionDef = serde_json::from_value(json!({
+    let sync: ra_agent::plugins::SkillActionDef = serde_json::from_value(json!({
         "id": "document.open",
         "label": "Open",
         "binding": {"type": "tool", "tool": "source_import"}
     }))
     .unwrap();
-    let background: octos_agent::plugins::SkillActionDef = serde_json::from_value(json!({
+    let background: ra_agent::plugins::SkillActionDef = serde_json::from_value(json!({
         "id": "source.import",
         "label": "Import",
         "execution": "background",
@@ -42253,9 +42253,9 @@ fn event_ledger_recovery_runs_exactly_once_across_concurrent_initializers() {
     // so the recovery has a real orphan sweep to perform.
     {
         let ledger = UiProtocolLedger::with_config(LedgerConfig::durable(temp.path().into()));
-        let task: octos_core::ui_protocol::TaskUpdatedEvent = serde_json::from_value(json!({
+        let task: ra_core::ui_protocol::TaskUpdatedEvent = serde_json::from_value(json!({
             "session_id": session_id.0.clone(),
-            "task_id": octos_core::TaskId::new().to_string(),
+            "task_id": ra_core::TaskId::new().to_string(),
             "title": "ghost task",
             "state": "running",
         }))
@@ -42324,23 +42324,23 @@ fn event_ledger_recovery_runs_exactly_once_across_concurrent_initializers() {
 struct ScriptedSentinelVerifier {
     calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
     reply: &'static str,
-    usage: octos_llm::TokenUsage,
+    usage: ra_llm::TokenUsage,
 }
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for ScriptedSentinelVerifier {
+impl ra_llm::LlmProvider for ScriptedSentinelVerifier {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
         self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        Ok(octos_llm::ChatResponse {
+        Ok(ra_llm::ChatResponse {
             content: Some(self.reply.to_string()),
             reasoning_content: None,
             tool_calls: Vec::new(),
-            stop_reason: octos_llm::StopReason::EndTurn,
+            stop_reason: ra_llm::StopReason::EndTurn,
             usage: self.usage.clone(),
             provider_index: Some(0),
         })
@@ -42382,7 +42382,7 @@ async fn interactive_sentinel_done_verdict_completes_scoped_goal() {
     let verifier = std::sync::Arc::new(ScriptedSentinelVerifier {
         calls: calls.clone(),
         reply: "DONE",
-        usage: octos_llm::TokenUsage {
+        usage: ra_llm::TokenUsage {
             input_tokens: 33,
             output_tokens: 3,
             ..Default::default()
@@ -42450,7 +42450,7 @@ async fn interactive_sentinel_notdone_verdict_leaves_goal_active() {
     let verifier = std::sync::Arc::new(ScriptedSentinelVerifier {
         calls: calls.clone(),
         reply: "NOT_DONE: evidence is missing",
-        usage: octos_llm::TokenUsage {
+        usage: ra_llm::TokenUsage {
             input_tokens: 20,
             output_tokens: 8,
             ..Default::default()
@@ -42506,7 +42506,7 @@ async fn interactive_sentinel_refuses_stale_goal_binding() {
     let verifier = std::sync::Arc::new(ScriptedSentinelVerifier {
         calls: calls.clone(),
         reply: "DONE",
-        usage: octos_llm::TokenUsage {
+        usage: ra_llm::TokenUsage {
             input_tokens: 10,
             output_tokens: 2,
             ..Default::default()
@@ -42564,7 +42564,7 @@ async fn interactive_sentinel_skips_verifier_without_completion_claim() {
     let verifier = std::sync::Arc::new(ScriptedSentinelVerifier {
         calls: calls.clone(),
         reply: "DONE",
-        usage: octos_llm::TokenUsage::default(),
+        usage: ra_llm::TokenUsage::default(),
     });
 
     let completed = run_interactive_sentinel_completion(
@@ -42609,7 +42609,7 @@ fn steer_dropped_frame(writer_rx: &std::sync::mpsc::Receiver<WsMessage>) -> Valu
 fn ledgered_steer_dropped(
     ledger: &UiProtocolLedger,
     session_id: &SessionKey,
-) -> Vec<octos_core::ui_protocol::TurnSteerDroppedEvent> {
+) -> Vec<ra_core::ui_protocol::TurnSteerDroppedEvent> {
     let baseline = UiCursor {
         stream: session_id.0.clone(),
         seq: 0,
@@ -42634,7 +42634,7 @@ fn leftover_steers_at_turn_end_are_returned_as_turn_steer_dropped() {
     let ledger = Arc::new(UiProtocolLedger::new(16));
     let session_id = SessionKey("local:steer-dropped".into());
     let turn_id = TurnId::new();
-    let buffer: octos_agent::SharedSteerBuffer = Arc::new(octos_agent::SteerBuffer::default());
+    let buffer: ra_agent::SharedSteerBuffer = Arc::new(ra_agent::SteerBuffer::default());
     buffer.push("first steer".into());
     buffer.push("second steer".into());
 
@@ -42679,7 +42679,7 @@ fn leftover_steers_after_normal_end_are_labelled_turn_ended() {
     let ledger = Arc::new(UiProtocolLedger::new(16));
     let session_id = SessionKey("local:steer-dropped-ended".into());
     let turn_id = TurnId::new();
-    let buffer: octos_agent::SharedSteerBuffer = Arc::new(octos_agent::SteerBuffer::default());
+    let buffer: ra_agent::SharedSteerBuffer = Arc::new(ra_agent::SteerBuffer::default());
     buffer.push("late steer".into());
 
     let returned = settle_leftover_steers(
@@ -42706,7 +42706,7 @@ fn no_leftover_steers_emits_nothing() {
     let ledger = Arc::new(UiProtocolLedger::new(16));
     let session_id = SessionKey("local:steer-none".into());
     let turn_id = TurnId::new();
-    let buffer: octos_agent::SharedSteerBuffer = Arc::new(octos_agent::SteerBuffer::default());
+    let buffer: ra_agent::SharedSteerBuffer = Arc::new(ra_agent::SteerBuffer::default());
 
     let returned = settle_leftover_steers(
         &buffer,
@@ -42757,7 +42757,7 @@ fn leftover_steers_are_ledgered_even_when_connection_write_fails() {
     let ledger = Arc::new(UiProtocolLedger::new(16));
     let session_id = SessionKey("local:steer-dead-peer".into());
     let turn_id = TurnId::new();
-    let buffer: octos_agent::SharedSteerBuffer = Arc::new(octos_agent::SteerBuffer::default());
+    let buffer: ra_agent::SharedSteerBuffer = Arc::new(ra_agent::SteerBuffer::default());
     buffer.push("orphaned steer".into());
 
     let returned = settle_leftover_steers(
@@ -42791,7 +42791,7 @@ async fn steer_dropped_is_emitted_before_the_terminal_frame() {
     let session_id = SessionKey("local:steer-order".into());
     let turn_id = TurnId::new();
     let turn_state = TokioMutex::new(TurnState::Active);
-    let buffer: octos_agent::SharedSteerBuffer = Arc::new(octos_agent::SteerBuffer::default());
+    let buffer: ra_agent::SharedSteerBuffer = Arc::new(ra_agent::SteerBuffer::default());
     buffer.push("accepted but never drained".into());
 
     try_emit_terminal(
@@ -42925,7 +42925,7 @@ async fn connection_close_settles_steers_before_connection_closed_terminal() {
     let active_turns: SharedActiveTurns = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
     let connection_turns: SharedConnectionTurns = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
     let handle = tokio::spawn(async { std::future::pending::<()>().await });
-    let buffer: octos_agent::SharedSteerBuffer = Arc::new(octos_agent::SteerBuffer::default());
+    let buffer: ra_agent::SharedSteerBuffer = Arc::new(ra_agent::SteerBuffer::default());
     buffer.push("typed just before the socket died".into());
     let mut entry = test_active_turn(turn_id.clone(), handle.abort_handle());
     entry.steer = Some(buffer.clone());
@@ -42998,11 +42998,11 @@ fn should_opt_out_of_cache_writes_when_building_btw_config() {
     let config = btw_chat_config();
     assert_eq!(
         config.cache_retention,
-        octos_llm::CacheRetention::None,
+        ra_llm::CacheRetention::None,
         "btw asides must not request cache writes"
     );
     assert_eq!(config.max_tokens, Some(BTW_ANSWER_MAX_TOKENS));
-    assert!(matches!(config.tool_choice, octos_llm::ToolChoice::None));
+    assert!(matches!(config.tool_choice, ra_llm::ToolChoice::None));
 }
 
 #[test]
@@ -43013,11 +43013,11 @@ fn should_opt_out_of_cache_writes_when_building_review_join_config() {
     let config = review_join_chat_config();
     assert_eq!(
         config.cache_retention,
-        octos_llm::CacheRetention::None,
+        ra_llm::CacheRetention::None,
         "the review join must not request cache writes"
     );
     assert_eq!(config.max_tokens, Some(1800));
-    assert!(matches!(config.tool_choice, octos_llm::ToolChoice::None));
+    assert!(matches!(config.tool_choice, ra_llm::ToolChoice::None));
 }
 
 #[test]
@@ -43151,7 +43151,7 @@ fn goal_scope_guard_admits_sibling_scope_repaint_after_other_scope_clear() {
     let b_repaint_json = orchestrator
         .session_goal_updated_event_json(&scoped_b, MAIN_PROFILE_ID)
         .expect("folder B has a live goal to repaint");
-    let b_repaint: octos_core::ui_protocol::SessionGoalUpdatedEvent =
+    let b_repaint: ra_core::ui_protocol::SessionGoalUpdatedEvent =
         serde_json::from_value(b_repaint_json).expect("updated event");
 
     // Folder A: register its scope, bind and CLEAR its own goal. The clear
@@ -43173,7 +43173,7 @@ fn goal_scope_guard_admits_sibling_scope_repaint_after_other_scope_clear() {
             profile_id: MAIN_PROFILE_ID.to_owned(),
         })
         .expect("clear folder A's goal");
-    let a_clear: octos_core::ui_protocol::SessionGoalClearedEvent =
+    let a_clear: ra_core::ui_protocol::SessionGoalClearedEvent =
         serde_json::from_value(a_clear_json).expect("cleared event");
 
     // Cleanup the process-global store BEFORE asserting.
@@ -43226,10 +43226,10 @@ async fn session_open_goal_frames_gated_when_goal_runtime_not_negotiated() {
     let session_id = SessionKey("local:goal-null-capability".into());
     // Seed the REPLAY lane with a durable goal frame from another connection.
     ledger.append_notification_from(
-        UiNotification::SessionGoalUpdated(octos_core::ui_protocol::SessionGoalUpdatedEvent {
+        UiNotification::SessionGoalUpdated(ra_core::ui_protocol::SessionGoalUpdatedEvent {
             session_id: session_id.clone(),
             profile_id: Some(MAIN_PROFILE_ID.to_owned()),
-            goal: octos_core::ui_protocol::UiGoalRecord {
+            goal: ra_core::ui_protocol::UiGoalRecord {
                 profile_id: Some(MAIN_PROFILE_ID.to_owned()),
                 goal_id: "goal-replayed".into(),
                 objective: "durable goal history".into(),
@@ -43282,7 +43282,7 @@ async fn session_open_goal_frames_gated_when_goal_runtime_not_negotiated() {
     assert!(opened, "session/open must succeed");
     // Feed the LIVE PUMP lane too, from another connection.
     ledger.append_notification_from(
-        UiNotification::SessionGoalCleared(octos_core::ui_protocol::SessionGoalClearedEvent {
+        UiNotification::SessionGoalCleared(ra_core::ui_protocol::SessionGoalClearedEvent {
             session_id: session_id.clone(),
             profile_id: Some(MAIN_PROFILE_ID.to_owned()),
             cleared: true,
@@ -43540,14 +43540,14 @@ fn runtime_writes_result_when_peer_did_not_claim_ownership() {
 }
 
 /// #27h-r1 — CONTRACT TWIN of
-/// `octos_agent::agent::budget::result_owner_content_contract_agent_side`:
+/// `ra_agent::agent::budget::result_owner_content_contract_agent_side`:
 /// the cli consumer asserts the SAME fixture table through the SAME shared
-/// function (`octos_agent::result_md_owner_content_is_peer`). If either
+/// function (`ra_agent::result_md_owner_content_is_peer`). If either
 /// side drifts (a local copy sneaks back in), one of the twins goes red on
 /// the identical inputs.
 #[test]
 fn result_owner_contract_27h_r1() {
-    let judge = octos_agent::result_md_owner_content_is_peer;
+    let judge = ra_agent::result_md_owner_content_is_peer;
     assert!(judge("peer"));
     assert!(judge("peer\n"));
     assert!(judge("  peer  "));
@@ -43561,7 +43561,7 @@ fn result_owner_contract_27h_r1() {
     // crate path exercised from the test surface too.)
     assert_eq!(
         std::any::type_name_of_val(&judge),
-        std::any::type_name_of_val(&octos_agent::result_md_owner_content_is_peer),
+        std::any::type_name_of_val(&ra_agent::result_md_owner_content_is_peer),
     );
 }
 
@@ -43585,14 +43585,14 @@ mod obs_fallback_switch_ui_48b {
             .collect()
     }
 
-    fn stub_router() -> Arc<octos_llm::AdaptiveRouter> {
-        Arc::new(octos_llm::AdaptiveRouter::new(
+    fn stub_router() -> Arc<ra_llm::AdaptiveRouter> {
+        Arc::new(ra_llm::AdaptiveRouter::new(
             vec![Arc::new(Wave4AStubProvider {
                 name: "a",
                 model: "m1",
             })],
             &[],
-            octos_llm::AdaptiveConfig::default(),
+            ra_llm::AdaptiveConfig::default(),
         ))
     }
 
@@ -43612,8 +43612,8 @@ mod obs_fallback_switch_ui_48b {
             session_id.clone(),
             Some(router.clone()),
         );
-        octos_llm::with_router_context(
-            octos_llm::RouterContext {
+        ra_llm::with_router_context(
+            ra_llm::RouterContext {
                 session_id: Some(session_id.0.clone()),
                 turn_id: None,
             },
@@ -43647,8 +43647,8 @@ mod obs_fallback_switch_ui_48b {
         let ws = WsConnection::new(tx);
         let _forwarder =
             spawn_router_failover_forwarder_for_test(ws, ledger, session_id, Some(router.clone()));
-        octos_llm::with_router_context(
-            octos_llm::RouterContext {
+        ra_llm::with_router_context(
+            ra_llm::RouterContext {
                 session_id: Some("some-other-session".to_string()),
                 turn_id: None,
             },
@@ -43774,18 +43774,18 @@ mod obs_malformed_exhausted_48b {
         // appends exactly one malformed_exhausted row to a temp ledger dir.
         struct AlwaysMalformedProvider;
         #[async_trait::async_trait]
-        impl octos_llm::LlmProvider for AlwaysMalformedProvider {
+        impl ra_llm::LlmProvider for AlwaysMalformedProvider {
             fn provider_name(&self) -> &str {
                 "always-malformed"
             }
 
             async fn chat(
                 &self,
-                _messages: &[octos_core::Message],
-                _tools: &[octos_llm::ToolSpec],
-                _config: &octos_llm::ChatConfig,
-            ) -> eyre::Result<octos_llm::ChatResponse> {
-                Err(eyre::Report::new(octos_llm::StreamError::MalformedArgs {
+                _messages: &[ra_core::Message],
+                _tools: &[ra_llm::ToolSpec],
+                _config: &ra_llm::ChatConfig,
+            ) -> eyre::Result<ra_llm::ChatResponse> {
+                Err(eyre::Report::new(ra_llm::StreamError::MalformedArgs {
                     tool_id: "call_bad".to_string(),
                     tool_name: "shell".to_string(),
                     error: "expected `,` or `}` at line 1 column 4123".to_string(),
@@ -43795,17 +43795,17 @@ mod obs_malformed_exhausted_48b {
                 "always-malformed"
             }
         }
-        let provider: std::sync::Arc<dyn octos_llm::LlmProvider> =
+        let provider: std::sync::Arc<dyn ra_llm::LlmProvider> =
             std::sync::Arc::new(AlwaysMalformedProvider);
-        let tools = octos_agent::ToolRegistry::new();
+        let tools = ra_agent::ToolRegistry::new();
         let dir = tempfile::tempdir().unwrap();
         let memory = std::sync::Arc::new(
-            octos_memory::EpisodeStore::open(dir.path().join("memory"))
+            ra_memory::EpisodeStore::open(dir.path().join("memory"))
                 .await
                 .unwrap(),
         );
-        let agent = octos_agent::Agent::new(
-            octos_core::AgentId::new("mfe-real"),
+        let agent = ra_agent::Agent::new(
+            ra_core::AgentId::new("mfe-real"),
             provider,
             tools,
             memory,
@@ -43818,7 +43818,7 @@ mod obs_malformed_exhausted_48b {
             .expect_err("exhausted malformed budget terminates the turn");
         let message = classify_runtime_error_message(&error);
         assert!(
-            message.starts_with(octos_agent::MALFORMED_TOOLCALL_EXHAUSTED_MARKER),
+            message.starts_with(ra_agent::MALFORMED_TOOLCALL_EXHAUSTED_MARKER),
             "real classified error carries the marker: {message}"
         );
 
@@ -43921,7 +43921,7 @@ mod obs_malformed_exhausted_48b {
     fn obs_no_malformed_exhausted_when_marker_not_prefix() {
         let message = format!(
             "ordinary error mentioning {} mid-text",
-            octos_agent::MALFORMED_TOOLCALL_EXHAUSTED_MARKER
+            ra_agent::MALFORMED_TOOLCALL_EXHAUSTED_MARKER
         );
         assert!(
             malformed_exhausted_detail_for_terminal(&message).is_none(),
@@ -43967,16 +43967,16 @@ fn default_oup_compaction_keeps_newest_user_raw_and_tool_groups_atomic() {
     assert_eq!(policy.target_tokens_after_compaction, Some(180));
 
     let mut manager = crate::context_manager::ContextManager::new("default-semantic", None);
-    manager.record_message(&octos_core::Message::user("old request ".repeat(80)));
-    let mut old_calls = octos_core::Message::assistant("");
+    manager.record_message(&ra_core::Message::user("old request ".repeat(80)));
+    let mut old_calls = ra_core::Message::assistant("");
     old_calls.tool_calls = Some(vec![
-        octos_core::ToolCall {
+        ra_core::ToolCall {
             id: "call_old_a".to_owned(),
             name: "read_file".to_owned(),
             arguments: serde_json::json!({"path": "old-a"}),
             metadata: None,
         },
-        octos_core::ToolCall {
+        ra_core::ToolCall {
             id: "call_old_b".to_owned(),
             name: "grep".to_owned(),
             arguments: serde_json::json!({"query": "old-b"}),
@@ -43985,31 +43985,31 @@ fn default_oup_compaction_keeps_newest_user_raw_and_tool_groups_atomic() {
     ]);
     let mut old_group_ids = manager.record_message(&old_calls);
     old_group_ids.extend(
-        manager.record_message(&octos_core::Message::tool_with_thread(
+        manager.record_message(&ra_core::Message::tool_with_thread(
             "old a output ".repeat(40),
             "call_old_a",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         )),
     );
     old_group_ids.extend(
-        manager.record_message(&octos_core::Message::tool_with_thread(
+        manager.record_message(&ra_core::Message::tool_with_thread(
             "old b output ".repeat(40),
             "call_old_b",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         )),
     );
 
     let newest_user_id =
-        manager.record_message(&octos_core::Message::user("CURRENT USER"))[0].clone();
-    let mut current_calls = octos_core::Message::assistant("");
+        manager.record_message(&ra_core::Message::user("CURRENT USER"))[0].clone();
+    let mut current_calls = ra_core::Message::assistant("");
     current_calls.tool_calls = Some(vec![
-        octos_core::ToolCall {
+        ra_core::ToolCall {
             id: "call_current_a".to_owned(),
             name: "read_file".to_owned(),
             arguments: serde_json::json!({"path": "current-a"}),
             metadata: None,
         },
-        octos_core::ToolCall {
+        ra_core::ToolCall {
             id: "call_current_b".to_owned(),
             name: "grep".to_owned(),
             arguments: serde_json::json!({"query": "current-b"}),
@@ -44018,17 +44018,17 @@ fn default_oup_compaction_keeps_newest_user_raw_and_tool_groups_atomic() {
     ]);
     let mut current_group_ids = manager.record_message(&current_calls);
     current_group_ids.extend(
-        manager.record_message(&octos_core::Message::tool_with_thread(
+        manager.record_message(&ra_core::Message::tool_with_thread(
             "current a",
             "call_current_a",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         )),
     );
     current_group_ids.extend(
-        manager.record_message(&octos_core::Message::tool_with_thread(
+        manager.record_message(&ra_core::Message::tool_with_thread(
             "current b",
             "call_current_b",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         )),
     );
 
@@ -44253,13 +44253,13 @@ fn should_merge_late_background_result_into_current_session_manager_not_stale_tu
 struct ManualCompactTinyProvider;
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for ManualCompactTinyProvider {
+impl ra_llm::LlmProvider for ManualCompactTinyProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
         unreachable!("compaction never calls the provider")
     }
 
@@ -44288,7 +44288,7 @@ fn should_refuse_manual_compaction_while_a_turn_is_active_and_leave_the_snapshot
             )
         })
         .collect();
-    let provider: Arc<dyn octos_llm::LlmProvider> = Arc::new(ManualCompactTinyProvider);
+    let provider: Arc<dyn ra_llm::LlmProvider> = Arc::new(ManualCompactTinyProvider);
     let (_messages, _live_manager, _notifications, registration) = appui_context_history_for_agent(
         dir.path(),
         &session_id,
@@ -44368,12 +44368,12 @@ fn should_surface_all_failed_lanes_when_composite_summary_wraps_a_typed_llm_erro
                    API error (moonshot-coding@api/k3): HTTP 500 upstream exploded; \
                    zai-coding/glm-5.3 (api_style=anthropic_messages): \
                    API error (zai-coding/glm-5.3): HTTP 500 upstream exploded";
-    let carrier = octos_llm::LlmError::from_status_with_label(
+    let carrier = ra_llm::LlmError::from_status_with_label(
         500,
         "upstream exploded",
         "moonshot-coding@api/k3",
     );
-    let typed = octos_agent::HarnessError::from_llm_error(&carrier)
+    let typed = ra_agent::HarnessError::from_llm_error(&carrier)
         .message()
         .to_string();
     let report: eyre::Report = eyre::Report::from(carrier).wrap_err(summary);
@@ -44392,7 +44392,7 @@ fn should_surface_all_failed_lanes_when_composite_summary_wraps_a_typed_llm_erro
     }
     assert!(wire.starts_with(&typed));
 
-    let plain: eyre::Report = octos_llm::LlmError::from_status_with_label(
+    let plain: eyre::Report = ra_llm::LlmError::from_status_with_label(
         500,
         "upstream exploded",
         "moonshot-coding@api/k3",
@@ -44443,7 +44443,7 @@ fn file_attached_source(
     turn_id: &TurnId,
 ) -> LedgeredUiProtocolEvent {
     ledger.append_notification(UiNotification::FileAttached(
-        octos_core::ui_protocol::FileAttachedEvent {
+        ra_core::ui_protocol::FileAttachedEvent {
             session_id: session_id.clone(),
             topic: None,
             turn_id: turn_id.clone(),
@@ -44520,8 +44520,8 @@ async fn should_keep_uncorrelated_canonical_messages_distinct_even_when_text_and
     let dir = tempfile::tempdir().unwrap();
     let ledger = Arc::new(UiProtocolLedger::new(16));
     let observer = message_commit_observer(ledger.clone());
-    octos_bus::session::set_scoped_message_commit_observer(dir.path(), &observer);
-    let mut manager = octos_bus::SessionManager::open(dir.path()).unwrap();
+    ra_bus::session::set_scoped_message_commit_observer(dir.path(), &observer);
+    let mut manager = ra_bus::SessionManager::open(dir.path()).unwrap();
     let session = SessionKey("local:uncorrelated-canonical-identity".into());
     let turn = TurnId::new();
     let message = pre_stamp_turn_thread_id(Message::assistant("same words"), &turn.0.to_string());
@@ -44560,8 +44560,8 @@ fn assistant_identity_response(
     content: &str,
     prior_iteration: u32,
     final_iteration: u32,
-) -> octos_agent::ConversationResponse {
-    octos_agent::ConversationResponse {
+) -> ra_agent::ConversationResponse {
+    ra_agent::ConversationResponse {
         content: content.into(),
         reasoning_content: None,
         provider_metadata: None,
@@ -44571,7 +44571,7 @@ fn assistant_identity_response(
         files_to_send: vec![],
         streamed: true,
         messages: vec![Message::assistant("same answer")],
-        assistant_segments: octos_agent::AssistantSegmentProvenance {
+        assistant_segments: ra_agent::AssistantSegmentProvenance {
             message_iterations: vec![(0, prior_iteration)],
             final_iteration,
         },
@@ -45131,7 +45131,7 @@ async fn ui_transport_sentinels_report_verifier_failure_kind() {
     use crate::autonomy::agent_orchestrator::{AgentOrchestrator as _, GoalSetRequest};
 
     let orchestrator = crate::autonomy::agent_orchestrator::InProcessAgentOrchestrator::default();
-    let key = octos_core::SessionKey("gap8-prof:api:gap8-sentinel".to_owned());
+    let key = ra_core::SessionKey("gap8-prof:api:gap8-sentinel".to_owned());
     orchestrator
         .set_goal(GoalSetRequest {
             session_id: key.clone(),
@@ -45150,19 +45150,19 @@ async fn ui_transport_sentinels_report_verifier_failure_kind() {
     // retries once (transient) so attempt lands at 2/2.
     struct EmptyReplyVerifier;
     #[async_trait::async_trait]
-    impl octos_llm::LlmProvider for EmptyReplyVerifier {
+    impl ra_llm::LlmProvider for EmptyReplyVerifier {
         async fn chat(
             &self,
-            _m: &[octos_core::Message],
-            _t: &[octos_llm::ToolSpec],
-            _c: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
-            Ok(octos_llm::ChatResponse {
+            _m: &[ra_core::Message],
+            _t: &[ra_llm::ToolSpec],
+            _c: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
+            Ok(ra_llm::ChatResponse {
                 content: None,
                 reasoning_content: Some("thinking…".to_owned()),
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage {
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage {
                     input_tokens: 3,
                     output_tokens: 1,
                     ..Default::default()
@@ -45221,7 +45221,7 @@ async fn ui_transport_autonomous_consumer_emits_verifier_warning_wire_shape() {
     use crate::autonomy::agent_orchestrator::{AgentOrchestrator as _, GoalSetRequest};
 
     let orchestrator = crate::autonomy::agent_orchestrator::InProcessAgentOrchestrator::default();
-    let key = octos_core::SessionKey("gap8b-prof:api:gap8b-auto".to_owned());
+    let key = ra_core::SessionKey("gap8b-prof:api:gap8b-auto".to_owned());
     orchestrator
         .set_goal(GoalSetRequest {
             session_id: key.clone(),
@@ -45238,19 +45238,19 @@ async fn ui_transport_autonomous_consumer_emits_verifier_warning_wire_shape() {
 
     struct EmptyReplyVerifier;
     #[async_trait::async_trait]
-    impl octos_llm::LlmProvider for EmptyReplyVerifier {
+    impl ra_llm::LlmProvider for EmptyReplyVerifier {
         async fn chat(
             &self,
-            _m: &[octos_core::Message],
-            _t: &[octos_llm::ToolSpec],
-            _c: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
-            Ok(octos_llm::ChatResponse {
+            _m: &[ra_core::Message],
+            _t: &[ra_llm::ToolSpec],
+            _c: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
+            Ok(ra_llm::ChatResponse {
                 content: None,
                 reasoning_content: Some("thinking…".to_owned()),
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage {
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage {
                     input_tokens: 3,
                     output_tokens: 1,
                     ..Default::default()
@@ -45314,7 +45314,7 @@ async fn ui_transport_autonomous_consumer_emits_verifier_warning_wire_shape() {
     // (the SessionGoalUpdated repaint the accountant sends next carries
     // `active`, never `complete`).
     let event_json = orchestrator.session_goal_updated_event_json(&key, "gap8b-prof");
-    let event = serde_json::from_value::<octos_core::ui_protocol::SessionGoalUpdatedEvent>(
+    let event = serde_json::from_value::<ra_core::ui_protocol::SessionGoalUpdatedEvent>(
         event_json.expect("goal event json"),
     )
     .expect("goal event parses");
@@ -45358,7 +45358,7 @@ async fn session_hydrate_preserves_canonical_user_and_terminal_sequences() {
     let state = prg_state_with_session(&session_id, |session| {
         session.messages.push(Message::user_rooting_thread(
             "hello",
-            octos_core::ClientMessageId(thread.clone()),
+            ra_core::ClientMessageId(thread.clone()),
         ));
     });
     let ledger = event_ledger(&state).await;
@@ -45512,7 +45512,7 @@ async fn interactive_sentinel_failure_warning_carries_wire_session_id() {
     let orchestrator = crate::autonomy::agent_orchestrator::InProcessAgentOrchestrator::default();
     // A SCOPED goal key in the real internal form: wire session id, then
     // the NUL byte and cwd-scope suffix (as a unicode escape in the literal).
-    let scoped_key = octos_core::SessionKey(
+    let scoped_key = ra_core::SessionKey(
         "wirefix-prof:api:wirefix-session\u{0}~cwd-76ac4758abceb96a".to_owned(),
     );
     orchestrator
@@ -45531,19 +45531,19 @@ async fn interactive_sentinel_failure_warning_carries_wire_session_id() {
 
     struct EmptyReplyVerifier;
     #[async_trait::async_trait]
-    impl octos_llm::LlmProvider for EmptyReplyVerifier {
+    impl ra_llm::LlmProvider for EmptyReplyVerifier {
         async fn chat(
             &self,
-            _m: &[octos_core::Message],
-            _t: &[octos_llm::ToolSpec],
-            _c: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
-            Ok(octos_llm::ChatResponse {
+            _m: &[ra_core::Message],
+            _t: &[ra_llm::ToolSpec],
+            _c: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
+            Ok(ra_llm::ChatResponse {
                 content: None,
                 reasoning_content: Some("thinking…".to_owned()),
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage {
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage {
                     input_tokens: 3,
                     output_tokens: 1,
                     ..Default::default()
@@ -45615,7 +45615,7 @@ async fn interactive_sentinel_failure_warning_plain_session_unchanged() {
     use crate::autonomy::agent_orchestrator::{AgentOrchestrator as _, GoalSetRequest};
 
     let orchestrator = crate::autonomy::agent_orchestrator::InProcessAgentOrchestrator::default();
-    let plain = octos_core::SessionKey("plainfix-prof:api:plainfix-session".to_owned());
+    let plain = ra_core::SessionKey("plainfix-prof:api:plainfix-session".to_owned());
     orchestrator
         .set_goal(GoalSetRequest {
             session_id: plain.clone(),
@@ -45716,8 +45716,8 @@ fn memory_search_filter_parses_kinds_sources_and_time_bounds() {
     assert_eq!(
         filter.kinds,
         vec![
-            octos_memory::RecordKind::Document,
-            octos_memory::RecordKind::Knowledge
+            ra_memory::RecordKind::Document,
+            ra_memory::RecordKind::Knowledge
         ],
         "kinds parse leniently and de-duplicate"
     );
@@ -45811,17 +45811,17 @@ fn memory_ingest_decodes_document_records_and_forces_untrusted() {
     assert!(validated.vectors.is_none());
     let doc = &validated.records[0];
     assert_eq!(doc.id, "doc:mail:42");
-    assert_eq!(doc.kind, octos_memory::RecordKind::Document);
+    assert_eq!(doc.kind, ra_memory::RecordKind::Document);
     assert_eq!(
         doc.trust,
-        octos_memory::Trust::Untrusted,
+        ra_memory::Trust::Untrusted,
         "documents can never claim trusted"
     );
     assert_eq!(doc.visits, 0, "usage counters are server-owned");
     assert!(!doc.promoted);
     assert_eq!(doc.parent.as_deref(), Some("thread-7"));
     assert_eq!(doc.fingerprint, "v1");
-    assert_eq!(validated.records[1].kind, octos_memory::RecordKind::Episode);
+    assert_eq!(validated.records[1].kind, ra_memory::RecordKind::Episode);
 }
 
 #[test]
@@ -45844,10 +45844,10 @@ fn memory_ingest_forces_untrusted_on_episode_records_too() {
     .expect("valid episode record");
     assert_eq!(validated.records.len(), 1);
     let episode = &validated.records[0];
-    assert_eq!(episode.kind, octos_memory::RecordKind::Episode);
+    assert_eq!(episode.kind, ra_memory::RecordKind::Episode);
     assert_eq!(
         episode.trust,
-        octos_memory::Trust::Untrusted,
+        ra_memory::Trust::Untrusted,
         "ingested episodes can never claim trusted"
     );
     assert_eq!(episode.visits, 0);
@@ -46413,16 +46413,16 @@ async fn should_end_a_capped_serve_turn_with_the_tools_disabled_grace_synthesis(
     struct ScriptedToolCaller {
         marker_a: String,
         marker_b: String,
-        requests: Arc<StdMutex<Vec<Vec<octos_llm::ToolSpec>>>>,
+        requests: Arc<StdMutex<Vec<Vec<ra_llm::ToolSpec>>>>,
     }
     #[async_trait::async_trait]
-    impl octos_llm::LlmProvider for ScriptedToolCaller {
+    impl ra_llm::LlmProvider for ScriptedToolCaller {
         async fn chat(
             &self,
             _messages: &[Message],
-            tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+            tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             let mut requests = self.requests.lock().unwrap_or_else(|p| p.into_inner());
             requests.push(tools.to_vec());
             let index = requests.len() - 1;
@@ -46430,23 +46430,23 @@ async fn should_end_a_capped_serve_turn_with_the_tools_disabled_grace_synthesis(
             let (content, tool_calls, stop_reason) = match index {
                 0 => (
                     None,
-                    vec![octos_core::ToolCall {
+                    vec![ra_core::ToolCall {
                         id: "grace-e2e-read-a".into(),
                         name: "read_file".into(),
                         arguments: json!({ "path": self.marker_a }),
                         metadata: None,
                     }],
-                    octos_llm::StopReason::ToolUse,
+                    ra_llm::StopReason::ToolUse,
                 ),
                 1 => (
                     None,
-                    vec![octos_core::ToolCall {
+                    vec![ra_core::ToolCall {
                         id: "grace-e2e-read-b".into(),
                         name: "read_file".into(),
                         arguments: json!({ "path": self.marker_b }),
                         metadata: None,
                     }],
-                    octos_llm::StopReason::ToolUse,
+                    ra_llm::StopReason::ToolUse,
                 ),
                 _ => (
                     Some(
@@ -46454,15 +46454,15 @@ async fn should_end_a_capped_serve_turn_with_the_tools_disabled_grace_synthesis(
                             .into(),
                     ),
                     Vec::new(),
-                    octos_llm::StopReason::EndTurn,
+                    ra_llm::StopReason::EndTurn,
                 ),
             };
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content,
                 reasoning_content: None,
                 tool_calls,
                 stop_reason,
-                usage: octos_llm::TokenUsage {
+                usage: ra_llm::TokenUsage {
                     input_tokens: 10,
                     output_tokens: 10,
                     ..Default::default()
@@ -46489,7 +46489,7 @@ async fn should_end_a_capped_serve_turn_with_the_tools_disabled_grace_synthesis(
         .join(MAIN_PROFILE_ID)
         .join("data")
         .join("users")
-        .join(octos_bus::session::encode_path_component(
+        .join(ra_bus::session::encode_path_component(
             session_id.base_key(),
         ))
         .join("workspace");
@@ -46706,17 +46706,17 @@ async fn should_store_a_download_copy_of_a_delivered_file_and_keep_its_original_
     // Per-project session store, as `appui.sessions_in_cwd` lays it out.
     let store_dir = project.path().join(".ra").join("dev");
     let sessions = Arc::new(TokioMutex::new(
-        octos_bus::SessionManager::open(&store_dir).unwrap(),
+        ra_bus::SessionManager::open(&store_dir).unwrap(),
     ));
     let key = SessionKey::with_profile("dev", "api", "web-send-file");
     let file = project.path().join("p20-art.png");
     std::fs::write(&file, b"png").unwrap();
     let raw = file.to_string_lossy().into_owned();
-    let copy = octos_bus::session_artifacts::delivered_copy_path(tenant.path(), &key, &raw);
+    let copy = ra_bus::session_artifacts::delivered_copy_path(tenant.path(), &key, &raw);
     assert!(!copy.exists(), "precondition: no download copy yet");
 
     // Exactly what `SendFileTool` puts on the per-turn channel.
-    let sent = octos_core::OutboundMessage {
+    let sent = ra_core::OutboundMessage {
         channel: "api".to_string(),
         chat_id: key.0.clone(),
         content: "P20 map".to_string(),
@@ -46739,7 +46739,7 @@ async fn should_store_a_download_copy_of_a_delivered_file_and_keep_its_original_
         b"png",
         "the download copy is stored where /api/files looks"
     );
-    let reread = octos_bus::SessionManager::open(&store_dir)
+    let reread = ra_bus::SessionManager::open(&store_dir)
         .unwrap()
         .load(&key)
         .await
@@ -47051,7 +47051,7 @@ fn stdio_default_feature_list_matches_the_stdio_defaults() {
     // Hosts moving a native client from stdio to the host-managed WebSocket
     // request exactly `UI_PROTOCOL_STDIO_DEFAULT_FEATURES` (UPCR-2026-036).
     let requested = ConnectionUiFeatures::from_requested_feature_tokens(
-        octos_core::ui_protocol::UI_PROTOCOL_STDIO_DEFAULT_FEATURES,
+        ra_core::ui_protocol::UI_PROTOCOL_STDIO_DEFAULT_FEATURES,
         true,
     );
     assert_eq!(requested, ConnectionUiFeatures::stdio_defaults());
@@ -47197,7 +47197,7 @@ async fn g1_raise_approval(
         features: ConnectionUiFeatures::default(),
     };
     let task = tokio::spawn(async move {
-        <UiProtocolApprovalRequester as octos_agent::ToolApprovalRequester>::request_approval(
+        <UiProtocolApprovalRequester as ra_agent::ToolApprovalRequester>::request_approval(
             &requester,
             ToolApprovalRequest {
                 tool_id: "shell-1".into(),
@@ -47261,7 +47261,7 @@ async fn g1_hydrated_pending(
     contracts: &Arc<UiProtocolContractStores>,
     session_id: &SessionKey,
 ) -> Vec<Value> {
-    use octos_core::ui_protocol::hydrate_sections;
+    use ra_core::ui_protocol::hydrate_sections;
     let active_turns: SharedActiveTurns = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
     handle_session_hydrate(
         ws,
@@ -47609,7 +47609,7 @@ async fn should_never_apply_a_host_recorded_approve_scope_to_an_external_turn() 
         features: ConnectionUiFeatures::default(),
     };
     assert_eq!(
-        <UiProtocolApprovalRequester as octos_agent::ToolApprovalRequester>::request_approval(
+        <UiProtocolApprovalRequester as ra_agent::ToolApprovalRequester>::request_approval(
             &requester,
             ToolApprovalRequest {
                 tool_id: "shell-2".into(),
@@ -47721,10 +47721,10 @@ async fn g1_ask_question(
     state: &Arc<AppState>,
     session_id: &SessionKey,
 ) -> (
-    tokio::task::JoinHandle<octos_agent::UserQuestionOutcome>,
+    tokio::task::JoinHandle<ra_agent::UserQuestionOutcome>,
     QuestionId,
 ) {
-    use octos_agent::UserQuestionRequester as _;
+    use ra_agent::UserQuestionRequester as _;
     let turn_id = TurnId::new();
     let requester = SessionUserQuestionRequester {
         ws: ws.clone(),
@@ -47737,7 +47737,7 @@ async fn g1_ask_question(
     };
     let task = tokio::spawn(async move {
         requester
-            .request_user_question(octos_agent::UserQuestionRequest {
+            .request_user_question(ra_agent::UserQuestionRequest {
                 questions: sample_pending_question(
                     SessionKey("unused".into()),
                     QuestionId::new(),
@@ -47797,7 +47797,7 @@ async fn g1_hydrated_questions(
     contracts: &Arc<UiProtocolContractStores>,
     session_id: &SessionKey,
 ) -> Vec<Value> {
-    use octos_core::ui_protocol::hydrate_sections;
+    use ra_core::ui_protocol::hydrate_sections;
     let active_turns: SharedActiveTurns = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
     handle_session_hydrate(
         ws,
@@ -48032,7 +48032,7 @@ async fn should_let_only_the_external_client_answer_its_question() {
     assert!(frame.get("error").is_none(), "{frame}");
     assert!(matches!(
         task.await.unwrap(),
-        octos_agent::UserQuestionOutcome::Answered(_)
+        ra_agent::UserQuestionOutcome::Answered(_)
     ));
 }
 
@@ -48108,7 +48108,7 @@ async fn should_keep_a_host_turns_question_on_the_host_as_before() {
     assert!(frame.get("error").is_none(), "{frame}");
     assert!(matches!(
         task.await.unwrap(),
-        octos_agent::UserQuestionOutcome::Answered(_)
+        ra_agent::UserQuestionOutcome::Answered(_)
     ));
 }
 
@@ -48233,7 +48233,7 @@ async fn should_keep_external_prompts_from_the_host_when_the_side_table_forgets_
     assert!(frame.get("error").is_none(), "{frame}");
     assert!(matches!(
         question_task.await.unwrap(),
-        octos_agent::UserQuestionOutcome::Answered(_)
+        ra_agent::UserQuestionOutcome::Answered(_)
     ));
 }
 

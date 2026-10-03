@@ -15,11 +15,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use octos_agent::harness_events::{HarnessEvent, HarnessEventPayload};
-use octos_agent::tools::mcp_agent::{
+use ra_agent::harness_events::{HarnessEvent, HarnessEventPayload};
+use ra_agent::tools::mcp_agent::{
     DispatchOutcome, DispatchRequest, DispatchResponse, McpAgentBackend,
 };
-use octos_swarm::{
+use ra_swarm::{
     ContractSpec, FanoutPattern, Swarm, SwarmBudget, SwarmContext, SwarmEventSink,
     SwarmOutcomeKind, SwarmTopology,
 };
@@ -224,11 +224,11 @@ fn context() -> SwarmContext {
 /// mid-dispatch (non-finalized) record.
 fn seeded_subtask(
     id: &str,
-    status: octos_swarm::SubtaskStatus,
+    status: ra_swarm::SubtaskStatus,
     last_outcome: &str,
     output: &str,
-) -> octos_swarm::SubtaskOutcome {
-    octos_swarm::SubtaskOutcome {
+) -> ra_swarm::SubtaskOutcome {
+    ra_swarm::SubtaskOutcome {
         contract_id: id.into(),
         label: None,
         status,
@@ -314,11 +314,11 @@ async fn should_sequence_contracts_in_order_with_abort_on_failure() {
     assert_eq!(result.completed_subtasks, 1);
     assert_eq!(
         result.per_task_outcomes[0].status,
-        octos_swarm::SubtaskStatus::Completed
+        ra_swarm::SubtaskStatus::Completed
     );
     assert_eq!(
         result.per_task_outcomes[1].status,
-        octos_swarm::SubtaskStatus::TerminalFailed
+        ra_swarm::SubtaskStatus::TerminalFailed
     );
     // The third contract was never dispatched.
     let history = backend.history();
@@ -417,13 +417,13 @@ async fn should_redispatch_failed_subcontract_bounded_retries() {
         .find(|outcome| outcome.contract_id == "flaky")
         .expect("flaky subtask present");
     assert!(
-        flaky_outcome.attempts <= octos_swarm::MAX_RETRY_ROUNDS + 1,
+        flaky_outcome.attempts <= ra_swarm::MAX_RETRY_ROUNDS + 1,
         "flaky retried {} times, should be bounded",
         flaky_outcome.attempts
     );
     assert_eq!(
         flaky_outcome.status,
-        octos_swarm::SubtaskStatus::RetryableFailed
+        ra_swarm::SubtaskStatus::RetryableFailed
     );
 }
 
@@ -478,9 +478,9 @@ async fn should_aggregate_validator_over_combined_output() {
     // satisfy (writing the target file as part of a sub-contract
     // "artifact"). The validator runs only once, after every sub-
     // contract terminated.
-    use octos_agent::validators::{ValidatorInvocation, ValidatorPhase, ValidatorRunner};
-    use octos_agent::workspace_policy::{Validator, ValidatorPhaseKind, ValidatorSpec};
-    use octos_swarm::AggregateValidator;
+    use ra_agent::validators::{ValidatorInvocation, ValidatorPhase, ValidatorRunner};
+    use ra_agent::workspace_policy::{Validator, ValidatorPhaseKind, ValidatorSpec};
+    use ra_swarm::AggregateValidator;
     use std::sync::Arc as StdArc;
 
     let backend = FakeBackend::new();
@@ -499,7 +499,7 @@ async fn should_aggregate_validator_over_combined_output() {
     // contract work — so we simulate the end-state here.
     std::fs::write(workspace_dir.path().join("aggregate.txt"), "done").unwrap();
 
-    let tools = StdArc::new(octos_agent::tools::ToolRegistry::new());
+    let tools = StdArc::new(ra_agent::tools::ToolRegistry::new());
     let runner = ValidatorRunner::new(tools, workspace_dir.path().to_path_buf());
     let invocation = ValidatorInvocation {
         phase: ValidatorPhase::Completion,
@@ -686,7 +686,7 @@ async fn should_emit_typed_swarm_dispatch_event() {
         HarnessEventPayload::SwarmDispatch { data } => {
             assert_eq!(
                 data.schema_version,
-                octos_agent::abi_schema::SWARM_DISPATCH_SCHEMA_VERSION
+                ra_agent::abi_schema::SWARM_DISPATCH_SCHEMA_VERSION
             );
             assert_eq!(data.dispatch_id, "d8");
             assert_eq!(data.topology, "parallel");
@@ -824,9 +824,9 @@ async fn should_replay_finalized_result_verbatim_including_validator_verdicts() 
     // old short-circuit recomputed from subtask state with empty
     // validator results, upgrading a validator-failed Partial to
     // Success on re-POST.
-    use octos_agent::validators::{ValidatorInvocation, ValidatorPhase, ValidatorRunner};
-    use octos_agent::workspace_policy::{Validator, ValidatorPhaseKind, ValidatorSpec};
-    use octos_swarm::AggregateValidator;
+    use ra_agent::validators::{ValidatorInvocation, ValidatorPhase, ValidatorRunner};
+    use ra_agent::workspace_policy::{Validator, ValidatorPhaseKind, ValidatorSpec};
+    use ra_swarm::AggregateValidator;
     use std::sync::Arc as StdArc;
 
     let backend = FakeBackend::new();
@@ -835,7 +835,7 @@ async fn should_replay_finalized_result_verbatim_including_validator_verdicts() 
     let workspace_dir = tempfile::tempdir().unwrap();
     // Deliberately do NOT create the file the validator requires — the
     // aggregate validator must fail and demote the outcome.
-    let tools = StdArc::new(octos_agent::tools::ToolRegistry::new());
+    let tools = StdArc::new(ra_agent::tools::ToolRegistry::new());
     let runner = ValidatorRunner::new(tools, workspace_dir.path().to_path_buf());
     let invocation = ValidatorInvocation {
         phase: ValidatorPhase::Completion,
@@ -888,7 +888,7 @@ async fn should_replay_finalized_result_verbatim_including_validator_verdicts() 
             || original
                 .per_task_outcomes
                 .iter()
-                .any(|o| o.status != octos_swarm::SubtaskStatus::Completed),
+                .any(|o| o.status != ra_swarm::SubtaskStatus::Completed),
         "validator failure must be visible in the original result"
     );
 
@@ -925,7 +925,7 @@ async fn should_error_not_panic_when_resume_contracts_fewer_than_recorded() {
     // #1719: a non-finalized record with MORE subtasks than the caller's
     // contract list used to drive `contracts[idx]` out of bounds — a
     // panic in production. It must surface as a typed error instead.
-    use octos_swarm::{DispatchRecord, DispatchStore, SubtaskOutcome, SubtaskStatus};
+    use ra_swarm::{DispatchRecord, DispatchStore, SubtaskOutcome, SubtaskStatus};
 
     let state_dir = tempfile::tempdir().unwrap();
     let pending = |id: &str| SubtaskOutcome {
@@ -1009,7 +1009,7 @@ async fn should_error_when_resume_contract_ids_mismatch_recorded() {
     // #1719: same count but different contract ids — silently retrying
     // slot N against a DIFFERENT contract would attribute outputs to
     // the wrong contract. Must be rejected.
-    use octos_swarm::{DispatchRecord, DispatchStore, SubtaskOutcome, SubtaskStatus};
+    use ra_swarm::{DispatchRecord, DispatchStore, SubtaskOutcome, SubtaskStatus};
 
     let state_dir = tempfile::tempdir().unwrap();
     {
@@ -1166,7 +1166,7 @@ async fn should_not_resume_pipeline_tail_after_persisted_terminal_failure() {
     // On resume the terminal stage is no longer pending, so the old
     // code dispatched the tail with no `pipeline_input` and rolled the
     // outcome up as Partial instead of Aborted.
-    use octos_swarm::{DispatchRecord, DispatchStore, SubtaskStatus};
+    use ra_swarm::{DispatchRecord, DispatchStore, SubtaskStatus};
 
     let state_dir = tempfile::tempdir().unwrap();
     {
@@ -1214,7 +1214,7 @@ async fn should_not_resume_sequential_tail_after_persisted_terminal_failure() {
     // Same resume hole for Sequential: invariant 3 says the dispatch
     // aborted at the first terminal failure — a resumed record must not
     // dispatch the contracts behind it.
-    use octos_swarm::{DispatchRecord, DispatchStore, SubtaskStatus};
+    use ra_swarm::{DispatchRecord, DispatchStore, SubtaskStatus};
 
     let state_dir = tempfile::tempdir().unwrap();
     {
@@ -1261,7 +1261,7 @@ async fn should_not_run_extra_round_when_resumed_at_retry_cap() {
     // a record checkpointed at the cap got one extra round per resume —
     // repeated crash/resume cycles made the bounded-cost invariant
     // unbounded.
-    use octos_swarm::{DispatchRecord, DispatchStore, SubtaskStatus};
+    use ra_swarm::{DispatchRecord, DispatchStore, SubtaskStatus};
 
     let state_dir = tempfile::tempdir().unwrap();
     {
@@ -1280,7 +1280,7 @@ async fn should_not_run_extra_round_when_resumed_at_retry_cap() {
                 "",
             )],
         );
-        record.retry_rounds_used = octos_swarm::MAX_RETRY_ROUNDS;
+        record.retry_rounds_used = ra_swarm::MAX_RETRY_ROUNDS;
         store.store(&record).await.unwrap();
     }
 
@@ -1306,7 +1306,7 @@ async fn should_not_run_extra_round_when_resumed_at_retry_cap() {
         backend.history().is_empty(),
         "a record resumed at the retry cap must not dispatch again"
     );
-    assert_eq!(result.retry_rounds_used, octos_swarm::MAX_RETRY_ROUNDS);
+    assert_eq!(result.retry_rounds_used, ra_swarm::MAX_RETRY_ROUNDS);
     assert_eq!(result.outcome, SwarmOutcomeKind::Failed);
 }
 
@@ -1314,7 +1314,7 @@ async fn should_not_run_extra_round_when_resumed_at_retry_cap() {
 async fn should_recompute_replay_for_legacy_finalized_record_without_snapshot() {
     // #1718 back-compat: rows persisted before `final_result` existed
     // must still replay via the legacy recomputation fallback.
-    use octos_swarm::{DispatchRecord, DispatchStore, SubtaskStatus};
+    use ra_swarm::{DispatchRecord, DispatchStore, SubtaskStatus};
 
     let state_dir = tempfile::tempdir().unwrap();
     {
@@ -1465,7 +1465,7 @@ async fn should_dispatch_through_cli_backend_with_retry_on_nonzero_exit() {
     // exit → RemoteError → retryable) and echoes the prompt on the
     // retry. Proves exit-code → outcome classification drives the
     // swarm retry loop exactly like MCP isError does.
-    use octos_agent::tools::mcp_agent::{CliAgentBackend, McpAgentBackendConfig};
+    use ra_agent::tools::mcp_agent::{CliAgentBackend, McpAgentBackendConfig};
 
     let script_dir = tempfile::tempdir().unwrap();
     let marker = script_dir.path().join("attempted");
@@ -1525,7 +1525,7 @@ async fn should_dispatch_through_cli_backend_with_retry_on_nonzero_exit() {
 
 #[tokio::test]
 async fn should_record_cost_attribution_via_ledger_stub() {
-    use octos_swarm::{CostLedger, SwarmCostAttribution};
+    use ra_swarm::{CostLedger, SwarmCostAttribution};
 
     #[derive(Default)]
     struct SpyLedger {

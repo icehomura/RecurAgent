@@ -13,8 +13,8 @@
 //! ```ignore
 //! use std::num::NonZeroUsize;
 //! use std::sync::Arc;
-//! use octos_agent::tools::mcp_agent::{build_backend_from_config, McpAgentBackendConfig};
-//! use octos_swarm::{
+//! use ra_agent::tools::mcp_agent::{build_backend_from_config, McpAgentBackendConfig};
+//! use ra_swarm::{
 //!     ContractSpec, Swarm, SwarmBudget, SwarmContext, SwarmTopology,
 //! };
 //!
@@ -81,8 +81,8 @@
 //! 7. Session-durable: redb-backed, supervisor can reload state and
 //!    resume after process restart.
 //! 8. Events emitted as
-//!    [`HarnessEventPayload::SwarmDispatch`](octos_agent::harness_events::HarnessEventPayload::SwarmDispatch)
-//!    with [`SWARM_DISPATCH_SCHEMA_VERSION`](octos_agent::abi_schema::SWARM_DISPATCH_SCHEMA_VERSION)
+//!    [`HarnessEventPayload::SwarmDispatch`](ra_agent::harness_events::HarnessEventPayload::SwarmDispatch)
+//!    with [`SWARM_DISPATCH_SCHEMA_VERSION`](ra_agent::abi_schema::SWARM_DISPATCH_SCHEMA_VERSION)
 //!    pinned at 1.
 //! 9. Zero new `unsafe` — the workspace-wide `deny(unsafe_code)` lint
 //!    is honoured.
@@ -102,10 +102,10 @@ pub use dispatcher::{
 };
 // #714: the gate type now lives in `ra-agent` so both swarm and
 // spawn agent_mcp dispatch share a single source of truth. Re-export
-// here so existing `octos_swarm::DispatchPolicy` callers (CLI / tests
+// here so existing `ra_swarm::DispatchPolicy` callers (CLI / tests
 // / harness) keep compiling without changes.
 pub use ledger::{CostLedger, NoopCostLedger, SwarmCostAttribution};
-pub use octos_agent::DispatchPolicy;
+pub use ra_agent::DispatchPolicy;
 pub use persistence::{DISPATCH_RECORD_SCHEMA_VERSION, DispatchRecord, DispatchStore};
 pub use result::{AggregateArtifact, SubtaskOutcome, SubtaskStatus, SwarmOutcomeKind, SwarmResult};
 pub use topology::{ContractSpec, FanoutPattern, MAX_CONTRACTS_PER_DISPATCH, SwarmTopology};

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use clap::{Args, Subcommand};
 use colored::Colorize;
 use eyre::Result;
-use octos_agent::bridge::work_secret::{WorkSecret, WorkSecretGrantRecord, WorkSecretGrantStore};
+use ra_agent::bridge::work_secret::{WorkSecret, WorkSecretGrantRecord, WorkSecretGrantStore};
 
 use super::Executable;
 use crate::auth::{AuthStore, keychain, oauth, token};
@@ -1254,7 +1254,7 @@ mod tests {
         );
     }
 
-    use octos_agent::bridge::work_secret::{WorkSecret, WorkSecretGrantStore};
+    use ra_agent::bridge::work_secret::{WorkSecret, WorkSecretGrantStore};
 
     #[test]
     fn keychain_target_scopes_by_name_and_by_content() {

@@ -7,10 +7,10 @@
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
-use octos_agent::permissions::SafetyTier;
-use octos_agent::tools::ToolPolicy;
-use octos_agent::tools::policy::PolicyDecision;
-use octos_agent::tools::robot_groups::{self, RobotToolRegistry};
+use ra_agent::permissions::SafetyTier;
+use ra_agent::tools::ToolPolicy;
+use ra_agent::tools::policy::PolicyDecision;
+use ra_agent::tools::robot_groups::{self, RobotToolRegistry};
 
 /// The robot-group registry is process-wide state. Serialize tests that
 /// mutate it so they don't race against each other.

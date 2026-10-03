@@ -14,10 +14,10 @@ use std::time::{Duration, SystemTime};
 
 use eyre::{Result, WrapErr};
 use fs2::FileExt;
-use octos_bus::SessionManager;
-use octos_core::{Message, MessageRole};
-use octos_llm::{ChatConfig, LlmProvider};
-use octos_memory::MemoryStore;
+use ra_bus::SessionManager;
+use ra_core::{Message, MessageRole};
+use ra_llm::{ChatConfig, LlmProvider};
+use ra_memory::MemoryStore;
 
 use super::extract::{EXTRACTION_SYSTEM_PROMPT, parse_extraction_response, validate_items};
 use super::input::{build_input_lines, render_transcript};
@@ -406,7 +406,7 @@ pub(crate) async fn run_extraction_pass(
     // captures only into its own memory namespace: the profile-level sweep
     // must never read its transcript into the profile's memory.
     let peers_root = data_dir.join("peers");
-    let app_bound = |key: &octos_core::SessionKey| {
+    let app_bound = |key: &ra_core::SessionKey| {
         crate::peers::app_binding::resolve_session_app_binding(&peers_root, key)
             .is_bound_or_refused()
     };
@@ -460,7 +460,7 @@ pub(crate) async fn run_extraction_pass(
     // Eligible = user-facing, idle long enough, young enough, and changed
     // since the snapshots we last read.
 
-    let mut candidates: Vec<(octos_bus::AnalysisSession, Vec<FileSnap>, SystemTime)> = Vec::new();
+    let mut candidates: Vec<(ra_bus::AnalysisSession, Vec<FileSnap>, SystemTime)> = Vec::new();
     for session in manager.list_for_analysis() {
         if session.internal || session.files.is_empty() || app_bound(&session.key) {
             continue;
@@ -656,7 +656,7 @@ pub(crate) async fn run_consolidation_pass(
         let memory_md =
             std::fs::read_to_string(data_dir.join("memory").join("MEMORY.md")).unwrap_or_default();
         let estimate =
-            2 * octos_memory::estimate_tokens(&memory_md) as u64 + staging_bytes_before / 4;
+            2 * ra_memory::estimate_tokens(&memory_md) as u64 + staging_bytes_before / 4;
         spent = estimate.max(1);
     }
     // Failed/rejected merges spent provider calls too — charging them is
@@ -766,7 +766,7 @@ async fn extract_one_session(
     memory_store: &Arc<MemoryStore>,
     provider: &dyn LlmProvider,
     knobs: &RefreshKnobs,
-    key: &octos_core::SessionKey,
+    key: &ra_core::SessionKey,
     newest: SystemTime,
     state: &mut RefreshState,
 ) -> Result<ExtractOutcome> {
@@ -863,7 +863,7 @@ async fn extract_one_session(
         // replayed, so a cache write is pure premium. (The consolidation
         // pass is different: its corrective re-ask APPENDS to the original
         // messages, genuinely reusing the prefix, so it keeps caching.)
-        cache_retention: octos_llm::CacheRetention::None,
+        cache_retention: ra_llm::CacheRetention::None,
         ..Default::default()
     };
     let response = provider.chat(&messages, &[], &config).await?;
@@ -875,7 +875,7 @@ async fn extract_one_session(
     let spent = if reported > 0 {
         reported
     } else {
-        (octos_memory::estimate_tokens(&user_prompt) + octos_memory::estimate_tokens(&raw)) as u64
+        (ra_memory::estimate_tokens(&user_prompt) + ra_memory::estimate_tokens(&raw)) as u64
     };
     state.tokens_today = state.tokens_today.saturating_add(spent);
 
@@ -924,8 +924,8 @@ async fn extract_one_session(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::SessionKey;
-    use octos_llm::{ChatResponse, StopReason, TokenUsage, ToolSpec};
+    use ra_core::SessionKey;
+    use ra_llm::{ChatResponse, StopReason, TokenUsage, ToolSpec};
 
     struct ScriptedProvider {
         response: String,
@@ -984,7 +984,7 @@ mod tests {
     async fn seed_session(data_dir: &Path, key: &str, user_text: &str) {
         let mut mgr = SessionManager::open(data_dir).unwrap();
         let key = SessionKey(key.to_string());
-        let mut msg = octos_core::Message {
+        let mut msg = ra_core::Message {
             role: MessageRole::User,
             content: user_text.to_string(),
             media: vec![],
@@ -1003,7 +1003,7 @@ mod tests {
 
     struct RetentionProbeProvider {
         response: String,
-        seen: std::sync::Mutex<Option<octos_llm::CacheRetention>>,
+        seen: std::sync::Mutex<Option<ra_llm::CacheRetention>>,
     }
 
     #[async_trait::async_trait]
@@ -1019,8 +1019,8 @@ mod tests {
                 content: Some(self.response.clone()),
                 reasoning_content: None,
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: None,
             })
         }
@@ -1030,7 +1030,7 @@ mod tests {
             _messages: &[Message],
             _tools: &[ToolSpec],
             _config: &ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatStream> {
+        ) -> eyre::Result<ra_llm::ChatStream> {
             unimplemented!("probe does not stream")
         }
 
@@ -1063,7 +1063,7 @@ mod tests {
         assert_eq!(report.extracted, 1, "probe extraction must go through");
         assert_eq!(
             *provider.seen.lock().unwrap(),
-            Some(octos_llm::CacheRetention::None),
+            Some(ra_llm::CacheRetention::None),
             "one-shot memory extraction must not request cache writes"
         );
     }
@@ -1395,9 +1395,9 @@ mod tests {
         let store = Arc::new(MemoryStore::open(dir.path()).await.unwrap());
         // A pending note exists, but the cap is exhausted.
         store
-            .write_staging_note(&octos_memory::StagingNote {
-                origin: octos_memory::NoteOrigin::Model,
-                kind: octos_memory::NoteKind::Fact,
+            .write_staging_note(&ra_memory::StagingNote {
+                origin: ra_memory::NoteOrigin::Model,
+                kind: ra_memory::NoteKind::Fact,
                 content: "some fact".to_string(),
                 session_key: None,
                 sensitive: false,
@@ -1436,9 +1436,9 @@ mod tests {
         assert!(!has_priority_note(dir.path()));
 
         store
-            .write_staging_note(&octos_memory::StagingNote {
-                origin: octos_memory::NoteOrigin::Model,
-                kind: octos_memory::NoteKind::Fact,
+            .write_staging_note(&ra_memory::StagingNote {
+                origin: ra_memory::NoteOrigin::Model,
+                kind: ra_memory::NoteKind::Fact,
                 content: "ordinary fact".to_string(),
                 session_key: None,
                 sensitive: false,
@@ -1452,9 +1452,9 @@ mod tests {
         );
 
         store
-            .write_staging_note(&octos_memory::StagingNote {
-                origin: octos_memory::NoteOrigin::Host,
-                kind: octos_memory::NoteKind::Forget,
+            .write_staging_note(&ra_memory::StagingNote {
+                origin: ra_memory::NoteOrigin::Host,
+                kind: ra_memory::NoteKind::Forget,
                 content: "forget my old address".to_string(),
                 session_key: None,
                 sensitive: false,
@@ -1472,9 +1472,9 @@ mod tests {
         // A free-text host forget with nothing to bind to: the engine parks
         // it (or leaves it pending) without provider work.
         store
-            .write_staging_note(&octos_memory::StagingNote {
-                origin: octos_memory::NoteOrigin::Host,
-                kind: octos_memory::NoteKind::Forget,
+            .write_staging_note(&ra_memory::StagingNote {
+                origin: ra_memory::NoteOrigin::Host,
+                kind: ra_memory::NoteKind::Forget,
                 content: "forget something that matches no entry".to_string(),
                 session_key: None,
                 sensitive: false,
@@ -1616,9 +1616,9 @@ mod tests {
         seed_session(dir.path(), "tg:500", "broken").await;
         // …while a host remember note waits in staging.
         store
-            .write_staging_note(&octos_memory::StagingNote {
-                origin: octos_memory::NoteOrigin::Host,
-                kind: octos_memory::NoteKind::UserRequest,
+            .write_staging_note(&ra_memory::StagingNote {
+                origin: ra_memory::NoteOrigin::Host,
+                kind: ra_memory::NoteKind::UserRequest,
                 content: "remember: the deploy password rotates monthly".to_string(),
                 session_key: None,
                 sensitive: false,
@@ -1672,9 +1672,9 @@ mod tests {
         // A model fact note makes the batch dirty; the ops provider returns
         // garbage (merge fails after the re-ask) with zero reported usage.
         store
-            .write_staging_note(&octos_memory::StagingNote {
-                origin: octos_memory::NoteOrigin::Model,
-                kind: octos_memory::NoteKind::Fact,
+            .write_staging_note(&ra_memory::StagingNote {
+                origin: ra_memory::NoteOrigin::Model,
+                kind: ra_memory::NoteKind::Fact,
                 content: "bad batch".to_string(),
                 session_key: None,
                 sensitive: false,
@@ -1703,9 +1703,9 @@ mod tests {
         let store = Arc::new(MemoryStore::open(dir.path()).await.unwrap());
         // A large-ish note the merge will consume (deleting the file).
         store
-            .write_staging_note(&octos_memory::StagingNote {
-                origin: octos_memory::NoteOrigin::Model,
-                kind: octos_memory::NoteKind::Fact,
+            .write_staging_note(&ra_memory::StagingNote {
+                origin: ra_memory::NoteOrigin::Model,
+                kind: ra_memory::NoteKind::Fact,
                 content: format!("prefers dark mode. {}", "detail ".repeat(600)),
                 session_key: None,
                 sensitive: false,
@@ -2029,7 +2029,7 @@ mod tests {
         // delta is empty.
         let mut mgr = SessionManager::open(dir.path()).unwrap();
         let key = SessionKey("api:506".to_string());
-        let msg = octos_core::Message {
+        let msg = ra_core::Message {
             role: MessageRole::System,
             content: "internal marker".to_string(),
             media: vec![],

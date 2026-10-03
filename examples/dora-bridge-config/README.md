@@ -86,7 +86,7 @@ in the tool list.
 ### Loading the config
 
 ```rust
-use octos_dora_mcp::{load_bridges, BridgeConfig};
+use ra_dora_mcp::{load_bridges, BridgeConfig};
 
 // Load all tool mappings from the JSON config.
 let config = BridgeConfig::from_file("examples/dora-bridge-config/dora_tool_map.json")?;

@@ -27,10 +27,10 @@ use tokio::process::Command;
 /// Environment variables blocked inside sandboxes (code injection vectors).
 ///
 /// Shared between sandbox backends and MCP server spawning. The canonical list
-/// lives in [`octos_core::env_hygiene`] (the bottom crate) so ra-core's own
+/// lives in [`ra_core::env_hygiene`] (the bottom crate) so ra-core's own
 /// controller-side git ops sanitize against the SAME set; re-exported here so
-/// every existing `octos_agent::sandbox::BLOCKED_ENV_VARS` reference is unchanged.
-pub use octos_core::env_hygiene::BLOCKED_ENV_VARS;
+/// every existing `ra_agent::sandbox::BLOCKED_ENV_VARS` reference is unchanged.
+pub use ra_core::env_hygiene::BLOCKED_ENV_VARS;
 
 /// Sandbox configuration.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

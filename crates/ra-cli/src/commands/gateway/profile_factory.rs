@@ -11,13 +11,13 @@ use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::time::Duration;
 
 use eyre::{Result, WrapErr};
-use octos_agent::{AgentConfig, HookContext, HookExecutor, ToolRegistry};
-use octos_bus::{ActiveSessionStore, CronService, SessionManager};
-use octos_core::OutboundMessage;
-use octos_llm::{
+use ra_agent::{AgentConfig, HookContext, HookExecutor, ToolRegistry};
+use ra_bus::{ActiveSessionStore, CronService, SessionManager};
+use ra_core::OutboundMessage;
+use ra_llm::{
     AdaptiveConfig, AdaptiveRouter, LlmProvider, ProviderChain, ProviderRouter, RetryProvider,
 };
-use octos_memory::{EpisodeStore, MemoryStore};
+use ra_memory::{EpisodeStore, MemoryStore};
 use tokio::sync::{Mutex, RwLock, mpsc};
 use tracing::{info, warn};
 
@@ -60,7 +60,7 @@ const FIRST_PARTY_SKILL_ENV_VARS: &[&str] = &[
 /// hand its SA JSON to every skill subprocess.
 ///
 /// The names are also force-registered via
-/// [`octos_agent::register_secret_env_names`]: `VERTEX_SA_JSON` in
+/// [`ra_agent::register_secret_env_names`]: `VERTEX_SA_JSON` in
 /// particular does not look secret to the `is_secret_env_name` heuristic,
 /// and the provider-build-time registration in `Config::resolve_api_key`
 /// only fires when Vertex is the ACTIVE provider.
@@ -226,7 +226,7 @@ pub(crate) fn profile_plugin_env(profile: &crate::profiles::UserProfile) -> Vec<
     // uses a Google-family provider. This keeps the sanctioned path working —
     // a Vertex-routed profile's skills still receive the SA JSON — without
     // leaking it into every skill subprocess of unrelated profiles.
-    octos_agent::register_secret_env_names(GOOGLE_VERTEX_CREDENTIAL_ENV_VARS.iter().copied());
+    ra_agent::register_secret_env_names(GOOGLE_VERTEX_CREDENTIAL_ENV_VARS.iter().copied());
     if profile_uses_google_family_provider(profile) {
         for key in GOOGLE_VERTEX_CREDENTIAL_ENV_VARS {
             if let Some(value) = resolved_env_vars
@@ -380,7 +380,7 @@ pub(crate) fn build_llm_stack(config: &Config, no_retry: bool) -> Result<LlmStac
             let routing_config = config.adaptive_routing.as_ref();
             let mode = routing_config
                 .map(|value| value.mode.into())
-                .unwrap_or(octos_llm::AdaptiveMode::Lane);
+                .unwrap_or(ra_llm::AdaptiveMode::Lane);
             let qos_ranking = routing_config
                 .map(|value| value.qos_ranking)
                 .unwrap_or(true);
@@ -394,7 +394,7 @@ pub(crate) fn build_llm_stack(config: &Config, no_retry: bool) -> Result<LlmStac
             // does the equivalent for the serve / ProfileRuntime path;
             // this is the same wiring for `commands::gateway`.
             if let Some(ar) = routing_config {
-                router.set_auto_escalation_config(octos_llm::AutoEscalationConfig::from(
+                router.set_auto_escalation_config(ra_llm::AutoEscalationConfig::from(
                     &ar.auto_escalation,
                 ));
             }
@@ -462,7 +462,7 @@ pub(crate) fn build_plugin_env(
 
     // Resolve the provider's base URL (config override > registry default)
     let base_url = config.base_url.clone().or_else(|| {
-        octos_llm::registry::lookup(provider_name)
+        ra_llm::registry::lookup(provider_name)
             .and_then(|e| e.default_base_url)
             .map(String::from)
     });
@@ -581,10 +581,10 @@ pub(crate) fn build_plugin_env(
 pub(crate) fn build_synthesis_config(
     config: &crate::config::Config,
     provider_name: &str,
-) -> Option<octos_agent::SynthesisConfig> {
+) -> Option<ra_agent::SynthesisConfig> {
     // Resolve base URL (config override > registry default).
     let base_url = config.base_url.clone().or_else(|| {
-        octos_llm::registry::lookup(provider_name)
+        ra_llm::registry::lookup(provider_name)
             .and_then(|e| e.default_base_url)
             .map(String::from)
     })?;
@@ -601,7 +601,7 @@ pub(crate) fn build_synthesis_config(
         .model
         .clone()
         .or_else(|| {
-            octos_llm::registry::lookup(provider_name)
+            ra_llm::registry::lookup(provider_name)
                 .and_then(|e| e.default_model())
                 .map(String::from)
         })
@@ -622,7 +622,7 @@ pub(crate) fn build_synthesis_config(
         "built synthesis_config for plugin injection"
     );
 
-    Some(octos_agent::SynthesisConfig {
+    Some(ra_agent::SynthesisConfig {
         endpoint: base_url,
         api_key,
         model,
@@ -645,14 +645,14 @@ pub(super) struct ProfileActorFactoryBuilder {
     /// `effective_octos_home == project_dir`, but the standalone/default path
     /// must also be correct.
     pub(super) effective_octos_home: PathBuf,
-    pub(super) tool_config: Arc<octos_agent::ToolConfigStore>,
+    pub(super) tool_config: Arc<ra_agent::ToolConfigStore>,
     pub(super) memory: Arc<EpisodeStore>,
     pub(super) memory_store: Arc<MemoryStore>,
-    pub(super) recall: Arc<octos_memory::RecallStore>,
+    pub(super) recall: Arc<ra_memory::RecallStore>,
     pub(super) agent_config: AgentConfig,
     pub(super) session_mgr: Arc<Mutex<SessionManager>>,
     pub(super) out_tx: mpsc::Sender<OutboundMessage>,
-    pub(super) spawn_inbound_tx: mpsc::Sender<octos_core::InboundMessage>,
+    pub(super) spawn_inbound_tx: mpsc::Sender<ra_core::InboundMessage>,
     pub(super) cron_service: Arc<CronService>,
     pub(super) tool_registry_factory: Arc<dyn ToolRegistryFactory + Send + Sync>,
     pub(super) pipeline_factory: Option<Arc<dyn PipelineToolFactory + Send + Sync>>,
@@ -660,7 +660,7 @@ pub(super) struct ProfileActorFactoryBuilder {
     pub(super) session_timeout_secs: u64,
     pub(super) shutdown: Arc<AtomicBool>,
     pub(super) cwd: PathBuf,
-    pub(super) provider_policy: Option<octos_agent::ToolPolicy>,
+    pub(super) provider_policy: Option<ra_agent::ToolPolicy>,
     pub(super) worker_prompt: Option<String>,
     pub(super) provider_router: Option<Arc<ProviderRouter>>,
     pub(super) active_sessions: Arc<RwLock<ActiveSessionStore>>,
@@ -669,11 +669,11 @@ pub(super) struct ProfileActorFactoryBuilder {
     pub(super) plugin_prompt_fragments: Vec<String>,
     pub(super) no_retry: bool,
     /// Sandbox config for child bot tool registries.
-    pub(super) sandbox_config: octos_agent::SandboxConfig,
+    pub(super) sandbox_config: ra_agent::SandboxConfig,
     pub(super) task_query_store: SessionTaskQueryStore,
     /// M8 fix-first item 8 (gap 2): shared SubAgentOutputRouter cloned
     /// into every ActorFactory built by this builder.
-    pub(super) subagent_output_router: Arc<octos_agent::SubAgentOutputRouter>,
+    pub(super) subagent_output_router: Arc<ra_agent::SubAgentOutputRouter>,
     /// Section B (codex review round-4): host-level plugin policy, OR'd
     /// with the profile's own `plugins.require_signed` so a host config
     /// can mandate strict signing even when individual profile JSONs omit
@@ -742,7 +742,7 @@ impl ProfileActorFactoryBuilder {
             .with_skill_filter(skill_filter.clone());
 
         let mut child_plugin_prompt_fragments = Vec::new();
-        let mut child_plugin_hooks: Vec<octos_agent::HookConfig> = Vec::new();
+        let mut child_plugin_hooks: Vec<ra_agent::HookConfig> = Vec::new();
 
         let max_inject_tokens = crate::config::MemoryConfig::effective_max_inject_tokens(
             profile_config.memory.as_ref(),
@@ -774,11 +774,11 @@ impl ProfileActorFactoryBuilder {
         // (codex P3: duplicate resolves broke the single-handle
         // invariant and doubled keychain lookups).
         let profile_embedder =
-            create_embedder(&profile_config).map(|e| e as Arc<dyn octos_llm::EmbeddingProvider>);
+            create_embedder(&profile_config).map(|e| e as Arc<dyn ra_llm::EmbeddingProvider>);
         // The routed profile's OWN recall index (its personal records live
         // under its data dir); the gateway's store is only right when both
         // are the same directory.
-        let profile_recall: Arc<octos_memory::RecallStore> = if profile_data_dir
+        let profile_recall: Arc<ra_memory::RecallStore> = if profile_data_dir
             == self.effective_octos_home
         {
             self.recall.clone()
@@ -807,7 +807,7 @@ impl ProfileActorFactoryBuilder {
                     .read_allow_paths
                     .push(self.project_dir.to_string_lossy().into_owned());
             }
-            let sandbox = octos_agent::create_sandbox(&sandbox_config);
+            let sandbox = ra_agent::create_sandbox(&sandbox_config);
             let mut tools = ToolRegistry::with_builtins_and_sandbox(&profile_data_dir, sandbox);
             tools.set_output_dir_hint(
                 profile_data_dir
@@ -818,13 +818,13 @@ impl ProfileActorFactoryBuilder {
             tools.inject_tool_config(self.tool_config.clone());
             if let Some(secs) = effective_profile.config.gateway.browser_timeout_secs {
                 tools.register(
-                    octos_agent::BrowserTool::with_timeout(std::time::Duration::from_secs(secs))
+                    ra_agent::BrowserTool::with_timeout(std::time::Duration::from_secs(secs))
                         .with_config(self.tool_config.clone()),
                 );
             }
 
             if !profile_config.mcp_servers.is_empty() {
-                match octos_agent::McpClient::start(&profile_config.mcp_servers).await {
+                match ra_agent::McpClient::start(&profile_config.mcp_servers).await {
                     Ok(client) => client.register_tools(&mut tools),
                     Err(e) => warn!(profile_id, "child bot MCP initialization failed: {e}"),
                 }
@@ -846,11 +846,11 @@ impl ProfileActorFactoryBuilder {
                 // S2 plumbing: pass profile-scoped synthesis config so per-tenant
                 // routing of synthesis credentials works.
                 let synthesis_config = build_synthesis_config(&profile_config, &provider_name);
-                match octos_agent::PluginLoader::load_into_with_options_and_filter(
+                match ra_agent::PluginLoader::load_into_with_options_and_filter(
                     &mut tools,
                     &plugin_dirs,
                     &plugin_env,
-                    octos_agent::PluginLoadOptions {
+                    ra_agent::PluginLoadOptions {
                         work_dir: Some(&plugin_work_dir),
                         synthesis_config,
                         // Section B: opt-in strict signature enforcement.
@@ -867,7 +867,7 @@ impl ProfileActorFactoryBuilder {
                         child_plugin_prompt_fragments = result.prompt_fragments;
                         child_plugin_hooks = result.hooks;
                         if !result.mcp_servers.is_empty() {
-                            match octos_agent::McpClient::start(&result.mcp_servers).await {
+                            match ra_agent::McpClient::start(&result.mcp_servers).await {
                                 Ok(client) => client.register_tools(&mut tools),
                                 Err(e) => warn!(
                                     profile_id,
@@ -880,7 +880,7 @@ impl ProfileActorFactoryBuilder {
                 }
                 // SPEC-VENDOR-NODE-V1 HTTP tool discovery — hard-fail per
                 // @ymote's Finding 2 contract (see chat.rs).
-                octos_agent::plugins::register_http_skills_on_startup(&mut tools, &plugin_dirs)
+                ra_agent::plugins::register_http_skills_on_startup(&mut tools, &plugin_dirs)
                     .await
                     .wrap_err_with(|| {
                         format!("HTTP tool discovery failed for child bot profile {profile_id}")
@@ -891,41 +891,41 @@ impl ProfileActorFactoryBuilder {
             let search_provider_keys = profile_search_provider_keys(&effective_profile);
             if !search_provider_keys.is_empty() {
                 tools.register(
-                    octos_agent::WebSearchTool::new()
+                    ra_agent::WebSearchTool::new()
                         .with_config(self.tool_config.clone())
                         .with_provider_keys(search_provider_keys.clone()),
                 );
             }
 
             tools.register(
-                octos_agent::DeepSearchTool::new(profile_data_dir.join("research"))
+                ra_agent::DeepSearchTool::new(profile_data_dir.join("research"))
                     .with_provider_keys(search_provider_keys),
             );
-            tools.register(octos_agent::SynthesizeResearchTool::new(
+            tools.register(ra_agent::SynthesizeResearchTool::new(
                 llm.clone(),
                 profile_data_dir.clone(),
             ));
-            tools.register(octos_agent::ManageSkillsTool::new(
+            tools.register(ra_agent::ManageSkillsTool::new(
                 profile_data_dir.join("skills"),
             ));
             tools.register(
-                octos_agent::RecallMemoryTool::new(self.memory_store.clone())
+                ra_agent::RecallMemoryTool::new(self.memory_store.clone())
                     .with_recall(profile_recall.clone(), profile_embedder.clone()),
             );
-            tools.register(octos_agent::MemorySearchTool::new(
+            tools.register(ra_agent::MemorySearchTool::new(
                 profile_recall.clone(),
                 profile_embedder.clone(),
             ));
-            tools.register(octos_agent::MemoryLoadTool::new(
+            tools.register(ra_agent::MemoryLoadTool::new(
                 profile_recall.clone(),
                 self.memory_store.clone(),
             ));
-            tools.register(octos_agent::SaveMemoryTool::new(self.memory_store.clone()));
-            tools.register(octos_agent::RecordMemoryUseTool::new(
+            tools.register(ra_agent::SaveMemoryTool::new(self.memory_store.clone()));
+            tools.register(ra_agent::RecordMemoryUseTool::new(
                 self.memory_store.clone(),
             ));
             if memory_refresh_enabled {
-                tools.register(octos_agent::MemoryNoteTool::new(self.memory_store.clone()));
+                tools.register(ra_agent::MemoryNoteTool::new(self.memory_store.clone()));
             }
             if let Some(ref policy) = profile_config.tool_policy {
                 tools.apply_policy(policy);
@@ -940,7 +940,7 @@ impl ProfileActorFactoryBuilder {
             }
             worker_prompt = Some(crate::commands::load_prompt(
                 "worker",
-                octos_agent::DEFAULT_WORKER_PROMPT,
+                ra_agent::DEFAULT_WORKER_PROMPT,
             ));
             provider_policy = tools.provider_policy().cloned();
 
@@ -1023,9 +1023,9 @@ impl ProfileActorFactoryBuilder {
 
             struct ChildPipelineToolFactory {
                 llm: Arc<dyn LlmProvider>,
-                memory: Arc<octos_memory::EpisodeStore>,
+                memory: Arc<ra_memory::EpisodeStore>,
                 data_dir: PathBuf,
-                policy: Option<octos_agent::ToolPolicy>,
+                policy: Option<ra_agent::ToolPolicy>,
                 plugin_dirs: Vec<PathBuf>,
                 router: Option<Arc<ProviderRouter>>,
                 octos_home: PathBuf,
@@ -1034,15 +1034,15 @@ impl ProfileActorFactoryBuilder {
                 /// `RunPipelineTool::with_embedder` so pipeline-spawned
                 /// agents inherit hybrid scored + filtered memory
                 /// recall instead of the cwd-only unfiltered fallback.
-                embedder: Option<Arc<dyn octos_llm::EmbeddingProvider>>,
+                embedder: Option<Arc<dyn ra_llm::EmbeddingProvider>>,
             }
 
             impl crate::session_actor::PipelineToolFactory for ChildPipelineToolFactory {
                 fn create(
                     &self,
-                    sandbox: &octos_agent::SandboxConfig,
-                ) -> Arc<dyn octos_agent::Tool> {
-                    let mut pt = octos_pipeline::RunPipelineTool::new(
+                    sandbox: &ra_agent::SandboxConfig,
+                ) -> Arc<dyn ra_agent::Tool> {
+                    let mut pt = ra_pipeline::RunPipelineTool::new(
                         self.llm.clone(),
                         self.memory.clone(),
                         self.data_dir.clone(),
@@ -1669,16 +1669,16 @@ mod tests {
 
         let store = Arc::new(crate::profiles::ProfileStore::open_unified(tmp.path()).unwrap());
         let tool_config = Arc::new(
-            octos_agent::ToolConfigStore::open(&effective_octos_home)
+            ra_agent::ToolConfigStore::open(&effective_octos_home)
                 .await
                 .unwrap(),
         );
         let memory = Arc::new(EpisodeStore::open(&effective_octos_home).await.unwrap());
         let memory_store = Arc::new(MemoryStore::open(&effective_octos_home).await.unwrap());
         let recall = Arc::new(
-            octos_memory::RecallStore::open(
+            ra_memory::RecallStore::open(
                 &effective_octos_home,
-                octos_memory::RecallConfig::default(),
+                ra_memory::RecallConfig::default(),
             )
             .unwrap(),
         );
@@ -1714,7 +1714,7 @@ mod tests {
             tool_registry_factory: Arc::new(SnapshotToolRegistryFactory::new(ToolRegistry::new())),
             pipeline_factory: None,
             max_history: Arc::new(AtomicUsize::new(50)),
-            session_timeout_secs: octos_agent::DEFAULT_SESSION_TIMEOUT_SECS,
+            session_timeout_secs: ra_agent::DEFAULT_SESSION_TIMEOUT_SECS,
             shutdown: Arc::new(AtomicBool::new(false)),
             cwd: project_dir.clone(),
             provider_policy: None,
@@ -1725,9 +1725,9 @@ mod tests {
             queue_mode: crate::config::QueueMode::Followup,
             plugin_prompt_fragments: vec![],
             no_retry: false,
-            sandbox_config: octos_agent::SandboxConfig::default(),
+            sandbox_config: ra_agent::SandboxConfig::default(),
             task_query_store: crate::session_actor::SessionTaskQueryStore::default(),
-            subagent_output_router: Arc::new(octos_agent::SubAgentOutputRouter::new(
+            subagent_output_router: Arc::new(ra_agent::SubAgentOutputRouter::new(
                 effective_octos_home.join("subagent-out"),
             )),
             host_plugins: Default::default(),

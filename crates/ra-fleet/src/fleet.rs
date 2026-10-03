@@ -28,7 +28,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use eyre::Result;
-use octos_core::SessionKey;
+use ra_core::SessionKey;
 
 use crate::grant::WorkerGrant;
 use crate::records::{

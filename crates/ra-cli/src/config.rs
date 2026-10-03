@@ -62,7 +62,7 @@ pub struct Config {
     /// #2166: primary model default reasoning effort. Precedence:
     /// session/turn override → this → `gateway.reasoning_effort` → none.
     #[serde(default)]
-    pub model_reasoning_effort: Option<octos_llm::ReasoningEffort>,
+    pub model_reasoning_effort: Option<ra_llm::ReasoningEffort>,
 
     /// Custom base URL for the API endpoint.
     #[serde(default)]
@@ -88,7 +88,7 @@ pub struct Config {
     /// Override auto-detected model behavior hints for the OpenAI provider.
     /// Useful for custom/unknown models behind OpenAI-compatible proxies.
     #[serde(default)]
-    pub model_hints: Option<octos_llm::openai::ModelHints>,
+    pub model_hints: Option<ra_llm::openai::ModelHints>,
 
     /// API protocol type: "openai" (default) or "anthropic".
     /// When set to "anthropic", the Anthropic Messages API format is used
@@ -107,11 +107,11 @@ pub struct Config {
 
     /// MCP server configurations.
     #[serde(default)]
-    pub mcp_servers: Vec<octos_agent::McpServerConfig>,
+    pub mcp_servers: Vec<ra_agent::McpServerConfig>,
 
     /// Sandbox configuration.
     #[serde(default)]
-    pub sandbox: octos_agent::SandboxConfig,
+    pub sandbox: ra_agent::SandboxConfig,
 
     /// Workspace snapshot-undo configuration (#1768). Opt-in: when
     /// `snapshots.enabled` is true, the agent records a git-backed
@@ -120,7 +120,7 @@ pub struct Config {
     /// mutating tool batch. Absent or `enabled: false` (the default) =
     /// feature off.
     #[serde(default)]
-    pub snapshots: Option<octos_agent::SnapshotConfig>,
+    pub snapshots: Option<ra_agent::SnapshotConfig>,
 
     /// Build-cache pool configuration (outer-loop #1–#3; design
     /// docs/build-cache-pool.md §2). Optional like `snapshots`: absent
@@ -133,12 +133,12 @@ pub struct Config {
 
     /// Tool access policy (allow/deny lists with group and wildcard support).
     #[serde(default)]
-    pub tool_policy: Option<octos_agent::ToolPolicy>,
+    pub tool_policy: Option<ra_agent::ToolPolicy>,
 
     /// Per-provider tool policies. Key = model ID or provider name prefix.
     /// Example: `{"gemini": {"deny": ["diff_edit"]}}`.
     #[serde(default)]
-    pub tool_policy_by_provider: std::collections::HashMap<String, octos_agent::ToolPolicy>,
+    pub tool_policy_by_provider: std::collections::HashMap<String, ra_agent::ToolPolicy>,
 
     /// Embedding configuration for hybrid memory search.
     #[serde(default)]
@@ -168,7 +168,7 @@ pub struct Config {
 
     /// Lifecycle hooks for agent events.
     #[serde(default)]
-    pub hooks: Vec<octos_agent::HookConfig>,
+    pub hooks: Vec<ra_agent::HookConfig>,
 
     /// Human-approval rules for tool calls that require a human decision
     /// before executing (suspend-and-resume flow on gateway channels — see
@@ -264,7 +264,7 @@ pub struct Config {
     /// Absent or `enabled: false` → every turn is classified as Strong
     /// (preserves pre-M6.6 routing behavior).
     #[serde(default)]
-    pub content_routing: Option<octos_llm::RoutingConfig>,
+    pub content_routing: Option<ra_llm::RoutingConfig>,
 
     /// AppUi (octos-app, octoscode, etc.) session defaults applied by
     /// `ra serve`. Operators can anchor every AppUi session that
@@ -481,7 +481,7 @@ pub struct FallbackModel {
     pub api_key_env: Option<String>,
     /// Override auto-detected model hints for this fallback.
     #[serde(default)]
-    pub model_hints: Option<octos_llm::openai::ModelHints>,
+    pub model_hints: Option<ra_llm::openai::ModelHints>,
     /// API protocol type: "openai" or "anthropic". Overrides provider default.
     #[serde(default)]
     pub api_type: Option<String>,
@@ -550,7 +550,7 @@ pub struct ApprovalRuleConfig {
 
 /// Config surface for the human-approval flow
 /// (`docs/ROBRIX-PHASE4-APPROVAL-FLOW-ADR.md`). Converted to
-/// [`octos_agent::HumanApprovalRules`] via [`Self::to_runtime_rules`].
+/// [`ra_agent::HumanApprovalRules`] via [`Self::to_runtime_rules`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ApprovalPolicyConfig {
     #[serde(default)]
@@ -560,25 +560,25 @@ pub struct ApprovalPolicyConfig {
 }
 
 impl ApprovalPolicyRiskLevel {
-    pub fn to_runtime(self) -> octos_agent::ApprovalRiskLevel {
+    pub fn to_runtime(self) -> ra_agent::ApprovalRiskLevel {
         match self {
-            Self::Normal => octos_agent::ApprovalRiskLevel::Normal,
-            Self::Critical => octos_agent::ApprovalRiskLevel::Critical,
+            Self::Normal => ra_agent::ApprovalRiskLevel::Normal,
+            Self::Critical => ra_agent::ApprovalRiskLevel::Critical,
         }
     }
 }
 
 impl ApprovalPolicyTimeoutBehavior {
-    pub fn to_runtime(self) -> octos_agent::ApprovalTimeoutBehavior {
+    pub fn to_runtime(self) -> ra_agent::ApprovalTimeoutBehavior {
         match self {
-            Self::Notify => octos_agent::ApprovalTimeoutBehavior::Notify,
+            Self::Notify => ra_agent::ApprovalTimeoutBehavior::Notify,
         }
     }
 }
 
 impl ApprovalRuleConfig {
-    pub fn to_runtime(&self) -> octos_agent::ApprovalRule {
-        octos_agent::ApprovalRule {
+    pub fn to_runtime(&self) -> ra_agent::ApprovalRule {
+        ra_agent::ApprovalRule {
             tools: self.tools.clone(),
             risk_level: self.risk_level.to_runtime(),
             authorized_approvers: self.authorized_approvers.clone(),
@@ -612,8 +612,8 @@ impl ApprovalPolicyConfig {
         Ok(())
     }
 
-    pub fn to_runtime_rules(&self) -> octos_agent::HumanApprovalRules {
-        octos_agent::HumanApprovalRules::new(
+    pub fn to_runtime_rules(&self) -> ra_agent::HumanApprovalRules {
+        ra_agent::HumanApprovalRules::new(
             self.rules
                 .iter()
                 .map(ApprovalRuleConfig::to_runtime)
@@ -711,7 +711,7 @@ fn default_embedding_provider() -> String {
 pub struct MemoryConfig {
     /// Token budget for the memory block injected into the system prompt
     /// (long-term memory + daily notes + bank summary combined). Defaults to
-    /// [`octos_memory::DEFAULT_MAX_INJECT_TOKENS`]. The budget is spent in
+    /// [`ra_memory::DEFAULT_MAX_INJECT_TOKENS`]. The budget is spent in
     /// priority order (MEMORY.md, today's notes, bank abstracts, older daily
     /// notes) and omissions are disclosed to the model with a marker.
     #[serde(default)]
@@ -723,7 +723,7 @@ pub struct MemoryConfig {
 
     /// Width of the vectors kept by the Recall/Knowledge index
     /// (Matryoshka-truncated from the embedder's output, int8 at rest).
-    /// Defaults to [`octos_memory::DEFAULT_RECALL_DIMENSION`] (256); never
+    /// Defaults to [`ra_memory::DEFAULT_RECALL_DIMENSION`] (256); never
     /// wider than the configured embedder. See
     /// docs/adr/personal-memory-tiers.md.
     #[serde(default)]
@@ -834,7 +834,7 @@ impl MemoryConfig {
     pub fn effective_max_inject_tokens(config: Option<&MemoryConfig>) -> usize {
         config
             .and_then(|m| m.max_inject_tokens)
-            .unwrap_or(octos_memory::DEFAULT_MAX_INJECT_TOKENS)
+            .unwrap_or(ra_memory::DEFAULT_MAX_INJECT_TOKENS)
     }
 
     /// Whether automatic memory refreshing (capture + read refresh) is on.
@@ -1095,7 +1095,7 @@ pub enum AdaptiveRoutingMode {
     Lane,
 }
 
-impl From<AdaptiveRoutingMode> for octos_llm::AdaptiveMode {
+impl From<AdaptiveRoutingMode> for ra_llm::AdaptiveMode {
     fn from(m: AdaptiveRoutingMode) -> Self {
         match m {
             AdaptiveRoutingMode::Off => Self::Off,
@@ -1187,7 +1187,7 @@ impl Default for AdaptiveRoutingConfig {
     }
 }
 
-/// Per-config auto-escalation tunables. Mirrors `octos_llm::AutoEscalationConfig`
+/// Per-config auto-escalation tunables. Mirrors `ra_llm::AutoEscalationConfig`
 /// but uses serde defaults so a missing `auto_escalation` block in
 /// `config.json` resolves to the recommended values.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1222,7 +1222,7 @@ impl Default for AutoEscalationConfigFile {
     }
 }
 
-impl From<&AutoEscalationConfigFile> for octos_llm::AutoEscalationConfig {
+impl From<&AutoEscalationConfigFile> for ra_llm::AutoEscalationConfig {
     fn from(c: &AutoEscalationConfigFile) -> Self {
         Self {
             enabled: c.enabled,
@@ -1258,7 +1258,7 @@ fn default_auto_escalation_recovery_factor() -> f64 {
     0.6
 }
 
-impl From<&AdaptiveRoutingConfig> for octos_llm::AdaptiveConfig {
+impl From<&AdaptiveRoutingConfig> for ra_llm::AdaptiveConfig {
     fn from(c: &AdaptiveRoutingConfig) -> Self {
         Self {
             failure_threshold: c.failure_threshold,
@@ -1378,7 +1378,7 @@ impl Config {
             dirs.push(local_skills);
         }
         // Layered skill dirs
-        let bundled = project_dir.join(octos_agent::bootstrap::BUNDLED_APP_SKILLS_DIR);
+        let bundled = project_dir.join(ra_agent::bootstrap::BUNDLED_APP_SKILLS_DIR);
         if bundled.exists() {
             dirs.push(bundled);
         }
@@ -1604,7 +1604,7 @@ pub struct GatewayConfig {
     /// (DeepSeek V4 gets `reasoning_effort` + `thinking`, OpenAI reasoning models
     /// and Grok get `reasoning_effort`), so non-thinking models silently ignore it.
     #[serde(default)]
-    pub reasoning_effort: Option<octos_llm::ReasoningEffort>,
+    pub reasoning_effort: Option<ra_llm::ReasoningEffort>,
 
     /// Sampling temperature override for chat LLM calls. When unset (the
     /// default), the built-in `ChatConfig` default (`0.0`, greedy) is used and
@@ -1989,7 +1989,7 @@ impl Config {
     /// The env-var name the provider chain would use by default.
     pub(crate) fn provider_default_env_var(provider: &str) -> Option<String> {
         Some(
-            octos_llm::registry::lookup(provider)
+            ra_llm::registry::lookup(provider)
                 .and_then(|e| e.api_key_env)
                 .map(String::from)
                 .unwrap_or_else(|| format!("{}_API_KEY", provider.to_uppercase())),
@@ -2001,7 +2001,7 @@ impl Config {
     /// in the registry, falls back to the conventional `{PROVIDER}_API_KEY`.
     /// Case-sensitive (Unix env names are case-sensitive).
     pub(crate) fn provider_knows_key_env(provider: &str, name: &str) -> bool {
-        match octos_llm::registry::lookup(provider) {
+        match ra_llm::registry::lookup(provider) {
             Some(entry) => entry.is_known_key_env(name),
             None => name == format!("{}_API_KEY", provider.to_uppercase()),
         }
@@ -2011,7 +2011,7 @@ impl Config {
     /// auth-store lookup: secret registration → `env_vars` map (keychain-
     /// resolved) → process env.
     fn resolve_env_var_only(&self, env_var: &str) -> Result<String> {
-        octos_agent::register_secret_env_names([env_var]);
+        ra_agent::register_secret_env_names([env_var]);
         if let Some(value) = self.env_vars.get(env_var).and_then(|value| {
             crate::auth::keychain::resolve_value(env_var, value).filter(|value| !value.is_empty())
         }) {
@@ -2037,9 +2037,9 @@ impl Config {
         // heuristic, so it can't be `echo`'d from the shell tool. Registered
         // names are still allowlistable: a tool that declares the var in its
         // manifest `env` list may receive it (the sanctioned path for skills
-        // that call LLMs). See `octos_agent::subprocess_env`.
+        // that call LLMs). See `ra_agent::subprocess_env`.
         let env_var = self.api_key_env.clone().unwrap_or_else(|| {
-            octos_llm::registry::lookup(provider)
+            ra_llm::registry::lookup(provider)
                 .and_then(|e| e.api_key_env)
                 .map(String::from)
                 .unwrap_or_else(|| format!("{}_API_KEY", provider.to_uppercase()))
@@ -2057,7 +2057,7 @@ impl Config {
         // override (e.g. a proxy key) stays exclusive so a missing override
         // never falls back to an unrelated ambient credential.
         let mut candidates = vec![env_var.clone()];
-        if let Some(entry) = octos_llm::registry::lookup(provider) {
+        if let Some(entry) = ra_llm::registry::lookup(provider) {
             // Only expand to sibling key vars when the configured var is itself
             // a declared key name (case-sensitive — see `is_known_key_env`).
             if entry.is_known_key_env(&env_var) {
@@ -2068,7 +2068,7 @@ impl Config {
                 }
             }
         }
-        octos_agent::register_secret_env_names(candidates.iter());
+        ra_agent::register_secret_env_names(candidates.iter());
 
         // Check auth store first. Auth is GLOBAL: it lives under the resolver's
         // `auth_home` (OCTOS_CONFIG_DIR if set, else the XDG default). This is
@@ -2117,8 +2117,8 @@ impl Config {
 
         // Check provider is valid
         if let Some(ref provider) = self.provider {
-            if provider != "custom" && octos_llm::registry::lookup(provider).is_none() {
-                let valid = octos_llm::registry::all_names();
+            if provider != "custom" && ra_llm::registry::lookup(provider).is_none() {
+                let valid = ra_llm::registry::all_names();
                 warnings.push(format!(
                     "Unknown provider '{}'. Valid options: {}",
                     provider,
@@ -2199,7 +2199,7 @@ impl Config {
         };
         if self.get_api_key(provider).is_err() {
             let env_var = self.api_key_env.clone().unwrap_or_else(|| {
-                octos_llm::registry::lookup(provider)
+                ra_llm::registry::lookup(provider)
                     .and_then(|e| e.api_key_env)
                     .map(String::from)
                     .unwrap_or_else(|| format!("{}_API_KEY", provider.to_uppercase()))
@@ -2251,7 +2251,7 @@ fn is_valid_model_for_provider(provider: &str, model: &str) -> bool {
 
 /// Detect LLM provider from model name when no explicit provider is set.
 pub fn detect_provider(model: &str) -> Option<&'static str> {
-    octos_llm::registry::detect_provider(model)
+    ra_llm::registry::detect_provider(model)
 }
 
 #[cfg(test)]
@@ -2299,7 +2299,7 @@ mod tests {
         let config: Config = serde_json::from_str(r#"{"snapshots": {"enabled": true}}"#).unwrap();
         assert_eq!(
             config.snapshots.unwrap().keep_last,
-            octos_agent::DEFAULT_SNAPSHOT_KEEP_LAST
+            ra_agent::DEFAULT_SNAPSHOT_KEEP_LAST
         );
     }
 
@@ -2416,7 +2416,7 @@ mod tests {
             "reasoning_effort": "high"
         }"#;
         let gw: GatewayConfig = serde_json::from_str(json).unwrap();
-        assert_eq!(gw.reasoning_effort, Some(octos_llm::ReasoningEffort::High));
+        assert_eq!(gw.reasoning_effort, Some(ra_llm::ReasoningEffort::High));
     }
 
     #[test]
@@ -3245,7 +3245,7 @@ mod tests {
     fn auto_escalation_defaults_match_router_defaults() {
         let cfg = AdaptiveRoutingConfig::default();
         assert!(cfg.auto_escalation.enabled);
-        let llm_cfg = octos_llm::AutoEscalationConfig::from(&cfg.auto_escalation);
+        let llm_cfg = ra_llm::AutoEscalationConfig::from(&cfg.auto_escalation);
         assert!(llm_cfg.enabled);
         assert_eq!(llm_cfg.latency_ceiling_ms, 8_000);
         assert!((llm_cfg.recovery_factor - 0.6).abs() < f64::EPSILON);
@@ -3562,7 +3562,7 @@ mod tests {
         // max_inject_tokens keeps its default independently.
         assert_eq!(
             MemoryConfig::effective_max_inject_tokens(Some(&on)),
-            octos_memory::DEFAULT_MAX_INJECT_TOKENS
+            ra_memory::DEFAULT_MAX_INJECT_TOKENS
         );
     }
 

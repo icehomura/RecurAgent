@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_core::PathClassification;
+use ra_core::PathClassification;
 use serde::Deserialize;
 
 use super::{Tool, ToolContext, ToolResult};
@@ -265,7 +265,7 @@ mod tests {
     // PR-B: SessionScope integration tests for ListDirTool.
     // ------------------------------------------------------------------
 
-    use octos_core::SessionScope;
+    use ra_core::SessionScope;
 
     fn ctx_with_scope(scope: SessionScope) -> ToolContext {
         let mut ctx = ToolContext::zero();

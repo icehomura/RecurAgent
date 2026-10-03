@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use futures::{SinkExt, StreamExt};
-use octos_agent::bridge::work_secret::WorkSecretGrantStore;
-use octos_cli::api::{AppState, build_router};
+use ra_agent::bridge::work_secret::WorkSecretGrantStore;
+use ra_cli::api::{AppState, build_router};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio_tungstenite::connect_async;

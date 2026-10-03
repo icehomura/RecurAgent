@@ -17,8 +17,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use eyre::Result;
-use octos_agent::{EffectivePermissions, SandboxConfig};
-use octos_core::SessionKey;
+use ra_agent::{EffectivePermissions, SandboxConfig};
+use ra_core::SessionKey;
 use tokio::sync::{Notify, Semaphore};
 use tokio::task::JoinHandle;
 
@@ -786,11 +786,11 @@ mod tests {
     use std::collections::HashMap as StdHashMap;
     use std::sync::Arc;
 
-    use octos_agent::sandbox::create_sandbox;
-    use octos_agent::{SandboxConfig, ToolRegistry};
-    use octos_core::Message;
-    use octos_llm::{ChatConfig, ChatResponse, LlmProvider, ToolSpec};
-    use octos_memory::{EpisodeStore, MemoryStore};
+    use ra_agent::sandbox::create_sandbox;
+    use ra_agent::{SandboxConfig, ToolRegistry};
+    use ra_core::Message;
+    use ra_llm::{ChatConfig, ChatResponse, LlmProvider, ToolSpec};
+    use ra_memory::{EpisodeStore, MemoryStore};
     use tempfile::TempDir;
 
     use crate::runtime::ProfileRuntime;
@@ -820,10 +820,10 @@ mod tests {
         let memory = Arc::new(EpisodeStore::open(&data_dir).await.unwrap());
         let memory_store = Arc::new(MemoryStore::open(&data_dir).await.unwrap());
         let recall = Arc::new(
-            octos_memory::RecallStore::open(&data_dir, octos_memory::RecallConfig::default())
+            ra_memory::RecallStore::open(&data_dir, ra_memory::RecallConfig::default())
                 .unwrap(),
         );
-        let tool_config = Arc::new(octos_agent::ToolConfigStore::open(&data_dir).await.unwrap());
+        let tool_config = Arc::new(ra_agent::ToolConfigStore::open(&data_dir).await.unwrap());
         let sandbox = SandboxConfig::default();
         let base_tools =
             ToolRegistry::with_builtins_and_sandbox(&data_dir, create_sandbox(&sandbox));
@@ -1551,23 +1551,23 @@ mod tests {
         // No cross-write: each runtime's manager persists under its own root.
         {
             let mut mgr = rt_a.sessions.lock().await;
-            mgr.add_message(&key, octos_core::Message::user("for-A"))
+            mgr.add_message(&key, ra_core::Message::user("for-A"))
                 .await
                 .unwrap();
         }
         {
             let mut mgr = rt_b.sessions.lock().await;
-            mgr.add_message(&key, octos_core::Message::user("for-B"))
+            mgr.add_message(&key, ra_core::Message::user("for-B"))
                 .await
                 .unwrap();
         }
-        let mut reload_a = octos_bus::SessionManager::open(&rt_a.sessions_root).unwrap();
+        let mut reload_a = ra_bus::SessionManager::open(&rt_a.sessions_root).unwrap();
         assert_eq!(reload_a.get_or_create(&key).await.messages.len(), 1);
         assert_eq!(
             reload_a.get_or_create(&key).await.messages[0].content,
             "for-A"
         );
-        let mut reload_b = octos_bus::SessionManager::open(&rt_b.sessions_root).unwrap();
+        let mut reload_b = ra_bus::SessionManager::open(&rt_b.sessions_root).unwrap();
         assert_eq!(reload_b.get_or_create(&key).await.messages.len(), 1);
         assert_eq!(
             reload_b.get_or_create(&key).await.messages[0].content,

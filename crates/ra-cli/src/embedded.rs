@@ -21,7 +21,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// ```no_run
 /// # async fn serve(home: &std::path::Path, io: tokio::io::DuplexStream) -> eyre::Result<()> {
 /// # let (reader, writer) = tokio::io::split(io);
-/// # octos_cli::embedded::serve_io(home, reader, writer).await
+/// # ra_cli::embedded::serve_io(home, reader, writer).await
 /// # }
 /// let runtime = tokio::runtime::Builder::new_multi_thread()
 ///     .enable_all()
@@ -48,7 +48,7 @@ where
         is_default: false,
     };
     let host_config = crate::config::Config::load_with_context(home, &context)?;
-    let profile = resolve_stored_profile(Some(octos_core::MAIN_PROFILE_ID), &data_dir)?
+    let profile = resolve_stored_profile(Some(ra_core::MAIN_PROFILE_ID), &data_dir)?
         .ok_or_else(|| eyre::eyre!("Configure the local LLM profile before generating a card"))?;
     let mut config = crate::profiles::config_from_profile(&profile, None, None);
     // Mobile card composition defaults to fast inference. A saved model or
@@ -58,7 +58,7 @@ where
             .gateway
             .get_or_insert_with(Default::default)
             .reasoning_effort
-            .get_or_insert(octos_llm::ReasoningEffort::Disabled);
+            .get_or_insert(ra_llm::ReasoningEffort::Disabled);
     }
     crate::config::merge_host_memory_into_profile(&mut config.memory, host_config.memory.as_ref());
     config.plugins.require_signed |= host_config.plugins.require_signed;
@@ -110,7 +110,7 @@ mod tests {
         let store = crate::profiles::ProfileStore::open_unified(&home.join(".ra"))
             .expect("profile store");
         let profile = json!({
-            "id": octos_core::MAIN_PROFILE_ID,
+            "id": ra_core::MAIN_PROFILE_ID,
             "name": "Main",
             "enabled": true,
             "config": {
@@ -125,7 +125,7 @@ mod tests {
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z",
         });
-        let path = store.profile_path(octos_core::MAIN_PROFILE_ID);
+        let path = store.profile_path(ra_core::MAIN_PROFILE_ID);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, profile.to_string()).expect("write profile");
     }
@@ -162,18 +162,18 @@ mod tests {
             let serving = tokio::spawn(async move { serve_io(&home_path, reader, writer).await });
 
             let (client_reader, mut client_writer) = tokio::io::split(client);
-            let session_id = octos_core::SessionKey::with_profile(
-                octos_core::MAIN_PROFILE_ID,
+            let session_id = ra_core::SessionKey::with_profile(
+                ra_core::MAIN_PROFILE_ID,
                 "embedded",
                 "happy-path",
             );
             let open = json!({
                 "jsonrpc": "2.0",
                 "id": "open",
-                "method": octos_core::ui_protocol::methods::SESSION_OPEN,
+                "method": ra_core::ui_protocol::methods::SESSION_OPEN,
                 "params": {
                     "session_id": session_id,
-                    "profile_id": octos_core::MAIN_PROFILE_ID,
+                    "profile_id": ra_core::MAIN_PROFILE_ID,
                     "cwd": workspace.path().to_string_lossy(),
                 },
             });

@@ -28,7 +28,7 @@ const MAX_SUMMARY_LINES: usize = 100_000;
 /// `MAX_INPUT_SIZE` (262_144).
 pub const DEFAULT_RESULT_CEILING_BYTES: usize = 262_144;
 
-/// The 1 MiB frame ceiling enforced by `octos_core::ui_protocol`'s
+/// The 1 MiB frame ceiling enforced by `ra_core::ui_protocol`'s
 /// `MAX_TEXT_FRAME_BYTES`. Re-declared here (not imported) to keep
 /// ra-pipeline free of an ra-core dependency edge for a single const;
 /// a unit test would catch drift if the core constant ever moved.

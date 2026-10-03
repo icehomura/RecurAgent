@@ -21,10 +21,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use octos_agent::{Agent, AgentConfig, Tool, ToolRegistry, ToolResult};
-use octos_core::{AgentId, Message, ToolCall};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_agent::{Agent, AgentConfig, Tool, ToolRegistry, ToolResult};
+use ra_core::{AgentId, Message, ToolCall};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 
 struct ScriptedLlm {
@@ -254,7 +254,7 @@ async fn supervisor_cancel_aborts_running_spawn_only_task() {
         let task = supervisor.get_task(&task_id);
         let is_cancelled = task
             .as_ref()
-            .map(|t| matches!(t.status, octos_agent::TaskStatus::Cancelled))
+            .map(|t| matches!(t.status, ra_agent::TaskStatus::Cancelled))
             .unwrap_or(false);
         if is_cancelled {
             break;
@@ -327,7 +327,7 @@ async fn cancel_runs_terminal_teardown_for_routed_spawn_only_task() {
     // the cancel arm actually has terminal teardown to run (or skip, pre-fix).
     // The worker seeds a startup line via `router.append` before the tool runs,
     // creating the handle in the Running phase.
-    let router = Arc::new(octos_agent::SubAgentOutputRouter::new(router_dir.path()));
+    let router = Arc::new(ra_agent::SubAgentOutputRouter::new(router_dir.path()));
 
     let agent = Agent::new(AgentId::new("interrupt-teardown"), llm, tools, memory)
         .with_config(AgentConfig {
@@ -385,7 +385,7 @@ async fn cancel_runs_terminal_teardown_for_routed_spawn_only_task() {
     loop {
         let cancelled = supervisor
             .get_task(&task_id)
-            .map(|t| matches!(t.status, octos_agent::TaskStatus::Cancelled))
+            .map(|t| matches!(t.status, ra_agent::TaskStatus::Cancelled))
             .unwrap_or(false);
         if cancelled {
             break;

@@ -3,7 +3,7 @@
 //! Provides a typed event system that pipeline executors emit at key lifecycle
 //! points. Consumers can subscribe via the `PipelineEventHandler` trait.
 
-use octos_core::TokenUsage;
+use ra_core::TokenUsage;
 use serde::Serialize;
 
 use crate::graph::{HandlerKind, OutcomeStatus};

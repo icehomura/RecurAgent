@@ -8,12 +8,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use octos_llm::{LlmProvider, openai::OpenAIProvider};
-use octos_memory::EpisodeStore;
-use octos_pipeline::context::PipelineContext;
-use octos_pipeline::executor::{ExecutorConfig, PipelineExecutor};
-use octos_pipeline::host_context::PipelineHostContext;
-use octos_pipeline::profile::ValidationProfile;
+use ra_llm::{LlmProvider, openai::OpenAIProvider};
+use ra_memory::EpisodeStore;
+use ra_pipeline::context::PipelineContext;
+use ra_pipeline::executor::{ExecutorConfig, PipelineExecutor};
+use ra_pipeline::host_context::PipelineHostContext;
+use ra_pipeline::profile::ValidationProfile;
 
 #[tokio::main]
 async fn main() {
@@ -57,7 +57,7 @@ async fn main() {
         catalog_dir: None,
         // #1607: pipeline validators run under a no-op sandbox in tests
         // (host-independent — command validators run the argv directly).
-        sandbox: octos_agent::SandboxConfig::default(),
+        sandbox: ra_agent::SandboxConfig::default(),
     };
     let executor = PipelineExecutor::new(config);
 

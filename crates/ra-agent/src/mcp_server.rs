@@ -38,7 +38,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use eyre::Result;
 use metrics::counter;
-use octos_core::{TASK_RESULT_SCHEMA_VERSION, TaskId, TokenUsage};
+use ra_core::{TASK_RESULT_SCHEMA_VERSION, TaskId, TokenUsage};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};

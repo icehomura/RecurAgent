@@ -12,7 +12,7 @@
 //!
 //! This module is the one place that decides which rows render and what the
 //! notes say, so the four builders agree.
-use octos_core::{Message, MessageRole};
+use ra_core::{Message, MessageRole};
 
 use crate::vision;
 
@@ -190,7 +190,7 @@ mod tests {
             content: "x".into(),
             media: media.iter().map(|s| s.to_string()).collect(),
             tool_calls: if tool_calls {
-                Some(vec![octos_core::ToolCall {
+                Some(vec![ra_core::ToolCall {
                     id: "c1".into(),
                     name: "view_image".into(),
                     arguments: serde_json::json!({}),

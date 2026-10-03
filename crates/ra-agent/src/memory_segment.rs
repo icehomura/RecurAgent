@@ -11,8 +11,8 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use octos_llm::EmbeddingProvider;
-use octos_memory::{MemoryStore, RecallStore};
+use ra_llm::EmbeddingProvider;
+use ra_memory::{MemoryStore, RecallStore};
 
 use crate::agent::PromptSegmentProvider;
 

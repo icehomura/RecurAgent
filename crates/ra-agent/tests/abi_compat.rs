@@ -12,16 +12,16 @@
 
 use std::path::{Path, PathBuf};
 
-use octos_agent::abi_schema::{
+use ra_agent::abi_schema::{
     HOOK_PAYLOAD_SCHEMA_VERSION, PROGRESS_EVENT_SCHEMA_VERSION, WORKSPACE_POLICY_SCHEMA_VERSION,
     check_supported,
 };
-use octos_agent::hooks::{HookEvent, HookPayload};
-use octos_agent::progress::{HARNESS_PROGRESS_EVENT_SCHEMA, ProgressEvent, ProgressEventEnvelope};
-use octos_agent::workspace_policy::{
+use ra_agent::hooks::{HookEvent, HookPayload};
+use ra_agent::progress::{HARNESS_PROGRESS_EVENT_SCHEMA, ProgressEvent, ProgressEventEnvelope};
+use ra_agent::workspace_policy::{
     WORKSPACE_POLICY_FILE, WorkspacePolicy, read_workspace_policy,
 };
-use octos_core::{TASK_RESULT_SCHEMA_VERSION, TaskResult};
+use ra_core::{TASK_RESULT_SCHEMA_VERSION, TaskResult};
 
 fn fixtures_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -53,7 +53,7 @@ fn should_load_workspace_policy_v1_slides_fixture() {
     assert_eq!(policy.schema_version, WORKSPACE_POLICY_SCHEMA_VERSION);
     assert_eq!(
         policy.workspace.kind,
-        octos_agent::WorkspacePolicyKind::Slides
+        ra_agent::WorkspacePolicyKind::Slides
     );
     assert!(
         policy
@@ -82,7 +82,7 @@ fn should_load_workspace_policy_v1_slides_fixture() {
 
 #[test]
 fn should_load_workspace_policy_v1_session_fixture() {
-    use octos_agent::workspace_policy::{
+    use ra_agent::workspace_policy::{
         SpawnTaskValidatorSpec, ValidatorFileSource, ValidatorSpec,
     };
 
@@ -96,7 +96,7 @@ fn should_load_workspace_policy_v1_session_fixture() {
     assert_eq!(policy.schema_version, WORKSPACE_POLICY_SCHEMA_VERSION);
     assert_eq!(
         policy.workspace.kind,
-        octos_agent::WorkspacePolicyKind::Session
+        ra_agent::WorkspacePolicyKind::Session
     );
     let tts = policy
         .spawn_tasks
@@ -208,7 +208,7 @@ fn should_default_workspace_policy_to_v1_when_schema_version_missing() {
     );
     assert_eq!(
         policy.workspace.kind,
-        octos_agent::WorkspacePolicyKind::Sites
+        ra_agent::WorkspacePolicyKind::Sites
     );
 }
 
@@ -220,11 +220,11 @@ fn should_preserve_all_first_party_built_in_workspace_policies() {
     let contracts: Vec<(&str, WorkspacePolicy)> = vec![
         (
             "slides",
-            WorkspacePolicy::for_kind(octos_agent::WorkspaceProjectKind::Slides),
+            WorkspacePolicy::for_kind(ra_agent::WorkspaceProjectKind::Slides),
         ),
         (
             "sites",
-            WorkspacePolicy::for_kind(octos_agent::WorkspaceProjectKind::Sites),
+            WorkspacePolicy::for_kind(ra_agent::WorkspaceProjectKind::Sites),
         ),
         ("session", WorkspacePolicy::for_session()),
         (

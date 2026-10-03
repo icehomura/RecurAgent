@@ -12,8 +12,8 @@
 //!
 //! Run with `cargo test -p ra-agent --test slides_validator_project_scope`.
 
-use octos_agent::workspace_git::WorkspaceProjectKind;
-use octos_agent::workspace_policy::{
+use ra_agent::workspace_git::WorkspaceProjectKind;
+use ra_agent::workspace_policy::{
     MagicByteKind, ValidatorPhaseKind, ValidatorSpec, WorkspacePolicy,
 };
 
@@ -60,7 +60,7 @@ fn slides_kind_policy_wires_mofa_slides_pptx_magic_bytes_validator() {
         } => {
             assert_eq!(
                 *source,
-                octos_agent::workspace_policy::ValidatorFileSource::SpawnOnlyFiles,
+                ra_agent::workspace_policy::ValidatorFileSource::SpawnOnlyFiles,
                 "slides MagicBytes must consume files_to_send (post #997 round-3)"
             );
             assert_eq!(
@@ -81,9 +81,9 @@ async fn html_pptx_fails_slides_kind_project_scope_validator_gate() {
     // because the slides-kind policy declared no validators.
     use std::sync::Arc;
 
-    use octos_agent::ToolRegistry;
-    use octos_agent::validators::ValidatorPhase;
-    use octos_agent::workspace_contract::run_declared_validators_with_output;
+    use ra_agent::ToolRegistry;
+    use ra_agent::validators::ValidatorPhase;
+    use ra_agent::workspace_contract::run_declared_validators_with_output;
 
     let dir = tempfile::tempdir().unwrap();
     let workspace_root = dir.path();
@@ -112,7 +112,7 @@ async fn html_pptx_fails_slides_kind_project_scope_validator_gate() {
         None,
         None,
         Some(vec![deck_path.clone()]),
-        Arc::new(octos_agent::sandbox::NoSandbox),
+        Arc::new(ra_agent::sandbox::NoSandbox),
     )
     .await;
 
@@ -133,9 +133,9 @@ async fn valid_pptx_passes_slides_kind_project_scope_validator_gate() {
     // mofa_slides outputs are not blocked.
     use std::sync::Arc;
 
-    use octos_agent::ToolRegistry;
-    use octos_agent::validators::ValidatorPhase;
-    use octos_agent::workspace_contract::run_declared_validators_with_output;
+    use ra_agent::ToolRegistry;
+    use ra_agent::validators::ValidatorPhase;
+    use ra_agent::workspace_contract::run_declared_validators_with_output;
 
     let dir = tempfile::tempdir().unwrap();
     let workspace_root = dir.path();
@@ -164,7 +164,7 @@ async fn valid_pptx_passes_slides_kind_project_scope_validator_gate() {
         None,
         None,
         Some(vec![deck_path.clone()]),
-        Arc::new(octos_agent::sandbox::NoSandbox),
+        Arc::new(ra_agent::sandbox::NoSandbox),
     )
     .await
     .expect("genuine PPTX must pass the slides project-scope validator gate");
@@ -177,7 +177,7 @@ async fn valid_pptx_passes_slides_kind_project_scope_validator_gate() {
         .expect("MagicBytes outcome must be recorded for a slides-kind gate run");
     assert_eq!(
         pptx_outcome.status,
-        octos_agent::validators::ValidatorStatus::Pass
+        ra_agent::validators::ValidatorStatus::Pass
     );
 }
 
@@ -221,11 +221,11 @@ async fn project_root_validators_write_to_project_ledger_without_manual_seeding(
     // i.e. the production code path never runs the declared validator at
     // the project root, so the ledger file never exists, and the
     // inspect-contract gate stays `ready = false` even with a genuine deck.
-    use octos_agent::ToolRegistry;
-    use octos_agent::inspect_workspace_contract_at_root;
-    use octos_agent::validators::{ValidatorLedger, ValidatorStatus};
-    use octos_agent::workspace_contract::run_project_root_validators;
-    use octos_agent::workspace_policy::write_workspace_policy;
+    use ra_agent::ToolRegistry;
+    use ra_agent::inspect_workspace_contract_at_root;
+    use ra_agent::validators::{ValidatorLedger, ValidatorStatus};
+    use ra_agent::workspace_contract::run_project_root_validators;
+    use ra_agent::workspace_policy::write_workspace_policy;
     use std::sync::Arc;
 
     let dir = tempfile::tempdir().unwrap();
@@ -276,7 +276,7 @@ async fn project_root_validators_write_to_project_ledger_without_manual_seeding(
         session_root,
         Some(WorkspaceProjectKind::Slides),
         &files_to_send,
-        Arc::new(octos_agent::sandbox::NoSandbox),
+        Arc::new(ra_agent::sandbox::NoSandbox),
     )
     .await;
 
@@ -357,13 +357,13 @@ async fn project_root_validators_write_to_project_ledger_without_manual_seeding(
 #[tokio::test]
 async fn spawn_only_mofa_slides_writes_project_ledger() {
     use async_trait::async_trait;
-    use octos_agent::{
+    use ra_agent::{
         Agent, AgentConfig, Tool, ToolRegistry, ToolResult, WorkspacePolicy, WorkspaceProjectKind,
         write_workspace_policy,
     };
-    use octos_core::{AgentId, Message, MessageRole, ToolCall};
-    use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-    use octos_memory::EpisodeStore;
+    use ra_core::{AgentId, Message, MessageRole, ToolCall};
+    use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+    use ra_memory::EpisodeStore;
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::Duration;
@@ -525,7 +525,7 @@ async fn spawn_only_mofa_slides_writes_project_ledger() {
             if task.tool_name == "mofa_slides"
                 && matches!(
                     task.status,
-                    octos_agent::TaskStatus::Completed | octos_agent::TaskStatus::Failed
+                    ra_agent::TaskStatus::Completed | ra_agent::TaskStatus::Failed
                 )
             {
                 completed = true;
@@ -559,13 +559,13 @@ async fn spawn_only_mofa_slides_writes_project_ledger() {
     );
 
     // The ledger must contain the slides-kind PPTX MagicBytes Pass row.
-    let ledger = octos_agent::ValidatorLedger::open(&ledger_path).expect("open project ledger");
+    let ledger = ra_agent::ValidatorLedger::open(&ledger_path).expect("open project ledger");
     let entries = ledger.read_all().expect("read project ledger entries");
     let pass = entries
         .iter()
         .find(|o| {
             o.validator_id == "slides.mofa_slides.pptx_magic_bytes"
-                && o.status == octos_agent::ValidatorStatus::Pass
+                && o.status == ra_agent::ValidatorStatus::Pass
         })
         .unwrap_or_else(|| {
             panic!(
@@ -596,14 +596,14 @@ async fn spawn_only_mofa_slides_writes_project_ledger() {
 #[tokio::test]
 async fn agent_mcp_slides_writes_project_ledger() {
     use async_trait::async_trait;
-    use octos_agent::tools::SpawnTool;
-    use octos_agent::{
+    use ra_agent::tools::SpawnTool;
+    use ra_agent::{
         DispatchOutcome, DispatchRequest, DispatchResponse, McpAgentBackend, SharedBackend, Tool,
         WorkspacePolicy, WorkspaceProjectKind, write_workspace_policy,
     };
-    use octos_core::Message;
-    use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-    use octos_memory::EpisodeStore;
+    use ra_core::Message;
+    use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+    use ra_memory::EpisodeStore;
     use std::path::PathBuf;
     use std::sync::Arc;
     use tempfile::TempDir;
@@ -767,13 +767,13 @@ async fn agent_mcp_slides_writes_project_ledger() {
         result.output
     );
 
-    let ledger = octos_agent::ValidatorLedger::open(&ledger_path).expect("open project ledger");
+    let ledger = ra_agent::ValidatorLedger::open(&ledger_path).expect("open project ledger");
     let entries = ledger.read_all().expect("read project ledger entries");
     let pass = entries
         .iter()
         .find(|o| {
             o.validator_id == "slides.mofa_slides.pptx_magic_bytes"
-                && o.status == octos_agent::ValidatorStatus::Pass
+                && o.status == ra_agent::ValidatorStatus::Pass
         })
         .unwrap_or_else(|| {
             panic!(
@@ -811,13 +811,13 @@ async fn agent_mcp_slides_writes_project_ledger() {
 #[tokio::test]
 async fn spawn_only_mofa_slides_propagates_files_to_send_onto_background_payload() {
     use async_trait::async_trait;
-    use octos_agent::tools::spawn::{BackgroundResultPayload, BackgroundResultSender};
-    use octos_agent::{
+    use ra_agent::tools::spawn::{BackgroundResultPayload, BackgroundResultSender};
+    use ra_agent::{
         Agent, AgentConfig, Tool, ToolRegistry, ToolResult, WorkspacePolicy, write_workspace_policy,
     };
-    use octos_core::{AgentId, Message, ToolCall};
-    use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-    use octos_memory::EpisodeStore;
+    use ra_core::{AgentId, Message, ToolCall};
+    use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+    use ra_memory::EpisodeStore;
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex as StdMutex};
     use std::time::Duration;
@@ -965,7 +965,7 @@ async fn spawn_only_mofa_slides_propagates_files_to_send_onto_background_payload
             if task.tool_name == "mofa_slides"
                 && matches!(
                     task.status,
-                    octos_agent::TaskStatus::Completed | octos_agent::TaskStatus::Failed
+                    ra_agent::TaskStatus::Completed | ra_agent::TaskStatus::Failed
                 )
             {
                 completed = true;

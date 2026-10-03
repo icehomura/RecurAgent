@@ -49,7 +49,7 @@ struct Input {
 /// drop the middle of a large recalled file — recreating the unrecoverable-tail
 /// problem recall exists to solve (mirrors `recall_memory`'s pager).
 fn render_page(content: &str, page: usize) -> String {
-    let limit = octos_core::tool_output_limit("recall");
+    let limit = ra_core::tool_output_limit("recall");
     let budget = limit.saturating_sub(512).max(1);
 
     let mut ranges: Vec<(usize, usize)> = Vec::new();
@@ -199,7 +199,7 @@ mod tests {
     async fn large_output_is_paged_not_silently_truncated() {
         // A payload several times the recall tool-output limit must be reachable
         // page by page (no silent middle-loss).
-        let limit = octos_core::tool_output_limit("recall");
+        let limit = ra_core::tool_output_limit("recall");
         let big: String = (0..(limit / 10 + 500))
             .map(|i| format!("line {i}\n"))
             .collect();

@@ -13,35 +13,35 @@
 
 use std::sync::Arc;
 
-use octos_agent::cost_ledger::{
+use ra_agent::cost_ledger::{
     CostAccountant, CostBudgetPolicy, CostLedger, PersistentCostLedger,
 };
-use octos_agent::file_state_cache::FileStateCache;
-use octos_agent::task_supervisor::TaskSupervisor;
-use octos_pipeline::host_context::PipelineHostContext;
-use octos_pipeline::{CodergenHandler, HandlerRegistry};
+use ra_agent::file_state_cache::FileStateCache;
+use ra_agent::task_supervisor::TaskSupervisor;
+use ra_pipeline::host_context::PipelineHostContext;
+use ra_pipeline::{CodergenHandler, HandlerRegistry};
 
-async fn temp_episode_store() -> Arc<octos_memory::EpisodeStore> {
+async fn temp_episode_store() -> Arc<ra_memory::EpisodeStore> {
     let dir = tempfile::tempdir().unwrap();
-    Arc::new(octos_memory::EpisodeStore::open(dir.path()).await.unwrap())
+    Arc::new(ra_memory::EpisodeStore::open(dir.path()).await.unwrap())
 }
 
 #[allow(dead_code)]
 struct MockProvider;
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for MockProvider {
+impl ra_llm::LlmProvider for MockProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
-        Ok(octos_llm::ChatResponse {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
+        Ok(ra_llm::ChatResponse {
             content: Some("ok".into()),
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage::default(),
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage::default(),
             reasoning_content: None,
             provider_index: None,
         })
@@ -91,7 +91,7 @@ async fn host_context_with_cache_and_supervisor() -> (
 async fn pipeline_worker_handler_carries_file_state_cache_from_host() {
     let (host, _cache, _sup, _acct, _ledger_dir) = host_context_with_cache_and_supervisor().await;
     let codergen = CodergenHandler::new(
-        Arc::new(MockProvider) as Arc<dyn octos_llm::LlmProvider>,
+        Arc::new(MockProvider) as Arc<dyn ra_llm::LlmProvider>,
         temp_episode_store().await,
         std::env::temp_dir(),
         Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -195,7 +195,7 @@ async fn empty_pipeline_host_context_does_not_inject_anything() {
     let host = PipelineHostContext::default();
     assert!(host.is_empty());
     let codergen = CodergenHandler::new(
-        Arc::new(MockProvider) as Arc<dyn octos_llm::LlmProvider>,
+        Arc::new(MockProvider) as Arc<dyn ra_llm::LlmProvider>,
         temp_episode_store().await,
         std::env::temp_dir(),
         Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -210,7 +210,7 @@ async fn empty_pipeline_host_context_does_not_inject_anything() {
 async fn handler_registry_default_with_codergen_carrying_host_context() {
     let (host, _, _, _, _ledger_dir) = host_context_with_cache_and_supervisor().await;
     let codergen = CodergenHandler::new(
-        Arc::new(MockProvider) as Arc<dyn octos_llm::LlmProvider>,
+        Arc::new(MockProvider) as Arc<dyn ra_llm::LlmProvider>,
         temp_episode_store().await,
         std::env::temp_dir(),
         Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -218,12 +218,12 @@ async fn handler_registry_default_with_codergen_carrying_host_context() {
     .with_host_context(host);
     let mut registry = HandlerRegistry::new();
     registry.register(
-        octos_pipeline::HandlerKind::Codergen,
-        Arc::new(codergen) as Arc<dyn octos_pipeline::Handler>,
+        ra_pipeline::HandlerKind::Codergen,
+        Arc::new(codergen) as Arc<dyn ra_pipeline::Handler>,
     );
     assert!(
         registry
-            .get(&octos_pipeline::HandlerKind::Codergen)
+            .get(&ra_pipeline::HandlerKind::Codergen)
             .is_some(),
         "Codergen handler should resolve out of the registry"
     );
@@ -249,7 +249,7 @@ async fn handler_registry_default_with_codergen_carrying_host_context() {
 /// exercise.
 #[tokio::test]
 async fn pipeline_worker_agent_inherits_session_scope() {
-    use octos_core::SessionScope;
+    use ra_core::SessionScope;
 
     let session_root = tempfile::tempdir().expect("scope root");
     let scope = Arc::new(
@@ -268,7 +268,7 @@ async fn pipeline_worker_agent_inherits_session_scope() {
         ..Default::default()
     };
     let codergen = CodergenHandler::new(
-        Arc::new(MockProvider) as Arc<dyn octos_llm::LlmProvider>,
+        Arc::new(MockProvider) as Arc<dyn ra_llm::LlmProvider>,
         temp_episode_store().await,
         std::env::temp_dir(),
         Arc::new(std::sync::atomic::AtomicBool::new(false)),

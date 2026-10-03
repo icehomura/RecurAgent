@@ -13,7 +13,7 @@
 //!     every gate-outgoing edge needs an explicit `condition=` so routing
 //!     does not fall through to the executor's label-substring fallback.
 
-use octos_pipeline::{DeadlineAction, HandlerKind, condition, parse_dot};
+use ra_pipeline::{DeadlineAction, HandlerKind, condition, parse_dot};
 
 const DOT_PATH: &str = "../../examples/dora-bridge-config/inspection_mission.dot";
 

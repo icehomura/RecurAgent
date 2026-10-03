@@ -1,6 +1,6 @@
 //! Pre-dispatch policy gate shared by every MCP-agent dispatch site —
 //! [`crate::tools::SpawnTool`]'s `agent_mcp` branch (#714) and the
-//! [`octos_swarm::Swarm`] dispatcher (#710 / #713).
+//! [`ra_swarm::Swarm`] dispatcher (#710 / #713).
 //!
 //! Pre-#714, [`crate::tools::SpawnTool`] dispatched to its configured
 //! MCP backend via [`crate::tools::mcp_agent::dispatch_with_metrics`]
@@ -23,7 +23,7 @@
 //!
 //! The gate is **opt-in**: callers wire it via
 //! [`crate::tools::SpawnTool::with_dispatch_policy`] or
-//! [`octos_swarm::SwarmBuilder::with_dispatch_policy`]. Without a
+//! [`ra_swarm::SwarmBuilder::with_dispatch_policy`]. Without a
 //! configured policy the dispatcher's behaviour is unchanged so
 //! existing M7.1 callers and tests do not regress.
 //!

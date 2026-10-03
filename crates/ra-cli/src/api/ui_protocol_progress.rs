@@ -4,14 +4,14 @@
 //! protocol mapping can be tested before the live transport adopts it.
 
 use chrono::{DateTime, Utc};
-use octos_core::ui_protocol::{
+use ra_core::ui_protocol::{
     ApprovalId, ApprovalRequestedEvent, MessageDeltaEvent, PlanUpdatedEvent, ReasoningDeltaEvent,
     TaskRuntimeState as UiTaskRuntimeState, TaskUpdatedEvent, ToolCompletedEvent,
     ToolProgressEvent, ToolStartedEvent, TurnId, UiFileMutationNotice, UiNotification,
     UiPlanRecord, UiProgressEvent, UiProgressMetadata, UiRetryBackoff, UiTokenCostUpdate,
     WarningEvent, file_mutation_operations, progress_kinds,
 };
-use octos_core::{SessionKey, TaskId};
+use ra_core::{SessionKey, TaskId};
 use serde_json::{Value, json};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -454,9 +454,9 @@ fn map_tool_end(context: &ProgressMappingContext, event: &Value) -> UiProgressMa
             // Raw progress JSON can come from arbitrary producers (binary
             // plugins); bound before this lands in the durable ledger.
             output_preview: string_field(event, &["output_preview"]).map(|preview| {
-                octos_core::truncated_utf8(
+                ra_core::truncated_utf8(
                     &preview,
-                    octos_core::ui_protocol::ENVELOPE_TOOL_OUTPUT_PREVIEW_MAX,
+                    ra_core::ui_protocol::ENVELOPE_TOOL_OUTPUT_PREVIEW_MAX,
                     "…",
                 )
             }),
@@ -646,7 +646,7 @@ fn ui_task_runtime_state(state: &str) -> Option<UiTaskRuntimeState> {
     }
 }
 
-pub(crate) fn background_task_to_progress_json(task: &octos_agent::BackgroundTask) -> Value {
+pub(crate) fn background_task_to_progress_json(task: &ra_agent::BackgroundTask) -> Value {
     // Carry `tool_call_id` on every `task_updated` snapshot so the
     // mapper below threads it onto `TaskUpdatedEvent`. The client uses
     // the wire-side mapping instead of racing a `task/updated` watcher
@@ -702,7 +702,7 @@ pub(crate) fn background_task_to_progress_json(task: &octos_agent::BackgroundTas
 /// A reconnecting TUI starts with an empty `session.tasks` and only applies
 /// incremental `task/updated` deltas, so without replaying the current task
 /// list on `session/open` the existing tasks are invisible until their next
-/// live transition. This routes the raw [`octos_agent::BackgroundTask`]
+/// live transition. This routes the raw [`ra_agent::BackgroundTask`]
 /// through the SAME mapping live updates use
 /// ([`background_task_to_progress_json`] -> [`map_progress_json`]), so the
 /// replayed wire shape is byte-identical to a live `task/updated`.
@@ -716,7 +716,7 @@ pub(crate) fn background_task_to_progress_json(task: &octos_agent::BackgroundTas
 /// [`map_progress_json`] turns into a `warning` rather than a notification).
 pub(crate) fn replay_task_updated_notification(
     session_id: &SessionKey,
-    task: &octos_agent::BackgroundTask,
+    task: &ra_agent::BackgroundTask,
 ) -> Option<UiNotification> {
     let event = background_task_to_progress_json(task);
     // The context turn is never surfaced: map_task_updated's fallback stamps
@@ -734,7 +734,7 @@ pub(crate) fn replay_task_updated_notification(
     })
 }
 
-fn stable_task_runtime_detail(task: &octos_agent::BackgroundTask) -> Option<String> {
+fn stable_task_runtime_detail(task: &ra_agent::BackgroundTask) -> Option<String> {
     if let Some(error) = task.error.as_deref() {
         return Some(error.to_string());
     }
@@ -759,7 +759,7 @@ fn stable_task_runtime_detail(task: &octos_agent::BackgroundTask) -> Option<Stri
 mod tests {
     use super::*;
     use chrono::Utc;
-    use octos_core::ui_protocol::{TaskRuntimeState as UiTaskRuntimeState, TurnId, UiNotification};
+    use ra_core::ui_protocol::{TaskRuntimeState as UiTaskRuntimeState, TurnId, UiNotification};
     use uuid::Uuid;
 
     fn context() -> ProgressMappingContext {
@@ -807,7 +807,7 @@ mod tests {
         assert_eq!(event.plan.items.len(), 2);
         assert_eq!(
             event.plan.items[1].status,
-            octos_core::ui_protocol::PlanItemStatus::InProgress
+            ra_core::ui_protocol::PlanItemStatus::InProgress
         );
     }
 
@@ -902,7 +902,7 @@ mod tests {
         let preview = completed.output_preview.as_deref().expect("preview");
         assert!(
             preview.chars().count()
-                <= octos_core::ui_protocol::ENVELOPE_TOOL_OUTPUT_PREVIEW_MAX + 1,
+                <= ra_core::ui_protocol::ENVELOPE_TOOL_OUTPUT_PREVIEW_MAX + 1,
             "mapper must bound raw-JSON previews, got {} chars",
             preview.chars().count()
         );
@@ -1326,7 +1326,7 @@ mod tests {
         // decodes back unchanged.
         let value = serde_json::to_value(updated).expect("serialize");
         assert_eq!(value.get("turn_id"), Some(&json!(explicit.to_string())));
-        let parsed: octos_core::ui_protocol::TaskUpdatedEvent =
+        let parsed: ra_core::ui_protocol::TaskUpdatedEvent =
             serde_json::from_value(value).expect("deserialize");
         assert_eq!(parsed.turn_id, Some(TurnId(explicit)));
 
@@ -1493,7 +1493,7 @@ mod tests {
 
     #[test]
     fn background_task_progress_json_uses_stable_detail() {
-        let task = octos_agent::BackgroundTask {
+        let task = ra_agent::BackgroundTask {
             id: "01900000-0000-7000-8000-000000000003".into(),
             tool_name: "search".into(),
             tool_call_id: "call-1".into(),
@@ -1504,8 +1504,8 @@ mod tests {
             child_joined_at: None,
             child_failure_action: None,
             task_ledger_path: None,
-            status: octos_agent::TaskStatus::Running,
-            runtime_state: octos_agent::TaskRuntimeState::DeliveringOutputs,
+            status: ra_agent::TaskStatus::Running,
+            runtime_state: ra_agent::TaskRuntimeState::DeliveringOutputs,
             runtime_detail: Some(
                 json!({
                     "workflow_kind": "research",
@@ -1550,7 +1550,7 @@ mod tests {
     #[test]
     fn replay_task_updated_notification_clears_turn_id_and_preserves_shape() {
         let session_id = SessionKey("local:demo".into());
-        let task = octos_agent::BackgroundTask {
+        let task = ra_agent::BackgroundTask {
             id: "01900000-0000-7000-8000-000000000099".into(),
             tool_name: "run_pipeline".into(),
             tool_call_id: "call-replay".into(),
@@ -1561,8 +1561,8 @@ mod tests {
             child_joined_at: None,
             child_failure_action: None,
             task_ledger_path: None,
-            status: octos_agent::TaskStatus::Running,
-            runtime_state: octos_agent::TaskRuntimeState::ExecutingTool,
+            status: ra_agent::TaskStatus::Running,
+            runtime_state: ra_agent::TaskRuntimeState::ExecutingTool,
             runtime_detail: None,
             started_at: Utc::now(),
             updated_at: Utc::now(),
@@ -1616,12 +1616,12 @@ mod tests {
     #[test]
     fn replay_task_updated_carries_started_at_and_relaunch_lineage() {
         let session_id = SessionKey("local:demo".into());
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         let original_id = supervisor.register("run_pipeline", "call-chain", Some("local:demo"));
         supervisor.mark_running(&original_id);
         supervisor.mark_failed(&original_id, "node 'design' failed".to_string());
         let successor_id = supervisor
-            .relaunch(&original_id, octos_agent::RelaunchOpts::default())
+            .relaunch(&original_id, ra_agent::RelaunchOpts::default())
             .expect("relaunch of a failed task succeeds");
         let successor = supervisor
             .get_task(&successor_id)
@@ -1659,7 +1659,7 @@ mod tests {
     /// absent (no `null` leakage that would clobber a prior value).
     #[test]
     fn background_task_progress_json_carries_m13b_projection_fields() {
-        let task = octos_agent::BackgroundTask {
+        let task = ra_agent::BackgroundTask {
             id: "01900000-0000-7000-8000-000000000004".into(),
             tool_name: "review".into(),
             tool_call_id: "call-r".into(),
@@ -1670,8 +1670,8 @@ mod tests {
             child_joined_at: None,
             child_failure_action: None,
             task_ledger_path: None,
-            status: octos_agent::TaskStatus::Running,
-            runtime_state: octos_agent::TaskRuntimeState::ExecutingTool,
+            status: ra_agent::TaskStatus::Running,
+            runtime_state: ra_agent::TaskRuntimeState::ExecutingTool,
             runtime_detail: None,
             started_at: Utc::now(),
             updated_at: Utc::now(),
@@ -1706,7 +1706,7 @@ mod tests {
         // Now exercise the absent-field path — unset fields must NOT
         // appear (no `null`) so a stale subscriber doesn't observe a
         // spurious "reset" of fields it had already cached.
-        let bare = octos_agent::BackgroundTask {
+        let bare = ra_agent::BackgroundTask {
             id: "01900000-0000-7000-8000-000000000005".into(),
             tool_name: "search".into(),
             tool_call_id: "call-s".into(),
@@ -1717,8 +1717,8 @@ mod tests {
             child_joined_at: None,
             child_failure_action: None,
             task_ledger_path: None,
-            status: octos_agent::TaskStatus::Running,
-            runtime_state: octos_agent::TaskRuntimeState::ExecutingTool,
+            status: ra_agent::TaskStatus::Running,
+            runtime_state: ra_agent::TaskRuntimeState::ExecutingTool,
             runtime_detail: None,
             started_at: Utc::now(),
             updated_at: Utc::now(),

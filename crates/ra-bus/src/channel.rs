@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_core::{InboundMessage, OutboundMessage};
+use ra_core::{InboundMessage, OutboundMessage};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
@@ -604,7 +604,7 @@ mod tests {
             media: vec![],
             metadata: serde_json::json!({}),
             message_id: None,
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         })
         .await
         .unwrap();

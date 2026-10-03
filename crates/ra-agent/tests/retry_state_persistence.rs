@@ -13,12 +13,12 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use octos_agent::{Agent, LoopRetryState};
-use octos_core::{AgentId, Message};
-use octos_llm::{
+use ra_agent::{Agent, LoopRetryState};
+use ra_core::{AgentId, Message};
+use ra_llm::{
     ChatConfig, ChatResponse, LlmError, LlmErrorKind, LlmProvider, StopReason, TokenUsage, ToolSpec,
 };
-use octos_memory::EpisodeStore;
+use ra_memory::EpisodeStore;
 
 struct InertProvider;
 
@@ -61,7 +61,7 @@ async fn build_agent_with_persistent_state(state: Arc<Mutex<LoopRetryState>>) ->
             .expect("open episode store"),
     );
     let llm: Arc<dyn LlmProvider> = Arc::new(InertProvider);
-    let tools = octos_agent::ToolRegistry::new();
+    let tools = ra_agent::ToolRegistry::new();
     Agent::new(AgentId::new("test-retry-persistence"), llm, tools, memory)
         .with_persistent_retry_state(state)
 }
@@ -89,7 +89,7 @@ async fn should_persist_retry_state_across_dispatch_calls() {
     // Turn 1: three rate-limit observations.
     {
         let mut guard = state.lock().unwrap();
-        let rate_error = octos_agent::HarnessError::RateLimited {
+        let rate_error = ra_agent::HarnessError::RateLimited {
             retry_after_secs: Some(1),
             message: "turn1".into(),
         };
@@ -102,7 +102,7 @@ async fn should_persist_retry_state_across_dispatch_calls() {
     // Turn 2: three more observations. The counter must keep climbing.
     {
         let mut guard = state.lock().unwrap();
-        let rate_error = octos_agent::HarnessError::RateLimited {
+        let rate_error = ra_agent::HarnessError::RateLimited {
             retry_after_secs: Some(1),
             message: "turn2".into(),
         };
@@ -125,11 +125,11 @@ async fn should_round_trip_retry_state_through_serde() {
     let state = Arc::new(Mutex::new(LoopRetryState::new()));
     {
         let mut guard = state.lock().unwrap();
-        let rate_error = octos_agent::HarnessError::RateLimited {
+        let rate_error = ra_agent::HarnessError::RateLimited {
             retry_after_secs: Some(2),
             message: "load test".into(),
         };
-        let ctx_error = octos_agent::HarnessError::ContextOverflow {
+        let ctx_error = ra_agent::HarnessError::ContextOverflow {
             limit: Some(200_000),
             used: Some(210_000),
             message: "context".into(),
@@ -172,7 +172,7 @@ async fn should_reset_to_default_when_no_handle_attached() {
             .expect("open episode store"),
     );
     let llm: Arc<dyn LlmProvider> = Arc::new(InertProvider);
-    let tools = octos_agent::ToolRegistry::new();
+    let tools = ra_agent::ToolRegistry::new();
     let agent = Agent::new(AgentId::new("test-no-persistence"), llm, tools, memory);
     assert!(
         agent.persistent_retry_state().is_none(),
@@ -250,7 +250,7 @@ async fn should_merge_concurrent_agents_increments_through_real_turns() {
                 .await
                 .expect("open episode store"),
         );
-        let tools = octos_agent::ToolRegistry::new();
+        let tools = ra_agent::ToolRegistry::new();
         Agent::new(
             AgentId::new("test-retry-concurrent"),
             provider.clone(),

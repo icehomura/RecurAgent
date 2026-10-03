@@ -24,8 +24,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::Utc;
-use octos_core::Message;
-use octos_llm::{ChatConfig, LlmProvider};
+use ra_core::Message;
+use ra_llm::{ChatConfig, LlmProvider};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
@@ -557,7 +557,7 @@ async fn fetch_summary(
         // watcher dedupes unchanged-snapshot ticks BEFORE calling (see
         // [`LastTickSummary`]), so an identical prompt is never re-sent and
         // a cache write would be pure 1.25x premium.
-        cache_retention: octos_llm::CacheRetention::None,
+        cache_retention: ra_llm::CacheRetention::None,
         prompt_cache_context: None,
         media_scope_root: None,
     };
@@ -577,7 +577,7 @@ async fn fetch_summary(
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use octos_llm::{ChatResponse, ChatStream, StopReason, TokenUsage, ToolSpec};
+    use ra_llm::{ChatResponse, ChatStream, StopReason, TokenUsage, ToolSpec};
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::time::Instant;
 
@@ -586,7 +586,7 @@ mod tests {
         calls: Arc<AtomicU32>,
         /// Cache-retention preference of the last request, so tests can pin
         /// the one-shot digest's opt-out at the call site.
-        seen_retention: Arc<std::sync::Mutex<Option<octos_llm::CacheRetention>>>,
+        seen_retention: Arc<std::sync::Mutex<Option<ra_llm::CacheRetention>>>,
     }
 
     impl MockProvider {
@@ -752,7 +752,7 @@ mod tests {
 
         assert_eq!(
             *seen.lock().unwrap(),
-            Some(octos_llm::CacheRetention::None),
+            Some(ra_llm::CacheRetention::None),
             "one-shot sub-agent digests must not request cache writes"
         );
     }

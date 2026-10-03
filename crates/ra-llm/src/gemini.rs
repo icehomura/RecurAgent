@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
 use futures::StreamExt;
-use octos_core::Message;
+use ra_core::Message;
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -630,7 +630,7 @@ fn build_gemini_contents_with_signature_fallback(
     // because Google warns that it can reduce model performance.
     let current_turn_start = messages
         .iter()
-        .rposition(|message| message.role == octos_core::MessageRole::User);
+        .rposition(|message| message.role == ra_core::MessageRole::User);
 
     // Map tool_call_id → function name so tool results can reference the right name.
     let mut call_id_to_name: std::collections::HashMap<String, String> =
@@ -638,7 +638,7 @@ fn build_gemini_contents_with_signature_fallback(
 
     for (message_index, msg) in messages.iter().enumerate() {
         match msg.role {
-            octos_core::MessageRole::System => match &mut system_instruction {
+            ra_core::MessageRole::System => match &mut system_instruction {
                 Some(existing) => {
                     existing.push_str("\n\n");
                     existing.push_str(&msg.content);
@@ -647,11 +647,11 @@ fn build_gemini_contents_with_signature_fallback(
                     system_instruction = Some(msg.content.clone());
                 }
             },
-            octos_core::MessageRole::User => {
+            ra_core::MessageRole::User => {
                 let parts = build_user_parts(msg, scope_root);
                 push_or_merge(&mut contents, "user", parts);
             }
-            octos_core::MessageRole::Assistant => {
+            ra_core::MessageRole::Assistant => {
                 let mut parts = Vec::new();
                 // Include text content if non-empty.
                 if !msg.content.is_empty() {
@@ -699,7 +699,7 @@ fn build_gemini_contents_with_signature_fallback(
                 }
                 push_or_merge(&mut contents, "model", parts);
             }
-            octos_core::MessageRole::Tool => {
+            ra_core::MessageRole::Tool => {
                 // Resolve function name from the matching tool call.
                 let name = msg
                     .tool_call_id
@@ -1113,7 +1113,7 @@ fn gemini_response_to_chat_response(
             } => {
                 let metadata =
                     thought_signature.map(|sig| serde_json::json!({ "thought_signature": sig }));
-                tool_calls.push(octos_core::ToolCall {
+                tool_calls.push(ra_core::ToolCall {
                     id: next_gemini_tool_call_id(),
                     name: function_call.name,
                     arguments: function_call.args,
@@ -1275,7 +1275,7 @@ fn map_gemini_sse(state: &mut GeminiStreamState, event: &crate::sse::SseEvent) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::{Message, MessageRole, ToolCall};
+    use ra_core::{Message, MessageRole, ToolCall};
 
     fn msg(role: MessageRole, content: &str) -> Message {
         Message {
@@ -1886,7 +1886,7 @@ mod tests {
             timestamp: chrono::Utc::now(),
         };
         let mut assistant = mk(MessageRole::Assistant, "");
-        assistant.tool_calls = Some(vec![octos_core::ToolCall {
+        assistant.tool_calls = Some(vec![ra_core::ToolCall {
             id: "call_1".into(),
             name: "view_image".into(),
             arguments: serde_json::json!({"path": "grab.png"}),
@@ -2406,7 +2406,7 @@ mod tests {
 
 #[cfg(test)]
 mod lane_attributed_operational_errors {
-    use octos_core::Message;
+    use ra_core::Message;
     use wiremock::matchers::method;
     use wiremock::{Mock, MockServer, ResponseTemplate};
 

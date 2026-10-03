@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use chrono::{TimeZone, Utc};
 use eyre::Result;
-use octos_agent::{FileMailbox, InProcessMailbox, MailboxBackend, MailboxEnvelope, MailboxMessage};
+use ra_agent::{FileMailbox, InProcessMailbox, MailboxBackend, MailboxEnvelope, MailboxMessage};
 
 #[tokio::test]
 async fn in_process_mailbox_sends_idle_and_acks() -> Result<()> {

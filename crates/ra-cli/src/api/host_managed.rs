@@ -37,7 +37,7 @@ use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use octos_core::{MAIN_PROFILE_ID, SessionKey};
+use ra_core::{MAIN_PROFILE_ID, SessionKey};
 
 use super::AppState;
 use super::pairing::PairingState;
@@ -81,8 +81,8 @@ pub const EXTERNAL_PARAMETER_DENIED: &str = "external_parameter_denied";
 pub const EXTERNAL_TURN_DENIED: &str = "external_turn_denied";
 
 /// The refusal for an external answer or turn control on a host turn.
-pub fn external_turn_denied(what: &str) -> octos_core::ui_protocol::RpcError {
-    octos_core::ui_protocol::RpcError::permission_denied(format!(
+pub fn external_turn_denied(what: &str) -> ra_core::ui_protocol::RpcError {
+    ra_core::ui_protocol::RpcError::permission_denied(format!(
         "an external client may answer or steer only its own turns ({what})"
     ))
     .with_data(serde_json::json!({ "kind": EXTERNAL_TURN_DENIED }))
@@ -94,8 +94,8 @@ pub const EXTERNAL_APPROVAL_OWNER_ONLY: &str = "external_approval_owner_only";
 
 /// The refusal for an answer to an external client's approval from any other
 /// connection.
-pub fn external_approval_owner_only() -> octos_core::ui_protocol::RpcError {
-    octos_core::ui_protocol::RpcError::permission_denied(
+pub fn external_approval_owner_only() -> ra_core::ui_protocol::RpcError {
+    ra_core::ui_protocol::RpcError::permission_denied(
         "this approval was raised by an external client's turn; only that client answers it",
     )
     .with_data(serde_json::json!({ "kind": EXTERNAL_APPROVAL_OWNER_ONLY }))
@@ -107,8 +107,8 @@ pub const EXTERNAL_QUESTION_OWNER_ONLY: &str = "external_question_owner_only";
 
 /// The refusal for an answer to an external client's question from any other
 /// connection.
-pub fn external_question_owner_only() -> octos_core::ui_protocol::RpcError {
-    octos_core::ui_protocol::RpcError::permission_denied(
+pub fn external_question_owner_only() -> ra_core::ui_protocol::RpcError {
+    ra_core::ui_protocol::RpcError::permission_denied(
         "this question was asked by an external client's turn; only that client answers it",
     )
     .with_data(serde_json::json!({ "kind": EXTERNAL_QUESTION_OWNER_ONLY }))
@@ -316,8 +316,8 @@ pub fn external_gate(
     method: &str,
     params: &serde_json::Value,
     opened_sessions: &std::collections::HashSet<String>,
-) -> Result<(), octos_core::ui_protocol::RpcError> {
-    use octos_core::ui_protocol::RpcError;
+) -> Result<(), ra_core::ui_protocol::RpcError> {
+    use ra_core::ui_protocol::RpcError;
     if !EXTERNAL_ALLOWED_METHODS.contains(&method) {
         return Err(RpcError::permission_denied(format!(
             "{method} is not available to external clients of a host-managed server"
@@ -400,10 +400,10 @@ pub fn external_turn_tool_allowed(name: &str) -> bool {
 }
 
 /// Confine an external turn's finished registry: only compiled-in tools
-/// ([`octos_agent::ToolOrigin::Builtin`]) named in [`EXTERNAL_TURN_TOOLS`]
+/// ([`ra_agent::ToolOrigin::Builtin`]) named in [`EXTERNAL_TURN_TOOLS`]
 /// survive. The names alone would not do: a plugin or MCP server can offer a
 /// tool under an allowlisted name.
-pub fn confine_external_turn_tools(registry: &mut octos_agent::ToolRegistry) {
+pub fn confine_external_turn_tools(registry: &mut ra_agent::ToolRegistry) {
     registry.retain_builtin(external_turn_tool_allowed);
 }
 
@@ -563,8 +563,8 @@ pub fn is_peer_session(session_id: &SessionKey) -> bool {
 }
 
 /// The refusal an external answer to a host-owned peer gets.
-pub fn peer_answer_denied(what: &str) -> octos_core::ui_protocol::RpcError {
-    octos_core::ui_protocol::RpcError::permission_denied(format!(
+pub fn peer_answer_denied(what: &str) -> ra_core::ui_protocol::RpcError {
+    ra_core::ui_protocol::RpcError::permission_denied(format!(
         "an external client cannot answer a host-owned app peer's {what}; answer it in the app"
     ))
     .with_data(serde_json::json!({ "kind": HOST_OWNED_PEER_ANSWER_DENIED }))

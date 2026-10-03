@@ -382,7 +382,7 @@ impl BrowserTool {
             "get_text" => match session.page.evaluate("document.body.innerText").await {
                 Ok(result) => {
                     let mut text = result.into_value::<String>().unwrap_or_default();
-                    octos_core::truncate_utf8(&mut text, MAX_OUTPUT_CHARS, "\n\n... (truncated)");
+                    ra_core::truncate_utf8(&mut text, MAX_OUTPUT_CHARS, "\n\n... (truncated)");
                     Ok(ToolResult {
                         output: text,
                         success: true,
@@ -397,7 +397,7 @@ impl BrowserTool {
             },
             "get_html" => match session.page.content().await {
                 Ok(mut html) => {
-                    octos_core::truncate_utf8(&mut html, MAX_OUTPUT_CHARS, "\n\n... (truncated)");
+                    ra_core::truncate_utf8(&mut html, MAX_OUTPUT_CHARS, "\n\n... (truncated)");
                     Ok(ToolResult {
                         output: html,
                         success: true,
@@ -539,7 +539,7 @@ impl BrowserTool {
                             Some(v) => v.to_string(),
                             None => "undefined".to_string(),
                         };
-                        octos_core::truncate_utf8(
+                        ra_core::truncate_utf8(
                             &mut output,
                             MAX_OUTPUT_CHARS,
                             "\n\n... (truncated)",
@@ -587,7 +587,7 @@ impl BrowserTool {
                         if count > 50 {
                             output.push_str(&format!("\n... and {} more", count - 50));
                         }
-                        octos_core::truncate_utf8(
+                        ra_core::truncate_utf8(
                             &mut output,
                             MAX_OUTPUT_CHARS,
                             "\n\n... (truncated)",
@@ -637,7 +637,7 @@ impl BrowserTool {
                             }
                             _ => "No links found".to_string(),
                         };
-                        octos_core::truncate_utf8(
+                        ra_core::truncate_utf8(
                             &mut output,
                             MAX_OUTPUT_CHARS,
                             "\n\n... (truncated)",

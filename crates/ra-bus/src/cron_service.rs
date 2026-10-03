@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use chrono::Utc;
 use eyre::{Result, WrapErr};
-use octos_core::InboundMessage;
+use ra_core::InboundMessage;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tracing::{debug, info, warn};
@@ -662,7 +662,7 @@ impl CronService {
                 "deliver_to_chat_id": job.payload.chat_id,
             }),
             message_id: None,
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         };
 
         // The delivery unit is detached (not abort-targeted), so a
@@ -1595,7 +1595,7 @@ mod tests {
             media: vec![],
             metadata: serde_json::Value::Null,
             message_id: None,
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         })
         .expect("pre-fill send must succeed on an empty capacity-1 channel");
 

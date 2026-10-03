@@ -17,7 +17,7 @@
 //!
 //! The helper is conservative: it only rewrites **display strings**, never
 //! filesystem paths used for IO. Callers that touch the filesystem must
-//! continue to canonicalise via `octos_agent::tools::resolve_path`.
+//! continue to canonicalise via `ra_agent::tools::resolve_path`.
 
 /// Sanitise a path-shaped string for embedding in a human-readable display
 /// field (`title`, `body`, `DiffPreview.title`, `DiffPreviewFile.path`,

@@ -33,7 +33,7 @@ use axum::extract::{ConnectInfo, Json, State};
 use axum::http::{HeaderMap, StatusCode};
 use serde::Serialize;
 
-use octos_core::ui_protocol::{
+use ra_core::ui_protocol::{
     ProfileLocalCreateParams, ProfileLocalCreateResult, RpcError, rpc_error_codes,
 };
 
@@ -177,7 +177,7 @@ fn derive_solo_credentials(name: &str) -> (String, String) {
     if username.is_empty() {
         username = "user".to_owned();
     }
-    if octos_core::is_reserved_channel_name(&username) {
+    if ra_core::is_reserved_channel_name(&username) {
         username = format!("{username}-user");
     }
     let email = format!("{username}@solo.local");

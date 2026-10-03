@@ -1,11 +1,11 @@
 //! Cost ledger adapter layer for M7.5.
 //!
-//! M7.4 provides the durable [`octos_agent::cost_ledger::PersistentCostLedger`]
+//! M7.4 provides the durable [`ra_agent::cost_ledger::PersistentCostLedger`]
 //! backing the full `CostAttributionEvent` schema (see
 //! `crates/ra-agent/src/cost_ledger.rs`). The swarm primitive uses a
 //! slimmer in-process adapter trait so we can keep the dispatcher decoupled
 //! from redb and the full attribution event shape. The agent-side
-//! [`octos_agent::CostLedger`] is available as a re-export for callers that
+//! [`ra_agent::CostLedger`] is available as a re-export for callers that
 //! need the full persistent trait; the [`CostLedger`] in this module is the
 //! narrower swarm-facing trait.
 //!
@@ -64,7 +64,7 @@ impl CostLedger for NoopCostLedger {
     async fn attribute(&self, _record: &SwarmCostAttribution) {
         // No-op adapter. Callers that want durable persistence should
         // supply their own adapter that forwards to
-        // `octos_agent::cost_ledger::PersistentCostLedger::record`.
+        // `ra_agent::cost_ledger::PersistentCostLedger::record`.
     }
 }
 

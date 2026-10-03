@@ -10,9 +10,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 
 use chrono::Utc;
-use octos_agent::normalize_tool_call_id;
-use octos_core::{Message, MessageRole, ToolCall};
-use octos_llm::ToolSpec;
+use ra_agent::normalize_tool_call_id;
+use ra_core::{Message, MessageRole, ToolCall};
+use ra_llm::ToolSpec;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -409,14 +409,14 @@ pub(crate) struct PromptFrame {
     pub(crate) messages: Vec<Message>,
     /// Local projection provenance only; never persisted or sent to a provider.
     #[serde(skip)]
-    pub(crate) prior_compaction_summaries: Vec<octos_agent::compaction::PriorCompactionSummary>,
+    pub(crate) prior_compaction_summaries: Vec<ra_agent::compaction::PriorCompactionSummary>,
     pub(crate) report: NormalizationReport,
     pub(crate) context_state: ContextState,
 }
 
 impl PromptFrame {
     pub(crate) fn compact_summary(&self, budget_tokens: u32) -> String {
-        octos_agent::compaction::compact_messages_with_prior_summaries(
+        ra_agent::compaction::compact_messages_with_prior_summaries(
             &self.messages,
             budget_tokens,
             &self.prior_compaction_summaries,
@@ -647,7 +647,7 @@ pub(crate) enum ContextLedgerLoadStatus {
 }
 
 pub(crate) fn context_ledger_path(data_dir: &Path, session_id: &str) -> PathBuf {
-    let encoded = octos_bus::session::encode_path_component(session_id);
+    let encoded = ra_bus::session::encode_path_component(session_id);
     data_dir
         .join("context_ledgers")
         .join(format!("{encoded}.json"))
@@ -707,7 +707,7 @@ fn context_ledger_artifact_path(data_dir: &Path, artifact_ref: &str) -> Result<P
                 // valid on Windows, where `:` is the drive/ADS separator.
                 // Writer and readers both route through this function, so the
                 // on-disk name stays consistent across platforms.
-                path.push(octos_core::safe_filename(&part.to_string_lossy()));
+                path.push(ra_core::safe_filename(&part.to_string_lossy()));
             }
             _ => {
                 return Err(format!(
@@ -3561,7 +3561,7 @@ impl ContextManager {
                     .source_item_ids
                     .iter()
                     .find_map(|id| summary_bodies.get(id))
-                    .map(|body| octos_agent::compaction::PriorCompactionSummary {
+                    .map(|body| ra_agent::compaction::PriorCompactionSummary {
                         message_index,
                         body: (*body).clone(),
                     })
@@ -4988,7 +4988,7 @@ mod tests {
         let mut user = Message::user("hello");
         user.thread_id = Some("thread-a".into());
         let assistant =
-            Message::assistant_with_thread("world", octos_core::ThreadId::new("thread-a"));
+            Message::assistant_with_thread("world", ra_core::ThreadId::new("thread-a"));
         let manager =
             ContextManager::from_session_history("coding:local:test", None, &[user, assistant]);
 
@@ -5111,7 +5111,7 @@ mod tests {
         // Summarize EXACTLY what the appui path feeds compaction: the projected
         // prompt. With the record-time strip, that projection is already clean.
         let before = manager.for_prompt(&PromptBuildPolicy::default());
-        let summary = octos_agent::compaction::compact_messages(&before.messages, 512);
+        let summary = ra_agent::compaction::compact_messages(&before.messages, 512);
         assert!(
             !summary.contains("VISUAL"),
             "compaction summary input/output must be marker-free, got: {summary}"
@@ -7060,7 +7060,7 @@ mod tests {
         manager.record_message(&Message::tool_with_thread(
             "tool result",
             "call_keep",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         ));
 
         let frame = manager.for_prompt(&PromptBuildPolicy {
@@ -7135,12 +7135,12 @@ mod tests {
         manager.record_message(&Message::tool_with_thread(
             "a result",
             "call_a",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         ));
         manager.record_message(&Message::tool_with_thread(
             "b result",
             "call_b",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         ));
 
         let blocks = manager.semantic_blocks();
@@ -7174,7 +7174,7 @@ mod tests {
         manager.record_message(&Message::tool_with_thread(
             "a result",
             "call_a",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         ));
 
         let blocks = manager.semantic_blocks();
@@ -7212,7 +7212,7 @@ mod tests {
         manager.record_message(&Message::tool_with_thread(
             "a result",
             "call_a",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         ));
         let background_ids =
             manager.record_persisted_message(&Message::assistant("background finished"), 4);
@@ -7221,7 +7221,7 @@ mod tests {
         manager.record_message(&Message::tool_with_thread(
             "b result",
             "call_b",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         ));
 
         let blocks = manager.semantic_blocks();
@@ -7286,7 +7286,7 @@ mod tests {
         manager.record_message(&Message::tool_with_thread(
             "a result",
             "call_a",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         ));
         manager.record_child_result_summary(
             "peer-1",
@@ -7348,7 +7348,7 @@ mod tests {
         manager.record_message(&Message::tool_with_thread(
             "a result",
             "call_a",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         ));
         manager.record_child_result_summary(
             "peer-1",
@@ -7370,7 +7370,7 @@ mod tests {
         restored.record_message(&Message::tool_with_thread(
             "b result",
             "call_b",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         ));
         let closed = restored
             .semantic_blocks()
@@ -7389,7 +7389,7 @@ mod tests {
         manager.record_message(&Message::tool_with_thread(
             "a result",
             "call_a",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         ));
         let mut value = serde_json::to_value(manager.snapshot()).expect("serialize snapshot");
         for item in value["items"].as_array_mut().expect("snapshot items") {
@@ -7450,7 +7450,7 @@ mod tests {
         ]);
         manager.record_persisted_message(&assistant, 1);
         manager.record_persisted_message(
-            &Message::tool_with_thread("a result", "call_a", octos_core::ThreadId::new("thread-1")),
+            &Message::tool_with_thread("a result", "call_a", ra_core::ThreadId::new("thread-1")),
             2,
         );
         assert!(!manager.semantic_blocks().last().unwrap().closed);
@@ -7483,7 +7483,7 @@ mod tests {
                 Message::tool_with_thread(
                     "a result",
                     "call_a",
-                    octos_core::ThreadId::new("thread-1"),
+                    ra_core::ThreadId::new("thread-1"),
                 ),
                 Message::user("continue without b"),
             ]
@@ -7818,7 +7818,7 @@ mod tests {
                 1,
                 "generated wrappers must not consume the budget on every generation"
             );
-            assert!(octos_llm::context::estimate_tokens(&summary) <= 512);
+            assert!(ra_llm::context::estimate_tokens(&summary) <= 512);
             let record = manager.compact_context(summary, policy);
             assert_eq!(record.status, ContextCompactionStatus::Installed);
             assert_eq!(record.budget_outcome, ContextCompactionBudgetOutcome::Met);
@@ -7945,12 +7945,12 @@ mod tests {
         manager.record_message(&Message::tool_with_thread(
             "a result",
             "call_a",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         ));
         manager.record_message(&Message::tool_with_thread(
             "b result",
             "call_b",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         ));
         manager.record_message(&Message::user("current request"));
         let policy = CompactContextPolicy {
@@ -7995,7 +7995,7 @@ mod tests {
         manager.record_message(&Message::tool_with_thread(
             raw.clone(),
             "call_sidecar",
-            octos_core::ThreadId::new("thread-1"),
+            ra_core::ThreadId::new("thread-1"),
         ));
         manager.record_message(&Message::user("current request"));
         let policy = CompactContextPolicy {
@@ -8435,7 +8435,7 @@ mod tests {
             Message::tool_with_thread(
                 "a result ".repeat(40),
                 "call_a",
-                octos_core::ThreadId::new("thread-1"),
+                ra_core::ThreadId::new("thread-1"),
             ),
         ];
         let mut manager = ContextManager::from_session_history(session_id, None, &durable);

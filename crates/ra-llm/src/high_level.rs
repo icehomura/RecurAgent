@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use eyre::Result;
-use octos_core::Message;
+use ra_core::Message;
 
 use crate::config::{ChatConfig, ResponseFormat};
 use crate::provider::LlmProvider;

@@ -1,7 +1,7 @@
 //! M7.6 — contract-authoring + swarm dispatch dashboard backend.
 //!
 //! Thin HTTP surface in front of the stable
-//! [`octos_swarm::Swarm::dispatch`] primitive. The dashboard's 4-tab UI
+//! [`ra_swarm::Swarm::dispatch`] primitive. The dashboard's 4-tab UI
 //! (Author / Dispatch / Live / Review) consumes this module's REST
 //! endpoints + the existing `/api/events`-style SSE stream.
 //!
@@ -19,7 +19,7 @@
 //!    SSE subscribers, and surface on the Matrix audit channel only
 //!    when a Matrix puppet subscriber is attached to the broadcaster.
 //! 4. All persisted / event shapes carry `schema_version: u32` pinned
-//!    in [`abi_schema`](octos_agent::abi_schema).
+//!    in [`abi_schema`](ra_agent::abi_schema).
 
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
@@ -28,15 +28,15 @@ use std::sync::{Arc, RwLock};
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use octos_agent::harness_events::write_event_to_sink;
-use octos_agent::tools::mcp_agent::{
+use ra_agent::harness_events::write_event_to_sink;
+use ra_agent::tools::mcp_agent::{
     DispatchOutcome, DispatchRequest, DispatchResponse, McpAgentBackend,
 };
-use octos_agent::{
+use ra_agent::{
     CostLedger, HarnessEvent, HarnessSwarmReviewDecisionEvent, PersistentCostLedger,
     SWARM_REVIEW_DECISION_SCHEMA_VERSION,
 };
-use octos_swarm::{
+use ra_swarm::{
     ContractSpec, NoopCostLedger, SubtaskOutcome, SubtaskStatus, Swarm, SwarmBudget, SwarmContext,
     SwarmEventSink, SwarmOutcomeKind, SwarmResult, SwarmTopology,
 };
@@ -46,7 +46,7 @@ use super::AppState;
 
 /// Upper bound on every operator-supplied identifier carried through the
 /// dispatch API. Mirrors
-/// [`octos_agent::harness_events::MAX_MESSAGE_BYTES`] (2 KiB) so the
+/// [`ra_agent::harness_events::MAX_MESSAGE_BYTES`] (2 KiB) so the
 /// validator rejects a bad field before the event validator further
 /// downstream sees it — making the 400 failure mode uniform with the
 /// sink-write validator. Measured in bytes, not chars.
@@ -164,7 +164,7 @@ pub struct SwarmDispatchRequest {
     /// the prior finalized record (primitive idempotency invariant).
     pub dispatch_id: String,
     /// Operator-chosen contract id for cost / review roll-ups. Matches
-    /// the `contract_id` on [`octos_agent::CostAttributionEvent`].
+    /// the `contract_id` on [`ra_agent::CostAttributionEvent`].
     pub contract_id: String,
     /// The contract list the primitive dispatches.
     pub contracts: Vec<ContractSpec>,
@@ -457,11 +457,11 @@ fn validate_dispatch_request(req: &SwarmDispatchRequest) -> Result<(), String> {
     // Pre-validate contract count so an oversize payload can be rejected
     // with a typed 400 instead of burning memory serializing it into the
     // primitive only to have the budget cap reject later.
-    if req.contracts.len() > octos_swarm::MAX_CONTRACTS_PER_DISPATCH {
+    if req.contracts.len() > ra_swarm::MAX_CONTRACTS_PER_DISPATCH {
         return Err(format!(
             "contracts length {} exceeds bound {}",
             req.contracts.len(),
-            octos_swarm::MAX_CONTRACTS_PER_DISPATCH
+            ra_swarm::MAX_CONTRACTS_PER_DISPATCH
         ));
     }
     if req.contracts.is_empty() {
@@ -493,18 +493,18 @@ fn validate_dispatch_request(req: &SwarmDispatchRequest) -> Result<(), String> {
         }
     }
     if let Some(rounds) = req.budget.max_retry_rounds {
-        if rounds > octos_swarm::MAX_RETRY_ROUNDS {
+        if rounds > ra_swarm::MAX_RETRY_ROUNDS {
             return Err(format!(
                 "max_retry_rounds {rounds} exceeds bound {}",
-                octos_swarm::MAX_RETRY_ROUNDS
+                ra_swarm::MAX_RETRY_ROUNDS
             ));
         }
     }
     if let Some(n) = req.budget.max_contracts {
-        if n > octos_swarm::MAX_CONTRACTS_PER_DISPATCH {
+        if n > ra_swarm::MAX_CONTRACTS_PER_DISPATCH {
             return Err(format!(
                 "max_contracts {n} exceeds bound {}",
-                octos_swarm::MAX_CONTRACTS_PER_DISPATCH
+                ra_swarm::MAX_CONTRACTS_PER_DISPATCH
             ));
         }
     }
@@ -612,7 +612,7 @@ pub async fn dispatch_detail(
         .collect();
 
     Ok(Json(SwarmDispatchDetail {
-        schema_version: octos_swarm::DISPATCH_RECORD_SCHEMA_VERSION,
+        schema_version: ra_swarm::DISPATCH_RECORD_SCHEMA_VERSION,
         dispatch_id: entry.row.dispatch_id.clone(),
         contract_id: entry.row.contract_id.clone(),
         topology: entry.row.topology.clone(),
@@ -892,7 +892,7 @@ impl SwarmEventSink for BroadcasterSwarmEventSink {
 /// through [`BroadcasterSwarmEventSink`] so the dashboard's Live tab +
 /// the M7.8 live gate both see frames on `/api/events/harness`.
 ///
-/// M7 req 7: callers MAY pass a [`octos_swarm::DispatchPolicy`] to wire
+/// M7 req 7: callers MAY pass a [`ra_swarm::DispatchPolicy`] to wire
 /// the swarm-level approval / tool-policy / sandbox / env-allowlist
 /// gates. Pass `None` for the legacy unenforced behaviour (existing
 /// integration tests pre-fix) — production deployments should pass a
@@ -903,7 +903,7 @@ pub async fn build_swarm_state(
     cost_ledger: Arc<PersistentCostLedger>,
     broadcaster: Arc<super::EventBroadcaster>,
     sink_path: Option<String>,
-    dispatch_policy: Option<octos_swarm::DispatchPolicy>,
+    dispatch_policy: Option<ra_swarm::DispatchPolicy>,
 ) -> eyre::Result<SwarmState> {
     let swarm_dir = swarm_dir.into();
     let sink: Arc<dyn SwarmEventSink> =
@@ -1022,7 +1022,7 @@ impl super::EventBroadcaster {
 #[allow(dead_code)]
 pub(crate) fn assert_event_is_review_decision(event: &HarnessEvent, dispatch_id: &str) {
     match &event.payload {
-        octos_agent::HarnessEventPayload::SwarmReviewDecision { data } => {
+        ra_agent::HarnessEventPayload::SwarmReviewDecision { data } => {
             assert_eq!(data.dispatch_id, dispatch_id);
         }
         _ => panic!("expected SwarmReviewDecision variant"),
@@ -1030,10 +1030,10 @@ pub(crate) fn assert_event_is_review_decision(event: &HarnessEvent, dispatch_id:
 }
 
 // Re-export a subset of primitive types so integration tests in the CLI
-// crate don't need to import `octos_swarm` directly.
-pub use octos_swarm::ContractSpec as SwarmContractSpec;
-pub use octos_swarm::MAX_RETRY_ROUNDS as SWARM_MAX_RETRY_ROUNDS;
-pub use octos_swarm::SubtaskStatus as SwarmSubtaskStatus;
+// crate don't need to import `ra_swarm` directly.
+pub use ra_swarm::ContractSpec as SwarmContractSpec;
+pub use ra_swarm::MAX_RETRY_ROUNDS as SWARM_MAX_RETRY_ROUNDS;
+pub use ra_swarm::SubtaskStatus as SwarmSubtaskStatus;
 
 /// Expose the underlying primitive's topology ctor shorthand so the
 /// tests don't need to re-import `NonZeroUsize`.
@@ -1259,7 +1259,7 @@ mod tests {
     /// regression that reverts to an uncapped push.
     #[tokio::test]
     async fn should_evict_oldest_when_dispatches_exceed_cap() {
-        use octos_swarm::{AggregateArtifact, SubtaskOutcome, SwarmOutcomeKind, SwarmResult};
+        use ra_swarm::{AggregateArtifact, SubtaskOutcome, SwarmOutcomeKind, SwarmResult};
         use tempfile::TempDir;
 
         let cap = MAX_IN_MEMORY_DISPATCHES;
@@ -1477,7 +1477,7 @@ mod tests {
     async fn should_reject_forged_reviewer_for_user_variant_caller() {
         use crate::api::router::AuthIdentity;
         use crate::user_store::UserRole;
-        use octos_swarm::{AggregateArtifact, SubtaskOutcome, SwarmOutcomeKind, SwarmResult};
+        use ra_swarm::{AggregateArtifact, SubtaskOutcome, SwarmOutcomeKind, SwarmResult};
         use tempfile::TempDir;
 
         let dir = TempDir::new().unwrap();
@@ -1594,7 +1594,7 @@ mod tests {
     /// produce a durable record.
     #[tokio::test]
     async fn should_persist_review_decision_to_sink_when_configured() {
-        use octos_swarm::{AggregateArtifact, SubtaskOutcome, SwarmOutcomeKind, SwarmResult};
+        use ra_swarm::{AggregateArtifact, SubtaskOutcome, SwarmOutcomeKind, SwarmResult};
         use tempfile::TempDir;
 
         let dir = TempDir::new().unwrap();
@@ -1690,7 +1690,7 @@ mod tests {
         );
         assert_eq!(
             parsed.get("schema").and_then(|v| v.as_str()),
-            Some(octos_agent::HARNESS_EVENT_SCHEMA_V1)
+            Some(ra_agent::HARNESS_EVENT_SCHEMA_V1)
         );
     }
 
@@ -1699,7 +1699,7 @@ mod tests {
     /// nobody accidentally writes to a default path in the future.
     #[tokio::test]
     async fn should_not_persist_review_when_sink_not_configured() {
-        use octos_swarm::{AggregateArtifact, SubtaskOutcome, SwarmOutcomeKind, SwarmResult};
+        use ra_swarm::{AggregateArtifact, SubtaskOutcome, SwarmOutcomeKind, SwarmResult};
         use tempfile::TempDir;
 
         let dir = TempDir::new().unwrap();

@@ -255,7 +255,7 @@ pub(crate) async fn format_file_with_command(
             let trimmed = stderr.trim();
             if !trimmed.is_empty() {
                 detail.push_str(": ");
-                detail.push_str(&octos_core::truncated_utf8(trimmed, 500, "..."));
+                detail.push_str(&ra_core::truncated_utf8(trimmed, 500, "..."));
             }
             FormatOutcome::Failed { formatter, detail }
         }
@@ -301,7 +301,7 @@ pub(crate) async fn note_for_outcome(
             // output, not our guess (same O_NOFOLLOW path as the tools).
             match crate::tools::read_no_follow(path).await {
                 Ok(on_disk) if on_disk != written => {
-                    let echo = octos_core::truncated_utf8(
+                    let echo = ra_core::truncated_utf8(
                         &on_disk,
                         MAX_FORMATTED_ECHO_BYTES,
                         "\n... [formatted content truncated — use read_file for the rest]",

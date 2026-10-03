@@ -30,10 +30,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use octos_agent::{Agent, AgentConfig, ConcurrencyClass, Tool, ToolRegistry, ToolResult};
-use octos_core::{AgentId, Message, ToolCall};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_agent::{Agent, AgentConfig, ConcurrencyClass, Tool, ToolRegistry, ToolResult};
+use ra_core::{AgentId, Message, ToolCall};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 
 /// A human-wait tool: blocks on a "human" (a `Notify` tripped after `delay`)

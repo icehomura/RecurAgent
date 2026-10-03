@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
-use octos_core::OutboundMessage;
+use ra_core::OutboundMessage;
 use serde::Deserialize;
 use tokio::sync::mpsc;
 

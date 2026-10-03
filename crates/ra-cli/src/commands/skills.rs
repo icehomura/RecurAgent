@@ -31,7 +31,7 @@ fn validate_skill_manifest(skill_dir: &Path) -> Result<()> {
     // `PluginManifest::from_file` runs both structural and schema
     // validation, threading through `OCTOS_MANIFEST_VALIDATION` for
     // the strict-rule layer.
-    octos_plugin::PluginManifest::from_file(&manifest_path)
+    ra_plugin::PluginManifest::from_file(&manifest_path)
         .map(|_| ())
         .wrap_err_with(|| {
             format!(
@@ -448,7 +448,7 @@ pub fn remove_skill(skills_dir: &Path, name: &str) -> Result<()> {
     // not block removal). Only runs if the skill has manifest.json with a
     // `hardware_lifecycle.shutdown` section.
     {
-        use octos_agent::plugins::run_shutdown_phase;
+        use ra_agent::plugins::run_shutdown_phase;
 
         match tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -1668,7 +1668,7 @@ fn maybe_install_binary(dir: &Path) -> Result<()> {
     if has_manifest {
         if let Ok(manifest_str) = std::fs::read_to_string(dir.join("manifest.json")) {
             if let Ok(manifest) = serde_json::from_str::<
-                octos_agent::plugins::manifest::PluginManifest,
+                ra_agent::plugins::manifest::PluginManifest,
             >(&manifest_str)
             {
                 if let Some(info) = manifest.binaries.get(&key) {
@@ -1871,8 +1871,8 @@ fn run_activate_lifecycle(skill_dir: &Path, name: &str) -> Result<()> {
     }
 
     use eyre::eyre;
-    use octos_agent::plugins::activate_skill;
-    use octos_agent::tools::ToolRegistry;
+    use ra_agent::plugins::activate_skill;
+    use ra_agent::tools::ToolRegistry;
 
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()

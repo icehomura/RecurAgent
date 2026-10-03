@@ -22,14 +22,14 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use octos_agent::{
+use ra_agent::{
     Agent, AgentConfig, FileStateCache, Tool, ToolRegistry, ToolResult,
     agents::{AgentDefinition, AgentDefinitions},
     tools::ToolContext,
 };
-use octos_core::{AgentId, Message, ToolCall};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_core::{AgentId, Message, ToolCall};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 
 /// Tool that captures the `ToolContext` it was invoked with so the test can
@@ -249,7 +249,7 @@ async fn threads_file_state_cache_into_read_file_after_m8_8_scheduler() {
 
     let cache = Arc::new(FileStateCache::new());
     let mut tools = ToolRegistry::new();
-    tools.register(octos_agent::ReadFileTool::new(workspace.path()));
+    tools.register(ra_agent::ReadFileTool::new(workspace.path()));
     let memory = Arc::new(
         EpisodeStore::open(memory_dir.path().join(".ra"))
             .await
@@ -292,7 +292,7 @@ async fn threads_file_state_cache_into_read_file_after_m8_8_scheduler() {
     let tool_outputs: Vec<&str> = resp
         .messages
         .iter()
-        .filter(|m| matches!(m.role, octos_core::MessageRole::Tool))
+        .filter(|m| matches!(m.role, ra_core::MessageRole::Tool))
         .map(|m| m.content.as_str())
         .collect();
     assert_eq!(
@@ -412,7 +412,7 @@ async fn threads_profile_permissions_into_tool_context_after_m8_fix_8() {
     // proves the wired path: a profile that denies `shell` must produce a
     // ToolContext whose `permissions.is_tool_allowed("shell")` is false at
     // the actual call site.
-    use octos_agent::profile::{PROFILE_SCHEMA_VERSION, ProfileDefinition, ProfileTools};
+    use ra_agent::profile::{PROFILE_SCHEMA_VERSION, ProfileDefinition, ProfileTools};
 
     let dir = TempDir::new().unwrap();
     let (probe, captured) = CtxProbeTool::new("perm_probe");

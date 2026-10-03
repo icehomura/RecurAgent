@@ -7,8 +7,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use octos_bus::{ActiveSessionStore, SessionManager, validate_topic_name};
-use octos_core::{InboundMessage, MAIN_PROFILE_ID, OutboundMessage, SessionKey};
+use ra_bus::{ActiveSessionStore, SessionManager, validate_topic_name};
+use ra_core::{InboundMessage, MAIN_PROFILE_ID, OutboundMessage, SessionKey};
 use tokio::sync::{Mutex, RwLock, mpsc};
 use tracing::{info, warn};
 
@@ -187,7 +187,7 @@ impl GatewayDispatcher {
             let reply = if name == "slides" || name.starts_with("slides ") {
                 if let Some(data_dir) = &self.data_dir {
                     let encoded_base =
-                        octos_bus::session::encode_path_component(session_key.base_key());
+                        ra_bus::session::encode_path_component(session_key.base_key());
                     let workspace_root =
                         data_dir.join("users").join(encoded_base).join("workspace");
                     std::fs::create_dir_all(&workspace_root).ok();
@@ -226,7 +226,7 @@ impl GatewayDispatcher {
                         .clone()
                         .unwrap_or_else(|| MAIN_PROFILE_ID.to_string());
                     let encoded_base =
-                        octos_bus::session::encode_path_component(session_key.base_key());
+                        ra_bus::session::encode_path_component(session_key.base_key());
                     let workspace_root =
                         data_dir.join("users").join(encoded_base).join("workspace");
                     std::fs::create_dir_all(&workspace_root).ok();
@@ -536,7 +536,7 @@ impl GatewayDispatcher {
         reply_channel: &str,
         reply_chat_id: &str,
         base_key_str: &str,
-        channel_mgr: Option<&octos_bus::ChannelManager>,
+        channel_mgr: Option<&ra_bus::ChannelManager>,
     ) -> Option<DispatchResult> {
         let topic = callback_data.strip_prefix("s:")?;
 
@@ -784,7 +784,7 @@ mod tests {
             media: vec![],
             metadata: serde_json::json!({}),
             message_id: None,
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         }
     }
 
@@ -1543,7 +1543,7 @@ mod tests {
         let (disp, _, tmp) = setup_dispatcher(tx);
         let disp = disp.with_data_dir(tmp.path().to_path_buf());
         let session_key = SessionKey::new("telegram", "123");
-        let encoded_base = octos_bus::session::encode_path_component(session_key.base_key());
+        let encoded_base = ra_bus::session::encode_path_component(session_key.base_key());
         let workspace_root = tmp
             .path()
             .join("users")
@@ -1584,7 +1584,7 @@ mod tests {
         let (disp, _, tmp) = setup_dispatcher(tx);
         let disp = disp.with_data_dir(tmp.path().to_path_buf());
         let session_key = SessionKey::new("telegram", "123");
-        let encoded_base = octos_bus::session::encode_path_component(session_key.base_key());
+        let encoded_base = ra_bus::session::encode_path_component(session_key.base_key());
         let workspace_root = tmp
             .path()
             .join("users")

@@ -7,8 +7,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use eyre::{Result, WrapErr};
-use octos_core::SessionKey;
-use octos_core::ui_protocol::*;
+use ra_core::SessionKey;
+use ra_core::ui_protocol::*;
 use serde_json::json;
 use tokio::sync::Mutex;
 
@@ -83,7 +83,7 @@ impl OupSession {
         state: Arc<crate::api::AppState>,
         session_id: SessionKey,
         cwd: &Path,
-        permissions: octos_agent::EffectivePermissions,
+        permissions: ra_agent::EffectivePermissions,
     ) -> Result<Self> {
         Self::open_with_questions(state, session_id, cwd, permissions, true).await
     }
@@ -92,7 +92,7 @@ impl OupSession {
         state: Arc<crate::api::AppState>,
         session_id: SessionKey,
         cwd: &Path,
-        permissions: octos_agent::EffectivePermissions,
+        permissions: ra_agent::EffectivePermissions,
         questions: bool,
     ) -> Result<Self> {
         let client = OupClient::connect(state).await?;
@@ -120,19 +120,19 @@ impl OupSession {
         // Permission selection uses the same solo gate and narrowing checks
         // as every other OUP client. Set it before open can build a runtime.
         let mode = match permissions.permission_profile {
-            octos_agent::PermissionProfile::ReadOnly => "read_only",
-            octos_agent::PermissionProfile::WorkspaceWrite => "workspace_write",
-            octos_agent::PermissionProfile::DangerFullAccess => "danger_full_access",
+            ra_agent::PermissionProfile::ReadOnly => "read_only",
+            ra_agent::PermissionProfile::WorkspaceWrite => "workspace_write",
+            ra_agent::PermissionProfile::DangerFullAccess => "danger_full_access",
         };
         client.request(methods::PERMISSION_PROFILE_SET, json!({
             "session_id": session_id,
             "update": {
                 "mode": mode,
                 "network": match permissions.network {
-                    octos_agent::NetworkPolicy::Allowed => Some("allow"),
-                    octos_agent::NetworkPolicy::Inherit => None,
+                    ra_agent::NetworkPolicy::Allowed => Some("allow"),
+                    ra_agent::NetworkPolicy::Inherit => None,
                 },
-                "approval_policy": if permissions.approval_policy == octos_agent::ApprovalPolicy::Never {
+                "approval_policy": if permissions.approval_policy == ra_agent::ApprovalPolicy::Never {
                     "never"
                 } else { "ask" },
             },
@@ -394,25 +394,25 @@ mod tests {
     use super::*;
 
     struct RecordingModel {
-        inputs: std::sync::Mutex<Vec<Vec<octos_core::Message>>>,
+        inputs: std::sync::Mutex<Vec<Vec<ra_core::Message>>>,
     }
 
     #[async_trait::async_trait]
-    impl octos_llm::LlmProvider for RecordingModel {
+    impl ra_llm::LlmProvider for RecordingModel {
         async fn chat(
             &self,
-            messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> Result<octos_llm::ChatResponse> {
+            messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> Result<ra_llm::ChatResponse> {
             let mut inputs = self.inputs.lock().unwrap();
             inputs.push(messages.to_vec());
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: Some(format!("canonical-answer-{}", inputs.len())),
                 reasoning_content: None,
                 tool_calls: vec![],
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: None,
             })
         }
@@ -427,23 +427,23 @@ mod tests {
     struct Frontend;
 
     struct TerminalModel {
-        stop: octos_llm::StopReason,
+        stop: ra_llm::StopReason,
         reasoning_only: bool,
         recover: bool,
         calls: std::sync::atomic::AtomicUsize,
     }
 
     #[async_trait::async_trait]
-    impl octos_llm::LlmProvider for TerminalModel {
+    impl ra_llm::LlmProvider for TerminalModel {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> Result<octos_llm::ChatResponse> {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> Result<ra_llm::ChatResponse> {
             let attempt = self.calls.fetch_add(1, Ordering::SeqCst);
             let recovered = self.recover && attempt > 0;
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: if self.reasoning_only && !recovered {
                     None
                 } else {
@@ -461,11 +461,11 @@ mod tests {
                     .then(|| "Need to inspect the image.".into()),
                 tool_calls: vec![],
                 stop_reason: if recovered {
-                    octos_llm::StopReason::EndTurn
+                    ra_llm::StopReason::EndTurn
                 } else {
                     self.stop
                 },
-                usage: octos_llm::TokenUsage {
+                usage: ra_llm::TokenUsage {
                     input_tokens: 12,
                     output_tokens: 7,
                     ..Default::default()
@@ -475,11 +475,11 @@ mod tests {
         }
         async fn chat_stream(
             &self,
-            messages: &[octos_core::Message],
-            tools: &[octos_llm::ToolSpec],
-            config: &octos_llm::ChatConfig,
-        ) -> Result<octos_llm::ChatStream> {
-            use octos_llm::StreamEvent;
+            messages: &[ra_core::Message],
+            tools: &[ra_llm::ToolSpec],
+            config: &ra_llm::ChatConfig,
+        ) -> Result<ra_llm::ChatStream> {
+            use ra_llm::StreamEvent;
             let response = self.chat(messages, tools, config).await?;
             Ok(Box::pin(futures::stream::iter(vec![
                 StreamEvent::ReasoningDelta(response.reasoning_content.unwrap_or_default()),
@@ -499,7 +499,7 @@ mod tests {
     async fn terminal_integrity_case(
         reasoning_only: bool,
         recover: bool,
-        stop: octos_llm::StopReason,
+        stop: ra_llm::StopReason,
     ) {
         use crate::autonomy::agent_orchestrator::{
             AgentOrchestrator, GoalSetRequest, default_agent_orchestrator,
@@ -520,7 +520,7 @@ mod tests {
         );
         let state = factory.oup_state().await.unwrap();
         let key = SessionKey::with_profile(
-            octos_core::MAIN_PROFILE_ID,
+            ra_core::MAIN_PROFILE_ID,
             "acp",
             &uuid::Uuid::now_v7().to_string(),
         );
@@ -528,7 +528,7 @@ mod tests {
             state.clone(),
             key.clone(),
             workspace.path(),
-            octos_agent::EffectivePermissions::workspace_write(),
+            ra_agent::EffectivePermissions::workspace_write(),
         )
         .await
         .unwrap();
@@ -537,7 +537,7 @@ mod tests {
             default_agent_orchestrator()
                 .set_goal(GoalSetRequest {
                     session_id: session.session_id.clone(),
-                    profile_id: octos_core::MAIN_PROFILE_ID.into(),
+                    profile_id: ra_core::MAIN_PROFILE_ID.into(),
                     objective: "Complete the requested inspection".into(),
                     status: Some("active".into()),
                     token_budget: Some(50_000),
@@ -675,7 +675,7 @@ mod tests {
                 state,
                 key,
                 workspace.path(),
-                octos_agent::EffectivePermissions::workspace_write(),
+                ra_agent::EffectivePermissions::workspace_write(),
             )
             .await
             .unwrap();
@@ -697,7 +697,7 @@ mod tests {
 
     #[tokio::test]
     async fn terminal_integrity_oup_preserves_truncation_without_success() {
-        terminal_integrity_case(false, false, octos_llm::StopReason::MaxTokens).await;
+        terminal_integrity_case(false, false, ra_llm::StopReason::MaxTokens).await;
     }
 
     #[tokio::test]
@@ -706,7 +706,7 @@ mod tests {
         let data = tempfile::tempdir().unwrap();
         let workspace = tempfile::tempdir().unwrap();
         let model = Arc::new(TerminalModel {
-            stop: octos_llm::StopReason::MaxTokens,
+            stop: ra_llm::StopReason::MaxTokens,
             reasoning_only: false,
             recover: false,
             calls: std::sync::atomic::AtomicUsize::new(0),
@@ -720,12 +720,12 @@ mod tests {
         let session = OupSession::open(
             state,
             SessionKey::with_profile(
-                octos_core::MAIN_PROFILE_ID,
+                ra_core::MAIN_PROFILE_ID,
                 "acp",
                 &uuid::Uuid::now_v7().to_string(),
             ),
             workspace.path(),
-            octos_agent::EffectivePermissions::workspace_write(),
+            ra_agent::EffectivePermissions::workspace_write(),
         )
         .await
         .unwrap();
@@ -760,26 +760,26 @@ mod tests {
 
     #[tokio::test]
     async fn terminal_integrity_oup_recovers_reasoning_only() {
-        terminal_integrity_case(true, true, octos_llm::StopReason::EndTurn).await;
+        terminal_integrity_case(true, true, ra_llm::StopReason::EndTurn).await;
     }
 
     #[tokio::test]
     async fn terminal_integrity_oup_exhausted_reasoning_only_errors() {
-        terminal_integrity_case(true, false, octos_llm::StopReason::EndTurn).await;
+        terminal_integrity_case(true, false, ra_llm::StopReason::EndTurn).await;
     }
 
     struct ToolThenEmptyModel(std::sync::atomic::AtomicUsize, bool, Option<&'static str>);
 
     #[async_trait::async_trait]
-    impl octos_llm::LlmProvider for ToolThenEmptyModel {
+    impl ra_llm::LlmProvider for ToolThenEmptyModel {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> Result<octos_llm::ChatResponse> {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> Result<ra_llm::ChatResponse> {
             let call = self.0.fetch_add(1, Ordering::SeqCst);
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: match call {
                     0 => Some("OLD-FINAL-DO-NOT-REUSE".into()),
                     1 => Some("PRETOOL-DO-NOT-REUSE".into()),
@@ -787,7 +787,7 @@ mod tests {
                 },
                 reasoning_content: (call >= 2).then(|| "reasoning is not a final answer".into()),
                 tool_calls: if call == 1 || (call >= 2 && self.1) {
-                    vec![octos_core::ToolCall {
+                    vec![ra_core::ToolCall {
                         id: format!("incomplete-list-{call}"),
                         name: "list_dir".into(),
                         arguments: json!({"path":"."}),
@@ -797,11 +797,11 @@ mod tests {
                     vec![]
                 },
                 stop_reason: match call {
-                    0 => octos_llm::StopReason::EndTurn,
-                    1 => octos_llm::StopReason::ToolUse,
-                    _ => octos_llm::StopReason::MaxTokens,
+                    0 => ra_llm::StopReason::EndTurn,
+                    1 => ra_llm::StopReason::ToolUse,
+                    _ => ra_llm::StopReason::MaxTokens,
                 },
-                usage: octos_llm::TokenUsage {
+                usage: ra_llm::TokenUsage {
                     input_tokens: 7,
                     output_tokens: 3,
                     ..Default::default()
@@ -851,12 +851,12 @@ mod tests {
         let session = OupSession::open(
             factory.oup_state().await.unwrap(),
             SessionKey::with_profile(
-                octos_core::MAIN_PROFILE_ID,
+                ra_core::MAIN_PROFILE_ID,
                 "acp",
                 &uuid::Uuid::now_v7().to_string(),
             ),
             workspace.path(),
-            octos_agent::EffectivePermissions::workspace_write(),
+            ra_agent::EffectivePermissions::workspace_write(),
         )
         .await
         .unwrap();
@@ -943,21 +943,21 @@ mod tests {
     }
 
     #[async_trait::async_trait]
-    impl octos_llm::LlmProvider for PendingModel {
+    impl ra_llm::LlmProvider for PendingModel {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> Result<octos_llm::ChatResponse> {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> Result<ra_llm::ChatResponse> {
             let _drop = ProviderDrop(self.dropped.clone());
             self.started.notify_one();
             self.release.notified().await;
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: Some("Other connection completed".into()),
                 reasoning_content: None,
                 tool_calls: vec![],
-                stop_reason: octos_llm::StopReason::EndTurn,
+                stop_reason: ra_llm::StopReason::EndTurn,
                 usage: Default::default(),
                 provider_index: None,
             })
@@ -989,7 +989,7 @@ mod tests {
         let mut sessions = Vec::new();
         for _ in 0..2 {
             let key = SessionKey::with_profile(
-                octos_core::MAIN_PROFILE_ID,
+                ra_core::MAIN_PROFILE_ID,
                 "acp",
                 &uuid::Uuid::now_v7().to_string(),
             );
@@ -997,7 +997,7 @@ mod tests {
                 state.clone(),
                 key,
                 workspace.path(),
-                octos_agent::EffectivePermissions::workspace_write(),
+                ra_agent::EffectivePermissions::workspace_write(),
             )
             .await
             .unwrap();
@@ -1116,7 +1116,7 @@ mod tests {
         .await
         .unwrap();
         let key = SessionKey::with_profile("migration", "acp", "reopen");
-        let permissions = octos_agent::EffectivePermissions::workspace_write();
+        let permissions = ra_agent::EffectivePermissions::workspace_write();
         let cancelled = AtomicBool::new(false);
         let session = OupSession::open(state.clone(), key.clone(), workspace.path(), permissions)
             .await
@@ -1177,12 +1177,12 @@ mod tests {
         });
         let factory = TestAgentFactory::new(model, data.path().to_owned(), first.path().to_owned());
         let state = factory.oup_state().await.unwrap();
-        let profile = &state.profiles[octos_core::MAIN_PROFILE_ID];
+        let profile = &state.profiles[ra_core::MAIN_PROFILE_ID];
         let a = state
             .session_cache
             .get_or_init(
                 profile,
-                SessionKey::with_profile(octos_core::MAIN_PROFILE_ID, "acp", "workspace-a"),
+                SessionKey::with_profile(ra_core::MAIN_PROFILE_ID, "acp", "workspace-a"),
                 Some(first.path().to_owned()),
             )
             .await
@@ -1191,7 +1191,7 @@ mod tests {
             .session_cache
             .get_or_init(
                 profile,
-                SessionKey::with_profile(octos_core::MAIN_PROFILE_ID, "acp", "workspace-b"),
+                SessionKey::with_profile(ra_core::MAIN_PROFILE_ID, "acp", "workspace-b"),
                 Some(second.path().to_owned()),
             )
             .await
@@ -1216,7 +1216,7 @@ mod tests {
         );
         let plugin = tool
             .as_any()
-            .downcast_ref::<octos_agent::plugins::PluginTool>()
+            .downcast_ref::<ra_agent::plugins::PluginTool>()
             .unwrap();
         assert_eq!(plugin.work_dir(), Some(a.workspace_root.as_path()));
         assert!(

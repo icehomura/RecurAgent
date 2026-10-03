@@ -308,7 +308,7 @@ pub fn emit_registered_progress_event_with_extra(
 
 /// Emit a credential rotation event to a registered sink (M6.5). Returns
 /// `true` when the sink accepted the write. Used by the harness-layer sink
-/// adapter that forwards `octos_llm::CredentialRotationEvent` into the
+/// adapter that forwards `ra_llm::CredentialRotationEvent` into the
 /// structured event stream.
 pub fn emit_registered_credential_rotation_event(
     raw_sink: impl AsRef<str>,
@@ -345,8 +345,8 @@ impl HarnessCredentialRotationSink {
     }
 }
 
-impl octos_llm::RotationEventSink for HarnessCredentialRotationSink {
-    fn emit(&self, event: &octos_llm::CredentialRotationEvent) {
+impl ra_llm::RotationEventSink for HarnessCredentialRotationSink {
+    fn emit(&self, event: &ra_llm::CredentialRotationEvent) {
         let _ = emit_registered_credential_rotation_event(
             &self.raw_sink,
             &event.credential_id,
@@ -434,7 +434,7 @@ pub enum HarnessEventPayload {
         #[serde(flatten)]
         data: HarnessCredentialRotationEvent,
     },
-    /// Emitted once per session load after [`octos_bus::ResumePolicy`] runs
+    /// Emitted once per session load after [`ra_bus::ResumePolicy`] runs
     /// (M8.6). Carries a typed report so operators can see what the
     /// sanitizer dropped and whether the worktree (if any) was still
     /// present on disk.
@@ -746,10 +746,10 @@ pub struct HarnessRoutingDecisionEvent {
     pub extra: HashMap<String, Value>,
 }
 
-/// Typed payload emitted when [`octos_bus::ResumePolicy`] sanitizes a
+/// Typed payload emitted when [`ra_bus::ResumePolicy`] sanitizes a
 /// session transcript on load (M8.6).
 ///
-/// The report fields mirror [`octos_bus::SessionSanitizeReport`] one-for-
+/// The report fields mirror [`ra_bus::SessionSanitizeReport`] one-for-
 /// one so operators can build dashboards without joining against a raw
 /// log. `worktree_missing` is a hard signal that the sub-agent's git
 /// worktree was cleaned up externally (Claude Code issue #22355) — the
@@ -775,7 +775,7 @@ pub struct HarnessSessionSanitizedEvent {
     /// Assistant messages with whitespace-only content.
     #[serde(default)]
     pub whitespace_only_dropped: usize,
-    /// Count of [`octos_bus::ReplacementStateRef`] entries recovered.
+    /// Count of [`ra_bus::ReplacementStateRef`] entries recovered.
     #[serde(default)]
     pub content_replacements_restored: usize,
     /// `true` when `workspace_root` was provided and missing on disk.
@@ -1010,14 +1010,14 @@ impl HarnessEvent {
     }
 
     /// Construct a `SessionSanitized` event from a
-    /// [`octos_bus::SessionSanitizeReport`] (M8.6). The caller supplies
+    /// [`ra_bus::SessionSanitizeReport`] (M8.6). The caller supplies
     /// session_id/task_id/workflow from its runtime context; the rest of
     /// the fields come straight from the report.
     pub fn session_sanitized(
         session_id: impl Into<String>,
         task_id: impl Into<String>,
         workflow: Option<impl Into<String>>,
-        report: &octos_bus::SessionSanitizeReport,
+        report: &ra_bus::SessionSanitizeReport,
     ) -> Self {
         Self {
             schema: HARNESS_EVENT_SCHEMA_V1.to_string(),
@@ -2670,7 +2670,7 @@ mod tests {
     /// report fields in `runtime_detail_value`.
     #[test]
     fn session_sanitized_event_round_trips() {
-        let report = octos_bus::SessionSanitizeReport {
+        let report = ra_bus::SessionSanitizeReport {
             input_len: 12,
             output_len: 9,
             unresolved_tool_uses_dropped: 2,
@@ -2716,7 +2716,7 @@ mod tests {
     /// can see it on the task dashboard.
     #[test]
     fn session_sanitized_event_flags_worktree_missing() {
-        let report = octos_bus::SessionSanitizeReport {
+        let report = ra_bus::SessionSanitizeReport {
             input_len: 4,
             output_len: 4,
             worktree_missing: true,
@@ -2753,7 +2753,7 @@ mod tests {
         let sink = HarnessEventSink::new(supervisor.clone(), task_id.clone(), "api:session")
             .expect("create sink");
 
-        let report = octos_bus::SessionSanitizeReport {
+        let report = ra_bus::SessionSanitizeReport {
             input_len: 3,
             output_len: 2,
             unresolved_tool_uses_dropped: 1,

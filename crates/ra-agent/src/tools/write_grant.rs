@@ -1,7 +1,7 @@
 //! #1976 — per-path WRITE-grant enforcement for the native file tools.
 //!
 //! A [`WritePathGrant`] is the ra-agent realisation of a fleet task's
-//! `fs: { write: [...], create_only }` grant (`octos_fleet::WorkerGrant::
+//! `fs: { write: [...], create_only }` grant (`ra_fleet::WorkerGrant::
 //! write_paths` — this crate deliberately has no `ra-fleet` dependency, so
 //! the host-side mapping lives in `ra-fleet-worker::closed_registry`,
 //! mirroring how `FsGrant` maps to `EffectivePermissions`). Bound to
@@ -18,7 +18,7 @@
 //! (`crate::sandbox::macos` `write_allow_globs`) express IDENTICALLY, so the
 //! tool layer and the shell sandbox can never disagree about what is granted.
 //! The same rules are validated fleet-side at plan time
-//! (`octos_fleet::validate_write_path_pattern`); re-validating here is
+//! (`ra_fleet::validate_write_path_pattern`); re-validating here is
 //! defense-in-depth for programmatic constructions.
 //!
 //! # Symlink safety (security round — ancestor-swap TOCTOU)
@@ -586,7 +586,7 @@ pub async fn confined_rewrite(
 }
 
 /// v1 pattern validation — the ra-agent twin of
-/// `octos_fleet::validate_write_path_pattern` (kept textually close on
+/// `ra_fleet::validate_write_path_pattern` (kept textually close on
 /// purpose; this crate has no ra-fleet dependency). Plan-time validation
 /// already rejected these for fleet grants; re-checking here fails closed for
 /// any programmatic caller.

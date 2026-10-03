@@ -9,9 +9,9 @@ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
 use metrics::counter;
-use octos_core::{AgentId, InboundMessage, SessionScope, Task, TaskContext, TaskKind, TaskResult};
-use octos_llm::{ContextWindowOverride, LlmProvider, ProviderRouter};
-use octos_memory::EpisodeStore;
+use ra_core::{AgentId, InboundMessage, SessionScope, Task, TaskContext, TaskKind, TaskResult};
+use ra_llm::{ContextWindowOverride, LlmProvider, ProviderRouter};
+use ra_memory::EpisodeStore;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
@@ -166,7 +166,7 @@ impl Drop for WorkerWorktreeGuard {
 fn prune_worker_worktree(repo_root: &Path, worktree: &WorkerWorktree) {
     // `--force` clears the untracked `.ra/worker-worktree.json` status
     // marker; the checkout is otherwise fresh.
-    match octos_core::agent_repo_git::agent_repo_git(repo_root)
+    match ra_core::agent_repo_git::agent_repo_git(repo_root)
         .args(["worktree", "remove", "--force"])
         .arg(&worktree.path)
         .output()
@@ -193,7 +193,7 @@ fn prune_worker_worktree(repo_root: &Path, worktree: &WorkerWorktree) {
             // worktree whose checkout is not on disk yet — the normal state
             // mid-`git worktree add` — so a refused spawn could destroy a
             // concurrently-created fleet checkout or peer fence in the same repo.
-            octos_core::clear_worktree_admin_entry(repo_root, &worktree.path);
+            ra_core::clear_worktree_admin_entry(repo_root, &worktree.path);
         }
         Err(error) => {
             warn!(
@@ -203,7 +203,7 @@ fn prune_worker_worktree(repo_root: &Path, worktree: &WorkerWorktree) {
             );
         }
     }
-    match octos_core::agent_repo_git::agent_repo_git(repo_root)
+    match ra_core::agent_repo_git::agent_repo_git(repo_root)
         .args(["branch", "-D"])
         .arg(&worktree.branch)
         .output()
@@ -249,7 +249,7 @@ fn validate_worker_worktree_slug(slug: &str) -> Result<(), String> {
 }
 
 fn git_stdout(repo: &Path, args: &[&str]) -> Result<String> {
-    let output = octos_core::agent_repo_git::agent_repo_git(repo)
+    let output = ra_core::agent_repo_git::agent_repo_git(repo)
         .args(args)
         .output()
         .wrap_err_with(|| format!("failed to run git {}", args.join(" ")))?;
@@ -264,7 +264,7 @@ fn git_stdout(repo: &Path, args: &[&str]) -> Result<String> {
 }
 
 fn git_ref_exists(repo: &Path, refname: &str) -> Result<bool> {
-    let status = octos_core::agent_repo_git::agent_repo_git(repo)
+    let status = ra_core::agent_repo_git::agent_repo_git(repo)
         .args(["show-ref", "--verify", "--quiet", refname])
         .status()
         .wrap_err("failed to run git show-ref")?;
@@ -297,7 +297,7 @@ fn git_ref_exists(repo: &Path, refname: &str) -> Result<bool> {
 /// message covers "not a git repository" as the actionable remedy, and a truly
 /// missing git surfaces its own error on the subsequent `git worktree add`.
 fn is_inside_git_work_tree(dir: &Path) -> bool {
-    octos_core::agent_repo_git::agent_repo_git(dir)
+    ra_core::agent_repo_git::agent_repo_git(dir)
         .args(["rev-parse", "--is-inside-work-tree"])
         .output()
         .map(|out| out.status.success() && String::from_utf8_lossy(&out.stdout).trim() == "true")
@@ -426,7 +426,7 @@ fn allocate_worker_worktree(
         // session-scope checks above already ran against the un-simplified
         // path, so containment guarantees are unaffected.
         let git_path = dunce::simplified(&path).to_path_buf();
-        let output = octos_core::agent_repo_git::agent_repo_git(&repo_root)
+        let output = ra_core::agent_repo_git::agent_repo_git(&repo_root)
             .args(["worktree", "add", "-b"])
             .arg(&branch)
             .arg(&git_path)
@@ -533,7 +533,7 @@ pub struct BackgroundResultPayload {
     pub task_id: Option<String>,
     /// Originating `tool_call_id` (the spawn_only tool invocation that
     /// produced this background task). Surfaced on the wire as
-    /// [`octos_core::ui_protocol::TurnSpawnCompleteEvent::tool_call_id`]
+    /// [`ra_core::ui_protocol::TurnSpawnCompleteEvent::tool_call_id`]
     /// so the client can flip the in-flight chip from spinner to
     /// checkmark directly off the envelope, without a race against a
     /// `task/updated` watcher that builds `task_id → tool_call_id`
@@ -546,7 +546,7 @@ pub struct BackgroundResultPayload {
     /// [`crate::task_supervisor::BackgroundTask::originating_client_message_id`]
     /// and that the M8.9 recovery path threads onto its synthetic turn.
     /// Surfaces on the wire as
-    /// [`octos_core::ui_protocol::TurnSpawnCompleteEvent::response_to_client_message_id`]
+    /// [`ra_core::ui_protocol::TurnSpawnCompleteEvent::response_to_client_message_id`]
     /// so the SPA reducer can anchor the new assistant bubble to the
     /// parent user prompt instead of falling back to thread-map heuristics
     /// (the bundle's `subSpawnComplete` handler bails when that lookup
@@ -644,7 +644,7 @@ fn is_retryable_child_failure(text: &str) -> bool {
 }
 
 fn classify_child_session_lifecycle_kind(
-    result: &Result<octos_core::TaskResult>,
+    result: &Result<ra_core::TaskResult>,
 ) -> ChildSessionLifecycleKind {
     match result {
         Ok(task_result) if task_result.success => ChildSessionLifecycleKind::Completed,
@@ -861,7 +861,7 @@ impl crate::progress::ProgressReporter for SpawnChildTranscriptReporter {
             } => {
                 let status = if success { "ok" } else { "FAILED" };
                 let first = output_preview.lines().next().unwrap_or_default();
-                let first = octos_core::truncated_utf8(first, 200, "…");
+                let first = ra_core::truncated_utf8(first, 200, "…");
                 format!("[tool {status}] {name} — {first}\n")
             }
             ProgressEvent::FileModified { path } => format!("[file modified] {path}\n"),
@@ -1087,7 +1087,7 @@ pub struct SpawnTool {
     /// `build_initial_messages` recall silently skipped (the same NEW-06
     /// class of gap `RunPipelineTool::with_embedder` closed for
     /// pipeline workers).
-    embedder: Option<Arc<dyn octos_llm::EmbeddingProvider>>,
+    embedder: Option<Arc<dyn ra_llm::EmbeddingProvider>>,
     /// Optional MCP-backed sub-agent used when callers pick
     /// `backend == "agent_mcp"`. Parent context stays small because the
     /// sub-agent's internal messages never leak back — only the final
@@ -1127,7 +1127,7 @@ pub struct SpawnTool {
     /// #714: pre-dispatch policy gate for the `agent_mcp` spawn branch.
     /// Without one, `dispatch_with_metrics` is reached unconditionally —
     /// the same bypass the swarm side closed via
-    /// `octos_swarm::SwarmBuilder::with_dispatch_policy` in #710 / #713.
+    /// `ra_swarm::SwarmBuilder::with_dispatch_policy` in #710 / #713.
     /// `None` keeps the pre-fix behaviour for callers that opted out
     /// (e.g. legacy tests not exercising the gate).
     dispatch_policy: Option<crate::dispatch_policy::DispatchPolicy>,
@@ -1463,13 +1463,13 @@ impl SpawnTool {
     /// Inherit the parent agent configuration for spawned workers.
     /// Propagate the parent's embedding provider onto every spawned
     /// worker Agent (embed-on-save + hybrid scored/filtered recall).
-    pub fn with_embedder(mut self, embedder: Arc<dyn octos_llm::EmbeddingProvider>) -> Self {
+    pub fn with_embedder(mut self, embedder: Arc<dyn ra_llm::EmbeddingProvider>) -> Self {
         self.embedder = Some(embedder);
         self
     }
 
     /// Test-only visibility: whether an embedder was threaded through.
-    pub fn embedder_for_test(&self) -> Option<&Arc<dyn octos_llm::EmbeddingProvider>> {
+    pub fn embedder_for_test(&self) -> Option<&Arc<dyn ra_llm::EmbeddingProvider>> {
         self.embedder.as_ref()
     }
 
@@ -1477,7 +1477,7 @@ impl SpawnTool {
     /// sugar for optional parent embedders.
     pub fn with_optional_embedder(
         mut self,
-        embedder: Option<Arc<dyn octos_llm::EmbeddingProvider>>,
+        embedder: Option<Arc<dyn ra_llm::EmbeddingProvider>>,
     ) -> Self {
         self.embedder = embedder.or(self.embedder);
         self
@@ -1517,7 +1517,7 @@ impl SpawnTool {
 
     /// #714: wire a pre-dispatch policy gate for the `agent_mcp` spawn
     /// branch. Mirrors
-    /// [`octos_swarm::SwarmBuilder::with_dispatch_policy`] so both
+    /// [`ra_swarm::SwarmBuilder::with_dispatch_policy`] so both
     /// dispatch surfaces fail closed on the same shape of gates
     /// ([`ToolPolicy`], env denylist / allowlist, approval,
     /// `require_sandboxed`). Without one, the agent_mcp branch reaches
@@ -3271,7 +3271,7 @@ impl Tool for SpawnTool {
             // budget reservation or backend dispatch so a denial
             // short-circuits the whole pipeline (no reservation taken,
             // no backend touched) — the same ordering the swarm
-            // dispatcher uses in `octos_swarm::dispatch_with_budget`.
+            // dispatcher uses in `ra_swarm::dispatch_with_budget`.
             // Without a configured policy this is a noop and the
             // existing path is unchanged. With one, the gate enforces
             // `tool_policy`, env denylist / allowlist, `require_approval`,
@@ -5268,7 +5268,7 @@ impl Tool for SpawnTool {
                         "deliver_to_chat_id": origin_chat_id,
                     }),
                     message_id: None,
-                    origin: octos_core::MessageOrigin::Synthetic,
+                    origin: ra_core::MessageOrigin::Synthetic,
                 };
 
                 if let Err(e) = inbound_tx.send(announce).await {

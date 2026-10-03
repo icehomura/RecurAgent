@@ -171,7 +171,7 @@ impl Tool for WorkspaceLogTool {
             output = "(no commits yet)".to_string();
         }
 
-        octos_core::truncate_utf8(&mut output, MAX_OUTPUT, "\n... (truncated)");
+        ra_core::truncate_utf8(&mut output, MAX_OUTPUT, "\n... (truncated)");
 
         Ok(ToolResult {
             output,
@@ -286,7 +286,7 @@ impl Tool for WorkspaceShowTool {
             }
         };
 
-        octos_core::truncate_utf8(&mut output, MAX_OUTPUT, "\n... (truncated)");
+        ra_core::truncate_utf8(&mut output, MAX_OUTPUT, "\n... (truncated)");
 
         Ok(ToolResult {
             output,
@@ -425,7 +425,7 @@ impl Tool for WorkspaceDiffTool {
             output = "(no changes between these commits)".to_string();
         }
 
-        octos_core::truncate_utf8(&mut output, MAX_OUTPUT, "\n... (truncated)");
+        ra_core::truncate_utf8(&mut output, MAX_OUTPUT, "\n... (truncated)");
 
         Ok(ToolResult {
             output,

@@ -6,15 +6,15 @@
 //! narrow — only items that integration tests or sibling crates consume.
 
 #[cfg(feature = "api")]
-pub use octos_store::admin_audit_store;
+pub use ra_store::admin_audit_store;
 // Extracted to the `ra-store` crate; re-exported so `crate::admin_token_store::…`
 // keeps resolving unchanged.
-pub use octos_store::admin_token_store;
+pub use ra_store::admin_token_store;
 #[cfg(feature = "api")]
 pub mod api;
 #[cfg(feature = "api")]
 pub mod embedded;
-pub use octos_store::approvals_audit;
+pub use ra_store::approvals_audit;
 pub mod auth;
 // Build-cache pool (outer-loop #3, design docs/build-cache-pool.md):
 // per-repository reusable cargo target-dir slots with flock exclusivity,
@@ -46,11 +46,11 @@ pub(crate) mod turn_loop;
 /// lifecycle logging for turn/interrupt and turn/steer (the `api` module
 /// calls these; kept feature-independent so the shape is testable).
 pub(crate) mod turn_trace;
-pub use octos_services::cli_agent_adapter;
+pub use ra_services::cli_agent_adapter;
 pub mod commands;
-pub use octos_services::compaction;
+pub use ra_services::compaction;
 pub mod config;
-pub use octos_services::config_context;
+pub use ra_services::config_context;
 pub mod config_layer;
 pub mod config_watcher;
 #[cfg(feature = "api")]
@@ -61,7 +61,7 @@ pub(crate) mod conversation_outcome;
 pub mod embed_model;
 // Interactive-contract stores (pending approvals / user questions / diff
 // previews / approval scopes). Deliberately NOT `api`-gated: they are plain
-// in-memory registries over `octos_core::ui_protocol` types with no axum /
+// in-memory registries over `ra_core::ui_protocol` types with no axum /
 // AppState / WebSocket dependency, and `ra chat --peers` needs the SAME
 // process-global `contract_stores()` the serve WS path uses so a peer's parked
 // oneshot and the master's `peer_respond` meet in one registry.
@@ -75,7 +75,7 @@ pub mod cron_tool;
 pub mod gateway_dispatcher;
 pub mod goal_tool;
 #[cfg(feature = "api")]
-pub use octos_store::login_allowlist;
+pub use ra_store::login_allowlist;
 pub mod memory_consolidate;
 pub mod memory_refresh;
 #[cfg(feature = "api")]
@@ -87,7 +87,7 @@ pub mod otp;
 // staging and OUP transport helpers are intentionally dormant in that build.
 #[cfg_attr(not(feature = "api"), allow(dead_code))]
 pub(crate) mod peers;
-pub use octos_services::persona_service;
+pub use ra_services::persona_service;
 #[cfg(feature = "api")]
 pub mod process_manager;
 pub mod profile_qr;
@@ -96,19 +96,19 @@ pub mod project_templates;
 mod qos_catalog;
 pub mod runtime;
 pub mod session_actor;
-pub use octos_store::setup_state_store;
+pub use ra_store::setup_state_store;
 pub mod skills_scope;
-pub use octos_services::soul_service;
-pub use octos_store::smtp_secret_store;
+pub use ra_services::soul_service;
+pub use ra_store::smtp_secret_store;
 pub mod status_indicator;
 pub mod status_layers;
 pub mod stream_reporter;
-pub use octos_services::tenant;
+pub use ra_services::tenant;
 pub mod tools;
 #[cfg(feature = "api")]
-pub use octos_services::updater;
-pub use octos_store::usage_ledger;
+pub use ra_services::updater;
+pub use ra_store::usage_ledger;
 #[cfg(feature = "api")]
-pub use octos_store::user_store;
-pub use octos_workflows::workflow_runtime;
-pub use octos_workflows::workflows;
+pub use ra_store::user_store;
+pub use ra_workflows::workflow_runtime;
+pub use ra_workflows::workflows;

@@ -26,7 +26,7 @@
 
 use std::path::{Path, PathBuf};
 
-use octos_core::SessionKey;
+use ra_core::SessionKey;
 use serde::{Deserialize, Serialize};
 
 use super::{peer_io, peer_slug_is_safe, staged_peer_dir};

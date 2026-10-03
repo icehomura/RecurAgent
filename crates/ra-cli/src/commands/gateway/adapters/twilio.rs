@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use eyre::WrapErr;
-use octos_bus::ChannelManager;
+use ra_bus::ChannelManager;
 
 use super::settings_str;
 use crate::config::ChannelEntry;
@@ -26,7 +26,7 @@ pub fn register(
         .get("webhook_port")
         .and_then(|v| v.as_u64())
         .unwrap_or(8090) as u16;
-    channel_mgr.register(Arc::new(octos_bus::TwilioChannel::new(
+    channel_mgr.register(Arc::new(ra_bus::TwilioChannel::new(
         &account_sid,
         &auth_token,
         &from_number,

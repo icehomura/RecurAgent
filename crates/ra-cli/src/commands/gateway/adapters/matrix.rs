@@ -2,14 +2,14 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use octos_bus::ChannelManager;
+use ra_bus::ChannelManager;
 
 use super::super::matrix_integration::*;
 use crate::config::ChannelEntry;
 
 pub fn register(
     channel_mgr: &mut ChannelManager,
-    matrix_channel: &mut Option<Arc<octos_bus::MatrixChannel>>,
+    matrix_channel: &mut Option<Arc<ra_bus::MatrixChannel>>,
     entry: &ChannelEntry,
     channel_index: usize,
     shutdown: &Arc<AtomicBool>,

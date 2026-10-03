@@ -2347,7 +2347,7 @@ async fn strict_env_allowlist_drops_non_listed_extra_env() {
 struct FixedVertexTokenSource;
 
 #[async_trait]
-impl octos_llm::vertex_auth::TokenSource for FixedVertexTokenSource {
+impl ra_llm::vertex_auth::TokenSource for FixedVertexTokenSource {
     async fn token(&self) -> eyre::Result<String> {
         Ok("cached-host-token".to_string())
     }

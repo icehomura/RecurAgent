@@ -19,7 +19,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use octos_agent::{
+use ra_agent::{
     HARNESS_EVENT_SCHEMA_V1, HarnessEvent, HarnessEventPayload, HarnessEventSink, TaskRuntimeState,
     TaskSupervisor,
 };

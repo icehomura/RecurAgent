@@ -15,8 +15,8 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::{LazyLock, Mutex};
 
-use octos_core::SessionKey;
-use octos_core::ui_protocol::{TurnId, TurnOrigin, TurnOriginKind};
+use ra_core::SessionKey;
+use ra_core::ui_protocol::{TurnId, TurnOrigin, TurnOriginKind};
 
 /// Longest label kept, in bytes.
 pub(crate) const TURN_ORIGIN_LABEL_MAX_BYTES: usize = 64;

@@ -6,8 +6,8 @@
 //! - [`WorkspacePolicy`](crate::workspace_policy::WorkspacePolicy)
 //! - [`HookPayload`](crate::hooks::HookPayload)
 //! - [`ProgressEvent`](crate::progress::ProgressEvent) (emitted shape)
-//! - [`TaskResult`](octos_core::TaskResult)
-//! - [`SessionSummary`](octos_core::SessionSummary) (harness M6.4)
+//! - [`TaskResult`](ra_core::TaskResult)
+//! - [`SessionSummary`](ra_core::SessionSummary) (harness M6.4)
 //!
 //! Each serialized instance carries a numeric `schema_version` (v1 is the
 //! current shape). Missing versions default to v1 for backward compatibility
@@ -104,9 +104,9 @@ pub const SWARM_REVIEW_DECISION_SCHEMA_VERSION: u32 = 1;
 /// Persisted instances include this field so iterative refinement can detect
 /// legacy payloads and reject future versions with a typed error.
 ///
-/// Re-exports [`octos_core::SESSION_SUMMARY_SCHEMA_VERSION`] so callers can
+/// Re-exports [`ra_core::SESSION_SUMMARY_SCHEMA_VERSION`] so callers can
 /// take the value from either crate interchangeably.
-pub const SESSION_SUMMARY_SCHEMA_VERSION: u32 = octos_core::SESSION_SUMMARY_SCHEMA_VERSION;
+pub const SESSION_SUMMARY_SCHEMA_VERSION: u32 = ra_core::SESSION_SUMMARY_SCHEMA_VERSION;
 
 /// Current schema version for the `routing.decision` harness event payload
 /// introduced in M6.6 (content-classified smart model routing).

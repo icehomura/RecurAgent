@@ -6,7 +6,7 @@
 //!
 //! TODO: Wire into agent loop to replace raw `Message` handling with typed turns.
 
-use octos_core::{Message, MessageRole};
+use ra_core::{Message, MessageRole};
 
 /// The semantic type of a turn in the agent conversation.
 #[derive(Debug, Clone, PartialEq, Eq)]

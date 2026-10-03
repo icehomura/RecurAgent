@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use octos_bus::{ChannelManager, SessionManager};
+use ra_bus::{ChannelManager, SessionManager};
 use tokio::sync::Mutex;
 
 use super::{TaskCancelCb, TaskRelaunchCb};
@@ -39,7 +39,7 @@ pub fn register(
         .get("auth_token")
         .and_then(|v| v.as_str())
         .map(String::from);
-    let mut channel = octos_bus::ApiChannel::new(
+    let mut channel = ra_bus::ApiChannel::new(
         port,
         auth_token,
         shutdown.clone(),

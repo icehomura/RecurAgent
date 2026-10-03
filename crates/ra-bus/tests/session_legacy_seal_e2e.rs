@@ -10,8 +10,8 @@
 
 use std::path::Path;
 
-use octos_bus::session::{SessionHandle, SessionManager};
-use octos_core::{Message, MessageRole, SessionKey};
+use ra_bus::session::{SessionHandle, SessionManager};
+use ra_core::{Message, MessageRole, SessionKey};
 
 const OVERSIZE: usize = 8 * 1024 * 1024 + 1024; // past the 8 MiB segment size
 

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use eyre::WrapErr;
-use octos_bus::ChannelManager;
+use ra_bus::ChannelManager;
 
 use super::settings_str;
 use crate::config::ChannelEntry;
@@ -27,7 +27,7 @@ pub fn register(
         .get("require_mention")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-    let mut tg = octos_bus::TelegramChannel::new(
+    let mut tg = ra_bus::TelegramChannel::new(
         &token,
         entry.allowed_senders.clone(),
         shutdown.clone(),

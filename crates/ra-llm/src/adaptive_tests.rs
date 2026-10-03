@@ -2682,7 +2682,7 @@ async fn test_unfit_lane_is_skipped_without_breaker_pollution() {
 mod lane_attribution {
     use std::sync::Arc;
 
-    use octos_core::Message;
+    use ra_core::Message;
     use wiremock::matchers::method;
     use wiremock::{Mock, MockServer, ResponseTemplate};
 

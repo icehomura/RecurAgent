@@ -14,7 +14,7 @@
 //! - [`ProfileRuntime`] is the *profile scope*: one per `(host process,
 //!   profile_id)` pair. It owns identity-shaped state — the LLM
 //!   provider, credentials, registered skills, plugin-env template, tool
-//!   policy, default sandbox, the base [`octos_agent::ToolRegistry`]
+//!   policy, default sandbox, the base [`ra_agent::ToolRegistry`]
 //!   template, and the per-profile memory stores. Anything that is an
 //!   account property of the logged-in user lives here.
 //! - [`SessionRuntime`] is the *session scope*: one per
@@ -23,8 +23,8 @@
 //!   per-session `workspace_root`, the per-session plugin work dir, an
 //!   effective sandbox config (which may override the profile default),
 //!   a workspace-bound and policy-filtered clone of the profile's tool
-//!   registry, the per-session [`octos_agent::Agent`], and the
-//!   per-session [`octos_bus::SessionManager`]. Anything that can vary
+//!   registry, the per-session [`ra_agent::Agent`], and the
+//!   per-session [`ra_bus::SessionManager`]. Anything that can vary
 //!   between two chats opened by the same logged-in user lives here.
 //!
 //! Every "is this thing per-profile or per-session?" question now has

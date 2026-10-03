@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
-use octos_llm::EmbeddingProvider;
-use octos_memory::{MemoryStore, RecallStore, RecordKind, SearchFilter};
+use ra_llm::EmbeddingProvider;
+use ra_memory::{MemoryStore, RecallStore, RecordKind, SearchFilter};
 use serde::Deserialize;
 
 use super::{Tool, ToolResult};
@@ -114,7 +114,7 @@ fn render_registry_page(registry: &str, page: usize) -> String {
     // outer truncate_head_tail limit — a too-tight margin let a full page +
     // marker + disclosure exceed it and re-trigger the silent middle-loss
     // (codex #1608 round-3 P1).
-    let limit = octos_core::tool_output_limit("recall_memory");
+    let limit = ra_core::tool_output_limit("recall_memory");
     let budget = limit.saturating_sub(512).max(1);
 
     // Build page ranges at newline boundaries (always char-safe), each
@@ -270,7 +270,7 @@ impl Tool for RecallMemoryTool {
 
         // Tier-2 registry load: the injected long-term memory is capped to a
         // token budget, so "MEMORY" (and aliases) returns the full MEMORY.md.
-        if octos_memory::is_reserved_memory_name(&name) {
+        if ra_memory::is_reserved_memory_name(&name) {
             // Prepend any PRE-UPGRADE bank entity whose name is now reserved:
             // new writes under these names are refused, but legacy files
             // would otherwise be shadowed by the alias and unreadable. Folding
@@ -281,7 +281,7 @@ impl Tool for RecallMemoryTool {
             if let Ok(entities) = self.store.list_entities().await {
                 for (name, _) in entities
                     .iter()
-                    .filter(|(n, _)| octos_memory::is_reserved_memory_name(n))
+                    .filter(|(n, _)| ra_memory::is_reserved_memory_name(n))
                 {
                     if let Ok(Some(content)) = self.store.read_entity(name).await {
                         full.push_str(&format!(
@@ -395,7 +395,7 @@ mod tests {
         let recall = Arc::new(
             RecallStore::open(
                 dir.path(),
-                octos_memory::RecallConfig {
+                ra_memory::RecallConfig {
                     dimension: 4,
                     ..Default::default()
                 },
@@ -454,13 +454,13 @@ mod tests {
             "long-term memory",
         ] {
             assert!(
-                octos_memory::is_reserved_memory_name(name),
+                ra_memory::is_reserved_memory_name(name),
                 "{name:?} should be a registry alias"
             );
         }
         for name in ["ra", "alice", "memories", "mem"] {
             assert!(
-                !octos_memory::is_reserved_memory_name(name),
+                !ra_memory::is_reserved_memory_name(name),
                 "{name:?} is a bank entity, not the registry"
             );
         }
@@ -489,7 +489,7 @@ mod tests {
     async fn should_page_registry_when_it_exceeds_tool_limit() {
         let dir = tempfile::tempdir().unwrap();
         let store = Arc::new(MemoryStore::open(dir.path()).await.unwrap());
-        let limit = octos_core::tool_output_limit("recall_memory");
+        let limit = ra_core::tool_output_limit("recall_memory");
         // Distinct per-line content so pages are verifiably different.
         let big: String = (0..(limit / 20))
             .map(|i| format!("Fact number {i} recorded for the record. ^maaaaaa\n"))
@@ -527,7 +527,7 @@ mod tests {
     async fn should_not_panic_on_multibyte_registry_at_the_cap() {
         let dir = tempfile::tempdir().unwrap();
         let store = Arc::new(MemoryStore::open(dir.path()).await.unwrap());
-        let limit = octos_core::tool_output_limit("recall_memory");
+        let limit = ra_core::tool_output_limit("recall_memory");
         // CJK is 3 bytes/char — a naive byte slice at `budget` would land
         // mid-codepoint and panic.
         let big = "记忆条目：这是一条中文记录。^maaaaaa\n".repeat(limit / 30);

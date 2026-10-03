@@ -4,7 +4,7 @@
 //! preview to escape the project workspace.
 //!
 //! These tests pin the validation helper in
-//! [`octos_cli::project_templates::validated_build_output_dir`] which
+//! [`ra_cli::project_templates::validated_build_output_dir`] which
 //! is the single entry-point every preview consumer must route
 //! through.
 //!
@@ -16,7 +16,7 @@
 
 use std::path::Path;
 
-use octos_cli::project_templates::{
+use ra_cli::project_templates::{
     BuildOutputDirError, SiteProjectMetadata, read_site_project_metadata,
     validated_build_output_dir,
 };
@@ -423,7 +423,7 @@ fn should_reject_template_mismatch() {
 /// root and the resolved asset. This pins the symlink-after-validate
 /// TOCTOU window: validate succeeds against a real `dist/` dir, then
 /// the attacker swaps `dist` for a symlink to `/tmp/escape`. The
-/// serve helper [`octos_cli::api::preview::serve_preview_no_follow`]
+/// serve helper [`ra_cli::api::preview::serve_preview_no_follow`]
 /// re-walks the path with `symlink_metadata` and refuses.
 ///
 /// Skipped on Windows where `std::os::unix::fs::symlink` is absent.
@@ -432,7 +432,7 @@ fn should_reject_template_mismatch() {
 fn should_reject_symlink_swap_after_validation() {
     use std::os::unix::fs::symlink;
 
-    use octos_cli::api::preview::serve_preview_no_follow_blocking;
+    use ra_cli::api::preview::serve_preview_no_follow_blocking;
 
     let tmp_project = tempfile::tempdir().unwrap();
     let tmp_outside = tempfile::tempdir().unwrap();
@@ -527,7 +527,7 @@ fn should_reject_unknown_template() {
 fn should_reject_handler_toctou_swap() {
     use std::os::unix::fs::symlink;
 
-    use octos_cli::api::preview::serve_preview_no_follow_blocking;
+    use ra_cli::api::preview::serve_preview_no_follow_blocking;
 
     let tmp_project = tempfile::tempdir().unwrap();
     let tmp_outside = tempfile::tempdir().unwrap();
@@ -584,7 +584,7 @@ fn should_reject_handler_toctou_swap() {
 async fn should_return_400_not_200_on_invalid() {
     use axum::body::to_bytes;
     use axum::http::StatusCode;
-    use octos_cli::api::testing::{SiteBuildError, preview_build_error_response};
+    use ra_cli::api::testing::{SiteBuildError, preview_build_error_response};
 
     // 1. UnknownTemplate (the new variant) must map to HTTP 400.
     let resp = preview_build_error_response(

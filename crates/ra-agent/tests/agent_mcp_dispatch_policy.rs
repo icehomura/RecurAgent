@@ -3,7 +3,7 @@
 //! dispatcher does.
 //!
 //! Pre-fix, [`SpawnTool::execute`] dispatched via
-//! [`octos_agent::tools::mcp_agent::dispatch_with_metrics`] without
+//! [`ra_agent::tools::mcp_agent::dispatch_with_metrics`] without
 //! consulting any policy, so rate-limit / fan-out / denylist
 //! constraints were trivially bypassed by a malicious or buggy MCP
 //! server. Companion gap to the supervisor fan-out cap shipped via
@@ -21,14 +21,14 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use async_trait::async_trait;
-use octos_agent::tools::mcp_agent::{
+use ra_agent::tools::mcp_agent::{
     DispatchOutcome, DispatchRequest, DispatchResponse, McpAgentBackend,
 };
-use octos_agent::tools::{DispatchPolicy, SharedBackend, SpawnTool, Tool};
-use octos_agent::{ToolApprovalDecision, ToolApprovalRequest, ToolApprovalRequester};
-use octos_core::InboundMessage;
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_agent::tools::{DispatchPolicy, SharedBackend, SpawnTool, Tool};
+use ra_agent::{ToolApprovalDecision, ToolApprovalRequest, ToolApprovalRequester};
+use ra_core::InboundMessage;
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 
 /// MCP backend that always reports success. Counts the dispatches it
@@ -87,7 +87,7 @@ struct NullLlm;
 impl LlmProvider for NullLlm {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
+        _messages: &[ra_core::Message],
         _tools: &[ToolSpec],
         _config: &ChatConfig,
     ) -> eyre::Result<ChatResponse> {
@@ -222,7 +222,7 @@ async fn dispatch_to_mcp_agent_helper_respects_dispatch_policy_per_714() {
     // gate must reject the helper invocation before the backend is
     // touched.
     let policy = DispatchPolicy {
-        tool_policy: Some(octos_agent::ToolPolicy {
+        tool_policy: Some(ra_agent::ToolPolicy {
             deny: vec!["run_task".into()],
             ..Default::default()
         }),
@@ -274,7 +274,7 @@ async fn dispatch_to_mcp_agent_helper_respects_dispatch_policy_per_714() {
 #[cfg(unix)]
 #[tokio::test]
 async fn agent_mcp_spawn_fails_closed_on_backend_configured_injection_env_per_1601() {
-    use octos_agent::tools::mcp_agent::{McpAgentBackendConfig, StdioMcpAgent};
+    use ra_agent::tools::mcp_agent::{McpAgentBackendConfig, StdioMcpAgent};
 
     let dir = TempDir::new().unwrap();
     let memory = memory(&dir).await;

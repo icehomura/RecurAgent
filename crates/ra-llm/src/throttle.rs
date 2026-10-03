@@ -9,7 +9,7 @@ use eyre::Result;
 use futures::Stream;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
-use octos_core::Message;
+use ra_core::Message;
 
 use crate::config::ChatConfig;
 use crate::provider::LlmProvider;

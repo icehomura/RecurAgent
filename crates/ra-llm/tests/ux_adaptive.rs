@@ -8,9 +8,9 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use octos_core::{Message, MessageRole};
-use octos_llm::openai::OpenAIProvider;
-use octos_llm::{AdaptiveConfig, AdaptiveMode, AdaptiveRouter, ChatConfig, LlmProvider};
+use ra_core::{Message, MessageRole};
+use ra_llm::openai::OpenAIProvider;
+use ra_llm::{AdaptiveConfig, AdaptiveMode, AdaptiveRouter, ChatConfig, LlmProvider};
 
 fn kimi() -> Arc<dyn LlmProvider> {
     let key = std::env::var("KIMI_API_KEY").expect("KIMI_API_KEY required");
@@ -59,7 +59,7 @@ fn chat_config() -> ChatConfig {
 
 /// Extract text from ChatResponse, checking both content and reasoning_content.
 /// kimi-k2.5 is a thinking model that may put output in reasoning_content.
-fn resp_text(resp: &octos_llm::ChatResponse) -> String {
+fn resp_text(resp: &ra_llm::ChatResponse) -> String {
     let mut parts = Vec::new();
     if let Some(c) = &resp.content {
         parts.push(c.as_str());
@@ -354,7 +354,7 @@ async fn test_multi_turn_context_preservation() {
 #[tokio::test]
 #[ignore]
 async fn test_responsiveness_baseline_learning() {
-    use octos_llm::ResponsivenessObserver;
+    use ra_llm::ResponsivenessObserver;
 
     let mut observer = ResponsivenessObserver::new();
     let provider = deepseek();

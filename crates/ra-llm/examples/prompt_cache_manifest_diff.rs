@@ -10,7 +10,7 @@
 
 use std::{env, fs, process};
 
-use octos_llm::{PromptCacheInputManifest, PromptCacheObservation};
+use ra_llm::{PromptCacheInputManifest, PromptCacheObservation};
 use serde_json::{Value, json};
 
 fn main() {

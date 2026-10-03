@@ -24,7 +24,7 @@ use std::io::Write as _;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use octos_agent::{
+use ra_agent::{
     HookConfig, HookEvent, HookExecutor, HookPayload, HookPayloadEnricher, HookResult,
 };
 

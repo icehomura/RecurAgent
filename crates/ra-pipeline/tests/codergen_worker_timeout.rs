@@ -6,11 +6,11 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_core::Message;
-use octos_llm::{ChatConfig, ChatResponse, ChatStream, LlmProvider, StopReason, ToolSpec};
-use octos_memory::EpisodeStore;
-use octos_pipeline::handler::HandlerContext;
-use octos_pipeline::{CodergenHandler, Handler, HandlerKind, OutcomeStatus, PipelineNode};
+use ra_core::Message;
+use ra_llm::{ChatConfig, ChatResponse, ChatStream, LlmProvider, StopReason, ToolSpec};
+use ra_memory::EpisodeStore;
+use ra_pipeline::handler::HandlerContext;
+use ra_pipeline::{CodergenHandler, Handler, HandlerKind, OutcomeStatus, PipelineNode};
 
 struct HangingProvider;
 

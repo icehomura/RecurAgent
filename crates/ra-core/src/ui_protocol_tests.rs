@@ -5744,7 +5744,7 @@ fn aux_rest_to_ws_v1_result_dtos_match_json_goldens() {
         }),
     );
 
-    // memory/search — `{ hits: [<octos_memory::Hit JSON>...] }`
+    // memory/search — `{ hits: [<ra_memory::Hit JSON>...] }`
     assert_eq!(
         serde_json::to_value(MemorySearchResult {
             hits: vec![serde_json::json!({ "id": "doc:mail:1", "score": 0.9 })],

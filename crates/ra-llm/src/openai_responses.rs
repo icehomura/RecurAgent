@@ -9,7 +9,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
 use futures::StreamExt;
-use octos_core::{Message, MessageRole};
+use ra_core::{Message, MessageRole};
 
 use reqwest::Client;
 use serde::Deserialize;
@@ -701,7 +701,7 @@ fn parse_responses_api(resp: ResponsesApiResponse) -> ChatResponse {
                         serde_json::Value::Null
                     }
                 };
-                tool_calls.push(octos_core::ToolCall {
+                tool_calls.push(ra_core::ToolCall {
                     id: call_id,
                     name,
                     arguments: parsed_args,
@@ -986,7 +986,7 @@ pub fn is_responses_capable(model: &str) -> bool {
 mod tests {
     use super::*;
     use crate::config::PromptCacheContext;
-    use octos_core::{Message, MessageRole};
+    use ra_core::{Message, MessageRole};
 
     /// A tool loop whose tool handed the model an image: user, assistant
     /// tool call, tool row with the PNG on its media.
@@ -1006,7 +1006,7 @@ mod tests {
             timestamp: chrono::Utc::now(),
         };
         let mut assistant = mk(MessageRole::Assistant, "");
-        assistant.tool_calls = Some(vec![octos_core::ToolCall {
+        assistant.tool_calls = Some(vec![ra_core::ToolCall {
             id: "call_1".into(),
             name: "view_image".into(),
             arguments: serde_json::json!({"path": "grab.png"}),
@@ -1110,7 +1110,7 @@ mod tests {
             role: MessageRole::Assistant,
             content: "Let me check".into(),
             media: vec![],
-            tool_calls: Some(vec![octos_core::ToolCall {
+            tool_calls: Some(vec![ra_core::ToolCall {
                 id: "call_1".into(),
                 name: "shell".into(),
                 arguments: serde_json::json!({"command": "ls"}),
@@ -1618,7 +1618,7 @@ mod tests {
 
 #[cfg(test)]
 mod lane_attributed_operational_errors {
-    use octos_core::Message;
+    use ra_core::Message;
     use wiremock::matchers::method;
     use wiremock::{Mock, MockServer, ResponseTemplate};
 

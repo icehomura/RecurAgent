@@ -12,7 +12,7 @@
 
 use std::path::{Path, PathBuf};
 
-use octos_core::SessionKey;
+use ra_core::SessionKey;
 use tracing::warn;
 
 /// `<data_dir>/users/<encoded base key>/workspace` — a session's tenant-owned

@@ -56,7 +56,7 @@ fn create(p: CreateParams) -> Result<Arc<dyn LlmProvider>> {
 
 #[cfg(test)]
 mod tests {
-    use octos_core::Message;
+    use ra_core::Message;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 

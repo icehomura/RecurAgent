@@ -11,8 +11,8 @@
 //!     pre-M6.2 `recover_shell_retry` helper (shell-spiral tests still
 //!     detect + return the same recovery content).
 
-use octos_agent::harness_errors::HarnessError;
-use octos_agent::{LoopDecision, LoopRetryLimits, LoopRetryState};
+use ra_agent::harness_errors::HarnessError;
+use ra_agent::{LoopDecision, LoopRetryLimits, LoopRetryState};
 
 // ─────────────────────────────────────────────────────────────────────────
 // Bucket exhaustion: InvalidRequest

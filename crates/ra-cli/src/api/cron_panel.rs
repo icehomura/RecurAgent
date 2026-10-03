@@ -47,7 +47,7 @@ use axum::Json;
 use axum::extract::{Path as AxumPath, State};
 use axum::http::{HeaderMap, StatusCode};
 use chrono::Utc;
-use octos_bus::CronService;
+use ra_bus::CronService;
 use serde::Deserialize;
 
 use super::AppState;
@@ -56,7 +56,7 @@ use crate::api::auth_handlers::resolve_my_profile_id;
 
 /// Render one job in the same shape the admin list uses, so the SPA
 /// can share a row component between the two surfaces.
-fn job_json(j: &octos_bus::CronJob, now_ms: i64) -> serde_json::Value {
+fn job_json(j: &ra_bus::CronJob, now_ms: i64) -> serde_json::Value {
     let next_in = j.state.next_run_at_ms.map(|t| {
         let secs = (t - now_ms) / 1000;
         if secs < 0 {
@@ -233,13 +233,13 @@ pub(crate) async fn apply_cron_toggle(
     cron_path: &Path,
     job_id: &str,
     enabled: bool,
-) -> Result<octos_bus::CronJob, ToggleError> {
+) -> Result<ra_bus::CronJob, ToggleError> {
     let content = match tokio::fs::read_to_string(cron_path).await {
         Ok(content) => content,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(ToggleError::NotFound),
         Err(_) => return Err(ToggleError::Io),
     };
-    let mut store: octos_bus::CronStore =
+    let mut store: ra_bus::CronStore =
         serde_json::from_str(&content).map_err(|_| ToggleError::Io)?;
     let job = store
         .jobs
@@ -260,7 +260,7 @@ pub(crate) async fn apply_cron_toggle(
     // consume each other's temp file (codex #1612 r4 P2). Runs on the
     // blocking pool (it is synchronous fs I/O).
     let cron_path = cron_path.to_path_buf();
-    tokio::task::spawn_blocking(move || octos_bus::write_cron_json_atomic(&cron_path, &json))
+    tokio::task::spawn_blocking(move || ra_bus::write_cron_json_atomic(&cron_path, &json))
         .await
         .map_err(|_| ToggleError::Io)?
         .map_err(|_| ToggleError::Io)?;
@@ -277,7 +277,7 @@ pub(crate) fn toggle_via_service(
     svc: &Arc<CronService>,
     job_id: &str,
     enabled: bool,
-) -> Result<octos_bus::CronJob, ToggleError> {
+) -> Result<ra_bus::CronJob, ToggleError> {
     match svc.toggle_job_reconciling(job_id, enabled) {
         Ok(Some(job)) => Ok(job),
         Ok(None) => Err(ToggleError::NotFound),
@@ -344,7 +344,7 @@ pub async fn set_my_cron_enabled(
 }
 
 /// Read + parse `cron.json`; `Ok(None)` when the file does not exist.
-async fn read_cron_store(cron_path: &Path) -> Result<Option<octos_bus::CronStore>, StatusCode> {
+async fn read_cron_store(cron_path: &Path) -> Result<Option<ra_bus::CronStore>, StatusCode> {
     let content = match tokio::fs::read_to_string(cron_path).await {
         Ok(content) => content,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -392,23 +392,23 @@ mod tests {
         })
     }
 
-    fn make_job(id: &str, enabled: bool) -> octos_bus::CronJob {
-        octos_bus::CronJob {
+    fn make_job(id: &str, enabled: bool) -> ra_bus::CronJob {
+        ra_bus::CronJob {
             id: id.into(),
             name: format!("job {id}"),
             enabled,
-            schedule: octos_bus::CronSchedule::Every {
+            schedule: ra_bus::CronSchedule::Every {
                 every_ms: 1_800_000,
             },
-            payload: octos_bus::CronPayload {
+            payload: ra_bus::CronPayload {
                 message: "check the queue".into(),
                 deliver: false,
                 channel: Some("system".into()),
                 chat_id: None,
-                mode: octos_bus::CronMode::Agent,
+                mode: ra_bus::CronMode::Agent,
             },
             state: Default::default(),
-            origin: octos_bus::CronOrigin::default(),
+            origin: ra_bus::CronOrigin::default(),
             created_at_ms: 1,
             delete_after_run: false,
             timezone: None,
@@ -418,12 +418,12 @@ mod tests {
     async fn seed_cron(
         ps: &ProfileStore,
         profile: &crate::profiles::UserProfile,
-        jobs: Vec<octos_bus::CronJob>,
+        jobs: Vec<ra_bus::CronJob>,
     ) -> PathBuf {
         let data_dir = ps.resolve_data_dir(profile);
         tokio::fs::create_dir_all(&data_dir).await.unwrap();
         let path = cron_path_for(&data_dir);
-        let store = octos_bus::CronStore { version: 1, jobs };
+        let store = ra_bus::CronStore { version: 1, jobs };
         tokio::fs::write(&path, serde_json::to_string_pretty(&store).unwrap())
             .await
             .unwrap();
@@ -521,7 +521,7 @@ mod tests {
         // Persisted: a fresh read of cron.json reflects the flip and
         // the store shape (version + full job records) survived.
         let content = tokio::fs::read_to_string(&path).await.unwrap();
-        let store: octos_bus::CronStore = serde_json::from_str(&content).unwrap();
+        let store: ra_bus::CronStore = serde_json::from_str(&content).unwrap();
         assert_eq!(store.version, 1);
         assert_eq!(store.jobs.len(), 1);
         assert!(!store.jobs[0].enabled);
@@ -566,7 +566,7 @@ mod tests {
         // Pure file-level core: flipping one job leaves siblings alone.
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("cron.json");
-        let store = octos_bus::CronStore {
+        let store = ra_bus::CronStore {
             version: 1,
             jobs: vec![make_job("one", true), make_job("two", true)],
         };
@@ -576,7 +576,7 @@ mod tests {
 
         let updated = apply_cron_toggle(&path, "two", false).await.unwrap();
         assert_eq!(updated.id, "two");
-        let reread: octos_bus::CronStore =
+        let reread: ra_bus::CronStore =
             serde_json::from_str(&tokio::fs::read_to_string(&path).await.unwrap()).unwrap();
         assert!(reread.jobs[0].enabled, "sibling job must be untouched");
         assert!(!reread.jobs[1].enabled);
@@ -591,7 +591,7 @@ mod tests {
         let path = dir.path().join("cron.json");
         let mut job = make_job("one", true);
         job.state.next_run_at_ms = Some(123); // long past
-        let store = octos_bus::CronStore {
+        let store = ra_bus::CronStore {
             version: 1,
             jobs: vec![job],
         };
@@ -601,7 +601,7 @@ mod tests {
 
         let disabled = apply_cron_toggle(&path, "one", false).await.unwrap();
         assert_eq!(disabled.state.next_run_at_ms, None);
-        let reread: octos_bus::CronStore =
+        let reread: ra_bus::CronStore =
             serde_json::from_str(&tokio::fs::read_to_string(&path).await.unwrap()).unwrap();
         assert_eq!(reread.jobs[0].state.next_run_at_ms, None);
 
@@ -622,7 +622,7 @@ mod tests {
         // memory over them.
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("cron.json");
-        let store = octos_bus::CronStore {
+        let store = ra_bus::CronStore {
             version: 1,
             jobs: vec![make_job("old", true)],
         };
@@ -634,7 +634,7 @@ mod tests {
         let svc = Arc::new(CronService::new(&path, tx));
         // …then an external owner (gateway child / CLI) rewrites the
         // file with an ADDITIONAL job.
-        let external = octos_bus::CronStore {
+        let external = ra_bus::CronStore {
             version: 1,
             jobs: vec![make_job("old", true), make_job("child-added", true)],
         };
@@ -645,7 +645,7 @@ mod tests {
         // Toggling through the service must see child-added AND keep it.
         let toggled = toggle_via_service(&svc, "child-added", false).unwrap();
         assert!(!toggled.enabled);
-        let reread: octos_bus::CronStore =
+        let reread: ra_bus::CronStore =
             serde_json::from_str(&tokio::fs::read_to_string(&path).await.unwrap()).unwrap();
         assert_eq!(reread.jobs.len(), 2, "child-added must survive: {reread:?}");
         assert!(reread.jobs.iter().any(|j| j.id == "old" && j.enabled));
@@ -666,7 +666,7 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("cron.json");
-        let store = octos_bus::CronStore {
+        let store = ra_bus::CronStore {
             version: 1,
             jobs: vec![make_job("one", true)],
         };
@@ -695,7 +695,7 @@ mod tests {
         let path = dir.path().join("cron.json");
         let mut job = make_job("svc1", true);
         job.state.next_run_at_ms = Some(123);
-        let store = octos_bus::CronStore {
+        let store = ra_bus::CronStore {
             version: 1,
             jobs: vec![job],
         };
@@ -709,7 +709,7 @@ mod tests {
         let toggled = toggle_via_service(&svc, "svc1", false).unwrap();
         assert!(!toggled.enabled);
         assert_eq!(toggled.state.next_run_at_ms, None, "deadline cleared");
-        let reread: octos_bus::CronStore =
+        let reread: ra_bus::CronStore =
             serde_json::from_str(&tokio::fs::read_to_string(&path).await.unwrap()).unwrap();
         assert!(!reread.jobs[0].enabled, "service persisted the flip");
 
@@ -751,7 +751,7 @@ mod tests {
         );
         assert!(a.is_ok() && b.is_ok());
 
-        let reread: octos_bus::CronStore =
+        let reread: ra_bus::CronStore =
             serde_json::from_str(&tokio::fs::read_to_string(&path).await.unwrap()).unwrap();
         assert!(
             reread.jobs.iter().all(|j| !j.enabled),

@@ -11,8 +11,8 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use octos_research::item::{ItemsDocument, ResearchItem, SkippedUrl, SummaryKind};
-use octos_research::{DomainCap, SearchHit};
+use ra_research::item::{ItemsDocument, ResearchItem, SkippedUrl, SummaryKind};
+use ra_research::{DomainCap, SearchHit};
 use serde::{Deserialize, Serialize};
 
 mod research;
@@ -132,7 +132,7 @@ struct Output {
 }
 
 /// v2 result summary: discriminator + headline + sources. Mirrors
-/// `octos_plugin::protocol_v2::ResultSummary` field-for-field. Avoids a
+/// `ra_plugin::protocol_v2::ResultSummary` field-for-field. Avoids a
 /// dependency on `ra-plugin` from the standalone plugin binary
 /// (plugin binaries should be self-contained per the SDK contract).
 #[derive(Serialize, Deserialize, Default)]
@@ -165,7 +165,7 @@ struct ResultSource {
     cited: bool,
 }
 
-/// v2 roll-up cost. Mirrors `octos_plugin::protocol_v2::ResultCost`.
+/// v2 roll-up cost. Mirrors `ra_plugin::protocol_v2::ResultCost`.
 #[derive(Serialize, Deserialize, Default)]
 struct ResultCost {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -268,7 +268,7 @@ async fn main() {
     }
     // A browser the metasearch launched (Google) would outlive this
     // process: statics are never dropped.
-    octos_research::browser::close_shared().await;
+    ra_research::browser::close_shared().await;
 }
 
 /// Install a SIGTERM handler that emits a final v2 progress event and
@@ -300,7 +300,7 @@ fn install_sigterm_handler() {
             // 10-second budget.
             let _ = tokio::time::timeout(
                 Duration::from_secs(4),
-                octos_research::browser::close_shared(),
+                ra_research::browser::close_shared(),
             )
             .await;
             // 130 = 128 + SIGTERM(2). Convention for "killed by signal 2".
@@ -359,10 +359,10 @@ impl SearchLog {
             self.dump.push_str("\n\n");
         }
         self.dump
-            .push_str(&octos_research::providers::format_hits(&label, &round.hits));
+            .push_str(&ra_research::providers::format_hits(&label, &round.hits));
         self.dump.push('\n');
         for h in round.hits {
-            if self.seen.insert(octos_research::urls::dedup_key(&h.url)) {
+            if self.seen.insert(ra_research::urls::dedup_key(&h.url)) {
                 self.hits.push(h);
             }
         }
@@ -414,7 +414,7 @@ async fn read_into(
                 let canonical = page.canonical_url();
                 if !st
                     .seen_canonical
-                    .insert(octos_research::urls::dedup_key(&canonical))
+                    .insert(ra_research::urls::dedup_key(&canonical))
                 {
                     continue;
                 }
@@ -468,7 +468,7 @@ fn one_line(s: &str) -> String {
 /// Structured item for a read source.
 fn source_item(s: &CitedSource, citation: usize, cited: bool, file: &str) -> ResearchItem {
     let url = s.page.canonical_url();
-    let domain = octos_research::urls::domain_of(&url).unwrap_or_default();
+    let domain = ra_research::urls::domain_of(&url).unwrap_or_default();
     let meta = &s.page.meta;
     let title = meta
         .title
@@ -476,7 +476,7 @@ fn source_item(s: &CitedSource, citation: usize, cited: bool, file: &str) -> Res
         .filter(|t| !t.is_empty())
         .or_else(|| Some(s.hit.title.clone()).filter(|t| !t.is_empty()))
         .unwrap_or_else(|| url.clone());
-    let summary = octos_research::item::extractive_summary(&s.page.text, 400);
+    let summary = ra_research::item::extractive_summary(&s.page.text, 400);
     ResearchItem {
         title: one_line(&title),
         source: meta
@@ -516,12 +516,12 @@ fn source_item(s: &CitedSource, citation: usize, cited: bool, file: &str) -> Res
 /// fetch error, no main text): headline-level information only. Headline
 /// sources listed in the report carry their `[N]` citation.
 fn unread_item(hit: &SearchHit, citation: Option<usize>, cited: bool) -> ResearchItem {
-    let url = octos_research::urls::canonicalize(&hit.url);
+    let url = ra_research::urls::canonicalize(&hit.url);
     let domain = hit
         .source_url
         .as_deref()
-        .and_then(octos_research::urls::domain_of)
-        .or_else(|| octos_research::urls::domain_of(&url))
+        .and_then(ra_research::urls::domain_of)
+        .or_else(|| ra_research::urls::domain_of(&url))
         .unwrap_or_default();
     ResearchItem {
         title: one_line(&hit.title),
@@ -663,10 +663,10 @@ async fn run_deep_search(
     // interleave languages so the page budget covers all of them.
     // -----------------------------------------------------------------------
     let (kept, skipped) = opts.filters.apply(std::mem::take(&mut log.hits));
-    let kept = octos_research::filter::interleave_by(kept, |h| {
+    let kept = ra_research::filter::interleave_by(kept, |h| {
         h.lang
             .as_deref()
-            .map(octos_research::lang::primary)
+            .map(ra_research::lang::primary)
             .unwrap_or_default()
     });
     let reader = research::Reader::new(opts.render);
@@ -857,7 +857,7 @@ async fn run_deep_search(
         synthesis_texts.push(preview.clone());
         saved_files.push((
             String::new(),
-            octos_research::urls::canonicalize(&hit.url),
+            ra_research::urls::canonicalize(&hit.url),
             preview,
         ));
     }
@@ -960,7 +960,7 @@ async fn run_deep_search(
     }
     let headline_keys: HashSet<String> = headline_hits
         .iter()
-        .map(|h| octos_research::urls::dedup_key(&h.url))
+        .map(|h| ra_research::urls::dedup_key(&h.url))
         .collect();
     for (j, hit) in headline_hits.iter().enumerate() {
         let n = read_count + j + 1;
@@ -968,7 +968,7 @@ async fn run_deep_search(
             .push(unread_item(hit, Some(n), cited_indexes.contains(&n)));
     }
     for hit in &st.unread {
-        if !headline_keys.contains(&octos_research::urls::dedup_key(&hit.url)) {
+        if !headline_keys.contains(&ra_research::urls::dedup_key(&hit.url)) {
             doc.items.push(unread_item(hit, None, false));
         }
     }
@@ -1102,7 +1102,7 @@ fn assemble_output(
 
 /// Empty (successful) result when no allowed provider returned anything.
 fn no_results_output(query: &str, log: &SearchLog, opts: &research::Options) -> Output {
-    let mut message = octos_research::no_results_message(query, &log.tried);
+    let mut message = ra_research::no_results_message(query, &log.tried);
     for n in &log.notes {
         message.push_str(&format!("\n{n}\n"));
     }
@@ -1232,7 +1232,7 @@ fn extract_subtopics(text: &str) -> Vec<String> {
 fn build_client() -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(15))
-        .user_agent(octos_research::USER_AGENT)
+        .user_agent(ra_research::USER_AGENT)
         .build()
         .unwrap_or_else(|_| reqwest::Client::new())
 }
@@ -1256,7 +1256,7 @@ async fn ddg_search(query: &str, count: u8) -> Result<Vec<SearchHit>, String> {
     }
     let html = response.text().await.unwrap_or_default();
     // Its bot check (often HTTP 202) is a miss: never parsed, never solved.
-    if octos_research::access::is_bot_challenge(&html) {
+    if ra_research::access::is_bot_challenge(&html) {
         return Err("DuckDuckGo answered with a bot check (not solved)".to_string());
     }
     Ok(parse_ddg_results(&html, count as usize)
@@ -1521,7 +1521,7 @@ async fn bing_cdp_search(query: &str, count: u8) -> Result<Vec<SearchHit>, Strin
 /// miss: its links (a captcha provider's privacy page, help pages) are not
 /// results.
 fn bing_hits_from_text(text: &str, count: u8) -> Result<Vec<SearchHit>, String> {
-    if octos_research::access::is_bot_challenge(text) {
+    if ra_research::access::is_bot_challenge(text) {
         return Err("Bing answered with a challenge (not solved)".to_string());
     }
     Ok(extract_bing_results(text)
@@ -1760,11 +1760,11 @@ fn clean_boilerplate(text: &str) -> String {
 // ---------------------------------------------------------------------------
 
 /// Private/internal link targets are dropped (shared SSRF classification
-/// from `octos_research::net`; the reader re-checks with DNS before any read).
+/// from `ra_research::net`; the reader re-checks with DNS before any read).
 fn is_private_url(url: &str) -> bool {
     url::Url::parse(url)
         .ok()
-        .and_then(|u| u.host_str().map(octos_research::net::is_private_host))
+        .and_then(|u| u.host_str().map(ra_research::net::is_private_host))
         .unwrap_or(false)
 }
 
@@ -1936,7 +1936,7 @@ fn host_slug(raw_url: &str) -> String {
 /// Keep at most `max_chars` characters (not bytes, so CJK text gets the same
 /// room as English) and append `suffix` when anything was cut.
 fn truncate_utf8(s: &str, max_chars: usize, suffix: &str) -> String {
-    octos_research::text::truncate_chars(s, max_chars, suffix)
+    ra_research::text::truncate_chars(s, max_chars, suffix)
 }
 
 /// Extract `(title, url)` pairs from a Bing SERP text dump.
@@ -2070,7 +2070,7 @@ fn research_dir(slug: &str) -> PathBuf {
 /// `01_*.md`, …) keep their leading-`_`/index prefix shapes so a
 /// directory listing groups by run.
 ///
-/// `octos_agent::tools::research_utils::read_sources` excludes files with
+/// `ra_agent::tools::research_utils::read_sources` excludes files with
 /// this report suffix when collecting "source" inputs for the
 /// `synthesize_research` map-reduce. Without that companion skip, the new
 /// topic-named report would be re-ingested as a source on the next
@@ -2404,7 +2404,7 @@ fn truncation_reason(reply: &ModelReply, synthesis: &str) -> Option<String> {
     if has_headline && !has_synthesis_section(&reply.content) {
         return Some("the reply stopped before its Synthesis section".to_string());
     }
-    octos_research::text::looks_cut_off(synthesis).map(|r| format!("the synthesis {r}"))
+    ra_research::text::looks_cut_off(synthesis).map(|r| format!("the synthesis {r}"))
 }
 
 fn has_synthesis_section(text: &str) -> bool {
@@ -2538,7 +2538,7 @@ async fn synthesize(
         }
     }
 
-    let (flagged, count) = octos_research::text::flag_uncited_sentences(&result.synthesis);
+    let (flagged, count) = ra_research::text::flag_uncited_sentences(&result.synthesis);
     result.synthesis = flagged;
     result.uncited_flagged = count;
     result.usd = project_usd(&model, result.tokens_in, result.tokens_out);
@@ -3104,7 +3104,7 @@ mod tests {
     #[test]
     fn should_treat_a_duckduckgo_bot_check_as_a_miss() {
         let html = serp_fixture("ddg_anomaly.html");
-        assert!(octos_research::access::is_bot_challenge(&html));
+        assert!(ra_research::access::is_bot_challenge(&html));
         assert!(parse_ddg_results(&html, 5).is_empty());
     }
 
@@ -3250,7 +3250,7 @@ mod tests {
         let page = research::ReadPage {
             final_url: "https://elpais.com/clima/cumbre.html".into(),
             text: "Los delegados de 190 países alcanzaron un acuerdo preliminar el jueves por la noche. Otra frase.".into(),
-            meta: octos_research::extract::PageMeta {
+            meta: ra_research::extract::PageMeta {
                 title: Some("Cumbre: acuerdo preliminar".into()),
                 site_name: Some("EL PAÍS".into()),
                 lang: Some("es-ES".into()),
@@ -4394,6 +4394,6 @@ A second paragraph elaborates on alternatives [2]."
     #[test]
     fn system_prompt_requires_citation_on_every_factual_sentence() {
         assert!(SYNTHESIS_SYSTEM_PROMPT.contains("Every sentence that states a fact"));
-        assert!(SYNTHESIS_SYSTEM_PROMPT.contains(octos_research::text::GAPS_PREFIX));
+        assert!(SYNTHESIS_SYSTEM_PROMPT.contains(ra_research::text::GAPS_PREFIX));
     }
 }

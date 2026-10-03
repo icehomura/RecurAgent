@@ -7,7 +7,7 @@ use std::sync::Arc;
 use clap::Args;
 use colored::Colorize;
 use eyre::{Result, WrapErr};
-use octos_bus::SessionManager;
+use ra_bus::SessionManager;
 
 use super::Executable;
 use crate::api::{
@@ -48,7 +48,7 @@ const FLEET_BOOT_RECONCILE_MAX_ATTEMPTS: u32 = 3;
 /// give the worker unbounded network/host reach. Returns whether `sandbox_cfg`
 /// yields real isolation.
 ///
-/// [`NoSandbox`]: octos_agent::sandbox::NoSandbox
+/// [`NoSandbox`]: ra_agent::sandbox::NoSandbox
 /// Default idle lifetime of a cached per-session runtime (30 minutes).
 const SESSION_CACHE_IDLE_TTL: std::time::Duration = std::time::Duration::from_secs(1800);
 
@@ -66,8 +66,8 @@ fn session_cache_idle_ttl() -> std::time::Duration {
         .map_or(SESSION_CACHE_IDLE_TTL, std::time::Duration::from_secs)
 }
 
-fn fleet_sandbox_is_isolating(sandbox_cfg: &octos_agent::sandbox::SandboxConfig) -> bool {
-    let sandbox = octos_agent::sandbox::create_sandbox(sandbox_cfg);
+fn fleet_sandbox_is_isolating(sandbox_cfg: &ra_agent::sandbox::SandboxConfig) -> bool {
+    let sandbox = ra_agent::sandbox::create_sandbox(sandbox_cfg);
     // A refusing resolution (explicit mode unhonorable on this host, or
     // sandbox.fail_closed with no backend) is fail-closed but useless to a
     // pool: every worker command would refuse. Treat it like a missing
@@ -88,9 +88,9 @@ fn fleet_sandbox_is_isolating(sandbox_cfg: &octos_agent::sandbox::SandboxConfig)
 /// lose its deliverable when the checkout is removed). Threaded into
 /// `PoolConfig.repo_git_write_supported`.
 fn fleet_sandbox_supports_repo_git_write(
-    sandbox_cfg: &octos_agent::sandbox::SandboxConfig,
+    sandbox_cfg: &ra_agent::sandbox::SandboxConfig,
 ) -> bool {
-    octos_agent::sandbox::create_sandbox(sandbox_cfg).supports_repo_git_write()
+    ra_agent::sandbox::create_sandbox(sandbox_cfg).supports_repo_git_write()
 }
 
 /// #1857 PR 5a fix (HIGH 2) — reconcile the fleet store at boot with a bounded
@@ -102,7 +102,7 @@ fn fleet_sandbox_supports_repo_git_write(
 /// SUCCEEDED. On persistent failure the caller must NOT install the pool, but
 /// serve boot itself is never aborted (advisory, like `FleetKernelStore::open`).
 async fn fleet_boot_reconcile(
-    store: &octos_fleet::FleetKernelStore,
+    store: &ra_fleet::FleetKernelStore,
     now_ms: u64,
     owner_epoch: u64,
     max_attempts: u32,
@@ -471,8 +471,8 @@ pub struct ServeCommand {
 
     /// Agent executable (e.g. `claude`). Required when
     /// `--swarm-backend stdio` or `cli` is set. Forwarded to
-    /// [`octos_agent::tools::mcp_agent::StdioMcpAgent`] /
-    /// [`octos_agent::tools::mcp_agent::CliAgentBackend`].
+    /// [`ra_agent::tools::mcp_agent::StdioMcpAgent`] /
+    /// [`ra_agent::tools::mcp_agent::CliAgentBackend`].
     #[arg(long, value_name = "CMD")]
     pub swarm_backend_cmd: Option<String>,
 
@@ -484,7 +484,7 @@ pub struct ServeCommand {
 
     /// HTTPS URL for a remote MCP agent. Required when
     /// `--swarm-backend http` is set. Forwarded to
-    /// [`octos_agent::tools::mcp_agent::HttpMcpAgent`].
+    /// [`ra_agent::tools::mcp_agent::HttpMcpAgent`].
     #[arg(long, value_name = "URL")]
     pub swarm_backend_url: Option<String>,
 }
@@ -1016,7 +1016,7 @@ impl ServeCommand {
         // is installed ONLY if the boot reconcile succeeded (a store that can't
         // reconcile a prior boot's stale leases must not accept new dispatch).
         let mut fleet_reconciled = false;
-        match octos_fleet::FleetKernelStore::open(data_dir.join("fleet-kernel")).await {
+        match ra_fleet::FleetKernelStore::open(data_dir.join("fleet-kernel")).await {
             Ok(fleet_store) => {
                 crate::autonomy::agent_orchestrator::default_agent_orchestrator()
                     .set_fleet_store(fleet_store.clone());
@@ -1186,13 +1186,13 @@ impl ServeCommand {
         // deep-search) and zero platform skills (voice). Doing it once
         // at process startup matches the gateway flow and keeps the
         // per-profile loop free of redundant disk writes.
-        octos_agent::bootstrap::bootstrap_bundled_skills(&data_dir);
-        octos_agent::bootstrap::bootstrap_platform_skills(&data_dir);
+        ra_agent::bootstrap::bootstrap_bundled_skills(&data_dir);
+        ra_agent::bootstrap::bootstrap_platform_skills(&data_dir);
         // Preflight: if the sibling app-skill binaries are missing beside the
         // running `ra` executable, bootstrap silently skipped them and the
         // affected tools (get_weather, etc.) will NOT register. Warn loudly so
         // a bare-binary deploy is diagnosable instead of a silent plugin_count=0.
-        let missing = octos_agent::bootstrap::missing_bundled_skill_binaries();
+        let missing = ra_agent::bootstrap::missing_bundled_skill_binaries();
         if !missing.is_empty() {
             tracing::warn!(
                 missing = ?missing,
@@ -1206,7 +1206,7 @@ impl ServeCommand {
         // `RunPipelineTool`s register that dir as the LOWEST-precedence
         // search path via `with_octos_home` (bootstrap-dir == search-dir).
         // Installed pipelines of the same name always win (no clobber).
-        octos_agent::bootstrap::bootstrap_bundled_pipelines(&data_dir);
+        ra_agent::bootstrap::bootstrap_bundled_pipelines(&data_dir);
 
         // M11-D — build the per-profile runtime catalog. For every
         // enabled profile that has an active primary LLM selection,
@@ -1311,7 +1311,7 @@ impl ServeCommand {
             .filter(|_| fleet_reconciled)
         {
             let keeper = profile_runtimes
-                .get(octos_core::MAIN_PROFILE_ID)
+                .get(ra_core::MAIN_PROFILE_ID)
                 .cloned()
                 .or_else(|| {
                     profile_runtimes
@@ -1362,9 +1362,9 @@ impl ServeCommand {
                         // worker → `Some(<repo>/.git)`, a TARGETED rw-bind so its
                         // `git commit` can reach `<repo>/.git` outside its cwd
                         // WITHOUT exposing host sockets via `--bind / /`).
-                        let sandbox_factory: octos_fleet_worker::SandboxFactory = Arc::new(
+                        let sandbox_factory: ra_fleet_worker::SandboxFactory = Arc::new(
                             move |_cwd: &std::path::Path,
-                                  grant: octos_fleet_worker::SandboxGrant| {
+                                  grant: ra_fleet_worker::SandboxGrant| {
                                 let mut cfg = sandbox_cfg.clone();
                                 cfg.allow_network = grant.allow_network;
                                 cfg.repo_git_write = grant.repo_git_dir;
@@ -1375,8 +1375,8 @@ impl ServeCommand {
                                 // in create_sandbox). Deny-wins with the file
                                 // tools' own fence.
                                 cfg.write_allow_globs = grant.write_allow_globs;
-                                Arc::<dyn octos_agent::sandbox::Sandbox>::from(
-                                    octos_agent::sandbox::create_sandbox(&cfg),
+                                Arc::<dyn ra_agent::sandbox::Sandbox>::from(
+                                    ra_agent::sandbox::create_sandbox(&cfg),
                                 )
                             },
                         );
@@ -1390,8 +1390,8 @@ impl ServeCommand {
                         // bounded the write.
                         let denial_data_dir = rt.data_dir.clone();
                         let denial_profile_id = rt.profile_id.clone();
-                        let violation_sink: octos_agent::tools::write_grant::WriteGrantViolationSink =
-                            Arc::new(move |v: octos_agent::tools::write_grant::WriteGrantViolation| {
+                        let violation_sink: ra_agent::tools::write_grant::WriteGrantViolationSink =
+                            Arc::new(move |v: ra_agent::tools::write_grant::WriteGrantViolation| {
                                 let data_dir = denial_data_dir.clone();
                                 let profile_id = denial_profile_id.clone();
                                 let record = move || {
@@ -1411,14 +1411,14 @@ impl ServeCommand {
                                 }
                             });
                         let factory = Arc::new(
-                            octos_fleet_worker::AgentFactory::new(
+                            ra_fleet_worker::AgentFactory::new(
                                 rt.llm.clone(),
                                 rt.memory.clone(),
                                 sandbox_factory,
                             )
                             .with_violation_sink(violation_sink),
                         );
-                        let cfg = octos_fleet_worker::PoolConfig {
+                        let cfg = ra_fleet_worker::PoolConfig {
                             global_concurrency: FLEET_POOL_GLOBAL_CONCURRENCY,
                             per_fleet_concurrency: FLEET_POOL_PER_FLEET_CONCURRENCY,
                             deadline: std::time::Duration::from_secs(
@@ -1439,7 +1439,7 @@ impl ServeCommand {
                             // loses a deliverable.
                             repo_git_write_supported,
                         };
-                        let pool = octos_fleet_worker::FleetWorkerPool::new(
+                        let pool = ra_fleet_worker::FleetWorkerPool::new(
                             Arc::new(fleet_store),
                             factory,
                             cfg,
@@ -1723,11 +1723,11 @@ impl ServeCommand {
         // F-005: Build the content classifier at startup. Absent config
         // or `enabled: false` → stays `None` so routing keeps the
         // pre-M6.6 strong-only default (invariant #3 of issue #493).
-        let content_classifier_init: Option<Arc<octos_llm::ContentClassifier>> = config
+        let content_classifier_init: Option<Arc<ra_llm::ContentClassifier>> = config
             .content_routing
             .as_ref()
             .filter(|cfg| cfg.enabled)
-            .map(|cfg| Arc::new(octos_llm::ContentClassifier::new(cfg.clone())));
+            .map(|cfg| Arc::new(ra_llm::ContentClassifier::new(cfg.clone())));
 
         // ── swarm ──────────────────────────────────────────────────
         // F-010: construct an MCP backend + SwarmState when the
@@ -1923,7 +1923,7 @@ impl ServeCommand {
             // `crate::api::preview_tokens` for the design rationale).
             preview_tokens,
             work_secret_store: Arc::new(
-                octos_agent::bridge::work_secret::WorkSecretGrantStore::new(&data_dir),
+                ra_agent::bridge::work_secret::WorkSecretGrantStore::new(&data_dir),
             ),
             // Issue #1009: owning sweeper handle. `Drop` aborts the
             // tokio task when the last `Arc<AppState>` is released,
@@ -2347,8 +2347,8 @@ impl ServeCommand {
     /// of `self` during the main init flow.
     ///
     /// `tool_policy` (`config.tool_policy`) is folded into the swarm's
-    /// production [`octos_swarm::DispatchPolicy`] via
-    /// [`octos_swarm::DispatchPolicy::from_agent_gates`]. The
+    /// production [`ra_swarm::DispatchPolicy`] via
+    /// [`ra_swarm::DispatchPolicy::from_agent_gates`]. The
     /// resulting policy reproduces two of the workspace-level gates
     /// the native side already applies:
     ///
@@ -2356,12 +2356,12 @@ impl ServeCommand {
     ///   per-profile `ProfileRuntime::tool_specs` registry is
     ///   filtered with at bootstrap.
     /// - **injection-env denylist** — the workspace-shared
-    ///   [`octos_agent::sandbox::BLOCKED_ENV_VARS`] set the agent's
+    ///   [`ra_agent::sandbox::BLOCKED_ENV_VARS`] set the agent's
     ///   sandbox + MCP subprocess paths use to scrub child env.
     ///
     /// Approval bridge, sandbox-required, and per-skill manifest env
     /// allowlists are intentionally not mirrored here — see
-    /// [`octos_swarm::DispatchPolicy::from_agent_gates`] rustdoc for
+    /// [`ra_swarm::DispatchPolicy::from_agent_gates`] rustdoc for
     /// the boundary. Closes audit issue #713 (M7 req 7 production
     /// wiring).
     // Each argument is a distinct `--swarm-*` CLI flag or shared handle;
@@ -2375,10 +2375,10 @@ impl ServeCommand {
         data_dir: &std::path::Path,
         broadcaster: Arc<crate::api::EventBroadcaster>,
         harness_sink: Option<String>,
-        tool_policy: Option<octos_agent::ToolPolicy>,
+        tool_policy: Option<ra_agent::ToolPolicy>,
     ) -> Result<Option<Arc<crate::api::SwarmState>>> {
-        use octos_agent::cost_ledger::PersistentCostLedger;
-        use octos_agent::tools::mcp_agent::{
+        use ra_agent::cost_ledger::PersistentCostLedger;
+        use ra_agent::tools::mcp_agent::{
             CliAgentBackend, HttpMcpAgent, McpAgentBackend, McpAgentBackendConfig, StdioMcpAgent,
         };
 
@@ -2469,7 +2469,7 @@ impl ServeCommand {
         // on top via `Swarm::builder(...).with_dispatch_policy(...)`.
         // See `DispatchPolicy::from_agent_gates` rustdoc for the full
         // boundary.
-        let dispatch_policy = octos_swarm::DispatchPolicy::from_agent_gates(tool_policy, true);
+        let dispatch_policy = ra_swarm::DispatchPolicy::from_agent_gates(tool_policy, true);
         let state = crate::api::build_swarm_state(
             backend,
             swarm_dir,
@@ -2815,7 +2815,7 @@ mod tests {
     /// bwrap/docker — so only the fail-closed direction is asserted here.)
     #[test]
     fn fleet_pool_requires_a_real_isolating_sandbox() {
-        use octos_agent::sandbox::{SandboxConfig, SandboxMode};
+        use ra_agent::sandbox::{SandboxConfig, SandboxMode};
         let disabled = SandboxConfig {
             enabled: false,
             ..Default::default()
@@ -2844,7 +2844,7 @@ mod tests {
     /// `refusal()` check this would regress to installing a dead pool.
     #[test]
     fn fleet_pool_rejects_a_refusing_sandbox_resolution() {
-        use octos_agent::sandbox::{SandboxConfig, SandboxMode};
+        use ra_agent::sandbox::{SandboxConfig, SandboxMode};
         // Unhonorable on every host this test runs on: landlock requires
         // Linux (and, on Linux, the ra-sandbox helper, absent in unit-test
         // runners); appcontainer requires Windows.
@@ -2868,8 +2868,8 @@ mod tests {
     /// store-level recovery contract.
     #[tokio::test]
     async fn fleet_boot_reconcile_recovers_a_stale_attempt_on_a_healthy_store() {
-        use octos_core::SessionKey;
-        use octos_fleet::{
+        use ra_core::SessionKey;
+        use ra_fleet::{
             ChildStatus, Fleet, FleetBudget, FleetKernelStore, LaunchOutcome, TaskSpec,
         };
         use std::sync::Arc;
@@ -2899,7 +2899,7 @@ mod tests {
                 detail: "d".to_owned(),
                 deps: Vec::new(),
                 acceptance: Vec::new(),
-                grant: octos_fleet::WorkerGrant::minimal(),
+                grant: ra_fleet::WorkerGrant::minimal(),
             }],
             1,
         )
@@ -3562,12 +3562,12 @@ mod tests {
     /// into the live `Swarm`.
     #[tokio::test]
     async fn should_inherit_tool_policy_into_swarm_dispatch_policy() {
-        use octos_swarm::{ContractSpec, SwarmBudget, SwarmContext, SwarmTopology};
+        use ra_swarm::{ContractSpec, SwarmBudget, SwarmContext, SwarmTopology};
         use std::num::NonZeroUsize;
 
         let dir = tempfile::tempdir().unwrap();
         let broadcaster = Arc::new(EventBroadcaster::new(16));
-        let tool_policy = octos_agent::ToolPolicy {
+        let tool_policy = ra_agent::ToolPolicy {
             deny: vec!["dangerous_tool".into()],
             ..Default::default()
         };
@@ -3629,7 +3629,7 @@ mod tests {
     /// operator's tool_policy is `None`.
     #[tokio::test]
     async fn should_block_injection_env_in_swarm_dispatch_by_default() {
-        use octos_swarm::{ContractSpec, SwarmBudget, SwarmContext, SwarmTopology};
+        use ra_swarm::{ContractSpec, SwarmBudget, SwarmContext, SwarmTopology};
         use std::num::NonZeroUsize;
 
         let dir = tempfile::tempdir().unwrap();

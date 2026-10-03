@@ -27,11 +27,11 @@ use axum::body::Body;
 use axum::extract::ConnectInfo;
 use axum::http::{Request, StatusCode};
 use chrono::Utc;
-use octos_cli::api::{AppState, build_router};
-use octos_cli::otp::{AuthManager, DashboardAuthConfig, SmtpConfig};
-use octos_cli::profiles::{ProfileConfig, ProfileStore, UserProfile};
-use octos_cli::user_store::{User, UserRole, UserStore};
-use octos_core::SessionKey;
+use ra_cli::api::{AppState, build_router};
+use ra_cli::otp::{AuthManager, DashboardAuthConfig, SmtpConfig};
+use ra_cli::profiles::{ProfileConfig, ProfileStore, UserProfile};
+use ra_cli::user_store::{User, UserRole, UserStore};
+use ra_core::SessionKey;
 use tempfile::TempDir;
 use tower::util::ServiceExt;
 
@@ -207,10 +207,10 @@ async fn build_fixture() -> Fixture {
     let key_a_other = SessionKey::with_profile(&profile_a.id, "api", session_a_other_id);
     let key_b = SessionKey::with_profile(&profile_b.id, "api", session_b_id);
     let key_admin = SessionKey::with_profile(&profile_admin.id, "api", session_admin_id);
-    let encoded_a = octos_bus::session::encode_path_component(key_a.base_key());
-    let encoded_a_other = octos_bus::session::encode_path_component(key_a_other.base_key());
-    let encoded_b = octos_bus::session::encode_path_component(key_b.base_key());
-    let encoded_admin = octos_bus::session::encode_path_component(key_admin.base_key());
+    let encoded_a = ra_bus::session::encode_path_component(key_a.base_key());
+    let encoded_a_other = ra_bus::session::encode_path_component(key_a_other.base_key());
+    let encoded_b = ra_bus::session::encode_path_component(key_b.base_key());
+    let encoded_admin = ra_bus::session::encode_path_component(key_admin.base_key());
 
     let ws_a = data_dir_a
         .join("users")

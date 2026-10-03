@@ -23,14 +23,14 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use octos_agent::{
+use ra_agent::{
     Agent, AgentConfig, AgentSummaryGenerator, FileStateCache, SubAgentOutputRouter, TaskStatus,
     Tool, ToolRegistry, ToolResult,
 };
-use octos_bus::{ReplacementStateRef, ResumePolicy, SanitizeError};
-use octos_core::{AgentId, Message, MessageRole, ToolCall};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_bus::{ReplacementStateRef, ResumePolicy, SanitizeError};
+use ra_core::{AgentId, Message, MessageRole, ToolCall};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 
 // =========================================================================
@@ -186,7 +186,7 @@ fn tc(id: &str, name: &str, args: serde_json::Value) -> ToolCall {
 
 #[tokio::test]
 async fn end_to_end_resume_covers_transcript_and_worktree_and_cache() {
-    use octos_agent::tools::{ReadFileTool, Tool as _, ToolContext};
+    use ra_agent::tools::{ReadFileTool, Tool as _, ToolContext};
 
     let dir = TempDir::new().unwrap();
     std::fs::write(dir.path().join("recovered.txt"), "body-line\n").unwrap();
@@ -336,7 +336,7 @@ async fn end_to_end_background_task_covers_disk_summary_terminal_detail() {
     let supervisor = tools.supervisor();
 
     let activity_buf = Arc::new(Mutex::new(vec!["line".to_string()]));
-    let activity = octos_agent::subagent_summary::ActivitySource::Fixed(activity_buf);
+    let activity = ra_agent::subagent_summary::ActivitySource::Fixed(activity_buf);
     let generator = Arc::new(
         AgentSummaryGenerator::with_activity_source(
             Arc::new(CheapMock),

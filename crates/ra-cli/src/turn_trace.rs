@@ -7,8 +7,8 @@
 //! input`) named neither session nor turn. Everything here logs ids, counts
 //! and states only — never user text.
 
-use octos_core::SessionKey;
-use octos_core::ui_protocol::TurnId;
+use ra_core::SessionKey;
+use ra_core::ui_protocol::TurnId;
 use tracing::{Span, info, info_span};
 
 /// The span the spawned agent future runs under, so every log line it emits

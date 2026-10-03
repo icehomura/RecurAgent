@@ -3,16 +3,16 @@ use super::*;
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
-struct FixtureProvider(Mutex<VecDeque<octos_llm::ChatResponse>>);
+struct FixtureProvider(Mutex<VecDeque<ra_llm::ChatResponse>>);
 
 #[async_trait::async_trait]
 impl LlmProvider for FixtureProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
         self.0
             .lock()
             .unwrap()
@@ -28,7 +28,7 @@ impl LlmProvider for FixtureProvider {
     }
 }
 
-fn fixture_runtime(final_text: &str, stop_reason: octos_llm::StopReason) -> RaRuntime {
+fn fixture_runtime(final_text: &str, stop_reason: ra_llm::StopReason) -> RaRuntime {
     // Explicit fake key bypasses the host's auth store; the real adapter is
     // replaced before any request. Tool access is only to this runtime's scratch.
     let mut runtime = RaRuntime::from_config(RuntimeConfig {
@@ -42,17 +42,17 @@ fn fixture_runtime(final_text: &str, stop_reason: octos_llm::StopReason) -> RaRu
     .unwrap();
     runtime.cwd = runtime.scratch_dir_for_test();
     runtime.llm = Arc::new(FixtureProvider(Mutex::new(VecDeque::from([
-        octos_llm::ChatResponse {
+        ra_llm::ChatResponse {
             content: Some("Inspecting scratch directory.".into()),
             reasoning_content: None,
-            tool_calls: vec![octos_core::ToolCall {
+            tool_calls: vec![ra_core::ToolCall {
                 id: "fixture-list".into(),
                 name: "list_dir".into(),
                 arguments: json!({"path": "."}),
                 metadata: None,
             }],
-            stop_reason: octos_llm::StopReason::ToolUse,
-            usage: octos_llm::TokenUsage {
+            stop_reason: ra_llm::StopReason::ToolUse,
+            usage: ra_llm::TokenUsage {
                 input_tokens: 7,
                 output_tokens: 3,
                 reasoning_tokens: 2,
@@ -62,12 +62,12 @@ fn fixture_runtime(final_text: &str, stop_reason: octos_llm::StopReason) -> RaRu
             },
             provider_index: None,
         },
-        octos_llm::ChatResponse {
+        ra_llm::ChatResponse {
             content: Some(final_text.into()),
             reasoning_content: None,
             tool_calls: vec![],
             stop_reason,
-            usage: octos_llm::TokenUsage {
+            usage: ra_llm::TokenUsage {
                 input_tokens: 11,
                 output_tokens: 5,
                 reasoning_tokens: 4,
@@ -84,7 +84,7 @@ fn fixture_runtime(final_text: &str, stop_reason: octos_llm::StopReason) -> RaRu
 #[test]
 fn should_preserve_partial_when_native_conversation_is_truncated() {
     let text = partial_text();
-    let runtime = fixture_runtime(&text, octos_llm::StopReason::MaxTokens);
+    let runtime = fixture_runtime(&text, ra_llm::StopReason::MaxTokens);
     let error = runtime
         .run_task(&TaskBrief {
             prompt: "Inspect scratch then answer".into(),
@@ -116,7 +116,7 @@ fn partial_text() -> String {
 }
 
 fn fail_c_task(text: &str) {
-    let mut runtime = fixture_runtime(text, octos_llm::StopReason::MaxTokens);
+    let mut runtime = fixture_runtime(text, ra_llm::StopReason::MaxTokens);
     let brief = CString::new(r#"{"prompt":"Inspect scratch then answer"}"#).unwrap();
     // This internal fixture owns the live runtime for the whole call.
     assert!(ra_run_task(&mut runtime, brief.as_ptr()).is_null());
@@ -185,7 +185,7 @@ fn should_clear_c_partial_on_new_failure_or_success() {
                 assert!(ra_embed(ptr::null_mut(), ptr::null()).is_null());
             }
             "success" => {
-                let mut runtime = fixture_runtime("genuine final", octos_llm::StopReason::EndTurn);
+                let mut runtime = fixture_runtime("genuine final", ra_llm::StopReason::EndTurn);
                 let brief = CString::new(r#"{"prompt":"Inspect then answer"}"#).unwrap();
                 let result = ra_run_task(&mut runtime, brief.as_ptr());
                 assert!(!result.is_null());

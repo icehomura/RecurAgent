@@ -2,9 +2,9 @@
 
 use chrono::Utc;
 use eyre::Result;
-use octos_bus::{SessionHandle, SessionManager};
-use octos_core::{Message, MessageRole, SessionKey};
-use octos_llm::{ChatConfig, LlmProvider};
+use ra_bus::{SessionHandle, SessionManager};
+use ra_core::{Message, MessageRole, SessionKey};
+use ra_llm::{ChatConfig, LlmProvider};
 use tracing::debug;
 
 /// Default minimum messages before compaction triggers.
@@ -162,7 +162,7 @@ pub async fn maybe_compact_with_config(
         temperature: Some(0.0),
         // One-shot: the transcript is summarized exactly once (then replaced
         // by the summary), so cache writes would be pure 1.25x premium.
-        cache_retention: octos_llm::CacheRetention::None,
+        cache_retention: ra_llm::CacheRetention::None,
         ..Default::default()
     };
 
@@ -299,7 +299,7 @@ pub async fn maybe_compact_handle(
         temperature: Some(0.0),
         // One-shot: the transcript is summarized exactly once (then replaced
         // by the summary), so cache writes would be pure 1.25x premium.
-        cache_retention: octos_llm::CacheRetention::None,
+        cache_retention: ra_llm::CacheRetention::None,
         ..Default::default()
     };
 
@@ -345,7 +345,7 @@ pub async fn maybe_compact_handle(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_llm::{ChatResponse, StopReason, TokenUsage, ToolSpec};
+    use ra_llm::{ChatResponse, StopReason, TokenUsage, ToolSpec};
 
     /// Summarizer stub: returns a fixed summary body regardless of input.
     struct StubSummarizer;

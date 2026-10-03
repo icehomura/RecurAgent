@@ -37,7 +37,7 @@ impl AssetSelector {
 }
 
 /// Product description threaded into every shared diagnostic. Constructed by the
-/// binary (octos-cli / octoscode), never inferred from this crate.
+/// binary (ra-cli / octoscode), never inferred from this crate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProductSpec {
     /// Bare binary name as run on PATH (no extension; `.exe` is appended on

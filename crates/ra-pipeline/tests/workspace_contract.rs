@@ -23,23 +23,23 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_agent::cost_ledger::{
+use ra_agent::cost_ledger::{
     CostAccountant, CostAttributionEvent, CostBudgetPolicy, PersistentCostLedger,
 };
-use octos_agent::workspace_policy::{
+use ra_agent::workspace_policy::{
     CompactionPolicy, CompactionSummarizerKind, ValidationPolicy, Validator, ValidatorPhaseKind,
     ValidatorSpec, WorkspaceArtifactsPolicy, WorkspacePolicy, WorkspacePolicyKind,
     WorkspacePolicyWorkspace, WorkspaceSnapshotTrigger, WorkspaceTrackingPolicy,
     WorkspaceVersionControlPolicy, WorkspaceVersionControlProvider,
 };
-use octos_agent::{COMPACTION_POLICY_SCHEMA_VERSION, WORKSPACE_POLICY_SCHEMA_VERSION};
-use octos_core::TokenUsage;
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage as LlmTokenUsage};
-use octos_memory::EpisodeStore;
-use octos_pipeline::context::PipelineContext;
-use octos_pipeline::executor::{ExecutorConfig, PipelineExecutor};
-use octos_pipeline::handler::HandlerContext;
-use octos_pipeline::{
+use ra_agent::{COMPACTION_POLICY_SCHEMA_VERSION, WORKSPACE_POLICY_SCHEMA_VERSION};
+use ra_core::TokenUsage;
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage as LlmTokenUsage};
+use ra_memory::EpisodeStore;
+use ra_pipeline::context::PipelineContext;
+use ra_pipeline::executor::{ExecutorConfig, PipelineExecutor};
+use ra_pipeline::handler::HandlerContext;
+use ra_pipeline::{
     Handler, HandlerKind, HandlerRegistry, NodeOutcome, NoopHandler, OutcomeStatus, PipelineNode,
 };
 use tempfile::TempDir;
@@ -71,8 +71,8 @@ impl ScriptedLlmProvider {
 impl LlmProvider for ScriptedLlmProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
         _config: &ChatConfig,
     ) -> Result<ChatResponse> {
         self.calls.fetch_add(1, Ordering::SeqCst);
@@ -165,12 +165,12 @@ fn base_config(dir: &TempDir, memory: Arc<EpisodeStore>, ctx: PipelineContext) -
         checkpoint_store: None,
         hook_executor: None,
         workspace_context: ctx,
-        host_context: octos_pipeline::host_context::PipelineHostContext::default(),
+        host_context: ra_pipeline::host_context::PipelineHostContext::default(),
         embedder: None,
         catalog_dir: None,
         // #1607: pipeline validators run under a no-op sandbox in tests
         // (host-independent — command validators run the argv directly).
-        sandbox: octos_agent::SandboxConfig::default(),
+        sandbox: ra_agent::SandboxConfig::default(),
     }
 }
 

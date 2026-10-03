@@ -125,19 +125,19 @@ async fn background_deliverable_auto_materializes_inline_final_output() {
     impl LlmProvider for InlineReviewProvider {
         async fn chat(
             &self,
-            _m: &[octos_core::Message],
-            _t: &[octos_llm::ToolSpec],
-            _c: &octos_llm::ChatConfig,
-        ) -> Result<octos_llm::ChatResponse> {
-            Ok(octos_llm::ChatResponse {
+            _m: &[ra_core::Message],
+            _t: &[ra_llm::ToolSpec],
+            _c: &ra_llm::ChatConfig,
+        ) -> Result<ra_llm::ChatResponse> {
+            Ok(ra_llm::ChatResponse {
                 content: Some(format!(
                     "# Code Review\n\n{}",
                     "detailed finding. ".repeat(60)
                 )),
                 reasoning_content: None,
                 tool_calls: vec![],
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: None,
             })
         }
@@ -219,7 +219,7 @@ async fn background_deliverable_auto_materializes_inline_final_output() {
 struct StubEmbedder;
 
 #[async_trait]
-impl octos_llm::EmbeddingProvider for StubEmbedder {
+impl ra_llm::EmbeddingProvider for StubEmbedder {
     async fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>> {
         Ok(vec![vec![0.0_f32; 1]; texts.len()])
     }
@@ -232,7 +232,7 @@ impl octos_llm::EmbeddingProvider for StubEmbedder {
 async fn embedder_probe_tool() -> SpawnTool {
     let dir = tempfile::tempdir().expect("tempdir");
     let memory = Arc::new(
-        octos_memory::EpisodeStore::open(dir.path().join("mem"))
+        ra_memory::EpisodeStore::open(dir.path().join("mem"))
             .await
             .expect("episode store"),
     );
@@ -251,7 +251,7 @@ async fn embedder_probe_tool() -> SpawnTool {
 /// handle so worker construction can forward it.
 #[tokio::test]
 async fn should_store_embedder_when_builder_provides_one() {
-    let embedder = Arc::new(StubEmbedder) as Arc<dyn octos_llm::EmbeddingProvider>;
+    let embedder = Arc::new(StubEmbedder) as Arc<dyn ra_llm::EmbeddingProvider>;
     let tool = embedder_probe_tool().await.with_embedder(embedder);
     assert!(
         tool.embedder_for_test().is_some(),
@@ -1973,8 +1973,8 @@ async fn test_background_spawn_emits_verify_and_complete_hooks() {
 
 #[test]
 fn classify_child_session_failure_as_retryable_when_budget_exhausted() {
-    let result = Ok::<octos_core::TaskResult, eyre::Report>(octos_core::TaskResult {
-        schema_version: octos_core::TASK_RESULT_SCHEMA_VERSION,
+    let result = Ok::<ra_core::TaskResult, eyre::Report>(ra_core::TaskResult {
+        schema_version: ra_core::TASK_RESULT_SCHEMA_VERSION,
         success: false,
         output: "Token budget exceeded (120 of 100).".to_string(),
         files_modified: vec![],
@@ -2039,16 +2039,16 @@ struct ShellThenEndProvider {
 impl LlmProvider for MockProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> Result<octos_llm::ChatResponse> {
-        Ok(octos_llm::ChatResponse {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> Result<ra_llm::ChatResponse> {
+        Ok(ra_llm::ChatResponse {
             content: Some("done".into()),
             reasoning_content: None,
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage {
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage {
                 input_tokens: 0,
                 output_tokens: 0,
                 ..Default::default()
@@ -2070,16 +2070,16 @@ impl LlmProvider for MockProvider {
 impl LlmProvider for ShellThenEndProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> Result<octos_llm::ChatResponse> {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> Result<ra_llm::ChatResponse> {
         let call = self.calls.fetch_add(1, Ordering::SeqCst);
         if call == 0 {
-            return Ok(octos_llm::ChatResponse {
+            return Ok(ra_llm::ChatResponse {
                 content: None,
                 reasoning_content: None,
-                tool_calls: vec![octos_core::ToolCall {
+                tool_calls: vec![ra_core::ToolCall {
                     id: "call_shell".into(),
                     name: "shell".into(),
                     arguments: serde_json::json!({
@@ -2087,18 +2087,18 @@ impl LlmProvider for ShellThenEndProvider {
                     }),
                     metadata: None,
                 }],
-                stop_reason: octos_llm::StopReason::ToolUse,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::ToolUse,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: None,
             });
         }
 
-        Ok(octos_llm::ChatResponse {
+        Ok(ra_llm::ChatResponse {
             content: Some("done".into()),
             reasoning_content: None,
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage::default(),
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage::default(),
             provider_index: None,
         })
     }
@@ -2129,32 +2129,32 @@ struct ContentThenToolProvider {
 impl LlmProvider for ContentThenToolProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> Result<octos_llm::ChatResponse> {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> Result<ra_llm::ChatResponse> {
         let call = self.calls.fetch_add(1, Ordering::SeqCst);
         if call == 0 {
-            return Ok(octos_llm::ChatResponse {
+            return Ok(ra_llm::ChatResponse {
                 content: Some("PLAN: scan the tree".into()),
                 reasoning_content: None,
-                tool_calls: vec![octos_core::ToolCall {
+                tool_calls: vec![ra_core::ToolCall {
                     id: "call_ls".into(),
                     name: "list_dir".into(),
                     arguments: serde_json::json!({"path": "."}),
                     metadata: None,
                 }],
-                stop_reason: octos_llm::StopReason::ToolUse,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::ToolUse,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: None,
             });
         }
-        Ok(octos_llm::ChatResponse {
+        Ok(ra_llm::ChatResponse {
             content: Some("FINAL: transcript test done".into()),
             reasoning_content: None,
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage::default(),
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage::default(),
             provider_index: None,
         })
     }
@@ -2405,16 +2405,16 @@ struct ShellDeliverableProvider {
 impl LlmProvider for ShellDeliverableProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> Result<octos_llm::ChatResponse> {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> Result<ra_llm::ChatResponse> {
         let call = self.calls.fetch_add(1, Ordering::SeqCst);
         if call == 0 {
-            return Ok(octos_llm::ChatResponse {
+            return Ok(ra_llm::ChatResponse {
                 content: None,
                 reasoning_content: None,
-                tool_calls: vec![octos_core::ToolCall {
+                tool_calls: vec![ra_core::ToolCall {
                     id: "call_shell".into(),
                     name: "shell".into(),
                     arguments: serde_json::json!({
@@ -2422,17 +2422,17 @@ impl LlmProvider for ShellDeliverableProvider {
                     }),
                     metadata: None,
                 }],
-                stop_reason: octos_llm::StopReason::ToolUse,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::ToolUse,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: None,
             });
         }
-        Ok(octos_llm::ChatResponse {
+        Ok(ra_llm::ChatResponse {
             content: Some("wrote the review".into()),
             reasoning_content: None,
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage::default(),
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage::default(),
             provider_index: None,
         })
     }
@@ -3344,20 +3344,20 @@ struct FailThenSucceedProvider {
 impl LlmProvider for FailThenSucceedProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> Result<octos_llm::ChatResponse> {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> Result<ra_llm::ChatResponse> {
         let n = self.calls.fetch_add(1, Ordering::SeqCst);
         if n == 0 {
             return Err(eyre::eyre!("simulated provider failure"));
         }
-        Ok(octos_llm::ChatResponse {
+        Ok(ra_llm::ChatResponse {
             content: Some("recovered".into()),
             reasoning_content: None,
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage::default(),
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage::default(),
             provider_index: None,
         })
     }
@@ -3414,10 +3414,10 @@ struct AlwaysFailProvider;
 impl LlmProvider for AlwaysFailProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> Result<octos_llm::ChatResponse> {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> Result<ra_llm::ChatResponse> {
         Err(eyre::eyre!("simulated permanent failure"))
     }
     fn model_id(&self) -> &str {
@@ -3679,36 +3679,36 @@ struct ScopeProbeProvider;
 impl LlmProvider for ScopeProbeProvider {
     async fn chat(
         &self,
-        messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> Result<octos_llm::ChatResponse> {
+        messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> Result<ra_llm::ChatResponse> {
         // First call → invoke scope_probe; second call (after the
         // probe's tool_result lands) → end the turn.
         let probe_already_run = messages
             .iter()
-            .any(|msg| matches!(msg.role, octos_core::MessageRole::Tool));
+            .any(|msg| matches!(msg.role, ra_core::MessageRole::Tool));
         if probe_already_run {
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: Some("done".into()),
                 reasoning_content: None,
                 tool_calls: vec![],
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: None,
             })
         } else {
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: None,
                 reasoning_content: None,
-                tool_calls: vec![octos_core::ToolCall {
+                tool_calls: vec![ra_core::ToolCall {
                     id: "call_scope_probe".into(),
                     name: "scope_probe".into(),
                     arguments: serde_json::json!({}),
                     metadata: None,
                 }],
-                stop_reason: octos_llm::StopReason::ToolUse,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::ToolUse,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: None,
             })
         }
@@ -3729,28 +3729,28 @@ struct EditSameFileProvider;
 impl LlmProvider for EditSameFileProvider {
     async fn chat(
         &self,
-        messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> Result<octos_llm::ChatResponse> {
+        messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> Result<ra_llm::ChatResponse> {
         let edit_already_run = messages
             .iter()
-            .any(|msg| matches!(msg.role, octos_core::MessageRole::Tool));
+            .any(|msg| matches!(msg.role, ra_core::MessageRole::Tool));
         if edit_already_run {
-            return Ok(octos_llm::ChatResponse {
+            return Ok(ra_llm::ChatResponse {
                 content: Some("done".into()),
                 reasoning_content: None,
                 tool_calls: vec![],
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: None,
             });
         }
 
-        Ok(octos_llm::ChatResponse {
+        Ok(ra_llm::ChatResponse {
             content: None,
             reasoning_content: None,
-            tool_calls: vec![octos_core::ToolCall {
+            tool_calls: vec![ra_core::ToolCall {
                 id: "call_edit_file".into(),
                 name: "edit_file".into(),
                 arguments: serde_json::json!({
@@ -3760,8 +3760,8 @@ impl LlmProvider for EditSameFileProvider {
                 }),
                 metadata: None,
             }],
-            stop_reason: octos_llm::StopReason::ToolUse,
-            usage: octos_llm::TokenUsage::default(),
+            stop_reason: ra_llm::StopReason::ToolUse,
+            usage: ra_llm::TokenUsage::default(),
             provider_index: None,
         })
     }
@@ -3895,7 +3895,7 @@ async fn worktree_isolation_prunes_allocation_when_sync_preflight_refuses() {
         repo.clone(),
         in_tx,
     );
-    let scope = octos_core::SessionScope::solo(repo.clone(), vec![]).expect("scope construction");
+    let scope = ra_core::SessionScope::solo(repo.clone(), vec![]).expect("scope construction");
     let mut ctx = super::super::ToolContext::zero();
     ctx.session_scope = Some(Arc::new(scope));
 
@@ -4052,7 +4052,7 @@ async fn worktree_isolation_refuses_scope_escape_before_creating() {
         in_tx,
     );
     let scope =
-        octos_core::SessionScope::solo(session_root.clone(), vec![]).expect("scope construction");
+        ra_core::SessionScope::solo(session_root.clone(), vec![]).expect("scope construction");
     let mut ctx = super::super::ToolContext::zero();
     ctx.session_scope = Some(Arc::new(scope));
 
@@ -4132,7 +4132,7 @@ async fn worktree_isolation_runs_concurrent_writers_on_separate_branches() {
         ],
     );
 
-    let scope = octos_core::SessionScope::solo(repo.path().to_path_buf(), vec![])
+    let scope = ra_core::SessionScope::solo(repo.path().to_path_buf(), vec![])
         .expect("scope construction");
     let (in_tx, _in_rx) = tokio::sync::mpsc::channel(16);
     let tool = SpawnTool::new(
@@ -4184,7 +4184,7 @@ async fn spawn_propagates_scope_to_sub_agent() {
     // contract is forgotten the moment work is delegated to a
     // sub-agent.
     let scope_dir = tempfile::tempdir().unwrap();
-    let scope = octos_core::SessionScope::solo(scope_dir.path().to_path_buf(), vec![])
+    let scope = ra_core::SessionScope::solo(scope_dir.path().to_path_buf(), vec![])
         .expect("scope construction");
 
     let observed = Arc::new(std::sync::Mutex::new(None::<PathBuf>));
@@ -4250,7 +4250,7 @@ async fn spawn_sub_agent_inherits_workspace_cwd() {
     // tool the child invokes runs with the right CWD even without
     // the scope plumb.
     let scope_dir = tempfile::tempdir().unwrap();
-    let scope = octos_core::SessionScope::solo(scope_dir.path().to_path_buf(), vec![])
+    let scope = ra_core::SessionScope::solo(scope_dir.path().to_path_buf(), vec![])
         .expect("scope construction");
 
     let observed = Arc::new(std::sync::Mutex::new(None::<PathBuf>));

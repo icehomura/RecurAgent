@@ -718,7 +718,7 @@ pub(crate) fn coding_tool_contract_payload(
     // `prompt_prefix` stays off the wire. The acceptance gate
     // (`Test: role/tool/sandbox/model policy is resolved by the
     // server runtime`) checks for this field's presence + shape.
-    let role_templates: Vec<Value> = octos_agent::RoleTemplate::all()
+    let role_templates: Vec<Value> = ra_agent::RoleTemplate::all()
         .iter()
         .map(|tpl| {
             serde_json::to_value(tpl.summary()).unwrap_or_else(|_| {
@@ -1275,8 +1275,8 @@ mod tests {
     /// runs in CI.
     #[test]
     fn p0_canonical_tools_are_registered_by_session_builtins() {
-        use octos_agent::ToolRegistry;
-        use octos_agent::sandbox::NoSandbox;
+        use ra_agent::ToolRegistry;
+        use ra_agent::sandbox::NoSandbox;
 
         let cwd = std::path::Path::new("/tmp");
         let registry = ToolRegistry::with_builtins_and_sandbox(cwd, Box::new(NoSandbox));
@@ -1303,8 +1303,8 @@ mod tests {
     /// the live registry registers them.
     #[test]
     fn p1_canonical_tools_are_registered_by_session_builtins() {
-        use octos_agent::ToolRegistry;
-        use octos_agent::sandbox::NoSandbox;
+        use ra_agent::ToolRegistry;
+        use ra_agent::sandbox::NoSandbox;
 
         let cwd = std::path::Path::new("/tmp");
         let registry = ToolRegistry::with_builtins_and_sandbox(cwd, Box::new(NoSandbox));
@@ -1326,8 +1326,8 @@ mod tests {
     /// table; if it ever moves behind a feature flag, this guard fires.
     #[test]
     fn codex_naming_aliases_are_registered_by_session_builtins() {
-        use octos_agent::ToolRegistry;
-        use octos_agent::sandbox::NoSandbox;
+        use ra_agent::ToolRegistry;
+        use ra_agent::sandbox::NoSandbox;
 
         let cwd = std::path::Path::new("/tmp");
         let registry = ToolRegistry::with_builtins_and_sandbox(cwd, Box::new(NoSandbox));
@@ -1376,8 +1376,8 @@ mod tests {
     /// wiring (OpenAI image API / bundled skill) is tracked in #1149.
     #[test]
     fn p2_image_generation_is_registered_by_session_builtins() {
-        use octos_agent::ToolRegistry;
-        use octos_agent::sandbox::NoSandbox;
+        use ra_agent::ToolRegistry;
+        use ra_agent::sandbox::NoSandbox;
 
         let cwd = std::path::Path::new("/tmp");
         let registry = ToolRegistry::with_builtins_and_sandbox(cwd, Box::new(NoSandbox));

@@ -12,7 +12,7 @@
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-use octos_embed_llama::LlamaEmbedder;
+use ra_embed_llama::LlamaEmbedder;
 
 /// llama.cpp's backend is global; serialize model-using tests so they do not
 /// race on it.

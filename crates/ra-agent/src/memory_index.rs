@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use eyre::{Result, WrapErr};
-use octos_llm::EmbeddingProvider;
-use octos_memory::{
+use ra_llm::EmbeddingProvider;
+use ra_memory::{
     MemoryStore, NoteKind, NoteOrigin, RecallStore, Record, RecordKind, SearchFilter, StagingNote,
     UpsertReport, record_from_bank_page,
 };
@@ -269,7 +269,7 @@ pub async fn nominate_for_promotion(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_memory::RecallConfig;
+    use ra_memory::RecallConfig;
 
     #[tokio::test]
     async fn should_index_bank_pages_once_and_drop_deleted_ones() {

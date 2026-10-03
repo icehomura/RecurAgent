@@ -47,7 +47,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
-use octos_core::{Message, MessageRole};
+use ra_core::{Message, MessageRole};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
@@ -349,7 +349,7 @@ pub fn filter_unresolved_tool_uses(
                 // assistant turn that would otherwise be orphaned when a
                 // sibling call lacked a matching result.
                 let has_text = !msg.content.trim().is_empty();
-                let mut kept_calls: Vec<octos_core::ToolCall> = Vec::with_capacity(calls.len());
+                let mut kept_calls: Vec<ra_core::ToolCall> = Vec::with_capacity(calls.len());
                 let mut had_unresolved = false;
                 for call in calls.iter() {
                     let resolved = result_ids.contains(call.id.as_str())
@@ -705,7 +705,7 @@ fn bump_mtime_marker(root: &Path) -> WorktreeStatus {
 mod tests {
     use super::*;
     use chrono::{Duration, TimeZone, Utc};
-    use octos_core::{Message, MessageRole, ToolCall};
+    use ra_core::{Message, MessageRole, ToolCall};
     use tempfile::TempDir;
 
     fn user(content: &str) -> Message {

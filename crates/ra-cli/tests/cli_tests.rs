@@ -209,7 +209,7 @@ fn test_completions_dynamic_providers_match_registry() {
     // The candidates must be the provider registry's canonical families — the
     // same names `config.llm.provider` accepts (#2413) — not a drifting
     // hand-written subset.
-    let mut expected: Vec<&str> = octos_llm::registry::all_entries()
+    let mut expected: Vec<&str> = ra_llm::registry::all_entries()
         .iter()
         .map(|entry| entry.name)
         .collect();

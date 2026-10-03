@@ -11,7 +11,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use octos_plugin::{PluginManifest, ValidationProfile, validate_manifest_schemas_with};
+use ra_plugin::{PluginManifest, ValidationProfile, validate_manifest_schemas_with};
 
 fn app_skills_dir() -> PathBuf {
     // Tests run with CWD = crate root (ra-plugin), so we go up two

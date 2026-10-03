@@ -39,7 +39,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
 
 use chrono::{DateTime, SecondsFormat, Utc};
-use octos_core::{Message, MessageRole, SessionKey};
+use ra_core::{Message, MessageRole, SessionKey};
 use serde::{Deserialize, Serialize};
 
 use super::app_binding::{
@@ -487,7 +487,7 @@ pub(crate) async fn shared_history_for_turn(
             return None;
         }
         let peer = read_peer_host_binding(peers_root, slug)?;
-        let messages = octos_bus::session::load_session_messages_locked(
+        let messages = ra_bus::session::load_session_messages_locked(
             &transcript_root(&peer.cwd),
             &peer_session,
         )
@@ -526,7 +526,7 @@ pub(crate) async fn shared_history_for_turn(
     for (id, cwd, _) in &sharing {
         let key = context_session_key(session, slug, id);
         let messages =
-            octos_bus::session::load_session_messages_locked(&transcript_root(cwd), &key)
+            ra_bus::session::load_session_messages_locked(&transcript_root(cwd), &key)
                 .await
                 .unwrap_or_default();
         let conversation = label.then_some(id.as_str());

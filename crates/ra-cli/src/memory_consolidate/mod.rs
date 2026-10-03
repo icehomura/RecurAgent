@@ -33,8 +33,8 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Duration, FixedOffset, NaiveDate};
 use eyre::{Result, WrapErr};
-use octos_core::Message;
-use octos_llm::{ChatConfig, LlmProvider, TokenUsage};
+use ra_core::Message;
+use ra_llm::{ChatConfig, LlmProvider, TokenUsage};
 
 use apply::{ApplyPlan, ScrubTarget, find_archive_block_by_hash};
 use entry::{Entry, ParsedMemory, estimate_tokens, render_memory_md};
@@ -470,7 +470,7 @@ pub async fn run_consolidation(
     // bank-listing error skips pruning entirely rather than risk dropping
     // live bank usage.
     {
-        let usage_store = octos_memory::MemoryStore::at_memory_dir(memory_dir);
+        let usage_store = ra_memory::MemoryStore::at_memory_dir(memory_dir);
         match usage_store.list_entities().await {
             Ok(bank) => {
                 let mut live: std::collections::HashSet<String> =
@@ -700,7 +700,7 @@ pub async fn run_consolidation(
     // empty and consolidation proceeds exactly as before. (Pruning runs
     // near the top, before the quiet-run early return, so it happens on
     // EVERY invocation.)
-    let usage = octos_memory::MemoryStore::at_memory_dir(memory_dir)
+    let usage = ra_memory::MemoryStore::at_memory_dir(memory_dir)
         .load_usage()
         .await;
 
@@ -1629,8 +1629,8 @@ mod tests {
     use std::sync::Mutex;
 
     use async_trait::async_trait;
-    use octos_core::MessageRole;
-    use octos_llm::{ChatResponse, StopReason, ToolSpec};
+    use ra_core::MessageRole;
+    use ra_llm::{ChatResponse, StopReason, ToolSpec};
 
     use super::entry::sha256_hex;
     use super::*;
@@ -1798,7 +1798,7 @@ mod tests {
         // when the run does no merge work.
         let dir = tempfile::tempdir().unwrap();
         write_memory(dir.path(), &["Fact. (updated: 2026-06-01) ^maaaaaa"]);
-        let store = octos_memory::MemoryStore::at_memory_dir(dir.path());
+        let store = ra_memory::MemoryStore::at_memory_dir(dir.path());
         let today = NaiveDate::parse_from_str(TODAY, "%Y-%m-%d").unwrap();
         store
             .record_memory_use(["^maaaaaa", "^mzzzzzz"], today)

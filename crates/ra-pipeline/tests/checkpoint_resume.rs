@@ -12,12 +12,12 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_core::TokenUsage;
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage as LlmTokenUsage};
-use octos_memory::EpisodeStore;
-use octos_pipeline::executor::{ExecutorConfig, PipelineExecutor};
-use octos_pipeline::handler::HandlerContext;
-use octos_pipeline::{
+use ra_core::TokenUsage;
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage as LlmTokenUsage};
+use ra_memory::EpisodeStore;
+use ra_pipeline::executor::{ExecutorConfig, PipelineExecutor};
+use ra_pipeline::handler::HandlerContext;
+use ra_pipeline::{
     CheckpointStore, FileSystemCheckpointStore, Handler, HandlerKind, HandlerRegistry,
     MissionCheckpoint, NodeOutcome, NoopHandler, OutcomeStatus, PersistedCheckpoint, PipelineNode,
 };
@@ -70,8 +70,8 @@ struct MockProvider;
 impl LlmProvider for MockProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
         _config: &ChatConfig,
     ) -> Result<ChatResponse> {
         Ok(ChatResponse {
@@ -118,13 +118,13 @@ fn base_config(
         max_concurrent_llm_calls: None,
         checkpoint_store: store,
         hook_executor: None,
-        workspace_context: octos_pipeline::context::PipelineContext::default(),
-        host_context: octos_pipeline::host_context::PipelineHostContext::default(),
+        workspace_context: ra_pipeline::context::PipelineContext::default(),
+        host_context: ra_pipeline::host_context::PipelineHostContext::default(),
         embedder: None,
         catalog_dir: None,
         // #1607: pipeline validators run under a no-op sandbox in tests
         // (host-independent — command validators run the argv directly).
-        sandbox: octos_agent::SandboxConfig::default(),
+        sandbox: ra_agent::SandboxConfig::default(),
     }
 }
 
@@ -257,7 +257,7 @@ async fn should_skip_completed_nodes_on_resume_from_checkpoint() {
 #[test]
 fn should_parse_inspection_mission_fixture() {
     let dot = include_str!("fixtures/inspection_mission.dot");
-    let graph = octos_pipeline::parse_dot(dot).expect("fixture must parse");
+    let graph = ra_pipeline::parse_dot(dot).expect("fixture must parse");
     // Every node with a deadline must parse a valid action.
     for node in graph.nodes.values() {
         if node.deadline_secs.is_some() {

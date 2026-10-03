@@ -438,7 +438,7 @@ fn git_blame(cwd: &std::path::Path, path: &str) -> Result<String> {
     // Blame reads the worktree file through the repo's filters; the agent can
     // write this repo's `.git/config`, so run with repository-scope program
     // settings overridden and without textconv.
-    let output = octos_core::agent_repo_git::agent_repo_git(worktree)
+    let output = ra_core::agent_repo_git::agent_repo_git(worktree)
         .args(["blame", "--porcelain", "--no-textconv", "--", path])
         .output()
         .map_err(|e| eyre::eyre!("failed to run git blame: {e}"))?;

@@ -25,7 +25,7 @@
 //! Envelope paths must be workspace-relative: absolute paths and `..`
 //! components are rejected outright, then every path goes through the same
 //! workspace-scoping resolution the other file tools use (session-scope-aware
-//! when a [`SessionScope`](octos_core::SessionScope) is threaded through the
+//! when a [`SessionScope`](ra_core::SessionScope) is threaded through the
 //! [`ToolContext`]). All file I/O uses the shared `O_NOFOLLOW` helpers so
 //! symlinks are rejected atomically.
 //!
@@ -2196,7 +2196,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_use_scope_workspace_when_session_scope_present() {
-        use octos_core::SessionScope;
+        use ra_core::SessionScope;
         use std::sync::Arc;
 
         let scope_dir = tempfile::tempdir().unwrap();

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-use octos_core::SessionKey;
-use octos_core::ui_protocol::{
+use ra_core::SessionKey;
+use ra_core::ui_protocol::{
     ApprovalDecidedEvent, ApprovalDecision, ApprovalId, ApprovalRequestedEvent,
     ApprovalRespondParams, ApprovalRespondResult, RpcError, TurnId, methods, rpc_error_codes,
 };
@@ -506,7 +506,7 @@ fn approval_cancelled_error(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::ui_protocol::{ApprovalRespondStatus, TurnId};
+    use ra_core::ui_protocol::{ApprovalRespondStatus, TurnId};
 
     #[test]
     fn known_pending_approval_accepts_once() {
@@ -1050,14 +1050,14 @@ mod tests {
         );
         assert!(store.pending_for_session(&session_id).is_empty());
         // Round-trips through the wire-shaped UiNotification carrier.
-        let notification = octos_core::ui_protocol::UiNotification::ApprovalDecided(event.clone());
+        let notification = ra_core::ui_protocol::UiNotification::ApprovalDecided(event.clone());
         let wire = notification
             .clone()
             .into_rpc_notification()
             .expect("serialize");
         assert_eq!(wire.method, methods::APPROVAL_DECIDED);
         assert_eq!(
-            octos_core::ui_protocol::UiNotification::from_rpc_notification(wire).expect("decode"),
+            ra_core::ui_protocol::UiNotification::from_rpc_notification(wire).expect("decode"),
             notification
         );
     }
@@ -1087,7 +1087,7 @@ mod tests {
         event.auto_resolved = true;
         event.policy_id = Some("policy:trusted_shell".into());
 
-        let wire = octos_core::ui_protocol::UiNotification::ApprovalDecided(event.clone())
+        let wire = ra_core::ui_protocol::UiNotification::ApprovalDecided(event.clone())
             .into_rpc_notification()
             .expect("serialize");
         assert_eq!(wire.params["auto_resolved"], json!(true));

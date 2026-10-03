@@ -257,7 +257,7 @@ impl RunIdCache {
 #[derive(Default)]
 pub struct UiProtocolRuntimeResources {
     ledger: std::sync::OnceLock<Arc<ui_protocol_ledger::UiProtocolLedger>>,
-    commit_observer: std::sync::OnceLock<octos_bus::MessageCommitObserver>,
+    commit_observer: std::sync::OnceLock<ra_bus::MessageCommitObserver>,
 }
 
 /// Shared application state for API handlers.
@@ -281,7 +281,7 @@ pub struct AppState {
     pub session_cache: Arc<SessionRuntimeCache>,
     /// Per-profile guard for AppUI skill install/remove plus runtime reload.
     pub profile_skill_mutation_locks: Arc<ProfileSkillMutationLocks>,
-    /// Process-wide [`octos_bus::SessionManager`] backed by
+    /// Process-wide [`ra_bus::SessionManager`] backed by
     /// `<data_dir>/sessions/`. Used by REST endpoints that browse and
     /// edit on-disk session history (`/api/sessions`, `/api/sessions/:id/messages`,
     /// `/api/sessions/:id/title`, …) and by the UI Protocol audit
@@ -291,7 +291,7 @@ pub struct AppState {
     /// the listing / metadata endpoints have a single shared handle.
     /// `None` in tests / setup-wizard deployments that haven't opened
     /// a SessionManager yet.
-    pub sessions: Option<Arc<tokio::sync::Mutex<octos_bus::SessionManager>>>,
+    pub sessions: Option<Arc<tokio::sync::Mutex<ra_bus::SessionManager>>>,
     /// Process-wide event broadcaster for harness/admin + swarm SSE
     /// surfaces. Chat traffic uses `/api/ui-protocol/ws` exclusively as
     /// of M9-α-5/α-6.
@@ -430,12 +430,12 @@ pub struct AppState {
     /// `config.credential_pool` when present; `None` falls back to the
     /// legacy single-credential flow. Shared with session actors so
     /// per-LLM-call `acquire`/`mark_*` operations see a consistent view.
-    pub credential_pool: Option<Arc<octos_llm::PersistentCredentialPool>>,
+    pub credential_pool: Option<Arc<ra_llm::PersistentCredentialPool>>,
     /// Content classifier (M6.6, F-005). Populated when
     /// `config.content_routing` is present and `enabled: true`. When
     /// `None` the router falls through to the unclassified strong-only
     /// default (invariant #3 of the M6.6 spec).
-    pub content_classifier: Option<Arc<octos_llm::ContentClassifier>>,
+    pub content_classifier: Option<Arc<ra_llm::ContentClassifier>>,
     /// M7.9 / W2: shared session-task supervisor lookup. Used by the
     /// `POST /api/tasks/{task_id}/cancel` and
     /// `POST /api/tasks/{task_id}/restart-from-node` endpoints to
@@ -471,7 +471,7 @@ pub struct AppState {
     /// `/v1/session_ingress/ws/{session_id}` revalidates the token on
     /// every frame, so revocation applies to already-open sockets without
     /// requiring a daemon restart.
-    pub work_secret_store: Arc<octos_agent::bridge::work_secret::WorkSecretGrantStore>,
+    pub work_secret_store: Arc<ra_agent::bridge::work_secret::WorkSecretGrantStore>,
     /// Owning handle to the background sweeper task spawned for
     /// `preview_tokens` (issue #1009). Storing it here ties the
     /// task's lifetime to `AppState`: when the last `Arc<AppState>` is
@@ -557,7 +557,7 @@ impl AppState {
             appui_default_session_cwd: None,
             preview_tokens: Arc::new(PreviewTokens::new()),
             work_secret_store: Arc::new(
-                octos_agent::bridge::work_secret::WorkSecretGrantStore::new(data_dir),
+                ra_agent::bridge::work_secret::WorkSecretGrantStore::new(data_dir),
             ),
             // Tests don't spawn the sweeper. Tests that exercise the
             // sweeper either drive `sweep_expired_all` directly or

@@ -279,7 +279,7 @@ pub(crate) fn load_prompt(name: &str, compiled_default: &str) -> String {
     compiled_default.to_string()
 }
 
-/// Build a [`PersistentCredentialPool`](octos_llm::PersistentCredentialPool)
+/// Build a [`PersistentCredentialPool`](ra_llm::PersistentCredentialPool)
 /// from top-level `CredentialPoolConfig` (F-005). Returns `None` when
 /// the config is absent, has no declared `credential_ids`, or when
 /// opening the redb file fails — the caller falls back to the legacy
@@ -289,7 +289,7 @@ pub(crate) fn load_prompt(name: &str, compiled_default: &str) -> String {
 pub(crate) fn build_credential_pool(
     config: Option<&crate::config::CredentialPoolConfig>,
     data_dir: &std::path::Path,
-) -> Option<std::sync::Arc<octos_llm::PersistentCredentialPool>> {
+) -> Option<std::sync::Arc<ra_llm::PersistentCredentialPool>> {
     let cfg = config?;
     if cfg.credential_ids.is_empty() {
         tracing::debug!("credential pool config present but `credential_ids` empty; skipping");
@@ -297,20 +297,20 @@ pub(crate) fn build_credential_pool(
     }
 
     let strategy = match cfg.strategy.as_str() {
-        "fill_first" => octos_llm::RotationStrategy::FillFirst,
-        "round_robin" => octos_llm::RotationStrategy::RoundRobin,
-        "random" => octos_llm::RotationStrategy::Random,
-        "least_used" => octos_llm::RotationStrategy::LeastUsed,
+        "fill_first" => ra_llm::RotationStrategy::FillFirst,
+        "round_robin" => ra_llm::RotationStrategy::RoundRobin,
+        "random" => ra_llm::RotationStrategy::Random,
+        "least_used" => ra_llm::RotationStrategy::LeastUsed,
         other => {
             tracing::warn!(
                 strategy = other,
                 "unknown credential pool strategy; defaulting to round_robin"
             );
-            octos_llm::RotationStrategy::RoundRobin
+            ra_llm::RotationStrategy::RoundRobin
         }
     };
 
-    let credentials: Vec<octos_llm::Credential> = cfg
+    let credentials: Vec<ra_llm::Credential> = cfg
         .credential_ids
         .iter()
         .map(|id| {
@@ -319,7 +319,7 @@ pub(crate) fn build_credential_pool(
             // explicit auth error on first use rather than at startup.
             let env_var = format!("{}_API_KEY", id.replace('-', "_").to_uppercase());
             let secret = std::env::var(&env_var).unwrap_or_default();
-            octos_llm::Credential::new(id.clone(), secret)
+            ra_llm::Credential::new(id.clone(), secret)
         })
         .collect();
 
@@ -327,16 +327,16 @@ pub(crate) fn build_credential_pool(
         .state_path
         .as_ref()
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| data_dir.join(octos_llm::DEFAULT_CREDENTIAL_POOL_DB_FILENAME));
+        .unwrap_or_else(|| data_dir.join(ra_llm::DEFAULT_CREDENTIAL_POOL_DB_FILENAME));
 
     let mut options =
-        octos_llm::PersistentCredentialPoolOptions::new(cfg.name.clone(), credentials)
+        ra_llm::PersistentCredentialPoolOptions::new(cfg.name.clone(), credentials)
             .with_strategy(strategy);
     if let Some(ms) = cfg.default_cooldown_ms {
         options = options.with_default_cooldown_us(ms.saturating_mul(1_000));
     }
 
-    match octos_llm::PersistentCredentialPool::open(&path, options) {
+    match ra_llm::PersistentCredentialPool::open(&path, options) {
         Ok(pool) => {
             tracing::info!(
                 path = %path.display(),

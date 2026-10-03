@@ -66,7 +66,7 @@ pub enum GoalSubcommand {
 // slice 2, upstream #2116). Contract: task-req-olp-obs-cli.spec.md —
 // scenarios "serve 停止时仍可读 goal 状态" and "未知 goal id 报结构化错误".
 // Reads the per-goal ledger (`<data_dir>/goal-ledgers/<goal_id>.db`, SQLite
-// via octos_fleet::GoalLedger) DIRECTLY — no serve process required.
+// via ra_fleet::GoalLedger) DIRECTLY — no serve process required.
 // `--json` and the human table share one assembly layer
 // ([`GoalStatusView`]) so the two modes can never diverge.
 use std::path::Path;
@@ -386,7 +386,7 @@ async fn serve_goal_operator_connection(
                 .map(|profile| profile_store.resolve_data_dir(&profile));
             match crate::autonomy::agent_orchestrator::default_agent_orchestrator()
                 .operator_transition_goal(
-                    &octos_core::SessionKey(request.session_id.clone()),
+                    &ra_core::SessionKey(request.session_id.clone()),
                     &request.profile_id,
                     Some(&request.goal_id),
                     &request.action,
@@ -626,8 +626,8 @@ pub(crate) struct GoalStatusView {
     pub updated_at_ms: u64,
 }
 
-impl From<octos_fleet::Goal> for GoalStatusView {
-    fn from(goal: octos_fleet::Goal) -> Self {
+impl From<ra_fleet::Goal> for GoalStatusView {
+    fn from(goal: ra_fleet::Goal) -> Self {
         Self {
             goal_id: goal.goal_id,
             status: goal.status,
@@ -702,7 +702,7 @@ pub(crate) fn load_goal_status(data_dir: &Path, goal_id: &str) -> Result<Option<
     if !db_path.exists() {
         return Ok(None);
     }
-    let ledger = octos_fleet::GoalLedger::open(&db_path)?;
+    let ledger = ra_fleet::GoalLedger::open(&db_path)?;
     Ok(ledger.get_goal(goal_id)?.map(GoalStatusView::from))
 }
 
@@ -1221,9 +1221,9 @@ mod tests_2116_readonly {
     fn seed_goal(data_dir: &Path, goal_id: &str, status: &str) {
         let db_path = goal_ledger_db_path(data_dir, goal_id);
         std::fs::create_dir_all(db_path.parent().expect("parent")).expect("mkdir");
-        let ledger = octos_fleet::GoalLedger::open(&db_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&db_path).expect("open ledger");
         ledger
-            .upsert_goal(&octos_fleet::Goal {
+            .upsert_goal(&ra_fleet::Goal {
                 goal_id: goal_id.to_owned(),
                 objective: "contract fixture".to_owned(),
                 status: status.to_owned(),

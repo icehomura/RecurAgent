@@ -12,8 +12,8 @@ use sha2::{Digest, Sha256};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 
-use octos_core::{PathClassification, SessionScope};
-use octos_llm::vertex_auth::TokenSource;
+use ra_core::{PathClassification, SessionScope};
+use ra_llm::vertex_auth::TokenSource;
 
 use crate::harness_errors::HarnessError;
 use crate::harness_events::{
@@ -483,9 +483,9 @@ impl PluginTool {
         ctx: Option<&ToolContext>,
         line: &str,
     ) {
-        use octos_plugin::protocol_v2::{LineParse, ProtocolV2Event};
+        use ra_plugin::protocol_v2::{LineParse, ProtocolV2Event};
 
-        let parse = octos_plugin::protocol_v2::parse_event_line(line);
+        let parse = ra_plugin::protocol_v2::parse_event_line(line);
         let message = match parse {
             LineParse::Empty => return,
             LineParse::Event(ProtocolV2Event::Progress(progress)) => {
@@ -574,7 +574,7 @@ impl PluginTool {
         plugin_name: &str,
         tool_name: &str,
         ctx: Option<&ToolContext>,
-        cost: &octos_plugin::protocol_v2::CostEvent,
+        cost: &ra_plugin::protocol_v2::CostEvent,
     ) {
         let Some(ctx) = ctx else {
             return;
@@ -1737,7 +1737,7 @@ mod subdir_rescue_tests {
 /// Order:
 ///
 /// 1. Try the shared
-///    [`octos_bus::file_handle::resolve_tool_path`] resolver — the same
+///    [`ra_bus::file_handle::resolve_tool_path`] resolver — the same
 ///    table that powers the file tools. This handles `up/...` /
 ///    `pf/...` handles (with both 3-segment and LLM-truncated
 ///    2-segment forms), and absolute paths inside the upload tmpdir.
@@ -1759,7 +1759,7 @@ fn resolve_plugin_input_path(
     raw_path: &str,
     work_dir: &std::path::Path,
 ) -> Result<String, eyre::Report> {
-    use octos_bus::file_handle::ToolPathScope;
+    use ra_bus::file_handle::ToolPathScope;
     // Codex round-3 BLOCKER fix (PR #1186 review): FAIL CLOSED on raw
     // `..` (`ParentDir`) components. The previous revision returned
     // `raw_path.to_string()` unchanged for unsafe inputs, but the
@@ -1797,14 +1797,14 @@ fn resolve_plugin_input_path(
     let stripped = strip_redundant_skill_output_prefix(raw_path, work_dir);
     if let Some(ref stripped_path) = stripped {
         if let Ok(resolved) =
-            octos_bus::file_handle::resolve_tool_path(work_dir, None, stripped_path)
+            ra_bus::file_handle::resolve_tool_path(work_dir, None, stripped_path)
         {
             if matches!(resolved.scope, ToolPathScope::Workspace) && resolved.absolute.exists() {
                 return Ok(resolved.absolute.to_string_lossy().into_owned());
             }
         }
     }
-    if let Ok(resolved) = octos_bus::file_handle::resolve_tool_path(work_dir, None, raw_path) {
+    if let Ok(resolved) = ra_bus::file_handle::resolve_tool_path(work_dir, None, raw_path) {
         let accept = match resolved.scope {
             // Upload / profile scopes go through `canonicalize_under`,
             // so existence is already guaranteed.

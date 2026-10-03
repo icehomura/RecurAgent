@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use eyre::WrapErr;
-use octos_bus::ChannelManager;
+use ra_bus::ChannelManager;
 
 use super::settings_str;
 use crate::config::ChannelEntry;
@@ -38,7 +38,7 @@ pub fn register(
         .and_then(|v| v.as_str())
         .map(String::from);
     channel_mgr.register(Arc::new(
-        octos_bus::FeishuChannel::new(
+        ra_bus::FeishuChannel::new(
             &app_id,
             &app_secret,
             entry.allowed_senders.clone(),

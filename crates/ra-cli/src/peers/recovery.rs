@@ -272,7 +272,7 @@ pub(crate) fn finish_peer_lifetime_turn(
 }
 
 pub(crate) fn enable_peer_task_persistence(
-    supervisor: &octos_agent::TaskSupervisor,
+    supervisor: &ra_agent::TaskSupervisor,
     path: impl Into<PathBuf>,
     peers_root: &Path,
     profile: &str,
@@ -339,7 +339,7 @@ mod tests {
         let ledger = temp.path().join("tasks.jsonl");
         peer_io::write_peer_file_atomic(&peer, "brief.md", "review").unwrap();
         peer_io::write_peer_file_atomic(&peer, "originator", &master).unwrap();
-        let staging = octos_agent::TaskSupervisor::new();
+        let staging = ra_agent::TaskSupervisor::new();
         staging.enable_persistence(&ledger).unwrap();
         let task_id = bind_peer_supervised_task(&staging, key.clone(), &master).unwrap();
         record_peer_lifetime_binding(&peers, &profile, "auditor", &master, &task_id).unwrap();
@@ -354,7 +354,7 @@ mod tests {
         peer_task_registry().take(&key);
         drop(staging);
 
-        let restored = octos_agent::TaskSupervisor::new();
+        let restored = ra_agent::TaskSupervisor::new();
         let changes = Arc::new(std::sync::Mutex::new(Vec::new()));
         let changed = changes.clone();
         restored.set_on_change(move |task| changed.lock().unwrap().push(task.id.clone()));
@@ -371,7 +371,7 @@ mod tests {
         // Inspect can be the first factory after boot; the later same-path
         // foreground factory must keep the recovered lease and remain quiet.
         enable_peer_task_persistence(&restored, &ledger, &peers, &profile, &master).unwrap();
-        let next_factory = octos_agent::TaskSupervisor::new();
+        let next_factory = ra_agent::TaskSupervisor::new();
         enable_peer_task_persistence(&next_factory, &ledger, &peers, &profile, &master).unwrap();
         assert!(next_factory.get_task(&task_id).unwrap().status.is_active());
         invalidate_peer_lifetime_for_input(&peers, "auditor").unwrap();
@@ -397,7 +397,7 @@ mod tests {
         peer_session: SessionKey,
         key: String,
         task_id: String,
-        supervisor: octos_agent::TaskSupervisor,
+        supervisor: ra_agent::TaskSupervisor,
     }
 
     impl Fixture {
@@ -414,7 +414,7 @@ mod tests {
             let key = peer_wire_key(&profile, "auditor");
             peer_io::write_peer_file_atomic(&dir, "brief.md", "review").unwrap();
             peer_io::write_peer_file_atomic(&dir, "originator", &master).unwrap();
-            let supervisor = octos_agent::TaskSupervisor::new();
+            let supervisor = ra_agent::TaskSupervisor::new();
             supervisor.enable_persistence(&ledger).unwrap();
             let task_id = bind_peer_supervised_task(&supervisor, key.clone(), &master).unwrap();
             record_peer_lifetime_binding(&peers, &profile, "auditor", &master, &task_id).unwrap();
@@ -443,9 +443,9 @@ mod tests {
             finish_peer_lifetime_turn(token, result, true, pending).unwrap();
         }
 
-        fn restart(&self) -> octos_agent::TaskSupervisor {
+        fn restart(&self) -> ra_agent::TaskSupervisor {
             peer_task_registry().take_if_task(&self.key, &self.task_id);
-            let restored = octos_agent::TaskSupervisor::new();
+            let restored = ra_agent::TaskSupervisor::new();
             enable_peer_task_persistence(
                 &restored,
                 &self.ledger,
@@ -724,7 +724,7 @@ mod tests {
                 write_lifetime(&fixture.dir, &record).unwrap();
             }
             let row = fixture.restart().get_task(&fixture.task_id).unwrap();
-            assert_eq!(row.status == octos_agent::TaskStatus::Completed, exact);
+            assert_eq!(row.status == ra_agent::TaskStatus::Completed, exact);
             assert_eq!(row.error.is_none(), exact);
         }
     }

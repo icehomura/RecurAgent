@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use eyre::WrapErr;
-use octos_bus::ChannelManager;
+use ra_bus::ChannelManager;
 
 use super::settings_str;
 use crate::config::ChannelEntry;
@@ -20,7 +20,7 @@ pub fn register(
         .wrap_err_with(|| format!("{bot_env} environment variable not set"))?;
     let app_token = std::env::var(&app_env)
         .wrap_err_with(|| format!("{app_env} environment variable not set"))?;
-    channel_mgr.register(Arc::new(octos_bus::SlackChannel::new(
+    channel_mgr.register(Arc::new(ra_bus::SlackChannel::new(
         &bot_token,
         &app_token,
         entry.allowed_senders.clone(),

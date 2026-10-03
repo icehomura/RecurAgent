@@ -518,7 +518,7 @@ pub async fn my_memory(
     // exists → empty state; dangling → 500) and materializing dirs on
     // a read endpoint (codex #1611 r8 P2). The no-follow walk below is
     // the sole authority on what exists.
-    let store = octos_memory::MemoryStore::at_memory_dir(data_dir.join("memory"));
+    let store = ra_memory::MemoryStore::at_memory_dir(data_dir.join("memory"));
 
     let empty = |state: &AppState, profile| {
         Json(MemoryOverviewResponse {
@@ -599,7 +599,7 @@ pub async fn my_memory(
                     entities.push(EntitySummary {
                         // The store's own parser — byte-identical to the
                         // agent-prompt summaries (codex #1611 r2 P2).
-                        summary: octos_memory::extract_abstract(&content),
+                        summary: ra_memory::extract_abstract(&content),
                         name,
                     });
                 }
@@ -685,7 +685,7 @@ pub async fn my_memory_entity(
 
     // Path-derivation only — no create_dir_all on a read endpoint
     // (codex #1611 r8 P2, same rationale as the overview handler).
-    let store = octos_memory::MemoryStore::at_memory_dir(data_dir.join("memory"));
+    let store = ra_memory::MemoryStore::at_memory_dir(data_dir.join("memory"));
     // Same traversal-character sanitization `read_entity` applies, on
     // top of the FD-anchored walk — a symlinked page, bank dir or any
     // ancestor is a plain 404.
@@ -753,7 +753,7 @@ mod tests {
 
     async fn seed_memory(ps: &ProfileStore, profile: &crate::profiles::UserProfile) {
         let data_dir = ps.resolve_data_dir(profile);
-        let store = octos_memory::MemoryStore::open(&data_dir).await.unwrap();
+        let store = ra_memory::MemoryStore::open(&data_dir).await.unwrap();
         store
             .write_long_term("# MEMORY\n\n- remembers things\n")
             .await
@@ -841,7 +841,7 @@ mod tests {
         let profile = make_user_profile("parity", "Parity");
         ps.save(&profile).unwrap();
         let data_dir = ps.resolve_data_dir(&profile);
-        let store = octos_memory::MemoryStore::open(&data_dir).await.unwrap();
+        let store = ra_memory::MemoryStore::open(&data_dir).await.unwrap();
         let tricky = "---abc\nnote\n---\nBody\n";
         store.write_entity("tricky", tricky).await.unwrap();
 
@@ -853,7 +853,7 @@ mod tests {
             .iter()
             .find(|e| e.name == "tricky")
             .expect("tricky entity listed");
-        assert_eq!(entity.summary, octos_memory::extract_abstract(tricky));
+        assert_eq!(entity.summary, ra_memory::extract_abstract(tricky));
         assert_eq!(entity.summary, "---abc", "not-a-frontmatter-opener stays");
     }
 

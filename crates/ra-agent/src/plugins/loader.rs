@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use eyre::Result;
-use octos_llm::vertex_auth::{ServiceAccount, TokenSource, VertexTokenProvider};
+use ra_llm::vertex_auth::{ServiceAccount, TokenSource, VertexTokenProvider};
 use sha2::{Digest, Sha256};
 use tracing::{info, warn};
 
@@ -259,7 +259,7 @@ impl PluginLoader {
     ) -> Result<PluginLoadResult> {
         let mut result = PluginLoadResult::default();
 
-        // Delegate dir scanning + dedup to octos_plugin::discovery so the
+        // Delegate dir scanning + dedup to ra_plugin::discovery so the
         // legacy loader inherits "first occurrence wins" semantics. Without
         // this, a plugin id present in both `~/.ra/skills/` and the
         // per-profile `<data_dir>/skills/` would register twice — and
@@ -269,14 +269,14 @@ impl PluginLoader {
         // `runtime/profile.rs::ProfileFactory`), so a stale per-profile
         // install would shadow a freshly-deployed global skill. We hit
         // this twice in 2026 (yangmi, douwentao) before consolidating.
-        let mut sources: Vec<octos_plugin::PluginSource> = Vec::with_capacity(dirs.len());
+        let mut sources: Vec<ra_plugin::PluginSource> = Vec::with_capacity(dirs.len());
         for dir in dirs {
             if !dir.exists() {
                 continue;
             }
-            sources.push(octos_plugin::PluginSource {
+            sources.push(ra_plugin::PluginSource {
                 path: dir.clone(),
-                origin: octos_plugin::PluginOrigin::User,
+                origin: ra_plugin::PluginOrigin::User,
             });
         }
         let extra_env_map: std::collections::HashMap<String, String> = extra_env
@@ -289,7 +289,7 @@ impl PluginLoader {
         // through actual invocation. Preserving that behaviour avoids
         // silently dropping skills on hosts where a probe disagrees with
         // reality. We may tighten this in a follow-up.
-        let discovery = octos_plugin::discover_plugins_with_errors(&sources, &extra_env_map);
+        let discovery = ra_plugin::discover_plugins_with_errors(&sources, &extra_env_map);
         result
             .plugin_errors
             .extend(discovery.errors.into_iter().map(|error| PluginLoadError {
@@ -311,7 +311,7 @@ impl PluginLoader {
                 }
             }
             let path = plugin.path;
-            // Re-parse via the agent-side manifest type below: octos_plugin's
+            // Re-parse via the agent-side manifest type below: ra_plugin's
             // PluginManifest is a structural subset and doesn't model
             // mcp_servers / hooks / prompts / spawn_only. Discovery has
             // already filtered for `manifest.json` presence, so we skip
@@ -343,8 +343,8 @@ impl PluginLoader {
                             continue;
                         }
                         let risk =
-                            octos_core::ui_protocol::manifest_tool_risk(loaded.risk.as_deref());
-                        octos_core::ui_protocol::register_tool_approval_risk(name.clone(), risk);
+                            ra_core::ui_protocol::manifest_tool_risk(loaded.risk.as_deref());
+                        ra_core::ui_protocol::register_tool_approval_risk(name.clone(), risk);
                         result.tool_names.push(name.clone());
                         registry.mark_as_plugin(&name);
                         registry.register(tool);
@@ -1086,22 +1086,22 @@ impl PluginLoader {
 }
 
 fn validate_manifest_tool_schemas(manifest: &PluginManifest) -> Result<()> {
-    validate_manifest_tool_schemas_with(manifest, octos_plugin::ValidationProfile::from_env())
+    validate_manifest_tool_schemas_with(manifest, ra_plugin::ValidationProfile::from_env())
 }
 
 fn validate_manifest_tool_schemas_with(
     manifest: &PluginManifest,
-    profile: octos_plugin::ValidationProfile,
+    profile: ra_plugin::ValidationProfile,
 ) -> Result<()> {
-    if matches!(profile, octos_plugin::ValidationProfile::Off) {
+    if matches!(profile, ra_plugin::ValidationProfile::Off) {
         return Ok(());
     }
 
     let mut errors = Vec::new();
     for tool in &manifest.tools {
-        errors.extend(octos_plugin::validate_schema(
+        errors.extend(ra_plugin::validate_schema(
             &tool.name,
-            octos_plugin::SchemaKind::Input,
+            ra_plugin::SchemaKind::Input,
             &tool.input_schema,
             profile,
         ));
@@ -2114,7 +2114,7 @@ mod tests {
         .unwrap();
 
         let err =
-            validate_manifest_tool_schemas_with(&manifest, octos_plugin::ValidationProfile::Strict)
+            validate_manifest_tool_schemas_with(&manifest, ra_plugin::ValidationProfile::Strict)
                 .expect_err("strict schema validation must reject provider-hostile schemas");
         let msg = err.to_string();
         assert!(msg.contains("plugin 'bad-schema-plugin'"));
@@ -2142,7 +2142,7 @@ mod tests {
         )
         .unwrap();
 
-        validate_manifest_tool_schemas_with(&manifest, octos_plugin::ValidationProfile::Lenient)
+        validate_manifest_tool_schemas_with(&manifest, ra_plugin::ValidationProfile::Lenient)
             .expect("lenient profile should preserve the documented escape hatch");
     }
 
@@ -2837,15 +2837,15 @@ mod tests {
             .unwrap();
         assert_eq!(first.tool_count, 3);
         assert_eq!(
-            octos_core::ui_protocol::tool_approval_risk(declared_tool),
+            ra_core::ui_protocol::tool_approval_risk(declared_tool),
             "medium"
         );
         assert_eq!(
-            octos_core::ui_protocol::tool_approval_risk(missing_tool),
+            ra_core::ui_protocol::tool_approval_risk(missing_tool),
             "high"
         );
         assert_eq!(
-            octos_core::ui_protocol::tool_approval_risk(blank_tool),
+            ra_core::ui_protocol::tool_approval_risk(blank_tool),
             "high"
         );
 
@@ -2870,11 +2870,11 @@ mod tests {
                 .unwrap();
         assert_eq!(second.tool_count, 2);
         assert_eq!(
-            octos_core::ui_protocol::tool_approval_risk(missing_tool),
+            ra_core::ui_protocol::tool_approval_risk(missing_tool),
             "unspecified"
         );
         assert_eq!(
-            octos_core::ui_protocol::tool_approval_risk(blank_tool),
+            ra_core::ui_protocol::tool_approval_risk(blank_tool),
             "unspecified"
         );
     }
@@ -3689,9 +3689,9 @@ path = "src/main.rs"
         use crate::agent::Agent;
         use crate::tools::MofaMakeTool;
         use async_trait::async_trait;
-        use octos_core::AgentId;
-        use octos_llm::{ChatResponse, LlmProvider, ToolSpec};
-        use octos_memory::EpisodeStore;
+        use ra_core::AgentId;
+        use ra_llm::{ChatResponse, LlmProvider, ToolSpec};
+        use ra_memory::EpisodeStore;
 
         // Minimal LlmProvider stub so we can construct an Agent without
         // pulling in a real backend. `chat` is never called by this test.
@@ -3700,9 +3700,9 @@ path = "src/main.rs"
         impl LlmProvider for NoopLlm {
             async fn chat(
                 &self,
-                _messages: &[octos_core::Message],
+                _messages: &[ra_core::Message],
                 _tools: &[ToolSpec],
-                _config: &octos_llm::ChatConfig,
+                _config: &ra_llm::ChatConfig,
             ) -> eyre::Result<ChatResponse> {
                 eyre::bail!("not exercised in this test")
             }
@@ -3895,18 +3895,18 @@ path = "src/main.rs"
         use crate::agent::Agent;
         use crate::tools::MofaMakeTool;
         use async_trait::async_trait;
-        use octos_core::AgentId;
-        use octos_llm::{ChatResponse, LlmProvider, ToolSpec};
-        use octos_memory::EpisodeStore;
+        use ra_core::AgentId;
+        use ra_llm::{ChatResponse, LlmProvider, ToolSpec};
+        use ra_memory::EpisodeStore;
 
         struct NoopLlm;
         #[async_trait]
         impl LlmProvider for NoopLlm {
             async fn chat(
                 &self,
-                _messages: &[octos_core::Message],
+                _messages: &[ra_core::Message],
                 _tools: &[ToolSpec],
-                _config: &octos_llm::ChatConfig,
+                _config: &ra_llm::ChatConfig,
             ) -> eyre::Result<ChatResponse> {
                 eyre::bail!("unused")
             }

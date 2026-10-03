@@ -40,7 +40,7 @@ use std::hash::{Hash, Hasher};
 #[cfg(test)]
 use std::sync::Mutex;
 
-use octos_core::{Message, MessageRole};
+use ra_core::{Message, MessageRole};
 
 /// Process-global findings collector.
 ///

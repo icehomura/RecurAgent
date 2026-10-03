@@ -114,14 +114,14 @@ const MAX_FILENAME_BYTES: usize = 255;
 
 /// Sibling backup filename for `file_name` + `suffix`, bounded to fit
 /// NAME_MAX: the natural `<file_name><suffix>` when it fits, else a clamped,
-/// hash-disambiguated stem via `octos_core::safe_filename`. Backups are
+/// hash-disambiguated stem via `ra_core::safe_filename`. Backups are
 /// internal — nothing looks them up by name — so the rename is safe.
 fn bounded_backup_name(file_name: &str, suffix: &str) -> String {
     let natural = format!("{file_name}{suffix}");
     if natural.len() <= MAX_FILENAME_BYTES {
         natural
     } else {
-        format!("{}{suffix}", octos_core::safe_filename(file_name))
+        format!("{}{suffix}", ra_core::safe_filename(file_name))
     }
 }
 
@@ -960,7 +960,7 @@ impl MemoryStore {
         let file_name = format!(
             "{}-{}.md",
             uuid::Uuid::now_v7().simple(),
-            octos_core::safe_filename(slug_source.trim())
+            ra_core::safe_filename(slug_source.trim())
         );
         let path = dir.join(file_name);
         let rendered = note.render();

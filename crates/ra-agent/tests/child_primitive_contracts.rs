@@ -23,23 +23,23 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use async_trait::async_trait;
-use octos_agent::tools::mcp_agent::{
+use ra_agent::tools::mcp_agent::{
     DispatchOutcome, DispatchRequest, DispatchResponse, McpAgentBackend,
 };
-use octos_agent::tools::{DelegateTool, SharedBackend, SpawnTool, Tool};
-use octos_agent::workspace_policy::{
+use ra_agent::tools::{DelegateTool, SharedBackend, SpawnTool, Tool};
+use ra_agent::workspace_policy::{
     CompactionPolicy, CompactionSummarizerKind, ValidationPolicy, Validator, ValidatorPhaseKind,
     ValidatorSpec, WorkspaceArtifactsPolicy, WorkspacePolicy, WorkspacePolicyKind,
     WorkspacePolicyWorkspace, WorkspaceSnapshotTrigger, WorkspaceTrackingPolicy,
     WorkspaceVersionControlPolicy, WorkspaceVersionControlProvider,
 };
-use octos_agent::{
+use ra_agent::{
     Agent, COMPACTION_POLICY_SCHEMA_VERSION, WORKSPACE_POLICY_SCHEMA_VERSION,
     write_workspace_policy,
 };
-use octos_core::{AgentId, InboundMessage, Message};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_core::{AgentId, InboundMessage, Message};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 
 /// Minimal LLM provider — the child agent just replies with scripted
@@ -448,7 +448,7 @@ async fn should_attach_compaction_runner_built_from_workspace_policy() {
     let dir = TempDir::new().unwrap();
     let memory = memory(&dir).await;
     let provider: Arc<dyn LlmProvider> = Arc::new(ScriptedLlmProvider::new("ok"));
-    let tools = octos_agent::ToolRegistry::with_builtins(dir.path());
+    let tools = ra_agent::ToolRegistry::with_builtins(dir.path());
     let policy = policy_with_compaction_and_validator("artifact.txt");
 
     let compaction_policy = policy
@@ -457,13 +457,13 @@ async fn should_attach_compaction_runner_built_from_workspace_policy() {
         .expect("test fixture declares compaction");
     let runner = match compaction_policy.summarizer {
         CompactionSummarizerKind::LlmIterative => {
-            octos_agent::compaction::CompactionRunner::with_provider(
+            ra_agent::compaction::CompactionRunner::with_provider(
                 compaction_policy,
                 provider.clone(),
             )
         }
         CompactionSummarizerKind::Extractive => {
-            octos_agent::compaction::CompactionRunner::new(compaction_policy)
+            ra_agent::compaction::CompactionRunner::new(compaction_policy)
         }
     }
     .with_workspace_policy(&policy);

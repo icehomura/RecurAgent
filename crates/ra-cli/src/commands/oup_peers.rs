@@ -5,7 +5,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use eyre::Result;
-use octos_core::{SessionKey, ui_protocol::*};
+use ra_core::{SessionKey, ui_protocol::*};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -13,14 +13,14 @@ use super::oup_session::{OupFrontend, OupSession};
 
 pub(crate) struct OupPeerHost {
     state: Arc<crate::api::AppState>,
-    permissions: octos_agent::EffectivePermissions,
+    permissions: ra_agent::EffectivePermissions,
     peers: Mutex<HashMap<SessionKey, (CancellationToken, JoinHandle<()>)>>,
 }
 
 impl OupPeerHost {
     pub(crate) fn new(
         state: Arc<crate::api::AppState>,
-        permissions: octos_agent::EffectivePermissions,
+        permissions: ra_agent::EffectivePermissions,
     ) -> Self {
         Self {
             state,
@@ -104,7 +104,7 @@ impl OupFrontend for PeerFrontend {
 async fn serve_peer(
     state: Arc<crate::api::AppState>,
     event: PeerStagedEvent,
-    permissions: octos_agent::EffectivePermissions,
+    permissions: ra_agent::EffectivePermissions,
     stop: CancellationToken,
 ) -> Result<()> {
     let key = SessionKey(format!("{}#{}", event.session_id.base_key(), event.topic));
@@ -142,20 +142,20 @@ mod tests {
 
     struct Model(AtomicUsize);
     #[async_trait::async_trait]
-    impl octos_llm::LlmProvider for Model {
+    impl ra_llm::LlmProvider for Model {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> Result<octos_llm::ChatResponse> {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> Result<ra_llm::ChatResponse> {
             self.0.fetch_add(1, Ordering::SeqCst);
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: Some("peer deliverable".into()),
                 reasoning_content: None,
                 tool_calls: vec![],
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage {
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage {
                     input_tokens: 10,
                     output_tokens: 5,
                     ..Default::default()
@@ -184,7 +184,7 @@ mod tests {
         let state = factory.oup_state().await.unwrap();
         let root = data.path().join("peers");
         std::fs::create_dir_all(&root).unwrap();
-        let master = SessionKey::with_profile(octos_core::MAIN_PROFILE_ID, "cli", "peer-test");
+        let master = SessionKey::with_profile(ra_core::MAIN_PROFILE_ID, "cli", "peer-test");
         let staged = crate::peers::stage_peer(
             &root,
             workspace.path(),
@@ -205,9 +205,9 @@ mod tests {
             brief_path: staged.brief_path.to_string_lossy().into_owned(),
             cwd: workspace.path().to_string_lossy().into_owned(),
             worktree_branch: None,
-            profile_id: octos_core::MAIN_PROFILE_ID.into(),
+            profile_id: ra_core::MAIN_PROFILE_ID.into(),
         });
-        let host = OupPeerHost::new(state, octos_agent::EffectivePermissions::workspace_write());
+        let host = OupPeerHost::new(state, ra_agent::EffectivePermissions::workspace_write());
         host.event(&event);
         host.event(&event);
         tokio::time::timeout(std::time::Duration::from_secs(15), async {
@@ -232,7 +232,7 @@ mod tests {
                     .iter()
                     .map(|row| (&row.slug, &row.result))
                     .collect::<Vec<_>>(),
-                crate::peers::peer_trusted_session(octos_core::MAIN_PROFILE_ID, &staged.slug)
+                crate::peers::peer_trusted_session(ra_core::MAIN_PROFILE_ID, &staged.slug)
             )
         });
         assert_eq!(
@@ -241,7 +241,7 @@ mod tests {
             "replayed staging must not run twice"
         );
         assert_eq!(
-            crate::peers::peer_trusted_session(octos_core::MAIN_PROFILE_ID, &staged.slug),
+            crate::peers::peer_trusted_session(ra_core::MAIN_PROFILE_ID, &staged.slug),
             Some(SessionKey(format!("{}#peer-{}", master.0, staged.slug)))
         );
         host.close().await;
@@ -259,7 +259,7 @@ mod tests {
         );
         let state = factory.oup_state().await.unwrap();
         let peers_root = data.path().join("peers");
-        let master = SessionKey::with_profile(octos_core::MAIN_PROFILE_ID, "cli", "budget-a");
+        let master = SessionKey::with_profile(ra_core::MAIN_PROFILE_ID, "cli", "budget-a");
         let staged = crate::peers::stage_peer_with_budget(
             &peers_root,
             workspace.path(),
@@ -276,7 +276,7 @@ mod tests {
         .unwrap();
         let host = OupPeerHost::new(
             state.clone(),
-            octos_agent::EffectivePermissions::workspace_write(),
+            ra_agent::EffectivePermissions::workspace_write(),
         );
         host.event(&UiNotification::PeerStaged(PeerStagedEvent {
             session_id: master.clone(),
@@ -286,7 +286,7 @@ mod tests {
             brief_path: staged.brief_path.to_string_lossy().into_owned(),
             cwd: workspace.path().to_string_lossy().into_owned(),
             worktree_branch: None,
-            profile_id: octos_core::MAIN_PROFILE_ID.into(),
+            profile_id: ra_core::MAIN_PROFILE_ID.into(),
         }));
         tokio::time::timeout(std::time::Duration::from_secs(15), async {
             loop {
@@ -304,13 +304,13 @@ mod tests {
         host.close().await;
 
         let second_master =
-            SessionKey::with_profile(octos_core::MAIN_PROFILE_ID, "cli", "budget-b");
+            SessionKey::with_profile(ra_core::MAIN_PROFILE_ID, "cli", "budget-b");
         let second_key = SessionKey(format!("{}#peer-{}", second_master.0, staged.slug));
         let second = OupSession::open(
             state,
             second_key,
             workspace.path(),
-            octos_agent::EffectivePermissions::workspace_write(),
+            ra_agent::EffectivePermissions::workspace_write(),
         )
         .await
         .unwrap();

@@ -11,12 +11,12 @@
 use std::fs;
 use std::path::PathBuf;
 
-use octos_agent::abi_schema::{HARNESS_ERROR_SCHEMA_VERSION, check_supported};
-use octos_agent::harness_errors::{HarnessError, RecoveryHint};
-use octos_agent::harness_events::{
+use ra_agent::abi_schema::{HARNESS_ERROR_SCHEMA_VERSION, check_supported};
+use ra_agent::harness_errors::{HarnessError, RecoveryHint};
+use ra_agent::harness_events::{
     HARNESS_EVENT_SCHEMA_V1, HarnessEvent, HarnessEventPayload, write_event_to_sink,
 };
-use octos_llm::{LlmError, LlmErrorKind};
+use ra_llm::{LlmError, LlmErrorKind};
 
 // ─────────────────────────────────────────────────────────────────────────
 // Classification
@@ -275,7 +275,7 @@ fn should_classify_hook_deny_as_policy_not_bug() {
     // harness fault: it must classify `variant=policy recovery=expected`
     // instead of `variant=internal recovery=bug`, so operator dashboards
     // stop paging on policy decisions.
-    let report: eyre::Report = octos_agent::hooks::HookDeniedError {
+    let report: eyre::Report = ra_agent::hooks::HookDeniedError {
         reason: "no network calls today".into(),
     }
     .into();

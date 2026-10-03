@@ -5,7 +5,7 @@ use std::sync::Mutex as StdMutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering};
 
 use async_trait::async_trait;
-use octos_core::{AgentId, MessageRole, TaskContext, TaskKind, ToolCall};
+use ra_core::{AgentId, MessageRole, TaskContext, TaskKind, ToolCall};
 
 // --- compose_turn_user_content (video-call context hint) ---
 
@@ -60,11 +60,11 @@ fn should_combine_video_hint_and_summary() {
     assert!(out.contains("look"));
     assert!(out.ends_with("SUMMARY"));
 }
-use octos_llm::{
+use ra_llm::{
     ChatResponse, LlmError, LlmErrorKind, LlmProvider, StopReason, TokenUsage as LlmTokenUsage,
     ToolChoice,
 };
-use octos_memory::EpisodeStore;
+use ra_memory::EpisodeStore;
 
 #[cfg(unix)]
 use crate::plugins::PluginTool;
@@ -117,7 +117,7 @@ impl LlmProvider for ScriptedProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
+        _tools: &[ra_llm::ToolSpec],
         _config: &ChatConfig,
     ) -> Result<ChatResponse> {
         self.responses
@@ -151,7 +151,7 @@ impl LlmProvider for TerminalScript {
     async fn chat(
         &self,
         messages: &[Message],
-        tools: &[octos_llm::ToolSpec],
+        tools: &[ra_llm::ToolSpec],
         config: &ChatConfig,
     ) -> Result<ChatResponse> {
         self.0.chat(messages, tools, config).await
@@ -160,10 +160,10 @@ impl LlmProvider for TerminalScript {
     async fn chat_stream(
         &self,
         messages: &[Message],
-        tools: &[octos_llm::ToolSpec],
+        tools: &[ra_llm::ToolSpec],
         config: &ChatConfig,
-    ) -> Result<octos_llm::ChatStream> {
-        use octos_llm::StreamEvent;
+    ) -> Result<ra_llm::ChatStream> {
+        use ra_llm::StreamEvent;
         let response = self.chat(messages, tools, config).await?;
         let events = vec![
             StreamEvent::ReasoningDelta(response.reasoning_content.unwrap_or_default()),
@@ -230,8 +230,8 @@ async fn terminal_integrity_reasoning_only_fail_fast_is_error() {
             save_episodes: false,
             ..Default::default()
         });
-        let result = octos_llm::with_llm_call_policy(
-            octos_llm::LlmCallPolicy::FailFast,
+        let result = ra_llm::with_llm_call_policy(
+            ra_llm::LlmCallPolicy::FailFast,
             agent.process_message("Inspect the image", &[], vec![]),
         )
         .await;
@@ -345,7 +345,7 @@ impl LlmProvider for MixedTerminalScript {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
+        _tools: &[ra_llm::ToolSpec],
         _config: &ChatConfig,
     ) -> Result<ChatResponse> {
         self.0
@@ -358,10 +358,10 @@ impl LlmProvider for MixedTerminalScript {
     async fn chat_stream(
         &self,
         messages: &[Message],
-        tools: &[octos_llm::ToolSpec],
+        tools: &[ra_llm::ToolSpec],
         config: &ChatConfig,
-    ) -> Result<octos_llm::ChatStream> {
-        use octos_llm::StreamEvent;
+    ) -> Result<ra_llm::ChatStream> {
+        use ra_llm::StreamEvent;
         let response = self.chat(messages, tools, config).await?;
         Ok(Box::pin(futures::stream::iter(vec![
             StreamEvent::ReasoningDelta(response.reasoning_content.unwrap_or_default()),
@@ -392,7 +392,7 @@ fn mixed_terminal_response(content: &str, input: u32, output: u32) -> ChatRespon
 }
 
 fn mixed_terminal_transport_error() -> Result<ChatResponse> {
-    Err(octos_llm::StreamError::Transport {
+    Err(ra_llm::StreamError::Transport {
         detail: "fixture transport failure".into(),
     }
     .into())
@@ -447,7 +447,7 @@ async fn assert_mixed_terminal_usage(
     if let Err(error) = &result {
         assert!(
             error.downcast_ref::<LlmError>().is_some()
-                || error.downcast_ref::<octos_llm::StreamError>().is_some(),
+                || error.downcast_ref::<ra_llm::StreamError>().is_some(),
             "usage settlement must preserve the typed error: {error:?}",
         );
     }
@@ -475,7 +475,7 @@ async fn assert_mixed_terminal_usage(
             400 + expected.3
         ),
     );
-    let pricing = octos_llm::pricing::model_pricing("claude-sonnet-4").unwrap();
+    let pricing = ra_llm::pricing::model_pricing("claude-sonnet-4").unwrap();
     // The fixture is a residual-protocol mock, not an Anthropic provider.
     // All disjoint cache traffic must remain priced (read 1x, write 1.25x).
     let expected_cost = pricing.cost(expected.0, expected.1)
@@ -763,7 +763,7 @@ struct RequestRecordingProvider {
 }
 
 /// `(messages, tools)` of every provider request, in call order.
-type RecordedRequests = Arc<StdMutex<Vec<(Vec<Message>, Vec<octos_llm::ToolSpec>)>>>;
+type RecordedRequests = Arc<StdMutex<Vec<(Vec<Message>, Vec<ra_llm::ToolSpec>)>>>;
 
 impl RequestRecordingProvider {
     fn new(responses: Vec<ChatResponse>, requests: RecordedRequests) -> Self {
@@ -779,7 +779,7 @@ impl LlmProvider for RequestRecordingProvider {
     async fn chat(
         &self,
         messages: &[Message],
-        tools: &[octos_llm::ToolSpec],
+        tools: &[ra_llm::ToolSpec],
         _config: &ChatConfig,
     ) -> Result<ChatResponse> {
         self.requests
@@ -806,7 +806,7 @@ const CHECKPOINT_ENVELOPE_OPEN: &str = "<context_event kind=\"convergence_checkp
 
 /// `(messages, tools, config)` of every provider request, in call order.
 type RecordedConfigRequests =
-    Arc<StdMutex<Vec<(Vec<Message>, Vec<octos_llm::ToolSpec>, ChatConfig)>>>;
+    Arc<StdMutex<Vec<(Vec<Message>, Vec<ra_llm::ToolSpec>, ChatConfig)>>>;
 
 /// Like [`RequestRecordingProvider`] but also keeps the `ChatConfig` of each
 /// call, so a test can compare the cache-relevant request controls of the
@@ -830,7 +830,7 @@ impl LlmProvider for ConfigRecordingProvider {
     async fn chat(
         &self,
         messages: &[Message],
-        tools: &[octos_llm::ToolSpec],
+        tools: &[ra_llm::ToolSpec],
         config: &ChatConfig,
     ) -> Result<ChatResponse> {
         self.requests
@@ -1043,7 +1043,7 @@ async fn should_send_checkpoint_with_identical_cache_relevant_config_and_tool_ch
         .with_config(AgentConfig {
             save_episodes: false,
             max_tokens: Some(8_192),
-            reasoning_effort: Some(octos_llm::ReasoningEffort::High),
+            reasoning_effort: Some(ra_llm::ReasoningEffort::High),
             ..Default::default()
         })
         .with_convergence_intervals(2, 100_000_000, std::time::Duration::from_secs(86_400));
@@ -1059,14 +1059,14 @@ async fn should_send_checkpoint_with_identical_cache_relevant_config_and_tool_ch
     let (_, _, action) = &requests[1];
     let (_, _, checkpoint) = &requests[2];
     let (_, _, next_action) = &requests[3];
-    assert!(matches!(action.tool_choice, octos_llm::ToolChoice::Auto));
+    assert!(matches!(action.tool_choice, ra_llm::ToolChoice::Auto));
     assert!(
-        matches!(checkpoint.tool_choice, octos_llm::ToolChoice::None),
+        matches!(checkpoint.tool_choice, ra_llm::ToolChoice::None),
         "the reflection must forbid tool use on the wire"
     );
     assert!(matches!(
         next_action.tool_choice,
-        octos_llm::ToolChoice::Auto
+        ra_llm::ToolChoice::Auto
     ));
     assert_eq!(checkpoint.reasoning_effort, action.reasoning_effort);
     assert_eq!(
@@ -1614,7 +1614,7 @@ async fn should_send_checkpoint_as_typed_user_tail_with_main_loop_tools_when_con
         .expect("checkpoint request has rows");
     assert_eq!(instruction.role, MessageRole::User);
     assert!(instruction.content.contains("CONVERGENCE CHECKPOINT"));
-    let tool_names = |tools: &[octos_llm::ToolSpec]| {
+    let tool_names = |tools: &[ra_llm::ToolSpec]| {
         tools
             .iter()
             .map(|tool| tool.name.clone())
@@ -1658,7 +1658,7 @@ fn durable_shape(messages: &[Message]) -> Vec<(MessageRole, String)> {
         .collect()
 }
 
-fn tool_names(tools: &[octos_llm::ToolSpec]) -> Vec<String> {
+fn tool_names(tools: &[ra_llm::ToolSpec]) -> Vec<String> {
     tools.iter().map(|tool| tool.name.clone()).collect()
 }
 
@@ -1784,7 +1784,7 @@ impl LlmProvider for FlappingRouteProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
+        _tools: &[ra_llm::ToolSpec],
         config: &ChatConfig,
     ) -> Result<ChatResponse> {
         let context = config
@@ -1915,7 +1915,7 @@ impl LlmProvider for BudgetProbePlanner {
     async fn chat(
         &self,
         messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
+        _tools: &[ra_llm::ToolSpec],
         _config: &ChatConfig,
     ) -> Result<ChatResponse> {
         if messages
@@ -1991,7 +1991,7 @@ impl LlmProvider for NoCallVerifier {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
+        _tools: &[ra_llm::ToolSpec],
         _config: &ChatConfig,
     ) -> Result<ChatResponse> {
         self.calls.fetch_add(1, AtomicOrdering::SeqCst);
@@ -2026,7 +2026,7 @@ impl LlmProvider for RepeatAwarePlanner {
     async fn chat(
         &self,
         messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
+        _tools: &[ra_llm::ToolSpec],
         _config: &ChatConfig,
     ) -> Result<ChatResponse> {
         let call = self.calls.fetch_add(1, AtomicOrdering::SeqCst) + 1;
@@ -2084,7 +2084,7 @@ impl LlmProvider for LedgerDrivenVerifier {
     async fn chat(
         &self,
         messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
+        _tools: &[ra_llm::ToolSpec],
         config: &ChatConfig,
     ) -> Result<ChatResponse> {
         self.calls.fetch_add(1, AtomicOrdering::SeqCst);
@@ -2093,8 +2093,8 @@ impl LlmProvider for LedgerDrivenVerifier {
             "verifier call must not expose tools"
         );
         assert_eq!(
-            octos_llm::current_lane_context().lane,
-            Some(octos_llm::Lane::FastChat),
+            ra_llm::current_lane_context().lane,
+            Some(ra_llm::Lane::FastChat),
             "verifier call should use the cheap fast-chat lane"
         );
         let prompt = messages
@@ -2141,7 +2141,7 @@ impl LlmProvider for PrematureEndPlanner {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
+        _tools: &[ra_llm::ToolSpec],
         _config: &ChatConfig,
     ) -> Result<ChatResponse> {
         let call = self.calls.fetch_add(1, AtomicOrdering::SeqCst);
@@ -2181,7 +2181,7 @@ impl LlmProvider for GateVerifier {
     async fn chat(
         &self,
         messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
+        _tools: &[ra_llm::ToolSpec],
         _config: &ChatConfig,
     ) -> Result<ChatResponse> {
         let call = self.calls.fetch_add(1, AtomicOrdering::SeqCst);
@@ -2268,8 +2268,8 @@ impl LlmProvider for ToolThenEndProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         let call = self.calls.fetch_add(1, AtomicOrdering::SeqCst);
         let response = if call == 0 {
@@ -2323,8 +2323,8 @@ impl LlmProvider for MaxTokensThenEndProvider {
     async fn chat(
         &self,
         messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         self.observed_prompts
             .lock()
@@ -2379,8 +2379,8 @@ impl LlmProvider for RecordingToolThenEndProvider {
     async fn chat(
         &self,
         messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         self.observed_prompts
             .lock()
@@ -2511,8 +2511,8 @@ impl LlmProvider for MultiToolThenEndProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         let call = self.calls.fetch_add(1, AtomicOrdering::SeqCst);
         let response = match call {
@@ -2648,8 +2648,8 @@ impl LlmProvider for TerminalLessonRetryProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         let call = self.calls.fetch_add(1, AtomicOrdering::SeqCst);
         let suffix = if call == 0 { "first" } else { "rewritten" };
@@ -2688,8 +2688,8 @@ impl LlmProvider for PodcastGenerateTwiceProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         let call = self.calls.fetch_add(1, AtomicOrdering::SeqCst);
         let response = match call {
@@ -2751,8 +2751,8 @@ impl LlmProvider for ConsecutiveVoiceSaveProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         let call = self.calls.fetch_add(1, AtomicOrdering::SeqCst);
         let response = match call {
@@ -4926,8 +4926,8 @@ impl LlmProvider for InertProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         unreachable!("InertProvider::chat must not be called in F-001 dispatch tests");
     }
@@ -4979,8 +4979,8 @@ impl LlmProvider for AlwaysSameToolProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         Ok(ChatResponse {
             content: None,
@@ -5562,8 +5562,8 @@ impl LlmProvider for CountingAlwaysSameToolProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         self.calls.fetch_add(1, AtomicOrdering::SeqCst);
         Ok(ChatResponse {
@@ -5655,8 +5655,8 @@ impl LlmProvider for UsageThenRateLimitProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         let n = self.calls.fetch_add(1, AtomicOrdering::SeqCst);
         if n == 0 {
@@ -5711,8 +5711,8 @@ async fn should_surface_accumulated_usage_when_llm_errors_after_prior_iteration(
 
     // FailFast makes call 2's rate-limit terminal (no retry/failover), so the
     // loop bails deterministically after recording call 1's usage.
-    let err = octos_llm::with_llm_call_policy(
-        octos_llm::LlmCallPolicy::FailFast,
+    let err = ra_llm::with_llm_call_policy(
+        ra_llm::LlmCallPolicy::FailFast,
         agent.process_message("please work", &[], vec![]),
     )
     .await
@@ -5721,7 +5721,7 @@ async fn should_surface_accumulated_usage_when_llm_errors_after_prior_iteration(
     // Constraint: the underlying LlmError must remain downcastable so
     // `classify_report` / retry-breaker logic still sees the rate limit.
     assert!(
-        err.downcast_ref::<octos_llm::LlmError>().is_some(),
+        err.downcast_ref::<ra_llm::LlmError>().is_some(),
         "underlying LlmError must stay downcastable through the usage carrier"
     );
 
@@ -5752,8 +5752,8 @@ impl LlmProvider for CountingAlternatingArgsProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         let n = self.calls.fetch_add(1, AtomicOrdering::SeqCst);
         let path = if n % 2 == 0 { "a.txt" } else { "b.txt" };
@@ -5837,8 +5837,8 @@ impl LlmProvider for CountingAlwaysNamedToolProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         self.calls.fetch_add(1, AtomicOrdering::SeqCst);
         Ok(ChatResponse {
@@ -5941,8 +5941,8 @@ impl LlmProvider for EndTurnOnlyProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         Ok(ChatResponse {
             content: Some("done".into()),
@@ -6517,8 +6517,8 @@ impl LlmProvider for MixedBatchSpawnOnlyAndErroringProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         let call = self.calls.fetch_add(1, AtomicOrdering::SeqCst);
         Ok(if call == 0 {
@@ -6595,8 +6595,8 @@ impl LlmProvider for StickyFlagThreeIterProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         let call = self.calls.fetch_add(1, AtomicOrdering::SeqCst);
         Ok(match call {
@@ -6848,8 +6848,8 @@ impl LlmProvider for SanitizedIdSpawnOnlyAndErroringProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         let call = self.calls.fetch_add(1, AtomicOrdering::SeqCst);
         Ok(if call == 0 {
@@ -7071,8 +7071,8 @@ impl LlmProvider for AlphaToolThenEndProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         let call = self.calls.fetch_add(1, AtomicOrdering::SeqCst);
         Ok(if call == 0 {
@@ -7318,7 +7318,7 @@ impl LlmProvider for AlwaysEmptyProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
+        _tools: &[ra_llm::ToolSpec],
         _config: &ChatConfig,
     ) -> Result<ChatResponse> {
         self.chat_calls.fetch_add(1, AtomicOrdering::SeqCst);
@@ -7353,7 +7353,7 @@ impl LlmProvider for AlwaysErrorProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
+        _tools: &[ra_llm::ToolSpec],
         _config: &ChatConfig,
     ) -> Result<ChatResponse> {
         self.chat_calls.fetch_add(1, AtomicOrdering::SeqCst);
@@ -7388,7 +7388,7 @@ fn task_for(instruction: &str, dir: &std::path::Path) -> Task {
 
 #[tokio::test]
 async fn should_not_retry_empty_response_when_failfast() {
-    use octos_llm::{LlmCallPolicy, with_llm_call_policy};
+    use ra_llm::{LlmCallPolicy, with_llm_call_policy};
 
     let dir = tempfile::tempdir().unwrap();
     let chat_calls = Arc::new(AtomicUsize::new(0));
@@ -7421,7 +7421,7 @@ async fn should_not_retry_empty_response_when_failfast() {
 
 #[tokio::test]
 async fn should_classify_once_and_emit_turn_failure_when_failfast_llm_error() {
-    use octos_llm::{LlmCallPolicy, with_llm_call_policy};
+    use ra_llm::{LlmCallPolicy, with_llm_call_policy};
 
     let dir = tempfile::tempdir().unwrap();
     let chat_calls = Arc::new(AtomicUsize::new(0));
@@ -7461,7 +7461,7 @@ async fn should_classify_once_and_emit_turn_failure_when_failfast_llm_error() {
 #[cfg(unix)]
 async fn should_not_emit_turn_failure_when_hook_denies_llm_call_under_failfast() {
     use crate::hooks::{HookConfig, HookEvent, HookExecutor};
-    use octos_llm::{LlmCallPolicy, with_llm_call_policy};
+    use ra_llm::{LlmCallPolicy, with_llm_call_policy};
 
     let dir = tempfile::tempdir().unwrap();
     let chat_calls = Arc::new(AtomicUsize::new(0));
@@ -7569,7 +7569,7 @@ impl LlmProvider for RecordingEndProvider {
     async fn chat(
         &self,
         messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
+        _tools: &[ra_llm::ToolSpec],
         _config: &ChatConfig,
     ) -> Result<ChatResponse> {
         self.chat_calls.fetch_add(1, AtomicOrdering::SeqCst);
@@ -7727,8 +7727,8 @@ impl LlmProvider for SteerDuringToolRoundProvider {
     async fn chat(
         &self,
         messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         self.observed
             .lock()
@@ -7783,8 +7783,8 @@ impl LlmProvider for SteerAfterFinalAnswerProvider {
     async fn chat(
         &self,
         messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         self.observed
             .lock()
@@ -8299,8 +8299,8 @@ impl LlmProvider for CallsOverflowingToolThenEnds {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         let call = self.calls.fetch_add(1, AtomicOrdering::SeqCst);
         Ok(if call == 0 {
@@ -8389,8 +8389,8 @@ impl LlmProvider for ReadsSameFileTwiceThenEnds {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
     ) -> Result<ChatResponse> {
         let call = self.calls.fetch_add(1, AtomicOrdering::SeqCst);
         Ok(if call < 2 {
@@ -8559,7 +8559,7 @@ impl LlmProvider for MalformedThenOkProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
+        _tools: &[ra_llm::ToolSpec],
         _config: &ChatConfig,
     ) -> Result<ChatResponse> {
         let mut guard = self
@@ -8568,7 +8568,7 @@ impl LlmProvider for MalformedThenOkProvider {
             .unwrap_or_else(|error| error.into_inner());
         if *guard > 0 {
             *guard -= 1;
-            return Err(eyre::Report::new(octos_llm::StreamError::MalformedArgs {
+            return Err(eyre::Report::new(ra_llm::StreamError::MalformedArgs {
                 tool_id: "call_bad".to_string(),
                 tool_name: "shell".to_string(),
                 error: "expected `,` or `}` at line 1 column 4123".to_string(),
@@ -8591,8 +8591,8 @@ fn plain_text_response(content: &str) -> ChatResponse {
         content: Some(content.to_owned()),
         reasoning_content: None,
         tool_calls: Vec::new(),
-        stop_reason: octos_llm::StopReason::EndTurn,
-        usage: octos_llm::TokenUsage {
+        stop_reason: ra_llm::StopReason::EndTurn,
+        usage: ra_llm::TokenUsage {
             input_tokens: 5,
             output_tokens: 5,
             ..Default::default()
@@ -8840,7 +8840,7 @@ impl LlmProvider for AlwaysEmptyMaxTokensProvider {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
+        _tools: &[ra_llm::ToolSpec],
         _config: &ChatConfig,
     ) -> Result<ChatResponse> {
         self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);

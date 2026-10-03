@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use async_trait::async_trait;
 use chrono::Utc;
 use eyre::Result;
-use octos_core::{InboundMessage, OutboundMessage};
+use ra_core::{InboundMessage, OutboundMessage};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::{Notify, mpsc};
 
@@ -94,7 +94,7 @@ impl Channel for CliChannel {
                 media: vec![],
                 metadata: serde_json::json!({}),
                 message_id: None,
-                origin: octos_core::MessageOrigin::ExternalUser,
+                origin: ra_core::MessageOrigin::ExternalUser,
             };
 
             if inbound_tx.send(msg).await.is_err() {

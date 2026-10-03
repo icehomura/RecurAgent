@@ -1,6 +1,6 @@
 //! Types for LLM interactions.
 
-use octos_core::ToolCall;
+use ra_core::ToolCall;
 use serde::{Deserialize, Serialize};
 
 /// Which prompt-cache rate card the answering slot bills at.

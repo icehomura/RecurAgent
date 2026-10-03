@@ -1013,7 +1013,7 @@ impl EpisodeStore {
 mod tests {
     use super::*;
     use crate::episode::{Episode, EpisodeOutcome};
-    use octos_core::{AgentId, TaskId};
+    use ra_core::{AgentId, TaskId};
     use std::path::PathBuf;
 
     fn make_episode(summary: &str, cwd: &str) -> Episode {

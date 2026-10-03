@@ -385,7 +385,7 @@ impl PersonBrowser {
             .map_err(|e| format!("browser profile {}: {e}", self.profile.display()))?;
         let _ = std::fs::write(
             self.profile.join(PROFILE_MARKER),
-            "A browser profile ra uses for searching (octos_research::browser).\n",
+            "A browser profile ra uses for searching (ra_research::browser).\n",
         );
         static NOTICE: std::sync::Once = std::sync::Once::new();
         NOTICE.call_once(|| {

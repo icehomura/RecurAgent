@@ -2,7 +2,7 @@
 //!
 //! The [`Swarm::dispatch`](crate::Swarm::dispatch) call accepts a list of
 //! [`ContractSpec`] + a [`SwarmTopology`]. Topology controls how the
-//! primitive issues sub-contracts to the underlying [`octos_agent::tools::mcp_agent::McpAgentBackend`]:
+//! primitive issues sub-contracts to the underlying [`ra_agent::tools::mcp_agent::McpAgentBackend`]:
 //!
 //! - [`SwarmTopology::Parallel`]: fan out up to `n` concurrent sub-contracts,
 //!   aggregate in arrival order.

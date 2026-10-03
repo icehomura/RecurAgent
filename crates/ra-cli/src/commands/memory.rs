@@ -164,7 +164,7 @@ impl MemoryCommand {
                 data_dir,
             } => run_promote(min_visits, limit, dry_run, data_dir).await,
             MemoryAction::Remember { text, data_dir } => {
-                write_host_note(data_dir, octos_memory::NoteKind::UserRequest, text, false).await
+                write_host_note(data_dir, ra_memory::NoteKind::UserRequest, text, false).await
             }
             MemoryAction::Forget {
                 text,
@@ -199,7 +199,7 @@ impl MemoryCommand {
                 };
                 write_host_note(
                     data_dir,
-                    octos_memory::NoteKind::Forget,
+                    ra_memory::NoteKind::Forget,
                     vec![content],
                     sensitive,
                 )
@@ -231,7 +231,7 @@ async fn run_reindex(dry_run: bool, data_dir: Option<PathBuf>) -> Result<()> {
     // Strict open: this needs the writer lock. `ra serve` holds it in the
     // normal fleet, so say that plainly instead of surfacing redb's
     // "Database already open" — the operator's next action is to stop serve.
-    let store = octos_memory::EpisodeStore::open_with_dimension(&data_dir, dimension)
+    let store = ra_memory::EpisodeStore::open_with_dimension(&data_dir, dimension)
         .await
         .wrap_err_with(|| {
             format!(
@@ -340,8 +340,8 @@ async fn run_reindex(dry_run: bool, data_dir: Option<PathBuf>) -> Result<()> {
 async fn open_recall(
     data_dir: &std::path::Path,
     config: &Config,
-    embedder: Option<&dyn octos_llm::EmbeddingProvider>,
-) -> Result<Arc<octos_memory::RecallStore>> {
+    embedder: Option<&dyn ra_llm::EmbeddingProvider>,
+) -> Result<Arc<ra_memory::RecallStore>> {
     let store = crate::runtime::profile::open_recall_store_strict(data_dir, config, embedder)
         .await
         .wrap_err_with(|| {
@@ -366,11 +366,11 @@ async fn run_search(
     }
     let (data_dir, config) = resolve(data_dir).await?;
     let embedder = crate::commands::chat::create_embedder(&config)
-        .map(|e| e as Arc<dyn octos_llm::EmbeddingProvider>);
+        .map(|e| e as Arc<dyn ra_llm::EmbeddingProvider>);
     let recall = open_recall(&data_dir, &config, embedder.as_deref()).await?;
     let kinds = match kind.as_deref() {
         Some(k) => vec![
-            octos_memory::RecordKind::parse(k)
+            ra_memory::RecordKind::parse(k)
                 .ok_or_else(|| eyre::eyre!("unknown kind {k:?}: episode, document or knowledge"))?,
         ],
         None => Vec::new(),
@@ -383,7 +383,7 @@ async fn run_search(
             .and_then(|mut v| (!v.is_empty()).then(|| v.swap_remove(0))),
         None => None,
     };
-    let filter = octos_memory::SearchFilter {
+    let filter = ra_memory::SearchFilter {
         kinds,
         sources: source.into_iter().collect(),
         limit: limit.clamp(1, 200),
@@ -428,7 +428,7 @@ async fn run_embedder(fetch: bool, data_dir: Option<PathBuf>) -> Result<()> {
     // The model cache is shared by every profile under the ra data root.
     let root = match data_dir {
         Some(d) => d,
-        None => octos_services::config_context::resolve_config_context(None).data_dir,
+        None => ra_services::config_context::resolve_config_context(None).data_dir,
     };
     let status = em::model_status(&root);
     println!("{}", "Bundled embedding model".bold());
@@ -506,25 +506,25 @@ async fn run_ingest(file: PathBuf, data_dir: Option<PathBuf>) -> Result<()> {
             .ok_or_else(|| eyre::eyre!("expected {{\"records\": [...]}} or an array"))?,
         _ => eyre::bail!("expected {{\"records\": [...]}} or an array"),
     };
-    let mut records: Vec<octos_memory::Record> = Vec::with_capacity(items.len());
+    let mut records: Vec<ra_memory::Record> = Vec::with_capacity(items.len());
     for item in items {
-        let mut r: octos_memory::Record =
+        let mut r: ra_memory::Record =
             serde_json::from_value(item).wrap_err("record does not match the Record schema")?;
-        if r.kind == octos_memory::RecordKind::Knowledge {
+        if r.kind == ra_memory::RecordKind::Knowledge {
             eyre::bail!(
                 "knowledge pages are written through save_memory / the bank, not ingest ({})",
                 r.id
             );
         }
-        r.trust = octos_memory::Trust::Untrusted;
+        r.trust = ra_memory::Trust::Untrusted;
         records.push(r);
     }
     let (data_dir, config) = resolve(data_dir).await?;
     let embedder = crate::commands::chat::create_embedder(&config)
-        .map(|e| e as Arc<dyn octos_llm::EmbeddingProvider>);
+        .map(|e| e as Arc<dyn ra_llm::EmbeddingProvider>);
     let recall = open_recall(&data_dir, &config, embedder.as_deref()).await?;
     let total = records.len();
-    let mut report = octos_memory::UpsertReport::default();
+    let mut report = ra_memory::UpsertReport::default();
     for chunk in records.chunks(REINDEX_BATCH * 4) {
         let vectors: Vec<Option<Vec<f32>>> = match &embedder {
             Some(e) => {
@@ -576,9 +576,9 @@ async fn run_promote(
     // Same geometry as the runtime, or a narrower configured embedder would
     // make every stored vector look foreign.
     let embedder = crate::commands::chat::create_embedder(&config)
-        .map(|e| e as Arc<dyn octos_llm::EmbeddingProvider>);
+        .map(|e| e as Arc<dyn ra_llm::EmbeddingProvider>);
     let recall = open_recall(&data_dir, &config, embedder.as_deref()).await?;
-    let memory_store = octos_memory::MemoryStore::open(&data_dir)
+    let memory_store = ra_memory::MemoryStore::open(&data_dir)
         .await
         .wrap_err("failed to open memory store")?;
     if dry_run {
@@ -597,7 +597,7 @@ async fn run_promote(
         }
         return Ok(());
     }
-    let promoted = octos_agent::memory_index::nominate_for_promotion(
+    let promoted = ra_agent::memory_index::nominate_for_promotion(
         &memory_store,
         &recall,
         min_visits,
@@ -621,7 +621,7 @@ async fn run_promote(
 
 async fn write_host_note(
     data_dir: Option<PathBuf>,
-    kind: octos_memory::NoteKind,
+    kind: ra_memory::NoteKind,
     text: Vec<String>,
     sensitive: bool,
 ) -> Result<()> {
@@ -631,12 +631,12 @@ async fn write_host_note(
     }
     let (data_dir, _config) = resolve(data_dir).await?;
     let memory_store = Arc::new(
-        octos_memory::MemoryStore::open(&data_dir)
+        ra_memory::MemoryStore::open(&data_dir)
             .await
             .wrap_err("failed to open memory store")?,
     );
-    let note = octos_memory::StagingNote {
-        origin: octos_memory::NoteOrigin::Host,
+    let note = ra_memory::StagingNote {
+        origin: ra_memory::NoteOrigin::Host,
         kind,
         content,
         session_key: None,
@@ -669,7 +669,7 @@ async fn resolve(data_dir: Option<PathBuf>) -> Result<(PathBuf, Config)> {
 async fn run_refresh(data_dir: Option<PathBuf>) -> Result<()> {
     let (data_dir, config) = resolve(data_dir).await?;
     let memory_store = Arc::new(
-        octos_memory::MemoryStore::open(&data_dir)
+        ra_memory::MemoryStore::open(&data_dir)
             .await
             .wrap_err("failed to open memory store")?,
     );
@@ -719,7 +719,7 @@ async fn run_refresh(data_dir: Option<PathBuf>) -> Result<()> {
 async fn run_status(data_dir: Option<PathBuf>) -> Result<()> {
     let (data_dir, _config) = resolve(data_dir).await?;
     let memory_store = Arc::new(
-        octos_memory::MemoryStore::open(&data_dir)
+        ra_memory::MemoryStore::open(&data_dir)
             .await
             .wrap_err("failed to open memory store")?,
     );

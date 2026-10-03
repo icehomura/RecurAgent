@@ -1,8 +1,8 @@
 //! Provider parsing from recorded fixtures (no network).
 
-use octos_research::filter::Filters;
-use octos_research::item::SearchHit;
-use octos_research::providers::{format_hits, parse_feed, parse_gdelt, parse_searxng};
+use ra_research::filter::Filters;
+use ra_research::item::SearchHit;
+use ra_research::providers::{format_hits, parse_feed, parse_gdelt, parse_searxng};
 
 fn fixture(name: &str) -> String {
     std::fs::read_to_string(format!(

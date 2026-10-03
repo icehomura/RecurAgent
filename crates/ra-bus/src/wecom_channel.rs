@@ -12,7 +12,7 @@ use std::time::Instant;
 use async_trait::async_trait;
 use chrono::Utc;
 use eyre::{Result, WrapErr};
-use octos_core::{InboundMessage, OutboundMessage};
+use ra_core::{InboundMessage, OutboundMessage};
 use reqwest::Client;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
@@ -296,7 +296,7 @@ impl WeComChannel {
                 }
             }),
             message_id: None,
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         })
     }
 

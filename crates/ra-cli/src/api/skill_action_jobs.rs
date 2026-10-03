@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
-use octos_agent::{BackgroundTask, TaskStatus, TaskSupervisor};
-use octos_core::SessionKey;
+use ra_agent::{BackgroundTask, TaskStatus, TaskSupervisor};
+use ra_core::SessionKey;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -266,7 +266,7 @@ mod tests {
         );
         supervisor.mark_runtime_state(
             &task_id,
-            octos_agent::TaskRuntimeState::VerifyingOutputs,
+            ra_agent::TaskRuntimeState::VerifyingOutputs,
             None,
         );
         assert_eq!(

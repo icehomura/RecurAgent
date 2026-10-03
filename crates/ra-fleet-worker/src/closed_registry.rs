@@ -23,24 +23,24 @@ use std::path::Path;
 use std::sync::Arc;
 
 use eyre::{Result, eyre};
-use octos_agent::policy::{ApprovalPolicy, EffectivePermissions, FilesystemScope};
-use octos_agent::sandbox::Sandbox;
-use octos_agent::tools::policy::ToolPolicy;
-use octos_agent::tools::write_grant::{WriteGrantViolationSink, WritePathGrant};
-use octos_agent::tools::{
+use ra_agent::policy::{ApprovalPolicy, EffectivePermissions, FilesystemScope};
+use ra_agent::sandbox::Sandbox;
+use ra_agent::tools::policy::ToolPolicy;
+use ra_agent::tools::write_grant::{WriteGrantViolationSink, WritePathGrant};
+use ra_agent::tools::{
     EditFileTool, GlobTool, GrepTool, ListDirTool, ReadFileTool, ShellTool, ToolRegistry,
     WebFetchTool, WebSearchTool, WriteFileTool,
 };
-use octos_fleet::WorkerGrant;
+use ra_fleet::WorkerGrant;
 
 use crate::escalate::{EscalateTool, EscalationSlot};
 
 /// The base tool set a *minimal* (least-privilege) worker holds — today's
 /// closed seven. Kept as a named constant for docs / discriminator tests;
-/// equals [`octos_fleet::BASE_TOOLS`] and `WorkerGrant::minimal().tools`. The
+/// equals [`ra_fleet::BASE_TOOLS`] and `WorkerGrant::minimal().tools`. The
 /// audit no longer compares against this fixed set — it compares against the
 /// per-worker `grant.sorted_tools()`.
-pub const ALLOWED: &[&str] = octos_fleet::BASE_TOOLS;
+pub const ALLOWED: &[&str] = ra_fleet::BASE_TOOLS;
 
 /// Map a [`WorkerGrant`]'s filesystem grant onto [`EffectivePermissions`].
 ///
@@ -57,8 +57,8 @@ pub const ALLOWED: &[&str] = octos_fleet::BASE_TOOLS;
 /// FOLLOW-UP (it needs a native-tool path-allowlist model), exactly like
 /// per-host filtering of raw network needs an egress proxy.
 ///
-/// [`FsGrant::Workspace`]: octos_fleet::FsGrant::Workspace
-/// [`FsGrant::Host`]: octos_fleet::FsGrant::Host
+/// [`FsGrant::Workspace`]: ra_fleet::FsGrant::Workspace
+/// [`FsGrant::Host`]: ra_fleet::FsGrant::Host
 fn perms_from_grant(grant: &WorkerGrant) -> EffectivePermissions {
     let mut perms =
         EffectivePermissions::workspace_write().with_approval_policy(ApprovalPolicy::Never);
@@ -252,8 +252,8 @@ pub fn build_fleet_worker_registry(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_agent::sandbox::NoSandbox;
-    use octos_fleet::{FsGrant, NetworkGrant};
+    use ra_agent::sandbox::NoSandbox;
+    use ra_fleet::{FsGrant, NetworkGrant};
     use std::collections::HashSet;
     use std::path::Path;
     use std::sync::{Arc, Mutex};
@@ -459,7 +459,7 @@ mod tests {
         let grant = WorkerGrant {
             network: NetworkGrant::Hosts(vec!["example.com".into()]),
             tools: {
-                let mut t: Vec<String> = octos_fleet::BASE_TOOLS
+                let mut t: Vec<String> = ra_fleet::BASE_TOOLS
                     .iter()
                     .map(|s| s.to_string())
                     .collect();
@@ -627,7 +627,7 @@ mod tests {
     /// enforcement mechanics themselves are proved in ra-agent).
     #[tokio::test]
     async fn write_grant_binds_into_worker_registry_and_records_denials() {
-        use octos_agent::tools::write_grant::{DENIED_MARKER, WriteGrantViolation};
+        use ra_agent::tools::write_grant::{DENIED_MARKER, WriteGrantViolation};
         use std::sync::Mutex;
 
         let cwd = tempfile::tempdir().unwrap();

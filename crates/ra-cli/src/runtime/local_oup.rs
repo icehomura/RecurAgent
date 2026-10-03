@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use eyre::{Result, WrapErr};
-use octos_agent::profile::ProfileDefinition;
-use octos_llm::LlmProvider;
+use ra_agent::profile::ProfileDefinition;
+use ra_llm::LlmProvider;
 
 use super::{BootstrapRole, ProfileRuntime};
 use crate::api::AppState;
@@ -95,7 +95,7 @@ async fn bootstrap_with_profile_root(
         let runtime = Arc::get_mut(&mut runtime)
             .ok_or_else(|| eyre::eyre!("local profile published before tool policy binding"))?;
         runtime.session_store_root = ephemeral.then(|| options.data_dir.clone());
-        runtime.session_defaults = Some(octos_agent::AgentConfig {
+        runtime.session_defaults = Some(ra_agent::AgentConfig {
             max_iterations: super::turn_policy::max_iterations(
                 runtime.max_iterations,
                 super::turn_policy::TurnIntent::Interactive,
@@ -125,7 +125,7 @@ async fn bootstrap_with_profile_root(
     }
     let mut state = AppState::without_services(&options.data_dir);
     state.sessions = Some(Arc::new(tokio::sync::Mutex::new(
-        octos_bus::SessionManager::open(&options.data_dir)
+        ra_bus::SessionManager::open(&options.data_dir)
             .wrap_err("open local OUP session store")?,
     )));
     // This state is reachable only through an in-process pipe. No network
@@ -155,26 +155,26 @@ pub(crate) fn resolve_stored_profile(
 mod tests {
     use super::*;
     use crate::commands::oup_session::{OupFrontend, OupSession};
-    use octos_core::ui_protocol::{UiCommand, UiNotification};
+    use ra_core::ui_protocol::{UiCommand, UiNotification};
 
     #[derive(Default)]
-    struct ContextModel(std::sync::Mutex<Vec<Vec<octos_core::Message>>>);
+    struct ContextModel(std::sync::Mutex<Vec<Vec<ra_core::Message>>>);
 
     #[async_trait::async_trait]
     impl LlmProvider for ContextModel {
         async fn chat(
             &self,
-            messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> Result<octos_llm::ChatResponse> {
+            messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> Result<ra_llm::ChatResponse> {
             self.0.lock().unwrap().push(messages.to_vec());
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: Some("ephemeral-fixture-answer".into()),
                 reasoning_content: None,
                 tool_calls: vec![],
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: None,
             })
         }
@@ -272,9 +272,9 @@ mod tests {
     // the payload landed. The fire happens BEFORE the turn's terminal
     // frame, so the line is on disk by the time `session.turn` resolves.
     #[cfg(unix)]
-    fn turn_end_capture_hook(log_path: &Path) -> octos_agent::HookConfig {
-        octos_agent::HookConfig {
-            event: octos_agent::HookEvent::OnTurnEnd,
+    fn turn_end_capture_hook(log_path: &Path) -> ra_agent::HookConfig {
+        ra_agent::HookConfig {
+            event: ra_agent::HookEvent::OnTurnEnd,
             command: vec![
                 "/bin/sh".into(),
                 "-c".into(),
@@ -306,9 +306,9 @@ mod tests {
         let state = bootstrap(options).await.unwrap();
         let session = OupSession::open(
             state.clone(),
-            octos_core::SessionKey::with_profile("ephemeral-fixture", "cli", "hooks"),
+            ra_core::SessionKey::with_profile("ephemeral-fixture", "cli", "hooks"),
             workspace.path(),
-            octos_agent::EffectivePermissions::workspace_write(),
+            ra_agent::EffectivePermissions::workspace_write(),
         )
         .await
         .unwrap();
@@ -358,11 +358,11 @@ mod tests {
     impl LlmProvider for FailingModel {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> Result<octos_llm::ChatResponse> {
-            Err(octos_llm::LlmError::auth("fixture invalid key").into())
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> Result<ra_llm::ChatResponse> {
+            Err(ra_llm::LlmError::auth("fixture invalid key").into())
         }
 
         fn provider_name(&self) -> &str {
@@ -395,9 +395,9 @@ mod tests {
         let state = bootstrap(options).await.unwrap();
         let session = OupSession::open(
             state.clone(),
-            octos_core::SessionKey::with_profile("ephemeral-fixture", "cli", "hooks-errored"),
+            ra_core::SessionKey::with_profile("ephemeral-fixture", "cli", "hooks-errored"),
             workspace.path(),
-            octos_agent::EffectivePermissions::workspace_write(),
+            ra_agent::EffectivePermissions::workspace_write(),
         )
         .await
         .unwrap();
@@ -439,10 +439,10 @@ mod tests {
         let mut options = options(data.path(), home.path(), Arc::new(ContextModel::default()));
         options.config.model_temperature = Some(0.3);
         options.config.model_top_p = Some(0.8);
-        options.config.model_reasoning_effort = Some(octos_llm::ReasoningEffort::High);
+        options.config.model_reasoning_effort = Some(ra_llm::ReasoningEffort::High);
         let gateway = options.config.gateway.get_or_insert_with(Default::default);
         gateway.llm_temperature = Some(0.7);
-        gateway.reasoning_effort = Some(octos_llm::ReasoningEffort::Low);
+        gateway.reasoning_effort = Some(ra_llm::ReasoningEffort::Low);
         gateway.max_output_tokens = Some(1234);
         gateway.llm_sampling_params = Some(serde_json::Map::from_iter([
             ("top_p".into(), serde_json::json!(0.95)),
@@ -455,7 +455,7 @@ mod tests {
         assert_eq!(config.chat_max_tokens, Some(1234));
         assert_eq!(
             config.reasoning_effort,
-            Some(octos_llm::ReasoningEffort::High)
+            Some(ra_llm::ReasoningEffort::High)
         );
         let sampling = config.chat_sampling_params.as_ref().unwrap();
         assert_eq!(sampling["top_p"], serde_json::json!(0.8_f32));
@@ -472,12 +472,12 @@ mod tests {
         let shared = home.path().join("profiles/ephemeral-fixture/data");
         let transient = tempfile::tempdir().unwrap();
         let workspace = tempfile::tempdir().unwrap();
-        let memory = octos_memory::MemoryStore::open(&shared).await.unwrap();
+        let memory = ra_memory::MemoryStore::open(&shared).await.unwrap();
         memory
             .write_long_term("SHARED-MEMORY-CONTEXT")
             .await
             .unwrap();
-        let config = octos_agent::ToolConfigStore::open(&shared).await.unwrap();
+        let config = ra_agent::ToolConfigStore::open(&shared).await.unwrap();
         config
             .set(
                 "read_file",
@@ -535,9 +535,9 @@ mod tests {
 
         let session = OupSession::open(
             state.clone(),
-            octos_core::SessionKey::with_profile("ephemeral-fixture", "cli", "context"),
+            ra_core::SessionKey::with_profile("ephemeral-fixture", "cli", "context"),
             workspace.path(),
-            octos_agent::EffectivePermissions::workspace_write(),
+            ra_agent::EffectivePermissions::workspace_write(),
         )
         .await
         .unwrap();
@@ -625,7 +625,7 @@ mod tests {
         // Even an explicit per-cwd storage request cannot override ephemeral ownership.
         let scoped = crate::runtime::SessionRuntime::bootstrap_in_cwd(
             profile,
-            octos_core::SessionKey::with_profile("ephemeral-fixture", "cli", "cwd"),
+            ra_core::SessionKey::with_profile("ephemeral-fixture", "cli", "cwd"),
             Some(workspace.path().to_owned()),
             true,
         )
@@ -640,8 +640,8 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let shared = home.path().join("profiles/ephemeral-fixture/data");
         let transient = tempfile::tempdir().unwrap();
-        let _owner = octos_memory::EpisodeStore::open(&shared).await.unwrap();
-        let memory = octos_memory::MemoryStore::open(&shared).await.unwrap();
+        let _owner = ra_memory::EpisodeStore::open(&shared).await.unwrap();
+        let memory = ra_memory::MemoryStore::open(&shared).await.unwrap();
         memory
             .write_long_term("LOCKED-SHARED-CONTEXT")
             .await

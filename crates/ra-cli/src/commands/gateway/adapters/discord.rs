@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use eyre::WrapErr;
-use octos_bus::ChannelManager;
+use ra_bus::ChannelManager;
 
 use super::settings_str;
 use crate::config::ChannelEntry;
@@ -17,7 +17,7 @@ pub fn register(
     let env = settings_str(&entry.settings, "token_env", "DISCORD_BOT_TOKEN");
     let token =
         std::env::var(&env).wrap_err_with(|| format!("{env} environment variable not set"))?;
-    channel_mgr.register(Arc::new(octos_bus::DiscordChannel::new(
+    channel_mgr.register(Arc::new(ra_bus::DiscordChannel::new(
         &token,
         entry.allowed_senders.clone(),
         shutdown.clone(),

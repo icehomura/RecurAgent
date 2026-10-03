@@ -24,7 +24,7 @@
 use std::path::{Path, PathBuf};
 
 use eyre::{Result, WrapErr, eyre};
-use octos_plugin::{LifecycleExecutor, LifecyclePhase, NoSandbox, ToolDiscovery};
+use ra_plugin::{LifecycleExecutor, LifecyclePhase, NoSandbox, ToolDiscovery};
 use tracing::{info, warn};
 
 use crate::tools::{Tool, ToolRegistry};

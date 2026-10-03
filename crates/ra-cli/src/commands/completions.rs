@@ -87,7 +87,7 @@ fn model_names_from(catalog: BTreeMap<String, Vec<String>>) -> Vec<String> {
 /// The registry's canonical provider families — the names `config.llm.provider`
 /// accepts — sorted so shells display candidates predictably.
 fn provider_names() -> Vec<&'static str> {
-    let mut names: Vec<&'static str> = octos_llm::registry::all_entries()
+    let mut names: Vec<&'static str> = ra_llm::registry::all_entries()
         .iter()
         .map(|entry| entry.name)
         .collect();
@@ -146,7 +146,7 @@ mod tests {
     /// aliases (those resolve via lookup anyway), no hand-written subset.
     #[test]
     fn dynamic_provider_names_are_registry_families() {
-        let mut expected: Vec<&str> = octos_llm::registry::all_entries()
+        let mut expected: Vec<&str> = ra_llm::registry::all_entries()
             .iter()
             .map(|entry| entry.name)
             .collect();

@@ -12,7 +12,7 @@
 //!   labels; the extractor must cite them, and the host later derives
 //!   evidence kinds from the roles at those indices.
 
-use octos_core::{Message, MessageRole};
+use ra_core::{Message, MessageRole};
 
 use super::redact::redact_secrets;
 
@@ -42,7 +42,7 @@ pub(crate) struct InputLine {
 /// The `[idx:role]` label survives, so message indices stay stable for
 /// `evidence_idx` validation.
 fn guard_line(text: String) -> String {
-    match octos_memory::guard::first_threat(&text) {
+    match ra_memory::guard::first_threat(&text) {
         Some(threat) => guard_placeholder(threat),
         None => text,
     }
@@ -76,7 +76,7 @@ fn window_threat(lines: &[InputLine]) -> Option<&'static str> {
         .map(|l| l.text.as_str())
         .collect::<Vec<_>>()
         .join("\n");
-    if let Some(t) = octos_memory::guard::first_threat(&label_free) {
+    if let Some(t) = ra_memory::guard::first_threat(&label_free) {
         return Some(t);
     }
     let labeled = lines
@@ -84,7 +84,7 @@ fn window_threat(lines: &[InputLine]) -> Option<&'static str> {
         .map(|l| format!("[{}:{}] {}", l.idx, l.role.as_str(), l.text))
         .collect::<Vec<_>>()
         .join("\n");
-    octos_memory::guard::first_threat(&labeled)
+    ra_memory::guard::first_threat(&labeled)
 }
 
 /// Redact threats that only reconstruct once transcript lines are joined
@@ -215,7 +215,7 @@ pub(crate) fn render_transcript(
     loop {
         let mut candidate = rendered[start..].join("\n");
         let within =
-            octos_memory::estimate_tokens(&candidate) <= max_tokens && candidate.len() <= max_bytes;
+            ra_memory::estimate_tokens(&candidate) <= max_tokens && candidate.len() <= max_bytes;
         if within || start + 1 >= rendered.len() {
             if !within {
                 // A single message can exceed the whole budget (pasted
@@ -228,7 +228,7 @@ pub(crate) fn render_transcript(
                     None => (String::new(), candidate),
                 };
                 let budget_tokens =
-                    max_tokens.saturating_sub(octos_memory::estimate_tokens(&label));
+                    max_tokens.saturating_sub(ra_memory::estimate_tokens(&label));
                 let budget_bytes = max_bytes.saturating_sub(label.len());
                 candidate = format!(
                     "{label}{}",
@@ -238,7 +238,7 @@ pub(crate) fn render_transcript(
                 // line hid behind a missing word boundary (…xignore… →
                 // "[…truncated] ignore…", codex round-6). Rescan and
                 // replace the whole candidate body if so.
-                if let Some(threat) = octos_memory::guard::first_threat(&candidate) {
+                if let Some(threat) = ra_memory::guard::first_threat(&candidate) {
                     let label_only = candidate
                         .split_once("] ")
                         .map(|(l, _)| format!("{l}] "))
@@ -249,7 +249,7 @@ pub(crate) fn render_transcript(
                     // exceed the budget the truncation just enforced
                     // (codex round-7).
                     if placeholder.len() > max_bytes {
-                        placeholder = octos_core::truncated_utf8(&placeholder, max_bytes, "");
+                        placeholder = ra_core::truncated_utf8(&placeholder, max_bytes, "");
                     }
                     candidate = placeholder;
                 }
@@ -271,7 +271,7 @@ fn truncate_front_to_budget(text: &str, max_tokens: usize, max_bytes: usize) -> 
     let bytes = text.len();
     loop {
         let tail = &text[cut..];
-        if octos_memory::estimate_tokens(tail) <= max_tokens.saturating_sub(16)
+        if ra_memory::estimate_tokens(tail) <= max_tokens.saturating_sub(16)
             && tail.len() <= max_bytes.saturating_sub(MARKER.len())
         {
             return format!("{MARKER}{tail}");
@@ -469,7 +469,7 @@ mod tests {
     #[test]
     fn should_drop_memory_tool_results_when_building_input() {
         let mut call = msg(MessageRole::Assistant, "noting that");
-        call.tool_calls = Some(vec![octos_core::ToolCall {
+        call.tool_calls = Some(vec![ra_core::ToolCall {
             id: "tc1".to_string(),
             name: "memory_note".to_string(),
             arguments: serde_json::json!({"kind":"fact","content":"x"}),
@@ -497,7 +497,7 @@ mod tests {
     #[test]
     fn should_truncate_tool_results_when_oversized() {
         let mut call = msg(MessageRole::Assistant, "checking");
-        call.tool_calls = Some(vec![octos_core::ToolCall {
+        call.tool_calls = Some(vec![ra_core::ToolCall {
             id: "tc9".to_string(),
             name: "shell".to_string(),
             arguments: serde_json::json!({}),
@@ -552,7 +552,7 @@ mod tests {
         let lines = build_input_lines(&transcript);
         let text = render_transcript(&lines, 1_000, 8_000);
         assert!(text.len() <= 8_000, "byte cap violated: {}", text.len());
-        assert!(octos_memory::estimate_tokens(&text) <= 1_000);
+        assert!(ra_memory::estimate_tokens(&text) <= 1_000);
         assert!(text.contains("truncated by input budget"));
         assert!(text.ends_with('z'), "tail must be kept");
         assert!(

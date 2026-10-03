@@ -10,8 +10,8 @@
 
 use std::sync::Arc;
 
-use octos_cli::api::AppState;
-use octos_llm::{
+use ra_cli::api::AppState;
+use ra_llm::{
     Credential, PersistentCredentialPool, PersistentCredentialPoolOptions, RotationStrategy,
 };
 use tempfile::TempDir;

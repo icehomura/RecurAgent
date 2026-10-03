@@ -7,7 +7,7 @@
 //!
 //! # Confinement (truthfulness — codex round blocker 5)
 //!
-//! The probe runs with SANITIZED ENV (the shared `octos_core::env_hygiene`
+//! The probe runs with SANITIZED ENV (the shared `ra_core::env_hygiene`
 //! denylist strips injection + credential-looking vars, the same hygiene MCP
 //! servers and hooks get) at HOST-USER authority in the profile data dir. It
 //! is NOT confined by a sandbox backend (bwrap / sandbox-exec / Docker) — the
@@ -341,7 +341,7 @@ fn clip_line(line: String) -> String {
         return line;
     }
     let mut clipped = line;
-    octos_core::truncate_utf8(&mut clipped, MONITOR_MAX_LINE_BYTES, " [line clipped]");
+    ra_core::truncate_utf8(&mut clipped, MONITOR_MAX_LINE_BYTES, " [line clipped]");
     clipped
 }
 
@@ -843,13 +843,13 @@ pub(crate) trait MonitorSink: Send + Sync {
 
 /// Build the sanitized probe command: cleared of code-injection vars and
 /// credential-looking env (heuristic + runtime-registered secrets) via the
-/// shared `octos_core::env_hygiene` single source of truth — the same
+/// shared `ra_core::env_hygiene` single source of truth — the same
 /// denylist every other ra subprocess spawner applies.
 pub(crate) fn sanitized_monitor_command(
     argv: &[String],
     cwd: Option<&std::path::Path>,
 ) -> std::process::Command {
-    use octos_core::env_hygiene::{
+    use ra_core::env_hygiene::{
         BLOCKED_ENV_VARS, is_registered_secret_env_name, is_secret_env_name,
     };
     let mut cmd = std::process::Command::new(&argv[0]);
@@ -1653,7 +1653,7 @@ mod tests {
             .filter(|(_, value)| value.is_none())
             .map(|(key, _)| key.to_string_lossy().into_owned())
             .collect();
-        for var in octos_core::env_hygiene::BLOCKED_ENV_VARS {
+        for var in ra_core::env_hygiene::BLOCKED_ENV_VARS {
             assert!(
                 removed.iter().any(|name| name == var),
                 "{var} must be explicitly removed from the monitor env"
@@ -1662,7 +1662,7 @@ mod tests {
         // Any credential-looking var present in THIS test process's env
         // must be scheduled for removal too.
         for (key, _) in std::env::vars() {
-            if octos_core::env_hygiene::is_secret_env_name(&key) {
+            if ra_core::env_hygiene::is_secret_env_name(&key) {
                 assert!(
                     removed.contains(&key),
                     "secret-looking env var {key} must be removed"

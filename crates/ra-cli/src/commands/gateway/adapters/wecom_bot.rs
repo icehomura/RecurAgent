@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use eyre::WrapErr;
-use octos_bus::ChannelManager;
+use ra_bus::ChannelManager;
 
 use super::settings_str;
 use crate::config::ChannelEntry;
@@ -19,7 +19,7 @@ pub fn register(
     if bot_id.is_empty() {
         eyre::bail!("wecom-bot channel requires settings.bot_id");
     }
-    channel_mgr.register(Arc::new(octos_bus::WeComBotChannel::new(
+    channel_mgr.register(Arc::new(ra_bus::WeComBotChannel::new(
         &bot_id,
         &secret,
         entry.allowed_senders.clone(),

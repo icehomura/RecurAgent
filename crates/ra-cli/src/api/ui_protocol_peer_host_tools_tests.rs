@@ -6,7 +6,7 @@
 use super::*;
 
 use crate::peers::host_tools::{apply_session_host_tools, resolve_session_host_tools};
-use octos_core::ui_protocol::{ApprovalRespondParams, QuestionId, UserQuestionAnswer};
+use ra_core::ui_protocol::{ApprovalRespondParams, QuestionId, UserQuestionAnswer};
 
 /// The chat id of this test's host sessions. Peer state (routes, the staged
 /// peers on disk) is process-wide and tests run in parallel, so each test
@@ -171,7 +171,7 @@ fn mail_send() -> Value {
 }
 
 /// The tool registry one turn of `key` would offer the model.
-async fn turn_registry(fx: &Fx, key: &SessionKey, turn: &str) -> octos_agent::ToolRegistry {
+async fn turn_registry(fx: &Fx, key: &SessionKey, turn: &str) -> ra_agent::ToolRegistry {
     let runtime = crate::runtime::SessionRuntime::bootstrap(&fx.runtime, key.clone(), None)
         .await
         .expect("bound session");
@@ -189,7 +189,7 @@ async fn turn_registry_on(
     key: &SessionKey,
     turn: &str,
     connection: u64,
-) -> octos_agent::ToolRegistry {
+) -> ra_agent::ToolRegistry {
     let runtime = crate::runtime::SessionRuntime::bootstrap(&fx.runtime, key.clone(), None)
         .await
         .expect("bound session");
@@ -206,16 +206,16 @@ async fn turn_registry_on(
     registry
 }
 
-fn sorted_names(registry: &octos_agent::ToolRegistry) -> Vec<String> {
+fn sorted_names(registry: &ra_agent::ToolRegistry) -> Vec<String> {
     let mut names = registry.tool_names();
     names.sort();
     names
 }
 
-fn call_ctx(id: &str) -> octos_agent::tools::ToolContext {
-    octos_agent::tools::ToolContext {
+fn call_ctx(id: &str) -> ra_agent::tools::ToolContext {
+    ra_agent::tools::ToolContext {
         tool_id: id.to_owned(),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     }
 }
 
@@ -548,7 +548,7 @@ fn app_approver(
     key: &SessionKey,
     contracts: &Arc<UiProtocolContractStores>,
     turn: &TurnId,
-) -> Arc<dyn octos_agent::ToolApprovalRequester> {
+) -> Arc<dyn ra_agent::ToolApprovalRequester> {
     let (ws, rx) = ws_connection_for_test(64);
     std::mem::forget(rx);
     Arc::new(UiProtocolApprovalRequester {
@@ -608,7 +608,7 @@ async fn should_run_a_destructive_tool_only_after_the_persons_approval() {
         let registry = registry.clone();
         let args = args.clone();
         tokio::spawn(
-            octos_agent::tools::TOOL_APPROVAL_CTX.scope(approver, async move {
+            ra_agent::tools::TOOL_APPROVAL_CTX.scope(approver, async move {
                 registry
                     .execute_with_context(&call_ctx("c1"), "mail_send", &args)
                     .await
@@ -630,7 +630,7 @@ async fn should_run_a_destructive_tool_only_after_the_persons_approval() {
         "dev",
         &contracts,
         &|_, _| panic!("nothing is decided"),
-        octos_agent::PeerRespondRequest {
+        ra_agent::PeerRespondRequest {
             slug: "news".into(),
             id: Some(approval_id.0.to_string()),
             decision: Some("approve".into()),
@@ -692,7 +692,7 @@ async fn should_not_run_a_declined_or_expired_destructive_call_nor_ask_twice() {
         let args = args.clone();
         let approver = app_approver(&fx, &key, &contracts, &turn);
         tokio::spawn(
-            octos_agent::tools::TOOL_APPROVAL_CTX.scope(approver, async move {
+            ra_agent::tools::TOOL_APPROVAL_CTX.scope(approver, async move {
                 registry
                     .execute_with_context(&call_ctx("c1"), "mail_send", &args)
                     .await
@@ -714,7 +714,7 @@ async fn should_not_run_a_declined_or_expired_destructive_call_nor_ask_twice() {
 
     // The same occurrence (session/turn/tool_call_id) is never asked twice.
     let approver = app_approver(&fx, &key, &contracts, &turn);
-    let again = octos_agent::tools::TOOL_APPROVAL_CTX
+    let again = ra_agent::tools::TOOL_APPROVAL_CTX
         .scope(
             approver.clone(),
             registry.execute_with_context(&call_ctx("c1"), "mail_send", &args),
@@ -725,7 +725,7 @@ async fn should_not_run_a_declined_or_expired_destructive_call_nor_ask_twice() {
     assert!(contracts.approvals.pending_for_session(&key).is_empty());
 
     // Expired: nobody answers within the TTL; the parked approval is released.
-    let expired = octos_agent::tools::TOOL_APPROVAL_CTX
+    let expired = ra_agent::tools::TOOL_APPROVAL_CTX
         .scope(
             approver,
             registry.execute_with_context(&call_ctx("c2"), "mail_send", &args),
@@ -843,7 +843,7 @@ async fn should_hand_a_confirm_app_call_to_the_owning_app_whoever_calls() {
     let contracts = Arc::new(UiProtocolContractStores::default());
     let registry = turn_registry(&fx, &context_key, "turn-1").await;
     let approver = app_approver(&fx, &context_key, &contracts, &TurnId::new());
-    let present = octos_agent::tools::TOOL_APPROVAL_CTX
+    let present = ra_agent::tools::TOOL_APPROVAL_CTX
         .scope(
             approver,
             registry.execute_with_context(&call_ctx("c1"), "news_share", &args),
@@ -862,7 +862,7 @@ async fn should_hand_a_confirm_app_call_to_the_owning_app_whoever_calls() {
     // input): still the owning app's own sheet, never a kernel approval.
     let registry = turn_registry(&fx, &key, "turn-2").await;
     let approver = app_approver(&fx, &key, &contracts, &TurnId::new());
-    let absent = octos_agent::tools::TOOL_APPROVAL_CTX
+    let absent = ra_agent::tools::TOOL_APPROVAL_CTX
         .scope(
             approver,
             registry.execute_with_context(&call_ctx("c2"), "news_share", &args),
@@ -1062,7 +1062,7 @@ async fn should_clamp_host_filesystem_access_for_a_bound_app_session() {
         &fx.runtime,
         key,
         None,
-        octos_agent::EffectivePermissions::danger_full_access(),
+        ra_agent::EffectivePermissions::danger_full_access(),
     )
     .await
     .expect("bound session");
@@ -1080,7 +1080,7 @@ async fn should_clamp_host_filesystem_access_for_a_bound_app_session() {
         &fx.runtime,
         SessionKey::with_profile_topic("dev", "api", &host_chat(), "plain"),
         None,
-        octos_agent::EffectivePermissions::danger_full_access(),
+        ra_agent::EffectivePermissions::danger_full_access(),
     )
     .await
     .unwrap();
@@ -1110,7 +1110,7 @@ async fn should_keep_a_host_tool_approval_and_turn_controls_on_the_host_connecti
     let turn = TurnId::new();
     // The host's own turn: its approval bridge writes to the shared ledger.
     let (bridge_ws, _bridge_rx) = ws_connection_for_test(64);
-    let approver: Arc<dyn octos_agent::ToolApprovalRequester> =
+    let approver: Arc<dyn ra_agent::ToolApprovalRequester> =
         Arc::new(UiProtocolApprovalRequester {
             ws: bridge_ws,
             ledger: ledger.clone(),
@@ -1124,7 +1124,7 @@ async fn should_keep_a_host_tool_approval_and_turn_controls_on_the_host_connecti
     let run = {
         let registry = registry.clone();
         tokio::spawn(
-            octos_agent::tools::TOOL_APPROVAL_CTX.scope(approver, async move {
+            ra_agent::tools::TOOL_APPROVAL_CTX.scope(approver, async move {
                 registry
                     .execute_with_context(&call_ctx("c1"), "mail_send", &json!({"draft_id": "d"}))
                     .await
@@ -1287,7 +1287,7 @@ async fn should_wait_for_the_apps_confirmation_sheet_instead_of_timing_out() {
         let registry = registry.clone();
         let approver = app_approver(&fx, &context_key, &contracts, &TurnId::new());
         tokio::spawn(
-            octos_agent::tools::TOOL_APPROVAL_CTX.scope(approver, async move {
+            ra_agent::tools::TOOL_APPROVAL_CTX.scope(approver, async move {
                 registry
                     .execute_with_context(&call_ctx("c1"), "news_share", &json!({"story": "hn-1"}))
                     .await
@@ -1314,7 +1314,7 @@ async fn should_wait_for_the_apps_confirmation_sheet_instead_of_timing_out() {
         let registry = registry.clone();
         let approver = app_approver(&fx, &context_key, &contracts, &TurnId::new());
         tokio::spawn(
-            octos_agent::tools::TOOL_APPROVAL_CTX.scope(approver, async move {
+            ra_agent::tools::TOOL_APPROVAL_CTX.scope(approver, async move {
                 registry
                     .execute_with_context(&call_ctx("c2"), "mail_send", &json!({"draft_id": "d-1"}))
                     .await
@@ -1388,7 +1388,7 @@ async fn should_never_answer_or_remember_a_host_tool_approval_by_scope() {
         let registry = registry.clone();
         let approver = app_approver(&fx, &key, &contracts, &turn);
         tokio::spawn(
-            octos_agent::tools::TOOL_APPROVAL_CTX.scope(approver, async move {
+            ra_agent::tools::TOOL_APPROVAL_CTX.scope(approver, async move {
                 registry
                     .execute_with_context(&call_ctx("c1"), "mail_send", &json!({"draft_id": "d-1"}))
                     .await
@@ -1642,7 +1642,7 @@ async fn should_give_no_tools_to_another_connection_on_the_hosts_base_key() {
         // It cannot call the destructive tool, so no approval is ever raised
         // for it to receive or answer.
         let contracts = Arc::new(UiProtocolContractStores::default());
-        let approver: Arc<dyn octos_agent::ToolApprovalRequester> =
+        let approver: Arc<dyn ra_agent::ToolApprovalRequester> =
             Arc::new(UiProtocolApprovalRequester {
                 ws: spoof_ws.clone(),
                 ledger: Arc::new(UiProtocolLedger::new(64)),
@@ -1653,7 +1653,7 @@ async fn should_give_no_tools_to_another_connection_on_the_hosts_base_key() {
                 turn_id: TurnId::new(),
                 features: ConnectionUiFeatures::default(),
             });
-        let forced = octos_agent::tools::TOOL_APPROVAL_CTX
+        let forced = ra_agent::tools::TOOL_APPROVAL_CTX
             .scope(
                 approver,
                 registry.execute_with_context(
@@ -1725,7 +1725,7 @@ async fn should_rebuild_a_session_runtime_cached_before_the_peer_was_bound() {
             &fx.runtime,
             key.clone(),
             None,
-            octos_agent::EffectivePermissions::danger_full_access(),
+            ra_agent::EffectivePermissions::danger_full_access(),
             epoch,
         )
         .await
@@ -1749,7 +1749,7 @@ async fn should_rebuild_a_session_runtime_cached_before_the_peer_was_bound() {
             &fx.runtime,
             key.clone(),
             None,
-            octos_agent::EffectivePermissions::danger_full_access(),
+            ra_agent::EffectivePermissions::danger_full_access(),
             epoch,
         )
         .await
@@ -1793,7 +1793,7 @@ async fn should_rebuild_a_session_runtime_cached_before_the_peer_was_bound() {
                 &fx.runtime,
                 ctx_key.clone(),
                 None,
-                octos_agent::EffectivePermissions::workspace_write(),
+                ra_agent::EffectivePermissions::workspace_write(),
                 epoch,
             )
             .await
@@ -1806,7 +1806,7 @@ async fn should_rebuild_a_session_runtime_cached_before_the_peer_was_bound() {
             &fx.runtime,
             key.clone(),
             None,
-            octos_agent::EffectivePermissions::workspace_write(),
+            ra_agent::EffectivePermissions::workspace_write(),
             epoch,
         )
         .await
@@ -1845,13 +1845,13 @@ impl ScriptedHostToolLlm {
 }
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for ScriptedHostToolLlm {
+impl ra_llm::LlmProvider for ScriptedHostToolLlm {
     async fn chat(
         &self,
         messages: &[Message],
-        tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
+        tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
         let call = self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let mut roster: Vec<String> = tools.iter().map(|t| t.name.clone()).collect();
         roster.sort();
@@ -1864,31 +1864,31 @@ impl octos_llm::LlmProvider for ScriptedHostToolLlm {
                     .push(message.content.clone());
             }
         }
-        let usage = octos_llm::TokenUsage {
+        let usage = ra_llm::TokenUsage {
             input_tokens: 10,
             output_tokens: 5,
             ..Default::default()
         };
         if call == 0 {
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: None,
                 reasoning_content: None,
-                tool_calls: vec![octos_core::ToolCall {
+                tool_calls: vec![ra_core::ToolCall {
                     id: "call_1".into(),
                     name: self.tool.clone(),
                     arguments: self.args.clone(),
                     metadata: None,
                 }],
-                stop_reason: octos_llm::StopReason::ToolUse,
+                stop_reason: ra_llm::StopReason::ToolUse,
                 usage,
                 provider_index: None,
             })
         } else {
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: Some("done".into()),
                 reasoning_content: None,
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
+                stop_reason: ra_llm::StopReason::EndTurn,
                 usage,
                 provider_index: None,
             })
@@ -1906,7 +1906,7 @@ impl octos_llm::LlmProvider for ScriptedHostToolLlm {
 
 /// The e2e fixture: a profile runtime whose model is `llm`, a staged News
 /// peer, and the host's connection with the tool set registered on it.
-async fn e2e_fixture(llm: Arc<dyn octos_llm::LlmProvider>, tools: Value) -> E2e {
+async fn e2e_fixture(llm: Arc<dyn ra_llm::LlmProvider>, tools: Value) -> E2e {
     let tmp = tempfile::tempdir().unwrap();
     let data_dir = tmp.path().join("data");
     std::fs::create_dir_all(data_dir.join("memory")).unwrap();
@@ -1966,7 +1966,7 @@ async fn e2e_fixture(llm: Arc<dyn octos_llm::LlmProvider>, tools: Value) -> E2e 
     let mut state = AppState::empty_for_tests();
     state.profiles.insert("dev".to_string(), runtime.clone());
     state.sessions = Some(Arc::new(tokio::sync::Mutex::new(
-        octos_bus::SessionManager::open(&data_dir).unwrap(),
+        ra_bus::SessionManager::open(&data_dir).unwrap(),
     )));
     let state = Arc::new(state);
     let apps = tmp.path().join("apps");
@@ -2239,7 +2239,7 @@ async fn should_refuse_to_fork_an_app_peer_session() {
             None,
             None,
             "f1".into(),
-            octos_core::ui_protocol::SessionForkParams {
+            ra_core::ui_protocol::SessionForkParams {
                 session_id: session.clone(),
                 new_chat_id: "copy".into(),
                 copy_messages: None,
@@ -2260,7 +2260,7 @@ async fn should_refuse_to_fork_an_app_peer_session() {
         None,
         None,
         "f2".into(),
-        octos_core::ui_protocol::SessionForkParams {
+        ra_core::ui_protocol::SessionForkParams {
             session_id: SessionKey::with_profile_topic("dev", "api", &host_chat(), "notes"),
             new_chat_id: "copy".into(),
             copy_messages: None,
@@ -2357,7 +2357,7 @@ async fn should_charge_a_request_contexts_turns_and_tools_to_its_peers_budget() 
         &fx.state,
         &context_key,
         &TurnId::new(),
-        octos_core::ui_protocol::TurnTerminalOutcome::Completed,
+        ra_core::ui_protocol::TurnTerminalOutcome::Completed,
         "done",
         150,
         None,
@@ -2394,25 +2394,25 @@ struct RecordingLlm {
 }
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for RecordingLlm {
+impl ra_llm::LlmProvider for RecordingLlm {
     async fn chat(
         &self,
         messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
         let text = messages
             .iter()
             .map(|m| m.content.clone())
             .collect::<Vec<_>>()
             .join("\n---\n");
         self.requests.lock().unwrap().push(text);
-        Ok(octos_llm::ChatResponse {
+        Ok(ra_llm::ChatResponse {
             content: Some("ok".into()),
             reasoning_content: None,
             tool_calls: Vec::new(),
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage {
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage {
                 input_tokens: 1,
                 output_tokens: 1,
                 ..Default::default()
@@ -2715,7 +2715,7 @@ async fn should_never_give_an_external_turn_a_host_routed_tool_when_one_is_regis
     assert_eq!(sorted_names(&registry), vec!["grep", "news_list"]);
     assert_eq!(
         registry.origin("news_list"),
-        Some(octos_agent::ToolOrigin::HostRouted)
+        Some(ra_agent::ToolOrigin::HostRouted)
     );
     super::super::host_managed::confine_external_turn_tools(&mut registry);
     assert_eq!(sorted_names(&registry), vec!["grep"]);
@@ -2901,11 +2901,11 @@ async fn should_keep_the_peers_kernel_tools_when_it_registers_an_empty_set() {
     assert_eq!(sorted_names(&registry), expected);
     assert_eq!(
         registry.origin("news_list"),
-        Some(octos_agent::ToolOrigin::HostRouted)
+        Some(ra_agent::ToolOrigin::HostRouted)
     );
     assert_eq!(
         registry.origin("read_file"),
-        Some(octos_agent::ToolOrigin::Builtin)
+        Some(ra_agent::ToolOrigin::Builtin)
     );
 
     // A request context of the peer gets the same.
@@ -2942,13 +2942,13 @@ async fn should_never_let_an_app_tool_shadow_a_kernel_tool() {
     let registry = turn_registry(&fx, &key, "turn-1").await;
     assert_eq!(
         registry.origin("exec_command"),
-        Some(octos_agent::ToolOrigin::Builtin),
+        Some(ra_agent::ToolOrigin::Builtin),
         "the kernel tool wins"
     );
 }
 
-fn send_input_request(message: &str, occurrence: &str) -> octos_agent::PeerSendInputRequest {
-    octos_agent::PeerSendInputRequest {
+fn send_input_request(message: &str, occurrence: &str) -> ra_agent::PeerSendInputRequest {
+    ra_agent::PeerSendInputRequest {
         slug: "news".into(),
         message: message.into(),
         occurrence_id: occurrence.into(),
@@ -2976,7 +2976,7 @@ async fn should_deliver_the_system_agents_input_to_the_host_connection_when_the_
         send_input_request("QUESTION_ME", "call_1"),
     )
     .expect("delivered");
-    assert_eq!(delivery, octos_agent::PeerSendInputDelivery::Queued);
+    assert_eq!(delivery, ra_agent::PeerSendInputDelivery::Queued);
     let input = next_frame(&mut host_rx, "peer/input").await;
     assert_eq!(input["peer"], "news");
     assert_eq!(input["session_id"], json!(peer_key(&fx)));
@@ -2998,7 +2998,7 @@ async fn should_deliver_the_system_agents_input_to_the_host_connection_when_the_
             send_input_request("QUESTION_ME", "call_1"),
         )
         .unwrap(),
-        octos_agent::PeerSendInputDelivery::AlreadyQueued
+        ra_agent::PeerSendInputDelivery::AlreadyQueued
     );
     // The same tool-call id in a LATER turn is a new input.
     deliver_peer_send_input(
@@ -3142,10 +3142,10 @@ async fn should_answer_a_host_peer_sessions_questions_only_on_the_owning_or_host
             TurnId::new(),
             "Pick a number",
             "Which number should I use?",
-            vec![octos_core::ui_protocol::UserQuestion {
+            vec![ra_core::ui_protocol::UserQuestion {
                 header: "Number".into(),
                 question: "Which number?".into(),
-                options: vec![octos_core::ui_protocol::UserQuestionOption {
+                options: vec![ra_core::ui_protocol::UserQuestionOption {
                     label: "42".into(),
                     description: "the answer".into(),
                 }],
@@ -3437,7 +3437,7 @@ async fn should_run_a_foreground_tool_in_a_host_turn_started_from_peer_input() {
         &Arc::new(UiProtocolContractStores::default()),
         &TurnId::new(),
     );
-    let ran = octos_agent::tools::TOOL_APPROVAL_CTX
+    let ran = ra_agent::tools::TOOL_APPROVAL_CTX
         .scope(
             approver.clone(),
             registry.execute_with_context(&call_ctx("c1"), "news_list", &json!({})),
@@ -3447,7 +3447,7 @@ async fn should_run_a_foreground_tool_in_a_host_turn_started_from_peer_input() {
     assert!(ran.success, "{}", ran.output);
     // Any other turn of the peer's own session is a background run.
     let registry = turn_registry(&fx, &key, "turn-other").await;
-    let refused = octos_agent::tools::TOOL_APPROVAL_CTX
+    let refused = ra_agent::tools::TOOL_APPROVAL_CTX
         .scope(
             approver,
             registry.execute_with_context(&call_ctx("c2"), "news_list", &json!({})),
@@ -3993,7 +3993,7 @@ async fn should_give_the_system_agent_the_app_tools_the_host_registers_on_its_se
     );
     assert_eq!(
         host_turn.origin("calendar_today"),
-        Some(octos_agent::ToolOrigin::HostRouted)
+        Some(ra_agent::ToolOrigin::HostRouted)
     );
     assert!(usual.iter().all(|name| host_turn.get(name).is_some()));
     // Any other connection's turn (a web client, a continuation) is untouched.
@@ -4155,7 +4155,7 @@ async fn should_register_a_host_sessions_tools_without_a_peer_token_when_the_con
     );
     assert_eq!(
         host_turn.origin("calendar_today"),
-        Some(octos_agent::ToolOrigin::HostRouted)
+        Some(ra_agent::ToolOrigin::HostRouted)
     );
     // Its answer to a call needs no token either (only the connection the
     // call was sent to may answer it).
@@ -4495,14 +4495,14 @@ fn reject_input(
 
 /// The system agent's `peer_send_input`, wired as a system turn wires it,
 /// waiting `wait` for the host's answer.
-fn system_send_input_tool(fx: &Fx, wait: std::time::Duration) -> octos_agent::PeerSendInputTool {
+fn system_send_input_tool(fx: &Fx, wait: std::time::Duration) -> ra_agent::PeerSendInputTool {
     let peers = peers_root(fx);
     let system = fx.system.0.clone();
     let turn = TurnId::new();
     let answer_turn = turn.clone();
-    let send: octos_agent::PeerSendInputCallback =
+    let send: ra_agent::PeerSendInputCallback =
         Arc::new(move |req| deliver_peer_send_input("dev", &peers, &system, &turn, req));
-    octos_agent::PeerSendInputTool::new(send).with_answer(peer_send_input_answer_callback(
+    ra_agent::PeerSendInputTool::new(send).with_answer(peer_send_input_answer_callback(
         fx.system.0.clone(),
         answer_turn,
         wait,
@@ -4558,7 +4558,7 @@ async fn should_fail_the_waiting_peer_send_input_with_the_hosts_reason() {
 
     let tool = system_send_input_tool(&fx, std::time::Duration::from_secs(10));
     let started = std::time::Instant::now();
-    let result = octos_agent::Tool::execute_with_context(
+    let result = ra_agent::Tool::execute_with_context(
         &tool,
         &call_ctx("call_1"),
         &json!({"slug": "news", "message": "summarise today's news"}),
@@ -4613,7 +4613,7 @@ async fn should_end_the_wait_without_an_error_when_the_host_starts_the_turn() {
     };
     let tool = system_send_input_tool(&fx, std::time::Duration::from_secs(10));
     let started = std::time::Instant::now();
-    let result = octos_agent::Tool::execute_with_context(
+    let result = ra_agent::Tool::execute_with_context(
         &tool,
         &call_ctx("call_1"),
         &json!({"slug": "news", "message": "hello"}),
@@ -4634,7 +4634,7 @@ async fn should_report_a_rejection_after_the_call_returned_on_the_system_session
     // The host does not answer within the call's wait: the call reports the
     // input as sent.
     let tool = system_send_input_tool(&fx, std::time::Duration::from_millis(50));
-    let result = octos_agent::Tool::execute_with_context(
+    let result = ra_agent::Tool::execute_with_context(
         &tool,
         &call_ctx("call_1"),
         &json!({"slug": "news", "message": "summarise today's news"}),
@@ -4918,7 +4918,7 @@ async fn should_refuse_a_turn_start_with_a_rejected_inputs_turn_id() {
         &Arc::new(UiProtocolContractStores::default()),
         &TurnId::new(),
     );
-    let refused = octos_agent::tools::TOOL_APPROVAL_CTX
+    let refused = ra_agent::tools::TOOL_APPROVAL_CTX
         .scope(
             approver,
             registry.execute_with_context(&call_ctx("c1"), "news_list", &json!({})),
@@ -4938,10 +4938,10 @@ async fn should_refuse_a_turn_start_with_a_rejected_inputs_turn_id() {
 // ---------------------------------------------------------------------------
 
 fn origin(
-    kind: octos_core::ui_protocol::TurnOriginKind,
+    kind: ra_core::ui_protocol::TurnOriginKind,
     label: Option<&str>,
-) -> octos_core::ui_protocol::TurnOrigin {
-    octos_core::ui_protocol::TurnOrigin {
+) -> ra_core::ui_protocol::TurnOrigin {
+    ra_core::ui_protocol::TurnOrigin {
         kind,
         label: label.map(str::to_owned),
     }
@@ -4992,7 +4992,7 @@ async fn start_turn(
     session: &SessionKey,
     turn_id: &TurnId,
     text: &str,
-    origin: Option<octos_core::ui_protocol::TurnOrigin>,
+    origin: Option<ra_core::ui_protocol::TurnOrigin>,
 ) -> bool {
     start_turn_in(
         e,
@@ -5020,7 +5020,7 @@ async fn start_turn_in(
     session: &SessionKey,
     turn_id: &TurnId,
     text: &str,
-    origin: Option<octos_core::ui_protocol::TurnOrigin>,
+    origin: Option<ra_core::ui_protocol::TurnOrigin>,
 ) -> bool {
     let connection_turns: SharedConnectionTurns = Arc::new(TokioMutex::new(HashMap::new()));
     handle_turn_start(
@@ -5071,7 +5071,7 @@ fn shared_peer(e: &E2e) -> SessionKey {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_run_a_persons_turn_on_the_peer_session_labelled_with_its_origin() {
-    use octos_core::ui_protocol::TurnOriginKind;
+    use ra_core::ui_protocol::TurnOriginKind;
     let llm = Arc::new(RecordingLlm::default());
     let mut e = e2e_fixture(llm.clone(), json!({ "tools": [] })).await;
     let _frames = collect_frames(e.rx.take().unwrap());
@@ -5162,7 +5162,7 @@ async fn should_run_a_persons_turn_on_the_peer_session_labelled_with_its_origin(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_label_a_peer_input_turn_as_the_system_agents_and_refuse_a_relabel() {
-    use octos_core::ui_protocol::TurnOriginKind;
+    use ra_core::ui_protocol::TurnOriginKind;
     let llm = Arc::new(RecordingLlm::default());
     let mut e = e2e_fixture(llm.clone(), json!({ "tools": [] })).await;
     let frames = collect_frames(e.rx.take().unwrap());
@@ -5237,7 +5237,7 @@ async fn should_label_a_peer_input_turn_as_the_system_agents_and_refuse_a_relabe
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_refuse_a_turn_origin_from_other_connections_and_on_other_sessions() {
-    use octos_core::ui_protocol::TurnOriginKind;
+    use ra_core::ui_protocol::TurnOriginKind;
     let llm = Arc::new(RecordingLlm::default());
     let mut e = e2e_fixture(llm.clone(), json!({ "tools": [] })).await;
     let host_frames = collect_frames(e.rx.take().unwrap());
@@ -5361,23 +5361,23 @@ struct GatedLlm {
 }
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for GatedLlm {
+impl ra_llm::LlmProvider for GatedLlm {
     async fn chat(
         &self,
         _messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
         if self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
             self.entered.notify_one();
             self.release.notified().await;
         }
-        Ok(octos_llm::ChatResponse {
+        Ok(ra_llm::ChatResponse {
             content: Some("ok".into()),
             reasoning_content: None,
             tool_calls: Vec::new(),
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage {
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage {
                 input_tokens: 1,
                 output_tokens: 1,
                 ..Default::default()
@@ -5397,7 +5397,7 @@ impl octos_llm::LlmProvider for GatedLlm {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_refuse_a_second_turn_while_the_shared_peer_session_is_busy() {
-    use octos_core::ui_protocol::TurnOriginKind;
+    use ra_core::ui_protocol::TurnOriginKind;
     let llm = Arc::new(GatedLlm::default());
     let mut e = e2e_fixture(llm.clone(), json!({ "tools": [] })).await;
     let frames = collect_frames(e.rx.take().unwrap());
@@ -5530,7 +5530,7 @@ async fn should_not_rearm_the_fleet_synthesis_for_a_persons_round_alone() {
 
 #[tokio::test]
 async fn should_run_a_foreground_tool_in_the_persons_turn_on_the_peer_session() {
-    use octos_core::ui_protocol::TurnOriginKind;
+    use ra_core::ui_protocol::TurnOriginKind;
     let fx = fixture().await;
     let token = prepare_news(&fx).await;
     let key = peer_key(&fx);
@@ -5557,7 +5557,7 @@ async fn should_run_a_foreground_tool_in_the_persons_turn_on_the_peer_session() 
         async move {
             crate::peers::turn_origin::record_turn_origin(&key, &turn, origin(kind, None));
             let registry = turn_registry(fx, &key, &turn.0.to_string()).await;
-            octos_agent::tools::TOOL_APPROVAL_CTX
+            ra_agent::tools::TOOL_APPROVAL_CTX
                 .scope(
                     approver,
                     registry.execute_with_context(&call_ctx("c1"), "news_list", &json!({})),
@@ -5673,7 +5673,7 @@ async fn start_turn_when_free(
     session: &SessionKey,
     turn_id: &TurnId,
     text: &str,
-    origin: Option<octos_core::ui_protocol::TurnOrigin>,
+    origin: Option<ra_core::ui_protocol::TurnOrigin>,
 ) {
     for attempt in 0..1000 {
         if start_turn(
@@ -5899,7 +5899,7 @@ async fn should_run_the_person_lane_while_the_system_agent_lane_is_busy() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_let_only_the_host_open_a_sharing_context_and_label_its_turns() {
-    use octos_core::ui_protocol::TurnOriginKind;
+    use ra_core::ui_protocol::TurnOriginKind;
     let llm = Arc::new(RecordingLlm::default());
     let mut e = e2e_fixture(llm.clone(), json!({ "tools": [] })).await;
     let host_frames = collect_frames(e.rx.take().unwrap());
@@ -6158,13 +6158,13 @@ impl LaneLlm {
 }
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for LaneLlm {
+impl ra_llm::LlmProvider for LaneLlm {
     async fn chat(
         &self,
         messages: &[Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
         let text = messages
             .iter()
             .map(|m| m.content.clone())
@@ -6178,30 +6178,30 @@ impl octos_llm::LlmProvider for LaneLlm {
             .map(|m| m.content.clone())
             .unwrap_or_default();
         let after_tool = messages.last().is_some_and(|m| m.role == MessageRole::Tool);
-        let usage = octos_llm::TokenUsage {
+        let usage = ra_llm::TokenUsage {
             input_tokens: 1,
             output_tokens: 1,
             ..Default::default()
         };
-        let reply = |content: &str| octos_llm::ChatResponse {
+        let reply = |content: &str| ra_llm::ChatResponse {
             content: Some(content.into()),
             reasoning_content: None,
             tool_calls: Vec::new(),
-            stop_reason: octos_llm::StopReason::EndTurn,
+            stop_reason: ra_llm::StopReason::EndTurn,
             usage: usage.clone(),
             provider_index: None,
         };
         if own.contains("SEND_IT") && !after_tool {
-            return Ok(octos_llm::ChatResponse {
+            return Ok(ra_llm::ChatResponse {
                 content: Some("Sending the mail now.".into()),
                 reasoning_content: None,
-                tool_calls: vec![octos_core::ToolCall {
+                tool_calls: vec![ra_core::ToolCall {
                     id: "call_send".into(),
                     name: "mail_send".into(),
                     arguments: json!({"draft_id": "d-secret-args"}),
                     metadata: None,
                 }],
-                stop_reason: octos_llm::StopReason::ToolUse,
+                stop_reason: ra_llm::StopReason::ToolUse,
                 usage,
                 provider_index: None,
             });
@@ -6419,7 +6419,7 @@ async fn serve_turn_registry(
     key: &SessionKey,
     turn: &str,
     connection: Option<u64>,
-) -> octos_agent::ToolRegistry {
+) -> ra_agent::ToolRegistry {
     let runtime = crate::runtime::SessionRuntime::bootstrap(&fx.runtime, key.clone(), None)
         .await
         .expect("session runtime");
@@ -7021,11 +7021,11 @@ async fn run_tool(
     runtime: &crate::runtime::SessionRuntime,
     tool: &str,
     args: Value,
-) -> octos_agent::tools::ToolResult {
-    let ctx = octos_agent::tools::ToolContext {
+) -> ra_agent::tools::ToolResult {
+    let ctx = ra_agent::tools::ToolContext {
         tool_id: "t".to_owned(),
         session_scope: runtime.agent.session_scope().cloned(),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     };
     runtime
         .tools

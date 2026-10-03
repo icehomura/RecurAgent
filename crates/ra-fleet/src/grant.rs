@@ -184,7 +184,7 @@ pub struct WorkerGrant {
     /// layer enforces the PATH fence only — no OS backend can distinguish
     /// create-vs-overwrite, so the no-overwrite half of `create_only` is
     /// tool-layer enforced (documented degradation, see
-    /// `octos_agent::sandbox::SandboxConfig::write_allow_globs`).
+    /// `ra_agent::sandbox::SandboxConfig::write_allow_globs`).
     #[serde(default, skip_serializing_if = "core::ops::Not::not")]
     pub create_only: bool,
 }

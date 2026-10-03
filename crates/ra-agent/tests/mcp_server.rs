@@ -15,16 +15,16 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use octos_agent::arc_task::{ARC_AGENT_TASK_SCHEMA_V1, parse_arc_agent_task_input};
-use octos_agent::harness_events::HarnessEventPayload;
-use octos_agent::mcp_server::{
+use ra_agent::arc_task::{ARC_AGENT_TASK_SCHEMA_V1, parse_arc_agent_task_input};
+use ra_agent::harness_events::HarnessEventPayload;
+use ra_agent::mcp_server::{
     McpServer, McpServerError, McpSessionCost, McpSessionDispatch, McpSessionOutcome,
     SessionLifecycleObserver, build_initialize_response, build_tools_list_response,
     constant_time_eq, dispatch_run_octos_session, parse_bearer_token, render_mcp_error,
 };
-use octos_agent::task_supervisor::{TaskLifecycleState, TaskSupervisor};
-use octos_agent::validators::{ValidatorOutcome, ValidatorPhase, ValidatorStatus};
-use octos_agent::{HarnessEvent, TASK_RESULT_SCHEMA_VERSION};
+use ra_agent::task_supervisor::{TaskLifecycleState, TaskSupervisor};
+use ra_agent::validators::{ValidatorOutcome, ValidatorPhase, ValidatorStatus};
+use ra_agent::{HarnessEvent, TASK_RESULT_SCHEMA_VERSION};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio::sync::Mutex;

@@ -14,8 +14,8 @@
 
 use std::path::Path;
 
-use octos_bus::session::{SessionHandle, SessionManager};
-use octos_core::{Message, MessageRole, SessionKey};
+use ra_bus::session::{SessionHandle, SessionManager};
+use ra_core::{Message, MessageRole, SessionKey};
 
 const OVERSIZE: usize = 8 * 1024 * 1024 + 1024; // past the 8 MiB segment size
 
@@ -211,7 +211,7 @@ async fn touch_over_noncontiguous_segments_keeps_the_fresh_zero_meta() {
     let active = tmp
         .path()
         .join("users")
-        .join(octos_bus::session::encode_path_component(base))
+        .join(ra_bus::session::encode_path_component(base))
         .join("sessions")
         .join("research.jsonl");
     std::fs::create_dir_all(active.with_extension("segments")).unwrap();

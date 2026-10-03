@@ -1141,7 +1141,7 @@ impl HookExecutor {
                         } else {
                             format!("{stdout}\n{stderr}")
                         };
-                        octos_core::truncate_utf8(
+                        ra_core::truncate_utf8(
                             &mut output,
                             2000,
                             "\n... (hook output truncated)",

@@ -40,8 +40,8 @@
 
 use std::sync::Arc;
 
-use octos_cli::api::ws_slash::{SlashCommandContext, try_dispatch_slash_command};
-use octos_core::{Message, SessionKey};
+use ra_cli::api::ws_slash::{SlashCommandContext, try_dispatch_slash_command};
+use ra_core::{Message, SessionKey};
 use tempfile::TempDir;
 use tokio::sync::Mutex;
 
@@ -54,7 +54,7 @@ async fn setup_ctx() -> (SlashCommandContext, TempDir, SessionKey) {
     let tmp = TempDir::new().unwrap();
     let session_key = SessionKey::new("api", "web-test-chat");
     let sessions = Arc::new(Mutex::new(
-        octos_bus::SessionManager::open(tmp.path()).unwrap(),
+        ra_bus::SessionManager::open(tmp.path()).unwrap(),
     ));
     let ctx = SlashCommandContext {
         sessions: sessions.clone(),
@@ -91,7 +91,7 @@ async fn should_scaffold_slides_when_new_slides_command_arrives_on_ws() {
     );
 
     // The scaffold lives under `<data_dir>/users/<encoded_base>/workspace/slides/<slug>`.
-    let encoded_base = octos_bus::session::encode_path_component(session_key.base_key());
+    let encoded_base = ra_bus::session::encode_path_component(session_key.base_key());
     let project_dir = tmp
         .path()
         .join("users")
@@ -284,7 +284,7 @@ async fn should_use_session_workspace_root_when_override_present() {
 
     let session_key = SessionKey::new("api", "coding-test");
     let sessions = Arc::new(Mutex::new(
-        octos_bus::SessionManager::open(tmp.path()).unwrap(),
+        ra_bus::SessionManager::open(tmp.path()).unwrap(),
     ));
     let ctx = SlashCommandContext {
         sessions: sessions.clone(),
@@ -309,7 +309,7 @@ async fn should_use_session_workspace_root_when_override_present() {
     assert!(scaffolded.join("script.js").is_file());
 
     // Negative: the conventional fallback path must NOT exist.
-    let encoded_base = octos_bus::session::encode_path_component(session_key.base_key());
+    let encoded_base = ra_bus::session::encode_path_component(session_key.base_key());
     let conventional = tmp
         .path()
         .join("users")

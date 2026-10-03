@@ -23,7 +23,7 @@ use chrono::Utc;
 use eyre::{Result, eyre};
 use futures::stream::{self, StreamExt};
 use metrics::counter;
-use octos_core::{
+use ra_core::{
     EventEnvelope, InboundMessage, MAIN_PROFILE_ID, Message, MessageRole, OutboundMessage,
     SessionKey, ThreadId, TurnContext,
 };
@@ -42,7 +42,7 @@ pub type TaskQueryFn = dyn Fn(&str) -> serde_json::Value + Send + Sync;
 
 /// M7.9 / W2: structured outcome for the cancel callback so the
 /// `ra-bus` crate doesn't need to depend on `ra-agent` types.
-/// Mapped 1:1 onto `octos_agent::TaskCancelError` by the gateway
+/// Mapped 1:1 onto `ra_agent::TaskCancelError` by the gateway
 /// runtime that wires this callback.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TaskCancelOutcome {
@@ -1374,7 +1374,7 @@ impl ApiChannel {
         if message.thread_id.is_none()
             && matches!(
                 message.role,
-                octos_core::MessageRole::Assistant | octos_core::MessageRole::Tool
+                ra_core::MessageRole::Assistant | ra_core::MessageRole::Tool
             )
         {
             tracing::warn!(
@@ -1542,7 +1542,7 @@ async fn handle_chat(
                 serde_json::Value::Object(metadata)
             },
             message_id: Some(request_thread_id.clone()),
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         };
 
         if let Err(e) = state.inbound_tx.send(inbound).await {
@@ -2409,7 +2409,7 @@ async fn handle_file_download(
         let tenant = state
             .profile_id
             .clone()
-            .unwrap_or_else(|| octos_core::MAIN_PROFILE_ID.to_string());
+            .unwrap_or_else(|| ra_core::MAIN_PROFILE_ID.to_string());
         if !crate::file_handle::upload_owned_by_tenant(&canonical, Some(&tenant)) {
             return (StatusCode::FORBIDDEN, "access denied").into_response();
         }
@@ -2481,7 +2481,7 @@ fn effective_upload_tenant(
         })
         .map(str::to_string)
         .or_else(|| gateway_profile_id.map(str::to_string))
-        .unwrap_or_else(|| octos_core::MAIN_PROFILE_ID.to_string())
+        .unwrap_or_else(|| ra_core::MAIN_PROFILE_ID.to_string())
 }
 
 /// POST /upload — upload files for use in chat media field.

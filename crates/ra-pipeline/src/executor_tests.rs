@@ -6,34 +6,34 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 
 struct RetentionProbeProvider {
-    seen: Mutex<Option<octos_llm::CacheRetention>>,
+    seen: Mutex<Option<ra_llm::CacheRetention>>,
 }
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for RetentionProbeProvider {
+impl ra_llm::LlmProvider for RetentionProbeProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
         *self.seen.lock().unwrap() = Some(config.cache_retention);
-        Ok(octos_llm::ChatResponse {
+        Ok(ra_llm::ChatResponse {
             content: Some(r#"[{"task": "search for X", "label": "X"}]"#.into()),
             reasoning_content: None,
             tool_calls: Vec::new(),
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage::default(),
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage::default(),
             provider_index: None,
         })
     }
 
     async fn chat_stream(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatStream> {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatStream> {
         unimplemented!("probe does not stream")
     }
 
@@ -60,7 +60,7 @@ async fn should_opt_out_of_cache_writes_when_planning_dynamic_tasks() {
     assert_eq!(tasks.len(), 1);
     assert_eq!(
         *probe.seen.lock().unwrap(),
-        Some(octos_llm::CacheRetention::None),
+        Some(ra_llm::CacheRetention::None),
         "one-shot dynamic planning must not request cache writes"
     );
 }
@@ -305,7 +305,7 @@ fn make_test_config() -> ExecutorConfig {
         host_context: crate::host_context::PipelineHostContext::default(),
         embedder: None,
         catalog_dir: None,
-        sandbox: octos_agent::SandboxConfig::default(),
+        sandbox: ra_agent::SandboxConfig::default(),
     }
 }
 
@@ -320,14 +320,14 @@ fn make_test_config() -> ExecutorConfig {
 #[test]
 fn pipeline_threads_configured_sandbox_into_validator_registry() {
     let mut config = make_test_config();
-    config.sandbox = octos_agent::SandboxConfig {
-        mode: octos_agent::SandboxMode::Docker,
-        ..octos_agent::SandboxConfig::default()
+    config.sandbox = ra_agent::SandboxConfig {
+        mode: ra_agent::SandboxMode::Docker,
+        ..ra_agent::SandboxConfig::default()
     };
     // Reconstruct exactly what the two validator blocks build.
-    let registry = octos_agent::ToolRegistry::with_builtins_and_sandbox(
+    let registry = ra_agent::ToolRegistry::with_builtins_and_sandbox(
         &config.working_dir,
-        octos_agent::create_sandbox(&config.sandbox),
+        ra_agent::create_sandbox(&config.sandbox),
     );
     let sandbox = registry.sandbox();
     assert!(
@@ -350,13 +350,13 @@ fn pipeline_threads_configured_sandbox_into_validator_registry() {
 #[test]
 fn pipeline_none_sandbox_registry_is_noop() {
     let mut config = make_test_config();
-    config.sandbox = octos_agent::SandboxConfig {
-        mode: octos_agent::SandboxMode::None,
-        ..octos_agent::SandboxConfig::default()
+    config.sandbox = ra_agent::SandboxConfig {
+        mode: ra_agent::SandboxMode::None,
+        ..ra_agent::SandboxConfig::default()
     };
-    let registry = octos_agent::ToolRegistry::with_builtins_and_sandbox(
+    let registry = ra_agent::ToolRegistry::with_builtins_and_sandbox(
         &config.working_dir,
-        octos_agent::create_sandbox(&config.sandbox),
+        ra_agent::create_sandbox(&config.sandbox),
     );
     assert!(
         registry.sandbox().is_noop(),
@@ -371,16 +371,16 @@ struct MockProvider;
 impl LlmProvider for MockProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> Result<octos_llm::ChatResponse> {
-        Ok(octos_llm::ChatResponse {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> Result<ra_llm::ChatResponse> {
+        Ok(ra_llm::ChatResponse {
             content: Some("done".into()),
             reasoning_content: None,
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage {
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage {
                 input_tokens: 0,
                 output_tokens: 0,
                 ..Default::default()
@@ -406,17 +406,17 @@ struct CountingProvider {
 impl LlmProvider for CountingProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> Result<octos_llm::ChatResponse> {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> Result<ra_llm::ChatResponse> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        Ok(octos_llm::ChatResponse {
+        Ok(ra_llm::ChatResponse {
             content: Some("done".into()),
             reasoning_content: None,
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage {
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage {
                 input_tokens: 0,
                 output_tokens: 0,
                 ..Default::default()
@@ -643,7 +643,7 @@ async fn make_capped_config(cap: usize) -> ExecutorConfig {
         host_context: crate::host_context::PipelineHostContext::default(),
         embedder: None,
         catalog_dir: None,
-        sandbox: octos_agent::SandboxConfig::default(),
+        sandbox: ra_agent::SandboxConfig::default(),
     }
 }
 
@@ -1039,11 +1039,11 @@ struct SixTaskPlanner;
 impl LlmProvider for SixTaskPlanner {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> Result<octos_llm::ChatResponse> {
-        Ok(octos_llm::ChatResponse {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> Result<ra_llm::ChatResponse> {
+        Ok(ra_llm::ChatResponse {
             content: Some(
                 r#"[{"task":"t1","label":"T1"},{"task":"t2","label":"T2"},
                         {"task":"t3","label":"T3"},{"task":"t4","label":"T4"},
@@ -1052,8 +1052,8 @@ impl LlmProvider for SixTaskPlanner {
             ),
             reasoning_content: None,
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage::default(),
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage::default(),
             provider_index: None,
         })
     }
@@ -1235,7 +1235,7 @@ async fn run_ir_e2e_deepseek_real() {
         return;
     };
     let provider: Arc<dyn LlmProvider> = Arc::new(
-        octos_llm::openai::OpenAIProvider::new(key, "deepseek-chat")
+        ra_llm::openai::OpenAIProvider::new(key, "deepseek-chat")
             .with_base_url("https://api.deepseek.com/v1"),
     );
     let mut config = make_capped_config(4).await;
@@ -1289,11 +1289,11 @@ async fn run_ir_e2e_deepseek_real() {
 /// `Vec` so the test can assert on the messages.
 #[derive(Default, Clone)]
 struct CapturingReporter {
-    events: Arc<std::sync::Mutex<Vec<octos_agent::progress::ProgressEvent>>>,
+    events: Arc<std::sync::Mutex<Vec<ra_agent::progress::ProgressEvent>>>,
 }
 
-impl octos_agent::progress::ProgressReporter for CapturingReporter {
-    fn report(&self, event: octos_agent::progress::ProgressEvent) {
+impl ra_agent::progress::ProgressReporter for CapturingReporter {
+    fn report(&self, event: ra_agent::progress::ProgressEvent) {
         if let Ok(mut g) = self.events.lock() {
             g.push(event);
         }
@@ -1305,10 +1305,10 @@ async fn heartbeat_emits_periodic_progress_with_current_node() {
     let reporter = CapturingReporter::default();
     let captured = reporter.events.clone();
 
-    let ctx = octos_agent::tools::ToolContext {
+    let ctx = ra_agent::tools::ToolContext {
         tool_id: "tc-heartbeat".to_string(),
         reporter: Arc::new(reporter),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     };
 
     let status = Arc::new(std::sync::Mutex::new(PipelineStatusSnapshot {
@@ -1358,7 +1358,7 @@ async fn heartbeat_emits_periodic_progress_with_current_node() {
     let messages: Vec<String> = events
         .iter()
         .filter_map(|e| match e {
-            octos_agent::progress::ProgressEvent::ToolProgress { message, .. } => {
+            ra_agent::progress::ProgressEvent::ToolProgress { message, .. } => {
                 Some(message.clone())
             }
             _ => None,
@@ -1393,10 +1393,10 @@ async fn heartbeat_guard_drop_stops_emission() {
     let reporter = CapturingReporter::default();
     let captured = reporter.events.clone();
 
-    let ctx = octos_agent::tools::ToolContext {
+    let ctx = ra_agent::tools::ToolContext {
         tool_id: "tc-heartbeat-stop".to_string(),
         reporter: Arc::new(reporter),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     };
 
     let status = Arc::new(std::sync::Mutex::new(PipelineStatusSnapshot {
@@ -1485,7 +1485,7 @@ fn node_output_preview_is_bounded() {
 /// opaque heartbeat existed.
 #[tokio::test]
 async fn node_started_and_completed_emit_structured_harness_events() {
-    use octos_agent::harness_events::{
+    use ra_agent::harness_events::{
         HarnessEvent, HarnessEventSinkContext, attach_event_sink_context, detach_event_sink_context,
     };
 
@@ -1501,10 +1501,10 @@ async fn node_started_and_completed_emit_structured_harness_events() {
         },
     );
 
-    let ctx = octos_agent::tools::ToolContext {
+    let ctx = ra_agent::tools::ToolContext {
         tool_id: "tc-pipeline-gap42".to_string(),
         harness_event_sink: Some(sink_uri.clone()),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     };
 
     let sink_for_assert = sink_uri.clone();
@@ -1575,7 +1575,7 @@ async fn node_started_and_completed_emit_structured_harness_events() {
     // The whole event line must stay well under the harness line cap.
     let line_len = serde_json::to_string(&events[1]).unwrap().len();
     assert!(
-        line_len < octos_agent::harness_events::MAX_HARNESS_EVENT_LINE_BYTES,
+        line_len < ra_agent::harness_events::MAX_HARNESS_EVENT_LINE_BYTES,
         "structured progress event must stay under the line cap; got {line_len}"
     );
 }
@@ -1586,10 +1586,10 @@ async fn heartbeat_carries_eta_label() {
     let reporter = CapturingReporter::default();
     let captured = reporter.events.clone();
 
-    let ctx = octos_agent::tools::ToolContext {
+    let ctx = ra_agent::tools::ToolContext {
         tool_id: "tc-heartbeat-eta".to_string(),
         reporter: Arc::new(reporter),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     };
 
     // Start with 0 done so the first ticks read "estimating…", then flip
@@ -1621,7 +1621,7 @@ async fn heartbeat_carries_eta_label() {
         .unwrap()
         .iter()
         .filter_map(|e| match e {
-            octos_agent::progress::ProgressEvent::ToolProgress { message, .. } => {
+            ra_agent::progress::ProgressEvent::ToolProgress { message, .. } => {
                 Some(message.clone())
             }
             _ => None,
@@ -1674,7 +1674,7 @@ async fn build_codergen_propagates_executor_working_dir_to_handler() {
         host_context: crate::host_context::PipelineHostContext::default(),
         embedder: None,
         catalog_dir: None,
-        sandbox: octos_agent::SandboxConfig::default(),
+        sandbox: ra_agent::SandboxConfig::default(),
     };
     config.working_dir = custom_wd.path().to_path_buf();
     let executor = PipelineExecutor::new(config);
@@ -1732,7 +1732,7 @@ async fn catalog_dir_overrides_working_dir_for_model_assignment() {
         embedder: None,
         // catalog reads must hit the PROFILE root, not the worker CWD.
         catalog_dir: Some(profile_root.path().to_path_buf()),
-        sandbox: octos_agent::SandboxConfig::default(),
+        sandbox: ra_agent::SandboxConfig::default(),
     };
 
     // Pin the helper that the executor uses for catalog lookup:
@@ -1782,7 +1782,7 @@ async fn catalog_dir_falls_back_to_working_dir_when_unset() {
         host_context: crate::host_context::PipelineHostContext::default(),
         embedder: None,
         catalog_dir: None,
-        sandbox: octos_agent::SandboxConfig::default(),
+        sandbox: ra_agent::SandboxConfig::default(),
     };
     config.working_dir = only_dir.path().to_path_buf();
     let executor = PipelineExecutor::new(config);
@@ -1809,7 +1809,7 @@ async fn catalog_dir_falls_back_to_working_dir_when_unset() {
 /// After the fix the assembled event line is provably under the cap.
 #[tokio::test]
 async fn pathological_node_event_stays_under_line_cap() {
-    use octos_agent::harness_events::{
+    use ra_agent::harness_events::{
         HarnessEvent, HarnessEventSinkContext, MAX_HARNESS_EVENT_LINE_BYTES,
         attach_event_sink_context, detach_event_sink_context,
     };
@@ -1824,10 +1824,10 @@ async fn pathological_node_event_stays_under_line_cap() {
         },
     );
 
-    let ctx = octos_agent::tools::ToolContext {
+    let ctx = ra_agent::tools::ToolContext {
         tool_id: "tc-pipeline-blocker1".to_string(),
         harness_event_sink: Some(sink_uri.clone()),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     };
 
     // A 4 KiB node_id (free-form, unbounded at the call site) and a 2 KiB
@@ -1901,7 +1901,7 @@ async fn pathological_node_event_stays_under_line_cap() {
 /// line is provably under the cap and the event always emits.
 #[tokio::test]
 async fn pathological_node_label_message_stays_under_line_cap() {
-    use octos_agent::harness_events::{
+    use ra_agent::harness_events::{
         HarnessEvent, HarnessEventSinkContext, MAX_HARNESS_EVENT_LINE_BYTES,
         attach_event_sink_context, detach_event_sink_context,
     };
@@ -1916,10 +1916,10 @@ async fn pathological_node_label_message_stays_under_line_cap() {
         },
     );
 
-    let ctx = octos_agent::tools::ToolContext {
+    let ctx = ra_agent::tools::ToolContext {
         tool_id: "tc-pipeline-blocker1-label".to_string(),
         harness_event_sink: Some(sink_uri.clone()),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     };
 
     // A pathological node LABEL → message: 8 KiB of NUL bytes (each escapes
@@ -1982,7 +1982,7 @@ async fn pathological_node_label_message_stays_under_line_cap() {
 /// Drain all `node_started`/`node_completed` events written to `sink_path`
 /// and return `(node_label, phase, success)` tuples for assertion.
 fn drain_node_events(sink_path: &str) -> Vec<(String, String, Option<bool>)> {
-    use octos_agent::harness_events::HarnessEvent;
+    use ra_agent::harness_events::HarnessEvent;
     let lines = std::fs::read_to_string(sink_path).unwrap_or_default();
     lines
         .lines()
@@ -2006,7 +2006,7 @@ fn drain_node_events(sink_path: &str) -> Vec<(String, String, Option<bool>)> {
 /// sites, so a parallel pipeline emitted NO per-node structured progress.
 #[tokio::test]
 async fn parallel_subnodes_emit_structured_events() {
-    use octos_agent::harness_events::{
+    use ra_agent::harness_events::{
         HarnessEventSinkContext, attach_event_sink_context, detach_event_sink_context,
     };
 
@@ -2020,10 +2020,10 @@ async fn parallel_subnodes_emit_structured_events() {
         },
     );
 
-    let ctx = octos_agent::tools::ToolContext {
+    let ctx = ra_agent::tools::ToolContext {
         tool_id: "tc-pipeline-parallel".to_string(),
         harness_event_sink: Some(sink_uri.clone()),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     };
 
     let dot = r#"
@@ -2080,7 +2080,7 @@ async fn parallel_subnodes_emit_structured_events() {
 /// expect node_started + node_completed for each fallback worker task.
 #[tokio::test]
 async fn dynamic_parallel_subnodes_emit_structured_events() {
-    use octos_agent::harness_events::{
+    use ra_agent::harness_events::{
         HarnessEventSinkContext, attach_event_sink_context, detach_event_sink_context,
     };
 
@@ -2094,10 +2094,10 @@ async fn dynamic_parallel_subnodes_emit_structured_events() {
         },
     );
 
-    let ctx = octos_agent::tools::ToolContext {
+    let ctx = ra_agent::tools::ToolContext {
         tool_id: "tc-pipeline-dynparallel".to_string(),
         harness_event_sink: Some(sink_uri.clone()),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     };
 
     let dot = r#"
@@ -2157,8 +2157,8 @@ async fn dynamic_parallel_subnodes_emit_structured_events() {
 /// emits NOTHING and `node_started` count == `node_completed` count.
 #[tokio::test]
 async fn parallel_prep_failure_leaves_no_dangling_node_started() {
-    use octos_agent::cost_ledger::{CostAccountant, CostBudgetPolicy, PersistentCostLedger};
-    use octos_agent::harness_events::{
+    use ra_agent::cost_ledger::{CostAccountant, CostBudgetPolicy, PersistentCostLedger};
+    use ra_agent::harness_events::{
         HarnessEventSinkContext, attach_event_sink_context, detach_event_sink_context,
     };
 
@@ -2172,10 +2172,10 @@ async fn parallel_prep_failure_leaves_no_dangling_node_started() {
         },
     );
 
-    let ctx = octos_agent::tools::ToolContext {
+    let ctx = ra_agent::tools::ToolContext {
         tool_id: "tc-pipeline-prepfail".to_string(),
         harness_event_sink: Some(sink_uri.clone()),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     };
 
     // Per-contract ceiling sized against the reservation SEQUENCE:
@@ -2253,8 +2253,8 @@ async fn parallel_prep_failure_leaves_no_dangling_node_started() {
 /// `node_completed`.
 #[tokio::test]
 async fn dynamic_parallel_prep_failure_leaves_no_dangling_node_started() {
-    use octos_agent::cost_ledger::{CostAccountant, CostBudgetPolicy, PersistentCostLedger};
-    use octos_agent::harness_events::{
+    use ra_agent::cost_ledger::{CostAccountant, CostBudgetPolicy, PersistentCostLedger};
+    use ra_agent::harness_events::{
         HarnessEventSinkContext, attach_event_sink_context, detach_event_sink_context,
     };
 
@@ -2268,10 +2268,10 @@ async fn dynamic_parallel_prep_failure_leaves_no_dangling_node_started() {
         },
     );
 
-    let ctx = octos_agent::tools::ToolContext {
+    let ctx = ra_agent::tools::ToolContext {
         tool_id: "tc-pipeline-dp-prepfail".to_string(),
         harness_event_sink: Some(sink_uri.clone()),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     };
 
     // The 3-task fallback expands (MockProvider returns "done" → JSON
@@ -2356,7 +2356,7 @@ fn linear_eta_saturates_on_huge_elapsed() {
 /// so the line is provably emittable with preview shrunk all the way to 0.
 #[tokio::test]
 async fn oversized_graph_id_node_event_still_emits() {
-    use octos_agent::harness_events::{
+    use ra_agent::harness_events::{
         HarnessEvent, HarnessEventSinkContext, MAX_HARNESS_EVENT_LINE_BYTES,
         attach_event_sink_context, detach_event_sink_context,
     };
@@ -2371,10 +2371,10 @@ async fn oversized_graph_id_node_event_still_emits() {
         },
     );
 
-    let ctx = octos_agent::tools::ToolContext {
+    let ctx = ra_agent::tools::ToolContext {
         tool_id: "tc-pipeline-blocker3".to_string(),
         harness_event_sink: Some(sink_uri.clone()),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     };
 
     // A 512-byte graph id (well over the 128-byte MAX_WORKFLOW_BYTES) plus a
@@ -2487,7 +2487,7 @@ fn install_handler(
 /// false}` via the RAII guard's Drop — otherwise the chip is stuck "running".
 #[tokio::test]
 async fn sequential_dispatch_error_emits_node_completed_via_guard() {
-    use octos_agent::harness_events::{
+    use ra_agent::harness_events::{
         HarnessEventSinkContext, attach_event_sink_context, detach_event_sink_context,
     };
 
@@ -2500,10 +2500,10 @@ async fn sequential_dispatch_error_emits_node_completed_via_guard() {
             task_id: "tc-seq-error".to_string(),
         },
     );
-    let ctx = octos_agent::tools::ToolContext {
+    let ctx = ra_agent::tools::ToolContext {
         tool_id: "tc-seq-error".to_string(),
         harness_event_sink: Some(sink_uri.clone()),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     };
 
     // Single codergen node whose handler hard-errors → dispatch `?`-returns.
@@ -2559,7 +2559,7 @@ async fn sequential_dispatch_error_emits_node_completed_via_guard() {
 /// at the run boundary so the test observes the emitted events.
 #[tokio::test]
 async fn sequential_panic_emits_node_completed_via_guard_drop() {
-    use octos_agent::harness_events::{
+    use ra_agent::harness_events::{
         HarnessEventSinkContext, attach_event_sink_context, detach_event_sink_context,
     };
 
@@ -2572,10 +2572,10 @@ async fn sequential_panic_emits_node_completed_via_guard_drop() {
             task_id: "tc-seq-panic".to_string(),
         },
     );
-    let ctx = octos_agent::tools::ToolContext {
+    let ctx = ra_agent::tools::ToolContext {
         tool_id: "tc-seq-panic".to_string(),
         harness_event_sink: Some(sink_uri.clone()),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     };
 
     let dot = r#"
@@ -2629,7 +2629,7 @@ async fn sequential_panic_emits_node_completed_via_guard_drop() {
 /// the TOOL_CTX task-local is gone when the future is dropped.
 #[tokio::test]
 async fn cancelled_run_emits_node_completed_via_guard_drop() {
-    use octos_agent::harness_events::{
+    use ra_agent::harness_events::{
         HarnessEventSinkContext, attach_event_sink_context, detach_event_sink_context,
     };
 
@@ -2642,10 +2642,10 @@ async fn cancelled_run_emits_node_completed_via_guard_drop() {
             task_id: "tc-cancel".to_string(),
         },
     );
-    let ctx = octos_agent::tools::ToolContext {
+    let ctx = ra_agent::tools::ToolContext {
         tool_id: "tc-cancel".to_string(),
         harness_event_sink: Some(sink_uri.clone()),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     };
 
     let dot = r#"
@@ -2699,7 +2699,7 @@ async fn cancelled_run_emits_node_completed_via_guard_drop() {
 /// node that runs; no double-emit" invariant for the sequential path.
 #[tokio::test]
 async fn sequential_happy_path_emits_exactly_one_pair() {
-    use octos_agent::harness_events::{
+    use ra_agent::harness_events::{
         HarnessEventSinkContext, attach_event_sink_context, detach_event_sink_context,
     };
 
@@ -2712,10 +2712,10 @@ async fn sequential_happy_path_emits_exactly_one_pair() {
             task_id: "tc-seq-happy".to_string(),
         },
     );
-    let ctx = octos_agent::tools::ToolContext {
+    let ctx = ra_agent::tools::ToolContext {
         tool_id: "tc-seq-happy".to_string(),
         harness_event_sink: Some(sink_uri.clone()),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     };
 
     // Single noop node — completes normally; the guard must disarm.
@@ -2771,7 +2771,7 @@ async fn sequential_happy_path_emits_exactly_one_pair() {
 /// the panicking worker's node_started dangles.
 #[tokio::test]
 async fn parallel_subnode_panic_emits_node_completed_via_guard_drop() {
-    use octos_agent::harness_events::{
+    use ra_agent::harness_events::{
         HarnessEventSinkContext, attach_event_sink_context, detach_event_sink_context,
     };
 
@@ -2784,10 +2784,10 @@ async fn parallel_subnode_panic_emits_node_completed_via_guard_drop() {
             task_id: "tc-par-panic".to_string(),
         },
     );
-    let ctx = octos_agent::tools::ToolContext {
+    let ctx = ra_agent::tools::ToolContext {
         tool_id: "tc-par-panic".to_string(),
         harness_event_sink: Some(sink_uri.clone()),
-        ..octos_agent::tools::ToolContext::zero()
+        ..ra_agent::tools::ToolContext::zero()
     };
 
     // Parallel fan-out where each sub-node is a codergen target whose
@@ -2863,10 +2863,10 @@ async fn resolve_provider_falls_back_to_default_when_key_absent() {
     impl LlmProvider for NamedMock {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
             _config: &ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             unreachable!("resolve_provider must not call chat()")
         }
         fn model_id(&self) -> &str {

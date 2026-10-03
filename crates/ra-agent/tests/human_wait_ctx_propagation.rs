@@ -29,16 +29,16 @@ use std::sync::{
 };
 
 use async_trait::async_trait;
-use octos_agent::tools::{TOOL_APPROVAL_CTX, USER_QUESTION_CTX};
-use octos_agent::{
+use ra_agent::tools::{TOOL_APPROVAL_CTX, USER_QUESTION_CTX};
+use ra_agent::{
     Agent, AgentConfig, AskUserQuestionTool, ConcurrencyClass, Tool, ToolApprovalDecision,
     ToolApprovalRequest, ToolApprovalRequester, ToolRegistry, ToolResult, UserQuestionOutcome,
     UserQuestionRequest, UserQuestionRequester,
 };
-use octos_core::ui_protocol::UserQuestionAnswer;
-use octos_core::{AgentId, Message, ToolCall};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_core::ui_protocol::UserQuestionAnswer;
+use ra_core::{AgentId, Message, ToolCall};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 
 /// Probe tool: at execution time, records whether `USER_QUESTION_CTX` is

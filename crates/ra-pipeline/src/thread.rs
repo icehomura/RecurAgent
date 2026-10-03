@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use octos_core::Message;
+use ra_core::Message;
 use tokio::sync::RwLock;
 
 /// Maximum number of threads per registry.
@@ -133,7 +133,7 @@ impl Default for ThreadRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::Message;
+    use ra_core::Message;
 
     #[test]
     fn should_create_empty_thread() {

@@ -2,7 +2,7 @@
 //! generated from ONE Rust definition by [uniffi](https://mozilla.github.io/uniffi-rs/).
 //!
 //! This crate is a thin, idiomatic wrapper over the **native core** exposed by
-//! `ra-ffi` ([`octos_ffi::RaRuntime`]). It adds NO logic of its own beyond
+//! `ra-ffi` ([`ra_ffi::RaRuntime`]). It adds NO logic of its own beyond
 //! type marshalling — in particular, the hardened credential path (single
 //! resolution + pinning + secret-scrubbing of error text) lives entirely in
 //! `ra-ffi::RaRuntime::from_config`, so it exists in exactly one place and
@@ -42,12 +42,12 @@ use std::sync::Arc;
 
 uniffi::setup_scaffolding!("ra");
 
-/// Runtime configuration. Maps directly onto [`octos_ffi::RuntimeConfig`].
+/// Runtime configuration. Maps directly onto [`ra_ffi::RuntimeConfig`].
 ///
 /// Supply EITHER `api_key` (a literal key) OR `api_key_env` (the name of a
 /// process env var holding it). If neither is set, resolution falls back to the
 /// conventional `{PROVIDER}_API_KEY` env var and then the `ra auth login`
-/// store — see the credential notes on [`octos_ffi::RaRuntime::from_config`].
+/// store — see the credential notes on [`ra_ffi::RaRuntime::from_config`].
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct Config {
     pub provider: String,
@@ -89,9 +89,9 @@ pub struct Config {
     pub embedding_auto_download: Option<bool>,
 }
 
-impl From<Config> for octos_ffi::RuntimeConfig {
+impl From<Config> for ra_ffi::RuntimeConfig {
     fn from(c: Config) -> Self {
-        octos_ffi::RuntimeConfig {
+        ra_ffi::RuntimeConfig {
             provider: c.provider,
             model: c.model,
             api_key: c.api_key,
@@ -117,7 +117,7 @@ impl From<Config> for octos_ffi::RuntimeConfig {
 /// weights.
 #[uniffi::export]
 pub fn embedding_model_status(data_dir: String) -> Result<String, OctosError> {
-    Ok(octos_ffi::embedding_model_status(std::path::Path::new(
+    Ok(ra_ffi::embedding_model_status(std::path::Path::new(
         &data_dir,
     ))?)
 }
@@ -131,13 +131,13 @@ pub fn embedding_model_status(data_dir: String) -> Result<String, OctosError> {
 /// `OCTOS_NO_MODEL_DOWNLOAD` is set), or the download fails to verify.
 #[uniffi::export]
 pub fn embedding_model_ensure(data_dir: String, download: bool) -> Result<String, OctosError> {
-    Ok(octos_ffi::embedding_model_ensure(
+    Ok(ra_ffi::embedding_model_ensure(
         std::path::Path::new(&data_dir),
         download,
     )?)
 }
 
-/// A one-shot task brief. Maps onto [`octos_ffi::TaskBrief`].
+/// A one-shot task brief. Maps onto [`ra_ffi::TaskBrief`].
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct Brief {
     pub prompt: String,
@@ -145,9 +145,9 @@ pub struct Brief {
     pub max_iterations: Option<u32>,
 }
 
-impl From<Brief> for octos_ffi::TaskBrief {
+impl From<Brief> for ra_ffi::TaskBrief {
     fn from(b: Brief) -> Self {
-        octos_ffi::TaskBrief {
+        ra_ffi::TaskBrief {
             prompt: b.prompt,
             max_iterations: b.max_iterations,
         }
@@ -164,8 +164,8 @@ pub struct TokenUsage {
     pub cache_write: u64,
 }
 
-impl From<octos_ffi::TokenUsage> for TokenUsage {
-    fn from(t: octos_ffi::TokenUsage) -> Self {
+impl From<ra_ffi::TokenUsage> for TokenUsage {
+    fn from(t: ra_ffi::TokenUsage) -> Self {
         TokenUsage {
             input: t.input,
             output: t.output,
@@ -184,8 +184,8 @@ pub struct TaskResult {
     pub tokens: TokenUsage,
 }
 
-impl From<octos_ffi::TaskResult> for TaskResult {
-    fn from(r: octos_ffi::TaskResult) -> Self {
+impl From<ra_ffi::TaskResult> for TaskResult {
+    fn from(r: ra_ffi::TaskResult) -> Self {
         TaskResult {
             output: r.output,
             iterations: r.iterations,
@@ -227,23 +227,23 @@ impl std::fmt::Display for OctosError {
             | OctosError::Embed { msg }
             | OctosError::Memory { msg } => f.write_str(msg),
             OctosError::NoEmbedder => f.write_str("no embedder configured"),
-            OctosError::Incomplete { .. } => f.write_str(octos_ffi::INCOMPLETE_RESPONSE_MESSAGE),
+            OctosError::Incomplete { .. } => f.write_str(ra_ffi::INCOMPLETE_RESPONSE_MESSAGE),
         }
     }
 }
 
 impl std::error::Error for OctosError {}
 
-impl From<octos_ffi::CoreError> for OctosError {
-    fn from(e: octos_ffi::CoreError) -> Self {
-        use octos_ffi::CoreError;
+impl From<ra_ffi::CoreError> for OctosError {
+    fn from(e: ra_ffi::CoreError) -> Self {
+        use ra_ffi::CoreError;
         // The caller's OWN key is already exact-scrubbed inside the core. Here we
         // additionally apply ra-ffi's heuristic redactor + length cap — the
         // SAME backstop the C-ABI runs in `set_last_error` — so a secret embedded
         // in a *provider* error body does not reach uniffi callers verbatim.
         // Applied ONLY at this facade boundary (never in the core), so the C
         // path's byte-for-byte `ra_last_error` output is unaffected.
-        let redact = octos_ffi::sanitize_error_text;
+        let redact = ra_ffi::sanitize_error_text;
         match e {
             CoreError::Config(msg) => OctosError::Config { msg: redact(&msg) },
             CoreError::Provider(msg) => OctosError::Provider { msg: redact(&msg) },
@@ -269,22 +269,22 @@ impl From<octos_ffi::CoreError> for OctosError {
 /// the single internal executor).
 #[derive(uniffi::Object)]
 pub struct Runtime {
-    inner: octos_ffi::RaRuntime,
+    inner: ra_ffi::RaRuntime,
 }
 
 #[uniffi::export]
 impl Runtime {
     /// Build a runtime from a [`Config`]. Resolves and pins the credential
-    /// exactly once inside the core (see [`octos_ffi::RaRuntime::from_config`]).
+    /// exactly once inside the core (see [`ra_ffi::RaRuntime::from_config`]).
     #[uniffi::constructor]
     pub fn new(config: Config) -> Result<Arc<Self>, OctosError> {
-        let inner = octos_ffi::RaRuntime::from_config(config.into())?;
+        let inner = ra_ffi::RaRuntime::from_config(config.into())?;
         Ok(Arc::new(Runtime { inner }))
     }
 
     /// Run a one-shot task and return its output + token usage.
     pub fn run_task(&self, brief: Brief) -> Result<TaskResult, OctosError> {
-        let native_brief: octos_ffi::TaskBrief = brief.into();
+        let native_brief: ra_ffi::TaskBrief = brief.into();
         let result = self.inner.run_task(&native_brief)?;
         Ok(result.into())
     }
@@ -301,14 +301,14 @@ impl Runtime {
     /// returns `{"inserted", "updated", "unchanged", "vectors_stored",
     /// "embedded"}`. At most 500 records per call; `kind: "knowledge"` is
     /// rejected; `trust` is forced to untrusted. See
-    /// [`octos_ffi::RaRuntime::memory_upsert`].
+    /// [`ra_ffi::RaRuntime::memory_upsert`].
     pub fn memory_upsert(&self, json: String) -> Result<String, OctosError> {
         Ok(self.inner.memory_upsert(&json)?)
     }
 
     /// Search the Recall index. `json` is `{"query", "kinds"?, "sources"?,
     /// "since"?, "until"?, "limit"?}`; returns `{"hits": [Hit…]}`. See
-    /// [`octos_ffi::RaRuntime::memory_search`].
+    /// [`ra_ffi::RaRuntime::memory_search`].
     pub fn memory_search(&self, json: String) -> Result<String, OctosError> {
         Ok(self.inner.memory_search(&json)?)
     }
@@ -328,7 +328,7 @@ impl Runtime {
 
 // Compile-time proof that the uniffi Object is `Send + Sync` — required for a
 // handle shared as `Arc<Runtime>` across foreign threads. It holds because
-// `octos_ffi::RaRuntime` is `Send + Sync` (a tokio runtime, `Arc<dyn
+// `ra_ffi::RaRuntime` is `Send + Sync` (a tokio runtime, `Arc<dyn
 // LlmProvider>` whose trait is `Send + Sync`, `Arc<EpisodeStore>`, the
 // `RwLock`-guarded `Arc<RecallStore>`, and plain data).
 // `#[derive(uniffi::Object)]` also requires this; the assertion just
@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn config_maps_to_runtime_config() {
         let cfg = sample_config();
-        let native: octos_ffi::RuntimeConfig = cfg.into();
+        let native: ra_ffi::RuntimeConfig = cfg.into();
         assert_eq!(native.provider, "openai");
         assert_eq!(native.model, "gpt-4o-mini");
         assert_eq!(native.api_key.as_deref(), Some("sk-uniffi-test-dummy"));
@@ -467,14 +467,14 @@ mod tests {
             recall_dimension: Some(128),
             ..sample_config()
         };
-        let native: octos_ffi::RuntimeConfig = cfg.into();
+        let native: ra_ffi::RuntimeConfig = cfg.into();
         assert_eq!(native.data_dir.as_deref(), Some("/tmp/ra-data"));
         assert_eq!(native.recall_dimension, Some(128));
     }
 
     #[test]
     fn memory_error_maps_and_redacts() {
-        use octos_ffi::CoreError;
+        use ra_ffi::CoreError;
         let err: OctosError = CoreError::Memory("no such record".into()).into();
         assert!(matches!(&err, OctosError::Memory { msg } if msg == "no such record"));
         assert_eq!(err.to_string(), "no such record");
@@ -538,7 +538,7 @@ mod tests {
             api_type: Some("anthropic".to_string()),
             ..sample_config()
         };
-        let native: octos_ffi::RuntimeConfig = cfg.into();
+        let native: ra_ffi::RuntimeConfig = cfg.into();
         assert_eq!(native.provider, "custom");
         assert_eq!(native.api_type.as_deref(), Some("anthropic"));
     }
@@ -549,14 +549,14 @@ mod tests {
             prompt: "hello".to_string(),
             max_iterations: Some(7),
         };
-        let native: octos_ffi::TaskBrief = brief.into();
+        let native: ra_ffi::TaskBrief = brief.into();
         assert_eq!(native.prompt, "hello");
         assert_eq!(native.max_iterations, Some(7));
     }
 
     #[test]
     fn core_error_variants_map_to_octos_error() {
-        use octos_ffi::CoreError;
+        use ra_ffi::CoreError;
         assert!(matches!(
             OctosError::from(CoreError::Config("c".into())),
             OctosError::Config { msg } if msg == "c"
@@ -587,7 +587,7 @@ mod tests {
 
     #[test]
     fn octos_error_from_core_error_redacts_secret_shaped_tokens() {
-        use octos_ffi::CoreError;
+        use ra_ffi::CoreError;
         // A provider error body can echo a credential the core did not know to
         // exact-scrub. The From<CoreError> conversion must apply ra-ffi's
         // heuristic redactor so it never reaches a uniffi caller verbatim.
@@ -605,10 +605,10 @@ mod tests {
 
     #[test]
     fn native_results_map_to_uniffi_records() {
-        let native = octos_ffi::TaskResult {
+        let native = ra_ffi::TaskResult {
             output: "done".to_string(),
             iterations: 2,
-            tokens: octos_ffi::TokenUsage {
+            tokens: ra_ffi::TokenUsage {
                 input: 10,
                 output: 20,
                 reasoning: 3,
@@ -629,11 +629,11 @@ mod tests {
     #[test]
     fn incomplete_error_preserves_payload_without_sanitizing_it_as_a_diagnostic() {
         let output = format!("  模型 partial\n{}", "actual output ".repeat(100));
-        let error = OctosError::from(octos_ffi::CoreError::Incomplete {
-            partial: octos_ffi::TaskResult {
+        let error = OctosError::from(ra_ffi::CoreError::Incomplete {
+            partial: ra_ffi::TaskResult {
                 output: output.clone(),
                 iterations: 2,
-                tokens: octos_ffi::TokenUsage {
+                tokens: ra_ffi::TokenUsage {
                     input: 18,
                     output: 8,
                     reasoning: 6,

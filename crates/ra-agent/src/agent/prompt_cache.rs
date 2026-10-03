@@ -7,8 +7,8 @@
 //! adapters can later add their own normalized manifests without logging raw
 //! prompt or tool-schema content.
 
-use octos_core::Message;
-use octos_llm::{PromptCacheContext, SemanticCheckpointHint, ToolSpec};
+use ra_core::Message;
+use ra_llm::{PromptCacheContext, SemanticCheckpointHint, ToolSpec};
 use serde::Serialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -88,7 +88,7 @@ pub(super) fn fingerprint_prompt(messages: &[Message], tools: &[ToolSpec]) -> Pr
             hash: hash_json(&stable),
             estimated_tokens: estimate_json_tokens(&stable),
         };
-        if in_leading_system_run && message.role == octos_core::MessageRole::System {
+        if in_leading_system_run && message.role == ra_core::MessageRole::System {
             system_segments.push(segment);
         } else {
             in_leading_system_run = false;
@@ -252,21 +252,21 @@ fn semantic_boundary_kinds(messages: &[Message]) -> Vec<Option<&'static str>> {
     // a tail System row is a conversation row that carries no boundary.
     let leading_system_rows = messages
         .iter()
-        .take_while(|message| message.role == octos_core::MessageRole::System)
+        .take_while(|message| message.role == ra_core::MessageRole::System)
         .count();
     let conversation = messages[leading_system_rows..].iter().collect::<Vec<_>>();
     conversation
         .iter()
         .enumerate()
         .map(|(index, message)| match message.role {
-            octos_core::MessageRole::User => {
+            ra_core::MessageRole::User => {
                 if message.content.trim_start().starts_with("<context_event") {
                     Some("context_event")
                 } else {
                     Some("user_turn")
                 }
             }
-            octos_core::MessageRole::Assistant => {
+            ra_core::MessageRole::Assistant => {
                 if message
                     .tool_calls
                     .as_ref()
@@ -277,7 +277,7 @@ fn semantic_boundary_kinds(messages: &[Message]) -> Vec<Option<&'static str>> {
                     Some("assistant_final")
                 }
             }
-            octos_core::MessageRole::Tool => {
+            ra_core::MessageRole::Tool => {
                 let Some(call_index) = (0..index).rev().find(|candidate| {
                     conversation[*candidate]
                         .tool_calls
@@ -285,7 +285,7 @@ fn semantic_boundary_kinds(messages: &[Message]) -> Vec<Option<&'static str>> {
                         .is_some_and(|calls| !calls.is_empty())
                         && conversation[*candidate + 1..index]
                             .iter()
-                            .all(|row| row.role == octos_core::MessageRole::Tool)
+                            .all(|row| row.role == ra_core::MessageRole::Tool)
                 }) else {
                     return Some("orphan_tool_output");
                 };
@@ -302,7 +302,7 @@ fn semantic_boundary_kinds(messages: &[Message]) -> Vec<Option<&'static str>> {
                     .collect::<std::collections::HashSet<_>>();
                 expected.is_subset(&observed).then_some("tool_interaction")
             }
-            octos_core::MessageRole::System => None,
+            ra_core::MessageRole::System => None,
         })
         .collect()
 }
@@ -377,7 +377,7 @@ fn hash_json(value: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::{MessageRole, ToolCall};
+    use ra_core::{MessageRole, ToolCall};
 
     fn tool(name: &str, description: &str) -> ToolSpec {
         ToolSpec {

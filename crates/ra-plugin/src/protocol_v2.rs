@@ -245,7 +245,7 @@ pub enum LineParse {
 /// # Examples
 ///
 /// ```
-/// use octos_plugin::protocol_v2::{parse_event_line, LineParse, ProtocolV2Event};
+/// use ra_plugin::protocol_v2::{parse_event_line, LineParse, ProtocolV2Event};
 ///
 /// // v2 progress event
 /// match parse_event_line(r#"{"type":"progress","stage":"init","message":"go"}"#) {

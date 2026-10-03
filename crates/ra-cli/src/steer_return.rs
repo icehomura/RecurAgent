@@ -6,8 +6,8 @@
 //! `transition_to_terminal_settling_steers`) drains the buffer, calls this
 //! and sends it — always BEFORE the terminal frame (`event.turn_steer_dropped.v1`).
 
-use octos_core::SessionKey;
-use octos_core::ui_protocol::{TurnId, TurnSteerDroppedEvent, UiNotification};
+use ra_core::SessionKey;
+use ra_core::ui_protocol::{TurnId, TurnSteerDroppedEvent, UiNotification};
 
 // No per-item allow needed: the only production reader is the allow-covered
 // `leftover_steer_notification` below, and rustc seeds liveness from
@@ -49,7 +49,7 @@ pub(crate) fn leftover_steer_notification(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::ui_protocol::{TurnCompletedEvent, TurnErrorEvent, methods};
+    use ra_core::ui_protocol::{TurnCompletedEvent, TurnErrorEvent, methods};
 
     fn ids() -> (SessionKey, TurnId) {
         (SessionKey("local:steer".into()), TurnId::new())

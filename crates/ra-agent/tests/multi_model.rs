@@ -8,13 +8,13 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use octos_agent::{Agent, AgentConfig, SpawnTool, Tool, ToolRegistry};
-use octos_core::{AgentId, Message, ToolCall};
-use octos_llm::{
+use ra_agent::{Agent, AgentConfig, SpawnTool, Tool, ToolRegistry};
+use ra_core::{AgentId, Message, ToolCall};
+use ra_llm::{
     ChatConfig, ChatResponse, ContextWindowOverride, LlmProvider, ProviderRouter, StopReason,
     TokenUsage, ToolSpec,
 };
-use octos_memory::EpisodeStore;
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 
 // ---------------------------------------------------------------------------
@@ -605,7 +605,7 @@ async fn test_context_window_override_subagent() {
     // Build long history to pressure context
     let history: Vec<Message> = (0..30)
         .map(|i| Message {
-            role: octos_core::MessageRole::User,
+            role: ra_core::MessageRole::User,
             content: format!(
                 "This is message number {i} with padding text to consume tokens in context window."
             ),
@@ -1027,7 +1027,7 @@ async fn test_custom_system_prompt_reaches_subagent() {
     let first_call = &captured[0];
     let system_msg = first_call
         .iter()
-        .find(|m| m.role == octos_core::MessageRole::System)
+        .find(|m| m.role == ra_core::MessageRole::System)
         .expect("sub-agent should receive a system message");
 
     // additional_instructions are appended to the default worker prompt
@@ -1087,7 +1087,7 @@ async fn test_default_system_prompt_without_override() {
 
     let system_msg = captured[0]
         .iter()
-        .find(|m| m.role == octos_core::MessageRole::System)
+        .find(|m| m.role == ra_core::MessageRole::System)
         .expect("sub-agent should receive a system message");
 
     assert!(

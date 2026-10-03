@@ -2,7 +2,7 @@
 
 use std::time::{Duration, Instant};
 
-use octos_core::TokenUsage;
+use ra_core::TokenUsage;
 use tracing::{info, warn};
 
 use super::Agent;
@@ -81,7 +81,7 @@ impl BudgetStop {
 }
 
 /// Tokens counted against the turn token budget: everything the provider
-/// processed. Per the [`octos_llm::TokenUsage`] contract, cache counts are
+/// processed. Per the [`ra_llm::TokenUsage`] contract, cache counts are
 /// DISJOINT from `input_tokens` on every provider (total prompt = input +
 /// cache_read + cache_write; inclusive wire formats are normalized at their
 /// parse boundary), so this sum is exact. Counting only input+output would
@@ -359,9 +359,9 @@ mod tests {
 
     async fn test_agent(max_timeout: Option<Duration>) -> super::Agent {
         use super::super::Agent;
-        use octos_core::AgentId;
-        use octos_llm::{ChatResponse, LlmProvider, ToolSpec};
-        use octos_memory::EpisodeStore;
+        use ra_core::AgentId;
+        use ra_llm::{ChatResponse, LlmProvider, ToolSpec};
+        use ra_memory::EpisodeStore;
         use std::sync::Arc;
 
         struct NoopProvider;
@@ -370,9 +370,9 @@ mod tests {
         impl LlmProvider for NoopProvider {
             async fn chat(
                 &self,
-                _messages: &[octos_core::Message],
+                _messages: &[ra_core::Message],
                 _tools: &[ToolSpec],
-                _config: &octos_llm::ChatConfig,
+                _config: &ra_llm::ChatConfig,
             ) -> eyre::Result<ChatResponse> {
                 eyre::bail!("not used in budget tests")
             }
@@ -482,7 +482,7 @@ mod tests {
             content: "test".into(),
             reasoning_content: None,
             provider_metadata: None,
-            token_usage: octos_core::TokenUsage {
+            token_usage: ra_core::TokenUsage {
                 input_tokens: 10,
                 output_tokens: 20,
                 ..Default::default()
@@ -515,7 +515,7 @@ mod tests {
 fn git_in(dir: &std::path::Path, args: &[&str]) -> Option<String> {
     // Kernel-side git in a repo the agent can write: repository-scope hooks,
     // fsmonitor and filter drivers are overridden (see `agent_repo_git`).
-    octos_core::agent_repo_git::agent_repo_git(dir)
+    ra_core::agent_repo_git::agent_repo_git(dir)
         .args(args)
         .output()
         .ok()

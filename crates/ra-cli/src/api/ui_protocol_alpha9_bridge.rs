@@ -44,9 +44,9 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use octos_agent::BackgroundResultPayload;
-use octos_core::SessionKey;
-use octos_core::ui_protocol::{
+use ra_agent::BackgroundResultPayload;
+use ra_core::SessionKey;
+use ra_core::ui_protocol::{
     FileAttachedEvent, SessionEventBridgedEvent, TurnCompletedEvent, TurnId, TurnSessionResult,
     TurnStartedEvent, UiNotification, VisualFailedEvent, VisualGeneratingEvent,
     VisualSucceededEvent, VoiceExitEvent,
@@ -468,7 +468,7 @@ pub(super) fn emit_session_event(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::ui_protocol::methods;
+    use ra_core::ui_protocol::methods;
     use serde_json::json;
 
     #[test]
@@ -956,7 +956,7 @@ mod tests {
         BackgroundResultPayload {
             task_label: task_label.to_string(),
             content: format!("✓ {task_label} completed"),
-            kind: octos_agent::BackgroundResultKind::Notification,
+            kind: ra_agent::BackgroundResultKind::Notification,
             media,
             envelope_media,
             originating_thread_id: Some("test-thread".into()),

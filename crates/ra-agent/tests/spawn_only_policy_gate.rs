@@ -26,11 +26,11 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use octos_agent::tools::ToolPolicy;
-use octos_agent::{Agent, AgentConfig, Tool, ToolRegistry, ToolResult};
-use octos_core::{AgentId, Message, ToolCall};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_agent::tools::ToolPolicy;
+use ra_agent::{Agent, AgentConfig, Tool, ToolRegistry, ToolResult};
+use ra_core::{AgentId, Message, ToolCall};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 
 // =========================================================================
@@ -207,7 +207,7 @@ async fn policy_denies_run_pipeline_via_spawn_only_path() {
     // Tool message in the turn's outbound messages tagged with the
     // [POLICY DENIED] marker the intercept produces.
     let denied = response.messages.iter().any(|m| {
-        matches!(m.role, octos_core::MessageRole::Tool)
+        matches!(m.role, ra_core::MessageRole::Tool)
             && m.content.contains("[POLICY DENIED]")
             && m.content.contains("blocked_bg")
     });
@@ -370,7 +370,7 @@ async fn apply_policy_then_stale_call_fails_synchronously_not_async() {
         .messages
         .iter()
         .find(|m| {
-            matches!(m.role, octos_core::MessageRole::Tool)
+            matches!(m.role, ra_core::MessageRole::Tool)
                 && m.tool_call_id
                     .as_deref()
                     .is_some_and(|id| id.contains("call-stale"))

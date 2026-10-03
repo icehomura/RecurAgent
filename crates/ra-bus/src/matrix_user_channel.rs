@@ -22,7 +22,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use eyre::{Result, WrapErr, eyre};
 use futures::StreamExt;
-use octos_core::{InboundMessage, OutboundMessage};
+use ra_core::{InboundMessage, OutboundMessage};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::sync::{Mutex, mpsc};
@@ -1353,7 +1353,7 @@ impl MatrixUserChannel {
                 media: vec![],
                 metadata: json!({}),
                 message_id: msg.event_id,
-                origin: octos_core::MessageOrigin::ExternalUser,
+                origin: ra_core::MessageOrigin::ExternalUser,
             };
             if inbound_tx.send(inbound).await.is_err() {
                 return Err(eyre!("inbound channel closed"));

@@ -9,7 +9,7 @@
 //! Run with: `wasm-pack test --node`
 #![cfg(target_arch = "wasm32")]
 
-use octos_wasm::{
+use ra_wasm::{
     decode_ui_frame, encode_rpc_notification, encode_rpc_request, encode_rpc_request_ndjson,
     max_text_frame_bytes, message_assistant, message_system, message_user, new_client_message_id,
     new_task_id, new_thread_id_rooted_at, new_turn_id, safe_filename, session_key_new,

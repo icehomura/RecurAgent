@@ -13,10 +13,10 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-use octos_agent::permissions::SafetyTier;
-use octos_agent::plugins::{activate_skill, run_shutdown_phase};
-use octos_agent::tools::ToolRegistry;
-use octos_agent::tools::robot_groups;
+use ra_agent::permissions::SafetyTier;
+use ra_agent::plugins::{activate_skill, run_shutdown_phase};
+use ra_agent::tools::ToolRegistry;
+use ra_agent::tools::robot_groups;
 use serde_json::json;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};

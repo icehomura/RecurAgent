@@ -11,21 +11,21 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 
 use async_trait::async_trait;
-use octos_agent::compaction::{
+use ra_agent::compaction::{
     CompactionPhase, CompactionPolicy, CompactionRunner, ExtractiveSummarizer, PreservedArtifact,
     Summarizer, TOOL_RESULT_PLACEHOLDER_SCHEMA_VERSION, ToolResultPlaceholder,
     ToolResultPlaceholderError,
 };
-use octos_agent::workspace_policy::{
+use ra_agent::workspace_policy::{
     WorkspaceArtifactsPolicy, WorkspacePolicy, WorkspacePolicyKind, WorkspacePolicyWorkspace,
     WorkspaceSnapshotTrigger, WorkspaceTrackingPolicy, WorkspaceVersionControlPolicy,
     WorkspaceVersionControlProvider,
 };
-use octos_agent::{Agent, ToolRegistry};
-use octos_agent::{COMPACTION_POLICY_SCHEMA_VERSION, WORKSPACE_POLICY_SCHEMA_VERSION};
-use octos_core::{AgentId, Message, MessageRole, ToolCall};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_agent::{Agent, ToolRegistry};
+use ra_agent::{COMPACTION_POLICY_SCHEMA_VERSION, WORKSPACE_POLICY_SCHEMA_VERSION};
+use ra_core::{AgentId, Message, MessageRole, ToolCall};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 
 struct CountingProvider {
     calls: Arc<AtomicUsize>,
@@ -175,7 +175,7 @@ fn should_keep_existing_extractive_behavior_when_policy_absent() {
         tool_result("tc1", "bar contents line"),
     ];
 
-    let summary = octos_agent::compaction::compact_messages(&messages, 10_000);
+    let summary = ra_agent::compaction::compact_messages(&messages, 10_000);
     assert!(summary.contains("Conversation Summary"));
     assert!(summary.contains("> User: Please summarise foo.txt"));
     assert!(summary.contains("Called read_file"));

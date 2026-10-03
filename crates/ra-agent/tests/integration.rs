@@ -3,10 +3,10 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use octos_agent::{Agent, AgentConfig, ToolRegistry};
-use octos_core::{AgentId, Message, ToolCall};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_agent::{Agent, AgentConfig, ToolRegistry};
+use ra_core::{AgentId, Message, ToolCall};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 
 /// Mock LLM provider that returns scripted responses in FIFO order.
@@ -253,7 +253,7 @@ async fn test_context_trimming() {
     // Build long history — each message ~100 chars (~25 tokens)
     let history: Vec<Message> = (0..30)
         .map(|i| Message {
-            role: octos_core::MessageRole::User,
+            role: ra_core::MessageRole::User,
             content: format!("This is message number {i} with some padding text to make it longer for token estimation purposes."),
             media: vec![],
             tool_calls: None,

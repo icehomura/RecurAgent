@@ -5,8 +5,8 @@
 use std::path::{Path, PathBuf};
 
 use eyre::{Result, WrapErr};
-use octos_core::{Message, MessageRole, TokenUsage};
-use octos_llm::{ChatConfig, LlmProvider};
+use ra_core::{Message, MessageRole, TokenUsage};
+use ra_llm::{ChatConfig, LlmProvider};
 use tracing::{info, warn};
 
 /// Maximum chars per LLM batch (~80K chars ≈ ~20K tokens).
@@ -162,7 +162,7 @@ pub async fn extract_findings(
         temperature: Some(0.0),
         // One-shot: each map-reduce prompt is unique and sent exactly once —
         // opt out of the 1.25x cache-write premium.
-        cache_retention: octos_llm::CacheRetention::None,
+        cache_retention: ra_llm::CacheRetention::None,
         ..Default::default()
     };
 
@@ -233,7 +233,7 @@ pub async fn merge_findings(
         temperature: Some(0.0),
         // One-shot: each map-reduce prompt is unique and sent exactly once —
         // opt out of the 1.25x cache-write premium.
-        cache_retention: octos_llm::CacheRetention::None,
+        cache_retention: ra_llm::CacheRetention::None,
         ..Default::default()
     };
 
@@ -367,7 +367,7 @@ mod tests {
     use super::*;
 
     struct RetentionProbeProvider {
-        seen: std::sync::Mutex<Option<octos_llm::CacheRetention>>,
+        seen: std::sync::Mutex<Option<ra_llm::CacheRetention>>,
     }
 
     #[async_trait::async_trait]
@@ -375,16 +375,16 @@ mod tests {
         async fn chat(
             &self,
             _messages: &[Message],
-            _tools: &[octos_llm::ToolSpec],
+            _tools: &[ra_llm::ToolSpec],
             config: &ChatConfig,
-        ) -> Result<octos_llm::ChatResponse> {
+        ) -> Result<ra_llm::ChatResponse> {
             *self.seen.lock().unwrap() = Some(config.cache_retention);
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: Some("findings".into()),
                 reasoning_content: None,
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: None,
             })
         }
@@ -392,9 +392,9 @@ mod tests {
         async fn chat_stream(
             &self,
             _messages: &[Message],
-            _tools: &[octos_llm::ToolSpec],
+            _tools: &[ra_llm::ToolSpec],
             _config: &ChatConfig,
-        ) -> Result<octos_llm::ChatStream> {
+        ) -> Result<ra_llm::ChatStream> {
             unimplemented!("probe does not stream")
         }
 
@@ -420,7 +420,7 @@ mod tests {
             .expect("probe provider yields findings");
         assert_eq!(
             *probe.seen.lock().unwrap(),
-            Some(octos_llm::CacheRetention::None),
+            Some(ra_llm::CacheRetention::None),
             "one-shot research batch analysis must not request cache writes"
         );
     }
@@ -435,7 +435,7 @@ mod tests {
             .expect("probe provider yields a merged report");
         assert_eq!(
             *probe.seen.lock().unwrap(),
-            Some(octos_llm::CacheRetention::None),
+            Some(ra_llm::CacheRetention::None),
             "one-shot research synthesis must not request cache writes"
         );
     }

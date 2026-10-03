@@ -1607,8 +1607,8 @@ mod tests {
     #[test]
     fn should_keep_the_full_episode_summary_as_body() {
         let ep = crate::Episode::new(
-            octos_core::TaskId::new(),
-            octos_core::AgentId::new("a"),
+            ra_core::TaskId::new(),
+            ra_core::AgentId::new("a"),
             std::path::PathBuf::from("/tmp"),
             "Fixed the parser.\n".to_string() + &"More detail. ".repeat(40),
             crate::EpisodeOutcome::Success,

@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_core::Message;
+use ra_core::Message;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
@@ -2899,7 +2899,7 @@ fn latest_user_text(messages: &[Message]) -> String {
     if let Some(msg) = messages
         .iter()
         .rev()
-        .find(|m| matches!(m.role, octos_core::MessageRole::User))
+        .find(|m| matches!(m.role, ra_core::MessageRole::User))
     {
         return msg.content.clone();
     }

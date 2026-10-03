@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
-use octos_memory::{MemoryStore, RecallStore, Record, RecordKind, Trust};
+use ra_memory::{MemoryStore, RecallStore, Record, RecordKind, Trust};
 use serde::Deserialize;
 
 use super::{Tool, ToolResult};
@@ -126,11 +126,11 @@ impl Tool for MemoryLoadTool {
         } else {
             None
         };
-        let limit = octos_core::tool_output_limit("memory_load");
+        let limit = ra_core::tool_output_limit("memory_load");
         let mut output = render_record(&record, page);
         if output.len() > limit {
             output =
-                octos_core::truncated_utf8(&output, limit.saturating_sub(64), "\n\n[truncated]");
+                ra_core::truncated_utf8(&output, limit.saturating_sub(64), "\n\n[truncated]");
         }
         Ok(ToolResult {
             output,
@@ -143,7 +143,7 @@ impl Tool for MemoryLoadTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_memory::RecallConfig;
+    use ra_memory::RecallConfig;
 
     #[tokio::test]
     async fn should_load_bank_page_document_abstract_and_count_visits() {
@@ -162,7 +162,7 @@ mod tests {
             )
             .unwrap(),
         );
-        let page = octos_memory::record_from_bank_page(
+        let page = ra_memory::record_from_bank_page(
             "sam-lee",
             "Hiking friend since 2024.",
             chrono::Utc::now(),

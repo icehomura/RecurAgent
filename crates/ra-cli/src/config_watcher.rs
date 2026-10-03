@@ -576,7 +576,7 @@ mod tests {
         std::fs::write(&profile_path, PROFILE_JSON).unwrap();
         let defaults_path = dir.path().join("profile-defaults.json");
         let defaults = ProfileConfig {
-            tool_policy: Some(octos_agent::ToolPolicy {
+            tool_policy: Some(ra_agent::ToolPolicy {
                 deny: vec!["bash".into()],
                 ..Default::default()
             }),
@@ -647,9 +647,9 @@ mod tests {
 
     // ---- FIX 3: profile-defaults.json watching + fail-safe ----
 
-    fn default_hook(cmd: &str) -> octos_agent::HookConfig {
-        octos_agent::HookConfig {
-            event: octos_agent::HookEvent::BeforeToolCall,
+    fn default_hook(cmd: &str) -> ra_agent::HookConfig {
+        ra_agent::HookConfig {
+            event: ra_agent::HookEvent::BeforeToolCall,
             command: vec![cmd.to_string()],
             timeout_ms: 5000,
             tool_filter: Vec::new(),

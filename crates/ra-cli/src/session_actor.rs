@@ -12,16 +12,16 @@ use std::sync::{Mutex as StdMutex, OnceLock, Weak};
 use std::time::{Duration, Instant};
 
 use metrics::counter;
-use octos_agent::compaction::CompactionRunner;
-use octos_agent::tools::spawn::{
+use ra_agent::compaction::CompactionRunner;
+use ra_agent::tools::spawn::{
     ChildPromptContextRequest, ChildSessionFailureAction, ChildSessionLifecycleKind,
     ChildSessionLifecyclePayload,
 };
-use octos_agent::tools::{
+use ra_agent::tools::{
     BackgroundResultKind, BackgroundResultPayload, CheckBackgroundTasksTool, MessageTool,
     ReadTaskOutputTool, SendFileTool, SpawnTool, ToolPolicy, ToolRegistry,
 };
-use octos_agent::{
+use ra_agent::{
     Agent, AgentConfig, AgentVerifierConfig, ApprovalDecision, ApprovalRequestEnvelope,
     ApprovalResponsePayload, ApprovalTimeoutBehavior, CompactionSummarizerKind,
     ConversationResponse, HookContext, HookExecutor, HookPayload, HookResult,
@@ -30,23 +30,23 @@ use octos_agent::{
     TaskSupervisor, TokenTracker, TurnAttachmentContext, WorkspacePolicy, read_workspace_policy,
     workspace_policy_path, write_workspace_policy,
 };
-use octos_bus::{
+use ra_bus::{
     ActiveSessionStore, SessionHandle, SessionManager,
     session::{
         ChildSessionContract, ChildSessionFailureAction as PersistedChildSessionFailureAction,
         ChildSessionJoinState, ChildSessionTerminalState,
     },
 };
-use octos_core::AgentId;
-use octos_core::{
+use ra_core::AgentId;
+use ra_core::{
     InboundMessage, MAIN_PROFILE_ID, METADATA_SENDER_USER_ID, Message, MessageRole,
     OutboundMessage, SessionKey, SessionScope,
 };
-use octos_llm::{
+use ra_llm::{
     AdaptiveMode, AdaptiveRouter, EmbeddingProvider, FailoverEvent, LlmProvider, ProviderRouter,
     ResponsivenessObserver, pricing::model_pricing,
 };
-use octos_memory::{EpisodeStore, MemoryStore};
+use ra_memory::{EpisodeStore, MemoryStore};
 use tokio::sync::{Mutex, RwLock, Semaphore, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tracing::{debug, info, warn};
@@ -71,7 +71,7 @@ use crate::status_layers::{StatusComposer, UserStatusConfig};
 /// its `tool_call_id` without re-execution.
 struct SessionToolOutputLedger(Arc<StdMutex<ContextManager>>);
 
-impl octos_agent::tools::ToolOutputLedger for SessionToolOutputLedger {
+impl ra_agent::tools::ToolOutputLedger for SessionToolOutputLedger {
     fn fetch(&self, tool_call_id: &str) -> Option<String> {
         self.0
             .lock()
@@ -461,7 +461,7 @@ fn build_forked_child_context_for_session_actor(
 }
 
 /// #1020 / M17-B — Build a [`ChildPromptContextManagerFactory`] suitable
-/// for [`octos_agent::DelegateTool`] that snapshots the parent's
+/// for [`ra_agent::DelegateTool`] that snapshots the parent's
 /// `ContextManager` per child via [`build_forked_child_context_for_session_actor`].
 ///
 /// Mirrors the SpawnTool factory wiring at
@@ -478,9 +478,9 @@ pub(crate) fn build_session_actor_delegate_tool_factory(
     parent_manager: Arc<StdMutex<ContextManager>>,
     parent_data_dir: PathBuf,
     parent_session_key: SessionKey,
-) -> octos_agent::tools::spawn::ChildPromptContextManagerFactory {
+) -> ra_agent::tools::spawn::ChildPromptContextManagerFactory {
     Arc::new(
-        move |request: octos_agent::tools::spawn::ChildPromptContextRequest| {
+        move |request: ra_agent::tools::spawn::ChildPromptContextRequest| {
             let (child_session_key, child_manager) = build_forked_child_context_for_session_actor(
                 &parent_manager,
                 &parent_data_dir,
@@ -607,8 +607,8 @@ fn covered_prompt_message_indices(messages: &[Message], known_messages: &[Messag
 }
 
 fn tool_call_slices_match(
-    left: Option<&[octos_core::ToolCall]>,
-    right: Option<&[octos_core::ToolCall]>,
+    left: Option<&[ra_core::ToolCall]>,
+    right: Option<&[ra_core::ToolCall]>,
 ) -> bool {
     match (left, right) {
         (None, None) => true,
@@ -893,7 +893,7 @@ async fn persist_assistant_message(
     };
     let mut assistant_msg = match resolved_thread_id {
         Some(tid) if !tid.is_empty() => {
-            Message::assistant_with_thread(content, octos_core::ThreadId::new(tid))
+            Message::assistant_with_thread(content, ra_core::ThreadId::new(tid))
         }
         _ => {
             // Orphan assistant (no user in history). Synthesize a stable
@@ -902,7 +902,7 @@ async fn persist_assistant_message(
             // uses UUIDv7 for temporal ordering. Rare: only fires for
             // System-primer transcripts.
             let synth = uuid::Uuid::now_v7().to_string();
-            Message::assistant_with_thread(content, octos_core::ThreadId::new(synth))
+            Message::assistant_with_thread(content, ra_core::ThreadId::new(synth))
         }
     };
     assistant_msg.media = media;
@@ -922,7 +922,7 @@ async fn persist_assistant_message(
     // disk write commits we mirror the message into the actor's local Vec
     // so subsequent `get_history` reads stay consistent.
     let mut handle = session_handle.lock().await;
-    match octos_bus::session::persist_message_through_canonical_path(
+    match ra_bus::session::persist_message_through_canonical_path(
         data_dir,
         session_key,
         assistant_msg.clone(),
@@ -1067,7 +1067,7 @@ fn approval_paths_summary(paths: &[PathBuf]) -> String {
 fn build_approval_continuation_prompt(
     pending: &PendingApproval,
     approved_by: &str,
-    result: &octos_agent::tools::ToolResult,
+    result: &ra_agent::tools::ToolResult,
 ) -> String {
     let status = if result.success { "success" } else { "failure" };
     let output = if result.output.trim().is_empty() {
@@ -1100,7 +1100,7 @@ fn build_approval_continuation_inbound(
     chat_id: &str,
     pending: &PendingApproval,
     approved_by: &str,
-    result: &octos_agent::tools::ToolResult,
+    result: &ra_agent::tools::ToolResult,
 ) -> InboundMessage {
     let mut metadata = serde_json::Map::new();
     metadata.insert(
@@ -1147,7 +1147,7 @@ fn build_approval_continuation_inbound(
         media: vec![],
         metadata: serde_json::Value::Object(metadata),
         message_id: None,
-        origin: octos_core::MessageOrigin::Synthetic,
+        origin: ra_core::MessageOrigin::Synthetic,
     }
 }
 
@@ -1545,14 +1545,14 @@ async fn persist_child_session_lifecycle(
             // own stale handles silently erase each other's contract (the
             // stuck-un-Joined race). The helper holds the per-key persist
             // lock across open→mutate→rewrite.
-            let _ = octos_bus::session::upsert_child_contract_through_canonical_path(
+            let _ = ra_bus::session::upsert_child_contract_through_canonical_path(
                 data_dir,
                 &child_key,
                 contract.clone(),
             )
             .await?;
             if parent_exists {
-                let _ = octos_bus::session::upsert_child_contract_through_canonical_path(
+                let _ = ra_bus::session::upsert_child_contract_through_canonical_path(
                     data_dir,
                     &parent_key,
                     contract,
@@ -1594,7 +1594,7 @@ async fn persist_child_session_lifecycle(
                 // thread_id from the child's history (or synthesize
                 // a UUIDv7 if the child is brand new).
                 let tid = fallback_thread_id_for_assistant(&child.session().messages);
-                let note_msg = Message::assistant_with_thread(note, octos_core::ThreadId::new(tid));
+                let note_msg = Message::assistant_with_thread(note, ra_core::ThreadId::new(tid));
                 child.add_message(note_msg).await?;
             }
             let contract = ChildSessionContract {
@@ -1621,14 +1621,14 @@ async fn persist_child_session_lifecycle(
             // is the production-documented race: two children completing
             // together each rewrote the parent from a stale snapshot, and the
             // loser's terminal contract reverted to pre-terminal.
-            let _ = octos_bus::session::upsert_child_contract_through_canonical_path(
+            let _ = ra_bus::session::upsert_child_contract_through_canonical_path(
                 data_dir,
                 &child_key,
                 contract.clone(),
             )
             .await?;
             if parent_exists {
-                let _ = octos_bus::session::upsert_child_contract_through_canonical_path(
+                let _ = ra_bus::session::upsert_child_contract_through_canonical_path(
                     data_dir,
                     &parent_key,
                     contract,
@@ -1713,7 +1713,7 @@ struct SessionTaskQueryEntry {
 }
 
 fn task_response_path(data_dir: &Path, path: &str) -> String {
-    octos_bus::file_handle::encode_profile_file_handle(data_dir, Path::new(path))
+    ra_bus::file_handle::encode_profile_file_handle(data_dir, Path::new(path))
         .unwrap_or_else(|| path.to_string())
 }
 
@@ -1738,7 +1738,7 @@ fn task_runtime_detail_for_response(
 
 fn sanitize_task_for_response(
     data_dir: &Path,
-    task: &octos_agent::BackgroundTask,
+    task: &ra_agent::BackgroundTask,
 ) -> serde_json::Value {
     let (runtime_detail, workflow_kind, current_phase) =
         task_runtime_detail_for_response(task.runtime_detail.as_deref());
@@ -1811,7 +1811,7 @@ fn forward_task_status_to_actor_inbox(
     orchestrator: &InProcessAgentOrchestrator,
     tx: &tokio::sync::mpsc::Sender<ActorMessage>,
     data_dir: &Path,
-    task: &octos_agent::BackgroundTask,
+    task: &ra_agent::BackgroundTask,
 ) {
     // Channel/gateway SessionActor keys carry the profile
     // (`profile:channel:chat`), so the key-derived fallback inside
@@ -1925,7 +1925,7 @@ impl SessionTaskQueryStore {
 
     /// Return the JSON task list for `session_key` and every reachable
     /// descendant session. The walk follows each task's
-    /// [`octos_agent::BackgroundTask::child_session_key`] to the next
+    /// [`ra_agent::BackgroundTask::child_session_key`] to the next
     /// supervisor (when one is registered and still alive) so that, e.g., a
     /// `run_pipeline` task running inside a child session shows up in its
     /// parent's `/api/sessions/:id/tasks` view. Without this, UIs cannot
@@ -1972,7 +1972,7 @@ impl SessionTaskQueryStore {
         serde_json::Value::Array(tasks)
     }
 
-    /// C8 / GAP A: return the raw [`octos_agent::BackgroundTask`] snapshots for
+    /// C8 / GAP A: return the raw [`ra_agent::BackgroundTask`] snapshots for
     /// `session_key` (and every reachable descendant session), each paired with
     /// the owning supervisor's `data_dir` for path encoding. Mirrors
     /// [`Self::query_json`]'s breadth-first traversal but yields the raw task
@@ -1985,8 +1985,8 @@ impl SessionTaskQueryStore {
     pub fn raw_tasks_for_session(
         &self,
         session_key: &str,
-    ) -> Vec<(octos_agent::BackgroundTask, PathBuf)> {
-        let mut tasks: Vec<(octos_agent::BackgroundTask, PathBuf)> = Vec::new();
+    ) -> Vec<(ra_agent::BackgroundTask, PathBuf)> {
+        let mut tasks: Vec<(ra_agent::BackgroundTask, PathBuf)> = Vec::new();
         let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
         let mut queue: std::collections::VecDeque<String> = std::collections::VecDeque::new();
         queue.push_back(session_key.to_string());
@@ -2025,7 +2025,7 @@ impl SessionTaskQueryStore {
     /// Walks every live supervisor (pruning dropped ones) until it finds
     /// the task. When no supervisor knows about `task_id`, returns
     /// `Err(TaskCancelError::NotFound)`.
-    pub fn cancel_task(&self, task_id: &str) -> Result<(), octos_agent::TaskCancelError> {
+    pub fn cancel_task(&self, task_id: &str) -> Result<(), ra_agent::TaskCancelError> {
         for supervisor in self.live_supervisors() {
             // Freshen this task from the ledger first (codex P2): a stale
             // restored `Running` copy in a later supervisor must not accept a
@@ -2036,7 +2036,7 @@ impl SessionTaskQueryStore {
                 return supervisor.cancel(task_id);
             }
         }
-        Err(octos_agent::TaskCancelError::NotFound)
+        Err(ra_agent::TaskCancelError::NotFound)
     }
 
     /// M7.9 / W2: locate the supervisor owning `task_id` and forward
@@ -2045,8 +2045,8 @@ impl SessionTaskQueryStore {
     pub fn relaunch_task(
         &self,
         task_id: &str,
-        opts: octos_agent::RelaunchOpts,
-    ) -> Result<String, octos_agent::TaskRelaunchError> {
+        opts: ra_agent::RelaunchOpts,
+    ) -> Result<String, ra_agent::TaskRelaunchError> {
         for supervisor in self.live_supervisors() {
             // Freshen from the ledger first (codex P2) so a stale cross-turn
             // copy doesn't drive a relaunch off outdated state.
@@ -2055,7 +2055,7 @@ impl SessionTaskQueryStore {
                 return supervisor.relaunch(task_id, opts);
             }
         }
-        Err(octos_agent::TaskRelaunchError::NotFound)
+        Err(ra_agent::TaskRelaunchError::NotFound)
     }
 
     /// Snapshot live supervisors, pruning dropped weak refs. Shared
@@ -2400,7 +2400,7 @@ async fn snapshot_workspace_turn_for_path(
     let turn_summary = git_turn_summary(turn_summary);
 
     match tokio::task::spawn_blocking(move || {
-        octos_agent::snapshot_workspace_turn(&workspace_root, &turn_summary)
+        ra_agent::snapshot_workspace_turn(&workspace_root, &turn_summary)
     })
     .await
     {
@@ -2459,8 +2459,8 @@ async fn snapshot_workspace_turn_for_path(
                             "{} [{}] {}: {}",
                             failure.repo_label,
                             match failure.phase {
-                                octos_agent::WorkspaceValidationPhase::TurnEnd => "turn_end",
-                                octos_agent::WorkspaceValidationPhase::Completion => "completion",
+                                ra_agent::WorkspaceValidationPhase::TurnEnd => "turn_end",
+                                ra_agent::WorkspaceValidationPhase::Completion => "completion",
                             },
                             failure.check,
                             failure.reason
@@ -2559,7 +2559,7 @@ pub enum ActorMessage {
         /// completion-review success gate can read this instead of inferring
         /// success from the rendered `"✗"` content heuristic. `None` for
         /// legacy callers and tests that do not track it.
-        terminal_status: Option<octos_agent::TaskStatus>,
+        terminal_status: Option<ra_agent::TaskStatus>,
         /// Completion acknowledgment for durable persistence.
         ack: Option<oneshot::Sender<bool>>,
     },
@@ -2942,7 +2942,7 @@ pub struct ActorFactory {
     pub session_mgr: Arc<Mutex<SessionManager>>,
     pub out_tx: mpsc::Sender<OutboundMessage>,
     pub spawn_inbound_tx: mpsc::Sender<InboundMessage>,
-    pub cron_service: Option<Arc<octos_bus::CronService>>,
+    pub cron_service: Option<Arc<ra_bus::CronService>>,
     pub tool_registry_factory: Arc<dyn ToolRegistryFactory + Send + Sync>,
     pub pipeline_factory: Option<Arc<dyn PipelineToolFactory + Send + Sync>>,
     pub max_history: Arc<std::sync::atomic::AtomicUsize>,
@@ -2952,7 +2952,7 @@ pub struct ActorFactory {
     /// Working directory for SpawnTool (shared profile-level cwd).
     pub cwd: std::path::PathBuf,
     /// Sandbox config — used to create per-user sandbox instances.
-    pub sandbox_config: octos_agent::SandboxConfig,
+    pub sandbox_config: ra_agent::SandboxConfig,
     /// Provider policy for SpawnTool and PipelineTool.
     pub provider_policy: Option<ToolPolicy>,
     /// Global `tool_policy` from config. The base registry has this applied
@@ -2981,14 +2981,14 @@ pub struct ActorFactory {
     pub adaptive_router: Option<Arc<AdaptiveRouter>>,
     /// RFC-3 (#1292): per-profile topic→lane override block, mirrored
     /// onto every actor at spawn time. `None` keeps the built-in
-    /// defaults from [`octos_llm::lane`] active without further wiring.
-    pub lane_routing: Option<octos_llm::LaneRoutingConfig>,
+    /// defaults from [`ra_llm::lane`] active without further wiring.
+    pub lane_routing: Option<ra_llm::LaneRoutingConfig>,
     /// Memory store for saving long-form outputs (research reports) to the
     /// memory bank so only a summary is injected into session context.
     pub memory_store: Option<Arc<MemoryStore>>,
     /// Recall/Knowledge index for `memory_search`/`memory_load` and the
     /// relevance-ranked memory segment (docs/adr/personal-memory-tiers.md).
-    pub recall: Option<Arc<octos_memory::RecallStore>>,
+    pub recall: Option<Arc<ra_memory::RecallStore>>,
     /// Resolved `memory.max_inject_tokens` for per-session memory segments.
     /// Paired with `memory_store`; `memory_refresh_enabled` gates the
     /// capture-policy text and the per-turn refresh provider.
@@ -3020,7 +3020,7 @@ pub struct ActorFactory {
     /// router instance backs every actor so dashboards see a consistent
     /// disk layout across sessions. Built once at factory construction
     /// time and cloned (cheap Arc bump) per actor.
-    pub subagent_output_router: Arc<octos_agent::SubAgentOutputRouter>,
+    pub subagent_output_router: Arc<ra_agent::SubAgentOutputRouter>,
 }
 
 /// Trait for creating per-session ToolRegistry instances.
@@ -3038,7 +3038,7 @@ pub trait ToolRegistryFactory: Send + Sync {
     fn create_registry_for_workspace(
         &self,
         workspace: &std::path::Path,
-        sandbox: Box<dyn octos_agent::Sandbox>,
+        sandbox: Box<dyn ra_agent::Sandbox>,
     ) -> ToolRegistry;
 }
 
@@ -3054,7 +3054,7 @@ pub trait ToolRegistryFactory: Send + Sync {
 /// binding: a read-only session's pipeline validators must not regain writes
 /// or network the profile default allowed.
 pub trait PipelineToolFactory: Send + Sync {
-    fn create(&self, sandbox: &octos_agent::SandboxConfig) -> Arc<dyn octos_agent::tools::Tool>;
+    fn create(&self, sandbox: &ra_agent::SandboxConfig) -> Arc<dyn ra_agent::tools::Tool>;
 
     /// Rebind canonical project discovery without rebuilding shared provider
     /// and memory resources. Custom factories may retain their own discovery.
@@ -3086,7 +3086,7 @@ impl ToolRegistryFactory for SnapshotToolRegistryFactory {
     fn create_registry_for_workspace(
         &self,
         workspace: &std::path::Path,
-        sandbox: Box<dyn octos_agent::Sandbox>,
+        sandbox: Box<dyn ra_agent::Sandbox>,
     ) -> ToolRegistry {
         // Re-bind cwd-bound tools to the per-user workspace while
         // preserving non-cwd tools (web_search, browser, MCP, plugins, etc.)
@@ -3143,10 +3143,10 @@ pub(crate) fn build_gateway_session_scope(
     // workspace path is the encoded form, so it matches the actor and the
     // tenant-ownership gate in `resolve_for_scope` now applies. Safe-id
     // sessions get a byte-identical scope (encode == raw, sanitize == raw).
-    let encoded_base = octos_bus::session::encode_path_component(&session_id_raw);
+    let encoded_base = ra_bus::session::encode_path_component(&session_id_raw);
     let workspace = data_dir.join("users").join(&encoded_base).join("workspace");
     let scope_session_id = crate::runtime::session::sanitize_scope_session_id(&session_id_raw);
-    let shared_zones: Vec<std::path::PathBuf> = octos_core::DEFAULT_MULTI_TENANT_SHARED_ZONE_NAMES
+    let shared_zones: Vec<std::path::PathBuf> = ra_core::DEFAULT_MULTI_TENANT_SHARED_ZONE_NAMES
         .iter()
         .map(|name| data_dir.join(name))
         .collect();
@@ -3164,7 +3164,7 @@ pub(crate) fn build_gateway_session_scope(
             // Round-2 BLOCKER 2: fail-closed canonicalisation. Drop
             // any plugin dir that can't be canonicalised so a later
             // symlink replacement can't be legitimised as `InSkillDir`.
-            let skill_dirs = octos_core::canonicalize_skill_read_zones(plugin_dirs);
+            let skill_dirs = ra_core::canonicalize_skill_read_zones(plugin_dirs);
             match scope.with_skill_read_zones(skill_dirs) {
                 Ok(scope) => Some(Arc::new(scope)),
                 Err(err) => {
@@ -3219,7 +3219,7 @@ impl ActorFactory {
         // Build per-user workspace directory for file isolation.
         // Each user's tools are restricted to their own workspace via
         // resolve_path() (application-level) and sandbox-exec SBPL (kernel-level on macOS).
-        let encoded_base = octos_bus::session::encode_path_component(session_key.base_key());
+        let encoded_base = ra_bus::session::encode_path_component(session_key.base_key());
         let user_workspace = self
             .data_dir
             .join("users")
@@ -3232,7 +3232,7 @@ impl ActorFactory {
         // FileStateCache BEFORE sanitize so the resume hand-off can seed
         // it directly. The same Arc is later wired into Agent::new so the
         // recovered file-identity claims actually reach the file tools.
-        let file_state_cache = Arc::new(octos_agent::FileStateCache::new());
+        let file_state_cache = Arc::new(ra_agent::FileStateCache::new());
         // M8.6: sanitize the loaded transcript. Dropping unresolved tool
         // calls, orphan thinking, and whitespace-only messages here
         // prevents the provider from 400-ing on the first request after a
@@ -3301,7 +3301,7 @@ impl ActorFactory {
                 //   clear stays as the safety floor underneath.
                 let is_child = session_handle.is_child_session();
                 session_handle.clear_messages_for_unsafe_resume();
-                let octos_bus::SanitizeError::WorktreeMissing { path, .. } = &error;
+                let ra_bus::SanitizeError::WorktreeMissing { path, .. } = &error;
                 let mut parent_marked_failed = false;
                 if is_child {
                     let failure_reason = format!(
@@ -3428,7 +3428,7 @@ impl ActorFactory {
         // Create tool registry with cwd-bound tools pointing to the per-user workspace.
         // A fresh sandbox is created per user so the SBPL profile restricts writes
         // to this user's workspace directory (kernel-enforced on macOS).
-        let user_sandbox = octos_agent::create_sandbox(&self.sandbox_config);
+        let user_sandbox = ra_agent::create_sandbox(&self.sandbox_config);
         let mut tools = self
             .tool_registry_factory
             .create_registry_for_workspace(&user_workspace, user_sandbox);
@@ -3593,12 +3593,12 @@ impl ActorFactory {
         // #2131: recall an evicted tool output by its tool_call_id from THIS
         // session's content-addressed ledger. Registered per-session (like the
         // task tools above) because the ContextManager is session-scoped.
-        tools.register(octos_agent::tools::RecallTool::new(Arc::new(
+        tools.register(ra_agent::tools::RecallTool::new(Arc::new(
             SessionToolOutputLedger(context_manager.clone()),
         )));
         tools.register(message_tool);
         tools.register(send_file_tool);
-        tools.register(octos_agent::SendAppCardTool::with_context(
+        tools.register(ra_agent::SendAppCardTool::with_context(
             proxy_tx.clone(),
             channel,
             chat_id,
@@ -3609,7 +3609,7 @@ impl ActorFactory {
         // observe an identical contract. (The Agent::new wiring further
         // down also consumes this Arc — keep them in sync.)
         let subagent_summary_generator_for_spawn =
-            Arc::new(octos_agent::AgentSummaryGenerator::new(
+            Arc::new(ra_agent::AgentSummaryGenerator::new(
                 self.llm_for_compaction.clone(),
                 self.subagent_output_router.clone(),
                 (*supervisor).clone(),
@@ -3705,7 +3705,7 @@ impl ActorFactory {
                 .with_topic(factory_topic.clone())
                 .with_base_dir(factory_base.clone())
                 .with_extra_allowed_dir(factory_extra.clone());
-                Arc::new(tool) as Arc<dyn octos_agent::tools::Tool>
+                Arc::new(tool) as Arc<dyn ra_agent::tools::Tool>
             }));
         }
 
@@ -3781,7 +3781,7 @@ impl ActorFactory {
             session_key.clone(),
         );
         let mut delegate_tool =
-            octos_agent::DelegateTool::new(self.llm.clone(), self.memory.clone(), self.cwd.clone())
+            ra_agent::DelegateTool::new(self.llm.clone(), self.memory.clone(), self.cwd.clone())
                 .with_provider_policy(self.provider_policy.clone())
                 .with_agent_config(self.agent_config.clone())
                 .with_optional_embedder(self.embedder.clone())
@@ -3870,7 +3870,7 @@ impl ActorFactory {
             // tools, shell, send_file, contract / task checks)
             // is unaffected — see
             // `tools::policy::keep_tool_in_slides_session`.
-            tools.retain(octos_agent::keep_tool_in_slides_session);
+            tools.retain(ra_agent::keep_tool_in_slides_session);
 
             // Scaffold slides project INTO the workspace so file tools
             // (read_file, write_file, mofa_slides) all resolve the same paths.
@@ -3994,7 +3994,7 @@ impl ActorFactory {
         // the SpawnTool via `with_parent_subagent_summary_generator`
         // (above) so child agents observe the same generator the
         // parent does.
-        let subagent_summary_generator = Arc::new(octos_agent::AgentSummaryGenerator::new(
+        let subagent_summary_generator = Arc::new(ra_agent::AgentSummaryGenerator::new(
             self.llm_for_compaction.clone(),
             self.subagent_output_router.clone(),
             (*supervisor).clone(),
@@ -4029,7 +4029,7 @@ impl ActorFactory {
 
         let mut agent = Agent::new(agent_id, session_llm, tools, self.memory.clone())
             .with_config(self.agent_config.clone())
-            .with_reporter(Arc::new(octos_agent::SilentReporter))
+            .with_reporter(Arc::new(ra_agent::SilentReporter))
             .with_shutdown(cancelled.clone())
             .with_prompt_context_manager(prompt_context_bridge)
             .with_system_prompt(system_prompt)
@@ -4064,8 +4064,8 @@ impl ActorFactory {
             // on a missing segment APPENDS, so without this the provider's
             // first refresh would place memory AFTER the tail
             // (pre → post → memory). Empty segments render as nothing.
-            agent.set_prompt_segment(octos_agent::MEMORY_SEGMENT_NAME, String::new());
-            let mut provider = octos_agent::MemorySegmentProvider::new(
+            agent.set_prompt_segment(ra_agent::MEMORY_SEGMENT_NAME, String::new());
+            let mut provider = ra_agent::MemorySegmentProvider::new(
                 memory_store.clone(),
                 self.memory_inject_tokens,
                 self.memory_refresh_enabled,
@@ -4148,7 +4148,7 @@ impl ActorFactory {
         // from the usage ledger at run() start and folds every completed
         // run back in. Without it the wire's `session_*` figures reset to
         // zero each turn and past turns were re-priced at the latest model.
-        let session_usage = octos_agent::SharedSessionUsage::default();
+        let session_usage = ra_agent::SharedSessionUsage::default();
         let agent = agent.with_session_usage_base(session_usage.clone());
 
         // Load per-user status configuration
@@ -4618,12 +4618,12 @@ struct SessionActor {
     /// deliberately omitted usage accounting.
     usage_ledger: Option<Arc<PersistentUsageLedger>>,
     /// Session-cumulative usage base shared with the agent (see the
-    /// `octos_agent::session_usage` module docs). Seeded from
+    /// `ra_agent::session_usage` module docs). Seeded from
     /// `usage_ledger` at run() start so it survives the runtime-cache
     /// eviction a `profile/llm/select` model switch triggers; folded
     /// after every completed run, each run priced at the model that
     /// ran it.
-    session_usage: octos_agent::SharedSessionUsage,
+    session_usage: ra_agent::SharedSessionUsage,
     /// Profile/account id used for usage analytics rollups.
     usage_profile_id: String,
     max_history: Arc<std::sync::atomic::AtomicUsize>,
@@ -4648,7 +4648,7 @@ struct SessionActor {
     /// every turn) so a hot-reload that swaps the profile's
     /// `lane_routing` field doesn't race the lane-context build
     /// inside the agent_task spawn.
-    lane_routing: Option<octos_llm::LaneRoutingConfig>,
+    lane_routing: Option<ra_llm::LaneRoutingConfig>,
     /// Memory store for saving long research reports out-of-band.
     memory_store: Option<Arc<MemoryStore>>,
     /// Active overflow task counter for concurrency limiting.
@@ -5121,7 +5121,7 @@ impl SessionActor {
             media: vec![],
             metadata: serde_json::Value::Object(metadata),
             message_id: None,
-            origin: octos_core::MessageOrigin::Synthetic,
+            origin: ra_core::MessageOrigin::Synthetic,
         }
     }
 
@@ -5176,7 +5176,7 @@ impl SessionActor {
             media: vec![],
             metadata: serde_json::Value::Object(metadata),
             message_id: None,
-            origin: octos_core::MessageOrigin::Synthetic,
+            origin: ra_core::MessageOrigin::Synthetic,
         }
     }
 
@@ -5275,7 +5275,7 @@ impl SessionActor {
             // user's own job with a loop it has nothing to do with, and the reap
             // would then delete a schedule the user asked for.
             if let Some(ref cron) = self.cron_tool {
-                cron.set_origin(octos_bus::CronOrigin {
+                cron.set_origin(ra_bus::CronOrigin {
                     session_id: Some(self.session_key.to_string()),
                     loop_id: loop_id_for_self_paced.clone(),
                     // The actor carries no profile id; `loop_id` is the key the
@@ -5287,7 +5287,7 @@ impl SessionActor {
             self.process_inbound(synthetic, Vec::new(), Vec::new(), None)
                 .await;
             if let Some(ref cron) = self.cron_tool {
-                cron.set_origin(octos_bus::CronOrigin::default());
+                cron.set_origin(ra_bus::CronOrigin::default());
             }
             // If this fire was a self-paced or maintenance loop, peek at
             // the model's reply and re-schedule via the orchestrator.
@@ -5418,7 +5418,7 @@ impl SessionActor {
                 .messages
                 .iter()
                 .rev()
-                .find(|msg| msg.role == octos_core::MessageRole::Assistant)
+                .find(|msg| msg.role == ra_core::MessageRole::Assistant)
                 .map(|msg| msg.content.clone())
                 .unwrap_or_default()
         };
@@ -5454,8 +5454,8 @@ impl SessionActor {
             // evo-goal-verifier: the wrapper owns gate/charge/retry/ledger;
             // per-attempt usage is charged inside it, so nothing is charged
             // here anymore.
-            let outcome = octos_llm::with_router_context(
-                octos_llm::RouterContext {
+            let outcome = ra_llm::with_router_context(
+                ra_llm::RouterContext {
                     session_id: Some(self.session_key.to_string()),
                     ..Default::default()
                 },
@@ -5509,10 +5509,10 @@ impl SessionActor {
                     snapshot.revision,
                 );
                 let note_id = format!("goal-verifier-note:v1:{}:{digest}", snapshot.goal_id);
-                match octos_bus::session::persist_system_note_once_through_canonical_path(
+                match ra_bus::session::persist_system_note_once_through_canonical_path(
                     &self.data_dir,
                     &self.session_key,
-                    octos_core::Message::system(format!(
+                    ra_core::Message::system(format!(
                         "goal completion not verified — {outcome}"
                     )),
                     &note_id,
@@ -5526,7 +5526,7 @@ impl SessionActor {
                         // RAM-didn't repair, and the no-duplicate case).
                         let mut handle = self.session_handle.lock().await;
                         let mirrored = handle.session().messages.iter().any(|m| {
-                            m.role == octos_core::MessageRole::System
+                            m.role == ra_core::MessageRole::System
                                 && m.client_message_id.as_deref() == Some(note_id.as_str())
                         });
                         if !mirrored {
@@ -5663,7 +5663,7 @@ impl SessionActor {
         decision: ApprovalDecision,
         decided_by: &str,
     ) {
-        use octos_core::ui_protocol as uip;
+        use ra_core::ui_protocol as uip;
         let mut event = uip::ApprovalDecidedEvent::manual(
             self.session_key.clone(),
             uip::ApprovalId::new(),
@@ -5861,7 +5861,7 @@ impl SessionActor {
                             pending.request.title
                         ))
                         .await;
-                        let result = octos_agent::tools::ToolResult {
+                        let result = ra_agent::tools::ToolResult {
                             output: format!("Execution errored: {err}"),
                             success: false,
                             ..Default::default()
@@ -5894,7 +5894,7 @@ impl SessionActor {
         };
         match ledger.session_totals(&self.session_key.to_string()).await {
             Ok(totals) if totals.run_count > 0 => {
-                self.session_usage.seed(octos_agent::SessionUsageSnapshot {
+                self.session_usage.seed(ra_agent::SessionUsageSnapshot {
                     input_tokens: totals.input_tokens,
                     output_tokens: totals.output_tokens,
                     spend_usd: totals.estimated_cost_usd,
@@ -5980,7 +5980,7 @@ impl SessionActor {
                                 }
                                 // A real inbound message is not a loop fire, so
                                 // clear any loop attribution left by one.
-                                cron.set_origin(octos_bus::CronOrigin {
+                                cron.set_origin(ra_bus::CronOrigin {
                                     session_id: Some(self.session_key.to_string()),
                                     loop_id: None,
                                     profile_id: None,
@@ -5988,13 +5988,13 @@ impl SessionActor {
                             }
 
                             // Check for abort trigger before processing
-                            if octos_core::is_abort_trigger(&message.content) {
+                            if ra_core::is_abort_trigger(&message.content) {
                                 debug!(session = %self.session_key, "abort trigger detected");
                                 self.cancelled.store(true, Ordering::Release);
                                 let _ = self.out_tx.send(OutboundMessage {
                                     channel: self.channel.clone(),
                                     chat_id: self.chat_id.clone(),
-                                    content: octos_core::abort_response(&message.content).to_string(),
+                                    content: ra_core::abort_response(&message.content).to_string(),
                                     reply_to: None,
                                     media: vec![],
                                     metadata: serde_json::json!({}),
@@ -6144,7 +6144,7 @@ impl SessionActor {
                             // prefix" heuristic — the rendered body is not load-bearing
                             // anymore, the explicit terminal status is.
                             let is_success_completion =
-                                matches!(terminal_status, Some(octos_agent::TaskStatus::Completed));
+                                matches!(terminal_status, Some(ra_agent::TaskStatus::Completed));
                             if persisted
                                 && is_success_completion
                                 && auto_review_background_completions_enabled()
@@ -6180,7 +6180,7 @@ impl SessionActor {
                         Some(ActorMessage::TaskStatusChanged { task_json }) => {
                             idle_sleep.as_mut().reset(tokio::time::Instant::now() + self.idle_timeout);
                             // Push task status change to the web client via SSE
-                            let _ = self.out_tx.send(octos_core::OutboundMessage {
+                            let _ = self.out_tx.send(ra_core::OutboundMessage {
                                 channel: self.channel.clone(),
                                 chat_id: self.chat_id.clone(),
                                 content: String::new(),
@@ -6883,7 +6883,7 @@ impl SessionActor {
                             attachment_media: queued_attachment_media,
                             attachment_prompt: queued_attachment_prompt,
                         }) => {
-                            if octos_core::is_abort_trigger(&queued.content) {
+                            if ra_core::is_abort_trigger(&queued.content) {
                                 debug!(session = %self.session_key, "abort in queue, cancelling batch");
                                 self.cancelled.store(true, Ordering::Release);
                                 break;
@@ -6966,7 +6966,7 @@ impl SessionActor {
                             attachment_media: queued_attachment_media,
                             attachment_prompt: queued_attachment_prompt,
                         }) => {
-                            if octos_core::is_abort_trigger(&queued.content) {
+                            if ra_core::is_abort_trigger(&queued.content) {
                                 debug!(session = %self.session_key, "abort in queue, cancelling");
                                 self.cancelled.store(true, Ordering::Release);
                                 break;
@@ -7220,9 +7220,9 @@ impl SessionActor {
         media
             .into_iter()
             .filter(|entry| {
-                match octos_bus::file_handle::resolve_upload_reference(entry) {
+                match ra_bus::file_handle::resolve_upload_reference(entry) {
                     Some(resolved) => {
-                        let owned = octos_bus::file_handle::upload_owned_by_tenant(
+                        let owned = ra_bus::file_handle::upload_owned_by_tenant(
                             &resolved,
                             self.tenant_id.as_deref(),
                         );
@@ -7253,9 +7253,9 @@ impl SessionActor {
                 // workspace — otherwise a pasted foreign handle would copy
                 // another tenant's file in. Non-upload entries (workspace /
                 // external paths) resolve to `None` and are kept unchanged.
-                let resolved = match octos_bus::file_handle::resolve_upload_reference(&path) {
+                let resolved = match ra_bus::file_handle::resolve_upload_reference(&path) {
                     Some(candidate) => {
-                        if !octos_bus::file_handle::upload_owned_by_tenant(
+                        if !ra_bus::file_handle::upload_owned_by_tenant(
                             &candidate,
                             self.tenant_id.as_deref(),
                         ) {
@@ -7311,7 +7311,7 @@ impl SessionActor {
         let mut audio_attachment_paths = Vec::new();
         let mut file_attachment_paths = Vec::new();
         for path in &attachment_media {
-            if octos_bus::media::is_audio(path) {
+            if ra_bus::media::is_audio(path) {
                 audio_attachment_paths.push(path.clone());
             } else {
                 file_attachment_paths.push(path.clone());
@@ -7331,7 +7331,7 @@ impl SessionActor {
     /// by setting `metadata.live_video = true` on the inbound (e.g. a turn/start
     /// from a video-call surface). Defaults false; never inferred from
     /// attachment types (a voice note + uploaded image is not a camera frame).
-    fn inbound_live_video(inbound: &octos_core::InboundMessage) -> bool {
+    fn inbound_live_video(inbound: &ra_core::InboundMessage) -> bool {
         inbound
             .metadata
             .get("live_video")
@@ -7431,7 +7431,7 @@ impl SessionActor {
         let user_msg = match client_message_id.as_deref() {
             Some(cmid) if !cmid.is_empty() => Message::user_with_cmid(
                 persisted_user_content.to_string(),
-                octos_core::ClientMessageId::new(cmid),
+                ra_core::ClientMessageId::new(cmid),
             ),
             _ => Message::user(persisted_user_content.to_string()),
         };
@@ -7710,7 +7710,7 @@ impl SessionActor {
             let mut user_msg = match client_message_id.as_deref() {
                 Some(cmid) if !cmid.is_empty() => Message::user_with_cmid(
                     persisted_user_content,
-                    octos_core::ClientMessageId::new(cmid),
+                    ra_core::ClientMessageId::new(cmid),
                 ),
                 _ => Message::user(persisted_user_content),
             };
@@ -7901,7 +7901,7 @@ impl SessionActor {
         // profiles without `lane_routing` config (built-in defaults
         // resolve unknown prefixes to General, which is a no-op).
         let lane_ctx =
-            octos_llm::LaneContext::for_topic(self.session_key.topic(), self.lane_routing.as_ref());
+            ra_llm::LaneContext::for_topic(self.session_key.topic(), self.lane_routing.as_ref());
 
         // Snapshot for overflow tasks: conversation context BEFORE the
         // primary task, EXCLUDING the primary user message.  Overflow needs
@@ -7916,12 +7916,12 @@ impl SessionActor {
             // RFC-3 (#1292): innermost task-local is the lane scope so
             // each agent-loop iteration's chat() call sees both the
             // lane filter and the failover-routing context.
-            let result = octos_llm::with_router_context(
-                octos_llm::RouterContext {
+            let result = ra_llm::with_router_context(
+                ra_llm::RouterContext {
                     session_id: Some(router_session_id),
                     turn_id: router_turn_id,
                 },
-                octos_llm::with_lane_context(
+                ra_llm::with_lane_context(
                     lane_ctx,
                     tokio::time::timeout(
                         session_timeout,
@@ -7963,7 +7963,7 @@ impl SessionActor {
                             warn!(session = %self.session_key, error = %e, "agent task panicked");
                             self.send_reply("Internal error during processing.").await;
                             // Clean up reporter + status + callback
-                            self.agent.set_reporter(Arc::new(octos_agent::SilentReporter));
+                            self.agent.set_reporter(Arc::new(ra_agent::SilentReporter));
                             if let Some(ref router) = self.adaptive_router {
                                 router.set_status_callback(None);
                             }
@@ -7983,9 +7983,9 @@ impl SessionActor {
                             attachment_media: _,
                             attachment_prompt: _,
                         }) => {
-                            if octos_core::is_abort_trigger(&message.content) {
+                            if ra_core::is_abort_trigger(&message.content) {
                                 self.cancelled.store(true, Ordering::Release);
-                                self.send_reply(octos_core::abort_response(&message.content)).await;
+                                self.send_reply(ra_core::abort_response(&message.content)).await;
                                 continue;
                             }
                             // Check if this is a slash command — handle inline
@@ -8057,7 +8057,7 @@ impl SessionActor {
                             expired_approval_requests.push(request_id);
                         }
                         Some(ActorMessage::TaskStatusChanged { task_json }) => {
-                            let _ = self.out_tx.send(octos_core::OutboundMessage {
+                            let _ = self.out_tx.send(ra_core::OutboundMessage {
                                 channel: self.channel.clone(),
                                 chat_id: self.chat_id.clone(),
                                 content: String::new(),
@@ -8074,7 +8074,7 @@ impl SessionActor {
                         }
                         None => {
                             // All senders dropped — actor shutting down
-                            self.agent.set_reporter(Arc::new(octos_agent::SilentReporter));
+                            self.agent.set_reporter(Arc::new(ra_agent::SilentReporter));
                             if let Some(ref router) = self.adaptive_router {
                                 router.set_status_callback(None);
                             }
@@ -8168,7 +8168,7 @@ impl SessionActor {
 
         // Reset reporter to silent (drops stream_tx → forwarder finishes)
         self.agent
-            .set_reporter(Arc::new(octos_agent::SilentReporter));
+            .set_reporter(Arc::new(ra_agent::SilentReporter));
 
         // Clear adaptive router status callback (stream_tx is being dropped)
         if let Some(ref router) = self.adaptive_router {
@@ -8424,14 +8424,14 @@ impl SessionActor {
                         let mut assistant_msg = match client_message_id.as_deref() {
                             Some(tid) if !tid.is_empty() => Message::assistant_with_thread(
                                 final_content.clone(),
-                                octos_core::ThreadId::new(tid),
+                                ra_core::ThreadId::new(tid),
                             ),
                             _ => {
                                 let tid =
                                     fallback_thread_id_for_assistant(&handle.session().messages);
                                 Message::assistant_with_thread(
                                     final_content.clone(),
-                                    octos_core::ThreadId::new(tid),
+                                    ra_core::ThreadId::new(tid),
                                 )
                             }
                         };
@@ -8795,7 +8795,7 @@ impl SessionActor {
             // strips it would fail to compile.
             let mut user_msg = match overflow_client_message_id.as_deref() {
                 Some(cmid) if !cmid.is_empty() => {
-                    Message::user_with_cmid(content.clone(), octos_core::ClientMessageId::new(cmid))
+                    Message::user_with_cmid(content.clone(), ra_core::ClientMessageId::new(cmid))
                 }
                 _ => Message::user(content.clone()),
             };
@@ -8971,7 +8971,7 @@ impl SessionActor {
             // critical bit that makes overflow stop being a special case —
             // same code path, same events, just a different thread_id.
             let (stream_tx, stream_rx) = tokio::sync::mpsc::unbounded_channel();
-            let overflow_reporter: Arc<dyn octos_agent::ProgressReporter> = Arc::new(
+            let overflow_reporter: Arc<dyn ra_agent::ProgressReporter> = Arc::new(
                 crate::stream_reporter::ChannelStreamReporter::new(stream_tx)
                     .with_thread_id(overflow_client_message_id.clone()),
             );
@@ -9014,10 +9014,10 @@ impl SessionActor {
             let reporter_for_scope = overflow_reporter.clone();
             let router_ctx_session = session_key.to_string();
             let router_ctx_turn = overflow_client_message_id.clone();
-            let result = octos_agent::TASK_REPORTER
+            let result = ra_agent::TASK_REPORTER
                 .scope(reporter_for_scope, async {
-                    octos_llm::with_router_context(
-                        octos_llm::RouterContext {
+                    ra_llm::with_router_context(
+                        ra_llm::RouterContext {
                             session_id: Some(router_ctx_session),
                             turn_id: router_ctx_turn,
                         },
@@ -9231,7 +9231,7 @@ impl SessionActor {
                     let mut final_reply = match overflow_client_message_id.as_deref() {
                         Some(tid) if !tid.is_empty() => Message::assistant_with_thread(
                             final_content.clone(),
-                            octos_core::ThreadId::new(tid),
+                            ra_core::ThreadId::new(tid),
                         ),
                         _ => {
                             // PR F (M8.10): non-API channels arrive
@@ -9244,7 +9244,7 @@ impl SessionActor {
                             drop(handle);
                             Message::assistant_with_thread(
                                 final_content.clone(),
-                                octos_core::ThreadId::new(tid),
+                                ra_core::ThreadId::new(tid),
                             )
                         }
                     };
@@ -9750,8 +9750,8 @@ impl SessionActor {
         let _in_flight_heartbeat = AbortOnDrop(in_flight_heartbeat);
 
         let llm_start = Instant::now();
-        let result = octos_llm::with_router_context(
-            octos_llm::RouterContext {
+        let result = ra_llm::with_router_context(
+            ra_llm::RouterContext {
                 session_id: Some(self.session_key.to_string()),
                 turn_id: client_message_id.clone(),
             },
@@ -9819,7 +9819,7 @@ impl SessionActor {
 
         // Reset reporter to silent (drop the stream sender → forwarder will finish)
         self.agent
-            .set_reporter(Arc::new(octos_agent::SilentReporter));
+            .set_reporter(Arc::new(ra_agent::SilentReporter));
 
         // Clear adaptive router status callback
         if let Some(ref router) = self.adaptive_router {
@@ -10037,14 +10037,14 @@ impl SessionActor {
                         let mut assistant_msg = match client_message_id.as_deref() {
                             Some(tid) if !tid.is_empty() => Message::assistant_with_thread(
                                 final_content.clone(),
-                                octos_core::ThreadId::new(tid),
+                                ra_core::ThreadId::new(tid),
                             ),
                             _ => {
                                 let tid =
                                     fallback_thread_id_for_assistant(&handle.session().messages);
                                 Message::assistant_with_thread(
                                     final_content.clone(),
-                                    octos_core::ThreadId::new(tid),
+                                    ra_core::ThreadId::new(tid),
                                 )
                             }
                         };
@@ -10391,7 +10391,7 @@ pub(crate) fn session_actor_for_goal_test(
         user_status_config: UserStatusConfig::default(),
         data_dir: data_dir.clone(),
         usage_ledger: None,
-        session_usage: octos_agent::SharedSessionUsage::default(),
+        session_usage: ra_agent::SharedSessionUsage::default(),
         max_history: Arc::new(std::sync::atomic::AtomicUsize::new(50)),
         idle_timeout: Duration::from_secs(60),
         session_timeout: Duration::from_secs(120),

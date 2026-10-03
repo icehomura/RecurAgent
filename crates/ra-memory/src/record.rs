@@ -162,13 +162,13 @@ impl Record {
 
     /// Enforce the size caps (UTF-8 safe).
     pub fn clamp(&mut self) {
-        self.title = octos_core::truncated_utf8(self.title.trim(), MAX_TITLE_BYTES, "");
-        self.abstract_ = octos_core::truncated_utf8(self.abstract_.trim(), MAX_ABSTRACT_BYTES, "");
+        self.title = ra_core::truncated_utf8(self.title.trim(), MAX_TITLE_BYTES, "");
+        self.abstract_ = ra_core::truncated_utf8(self.abstract_.trim(), MAX_ABSTRACT_BYTES, "");
         if let Some(body) = &self.body {
             if body.trim().is_empty() {
                 self.body = None;
             } else if body.len() > MAX_BODY_BYTES {
-                self.body = Some(octos_core::truncated_utf8(body, MAX_BODY_BYTES, ""));
+                self.body = Some(ra_core::truncated_utf8(body, MAX_BODY_BYTES, ""));
             }
         }
     }

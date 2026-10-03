@@ -2,7 +2,7 @@
 //! root). Everything that touches pyo3 / libpython lives here so the default
 //! build stays libpython-free.
 
-use octos_ffi::{CoreError, RaRuntime, RuntimeConfig, TaskBrief};
+use ra_ffi::{CoreError, RaRuntime, RuntimeConfig, TaskBrief};
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
@@ -18,7 +18,7 @@ create_exception!(
 ///
 /// The caller's OWN key is already exact-scrubbed inside the core. Here we
 /// additionally apply ra-ffi's heuristic redactor + length cap
-/// ([`octos_ffi::sanitize_error_text`]) — the SAME backstop the C-ABI runs in
+/// ([`ra_ffi::sanitize_error_text`]) — the SAME backstop the C-ABI runs in
 /// `set_last_error` and the uniffi facade runs in its `From<CoreError>` — so a
 /// secret embedded in a *provider* error body never reaches a Python caller
 /// verbatim. Applied ONLY here at the facade boundary, never in the core (doing
@@ -27,15 +27,15 @@ create_exception!(
 /// A free function rather than a `From` impl: the orphan rule forbids
 /// `impl From<CoreError> for PyErr` (both types are foreign to this crate).
 fn to_py_err(e: CoreError) -> PyErr {
-    OctosError::new_err(octos_ffi::sanitize_error_text(&e.to_string()))
+    OctosError::new_err(ra_ffi::sanitize_error_text(&e.to_string()))
 }
 
-/// Runtime configuration. Maps directly onto [`octos_ffi::RuntimeConfig`].
+/// Runtime configuration. Maps directly onto [`ra_ffi::RuntimeConfig`].
 ///
 /// Supply EITHER `api_key` (a literal key) OR `api_key_env` (the name of a
 /// process env var holding it). If neither is set, resolution falls back to the
 /// conventional `{PROVIDER}_API_KEY` env var and then the `ra auth login`
-/// store — see [`octos_ffi::RaRuntime::from_config`].
+/// store — see [`ra_ffi::RaRuntime::from_config`].
 ///
 /// # Secret handling
 ///
@@ -165,7 +165,7 @@ impl Config {
     }
 }
 
-/// A one-shot task brief. Maps onto [`octos_ffi::TaskBrief`].
+/// A one-shot task brief. Maps onto [`ra_ffi::TaskBrief`].
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct Brief {
@@ -222,7 +222,7 @@ pub struct TokenUsage {
 }
 
 impl TokenUsage {
-    fn from_native(t: octos_ffi::TokenUsage) -> Self {
+    fn from_native(t: ra_ffi::TokenUsage) -> Self {
         TokenUsage {
             input: t.input,
             output: t.output,
@@ -256,7 +256,7 @@ pub struct TaskResult {
 }
 
 impl TaskResult {
-    fn from_native(r: octos_ffi::TaskResult) -> Self {
+    fn from_native(r: ra_ffi::TaskResult) -> Self {
         TaskResult {
             output: r.output,
             iterations: r.iterations,
@@ -341,7 +341,7 @@ impl Runtime {
 // Compile-time proof that the pyclass is `Send + Sync`, matching the uniffi
 // facade's assertion. `#[pyclass]` already requires `Send`; this makes a
 // regression a direct, readable error. It holds because
-// `octos_ffi::RaRuntime` is `Send + Sync`.
+// `ra_ffi::RaRuntime` is `Send + Sync`.
 const _: fn() = || {
     fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<Runtime>();
@@ -431,10 +431,10 @@ mod tests {
 
     #[test]
     fn native_results_map_to_pyclasses() {
-        let native = octos_ffi::TaskResult {
+        let native = ra_ffi::TaskResult {
             output: "done".to_string(),
             iterations: 2,
-            tokens: octos_ffi::TokenUsage {
+            tokens: ra_ffi::TokenUsage {
                 input: 10,
                 output: 20,
                 reasoning: 3,

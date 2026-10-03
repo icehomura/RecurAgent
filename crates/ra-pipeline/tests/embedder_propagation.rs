@@ -20,12 +20,12 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_llm::EmbeddingProvider;
-use octos_pipeline::{CodergenHandler, RunPipelineTool};
+use ra_llm::EmbeddingProvider;
+use ra_pipeline::{CodergenHandler, RunPipelineTool};
 
-async fn temp_episode_store() -> Arc<octos_memory::EpisodeStore> {
+async fn temp_episode_store() -> Arc<ra_memory::EpisodeStore> {
     let dir = tempfile::tempdir().unwrap();
-    Arc::new(octos_memory::EpisodeStore::open(dir.path()).await.unwrap())
+    Arc::new(ra_memory::EpisodeStore::open(dir.path()).await.unwrap())
 }
 
 /// Stub embedder — never actually invoked by these tests; we only
@@ -48,18 +48,18 @@ impl EmbeddingProvider for StubEmbedder {
 struct MockProvider;
 
 #[async_trait]
-impl octos_llm::LlmProvider for MockProvider {
+impl ra_llm::LlmProvider for MockProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
-        Ok(octos_llm::ChatResponse {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
+        Ok(ra_llm::ChatResponse {
             content: Some("ok".into()),
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage::default(),
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage::default(),
             reasoning_content: None,
             provider_index: None,
         })
@@ -78,7 +78,7 @@ impl octos_llm::LlmProvider for MockProvider {
 #[tokio::test]
 async fn run_pipeline_tool_stores_embedder_from_builder() {
     let memory = temp_episode_store().await;
-    let llm = Arc::new(MockProvider) as Arc<dyn octos_llm::LlmProvider>;
+    let llm = Arc::new(MockProvider) as Arc<dyn ra_llm::LlmProvider>;
     let embedder = Arc::new(StubEmbedder) as Arc<dyn EmbeddingProvider>;
     let tool = RunPipelineTool::new(llm, memory, std::env::temp_dir(), std::env::temp_dir())
         .with_embedder(embedder.clone());
@@ -97,7 +97,7 @@ async fn run_pipeline_tool_stores_embedder_from_builder() {
 async fn codergen_handler_stores_embedder_from_builder() {
     let embedder = Arc::new(StubEmbedder) as Arc<dyn EmbeddingProvider>;
     let codergen = CodergenHandler::new(
-        Arc::new(MockProvider) as Arc<dyn octos_llm::LlmProvider>,
+        Arc::new(MockProvider) as Arc<dyn ra_llm::LlmProvider>,
         temp_episode_store().await,
         std::env::temp_dir(),
         Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -117,7 +117,7 @@ async fn codergen_handler_stores_embedder_from_builder() {
 #[tokio::test]
 async fn run_pipeline_tool_defaults_to_no_embedder() {
     let tool = RunPipelineTool::new(
-        Arc::new(MockProvider) as Arc<dyn octos_llm::LlmProvider>,
+        Arc::new(MockProvider) as Arc<dyn ra_llm::LlmProvider>,
         temp_episode_store().await,
         std::env::temp_dir(),
         std::env::temp_dir(),
@@ -133,7 +133,7 @@ async fn run_pipeline_tool_defaults_to_no_embedder() {
 #[tokio::test]
 async fn codergen_handler_defaults_to_no_embedder() {
     let codergen = CodergenHandler::new(
-        Arc::new(MockProvider) as Arc<dyn octos_llm::LlmProvider>,
+        Arc::new(MockProvider) as Arc<dyn ra_llm::LlmProvider>,
         temp_episode_store().await,
         std::env::temp_dir(),
         Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -155,12 +155,12 @@ async fn codergen_handler_defaults_to_no_embedder() {
 /// survives.
 #[tokio::test]
 async fn build_codergen_propagates_embedder_from_executor_config() {
-    use octos_pipeline::PipelineExecutor;
-    use octos_pipeline::executor::ExecutorConfig;
+    use ra_pipeline::PipelineExecutor;
+    use ra_pipeline::executor::ExecutorConfig;
 
     let embedder = Arc::new(StubEmbedder) as Arc<dyn EmbeddingProvider>;
     let config = ExecutorConfig {
-        default_provider: Arc::new(MockProvider) as Arc<dyn octos_llm::LlmProvider>,
+        default_provider: Arc::new(MockProvider) as Arc<dyn ra_llm::LlmProvider>,
         provider_router: None,
         memory: temp_episode_store().await,
         working_dir: std::env::temp_dir(),
@@ -175,13 +175,13 @@ async fn build_codergen_propagates_embedder_from_executor_config() {
         max_concurrent_llm_calls: None,
         checkpoint_store: None,
         hook_executor: None,
-        workspace_context: octos_pipeline::PipelineContext::default(),
-        host_context: octos_pipeline::PipelineHostContext::default(),
+        workspace_context: ra_pipeline::PipelineContext::default(),
+        host_context: ra_pipeline::PipelineHostContext::default(),
         embedder: Some(embedder),
         catalog_dir: None,
         // #1607: pipeline validators run under a no-op sandbox in tests
         // (host-independent — command validators run the argv directly).
-        sandbox: octos_agent::SandboxConfig::default(),
+        sandbox: ra_agent::SandboxConfig::default(),
     };
 
     let executor = PipelineExecutor::new(config);
@@ -202,11 +202,11 @@ async fn build_codergen_propagates_embedder_from_executor_config() {
 /// fabricating one from defaults / lazily-cached state.
 #[tokio::test]
 async fn build_codergen_omits_embedder_when_executor_config_has_none() {
-    use octos_pipeline::PipelineExecutor;
-    use octos_pipeline::executor::ExecutorConfig;
+    use ra_pipeline::PipelineExecutor;
+    use ra_pipeline::executor::ExecutorConfig;
 
     let config = ExecutorConfig {
-        default_provider: Arc::new(MockProvider) as Arc<dyn octos_llm::LlmProvider>,
+        default_provider: Arc::new(MockProvider) as Arc<dyn ra_llm::LlmProvider>,
         provider_router: None,
         memory: temp_episode_store().await,
         working_dir: std::env::temp_dir(),
@@ -221,13 +221,13 @@ async fn build_codergen_omits_embedder_when_executor_config_has_none() {
         max_concurrent_llm_calls: None,
         checkpoint_store: None,
         hook_executor: None,
-        workspace_context: octos_pipeline::PipelineContext::default(),
-        host_context: octos_pipeline::PipelineHostContext::default(),
+        workspace_context: ra_pipeline::PipelineContext::default(),
+        host_context: ra_pipeline::PipelineHostContext::default(),
         embedder: None,
         catalog_dir: None,
         // #1607: pipeline validators run under a no-op sandbox in tests
         // (host-independent — command validators run the argv directly).
-        sandbox: octos_agent::SandboxConfig::default(),
+        sandbox: ra_agent::SandboxConfig::default(),
     };
 
     let executor = PipelineExecutor::new(config);
@@ -253,7 +253,7 @@ async fn build_codergen_omits_embedder_when_executor_config_has_none() {
 #[tokio::test]
 async fn run_pipeline_tool_with_embedder_chain_pin() {
     let memory = temp_episode_store().await;
-    let llm = Arc::new(MockProvider) as Arc<dyn octos_llm::LlmProvider>;
+    let llm = Arc::new(MockProvider) as Arc<dyn ra_llm::LlmProvider>;
     let embedder = Arc::new(StubEmbedder) as Arc<dyn EmbeddingProvider>;
 
     // 1) RunPipelineTool::with_embedder stores the handle.

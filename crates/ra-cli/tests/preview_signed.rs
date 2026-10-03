@@ -40,11 +40,11 @@ use std::sync::Arc;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use chrono::Utc;
-use octos_cli::api::{AppState, build_router};
-use octos_cli::otp::{AuthManager, DashboardAuthConfig, SmtpConfig};
-use octos_cli::profiles::{ProfileConfig, ProfileStore, UserProfile};
-use octos_cli::user_store::{User, UserRole, UserStore};
-use octos_core::SessionKey;
+use ra_cli::api::{AppState, build_router};
+use ra_cli::otp::{AuthManager, DashboardAuthConfig, SmtpConfig};
+use ra_cli::profiles::{ProfileConfig, ProfileStore, UserProfile};
+use ra_cli::user_store::{User, UserRole, UserStore};
+use ra_core::SessionKey;
 use serde_json::Value;
 use tempfile::TempDir;
 use tower::util::ServiceExt;
@@ -154,7 +154,7 @@ async fn build_fixture_with_ttl(ttl: std::time::Duration) -> Fixture {
     let session_a_id = "site-A-signed-1234567890";
 
     let key_a = SessionKey::with_profile(&profile_a.id, "api", session_a_id);
-    let encoded_a = octos_bus::session::encode_path_component(key_a.base_key());
+    let encoded_a = ra_bus::session::encode_path_component(key_a.base_key());
     let ws_a = data_dir_a
         .join("users")
         .join(&encoded_a)
@@ -167,7 +167,7 @@ async fn build_fixture_with_ttl(ttl: std::time::Duration) -> Fixture {
         profile_store: Some(profile_store.clone()),
         user_store: Some(user_store.clone()),
         auth_manager: Some(auth_manager.clone()),
-        preview_tokens: Arc::new(octos_cli::api::PreviewTokens::with_ttl(ttl)),
+        preview_tokens: Arc::new(ra_cli::api::PreviewTokens::with_ttl(ttl)),
         ..AppState::empty_for_tests()
     });
 
@@ -584,7 +584,7 @@ async fn test_9_per_bearer_cap_returns_429() {
     let fx = build_fixture().await;
     let app = build_router(fx.state.clone());
 
-    let cap = octos_cli::api::PreviewTokens::MAX_PER_BEARER;
+    let cap = ra_cli::api::PreviewTokens::MAX_PER_BEARER;
 
     // Mint up to the cap — every one must succeed.
     for i in 0..cap {
@@ -641,7 +641,7 @@ async fn test_9_per_bearer_cap_returns_429() {
 async fn test_10_background_sweeper_removes_expired() {
     use std::time::Duration;
 
-    let cache = std::sync::Arc::new(octos_cli::api::PreviewTokens::with_ttl(
+    let cache = std::sync::Arc::new(ra_cli::api::PreviewTokens::with_ttl(
         Duration::from_millis(50),
     ));
 
@@ -651,9 +651,9 @@ async fn test_10_background_sweeper_removes_expired() {
     let signed = cache
         .issue(
             "BEARER-A".into(),
-            octos_cli::api::TestAuthIdentity::User {
+            ra_cli::api::TestAuthIdentity::User {
                 id: "tenant-a".into(),
-                role: octos_cli::user_store::UserRole::User,
+                role: ra_cli::user_store::UserRole::User,
             },
             "tenant-a".into(),
             "session-1".into(),
@@ -665,7 +665,7 @@ async fn test_10_background_sweeper_removes_expired() {
 
     // Spawn the background sweeper with a 20ms interval (fast enough to
     // sweep the 50ms-TTL token within the test's 250ms wait window).
-    let _handle = octos_cli::api::PreviewTokens::spawn_background_sweeper(
+    let _handle = ra_cli::api::PreviewTokens::spawn_background_sweeper(
         cache.clone(),
         Duration::from_millis(20),
     );
@@ -690,7 +690,7 @@ async fn test_10_background_sweeper_removes_expired() {
 /// bearer. Used by the per-identity cap test to simulate
 /// logout/login session rotation against a single account.
 async fn mint_fresh_bearer(
-    auth_manager: &octos_cli::otp::AuthManager,
+    auth_manager: &ra_cli::otp::AuthManager,
     email: &str,
     static_token: &str,
 ) -> String {
@@ -735,8 +735,8 @@ async fn should_reject_when_identity_cap_reached_across_bearers() {
         .clone();
 
     let bearer1 = fx.token_a.clone(); // already minted by the fixture
-    let per_bearer = octos_cli::api::PreviewTokens::MAX_PER_BEARER;
-    let per_identity = octos_cli::api::PreviewTokens::MAX_PER_IDENTITY;
+    let per_bearer = ra_cli::api::PreviewTokens::MAX_PER_BEARER;
+    let per_identity = ra_cli::api::PreviewTokens::MAX_PER_IDENTITY;
 
     // Pre-condition check — the test assumes 2 × per-bearer ≥
     // per-identity so two rotated bearers can saturate the identity.
@@ -845,7 +845,7 @@ async fn should_return_429_when_global_cap_full_with_only_live_grants() {
     let fx = build_fixture().await;
     let app = build_router(fx.state.clone());
 
-    let cap = octos_cli::api::PreviewTokens::MAX_TOTAL;
+    let cap = ra_cli::api::PreviewTokens::MAX_TOTAL;
     let tokens = fx
         .state
         .preview_tokens
@@ -912,7 +912,7 @@ async fn should_return_429_when_global_cap_full_with_only_live_grants() {
 async fn rate_limited_response_includes_retry_after_header() {
     let fx = build_fixture().await;
     let app = build_router(fx.state.clone());
-    let cap = octos_cli::api::PreviewTokens::MAX_PER_BEARER;
+    let cap = ra_cli::api::PreviewTokens::MAX_PER_BEARER;
 
     for _ in 0..cap {
         let resp = sign_preview_request(

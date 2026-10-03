@@ -122,7 +122,7 @@ async fn launch_browser() -> Result<(
 /// The browser's own User-Agent with the ra product token appended, so
 /// sites can tell who is crawling (never a disguised desktop browser).
 fn identifiable_user_agent(base: &str) -> String {
-    format!("{} {}", base.trim(), octos_research::USER_AGENT)
+    format!("{} {}", base.trim(), ra_research::USER_AGENT)
         .trim()
         .to_string()
 }
@@ -165,7 +165,7 @@ async fn extract_text(page: &Page) -> Result<String, String> {
         Ok(result) => {
             let mut t = result.into_value::<String>().unwrap_or_default();
             if t.len() > MAX_PAGE_TEXT_CHARS {
-                octos_core::truncate_utf8(&mut t, MAX_PAGE_TEXT_CHARS, "\n\n... (truncated)");
+                ra_core::truncate_utf8(&mut t, MAX_PAGE_TEXT_CHARS, "\n\n... (truncated)");
             }
             Ok(t)
         }
@@ -174,14 +174,14 @@ async fn extract_text(page: &Page) -> Result<String, String> {
 }
 
 /// Two-second waits for a self-clearing challenge page (see
-/// `octos_research::access::interstitial_text`).
+/// `ra_research::access::interstitial_text`).
 const INTERSTITIAL_WAITS: u32 = 5;
 
 /// Check if text looks like a bot-protection page.
 fn is_bot_blocked(text: &str) -> bool {
     let lower = text.to_lowercase();
     // The shared list (Chinese sites' WAF pages included), on short text.
-    octos_research::access::challenge_text(text)
+    ra_research::access::challenge_text(text)
         || lower.contains("performing security verification")
         || lower.contains("press & hold to confirm you are")
         || lower.contains("please verify you are a human")
@@ -232,7 +232,7 @@ async fn crawl_single_page(page: &Page, url: &str, page_settle_ms: u64) -> Crawl
     // "正在进行安全检测…"): wait for it, up to ~10 s. Any other challenge is
     // the site saying no: recorded, not worked around.
     let mut waits = 0;
-    while waits < INTERSTITIAL_WAITS && octos_research::access::interstitial_text(&text) {
+    while waits < INTERSTITIAL_WAITS && ra_research::access::interstitial_text(&text) {
         tokio::time::sleep(Duration::from_secs(2)).await;
         waits += 1;
         if let Ok(t) = extract_text(page).await {
@@ -291,16 +291,16 @@ fn challenged(url: &str) -> CrawledPage {
 
 /// robots.txt verdict for `url` when the operator turned robots checks on
 /// (`OCTOS_RESPECT_ROBOTS`); `None` = allowed or checks off.
-async fn robots_refusal(cache: &octos_research::RobotsCache, url: &str) -> Option<String> {
-    if !octos_research::respect_robots(|k| std::env::var(k).ok()) {
+async fn robots_refusal(cache: &ra_research::RobotsCache, url: &str) -> Option<String> {
+    if !ra_research::respect_robots(|k| std::env::var(k).ok()) {
         return None;
     }
     let decision = cache
-        .check(url, octos_research::AGENT_TOKEN, |robots_url| async move {
-            match octos_research::net::safe_get(&robots_url, Duration::from_secs(10)).await {
+        .check(url, ra_research::AGENT_TOKEN, |robots_url| async move {
+            match ra_research::net::safe_get(&robots_url, Duration::from_secs(10)).await {
                 Ok(resp) => {
                     let status = resp.status().as_u16();
-                    let body = octos_research::net::read_capped(resp, 512 * 1024)
+                    let body = ra_research::net::read_capped(resp, 512 * 1024)
                         .await
                         .unwrap_or_default();
                     (Some(status), body)
@@ -476,8 +476,8 @@ impl Tool for DeepCrawlTool {
             "starting deep crawl"
         );
 
-        let robots = octos_research::RobotsCache::new();
-        let throttle = octos_research::HostThrottle::new(PAGE_INTERVAL);
+        let robots = ra_research::RobotsCache::new();
+        let throttle = ra_research::HostThrottle::new(PAGE_INTERVAL);
         while let Some((url, depth)) = queue.pop_front() {
             if results.len() >= max_pages as usize {
                 break;
@@ -543,7 +543,7 @@ impl Tool for DeepCrawlTool {
                     // Sign-in, sign-up and sign-out pages hold no content; an
                     // explicit path_prefix (already applied above) crawls them.
                     if input.path_prefix.is_none()
-                        && octos_research::urls::is_account_link(&normalized)
+                        && ra_research::urls::is_account_link(&normalized)
                     {
                         if !skipped_account.contains(&normalized) {
                             skipped_account.push(normalized);
@@ -590,7 +590,7 @@ impl Tool for DeepCrawlTool {
         output.push('\n');
         if !skipped_account.is_empty() {
             output.push_str(&format!(
-                "## Not followed: {} sign-in/sign-up link(s) (octos_research::urls::is_account_link; set path_prefix to crawl under one)\n",
+                "## Not followed: {} sign-in/sign-up link(s) (ra_research::urls::is_account_link; set path_prefix to crawl under one)\n",
                 skipped_account.len()
             ));
             for u in skipped_account.iter().take(20) {
@@ -631,7 +631,7 @@ impl Tool for DeepCrawlTool {
                 output.push_str(&format!("Error: {err}\n\n"));
             } else {
                 let preview = if crawled.text.len() > PREVIEW_CHARS {
-                    octos_core::truncated_utf8(&crawled.text, PREVIEW_CHARS, "...")
+                    ra_core::truncated_utf8(&crawled.text, PREVIEW_CHARS, "...")
                 } else {
                     crawled.text.clone()
                 };
@@ -647,7 +647,7 @@ impl Tool for DeepCrawlTool {
         ));
 
         // Truncate final output if needed
-        octos_core::truncate_utf8(&mut output, max_output_chars, "\n\n... (truncated)");
+        ra_core::truncate_utf8(&mut output, max_output_chars, "\n\n... (truncated)");
 
         info!(
             pages = results.len(),
@@ -679,7 +679,7 @@ mod tests {
         );
         let ua = super::identifiable_user_agent("Mozilla/5.0 HeadlessChrome/131.0");
         assert!(ua.starts_with("Mozilla/5.0 HeadlessChrome/131.0 "), "{ua}");
-        assert!(ua.ends_with(octos_research::USER_AGENT), "{ua}");
+        assert!(ua.ends_with(ra_research::USER_AGENT), "{ua}");
     }
 
     #[test]
@@ -689,10 +689,10 @@ mod tests {
         assert!(super::is_bot_blocked(
             "Just a moment... checking your browser"
         ));
-        assert!(octos_research::access::interstitial_text(
+        assert!(ra_research::access::interstitial_text(
             "Just a moment... checking your browser"
         ));
-        assert!(!octos_research::access::interstitial_text(
+        assert!(!ra_research::access::interstitial_text(
             "Please complete the CAPTCHA to continue"
         ));
         let page = super::challenged("https://example.com/");

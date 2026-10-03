@@ -1,11 +1,11 @@
 //! The always-on `escalate` safety valve (PR B).
 //!
 //! A closed fleet worker is provisioned with a least-privilege
-//! [`octos_fleet::WorkerGrant`]. When a task genuinely needs a capability it was
+//! [`ra_fleet::WorkerGrant`]. When a task genuinely needs a capability it was
 //! NOT granted — a host, a tool, host filesystem — the worker cannot self-widen
 //! (only the keeper's `goal_grant` mutates the grant). Instead it calls
 //! `escalate`: a fire-and-**return** tool that RECORDS a
-//! [`octos_fleet::EscalationRequest`] into a shared slot and returns
+//! [`ra_fleet::EscalationRequest`] into a shared slot and returns
 //! immediately. It does NOT block on input (the closed worker has no human to
 //! ask and can never park) — the contrast with the FORBIDDEN
 //! `ask_user_question`/`peer_handoff`. After the turn, [`crate::run_attempt`]
@@ -21,8 +21,8 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_agent::tools::{Tool, ToolResult};
-use octos_fleet::{EscalationRequest, FsGrant, NetworkGrant, WorkerGrant};
+use ra_agent::tools::{Tool, ToolResult};
+use ra_fleet::{EscalationRequest, FsGrant, NetworkGrant, WorkerGrant};
 use serde_json::{Value, json};
 
 /// The shared one-shot signal the [`EscalateTool`] writes into. `run_attempt`

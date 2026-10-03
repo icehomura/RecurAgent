@@ -9,8 +9,8 @@
 
 use std::sync::Arc;
 
-use octos_cli::api::AppState;
-use octos_llm::{ContentClassifier, ModelTier, RoutingConfig};
+use ra_cli::api::AppState;
+use ra_llm::{ContentClassifier, ModelTier, RoutingConfig};
 
 #[tokio::test]
 async fn should_populate_app_state_content_classifier_when_configured() {

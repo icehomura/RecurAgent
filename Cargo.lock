@@ -1593,7 +1593,7 @@ version = "1.0.0"
 dependencies = [
  "chrono",
  "futures-util",
- "octos-research",
+ "ra-research",
  "regex",
  "reqwest 0.12.28",
  "scraper 0.22.0",
@@ -1613,7 +1613,7 @@ dependencies = [
  "chrono",
  "ego-tree 0.10.0",
  "futures",
- "octos-research",
+ "ra-research",
  "regex",
  "reqwest 0.12.28",
  "scraper 0.22.0",
@@ -3179,8 +3179,8 @@ name = "harness-starter-audio"
 version = "1.0.0"
 dependencies = [
  "eyre",
- "octos-agent",
- "octos-plugin",
+ "ra-agent",
+ "ra-plugin",
  "serde",
  "serde_json",
  "tempfile",
@@ -3192,8 +3192,8 @@ name = "harness-starter-coding"
 version = "1.0.0"
 dependencies = [
  "eyre",
- "octos-agent",
- "octos-plugin",
+ "ra-agent",
+ "ra-plugin",
  "serde",
  "serde_json",
  "tempfile",
@@ -3205,8 +3205,8 @@ name = "harness-starter-generic"
 version = "1.0.0"
 dependencies = [
  "eyre",
- "octos-agent",
- "octos-plugin",
+ "ra-agent",
+ "ra-plugin",
  "serde",
  "serde_json",
  "tempfile",
@@ -3219,8 +3219,8 @@ version = "1.0.0"
 dependencies = [
  "chrono",
  "eyre",
- "octos-agent",
- "octos-plugin",
+ "ra-agent",
+ "ra-plugin",
  "serde",
  "serde_json",
  "tempfile",
@@ -4923,579 +4923,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "octos-agent"
-version = "2.0.3-rc.13"
-dependencies = [
- "async-trait",
- "base64",
- "chromiumoxide",
- "chrono",
- "dirs",
- "dunce",
- "eyre",
- "flate2",
- "futures",
- "gix",
- "glob",
- "globset",
- "hound",
- "htmd",
- "html5ever 0.35.0",
- "ignore",
- "keyring",
- "lettre",
- "libc",
- "markup5ever_rcdom",
- "metrics",
- "oauth2",
- "octos-bus",
- "octos-core",
- "octos-llm",
- "octos-memory",
- "octos-plugin",
- "octos-research",
- "pdf-extract",
- "redb",
- "regex",
- "reqwest 0.12.28",
- "reqwest 0.13.2",
- "rmcp",
- "rustix",
- "serde",
- "serde_json",
- "sha2",
- "shlex",
- "similar",
- "symphonia",
- "tar",
- "tempfile",
- "tiny_http",
- "tokio",
- "tokio-test",
- "tokio-util",
- "toml 0.8.23",
- "tracing",
- "tree-sitter",
- "tree-sitter-javascript",
- "tree-sitter-python",
- "tree-sitter-rust",
- "tree-sitter-typescript",
- "url",
- "webbrowser",
- "which 7.0.3",
- "wiremock",
-]
-
-[[package]]
-name = "octos-bus"
-version = "2.0.3-rc.13"
-dependencies = [
- "aes",
- "async-imap",
- "async-trait",
- "axum",
- "base64",
- "cbc",
- "chrono",
- "chrono-tz",
- "cron",
- "eyre",
- "futures",
- "lettre",
- "lru 0.16.3",
- "mailparse",
- "metrics",
- "octos-core",
- "proptest",
- "reqwest 0.12.28",
- "rustls 0.23.36",
- "rustls-native-certs",
- "serde",
- "serde_json",
- "serde_yml",
- "serenity",
- "sha2",
- "subtle",
- "teloxide",
- "tempfile",
- "tokio",
- "tokio-rustls 0.26.4",
- "tokio-test",
- "tokio-tungstenite 0.26.2",
- "tower",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "webpki-roots 0.26.11",
-]
-
-[[package]]
-name = "octos-cli"
-version = "2.0.3-rc.13"
-dependencies = [
- "agent-client-protocol",
- "argon2",
- "async-trait",
- "axum",
- "base64",
- "chacha20poly1305",
- "chrono",
- "clap",
- "clap_complete",
- "color-eyre",
- "colored 2.2.0",
- "constant_time_eq 0.3.1",
- "dirs",
- "dunce",
- "eyre",
- "flate2",
- "fs2",
- "futures",
- "getrandom 0.2.17",
- "iana-time-zone",
- "image",
- "keyring",
- "lettre",
- "libc",
- "metrics",
- "metrics-exporter-prometheus",
- "octos-agent",
- "octos-bus",
- "octos-core",
- "octos-diagnostics",
- "octos-embed-llama",
- "octos-fleet",
- "octos-fleet-worker",
- "octos-llm",
- "octos-memory",
- "octos-pipeline",
- "octos-plugin",
- "octos-sandbox",
- "octos-services",
- "octos-store",
- "octos-swarm",
- "octos-workflows",
- "open",
- "percent-encoding",
- "qrcode",
- "quick-xml",
- "rand 0.8.5",
- "redb",
- "regex",
- "reqwest 0.12.28",
- "rpassword",
- "rusqlite",
- "rust-embed",
- "rustix",
- "rustls 0.23.36",
- "rustls-native-certs",
- "rustyline",
- "semver",
- "serde",
- "serde_json",
- "sha2",
- "subtle",
- "sysinfo",
- "tar",
- "teloxide",
- "tempfile",
- "tokio",
- "tokio-test",
- "tokio-tungstenite 0.26.2",
- "tokio-util",
- "toml 0.8.23",
- "tower",
- "tower-http",
- "tracing",
- "tracing-appender",
- "tracing-core",
- "tracing-subscriber",
- "url",
- "uuid",
- "wiremock",
- "zip",
-]
-
-[[package]]
-name = "octos-core"
-version = "2.0.3-rc.13"
-dependencies = [
- "chrono",
- "eyre",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "tokio-test",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "octos-diagnostics"
-version = "2.0.3-rc.13"
-dependencies = [
- "eyre",
- "octos-core",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "octos-dora-mcp"
-version = "2.0.3-rc.13"
-dependencies = [
- "octos-agent",
-]
-
-[[package]]
-name = "octos-embed-llama"
-version = "2.0.3-rc.13"
-dependencies = [
- "async-trait",
- "eyre",
- "llama-cpp-2",
- "octos-llm",
- "octos-memory",
- "self_cell",
- "serde_json",
- "tracing",
-]
-
-[[package]]
-name = "octos-ffi"
-version = "2.0.3-rc.13"
-dependencies = [
- "async-trait",
- "chrono",
- "eyre",
- "libc",
- "octos-agent",
- "octos-cli",
- "octos-core",
- "octos-embed-llama",
- "octos-llm",
- "octos-memory",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "octos-fleet"
-version = "2.0.3-rc.13"
-dependencies = [
- "eyre",
- "octos-core",
- "redb",
- "rusqlite",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "octos-fleet-worker"
-version = "2.0.3-rc.13"
-dependencies = [
- "async-trait",
- "eyre",
- "octos-agent",
- "octos-core",
- "octos-fleet",
- "octos-llm",
- "octos-memory",
- "serde_json",
- "tempfile",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "octos-llm"
-version = "2.0.3-rc.13"
-dependencies = [
- "async-trait",
- "base64",
- "chrono",
- "eyre",
- "futures",
- "jsonwebtoken",
- "libc",
- "metrics",
- "octos-core",
- "redb",
- "reqwest 0.12.28",
- "secrecy 0.10.3",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "tokio",
- "tokio-test",
- "tracing",
- "tracing-subscriber",
- "wiremock",
-]
-
-[[package]]
-name = "octos-memory"
-version = "2.0.3-rc.13"
-dependencies = [
- "bincode",
- "chrono",
- "eyre",
- "hnsw_rs",
- "octos-core",
- "redb",
- "regex",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tokio-test",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "octos-pipeline"
-version = "2.0.3-rc.13"
-dependencies = [
- "async-trait",
- "chrono",
- "eyre",
- "futures",
- "glob",
- "octos-agent",
- "octos-core",
- "octos-llm",
- "octos-memory",
- "octos-plugin",
- "regex",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "tokio",
- "tokio-test",
- "tracing",
-]
-
-[[package]]
-name = "octos-plugin"
-version = "2.0.3-rc.13"
-dependencies = [
- "eyre",
- "metrics",
- "octos-core",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tokio-test",
- "tracing",
- "which 7.0.3",
-]
-
-[[package]]
-name = "octos-pyo3"
-version = "2.0.3-rc.13"
-dependencies = [
- "octos-ffi",
- "pyo3",
-]
-
-[[package]]
-name = "octos-research"
-version = "2.0.3-rc.13"
-dependencies = [
- "base64",
- "chromiumoxide",
- "chrono",
- "dom_smoothie",
- "futures",
- "makepad-script",
- "octoscript-core",
- "quick-xml",
- "regex",
- "reqwest 0.12.28",
- "scraper 0.22.0",
- "serde",
- "serde_json",
- "sha2",
- "tokio",
- "tracing",
- "url",
- "wreq",
- "wreq-util",
-]
-
-[[package]]
-name = "octos-sandbox"
-version = "0.1.0"
-dependencies = [
- "clap",
- "eyre",
- "landlock",
- "lddtree",
- "libc",
- "rappct",
- "seccompiler",
- "serde_json",
- "tempfile",
- "tokio",
- "windows 0.62.2",
-]
-
-[[package]]
-name = "octos-server"
-version = "2.0.3-rc.13"
-dependencies = [
- "async-trait",
- "axum",
- "chrono",
- "eyre",
- "futures",
- "lettre",
- "metrics",
- "metrics-exporter-prometheus",
- "octos-agent",
- "octos-bus",
- "octos-core",
- "octos-llm",
- "octos-pipeline",
- "octos-plugin",
- "octos-services",
- "octos-store",
- "octos-workflows",
- "rand 0.8.5",
- "rust-embed",
- "rustls 0.23.36",
- "rustls-native-certs",
- "serde",
- "serde_json",
- "subtle",
- "sysinfo",
- "tokio",
- "tokio-tungstenite 0.26.2",
- "tokio-util",
- "tower-http",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "octos-services"
-version = "2.0.3-rc.13"
-dependencies = [
- "async-trait",
- "chrono",
- "dirs",
- "eyre",
- "flate2",
- "futures",
- "octos-bus",
- "octos-core",
- "octos-llm",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sha2",
- "tar",
- "tempfile",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "octos-store"
-version = "2.0.3-rc.13"
-dependencies = [
- "base64",
- "chrono",
- "constant_time_eq 0.3.1",
- "eyre",
- "getrandom 0.2.17",
- "octos-core",
- "redb",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "octos-swarm"
-version = "2.0.3-rc.13"
-dependencies = [
- "async-trait",
- "chrono",
- "eyre",
- "metrics",
- "octos-agent",
- "redb",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "tokio",
- "tokio-test",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "octos-uniffi"
-version = "2.0.3-rc.13"
-dependencies = [
- "octos-ffi",
- "serde_json",
- "uniffi",
-]
-
-[[package]]
-name = "octos-wasm"
-version = "2.0.3-rc.13"
-dependencies = [
- "chrono",
- "console_error_panic_hook",
- "js-sys",
- "octos-core",
- "serde",
- "serde-wasm-bindgen",
- "serde_json",
- "uuid",
- "wasm-bindgen",
- "wasm-bindgen-test",
-]
-
-[[package]]
-name = "octos-workflows"
-version = "2.0.3-rc.13"
-dependencies = [
- "chrono",
- "eyre",
- "octos-agent",
- "octos-core",
- "octos-pipeline",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "octoscript-core"
 version = "0.1.0"
 source = "git+https://github.com/OctoSense-org/Octoscript.git?rev=e152f8bc1fd7dae1ce51993cab1c5fcb0fdc8b23#e152f8bc1fd7dae1ce51993cab1c5fcb0fdc8b23"
@@ -6228,6 +5655,579 @@ name = "r-efi"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+
+[[package]]
+name = "ra-agent"
+version = "2.0.3-rc.13"
+dependencies = [
+ "async-trait",
+ "base64",
+ "chromiumoxide",
+ "chrono",
+ "dirs",
+ "dunce",
+ "eyre",
+ "flate2",
+ "futures",
+ "gix",
+ "glob",
+ "globset",
+ "hound",
+ "htmd",
+ "html5ever 0.35.0",
+ "ignore",
+ "keyring",
+ "lettre",
+ "libc",
+ "markup5ever_rcdom",
+ "metrics",
+ "oauth2",
+ "pdf-extract",
+ "ra-bus",
+ "ra-core",
+ "ra-llm",
+ "ra-memory",
+ "ra-plugin",
+ "ra-research",
+ "redb",
+ "regex",
+ "reqwest 0.12.28",
+ "reqwest 0.13.2",
+ "rmcp",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sha2",
+ "shlex",
+ "similar",
+ "symphonia",
+ "tar",
+ "tempfile",
+ "tiny_http",
+ "tokio",
+ "tokio-test",
+ "tokio-util",
+ "toml 0.8.23",
+ "tracing",
+ "tree-sitter",
+ "tree-sitter-javascript",
+ "tree-sitter-python",
+ "tree-sitter-rust",
+ "tree-sitter-typescript",
+ "url",
+ "webbrowser",
+ "which 7.0.3",
+ "wiremock",
+]
+
+[[package]]
+name = "ra-bus"
+version = "2.0.3-rc.13"
+dependencies = [
+ "aes",
+ "async-imap",
+ "async-trait",
+ "axum",
+ "base64",
+ "cbc",
+ "chrono",
+ "chrono-tz",
+ "cron",
+ "eyre",
+ "futures",
+ "lettre",
+ "lru 0.16.3",
+ "mailparse",
+ "metrics",
+ "proptest",
+ "ra-core",
+ "reqwest 0.12.28",
+ "rustls 0.23.36",
+ "rustls-native-certs",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "serenity",
+ "sha2",
+ "subtle",
+ "teloxide",
+ "tempfile",
+ "tokio",
+ "tokio-rustls 0.26.4",
+ "tokio-test",
+ "tokio-tungstenite 0.26.2",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "webpki-roots 0.26.11",
+]
+
+[[package]]
+name = "ra-cli"
+version = "2.0.3-rc.13"
+dependencies = [
+ "agent-client-protocol",
+ "argon2",
+ "async-trait",
+ "axum",
+ "base64",
+ "chacha20poly1305",
+ "chrono",
+ "clap",
+ "clap_complete",
+ "color-eyre",
+ "colored 2.2.0",
+ "constant_time_eq 0.3.1",
+ "dirs",
+ "dunce",
+ "eyre",
+ "flate2",
+ "fs2",
+ "futures",
+ "getrandom 0.2.17",
+ "iana-time-zone",
+ "image",
+ "keyring",
+ "lettre",
+ "libc",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "open",
+ "percent-encoding",
+ "qrcode",
+ "quick-xml",
+ "ra-agent",
+ "ra-bus",
+ "ra-core",
+ "ra-diagnostics",
+ "ra-embed-llama",
+ "ra-fleet",
+ "ra-fleet-worker",
+ "ra-llm",
+ "ra-memory",
+ "ra-pipeline",
+ "ra-plugin",
+ "ra-sandbox",
+ "ra-services",
+ "ra-store",
+ "ra-swarm",
+ "ra-workflows",
+ "rand 0.8.5",
+ "redb",
+ "regex",
+ "reqwest 0.12.28",
+ "rpassword",
+ "rusqlite",
+ "rust-embed",
+ "rustix",
+ "rustls 0.23.36",
+ "rustls-native-certs",
+ "rustyline",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2",
+ "subtle",
+ "sysinfo",
+ "tar",
+ "teloxide",
+ "tempfile",
+ "tokio",
+ "tokio-test",
+ "tokio-tungstenite 0.26.2",
+ "tokio-util",
+ "toml 0.8.23",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-appender",
+ "tracing-core",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+ "wiremock",
+ "zip",
+]
+
+[[package]]
+name = "ra-core"
+version = "2.0.3-rc.13"
+dependencies = [
+ "chrono",
+ "eyre",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio-test",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "ra-diagnostics"
+version = "2.0.3-rc.13"
+dependencies = [
+ "eyre",
+ "ra-core",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "ra-dora-mcp"
+version = "2.0.3-rc.13"
+dependencies = [
+ "ra-agent",
+]
+
+[[package]]
+name = "ra-embed-llama"
+version = "2.0.3-rc.13"
+dependencies = [
+ "async-trait",
+ "eyre",
+ "llama-cpp-2",
+ "ra-llm",
+ "ra-memory",
+ "self_cell",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "ra-ffi"
+version = "2.0.3-rc.13"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "eyre",
+ "libc",
+ "ra-agent",
+ "ra-cli",
+ "ra-core",
+ "ra-embed-llama",
+ "ra-llm",
+ "ra-memory",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "ra-fleet"
+version = "2.0.3-rc.13"
+dependencies = [
+ "eyre",
+ "ra-core",
+ "redb",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "ra-fleet-worker"
+version = "2.0.3-rc.13"
+dependencies = [
+ "async-trait",
+ "eyre",
+ "ra-agent",
+ "ra-core",
+ "ra-fleet",
+ "ra-llm",
+ "ra-memory",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "ra-llm"
+version = "2.0.3-rc.13"
+dependencies = [
+ "async-trait",
+ "base64",
+ "chrono",
+ "eyre",
+ "futures",
+ "jsonwebtoken",
+ "libc",
+ "metrics",
+ "ra-core",
+ "redb",
+ "reqwest 0.12.28",
+ "secrecy 0.10.3",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "tracing-subscriber",
+ "wiremock",
+]
+
+[[package]]
+name = "ra-memory"
+version = "2.0.3-rc.13"
+dependencies = [
+ "bincode",
+ "chrono",
+ "eyre",
+ "hnsw_rs",
+ "ra-core",
+ "redb",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "ra-pipeline"
+version = "2.0.3-rc.13"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "eyre",
+ "futures",
+ "glob",
+ "ra-agent",
+ "ra-core",
+ "ra-llm",
+ "ra-memory",
+ "ra-plugin",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tokio-test",
+ "tracing",
+]
+
+[[package]]
+name = "ra-plugin"
+version = "2.0.3-rc.13"
+dependencies = [
+ "eyre",
+ "metrics",
+ "ra-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "which 7.0.3",
+]
+
+[[package]]
+name = "ra-pyo3"
+version = "2.0.3-rc.13"
+dependencies = [
+ "pyo3",
+ "ra-ffi",
+]
+
+[[package]]
+name = "ra-research"
+version = "2.0.3-rc.13"
+dependencies = [
+ "base64",
+ "chromiumoxide",
+ "chrono",
+ "dom_smoothie",
+ "futures",
+ "makepad-script",
+ "octoscript-core",
+ "quick-xml",
+ "regex",
+ "reqwest 0.12.28",
+ "scraper 0.22.0",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tracing",
+ "url",
+ "wreq",
+ "wreq-util",
+]
+
+[[package]]
+name = "ra-sandbox"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "eyre",
+ "landlock",
+ "lddtree",
+ "libc",
+ "rappct",
+ "seccompiler",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "windows 0.62.2",
+]
+
+[[package]]
+name = "ra-server"
+version = "2.0.3-rc.13"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "eyre",
+ "futures",
+ "lettre",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "ra-agent",
+ "ra-bus",
+ "ra-core",
+ "ra-llm",
+ "ra-pipeline",
+ "ra-plugin",
+ "ra-services",
+ "ra-store",
+ "ra-workflows",
+ "rand 0.8.5",
+ "rust-embed",
+ "rustls 0.23.36",
+ "rustls-native-certs",
+ "serde",
+ "serde_json",
+ "subtle",
+ "sysinfo",
+ "tokio",
+ "tokio-tungstenite 0.26.2",
+ "tokio-util",
+ "tower-http",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "ra-services"
+version = "2.0.3-rc.13"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "dirs",
+ "eyre",
+ "flate2",
+ "futures",
+ "ra-bus",
+ "ra-core",
+ "ra-llm",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tar",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "ra-store"
+version = "2.0.3-rc.13"
+dependencies = [
+ "base64",
+ "chrono",
+ "constant_time_eq 0.3.1",
+ "eyre",
+ "getrandom 0.2.17",
+ "ra-core",
+ "redb",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "ra-swarm"
+version = "2.0.3-rc.13"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "eyre",
+ "metrics",
+ "ra-agent",
+ "redb",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "ra-uniffi"
+version = "2.0.3-rc.13"
+dependencies = [
+ "ra-ffi",
+ "serde_json",
+ "uniffi",
+]
+
+[[package]]
+name = "ra-wasm"
+version = "2.0.3-rc.13"
+dependencies = [
+ "chrono",
+ "console_error_panic_hook",
+ "js-sys",
+ "ra-core",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+]
+
+[[package]]
+name = "ra-workflows"
+version = "2.0.3-rc.13"
+dependencies = [
+ "chrono",
+ "eyre",
+ "ra-agent",
+ "ra-core",
+ "ra-pipeline",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "radix_trie"

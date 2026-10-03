@@ -77,7 +77,7 @@ impl Continuations {
         let mut history = pending.history;
         history.extend(
             // Assistant text carries no media, so no scope root is needed.
-            build_input_messages(&[octos_core::Message::assistant(text)], None)
+            build_input_messages(&[ra_core::Message::assistant(text)], None)
                 .iter()
                 .map(digest),
         );

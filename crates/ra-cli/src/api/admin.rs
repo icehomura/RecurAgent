@@ -1060,11 +1060,11 @@ pub async fn test_provider(
     identity: Option<axum::Extension<super::router::AuthIdentity>>,
     Json(req): Json<TestProviderRequest>,
 ) -> Result<Json<TestProviderResponse>, (StatusCode, String)> {
-    use octos_core::{Message, MessageRole};
-    use octos_llm::{ChatConfig, LlmProvider};
+    use ra_core::{Message, MessageRole};
+    use ra_llm::{ChatConfig, LlmProvider};
 
     // Resolve the API key: prefer raw api_key, fall back to reading from saved profile
-    let keyless = octos_llm::registry::is_keyless(&req.provider);
+    let keyless = ra_llm::registry::is_keyless(&req.provider);
     let resolved = if let Some(ref key) = req.api_key {
         if !key.is_empty() && !key.contains("***") {
             Ok(key.clone())
@@ -1107,7 +1107,7 @@ pub async fn test_provider(
     }
 
     let provider: Arc<dyn LlmProvider> = {
-        let params = octos_llm::registry::CreateParams {
+        let params = ra_llm::registry::CreateParams {
             // Empty means "keyless family" — let the factory apply its own
             // fallback instead of sending an empty Bearer token.
             api_key: (!api_key.is_empty()).then(|| api_key.clone()),
@@ -1117,7 +1117,7 @@ pub async fn test_provider(
             llm_timeout_secs: None,
             llm_connect_timeout_secs: None,
         };
-        match octos_llm::registry::lookup(&req.provider) {
+        match ra_llm::registry::lookup(&req.provider) {
             Some(entry) => (entry.create)(params)
                 .map_err(|e| (StatusCode::BAD_REQUEST, format!("provider error: {e:#}")))?,
             None => {
@@ -1127,7 +1127,7 @@ pub async fn test_provider(
                     .as_deref()
                     .unwrap_or("https://api.openai.com/v1");
                 Arc::new(
-                    octos_llm::openai::OpenAIProvider::new(&api_key, &req.model)
+                    ra_llm::openai::OpenAIProvider::new(&api_key, &req.model)
                         .with_base_url(url)
                         .with_provider_label(&req.provider),
                 )
@@ -1154,7 +1154,7 @@ pub async fn test_provider(
     // alias as an unrelated provider left the connectivity probe with only 16
     // output tokens and caused thinking-capable Gemini models to return a
     // truncated/empty candidate that was then reported as a connection error.
-    let canonical_provider = octos_llm::registry::lookup(&req.provider)
+    let canonical_provider = ra_llm::registry::lookup(&req.provider)
         .map(|entry| entry.name)
         .unwrap_or(req.provider.as_str());
     let max_tokens = if canonical_provider == "gemini" || canonical_provider == "vertex" {
@@ -1207,7 +1207,7 @@ pub async fn provider_models(
     identity: Option<axum::Extension<super::router::AuthIdentity>>,
     Json(req): Json<TestProviderRequest>,
 ) -> Result<Json<Vec<String>>, (StatusCode, String)> {
-    let keyless = octos_llm::registry::is_keyless(&req.provider);
+    let keyless = ra_llm::registry::is_keyless(&req.provider);
     let resolved = if let Some(ref key) = req.api_key {
         if !key.is_empty() && !key.contains("***") {
             Ok(key.clone())
@@ -1244,13 +1244,13 @@ pub async fn provider_models(
     // override, then the family's declared protocol — per-model for families
     // like r9s that pick the wire protocol by model name), never from the
     // literal family id, so the two clients cannot drift.
-    let route = octos_llm::discovery::resolve_model_discovery(
+    let route = ra_llm::discovery::resolve_model_discovery(
         Some(&req.provider),
         req.api_type.as_deref(),
         (!req.model.trim().is_empty()).then_some(req.model.trim()),
         req.base_url.as_deref(),
     );
-    let outcome = octos_llm::discovery::discover_models(
+    let outcome = ra_llm::discovery::discover_models(
         &route,
         &api_key,
         req.base_url.as_deref(),
@@ -1259,11 +1259,11 @@ pub async fn provider_models(
     .await;
     match outcome {
         // Success — including an empty catalog, which is data, not an error.
-        octos_llm::discovery::DiscoveryOutcome::Discovered(models) => Ok(Json(models)),
+        ra_llm::discovery::DiscoveryOutcome::Discovered(models) => Ok(Json(models)),
         // Advisory: this family has no model-list endpoint. Not an error —
         // manual model-id entry, Test, and Save stay fully available, and the
         // dashboard treats an empty list as "nothing to suggest".
-        octos_llm::discovery::DiscoveryOutcome::Unsupported(_) => Ok(Json(Vec::new())),
+        ra_llm::discovery::DiscoveryOutcome::Unsupported(_) => Ok(Json(Vec::new())),
         other => Err((
             if other.status_label() == "rate_limited" {
                 StatusCode::TOO_MANY_REQUESTS
@@ -2378,7 +2378,7 @@ async fn scrape_gateway_tasks(
         let Some(id) = session.get("id").and_then(serde_json::Value::as_str) else {
             continue;
         };
-        let encoded = octos_bus::session::encode_path_component(id);
+        let encoded = ra_bus::session::encode_path_component(id);
         let tasks_url = format!("http://127.0.0.1:{port}/sessions/{encoded}/tasks");
         let resp = match client
             .get(tasks_url)
@@ -2742,7 +2742,7 @@ pub async fn list_platform_skills(
     ))?;
     let skills_dir = store
         .octos_home_dir()
-        .join(octos_agent::bootstrap::PLATFORM_SKILLS_DIR);
+        .join(ra_agent::bootstrap::PLATFORM_SKILLS_DIR);
 
     // List installed platform skills
     let installed = crate::commands::skills::list_skills(&skills_dir).unwrap_or_default();
@@ -2754,7 +2754,7 @@ pub async fn list_platform_skills(
 
     // Check models against platform allowlist
     let mdir = models_dir();
-    let allowlist = octos_llm::ominix::PlatformModels::load_or_create(store.octos_home_dir());
+    let allowlist = ra_llm::ominix::PlatformModels::load_or_create(store.octos_home_dir());
     let asr_models: Vec<String> = allowlist
         .ids_for_role("asr")
         .into_iter()
@@ -2771,7 +2771,7 @@ pub async fn list_platform_skills(
 
     // Build platform skills list
     let mut skills = Vec::new();
-    for &(name, _, _, _) in octos_agent::bundled_app_skills::PLATFORM_SKILLS {
+    for &(name, _, _, _) in ra_agent::bundled_app_skills::PLATFORM_SKILLS {
         let is_installed = installed.iter().any(|s| s.name == name);
         skills.push(serde_json::json!({
             "name": name,
@@ -2835,12 +2835,12 @@ pub async fn platform_runtime_bootstrap(
     let octos_home = store.octos_home_dir();
     let mut actions = Vec::new();
 
-    let mut allowlist = octos_llm::ominix::PlatformModels::load_or_create(octos_home);
+    let mut allowlist = ra_llm::ominix::PlatformModels::load_or_create(octos_home);
     for (model_id, role) in ominix_runtime::DEFAULT_VOICE_MODELS {
         if allowlist.find(model_id).is_none() {
             allowlist
                 .platform_models
-                .push(octos_llm::ominix::PlatformModel {
+                .push(ra_llm::ominix::PlatformModel {
                     id: (*model_id).to_string(),
                     role: (*role).to_string(),
                 });
@@ -2936,7 +2936,7 @@ pub async fn install_platform_skill(
     ))?;
     let octos_home = store.octos_home_dir();
 
-    if octos_agent::bootstrap::bootstrap_single_skill(octos_home, &name) {
+    if ra_agent::bootstrap::bootstrap_single_skill(octos_home, &name) {
         Ok(Json(ActionResponse {
             ok: true,
             message: Some(format!("Platform skill '{name}' installed")),
@@ -2960,7 +2960,7 @@ pub async fn remove_platform_skill(
     ))?;
     let skills_dir = store
         .octos_home_dir()
-        .join(octos_agent::bootstrap::PLATFORM_SKILLS_DIR);
+        .join(ra_agent::bootstrap::PLATFORM_SKILLS_DIR);
 
     // Defer to spawn_blocking so remove_skill's internal current-thread
     // tokio runtime doesn't try to construct inside the axum runtime
@@ -3118,27 +3118,27 @@ fn last_lines(content: &str, n: usize) -> Vec<String> {
 
 // ── Model Management (proxy to ominix-api) ─────────────────────────
 
-async fn fetch_ominix_catalog() -> Result<Vec<octos_llm::ominix::CatalogModel>, String> {
-    octos_llm::ominix::OminixClient::new(&ominix_api_url())
+async fn fetch_ominix_catalog() -> Result<Vec<ra_llm::ominix::CatalogModel>, String> {
+    ra_llm::ominix::OminixClient::new(&ominix_api_url())
         .fetch_catalog()
         .await
         .map_err(|e| format!("Failed to fetch ominix-api catalog: {e}"))
 }
 
 fn catalog_model<'a>(
-    catalog: &'a [octos_llm::ominix::CatalogModel],
+    catalog: &'a [ra_llm::ominix::CatalogModel],
     model_id: &str,
-) -> Option<&'a octos_llm::ominix::CatalogModel> {
+) -> Option<&'a ra_llm::ominix::CatalogModel> {
     catalog.iter().find(|model| model.id == model_id)
 }
 
-fn catalog_status(catalog: &[octos_llm::ominix::CatalogModel], model_id: &str) -> String {
+fn catalog_status(catalog: &[ra_llm::ominix::CatalogModel], model_id: &str) -> String {
     catalog_model(catalog, model_id)
         .map(|model| model.status.clone())
         .unwrap_or_else(|| "unknown".to_string())
 }
 
-fn missing_default_model_bytes(catalog: &[octos_llm::ominix::CatalogModel]) -> u64 {
+fn missing_default_model_bytes(catalog: &[ra_llm::ominix::CatalogModel]) -> u64 {
     ominix_runtime::DEFAULT_VOICE_MODELS
         .iter()
         .filter_map(|(model_id, _)| {
@@ -3273,10 +3273,10 @@ pub async fn platform_models_catalog(
         StatusCode::SERVICE_UNAVAILABLE,
         "admin not configured".into(),
     ))?;
-    let allowlist = octos_llm::ominix::PlatformModels::load_or_create(store.octos_home_dir());
+    let allowlist = ra_llm::ominix::PlatformModels::load_or_create(store.octos_home_dir());
 
     // Try fetching live catalog from ominix-api
-    let ominix = octos_llm::ominix::OminixClient::new(&ominix_api_url());
+    let ominix = ra_llm::ominix::OminixClient::new(&ominix_api_url());
     let models: Vec<serde_json::Value> = match ominix.platform_catalog(&allowlist).await {
         Ok(catalog) => catalog
             .into_iter()
@@ -3329,7 +3329,7 @@ pub async fn platform_models_download(
         StatusCode::SERVICE_UNAVAILABLE,
         "admin not configured".into(),
     ))?;
-    let allowlist = octos_llm::ominix::PlatformModels::load_or_create(store.octos_home_dir());
+    let allowlist = ra_llm::ominix::PlatformModels::load_or_create(store.octos_home_dir());
     if allowlist.find(model_id).is_none() {
         let valid: Vec<&str> = allowlist
             .platform_models
@@ -3434,8 +3434,8 @@ pub async fn platform_models_available(
         StatusCode::SERVICE_UNAVAILABLE,
         "admin not configured".into(),
     ))?;
-    let allowlist = octos_llm::ominix::PlatformModels::load_or_create(store.octos_home_dir());
-    let ominix = octos_llm::ominix::OminixClient::new(&ominix_api_url());
+    let allowlist = ra_llm::ominix::PlatformModels::load_or_create(store.octos_home_dir());
+    let ominix = ra_llm::ominix::OminixClient::new(&ominix_api_url());
 
     let catalog = ominix.fetch_catalog().await.map_err(|e| {
         (
@@ -3484,7 +3484,7 @@ pub async fn platform_models_enable(
         "admin not configured".into(),
     ))?;
     let octos_home = store.octos_home_dir();
-    let mut allowlist = octos_llm::ominix::PlatformModels::load_or_create(octos_home);
+    let mut allowlist = ra_llm::ominix::PlatformModels::load_or_create(octos_home);
 
     if allowlist.find(model_id).is_some() {
         return Ok(Json(serde_json::json!({
@@ -3495,7 +3495,7 @@ pub async fn platform_models_enable(
 
     allowlist
         .platform_models
-        .push(octos_llm::ominix::PlatformModel {
+        .push(ra_llm::ominix::PlatformModel {
             id: model_id.to_string(),
             role: role.to_string(),
         });
@@ -3529,7 +3529,7 @@ pub async fn platform_models_disable(
         "admin not configured".into(),
     ))?;
     let octos_home = store.octos_home_dir();
-    let mut allowlist = octos_llm::ominix::PlatformModels::load_or_create(octos_home);
+    let mut allowlist = ra_llm::ominix::PlatformModels::load_or_create(octos_home);
 
     let before = allowlist.platform_models.len();
     allowlist.platform_models.retain(|m| m.id != model_id);
@@ -3608,7 +3608,7 @@ fn default_version() -> String {
 
 /// Whether `latest` is strictly newer than the running `current` release,
 /// with full semver precedence: `2.0.3-rc.12 < 2.0.3-rc.13 < 2.0.3`. This is
-/// deliberately pre-release-aware — unlike `octos_diagnostics`' planner, whose
+/// deliberately pre-release-aware — unlike `ra_diagnostics`' planner, whose
 /// `parse_version` strips pre-releases — because the admin channel installs
 /// pinned rc tags and must keep the rc train flowing forward while still
 /// refusing downgrades. Unparseable on either side means "can't tell" and
@@ -3766,7 +3766,7 @@ pub async fn list_sessions(
                 .and_then(|n| n.to_str())
                 .unwrap_or("")
                 .to_string();
-            let decoded_key = octos_bus::SessionManager::decode_filename(&file_name);
+            let decoded_key = ra_bus::SessionManager::decode_filename(&file_name);
             let entry_val = build_session_entry(&path, decoded_key.clone(), file_name);
             session_map.insert(decoded_key, entry_val);
         }
@@ -3784,7 +3784,7 @@ pub async fn list_sessions(
                 Some(name) => name.to_string(),
                 None => continue,
             };
-            let base_key = octos_bus::SessionManager::decode_filename(&encoded_base_key);
+            let base_key = ra_bus::SessionManager::decode_filename(&encoded_base_key);
 
             let user_sessions_dir = user_path.join("sessions");
             if let Ok(sess_entries) = std::fs::read_dir(&user_sessions_dir) {
@@ -3859,9 +3859,9 @@ pub async fn read_session(
     let data_dir = ps.resolve_data_dir(&profile);
 
     // Read session file directly (read-only, no side effects)
-    let sm = octos_bus::SessionManager::open(&data_dir)
+    let sm = ra_bus::SessionManager::open(&data_dir)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let key = octos_core::SessionKey(query.key.clone());
+    let key = ra_core::SessionKey(query.key.clone());
     let session = sm.load(&key).await.ok_or((
         StatusCode::NOT_FOUND,
         format!("session '{}' not found", query.key),
@@ -3950,7 +3950,7 @@ pub async fn list_cron_jobs(
             format!("failed to read cron.json: {e}"),
         )
     })?;
-    let store: octos_bus::CronStore = serde_json::from_str(&content).map_err(|e| {
+    let store: ra_bus::CronStore = serde_json::from_str(&content).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("failed to parse cron.json: {e}"),
@@ -4371,11 +4371,11 @@ pub async fn admin_shell(
     cmd.arg("-c").arg(&req.command).current_dir(cwd_path);
 
     // Sanitize environment — remove dangerous env vars
-    for var in octos_agent::sandbox::BLOCKED_ENV_VARS {
+    for var in ra_agent::sandbox::BLOCKED_ENV_VARS {
         cmd.env_remove(var);
     }
 
-    let cmd_preview = octos_core::truncated_utf8(&req.command, 200, "...");
+    let cmd_preview = ra_core::truncated_utf8(&req.command, 200, "...");
     tracing::info!(
         command = %cmd_preview,
         cwd = %cwd,

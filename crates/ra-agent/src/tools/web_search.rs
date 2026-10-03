@@ -91,7 +91,7 @@ pub struct WebSearchTool {
     config: Option<Arc<super::tool_config::ToolConfigStore>>,
     provider_keys: HashMap<String, String>,
     /// ra metasearch, built on first use (it takes the provider keys).
-    metasearch: Arc<std::sync::OnceLock<octos_research::metasearch::Metasearch>>,
+    metasearch: Arc<std::sync::OnceLock<ra_research::metasearch::Metasearch>>,
     /// Results-page search override; `None` = the environment decides.
     serp_scrape: Option<bool>,
 }
@@ -104,13 +104,13 @@ impl WebSearchTool {
                 .connect_timeout(Duration::from_secs(10))
                 // Identifiable, never a disguised desktop browser (ADR 0002),
                 // including for the opt-in DuckDuckGo scrape.
-                .user_agent(octos_research::USER_AGENT)
+                .user_agent(ra_research::USER_AGENT)
                 .build()
                 .unwrap_or_else(|_| Client::new()),
             research_client: Client::builder()
                 .timeout(Duration::from_secs(20))
                 .connect_timeout(Duration::from_secs(10))
-                .user_agent(octos_research::USER_AGENT)
+                .user_agent(ra_research::USER_AGENT)
                 .build()
                 .unwrap_or_else(|_| Client::new()),
             config: None,
@@ -139,14 +139,14 @@ impl WebSearchTool {
 
     /// Use this metasearch instead of the default one (tests, embedders
     /// with their own fetcher or engines).
-    pub fn with_metasearch(self, metasearch: octos_research::metasearch::Metasearch) -> Self {
+    pub fn with_metasearch(self, metasearch: ra_research::metasearch::Metasearch) -> Self {
         let _ = self.metasearch.set(metasearch);
         self
     }
 
     /// The metasearch, sharing the process-wide rate limits and cache.
     /// Profile provider keys (e.g. `brave`) are passed to keyed engines.
-    fn metasearch(&self) -> &octos_research::metasearch::Metasearch {
+    fn metasearch(&self) -> &ra_research::metasearch::Metasearch {
         self.metasearch.get_or_init(|| {
             let keys = self
                 .provider_keys
@@ -154,8 +154,8 @@ impl WebSearchTool {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
             // Engines that render (Google) load in the person's browser.
-            octos_research::metasearch::Metasearch::from_env(
-                octos_research::metasearch::default_fetch(),
+            ra_research::metasearch::Metasearch::from_env(
+                ra_research::metasearch::default_fetch(),
                 &keys,
             )
         })
@@ -182,7 +182,7 @@ struct Input {
     count: Option<u8>,
     /// BCP-47 language(s): a string, a list, or comma-separated.
     #[serde(default)]
-    lang: octos_research::OneOrMany,
+    lang: ra_research::OneOrMany,
     /// The query per language (tag → query).
     #[serde(default)]
     query_by_lang: std::collections::BTreeMap<String, String>,
@@ -199,7 +199,7 @@ struct Input {
 
 /// Parsed free-tier controls.
 pub(crate) struct FreeTierControls {
-    pub filters: octos_research::Filters,
+    pub filters: ra_research::Filters,
     /// Per-language queries (normalized tag → query).
     pub query_by_lang: std::collections::BTreeMap<String, String>,
     pub region: Option<String>,
@@ -214,15 +214,15 @@ impl FreeTierControls {
         let now = chrono::Utc::now();
         let since = match input.since.as_deref().map(str::trim) {
             None | Some("") => None,
-            Some(s) => Some(octos_research::date::Since::parse(s, now)?),
+            Some(s) => Some(ra_research::date::Since::parse(s, now)?),
         };
-        let query_by_lang = octos_research::lang::parse_query_by_lang(&input.query_by_lang)?;
+        let query_by_lang = ra_research::lang::parse_query_by_lang(&input.query_by_lang)?;
         let mut langs = input.lang.clone().into_vec();
         if !langs.is_empty() {
             langs.extend(query_by_lang.keys().cloned());
         }
-        let filters = octos_research::Filters::new(langs, since, Vec::new(), Vec::new(), None)?;
-        let category = octos_research::Category::parse(input.category.as_deref())?;
+        let filters = ra_research::Filters::new(langs, since, Vec::new(), Vec::new(), None)?;
+        let category = ra_research::Category::parse(input.category.as_deref())?;
         let news = category.is_news(&input.query, filters.since.as_ref(), now);
         let ms_category = category.metasearch_category(&input.query, filters.since.as_ref(), now);
         let region = input
@@ -243,7 +243,7 @@ impl FreeTierControls {
     /// Languages to query: requested ones, else a script guess, else default.
     fn langs(&self, query: &str) -> Vec<Option<String>> {
         let mut langs: Vec<Option<String>> = if self.filters.langs.is_empty() {
-            vec![octos_research::lang::guess_from_script(query).map(String::from)]
+            vec![ra_research::lang::guess_from_script(query).map(String::from)]
         } else {
             self.filters.langs.iter().cloned().map(Some).collect()
         };
@@ -257,7 +257,7 @@ impl FreeTierControls {
 
     /// The query for one language.
     fn query_for<'a>(&'a self, query: &'a str, lang: Option<&str>) -> &'a str {
-        octos_research::lang::query_for(query, &self.query_by_lang, lang)
+        ra_research::lang::query_for(query, &self.query_by_lang, lang)
     }
 }
 
@@ -265,12 +265,12 @@ impl FreeTierControls {
 /// is on: yes unless the operator set `OCTOS_ALLOW_SERP_SCRAPE=0`
 /// (ADR 0002 §6: general web search, honest, no CAPTCHA solving).
 pub(crate) fn serp_scrape_opted_in(lookup: impl Fn(&str) -> Option<String>) -> bool {
-    octos_research::serp_scrape_allowed(lookup)
+    ra_research::serp_scrape_allowed(lookup)
 }
 
 /// Whether the ra metasearch is on (`OCTOS_METASEARCH`, default on).
 fn metasearch_on() -> bool {
-    octos_research::metasearch::enabled(|k| std::env::var(k).ok())
+    ra_research::metasearch::enabled(|k| std::env::var(k).ok())
 }
 
 /// Free-tier providers in order: the ra metasearch (every category), or
@@ -280,8 +280,8 @@ pub(crate) fn free_tier_providers(
     news: bool,
     metasearch: bool,
     searxng: bool,
-) -> Vec<octos_research::Provider> {
-    octos_research::plan::plan(&octos_research::plan::PlanInput {
+) -> Vec<ra_research::Provider> {
+    ra_research::plan::plan(&ra_research::plan::PlanInput {
         news,
         metasearch,
         searxng_configured: searxng,
@@ -295,8 +295,8 @@ const REFERENCE_ENGINES: &[&str] = &["wikipedia", "wikidata"];
 
 /// A metasearch hit that only reference engines returned (its `engines`
 /// list, best first, names every engine that found the URL).
-fn is_reference_hit(hit: &octos_research::SearchHit) -> bool {
-    hit.provider == octos_research::metasearch::PROVIDER_ID
+fn is_reference_hit(hit: &ra_research::SearchHit) -> bool {
+    hit.provider == ra_research::metasearch::PROVIDER_ID
         && !hit.engines.is_empty()
         && hit
             .engines
@@ -317,7 +317,7 @@ fn is_reference_hit(hit: &octos_research::SearchHit) -> bool {
 pub(crate) fn needs_results_page_tier(
     serp_scrape: bool,
     news: bool,
-    free_hits: &[octos_research::SearchHit],
+    free_hits: &[ra_research::SearchHit],
 ) -> bool {
     serp_scrape && !news && !free_hits.is_empty() && free_hits.iter().all(is_reference_hit)
 }
@@ -327,11 +327,11 @@ pub(crate) fn needs_results_page_tier(
 /// `limit`. Web results go first so encyclopedia entries cannot crowd them
 /// out of the count.
 pub(crate) fn merge_web_first(
-    web: Vec<octos_research::SearchHit>,
-    free: Vec<octos_research::SearchHit>,
-    filters: &octos_research::Filters,
+    web: Vec<ra_research::SearchHit>,
+    free: Vec<ra_research::SearchHit>,
+    filters: &ra_research::Filters,
     limit: usize,
-) -> Vec<octos_research::SearchHit> {
+) -> Vec<ra_research::SearchHit> {
     let (mut kept, _skipped) = filters.apply(web.into_iter().chain(free).collect());
     kept.truncate(limit);
     kept
@@ -345,10 +345,10 @@ pub(crate) async fn results_page_tier<D, B>(
     query: &str,
     ddg: D,
     bing: B,
-) -> Option<(&'static str, Vec<octos_research::SearchHit>)>
+) -> Option<(&'static str, Vec<ra_research::SearchHit>)>
 where
-    D: std::future::Future<Output = std::result::Result<Vec<octos_research::SearchHit>, String>>,
-    B: std::future::Future<Output = std::result::Result<Vec<octos_research::SearchHit>, String>>,
+    D: std::future::Future<Output = std::result::Result<Vec<ra_research::SearchHit>, String>>,
+    B: std::future::Future<Output = std::result::Result<Vec<ra_research::SearchHit>, String>>,
 {
     if let Some(hits) = serp_outcome("duckduckgo", query, ddg.await) {
         return Some(("duckduckgo", hits));
@@ -359,8 +359,8 @@ where
 fn serp_outcome(
     provider: &'static str,
     query: &str,
-    r: std::result::Result<Vec<octos_research::SearchHit>, String>,
-) -> Option<Vec<octos_research::SearchHit>> {
+    r: std::result::Result<Vec<ra_research::SearchHit>, String>,
+) -> Option<Vec<ra_research::SearchHit>> {
     match r {
         Ok(h) if !h.is_empty() => Some(h),
         Ok(_) => {
@@ -368,7 +368,7 @@ fn serp_outcome(
             None
         }
         Err(e) => {
-            let snippet = octos_core::truncated_utf8(&e, 120, "...");
+            let snippet = ra_core::truncated_utf8(&e, 120, "...");
             warn!(provider, fallback_reason = "miss", error = %snippet, "web_search rotation");
             None
         }
@@ -387,8 +387,8 @@ pub(crate) async fn complete_free_tier<D, B>(
     bing: B,
 ) -> FreeTierAnswer
 where
-    D: std::future::Future<Output = std::result::Result<Vec<octos_research::SearchHit>, String>>,
-    B: std::future::Future<Output = std::result::Result<Vec<octos_research::SearchHit>, String>>,
+    D: std::future::Future<Output = std::result::Result<Vec<ra_research::SearchHit>, String>>,
+    B: std::future::Future<Output = std::result::Result<Vec<ra_research::SearchHit>, String>>,
 {
     if !needs_results_page_tier(serp_scrape, c.news, &answer.hits) {
         return answer;
@@ -414,7 +414,7 @@ where
 
 /// What the free tier found, before it is formatted.
 pub(crate) struct FreeTierAnswer {
-    pub hits: Vec<octos_research::SearchHit>,
+    pub hits: Vec<ra_research::SearchHit>,
     /// Providers that contributed, in output order.
     pub used: Vec<&'static str>,
     pub note: Option<String>,
@@ -431,7 +431,7 @@ impl FreeTierAnswer {
     fn into_result(self, query: &str, c: &FreeTierControls) -> ToolResult {
         let used = self.used.join("+");
         info!(provider = %used, used_provider = %used, query = %query, "web_search");
-        let mut output = octos_research::providers::format_hits(query, &self.hits);
+        let mut output = ra_research::providers::format_hits(query, &self.hits);
         if let Some(note) = self.note.filter(|_| c.category == "general") {
             output.push_str(&format!("Note: {note}\n"));
         }
@@ -443,7 +443,7 @@ impl FreeTierAnswer {
         if let Some(notice) = self.browser_notice {
             output.push_str(&format!("Note: {notice}\n"));
         }
-        if octos_research::respect_robots(|k| std::env::var(k).ok())
+        if ra_research::respect_robots(|k| std::env::var(k).ok())
             && self.hits.iter().any(|h| {
                 h.provider == "google_news_rss" || h.engines.iter().any(|e| e == "google_news")
             })
@@ -461,10 +461,10 @@ impl FreeTierAnswer {
 }
 
 /// GDELT asks for at most one request every 5 seconds (process-wide).
-fn gdelt_throttle() -> &'static octos_research::HostThrottle {
-    static T: std::sync::OnceLock<octos_research::HostThrottle> = std::sync::OnceLock::new();
+fn gdelt_throttle() -> &'static ra_research::HostThrottle {
+    static T: std::sync::OnceLock<ra_research::HostThrottle> = std::sync::OnceLock::new();
     T.get_or_init(|| {
-        octos_research::HostThrottle::new(octos_research::providers::GDELT_MIN_INTERVAL)
+        ra_research::HostThrottle::new(ra_research::providers::GDELT_MIN_INTERVAL)
     })
 }
 
@@ -644,7 +644,7 @@ impl Tool for WebSearchTool {
         if serp_scrape && self.serp_scrape.is_none() {
             static NOTICE: std::sync::Once = std::sync::Once::new();
             if let Some(notice) =
-                octos_research::serp_scrape_default_notice(|k| std::env::var(k).ok())
+                ra_research::serp_scrape_default_notice(|k| std::env::var(k).ok())
             {
                 NOTICE.call_once(|| warn!("{notice}"));
             }
@@ -697,7 +697,7 @@ impl Tool for WebSearchTool {
                     return result;
                 }
                 if is_quota_or_rate_limit_error(r) {
-                    let snippet = octos_core::truncated_utf8(&r.output, 120, "...");
+                    let snippet = ra_core::truncated_utf8(&r.output, 120, "...");
                     warn!(
                         provider = "tavily",
                         fallback_reason = "quota",
@@ -705,7 +705,7 @@ impl Tool for WebSearchTool {
                         "web_search rotation"
                     );
                 } else if !r.success {
-                    let snippet = octos_core::truncated_utf8(&r.output, 120, "...");
+                    let snippet = ra_core::truncated_utf8(&r.output, 120, "...");
                     warn!(
                         provider = "tavily",
                         fallback_reason = "error",
@@ -736,7 +736,7 @@ impl Tool for WebSearchTool {
                     return result;
                 }
                 if is_quota_or_rate_limit_error(r) {
-                    let snippet = octos_core::truncated_utf8(&r.output, 120, "...");
+                    let snippet = ra_core::truncated_utf8(&r.output, 120, "...");
                     warn!(
                         provider = "exa",
                         fallback_reason = "quota",
@@ -744,7 +744,7 @@ impl Tool for WebSearchTool {
                         "web_search rotation"
                     );
                 } else if !r.success {
-                    let snippet = octos_core::truncated_utf8(&r.output, 120, "...");
+                    let snippet = ra_core::truncated_utf8(&r.output, 120, "...");
                     warn!(
                         provider = "exa",
                         fallback_reason = "error",
@@ -775,7 +775,7 @@ impl Tool for WebSearchTool {
                     return result;
                 }
                 if is_quota_or_rate_limit_error(r) {
-                    let snippet = octos_core::truncated_utf8(&r.output, 120, "...");
+                    let snippet = ra_core::truncated_utf8(&r.output, 120, "...");
                     warn!(
                         provider = "brave",
                         fallback_reason = "quota",
@@ -783,7 +783,7 @@ impl Tool for WebSearchTool {
                         "web_search rotation"
                     );
                 } else if !r.success {
-                    let snippet = octos_core::truncated_utf8(&r.output, 120, "...");
+                    let snippet = ra_core::truncated_utf8(&r.output, 120, "...");
                     warn!(
                         provider = "brave",
                         fallback_reason = "error",
@@ -814,7 +814,7 @@ impl Tool for WebSearchTool {
                     return result;
                 }
                 if is_quota_or_rate_limit_error(r) {
-                    let snippet = octos_core::truncated_utf8(&r.output, 120, "...");
+                    let snippet = ra_core::truncated_utf8(&r.output, 120, "...");
                     warn!(
                         provider = "you.com",
                         fallback_reason = "quota",
@@ -822,7 +822,7 @@ impl Tool for WebSearchTool {
                         "web_search rotation"
                     );
                 } else if !r.success {
-                    let snippet = octos_core::truncated_utf8(&r.output, 120, "...");
+                    let snippet = ra_core::truncated_utf8(&r.output, 120, "...");
                     warn!(
                         provider = "you.com",
                         fallback_reason = "error",
@@ -858,7 +858,7 @@ impl Tool for WebSearchTool {
                     return result;
                 }
                 if is_quota_or_rate_limit_error(r) {
-                    let snippet = octos_core::truncated_utf8(&r.output, 120, "...");
+                    let snippet = ra_core::truncated_utf8(&r.output, 120, "...");
                     warn!(
                         provider = "perplexity",
                         fallback_reason = "quota",
@@ -866,7 +866,7 @@ impl Tool for WebSearchTool {
                         "web_search rotation"
                     );
                 } else if !r.success {
-                    let snippet = octos_core::truncated_utf8(&r.output, 120, "...");
+                    let snippet = ra_core::truncated_utf8(&r.output, 120, "...");
                     warn!(
                         provider = "perplexity",
                         fallback_reason = "error",
@@ -903,7 +903,7 @@ impl Tool for WebSearchTool {
                 );
                 return ddg_result.expect("checked Some");
             }
-            let snippet = octos_core::truncated_utf8(&r.output, 120, "...");
+            let snippet = ra_core::truncated_utf8(&r.output, 120, "...");
             warn!(
                 provider = "duckduckgo",
                 fallback_reason = if r.success { "empty" } else { "error" },
@@ -933,7 +933,7 @@ impl Tool for WebSearchTool {
                         );
                         return cdp;
                     }
-                    let snippet = octos_core::truncated_utf8(&r.output, 120, "...");
+                    let snippet = ra_core::truncated_utf8(&r.output, 120, "...");
                     warn!(
                         provider = "bing_cdp",
                         fallback_reason = if r.success { "empty" } else { "miss" },
@@ -955,7 +955,7 @@ impl Tool for WebSearchTool {
             query = %input.query,
             "web_search: no results from allowed providers"
         );
-        let mut output = octos_research::no_results_message(&input.query, &tried);
+        let mut output = ra_research::no_results_message(&input.query, &tried);
         for note in &free_notes {
             output.push_str(&format!("Note: {note}\n"));
         }
@@ -1006,7 +1006,7 @@ impl WebSearchTool {
     /// `SEARXNG_URL`. Operator configuration, so a private address (a
     /// localhost instance) is allowed here.
     fn searxng_base(&self) -> Option<String> {
-        self.provider_key("searxng", octos_research::SEARXNG_URL_ENV)
+        self.provider_key("searxng", ra_research::SEARXNG_URL_ENV)
             .filter(|v| !v.trim().is_empty())
     }
 
@@ -1022,7 +1022,7 @@ impl WebSearchTool {
         if !status.is_success() {
             return Err(format!(
                 "{label} HTTP {status}: {}",
-                octos_core::truncated_utf8(&body, 160, "...")
+                ra_core::truncated_utf8(&body, 160, "...")
             ));
         }
         Ok(body)
@@ -1034,8 +1034,8 @@ impl WebSearchTool {
         count: u8,
         c: &FreeTierControls,
         langs: &[Option<String>],
-    ) -> octos_research::metasearch::SearchResponse {
-        let mut req = octos_research::metasearch::SearchRequest::new(query, c.category);
+    ) -> ra_research::metasearch::SearchResponse {
+        let mut req = ra_research::metasearch::SearchRequest::new(query, c.category);
         req.query_by_lang = c.query_by_lang.clone();
         req.langs = langs.iter().flatten().cloned().collect();
         req.region = c.region.clone();
@@ -1054,14 +1054,14 @@ impl WebSearchTool {
 
     async fn free_provider(
         &self,
-        provider: octos_research::Provider,
+        provider: ra_research::Provider,
         query: &str,
         lang: Option<&str>,
         count: u8,
         c: &FreeTierControls,
-    ) -> std::result::Result<Vec<octos_research::SearchHit>, String> {
-        use octos_research::Provider as P;
-        use octos_research::providers as free;
+    ) -> std::result::Result<Vec<ra_research::SearchHit>, String> {
+        use ra_research::Provider as P;
+        use ra_research::providers as free;
         let since = c.filters.since.as_ref();
         match provider {
             P::Gdelt => {
@@ -1108,7 +1108,7 @@ impl WebSearchTool {
         let mut challenges = Vec::new();
         let mut browser_notice = None;
         // The metasearch covers every requested language in one call.
-        if providers.contains(&octos_research::Provider::Metasearch) {
+        if providers.contains(&ra_research::Provider::Metasearch) {
             let resp = self.metasearch_search(query, count, c, &langs).await;
             for e in &resp.engines {
                 info!(
@@ -1132,7 +1132,7 @@ impl WebSearchTool {
         for lang in &langs {
             for p in providers
                 .iter()
-                .filter(|p| **p != octos_research::Provider::Metasearch)
+                .filter(|p| **p != ra_research::Provider::Metasearch)
             {
                 calls.push(async move {
                     let r = tokio::time::timeout(
@@ -1165,16 +1165,16 @@ impl WebSearchTool {
                     "web_search rotation"
                 ),
                 Err(e) => {
-                    let snippet = octos_core::truncated_utf8(&e, 120, "...");
+                    let snippet = ra_core::truncated_utf8(&e, 120, "...");
                     warn!(provider = p.id(), fallback_reason = "error", error = %snippet, "web_search rotation");
                 }
             }
         }
         let (kept, _skipped) = c.filters.apply(hits);
-        let mut kept = octos_research::filter::interleave_by(kept, |h| {
+        let mut kept = ra_research::filter::interleave_by(kept, |h| {
             h.lang
                 .as_deref()
-                .map(octos_research::lang::primary)
+                .map(ra_research::lang::primary)
                 .unwrap_or_default()
         });
         let limit = count as usize * langs.len().max(1);
@@ -1244,7 +1244,7 @@ impl WebSearchTool {
         let mut output = format!("Results for: {query}\n\n");
         for (i, r) in results.iter().enumerate() {
             output.push_str(&format!("{}. {}\n   {}\n", i + 1, r.title, r.url));
-            let snippet = octos_core::truncated_utf8(&r.content, 300, "...");
+            let snippet = ra_core::truncated_utf8(&r.content, 300, "...");
             output.push_str(&format!("   {snippet}\n\n"));
         }
 
@@ -1441,7 +1441,7 @@ impl WebSearchTool {
             }
             // Include first snippet if available (richer than description)
             if let Some(snippet) = r.snippets.first() {
-                let truncated = octos_core::truncated_utf8(snippet, 300, "...");
+                let truncated = ra_core::truncated_utf8(snippet, 300, "...");
                 output.push_str(&format!("   {truncated}\n"));
             }
             output.push('\n');
@@ -1534,7 +1534,7 @@ impl WebSearchTool {
         }
         let html = response.text().await.unwrap_or_default();
         // Its bot check (often HTTP 202) is a miss: never parsed, never solved.
-        if octos_research::access::is_bot_challenge(&html) {
+        if ra_research::access::is_bot_challenge(&html) {
             return Err("DuckDuckGo answered with a bot check (not solved)".to_string());
         }
         Ok(parse_ddg_results(&html, count as usize))
@@ -1545,7 +1545,7 @@ impl WebSearchTool {
         &self,
         query: &str,
         count: u8,
-    ) -> std::result::Result<Vec<octos_research::SearchHit>, String> {
+    ) -> std::result::Result<Vec<ra_research::SearchHit>, String> {
         self.ddg_results(query, count)
             .await
             .map(|r| serp_hits(r, "duckduckgo"))
@@ -1589,7 +1589,7 @@ impl WebSearchTool {
         &self,
         query: &str,
         count: u8,
-    ) -> std::result::Result<Vec<octos_research::SearchHit>, String> {
+    ) -> std::result::Result<Vec<ra_research::SearchHit>, String> {
         #[cfg(feature = "browser")]
         {
             self.bing_results(
@@ -1711,7 +1711,7 @@ impl WebSearchTool {
         match tokio::time::timeout(bound, fut).await {
             Ok(Ok(results)) => Ok(results),
             Ok(Err(e)) => {
-                let snippet = octos_core::truncated_utf8(&e.to_string(), 200, "...");
+                let snippet = ra_core::truncated_utf8(&e.to_string(), 200, "...");
                 warn!(
                     provider = "bing_cdp",
                     fallback_reason = "launch_error",
@@ -1740,9 +1740,9 @@ impl WebSearchTool {
 fn serp_hits(
     rows: Vec<(String, String, String)>,
     provider: &str,
-) -> Vec<octos_research::SearchHit> {
+) -> Vec<ra_research::SearchHit> {
     rows.into_iter()
-        .map(|(title, url, snippet)| octos_research::SearchHit {
+        .map(|(title, url, snippet)| ra_research::SearchHit {
             url,
             title,
             snippet,
@@ -1770,7 +1770,7 @@ pub(super) fn detect_browser_executable() -> Option<std::path::PathBuf> {
 pub(super) async fn set_identifiable_user_agent(page: &chromiumoxide::Page) {
     use chromiumoxide::cdp::browser_protocol::network::SetUserAgentOverrideParams;
     let base = page.user_agent().await.unwrap_or_default();
-    let ua = format!("{base} octos-research/1.0 (+https://github.com/octos-org/octos)");
+    let ua = format!("{base} ra-research/1.0 (+https://github.com/octos-org/octos)");
     let _ = page
         .set_user_agent(SetUserAgentOverrideParams::new(ua.trim().to_string()))
         .await;
@@ -1840,7 +1840,7 @@ async fn render_and_parse_bing(
             .await
             .map_err(|e| eyre::eyre!("failed to read Bing HTML: {e}"))?;
         // A challenge is a miss: never parsed, never solved.
-        if octos_research::access::is_bot_challenge(&html) {
+        if ra_research::access::is_bot_challenge(&html) {
             eyre::bail!("Bing answered with a challenge (not solved)");
         }
         Ok::<_, eyre::Report>(parse_bing_results(&html, count as usize))
@@ -2138,18 +2138,18 @@ mod tests {
         // #2607: the check is detected (ddg_search then reports an error and
         // the rotation moves on) and yields no results even if parsed.
         let html = serp_fixture("ddg_anomaly.html");
-        assert!(octos_research::access::is_bot_challenge(&html));
+        assert!(ra_research::access::is_bot_challenge(&html));
         assert!(parse_ddg_results(&html, 5).is_empty());
         // A real results page is not taken for one.
         let results = r#"<a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fpage&amp;rut=abc123">Example Title</a><a class="result__snippet">This is a snippet.</a>"#;
-        assert!(!octos_research::access::is_bot_challenge(results));
+        assert!(!ra_research::access::is_bot_challenge(results));
     }
 
     #[cfg(feature = "browser")]
     #[test]
     fn should_treat_a_bing_challenge_as_a_miss() {
         let html = serp_fixture("bing_challenge.html");
-        assert!(octos_research::access::is_bot_challenge(&html));
+        assert!(ra_research::access::is_bot_challenge(&html));
         assert!(parse_bing_results(&html, 5).is_empty());
     }
 
@@ -2427,7 +2427,7 @@ mod tests {
 
     #[test]
     fn should_try_free_news_sources_before_keyed_providers() {
-        use octos_research::Provider;
+        use ra_research::Provider;
         assert_eq!(
             free_tier_providers(true, true, true),
             vec![Provider::Metasearch, Provider::Searxng]
@@ -2454,8 +2454,8 @@ mod tests {
         assert!(serp_scrape_opted_in(|_| None), "on by default");
         assert!(!serp_scrape_opted_in(|_| Some("false".into())));
         for key in [
-            octos_research::SERP_SCRAPE_ENV,
-            octos_research::BROWSER_SERP_ENV,
+            ra_research::SERP_SCRAPE_ENV,
+            ra_research::BROWSER_SERP_ENV,
         ] {
             assert!(!serp_scrape_opted_in(
                 |k| (k == key).then(|| "0".to_string())
@@ -2499,22 +2499,22 @@ mod tests {
             "BRAVE_API_KEY",
             "YDC_API_KEY",
             "PERPLEXITY_API_KEY",
-            octos_research::SEARXNG_URL_ENV,
+            ra_research::SEARXNG_URL_ENV,
         ];
         if configured.iter().any(|k| std::env::var(k).is_ok()) {
             return; // developer machine with keys: not the keyless case
         }
         struct Offline;
-        impl octos_research::metasearch::Fetch for Offline {
+        impl ra_research::metasearch::Fetch for Offline {
             fn fetch(
                 &self,
-                _: octos_research::metasearch::HttpRequest,
-            ) -> octos_research::metasearch::FetchFuture<'_> {
+                _: ra_research::metasearch::HttpRequest,
+            ) -> ra_research::metasearch::FetchFuture<'_> {
                 Box::pin(async { Err("offline".to_string()) })
             }
         }
-        let metasearch = octos_research::metasearch::Metasearch::new(
-            octos_research::metasearch::Registry::builtin(),
+        let metasearch = ra_research::metasearch::Metasearch::new(
+            ra_research::metasearch::Registry::builtin(),
             Arc::new(Offline),
             Default::default(),
         );
@@ -2540,18 +2540,18 @@ mod tests {
         assert!(!r.output.contains("Results for:"));
     }
 
-    fn meta_hit(url: &str, engines: &[&str]) -> octos_research::SearchHit {
-        octos_research::SearchHit {
+    fn meta_hit(url: &str, engines: &[&str]) -> ra_research::SearchHit {
+        ra_research::SearchHit {
             url: url.to_string(),
             title: url.to_string(),
-            provider: octos_research::metasearch::PROVIDER_ID.to_string(),
+            provider: ra_research::metasearch::PROVIDER_ID.to_string(),
             engines: engines.iter().map(|e| e.to_string()).collect(),
             ..Default::default()
         }
     }
 
-    fn web_hit(url: &str, provider: &str) -> octos_research::SearchHit {
-        octos_research::SearchHit {
+    fn web_hit(url: &str, provider: &str) -> ra_research::SearchHit {
+        ra_research::SearchHit {
             url: url.to_string(),
             title: url.to_string(),
             provider: provider.to_string(),
@@ -2583,7 +2583,7 @@ mod tests {
         }
     }
 
-    type Serp = std::result::Result<Vec<octos_research::SearchHit>, String>;
+    type Serp = std::result::Result<Vec<ra_research::SearchHit>, String>;
 
     /// A results-page search that records whether it ran.
     async fn serp(called: &std::sync::atomic::AtomicBool, r: Serp) -> Serp {

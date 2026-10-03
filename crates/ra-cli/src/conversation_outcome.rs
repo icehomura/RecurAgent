@@ -1,6 +1,6 @@
 //! Conversational hosts must retain partial work without treating truncation as success.
 
-use octos_agent::{ConversationResponse, IncompleteResponseError};
+use ra_agent::{ConversationResponse, IncompleteResponseError};
 
 pub(crate) enum ConversationOutcome {
     Complete(ConversationResponse),
@@ -58,7 +58,7 @@ pub(crate) fn mark_incomplete(metadata: &mut serde_json::Value, incomplete: bool
 
 pub(crate) fn mark_incomplete_usage(
     metadata: &mut serde_json::Value,
-    usage: &octos_core::TokenUsage,
+    usage: &ra_core::TokenUsage,
 ) {
     mark_incomplete(metadata, true);
     metadata["tokens_in"] = usage.input_tokens.into();

@@ -1,7 +1,7 @@
 //! `ra update` — Stage 2 ships **`--check` only** (plan, never mutate).
 //!
 //! `ra update --check` resolves the ra-server [`ProductSpec`], detects the
-//! install method, calls the shared `octos_diagnostics::update_check` (a public
+//! install method, calls the shared `ra_diagnostics::update_check` (a public
 //! GitHub Releases fetch + the pure planner), and prints the resulting
 //! [`UpdatePlan`]. It NEVER mutates a binary.
 //!
@@ -19,7 +19,7 @@
 use clap::Args;
 use colored::Colorize;
 use eyre::Result;
-use octos_diagnostics::{InstallMethod, ProductSpec, UpdatePlan, detect, update_check};
+use ra_diagnostics::{InstallMethod, ProductSpec, UpdatePlan, detect, update_check};
 
 use super::Executable;
 

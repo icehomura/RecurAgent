@@ -1,19 +1,19 @@
 //! Smoke test for `harness-starter-generic`.
 //!
 //! Asserts:
-//! (a) the plugin manifest parses via `octos_plugin::PluginManifest::from_file`.
+//! (a) the plugin manifest parses via `ra_plugin::PluginManifest::from_file`.
 //! (b) the workspace policy parses via
-//!     `octos_agent::workspace_policy::WorkspacePolicy`.
+//!     `ra_agent::workspace_policy::WorkspacePolicy`.
 //! (c) at least one declared artifact is produced under a fake run.
 //! (d) `lifecycle_state` transitions `Queued -> Running -> Verifying -> Ready`
-//!     via `octos_agent::task_supervisor::TaskSupervisor`.
+//!     via `ra_agent::task_supervisor::TaskSupervisor`.
 
 use std::path::{Path, PathBuf};
 
 use harness_starter_generic::{ProduceArtifactInput, produce_artifact};
-use octos_agent::task_supervisor::{TaskLifecycleState, TaskRuntimeState, TaskSupervisor};
-use octos_agent::workspace_policy::{WorkspacePolicy, WorkspacePolicyKind};
-use octos_plugin::PluginManifest;
+use ra_agent::task_supervisor::{TaskLifecycleState, TaskRuntimeState, TaskSupervisor};
+use ra_agent::workspace_policy::{WorkspacePolicy, WorkspacePolicyKind};
+use ra_plugin::PluginManifest;
 
 fn crate_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

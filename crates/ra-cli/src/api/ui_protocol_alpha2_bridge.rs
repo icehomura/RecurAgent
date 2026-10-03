@@ -18,9 +18,9 @@
 
 use std::sync::Arc;
 
-use octos_agent::{ProgressEvent, ProgressReporter};
-use octos_core::SessionKey;
-use octos_core::ui_protocol::{ToolProgressEvent, TurnId, UiNotification};
+use ra_agent::{ProgressEvent, ProgressReporter};
+use ra_core::SessionKey;
+use ra_core::ui_protocol::{ToolProgressEvent, TurnId, UiNotification};
 
 use super::ui_protocol_ledger::UiProtocolLedger;
 
@@ -91,7 +91,7 @@ impl ProgressReporter for LedgerToolProgressReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::ui_protocol::methods;
+    use ra_core::ui_protocol::methods;
     use std::sync::Mutex;
 
     /// Test double that captures every event the inner reporter receives.

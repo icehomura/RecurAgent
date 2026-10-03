@@ -7,24 +7,24 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use octos_agent::Tool;
-use octos_pipeline::RunPipelineTool;
+use ra_agent::Tool;
+use ra_pipeline::RunPipelineTool;
 
 struct MockProvider;
 
 #[async_trait::async_trait]
-impl octos_llm::LlmProvider for MockProvider {
+impl ra_llm::LlmProvider for MockProvider {
     async fn chat(
         &self,
-        _messages: &[octos_core::Message],
-        _tools: &[octos_llm::ToolSpec],
-        _config: &octos_llm::ChatConfig,
-    ) -> eyre::Result<octos_llm::ChatResponse> {
-        Ok(octos_llm::ChatResponse {
+        _messages: &[ra_core::Message],
+        _tools: &[ra_llm::ToolSpec],
+        _config: &ra_llm::ChatConfig,
+    ) -> eyre::Result<ra_llm::ChatResponse> {
+        Ok(ra_llm::ChatResponse {
             content: Some("DOT_UI_SMOKE_OK".into()),
             tool_calls: vec![],
-            stop_reason: octos_llm::StopReason::EndTurn,
-            usage: octos_llm::TokenUsage::default(),
+            stop_reason: ra_llm::StopReason::EndTurn,
+            usage: ra_llm::TokenUsage::default(),
             reasoning_content: None,
             provider_index: None,
         })
@@ -41,9 +41,9 @@ async fn make_tool() -> (RunPipelineTool, tempfile::TempDir, tempfile::TempDir) 
     let working = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();
     let memory_dir = data.path().join("episodes");
-    let memory = Arc::new(octos_memory::EpisodeStore::open(&memory_dir).await.unwrap());
+    let memory = Arc::new(ra_memory::EpisodeStore::open(&memory_dir).await.unwrap());
     let tool = RunPipelineTool::new(
-        Arc::new(MockProvider) as Arc<dyn octos_llm::LlmProvider>,
+        Arc::new(MockProvider) as Arc<dyn ra_llm::LlmProvider>,
         memory,
         PathBuf::from(working.path()),
         PathBuf::from(data.path()),

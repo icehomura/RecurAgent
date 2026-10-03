@@ -9,9 +9,9 @@
 
 use chrono::Utc;
 use futures::StreamExt;
-use octos_core::{Message, MessageRole};
-use octos_llm::anthropic::AnthropicProvider;
-use octos_llm::{ChatConfig, LlmProvider, StreamEvent, ToolSpec};
+use ra_core::{Message, MessageRole};
+use ra_llm::anthropic::AnthropicProvider;
+use ra_llm::{ChatConfig, LlmProvider, StreamEvent, ToolSpec};
 
 fn msg(role: MessageRole, content: impl Into<String>) -> Message {
     Message {

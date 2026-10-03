@@ -20,9 +20,9 @@ pub use service::{MemoryRefreshService, PassReport, RefreshKnobs, refresh_status
 /// disable the sweep.
 pub fn resolve_refresh_provider(
     config: &crate::config::Config,
-    profile_provider: std::sync::Arc<dyn octos_llm::LlmProvider>,
+    profile_provider: std::sync::Arc<dyn ra_llm::LlmProvider>,
     extract_model: Option<&str>,
-) -> std::sync::Arc<dyn octos_llm::LlmProvider> {
+) -> std::sync::Arc<dyn ra_llm::LlmProvider> {
     let Some(key) = extract_model.map(str::trim).filter(|k| !k.is_empty()) else {
         return profile_provider;
     };
@@ -46,7 +46,7 @@ pub fn resolve_refresh_provider(
         None,
         config.api_type.as_deref(),
     ) {
-        Ok(provider) => std::sync::Arc::new(octos_llm::RetryProvider::new(provider)),
+        Ok(provider) => std::sync::Arc::new(ra_llm::RetryProvider::new(provider)),
         Err(e) => {
             tracing::warn!(
                 key,

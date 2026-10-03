@@ -26,8 +26,8 @@ use std::collections::HashMap;
 use std::fmt;
 
 use metrics::counter;
-use octos_core::truncated_utf8;
-use octos_llm::{LlmError, LlmErrorKind};
+use ra_core::truncated_utf8;
+use ra_llm::{LlmError, LlmErrorKind};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

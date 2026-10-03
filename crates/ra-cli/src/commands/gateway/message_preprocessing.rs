@@ -6,8 +6,8 @@
 use std::path::{Path, PathBuf};
 
 use eyre::WrapErr;
-use octos_bus::ChannelManager;
-use octos_core::{InboundMessage, OutboundMessage};
+use ra_bus::ChannelManager;
+use ra_core::{InboundMessage, OutboundMessage};
 use tracing::warn;
 
 const MAX_SCANNED_PDF_FALLBACK_BYTES: u64 = 25 * 1024 * 1024;
@@ -53,7 +53,7 @@ pub async fn process_media(
     if let Some(asr_bin) = asr_binary {
         for path in &inbound.media {
             let resolved_path = resolve_media_reference(path);
-            if octos_bus::media::is_audio(path) {
+            if ra_bus::media::is_audio(path) {
                 saw_audio = true;
                 is_voice_message = true;
                 attachment_media.push(resolved_path.clone());
@@ -101,7 +101,7 @@ pub async fn process_media(
         // Check for audio even without transcriber (for voice_message flag)
         for path in &inbound.media {
             let resolved_path = resolve_media_reference(path);
-            if octos_bus::media::is_audio(path) {
+            if ra_bus::media::is_audio(path) {
                 is_voice_message = true;
                 attachment_media.push(resolved_path.clone());
                 audio_filenames.push(attachment_display_name(path));
@@ -176,7 +176,7 @@ async fn route_non_audio_attachment(
     attachment_filenames: &mut Vec<String>,
     attachment_notes: &mut Vec<String>,
 ) {
-    if octos_bus::media::is_image(display_source) {
+    if ra_bus::media::is_image(display_source) {
         image_media.push(resolved_path.to_string());
     } else {
         attachment_media.push(resolved_path.to_string());
@@ -235,7 +235,7 @@ enum PdfTextStatus {
 }
 
 async fn classify_pdf_text(path: &Path) -> PdfTextStatus {
-    match octos_agent::tools::read_no_follow(path).await {
+    match ra_agent::tools::read_no_follow(path).await {
         Ok(text) if has_meaningful_pdf_text(&text) => PdfTextStatus::Meaningful,
         Ok(_) => PdfTextStatus::EmptyOrSparse,
         Err(error) => PdfTextStatus::ExtractionFailed(error.to_string()),
@@ -312,7 +312,7 @@ async fn render_pdf_pages_as_images(pdf_path: &Path) -> Result<Vec<String>, Stri
 }
 
 fn render_pdf_pages_as_images_blocking(pdf_path: &Path) -> Result<Vec<String>, String> {
-    let output_dir = octos_bus::file_handle::temp_upload_root().join("pdf-page-images");
+    let output_dir = ra_bus::file_handle::temp_upload_root().join("pdf-page-images");
     std::fs::create_dir_all(&output_dir)
         .map_err(|error| format!("failed to create rendered-page directory: {error}"))?;
 
@@ -394,7 +394,7 @@ fn safe_file_stem(path: &Path) -> String {
 }
 
 fn resolve_media_reference(path: &str) -> String {
-    octos_bus::file_handle::resolve_upload_reference(path)
+    ra_bus::file_handle::resolve_upload_reference(path)
         .map(|resolved| resolved.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.to_string())
 }
@@ -562,7 +562,7 @@ mod tests {
             media: media.into_iter().map(|path| path.to_string()).collect(),
             metadata: serde_json::json!({}),
             message_id: None,
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         }
     }
 
@@ -606,11 +606,11 @@ mod tests {
 
     #[tokio::test]
     async fn process_media_resolves_upload_handles_to_real_paths() {
-        let upload_root = octos_bus::file_handle::temp_upload_root();
+        let upload_root = ra_bus::file_handle::temp_upload_root();
         std::fs::create_dir_all(&upload_root).unwrap();
         let saved = upload_root.join(format!("{}-report.pdf", uuid::Uuid::now_v7()));
         std::fs::write(&saved, b"pdf").unwrap();
-        let handle = octos_bus::file_handle::encode_tmp_upload_handle(&saved, Some("report.pdf"))
+        let handle = ra_bus::file_handle::encode_tmp_upload_handle(&saved, Some("report.pdf"))
             .expect("handle");
         let mut inbound = inbound_with_media("Please summarize this", vec![handle.as_str()]);
         let channels = ChannelManager::new();

@@ -6,7 +6,7 @@
 
 use std::time::{Duration, Instant};
 
-use octos_core::TokenUsage;
+use ra_core::TokenUsage;
 
 const DEFAULT_LLM_CALL_INTERVAL: u32 = 20;
 const DEFAULT_ACTIVE_TOKEN_INTERVAL: u64 = 100_000;

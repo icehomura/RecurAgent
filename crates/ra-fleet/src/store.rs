@@ -36,7 +36,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use eyre::{Result, WrapErr, bail};
-use octos_core::SessionKey;
+use ra_core::SessionKey;
 use redb::{Database, ReadableTable, TableDefinition};
 use uuid::Uuid;
 

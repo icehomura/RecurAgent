@@ -19,13 +19,13 @@ use axum::http::{HeaderMap, Uri};
 use axum::response::{IntoResponse, Response};
 use chrono::{DateTime, Utc};
 use futures::{SinkExt, StreamExt};
-use octos_agent::{
+use ra_agent::{
     Agent, BackgroundResultKind, BackgroundResultPayload, PromptContextManager, PromptContextPhase,
     PromptContextReport, PromptContextRequest, ToolApprovalDecision, ToolApprovalRequest,
     UserQuestionOutcome, UserQuestionRequest,
 };
-use octos_core::app_ui_codec::{self, AppUiFrame, MAX_TEXT_FRAME_BYTES};
-use octos_core::ui_protocol::{
+use ra_core::app_ui_codec::{self, AppUiFrame, MAX_TEXT_FRAME_BYTES};
+use ra_core::ui_protocol::{
     AgentOutputDeltaEvent, AgentUpdatedEvent, ApprovalAutoResolvedEvent, ApprovalCancelledEvent,
     ApprovalCommandDetails, ApprovalDecidedEvent, ApprovalDecision, ApprovalId,
     ApprovalRenderHints, ApprovalRequestedEvent, ApprovalTypedDetails, AttachmentOwnerV2,
@@ -74,11 +74,11 @@ use octos_core::ui_protocol::{
     VoiceAudioChunkEvent, approval_cancelled_reasons, approval_kinds, hydrate_sections,
     progress_kinds, thread_status,
 };
-use octos_core::{
+use ra_core::{
     AgentId, InboundMessage, MAIN_PROFILE_ID, Message, MessageOrigin, MessageRole, SessionKey,
     TaskId,
 };
-use octos_llm::pricing::model_pricing;
+use ra_llm::pricing::model_pricing;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufWriter};
@@ -321,7 +321,7 @@ fn emit_finding_recorded_event(data_dir: &Path, goal_id: &str, slug: &str, detai
 }
 
 fn peer_finding_assertion(outcome: &str, body: &str) -> String {
-    let content = octos_core::truncated_utf8(body, MAX_PEER_FINDING_RECORD_CHARS, " …[truncated]");
+    let content = ra_core::truncated_utf8(body, MAX_PEER_FINDING_RECORD_CHARS, " …[truncated]");
     format!("[{outcome}] {content}")
 }
 const APPROVAL_CANCELLED_REASON_REQUEST_SEND_FAILED: &str = "request_send_failed";
@@ -347,15 +347,15 @@ const USER_QUESTION_CANCELLED_REASON_WAITER_DROPPED: &str = "waiter_dropped";
 /// Cancelled) instead of wedging it forever awaiting an answer no one will give.
 const APPROVAL_CANCELLED_REASON_PEER_CLOSED: &str = "peer_closed";
 const APPUI_METHOD_CONFIG_CAPABILITIES_LIST: &str =
-    octos_core::ui_protocol::methods::CONFIG_CAPABILITIES_LIST;
+    ra_core::ui_protocol::methods::CONFIG_CAPABILITIES_LIST;
 const APPUI_METHOD_CLIENT_HELLO: &str = "client_hello";
 /// Stop this `ra serve`, exactly as Ctrl+C would. Local `--solo` HTTP
 /// servers only — see [`supports_server_shutdown`].
 const APPUI_METHOD_SERVER_SHUTDOWN: &str = "server/shutdown";
 const APPUI_METHOD_SESSION_STATUS_READ: &str =
-    octos_core::ui_protocol::methods::SESSION_STATUS_READ;
+    ra_core::ui_protocol::methods::SESSION_STATUS_READ;
 const APPUI_METHOD_PROFILE_LOCAL_CREATE: &str =
-    octos_core::ui_protocol::methods::PROFILE_LOCAL_CREATE;
+    ra_core::ui_protocol::methods::PROFILE_LOCAL_CREATE;
 const APPUI_METHOD_PROFILE_LLM_LIST: &str = "profile/llm/list";
 const APPUI_METHOD_PROFILE_LLM_SELECT: &str = "profile/llm/select";
 const APPUI_METHOD_MCP_STATUS_LIST: &str = "mcp/status/list";
@@ -480,7 +480,7 @@ const APPUI_METHOD_ONBOARDING_WORKSPACE_PROBE: &str = "onboarding/workspace_prob
 /// banned-system-root rule, same `~` expansion.
 const APPUI_METHOD_ONBOARDING_WORKSPACE_LIST: &str = "onboarding/workspace_list";
 const APPUI_METHOD_ONBOARDING_WORKSPACE_CREATE: &str = "onboarding/workspace_create";
-const APPUI_METHOD_REVIEW_START: &str = octos_core::ui_protocol::methods::REVIEW_START;
+const APPUI_METHOD_REVIEW_START: &str = ra_core::ui_protocol::methods::REVIEW_START;
 
 /// The canonical model catalog — the single source of truth for provisionable
 /// models (`model_catalog.json`). Compiled in so onboarding always has the full
@@ -572,7 +572,7 @@ const APPUI_EXTRA_METHODS: &[&str] = &[
     APPUI_METHOD_ONBOARDING_WORKSPACE_PROBE,
     APPUI_METHOD_ONBOARDING_WORKSPACE_LIST,
     APPUI_METHOD_ONBOARDING_WORKSPACE_CREATE,
-    octos_core::ui_protocol::methods::SESSION_BTW,
+    ra_core::ui_protocol::methods::SESSION_BTW,
     APPUI_METHOD_SESSION_COMPACT,
     APPUI_METHOD_SESSION_COMPACT_MODE_SET,
     APPUI_METHOD_VOICE_ADMIT,
@@ -581,21 +581,21 @@ const APPUI_EXTRA_METHODS: &[&str] = &[
 const APPUI_STDIO_AUTH_BOUND_UNAVAILABLE_METHODS: &[&str] = &[
     APPUI_METHOD_AUTH_ME,
     APPUI_METHOD_AUTH_LOGOUT,
-    octos_core::ui_protocol::methods::CONTENT_LIST,
-    octos_core::ui_protocol::methods::CONTENT_DELETE,
-    octos_core::ui_protocol::methods::CONTENT_BULK_DELETE,
-    octos_core::ui_protocol::methods::MEMORY_OVERVIEW,
-    octos_core::ui_protocol::methods::MEMORY_ENTITY,
-    octos_core::ui_protocol::methods::MEMORY_SEARCH,
-    octos_core::ui_protocol::methods::MEMORY_LOAD,
-    octos_core::ui_protocol::methods::MEMORY_INGEST,
-    octos_core::ui_protocol::methods::CRON_LIST,
-    octos_core::ui_protocol::methods::CRON_TOGGLE,
-    octos_core::ui_protocol::methods::SMART_HOME_STATUS_GET,
-    octos_core::ui_protocol::methods::SMART_HOME_DEVICE_LIST,
-    octos_core::ui_protocol::methods::SMART_HOME_DEVICE_COMMAND,
-    octos_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_START,
-    octos_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_STOP,
+    ra_core::ui_protocol::methods::CONTENT_LIST,
+    ra_core::ui_protocol::methods::CONTENT_DELETE,
+    ra_core::ui_protocol::methods::CONTENT_BULK_DELETE,
+    ra_core::ui_protocol::methods::MEMORY_OVERVIEW,
+    ra_core::ui_protocol::methods::MEMORY_ENTITY,
+    ra_core::ui_protocol::methods::MEMORY_SEARCH,
+    ra_core::ui_protocol::methods::MEMORY_LOAD,
+    ra_core::ui_protocol::methods::MEMORY_INGEST,
+    ra_core::ui_protocol::methods::CRON_LIST,
+    ra_core::ui_protocol::methods::CRON_TOGGLE,
+    ra_core::ui_protocol::methods::SMART_HOME_STATUS_GET,
+    ra_core::ui_protocol::methods::SMART_HOME_DEVICE_LIST,
+    ra_core::ui_protocol::methods::SMART_HOME_DEVICE_COMMAND,
+    ra_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_START,
+    ra_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_STOP,
 ];
 type WsSink = futures::stream::SplitSink<WebSocket, WsMessage>;
 type SharedActiveTurns = Arc<tokio::sync::Mutex<HashMap<SessionKey, ActiveTurn>>>;
@@ -1764,8 +1764,8 @@ struct SessionPermissionProfileStore {
 
 #[derive(Debug, Clone, Copy, Default)]
 struct StoredSessionPermissionProfile {
-    selection: octos_core::ui_protocol::PermissionProfileSelection,
-    approval_policy: Option<octos_agent::ApprovalPolicy>,
+    selection: ra_core::ui_protocol::PermissionProfileSelection,
+    approval_policy: Option<ra_agent::ApprovalPolicy>,
 }
 
 impl SessionPermissionProfileStore {
@@ -1773,7 +1773,7 @@ impl SessionPermissionProfileStore {
     // the stored profile directly; this build only reads via
     // `get_state_explicit`.
     #[allow(dead_code)]
-    fn get(&self, session_id: &SessionKey) -> octos_core::ui_protocol::PermissionProfileSelection {
+    fn get(&self, session_id: &SessionKey) -> ra_core::ui_protocol::PermissionProfileSelection {
         self.get_state(session_id).selection
     }
 
@@ -1799,8 +1799,8 @@ impl SessionPermissionProfileStore {
     fn set(
         &self,
         session_id: SessionKey,
-        selection: octos_core::ui_protocol::PermissionProfileSelection,
-        approval_policy: Option<octos_agent::ApprovalPolicy>,
+        selection: ra_core::ui_protocol::PermissionProfileSelection,
+        approval_policy: Option<ra_agent::ApprovalPolicy>,
     ) {
         self.selections
             .lock()
@@ -1844,11 +1844,11 @@ fn effective_session_permission_state(
         && !session_id_encodes_non_solo_scope(session_id)
     {
         return StoredSessionPermissionProfile {
-            selection: octos_core::ui_protocol::PermissionProfileSelection {
-                mode: octos_core::ui_protocol::PermissionProfileMode::DangerFullAccess,
-                network: octos_core::ui_protocol::PermissionNetworkPolicy::Allow,
+            selection: ra_core::ui_protocol::PermissionProfileSelection {
+                mode: ra_core::ui_protocol::PermissionProfileMode::DangerFullAccess,
+                network: ra_core::ui_protocol::PermissionNetworkPolicy::Allow,
             },
-            approval_policy: Some(octos_agent::ApprovalPolicy::Never),
+            approval_policy: Some(ra_agent::ApprovalPolicy::Never),
         };
     }
     // Network-on default: a fresh Local session with no explicit selection gets
@@ -1864,9 +1864,9 @@ fn effective_session_permission_state(
         && !session_id_encodes_non_solo_scope(session_id)
     {
         return StoredSessionPermissionProfile {
-            selection: octos_core::ui_protocol::PermissionProfileSelection {
-                mode: octos_core::ui_protocol::PermissionProfileMode::WorkspaceWrite,
-                network: octos_core::ui_protocol::PermissionNetworkPolicy::Allow,
+            selection: ra_core::ui_protocol::PermissionProfileSelection {
+                mode: ra_core::ui_protocol::PermissionProfileMode::WorkspaceWrite,
+                network: ra_core::ui_protocol::PermissionNetworkPolicy::Allow,
             },
             approval_policy: None,
         };
@@ -2100,7 +2100,7 @@ struct ActiveTurn {
     /// agent loop drains at the next iteration boundary. `None` for
     /// non-steerable turns (code review, M9 protocol fixtures), mirroring
     /// codex's `ActiveTurnNotSteerable` for review/compact turn kinds.
-    steer: Option<octos_agent::SharedSteerBuffer>,
+    steer: Option<ra_agent::SharedSteerBuffer>,
     abort: AbortHandle,
     /// The connection whose request started the turn (`turn/start`,
     /// `review/start`); `None` for server-initiated turns (continuations).
@@ -2699,11 +2699,11 @@ impl ConnectionUiFeatures {
         if self.agent_control_available() {
             push_capability_feature(
                 &mut capabilities.supported_features,
-                octos_core::ui_protocol::UI_PROTOCOL_FEATURE_HARNESS_TASK_SUPERVISION_INSPECTION_V1,
+                ra_core::ui_protocol::UI_PROTOCOL_FEATURE_HARNESS_TASK_SUPERVISION_INSPECTION_V1,
             );
             push_capability_feature(
                 &mut capabilities.supported_features,
-                octos_core::ui_protocol::UI_PROTOCOL_FEATURE_HARNESS_TASK_ARTIFACTS_V1,
+                ra_core::ui_protocol::UI_PROTOCOL_FEATURE_HARNESS_TASK_ARTIFACTS_V1,
             );
         }
         if supports_local_solo_profile_create(state) {
@@ -2862,10 +2862,10 @@ fn voice_admission_method_available(method: &str, features: ConnectionUiFeatures
 }
 
 fn skill_action_execution_available(
-    action: &octos_agent::plugins::SkillActionDef,
+    action: &ra_agent::plugins::SkillActionDef,
     features: ConnectionUiFeatures,
 ) -> bool {
-    action.execution != octos_agent::plugins::SkillActionExecution::Background
+    action.execution != ra_agent::plugins::SkillActionExecution::Background
         || features.skill_action_jobs_available()
 }
 
@@ -3599,7 +3599,7 @@ fn publish_appui_context_status(session_id: &SessionKey, manager: &ContextManage
     update_session_context_status(session_id, appui_context_status_value(manager));
 }
 
-fn appui_context_compact_threshold_tokens(llm_provider: &dyn octos_llm::LlmProvider) -> usize {
+fn appui_context_compact_threshold_tokens(llm_provider: &dyn ra_llm::LlmProvider) -> usize {
     appui_compact_threshold_tokens_for(
         env_usize("OCTOS_CONTEXT_COMPACT_THRESHOLD_TOKENS"),
         llm_provider.context_window() as usize * APPUI_CONTEXT_COMPACT_RATIO_NUMERATOR
@@ -3785,16 +3785,16 @@ fn session_compaction_mode_str(session_id: &SessionKey, state: &AppState) -> &'s
 /// (`AppState::llm_compaction`); the flag-off path calls the heuristic directly.
 /// Returns a plain `String` for the unchanged `compact_context`.
 fn appui_compaction_summary(
-    llm_provider: &Arc<dyn octos_llm::LlmProvider>,
+    llm_provider: &Arc<dyn ra_llm::LlmProvider>,
     frame: &crate::context_manager::PromptFrame,
     budget_tokens: u32,
 ) -> String {
-    if let Some(summary) = octos_agent::compaction::llm_compaction_summary_with_budget(
+    if let Some(summary) = ra_agent::compaction::llm_compaction_summary_with_budget(
         llm_provider,
         &frame.messages,
         budget_tokens,
         std::time::Duration::from_secs(
-            octos_agent::compaction::DEFAULT_LLM_COMPACTION_TIMEOUT_SECS,
+            ra_agent::compaction::DEFAULT_LLM_COMPACTION_TIMEOUT_SECS,
         ),
     ) {
         return summary;
@@ -3809,13 +3809,13 @@ fn appui_compaction_summary(
 /// `provider_name()` here would compare a `label@host` router tag against
 /// the untagged metadata label and rotate the epoch on every call.
 pub(crate) fn prompt_cache_lane_identity(
-    llm_provider: &dyn octos_llm::LlmProvider,
+    llm_provider: &dyn ra_llm::LlmProvider,
 ) -> (String, String) {
     let metadata = llm_provider.provider_metadata();
     (metadata.provider, metadata.model)
 }
 
-fn appui_context_prompt_policy(llm_provider: &dyn octos_llm::LlmProvider) -> PromptBuildPolicy {
+fn appui_context_prompt_policy(llm_provider: &dyn ra_llm::LlmProvider) -> PromptBuildPolicy {
     PromptBuildPolicy {
         include_reasoning: false,
         supports_media: true,
@@ -3837,7 +3837,7 @@ fn appui_context_prompt_policy(llm_provider: &dyn octos_llm::LlmProvider) -> Pro
 fn appui_compact_context_if_over_threshold(
     manager: &mut ContextManager,
     session_id: &SessionKey,
-    llm_provider: &Arc<dyn octos_llm::LlmProvider>,
+    llm_provider: &Arc<dyn ra_llm::LlmProvider>,
     llm_compaction_enabled: bool,
     trigger: &str,
 ) -> Vec<UiNotification> {
@@ -3927,7 +3927,7 @@ fn appui_context_open_snapshot(
     data_dir: &Path,
     session_id: &SessionKey,
     history: &[Message],
-    llm_provider: Option<&Arc<dyn octos_llm::LlmProvider>>,
+    llm_provider: Option<&Arc<dyn ra_llm::LlmProvider>>,
 ) -> (Value, UiContextState, Vec<UiNotification>) {
     // While a turn owns the ledger, report its live generation and never
     // compact or persist from disk underneath it. The live check, load,
@@ -3997,7 +3997,7 @@ fn appui_context_history_for_agent(
     data_dir: &Path,
     session_id: &SessionKey,
     history: &[Message],
-    llm_provider: &Arc<dyn octos_llm::LlmProvider>,
+    llm_provider: &Arc<dyn ra_llm::LlmProvider>,
     llm_compaction_enabled: bool,
     trigger: &str,
 ) -> (
@@ -4057,7 +4057,7 @@ fn appui_context_history_for_agent(
 fn appui_append_tail_context_events(
     data_dir: &Path,
     session_id: &SessionKey,
-    llm_provider: &Arc<dyn octos_llm::LlmProvider>,
+    llm_provider: &Arc<dyn ra_llm::LlmProvider>,
     context_manager: &Arc<StdMutex<ContextManager>>,
     history: &mut Vec<Message>,
     events: Vec<(ContextEventKind, &'static str, String)>,
@@ -4109,7 +4109,7 @@ fn appui_force_compact_context(
     data_dir: &Path,
     session_id: &SessionKey,
     history: &[Message],
-    llm_provider: &Arc<dyn octos_llm::LlmProvider>,
+    llm_provider: &Arc<dyn ra_llm::LlmProvider>,
     llm_compaction_enabled: bool,
 ) -> (Vec<UiNotification>, serde_json::Value) {
     const TRIGGER: &str = "appui_manual_compact";
@@ -4191,7 +4191,7 @@ fn appui_manual_compact_session(
     data_dir: &Path,
     session_id: &SessionKey,
     history: &[Message],
-    llm_provider: &Arc<dyn octos_llm::LlmProvider>,
+    llm_provider: &Arc<dyn ra_llm::LlmProvider>,
     llm_compaction_enabled: bool,
 ) -> Result<(Vec<UiNotification>, serde_json::Value), RpcError> {
     let persist_lock = appui_context_persist_lock(session_id);
@@ -4378,8 +4378,8 @@ fn covered_prompt_message_indices(messages: &[Message], known_messages: &[Messag
 }
 
 fn tool_call_slices_match(
-    left: Option<&[octos_core::ToolCall]>,
-    right: Option<&[octos_core::ToolCall]>,
+    left: Option<&[ra_core::ToolCall]>,
+    right: Option<&[ra_core::ToolCall]>,
 ) -> bool {
     match (left, right) {
         (None, None) => true,
@@ -4444,7 +4444,7 @@ struct AppUiPromptContextBridge {
     /// fallback whenever an LLM summary fails, and the flag-off state). Set on
     /// the per-turn bridge only when the flag is on; child/spawn bridges leave
     /// it `None`.
-    llm_compaction_provider: Option<Arc<dyn octos_llm::LlmProvider>>,
+    llm_compaction_provider: Option<Arc<dyn ra_llm::LlmProvider>>,
     /// UPCR-2026-035: render earlier `memory_update` context events as "no
     /// memory" in the outgoing prompt (a turn without the app's context).
     redact_memory_events: bool,
@@ -4517,7 +4517,7 @@ impl AppUiPromptContextBridge {
         self
     }
 
-    fn with_llm_compaction_provider(mut self, provider: Arc<dyn octos_llm::LlmProvider>) -> Self {
+    fn with_llm_compaction_provider(mut self, provider: Arc<dyn ra_llm::LlmProvider>) -> Self {
         self.llm_compaction_provider = Some(provider);
         self
     }
@@ -5066,7 +5066,7 @@ fn register_session_ledger_scope(
     runtime: &crate::runtime::SessionRuntime,
 ) {
     if let Some(observer) = state.ui_protocol.commit_observer.get() {
-        octos_bus::set_scoped_message_commit_observer(&runtime.sessions_root, observer);
+        ra_bus::set_scoped_message_commit_observer(&runtime.sessions_root, observer);
     }
     let scope = (runtime.sessions_root != runtime.profile.data_dir).then(|| {
         use sha2::{Digest, Sha256};
@@ -5154,10 +5154,10 @@ pub(super) async fn event_ledger(state: &AppState) -> Arc<UiProtocolLedger> {
         .commit_observer
         .get_or_init(|| message_commit_observer(installed.clone()));
     if let Some(root) = data_dir {
-        octos_bus::set_scoped_message_commit_observer(&root, observer);
+        ra_bus::set_scoped_message_commit_observer(&root, observer);
     }
     for profile in state.profiles.values() {
-        octos_bus::set_scoped_message_commit_observer(&profile.data_dir, observer);
+        ra_bus::set_scoped_message_commit_observer(&profile.data_dir, observer);
     }
     // The winning initializer starts exactly one sweep per runtime. Scoped
     // registrations above all retain this runtime's single commit observer.
@@ -5335,7 +5335,7 @@ async fn store_delivered_media_copies(
     let key = session_id.clone();
     let media = media.to_vec();
     if let Err(error) = tokio::task::spawn_blocking(move || {
-        octos_bus::session_artifacts::store_delivered_copies(&root, &key, &media);
+        ra_bus::session_artifacts::store_delivered_copies(&root, &key, &media);
     })
     .await
     {
@@ -5348,12 +5348,12 @@ async fn store_delivered_media_copies(
 /// download copies of its files. A spawn-only companion is transcript-only: the linked v2
 /// background-child payload owns its media and visible completion.
 async fn persist_send_file_delivery(
-    sessions: &Arc<TokioMutex<octos_bus::SessionManager>>,
+    sessions: &Arc<TokioMutex<ra_bus::SessionManager>>,
     data_dir: &Path,
     download_root: &Path,
     session_id: &SessionKey,
     default_thread_id: &str,
-    msg: octos_core::OutboundMessage,
+    msg: ra_core::OutboundMessage,
 ) -> Option<(Message, usize)> {
     let thread_id = msg
         .metadata
@@ -5387,7 +5387,7 @@ async fn persist_send_file_delivery(
 }
 
 async fn persist_assistant_with_media(
-    sessions: &Arc<TokioMutex<octos_bus::SessionManager>>,
+    sessions: &Arc<TokioMutex<ra_bus::SessionManager>>,
     data_dir: &Path,
     session_id: &SessionKey,
     content: String,
@@ -5395,14 +5395,14 @@ async fn persist_assistant_with_media(
     thread_id: String,
     label: &str,
 ) -> Option<(Message, usize)> {
-    let mut message = Message::assistant_with_thread(content, octos_core::ThreadId::new(thread_id));
+    let mut message = Message::assistant_with_thread(content, ra_core::ThreadId::new(thread_id));
     message.media = media;
     let committed_message = message.clone();
     // Capture the stamped timestamp BEFORE the canonical persist
     // consumes the message — `MessageCommitObserver` derives the wire
     // `message_id` from `(session_id, committed_seq, message.timestamp)`
     // for the canonical background-child payload.
-    let committed_seq = match octos_bus::session::persist_message_through_canonical_path(
+    let committed_seq = match ra_bus::session::persist_message_through_canonical_path(
         data_dir, session_id, message,
     )
     .await
@@ -5447,14 +5447,14 @@ async fn persist_assistant_with_media(
 /// transport, this filter remains correct because the filtering criteria
 /// describe a metadata-only row (no rendering surface) regardless of
 /// transport.
-fn is_metadata_only_assistant_row(message: &octos_core::Message) -> bool {
-    message.role == octos_core::MessageRole::Assistant
+fn is_metadata_only_assistant_row(message: &ra_core::Message) -> bool {
+    message.role == ra_core::MessageRole::Assistant
         && message.content.trim().is_empty()
         && message.media.is_empty()
 }
 
-fn message_commit_observer(ledger: Arc<UiProtocolLedger>) -> octos_bus::MessageCommitObserver {
-    let observer: octos_bus::MessageCommitObserver =
+fn message_commit_observer(ledger: Arc<UiProtocolLedger>) -> ra_bus::MessageCommitObserver {
+    let observer: ra_bus::MessageCommitObserver =
         Arc::new(move |session_key, message, committed_seq| {
             if is_metadata_only_assistant_row(message) {
                 return;
@@ -5558,7 +5558,7 @@ fn message_commit_observer(ledger: Arc<UiProtocolLedger>) -> octos_bus::MessageC
 
 #[cfg(test)]
 fn install_message_commit_observer(ledger: Arc<UiProtocolLedger>) {
-    octos_bus::set_message_commit_observer(Some(message_commit_observer(ledger)));
+    ra_bus::set_message_commit_observer(Some(message_commit_observer(ledger)));
 }
 
 /// Process-global pending diff-preview store. Mirrors
@@ -5783,8 +5783,8 @@ impl BoundedChannelReporter {
     }
 }
 
-impl octos_agent::ProgressReporter for BoundedChannelReporter {
-    fn report(&self, event: octos_agent::ProgressEvent) {
+impl ra_agent::ProgressReporter for BoundedChannelReporter {
+    fn report(&self, event: ra_agent::ProgressEvent) {
         let json = match serde_json::to_string(&super::events::event_to_json(
             &event,
             self.thread_id.as_deref(),
@@ -5840,7 +5840,7 @@ impl octos_agent::ProgressReporter for BoundedChannelReporter {
 fn forward_task_progress_to_channel(
     tx: &tokio::sync::mpsc::Sender<String>,
     progress_dropped: &Arc<AtomicU64>,
-    task: &octos_agent::BackgroundTask,
+    task: &ra_agent::BackgroundTask,
     runtime_profile_id: Option<&str>,
 ) {
     let event = background_task_to_progress_json(task);
@@ -5900,7 +5900,7 @@ fn forward_task_progress_to_channel(
 fn forward_terminal_agent_update_durable(
     ws: &WsConnection,
     ledger: &UiProtocolLedger,
-    task: &octos_agent::BackgroundTask,
+    task: &ra_agent::BackgroundTask,
     runtime_profile_id: Option<&str>,
 ) {
     if !task.status.is_terminal() {
@@ -5914,7 +5914,7 @@ fn forward_terminal_agent_update_durable(
             return;
         }
     };
-    let Ok(agent) = serde_json::from_value::<octos_core::ui_protocol::UiAgentRecord>(agent_value)
+    let Ok(agent) = serde_json::from_value::<ra_core::ui_protocol::UiAgentRecord>(agent_value)
     else {
         return;
     };
@@ -5928,7 +5928,7 @@ fn forward_terminal_agent_update_durable(
 fn forward_task_progress_json_to_channel(
     tx: &tokio::sync::mpsc::Sender<String>,
     progress_dropped: &Arc<AtomicU64>,
-    task: &octos_agent::BackgroundTask,
+    task: &ra_agent::BackgroundTask,
     method: &'static str,
     json: String,
 ) {
@@ -6082,7 +6082,7 @@ fn refuse_registered_question_park_for_closed_peer(
     gate: Option<&PeerParkGate>,
     contracts: &UiProtocolContractStores,
     session_id: &SessionKey,
-    question_id: &octos_core::ui_protocol::QuestionId,
+    question_id: &ra_core::ui_protocol::QuestionId,
 ) -> bool {
     if !peer_park_is_refused(gate) {
         return false;
@@ -6116,7 +6116,7 @@ struct UiProtocolApprovalRequester {
 }
 
 #[async_trait::async_trait]
-impl octos_agent::ToolApprovalRequester for UiProtocolApprovalRequester {
+impl ra_agent::ToolApprovalRequester for UiProtocolApprovalRequester {
     async fn request_approval(&self, request: ToolApprovalRequest) -> ToolApprovalDecision {
         let approval_id = ApprovalId::new();
         // UPCR-2026-035: a once-only approval (a host-routed app tool's exact
@@ -6552,7 +6552,7 @@ struct SessionUserQuestionRequester {
 struct PendingQuestionWaiterGuard {
     contracts: Arc<UiProtocolContractStores>,
     session_id: SessionKey,
-    question_id: octos_core::ui_protocol::QuestionId,
+    question_id: ra_core::ui_protocol::QuestionId,
     armed: bool,
 }
 
@@ -6560,7 +6560,7 @@ impl PendingQuestionWaiterGuard {
     fn new(
         contracts: Arc<UiProtocolContractStores>,
         session_id: SessionKey,
-        question_id: octos_core::ui_protocol::QuestionId,
+        question_id: ra_core::ui_protocol::QuestionId,
     ) -> Self {
         Self {
             contracts,
@@ -6590,9 +6590,9 @@ impl Drop for PendingQuestionWaiterGuard {
 }
 
 #[async_trait::async_trait]
-impl octos_agent::UserQuestionRequester for SessionUserQuestionRequester {
+impl ra_agent::UserQuestionRequester for SessionUserQuestionRequester {
     async fn request_user_question(&self, request: UserQuestionRequest) -> UserQuestionOutcome {
-        let question_id = octos_core::ui_protocol::QuestionId::new();
+        let question_id = ra_core::ui_protocol::QuestionId::new();
         let event = UserQuestionRequestedEvent {
             session_id: self.session_id.clone(),
             topic: self.session_id.topic().map(ToOwned::to_owned),
@@ -6814,17 +6814,17 @@ fn approval_event_from_tool_request(
 /// Resolve the manifest-declared risk for `tool_name`. Falls back to
 /// `unspecified` when the registry has no entry.
 fn server_risk_for(tool_name: &str) -> String {
-    octos_core::ui_protocol::tool_approval_risk(tool_name)
+    ra_core::ui_protocol::tool_approval_risk(tool_name)
 }
 
 #[cfg(test)]
 fn register_tool_risk_for_test(tool_name: &str, risk: &str) {
-    octos_core::ui_protocol::register_tool_approval_risk(tool_name, risk);
+    ra_core::ui_protocol::register_tool_approval_risk(tool_name, risk);
 }
 
 #[cfg(test)]
 fn clear_tool_risk_registry_for_test() {
-    octos_core::ui_protocol::clear_tool_approval_risks_for_test();
+    ra_core::ui_protocol::clear_tool_approval_risks_for_test();
 }
 
 #[cfg(test)]
@@ -9541,9 +9541,9 @@ struct RawLlmSelection {
     #[serde(default)]
     route: RawLlmRoute,
     /// Typed compatibility metadata (mirrors
-    /// [`octos_llm::openai::ModelHints`]) — never a request-body bag.
+    /// [`ra_llm::openai::ModelHints`]) — never a request-body bag.
     #[serde(default)]
-    model_hints: Option<octos_llm::openai::ModelHints>,
+    model_hints: Option<ra_llm::openai::ModelHints>,
     /// Local runtime context budget override (#2142). Reaches the runtime
     /// `ContextWindowOverride` via the durable selection; NOT an upstream
     /// request field. Carried as a raw integer on the wire so negative /
@@ -9561,7 +9561,7 @@ struct RawLlmSelection {
     /// Per-model default reasoning effort (the session/turn override tier
     /// wins over this).
     #[serde(default)]
-    reasoning_effort: Option<octos_llm::ReasoningEffort>,
+    reasoning_effort: Option<ra_llm::ReasoningEffort>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -10390,7 +10390,7 @@ fn normalize_local_username(username: &str) -> Result<String, RpcError> {
     // any record persists: previously the user record was saved first
     // and only the later profile save failed, leaving a valid user
     // with no usable profile (codex #1613 r5).
-    if octos_core::is_reserved_channel_name(&normalized) {
+    if ra_core::is_reserved_channel_name(&normalized) {
         return Err(local_profile_error(
             "profile_local_invalid_username",
             "username must not be a reserved channel name (e.g. api, slack, line)",
@@ -10546,8 +10546,8 @@ fn normalize_requested_profile_id(requested: &str) -> Option<String> {
     slug.truncate(LOCAL_PROFILE_ID_MAX_LEN);
     let slug = slug.trim_matches('-').to_owned();
     if slug.is_empty()
-        || slug == octos_core::MAIN_PROFILE_ID
-        || octos_core::is_reserved_channel_name(&slug)
+        || slug == ra_core::MAIN_PROFILE_ID
+        || ra_core::is_reserved_channel_name(&slug)
     {
         return None;
     }
@@ -10592,7 +10592,7 @@ fn local_profile_candidate_is_free(
     user_store: &crate::user_store::UserStore,
     claimed_emails: Option<&std::collections::HashSet<String>>,
 ) -> bool {
-    if id == octos_core::MAIN_PROFILE_ID || octos_core::is_reserved_channel_name(id) {
+    if id == ra_core::MAIN_PROFILE_ID || ra_core::is_reserved_channel_name(id) {
         return false;
     }
     if profile_store.profile_path(id).exists() {
@@ -10674,7 +10674,7 @@ fn generated_local_profile_id(
 /// original `requested_id` when valid, else the assigned `profile_id`. A
 /// profile therefore always ends up with SOME display name.
 fn resolve_local_display_name(
-    params: &octos_core::ui_protocol::ProfileLocalCreateParams,
+    params: &ra_core::ui_protocol::ProfileLocalCreateParams,
     profile_id: &str,
 ) -> String {
     let is_displayable = |candidate: &str| {
@@ -10695,7 +10695,7 @@ fn resolve_local_display_name(
 /// Resolve the optional owner email: validated when the client provides one,
 /// else `None` (a solo local profile does not require an email).
 fn resolve_optional_local_email(
-    params: &octos_core::ui_protocol::ProfileLocalCreateParams,
+    params: &ra_core::ui_protocol::ProfileLocalCreateParams,
 ) -> Result<Option<String>, RpcError> {
     if params.email.trim().is_empty() {
         Ok(None)
@@ -10724,9 +10724,9 @@ fn resolve_optional_local_email(
 fn create_fresh_local_solo_profile(
     profile_store: &crate::profiles::ProfileStore,
     user_store: &crate::user_store::UserStore,
-    params: &octos_core::ui_protocol::ProfileLocalCreateParams,
+    params: &ra_core::ui_protocol::ProfileLocalCreateParams,
     requested_slug: Option<String>,
-) -> Result<octos_core::ui_protocol::ProfileLocalCreateResult, RpcError> {
+) -> Result<ra_core::ui_protocol::ProfileLocalCreateResult, RpcError> {
     // Resolve the optional client email up front: when absent we must also pick
     // an id whose synthesized `<id>@solo.local` is free, so snapshot claimed
     // emails ONCE and thread the set through id selection.
@@ -10826,7 +10826,7 @@ fn create_fresh_local_solo_profile(
     write_local_profile_metadata(profile_store, &profile, &username, &email)?;
     persist_default_if_requested(profile_store, params, &profile_id)?;
 
-    Ok(octos_core::ui_protocol::ProfileLocalCreateResult {
+    Ok(ra_core::ui_protocol::ProfileLocalCreateResult {
         profile_id: profile_id.clone(),
         user_id: profile_id,
         name,
@@ -10843,7 +10843,7 @@ fn create_fresh_local_solo_profile(
 /// applies whether the profile was freshly minted or already existed.
 fn persist_default_if_requested(
     profile_store: &crate::profiles::ProfileStore,
-    params: &octos_core::ui_protocol::ProfileLocalCreateParams,
+    params: &ra_core::ui_protocol::ProfileLocalCreateParams,
     profile_id: &str,
 ) -> Result<(), RpcError> {
     if params.make_default.unwrap_or(false) {
@@ -10858,8 +10858,8 @@ fn persist_default_if_requested(
 
 pub(crate) fn create_or_get_local_solo_profile(
     state: &AppState,
-    params: octos_core::ui_protocol::ProfileLocalCreateParams,
-) -> Result<octos_core::ui_protocol::ProfileLocalCreateResult, RpcError> {
+    params: ra_core::ui_protocol::ProfileLocalCreateParams,
+) -> Result<ra_core::ui_protocol::ProfileLocalCreateResult, RpcError> {
     if !supports_local_solo_profile_create(state) {
         return Err(local_profile_permission_error(
             "profile_local_unsupported",
@@ -10952,7 +10952,7 @@ pub(crate) fn create_or_get_local_solo_profile(
         if existing_user.is_some() {
             write_local_profile_metadata(&profile_store, profile, &username, &email)?;
             persist_default_if_requested(&profile_store, &params, &profile_id)?;
-            return Ok(octos_core::ui_protocol::ProfileLocalCreateResult {
+            return Ok(ra_core::ui_protocol::ProfileLocalCreateResult {
                 profile_id: profile_id.clone(),
                 user_id: profile_id,
                 name,
@@ -11003,7 +11003,7 @@ pub(crate) fn create_or_get_local_solo_profile(
     write_local_profile_metadata(&profile_store, &profile, &username, &email)?;
     persist_default_if_requested(&profile_store, &params, &profile_id)?;
 
-    Ok(octos_core::ui_protocol::ProfileLocalCreateResult {
+    Ok(ra_core::ui_protocol::ProfileLocalCreateResult {
         profile_id: profile_id.clone(),
         user_id: profile_id,
         name,
@@ -11097,8 +11097,8 @@ fn configured_provider_json(
 fn permission_profile_supported_selections(
     state: &AppState,
     session_id: &SessionKey,
-) -> Vec<octos_core::ui_protocol::PermissionProfileSelection> {
-    use octos_core::ui_protocol::{
+) -> Vec<ra_core::ui_protocol::PermissionProfileSelection> {
+    use ra_core::ui_protocol::{
         PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
         PermissionProfileSelection as Selection,
     };
@@ -11137,8 +11137,8 @@ fn permission_profile_supported_selections(
 }
 
 fn permission_selection_policy_fields(
-    selection: octos_core::ui_protocol::PermissionProfileSelection,
-    approval_policy: Option<octos_agent::ApprovalPolicy>,
+    selection: ra_core::ui_protocol::PermissionProfileSelection,
+    approval_policy: Option<ra_agent::ApprovalPolicy>,
 ) -> (
     &'static str,
     &'static str,
@@ -11146,12 +11146,12 @@ fn permission_selection_policy_fields(
     &'static str,
     &'static str,
 ) {
-    use octos_core::ui_protocol::{
+    use ra_core::ui_protocol::{
         PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
     };
 
     let approval_policy = if selection.mode == Mode::DangerFullAccess
-        || approval_policy == Some(octos_agent::ApprovalPolicy::Never)
+        || approval_policy == Some(ra_agent::ApprovalPolicy::Never)
     {
         "never"
     } else {
@@ -11190,13 +11190,13 @@ fn permission_selection_policy_fields(
 
 fn parse_permission_approval_policy(
     value: Option<&str>,
-) -> Result<Option<octos_agent::ApprovalPolicy>, RpcError> {
+) -> Result<Option<ra_agent::ApprovalPolicy>, RpcError> {
     let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
         return Ok(None);
     };
     match value {
-        "never" => Ok(Some(octos_agent::ApprovalPolicy::Never)),
-        "ask" | "on-request" | "on_request" => Ok(Some(octos_agent::ApprovalPolicy::Ask)),
+        "never" => Ok(Some(ra_agent::ApprovalPolicy::Never)),
+        "ask" | "on-request" | "on_request" => Ok(Some(ra_agent::ApprovalPolicy::Ask)),
         other => Err(
             RpcError::invalid_params(format!("unsupported approval_policy '{other}'")).with_data(
                 json!({
@@ -11210,8 +11210,8 @@ fn parse_permission_approval_policy(
 
 fn permission_profile_disallowed_error(
     state: &AppState,
-    selection: octos_core::ui_protocol::PermissionProfileSelection,
-    approval_policy: Option<octos_agent::ApprovalPolicy>,
+    selection: ra_core::ui_protocol::PermissionProfileSelection,
+    approval_policy: Option<ra_agent::ApprovalPolicy>,
 ) -> RpcError {
     let (approval_policy, _, permission_profile, _, network) =
         permission_selection_policy_fields(selection, approval_policy);
@@ -11323,7 +11323,7 @@ fn session_id_encodes_non_solo_scope(session_id: &SessionKey) -> bool {
 /// `session_id_encodes_non_solo_scope` to distinguish a legacy
 /// `{channel}:{chat_id_with_colons}` session from a tenant-scoped
 /// `{profile}:tenant:{chat}` session. This is a SUPERSET of
-/// `octos_core::types::is_channel_name` — core's list omits
+/// `ra_core::types::is_channel_name` — core's list omits
 /// feature-gated channels (`line`, `wechat`, `mock`) that the
 /// gateway / bus crates emit in `BusMessage.channel`. Codex round 4
 /// review (#1167) caught the gap: a legacy
@@ -11360,11 +11360,11 @@ fn is_registered_channel_name(value: &str) -> bool {
 fn permission_selection_allowed(
     state: &AppState,
     session_id: &SessionKey,
-    selection: octos_core::ui_protocol::PermissionProfileSelection,
-    approval_policy: Option<octos_agent::ApprovalPolicy>,
+    selection: ra_core::ui_protocol::PermissionProfileSelection,
+    approval_policy: Option<ra_agent::ApprovalPolicy>,
     requested_runtime_mode: Option<&str>,
 ) -> bool {
-    use octos_core::ui_protocol::{
+    use ra_core::ui_protocol::{
         PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
     };
 
@@ -11402,22 +11402,22 @@ fn permission_selection_allowed(
     effective_local
         || (selection.mode != Mode::DangerFullAccess
             && selection.network != Network::Allow
-            && approval_policy != Some(octos_agent::ApprovalPolicy::Never))
+            && approval_policy != Some(ra_agent::ApprovalPolicy::Never))
 }
 
 fn effective_permissions_for_session(
     state: &AppState,
     session_id: &SessionKey,
-) -> Result<octos_agent::EffectivePermissions, RpcError> {
-    use octos_core::ui_protocol::{
+) -> Result<ra_agent::EffectivePermissions, RpcError> {
+    use ra_core::ui_protocol::{
         PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
     };
 
     let permission_state = effective_session_permission_state(state, session_id);
     let requested = match permission_state.selection.mode {
-        Mode::ReadOnly => octos_agent::PermissionProfile::ReadOnly,
-        Mode::WorkspaceWrite => octos_agent::PermissionProfile::WorkspaceWrite,
-        Mode::DangerFullAccess => octos_agent::PermissionProfile::DangerFullAccess,
+        Mode::ReadOnly => ra_agent::PermissionProfile::ReadOnly,
+        Mode::WorkspaceWrite => ra_agent::PermissionProfile::WorkspaceWrite,
+        Mode::DangerFullAccess => ra_agent::PermissionProfile::DangerFullAccess,
     };
     // SECURITY KEYSTONE (yolo GAP #1): map Local onto the dangerous-capable
     // `RuntimeMode::Solo` ONLY when the operator opted in via `--solo`.
@@ -11427,13 +11427,13 @@ fn effective_permissions_for_session(
     // runtime). See `local_solo_danger_allowed`.
     let runtime_mode = match state.deployment_mode {
         crate::config::DeploymentMode::Local if local_solo_danger_allowed(state) => {
-            octos_agent::RuntimeMode::Solo
+            ra_agent::RuntimeMode::Solo
         }
-        crate::config::DeploymentMode::Local => octos_agent::RuntimeMode::Local,
-        crate::config::DeploymentMode::Tenant => octos_agent::RuntimeMode::Tenant,
-        crate::config::DeploymentMode::Cloud => octos_agent::RuntimeMode::Cloud,
+        crate::config::DeploymentMode::Local => ra_agent::RuntimeMode::Local,
+        crate::config::DeploymentMode::Tenant => ra_agent::RuntimeMode::Tenant,
+        crate::config::DeploymentMode::Cloud => ra_agent::RuntimeMode::Cloud,
     };
-    let mut permissions = octos_agent::EffectivePermissions::for_runtime(requested, runtime_mode)
+    let mut permissions = ra_agent::EffectivePermissions::for_runtime(requested, runtime_mode)
         .map_err(|err| {
         RpcError::permission_denied(err.to_string()).with_data(json!({
             "kind": "permission_profile_disallowed",
@@ -11445,18 +11445,18 @@ fn effective_permissions_for_session(
         permissions = permissions.with_approval_policy(approval_policy);
     }
     if permission_state.selection.network == Network::Allow {
-        permissions.network = octos_agent::NetworkPolicy::Allowed;
+        permissions.network = ra_agent::NetworkPolicy::Allowed;
     }
     Ok(permissions)
 }
 
 fn permission_profile_list_result(
     state: &AppState,
-    params: octos_core::ui_protocol::PermissionProfileListParams,
-) -> octos_core::ui_protocol::PermissionProfileListResult {
+    params: ra_core::ui_protocol::PermissionProfileListParams,
+) -> ra_core::ui_protocol::PermissionProfileListResult {
     let current = effective_session_permission_state(state, &params.session_id).selection;
     let profiles = permission_profile_supported_selections(state, &params.session_id);
-    octos_core::ui_protocol::PermissionProfileListResult {
+    ra_core::ui_protocol::PermissionProfileListResult {
         session_id: params.session_id,
         current,
         profiles,
@@ -11465,8 +11465,8 @@ fn permission_profile_list_result(
 
 fn permission_profile_set_result(
     state: &AppState,
-    params: octos_core::ui_protocol::PermissionProfileSetParams,
-) -> Result<octos_core::ui_protocol::PermissionProfileSetResult, RpcError> {
+    params: ra_core::ui_protocol::PermissionProfileSetParams,
+) -> Result<ra_core::ui_protocol::PermissionProfileSetResult, RpcError> {
     let store = session_permission_profiles();
     let previous_state = effective_session_permission_state(state, &params.session_id);
     let previous = previous_state.selection;
@@ -11488,7 +11488,7 @@ fn permission_profile_set_result(
         ));
     }
     store.set(params.session_id.clone(), requested, approval_policy);
-    Ok(octos_core::ui_protocol::PermissionProfileSetResult {
+    Ok(ra_core::ui_protocol::PermissionProfileSetResult {
         session_id: params.session_id,
         current: requested,
         applied: requested != previous || approval_policy != previous_state.approval_policy,
@@ -11496,8 +11496,8 @@ fn permission_profile_set_result(
 }
 
 fn coding_tool_policy_view(
-    selection: octos_core::ui_protocol::PermissionProfileSelection,
-    approval_policy: Option<octos_agent::ApprovalPolicy>,
+    selection: ra_core::ui_protocol::PermissionProfileSelection,
+    approval_policy: Option<ra_agent::ApprovalPolicy>,
 ) -> super::coding_tool_contract::ToolPolicyView<'static> {
     let (approval_policy, sandbox_mode, _, _, _) =
         permission_selection_policy_fields(selection, approval_policy);
@@ -11508,7 +11508,7 @@ fn coding_tool_policy_view(
     }
 }
 
-fn model_visible_tool_names(registry: Option<&octos_agent::ToolRegistry>) -> Vec<String> {
+fn model_visible_tool_names(registry: Option<&ra_agent::ToolRegistry>) -> Vec<String> {
     let mut names: Vec<String> = registry
         .map(|registry| registry.specs().into_iter().map(|spec| spec.name).collect())
         .unwrap_or_else(|| {
@@ -11522,7 +11522,7 @@ fn model_visible_tool_names(registry: Option<&octos_agent::ToolRegistry>) -> Vec
     names
 }
 
-fn registered_tool_names(registry: Option<&octos_agent::ToolRegistry>) -> Vec<String> {
+fn registered_tool_names(registry: Option<&ra_agent::ToolRegistry>) -> Vec<String> {
     let mut names = registry
         .map(|registry| registry.tool_names())
         .unwrap_or_else(|| model_visible_tool_names(None));
@@ -11535,7 +11535,7 @@ fn registered_tool_names(registry: Option<&octos_agent::ToolRegistry>) -> Vec<St
 /// Retained (returning an empty set) so the coding tool contract's
 /// disabled-vs-deferred bookkeeping keeps compiling; every registered-but-
 /// -not-visible tool is now genuinely disabled (internal-hidden / policy).
-fn deferred_model_tool_names(_registry: Option<&octos_agent::ToolRegistry>) -> Vec<String> {
+fn deferred_model_tool_names(_registry: Option<&ra_agent::ToolRegistry>) -> Vec<String> {
     Vec::new()
 }
 
@@ -11825,7 +11825,7 @@ fn raw_catalog_result(_state: &AppState, _profile_id: Option<&str>) -> Result<Va
     //
     // Families with no registry entry have no key-env/route metadata and can't
     // be onboarded, so they're skipped.
-    let canonical: octos_llm::QosCatalog = serde_json::from_str(CANONICAL_MODEL_CATALOG)
+    let canonical: ra_llm::QosCatalog = serde_json::from_str(CANONICAL_MODEL_CATALOG)
         .map_err(|error| RpcError::internal_error(format!("canonical model catalog: {error}")))?;
 
     // `endpoints` (alternative provisioning routes — e.g. AutoDL/WiseModel) is
@@ -11854,7 +11854,7 @@ fn raw_catalog_result(_state: &AppState, _profile_id: Option<&str>) -> Result<Va
         // Canonicalize the family via the registry (handles aliases:
         // google->gemini, qwen->dashscope, glm->zhipu). A family with no
         // registry entry has no key-env/route and can't be onboarded.
-        let Some(reg) = octos_llm::registry::lookup(family_id) else {
+        let Some(reg) = ra_llm::registry::lookup(family_id) else {
             continue;
         };
         let family = families
@@ -12179,13 +12179,13 @@ fn raw_profile_skills_list(
 #[derive(Debug, Clone)]
 struct SkillActionRecord {
     skill_id: String,
-    action: octos_agent::plugins::SkillActionDef,
+    action: ra_agent::plugins::SkillActionDef,
     available: bool,
     unavailable_reason: Option<String>,
 }
 
 fn action_matches_filters(
-    action: &octos_agent::plugins::SkillActionDef,
+    action: &ra_agent::plugins::SkillActionDef,
     surface: Option<&str>,
     required_tags: &[String],
 ) -> bool {
@@ -12202,8 +12202,8 @@ fn action_matches_filters(
 }
 
 fn trusted_skill_action_records(
-    loaded_actions: &[octos_agent::plugins::LoadedSkillAction],
-    registry: &octos_agent::ToolRegistry,
+    loaded_actions: &[ra_agent::plugins::LoadedSkillAction],
+    registry: &ra_agent::ToolRegistry,
     surface: Option<&str>,
     required_tags: &[String],
 ) -> Vec<SkillActionRecord> {
@@ -12222,7 +12222,7 @@ fn trusted_skill_action_records(
 
 fn skill_action_record_is_trusted(
     record: &SkillActionRecord,
-    registry: &octos_agent::ToolRegistry,
+    registry: &ra_agent::ToolRegistry,
 ) -> bool {
     let Some(tool_name) = record.action.binding.tool_name() else {
         return false;
@@ -12231,7 +12231,7 @@ fn skill_action_record_is_trusted(
         .get(tool_name)
         .and_then(|tool| {
             tool.as_any()
-                .downcast_ref::<octos_agent::plugins::PluginTool>()
+                .downcast_ref::<ra_agent::plugins::PluginTool>()
         })
         .is_some_and(|tool| tool.plugin_name() == record.skill_id)
 }
@@ -12546,20 +12546,20 @@ struct QueuedSkillActionJob {
     workspace_root: PathBuf,
     execution_context: SkillActionExecutionContext,
     task_id: String,
-    _terminal_guard: octos_agent::TaskTerminalGuard,
+    _terminal_guard: ra_agent::TaskTerminalGuard,
 }
 
 #[derive(Clone)]
 struct SkillActionExecutionContext {
-    tool_context: octos_agent::tools::ToolContext,
-    approval_requester: Option<Arc<dyn octos_agent::ToolApprovalRequester>>,
+    tool_context: ra_agent::tools::ToolContext,
+    approval_requester: Option<Arc<dyn ra_agent::ToolApprovalRequester>>,
 }
 
 impl SkillActionExecutionContext {
     #[cfg(test)]
     fn zero() -> Self {
         Self {
-            tool_context: octos_agent::tools::ToolContext::zero(),
+            tool_context: ra_agent::tools::ToolContext::zero(),
             approval_requester: None,
         }
     }
@@ -12585,15 +12585,15 @@ fn materialize_action_file_path(
     workspace_root: &Path,
     tenant_id: Option<&str>,
     raw_path: &str,
-    materialization: octos_agent::plugins::SkillActionFileMaterialization,
+    materialization: ra_agent::plugins::SkillActionFileMaterialization,
 ) -> Result<Vec<String>, RpcError> {
     match materialization {
-        octos_agent::plugins::SkillActionFileMaterialization::Raw => Ok(vec![raw_path.to_string()]),
-        octos_agent::plugins::SkillActionFileMaterialization::WorkspaceRelative => {
-            use octos_bus::file_handle::ToolPathScope;
+        ra_agent::plugins::SkillActionFileMaterialization::Raw => Ok(vec![raw_path.to_string()]),
+        ra_agent::plugins::SkillActionFileMaterialization::WorkspaceRelative => {
+            use ra_bus::file_handle::ToolPathScope;
 
             let resolved =
-                octos_bus::file_handle::resolve_tool_path(workspace_root, None, raw_path).map_err(
+                ra_bus::file_handle::resolve_tool_path(workspace_root, None, raw_path).map_err(
                     |error| {
                         RpcError::invalid_params(format!(
                             "skill action input path `{raw_path}` is invalid: {error}"
@@ -12602,7 +12602,7 @@ fn materialize_action_file_path(
                 )?;
             match resolved.scope {
                 ToolPathScope::UploadTmpdir => {
-                    let paths = octos_bus::file_handle::materialize_uploads_as_workspace_relative(
+                    let paths = ra_bus::file_handle::materialize_uploads_as_workspace_relative(
                         workspace_root,
                         tenant_id,
                         &[raw_path.to_string()],
@@ -12644,8 +12644,8 @@ fn materialize_action_file_path(
                 )),
             }
         }
-        octos_agent::plugins::SkillActionFileMaterialization::TurnMedia => {
-            Ok(octos_bus::file_handle::materialize_turn_uploads(
+        ra_agent::plugins::SkillActionFileMaterialization::TurnMedia => {
+            Ok(ra_bus::file_handle::materialize_turn_uploads(
                 workspace_root,
                 tenant_id,
                 &[raw_path.to_string()],
@@ -12655,14 +12655,14 @@ fn materialize_action_file_path(
 }
 
 fn prepare_skill_action_tool_invocation(
-    action: &octos_agent::plugins::SkillActionDef,
-    registry: &octos_agent::ToolRegistry,
+    action: &ra_agent::plugins::SkillActionDef,
+    registry: &ra_agent::ToolRegistry,
     workspace_root: &Path,
     tenant_id: Option<&str>,
     arguments: Value,
 ) -> Result<PreparedSkillActionInvocation, RpcError> {
     let (tool, input_mode, file_argument, file_materialization) = match &action.binding {
-        octos_agent::plugins::SkillActionBinding::Tool {
+        ra_agent::plugins::SkillActionBinding::Tool {
             tool,
             input_mode,
             file_argument,
@@ -12691,7 +12691,7 @@ fn prepare_skill_action_tool_invocation(
     let mut args = action_arguments_object(arguments)?;
     validate_action_arguments(&action.input_schema, &Value::Object(args.clone()))?;
     match input_mode {
-        octos_agent::plugins::SkillActionInputMode::Single => Ok(PreparedSkillActionInvocation {
+        ra_agent::plugins::SkillActionInputMode::Single => Ok(PreparedSkillActionInvocation {
             tool: tool.to_string(),
             materialized_paths: Vec::new(),
             calls: vec![PreparedSkillActionCall {
@@ -12701,7 +12701,7 @@ fn prepare_skill_action_tool_invocation(
                 args: Value::Object(args),
             }],
         }),
-        octos_agent::plugins::SkillActionInputMode::FileEach => {
+        ra_agent::plugins::SkillActionInputMode::FileEach => {
             let paths = args.remove("paths").ok_or_else(|| {
                 RpcError::invalid_params("file_each skill action requires arguments.paths")
             })?;
@@ -12797,7 +12797,7 @@ fn action_artifact_value(workspace_root: &Path, path: &Path) -> Option<Value> {
         return None;
     }
     let handle =
-        octos_bus::file_handle::encode_workspace_file_handle(&canonical_root, &canonical_path)?;
+        ra_bus::file_handle::encode_workspace_file_handle(&canonical_root, &canonical_path)?;
     let display_name = canonical_path.file_name()?.to_str()?;
     let size = std::fs::metadata(&canonical_path).ok()?.len();
     Some(json!({
@@ -12808,7 +12808,7 @@ fn action_artifact_value(workspace_root: &Path, path: &Path) -> Option<Value> {
     }))
 }
 
-fn tool_result_to_action_value(result: octos_agent::ToolResult, workspace_root: &Path) -> Value {
+fn tool_result_to_action_value(result: ra_agent::ToolResult, workspace_root: &Path) -> Value {
     let file_modified = result
         .file_modified
         .as_deref()
@@ -12838,19 +12838,19 @@ fn tool_result_to_action_value(result: octos_agent::ToolResult, workspace_root: 
 async fn execute_skill_action_tool_call(
     action_id: &str,
     tool: &str,
-    registry: &octos_agent::ToolRegistry,
+    registry: &ra_agent::ToolRegistry,
     args: &Value,
     execution_context: &SkillActionExecutionContext,
-) -> Result<octos_agent::ToolResult, RpcError> {
+) -> Result<ra_agent::ToolResult, RpcError> {
     let tool_context = execution_context.tool_context.clone();
-    let execute = octos_agent::tools::TOOL_CTX.scope(tool_context.clone(), async {
+    let execute = ra_agent::tools::TOOL_CTX.scope(tool_context.clone(), async {
         registry
             .execute_with_context(&tool_context, tool, args)
             .await
     });
     let result = match &execution_context.approval_requester {
         Some(requester) => {
-            octos_agent::tools::TOOL_APPROVAL_CTX
+            ra_agent::tools::TOOL_APPROVAL_CTX
                 .scope(requester.clone(), execute)
                 .await
         }
@@ -12864,8 +12864,8 @@ async fn execute_skill_action_tool_call(
 }
 
 async fn invoke_skill_action_tool_binding(
-    action: &octos_agent::plugins::SkillActionDef,
-    registry: &octos_agent::ToolRegistry,
+    action: &ra_agent::plugins::SkillActionDef,
+    registry: &ra_agent::ToolRegistry,
     workspace_root: &Path,
     tenant_id: Option<&str>,
     arguments: Value,
@@ -12920,7 +12920,7 @@ async fn invoke_skill_action_tool_binding(
 /// (`snapshot_excluding` — e.g. the native-review specialist swarm) inherit
 /// the pair onto their fresh supervisors.
 fn wire_goal_task_row_observers_for_cached_supervisor(
-    supervisor: &Arc<octos_agent::TaskSupervisor>,
+    supervisor: &Arc<ra_agent::TaskSupervisor>,
     session_id: &SessionKey,
     profile_id: &str,
     profile_data_dir: &std::path::Path,
@@ -12940,7 +12940,7 @@ fn wire_goal_task_row_observers_for_cached_supervisor(
 }
 
 fn install_skill_action_job_projection_listener(
-    supervisor: &octos_agent::TaskSupervisor,
+    supervisor: &ra_agent::TaskSupervisor,
     profile_id: &str,
     session_id: &SessionKey,
     ledger: &Arc<UiProtocolLedger>,
@@ -12975,9 +12975,9 @@ fn install_skill_action_job_projection_listener(
 // inferred from ambient state.
 #[allow(clippy::too_many_arguments)]
 fn enqueue_background_skill_action_jobs(
-    action: &octos_agent::plugins::SkillActionDef,
+    action: &ra_agent::plugins::SkillActionDef,
     skill_id: &str,
-    registry: &octos_agent::ToolRegistry,
+    registry: &ra_agent::ToolRegistry,
     workspace_root: &Path,
     tenant_id: Option<&str>,
     profile_id: &str,
@@ -13038,7 +13038,7 @@ fn enqueue_background_skill_action_jobs(
             .expect("registered skill action task has projection metadata");
         job_values.push(skill_action_job_record_to_value(job)?);
         let terminal_guard =
-            octos_agent::TaskTerminalGuard::new(Arc::clone(&supervisor), task_id.clone());
+            ra_agent::TaskTerminalGuard::new(Arc::clone(&supervisor), task_id.clone());
         queued_jobs.push(QueuedSkillActionJob {
             tool: prepared.tool.clone(),
             args: call.args,
@@ -13064,7 +13064,7 @@ fn enqueue_background_skill_action_jobs(
 }
 
 async fn run_background_skill_action_job(
-    registry: Arc<octos_agent::ToolRegistry>,
+    registry: Arc<ra_agent::ToolRegistry>,
     queued: QueuedSkillActionJob,
 ) {
     let supervisor = registry.supervisor();
@@ -13162,12 +13162,12 @@ fn reserve_skill_action_batch() -> Result<tokio::sync::OwnedSemaphorePermit, Rpc
 }
 
 async fn run_background_skill_action_batch(
-    registry: Arc<octos_agent::ToolRegistry>,
+    registry: Arc<ra_agent::ToolRegistry>,
     queued_jobs: Vec<QueuedSkillActionJob>,
-    concurrency_class: octos_agent::ConcurrencyClass,
+    concurrency_class: ra_agent::ConcurrencyClass,
     _batch_permit: tokio::sync::OwnedSemaphorePermit,
 ) {
-    let _exclusive_permit = if concurrency_class == octos_agent::ConcurrencyClass::Exclusive {
+    let _exclusive_permit = if concurrency_class == ra_agent::ConcurrencyClass::Exclusive {
         Some(
             exclusive_skill_action_semaphore()
                 .acquire_owned()
@@ -13317,18 +13317,18 @@ async fn raw_skill_action_invoke(
             session_id: params.session_id.clone(),
             turn_id: TurnId::new(),
             features: ui_context.features,
-        }) as Arc<dyn octos_agent::ToolApprovalRequester>
+        }) as Arc<dyn ra_agent::ToolApprovalRequester>
     });
     let execution_context = SkillActionExecutionContext {
-        tool_context: octos_agent::tools::ToolContext {
+        tool_context: ra_agent::tools::ToolContext {
             tool_id: record.action.id.clone(),
             session_scope,
-            ..octos_agent::tools::ToolContext::zero()
+            ..ra_agent::tools::ToolContext::zero()
         },
         approval_requester,
     };
     match record.action.execution {
-        octos_agent::plugins::SkillActionExecution::Sync => {
+        ra_agent::plugins::SkillActionExecution::Sync => {
             invoke_skill_action_tool_binding(
                 &record.action,
                 &session_runtime.tools,
@@ -13339,7 +13339,7 @@ async fn raw_skill_action_invoke(
             )
             .await
         }
-        octos_agent::plugins::SkillActionExecution::Background => {
+        ra_agent::plugins::SkillActionExecution::Background => {
             let batch_permit = reserve_skill_action_batch()?;
             let profile_id = session_runtime.profile.profile_id.clone();
             let supervisor = session_runtime.tools.supervisor();
@@ -14242,11 +14242,11 @@ fn llm_selection_activation_error(
     let requires_key = if family == "custom" {
         true
     } else {
-        let Some(entry) = octos_llm::registry::lookup(family) else {
+        let Some(entry) = ra_llm::registry::lookup(family) else {
             return Err(RpcError::invalid_params(format!(
                 "cannot activate {family}/{model}: unknown provider family — valid: \
                  custom, {}",
-                octos_llm::registry::all_names().join(", ")
+                ra_llm::registry::all_names().join(", ")
             ))
             .with_data(json!({ "kind": "llm_provider_unresolved", "family": family })));
         };
@@ -14316,7 +14316,7 @@ async fn raw_profile_llm_test(
         // Keyless local families (local/ollama/vllm) construct without a
         // key — dead-ending them on "No API key provided" blocked the
         // keyless onboarding test entirely (red-team pass).
-        None if octos_llm::registry::is_keyless(&family_id) => String::new(),
+        None if ra_llm::registry::is_keyless(&family_id) => String::new(),
         None => {
             return Ok(profile_llm_test_result(
                 state,
@@ -14355,7 +14355,7 @@ async fn raw_profile_llm_test(
         thread_id: None,
         timestamp: Utc::now(),
     }];
-    let canonical_family = octos_llm::registry::lookup(&family_id)
+    let canonical_family = ra_llm::registry::lookup(&family_id)
         .map(|entry| entry.name)
         .unwrap_or(family_id.as_str());
     let max_tokens = if canonical_family == "gemini" || canonical_family == "vertex" {
@@ -14363,7 +14363,7 @@ async fn raw_profile_llm_test(
     } else {
         16
     };
-    let config = octos_llm::ChatConfig {
+    let config = ra_llm::ChatConfig {
         max_tokens: Some(max_tokens),
         temperature: Some(0.0),
         ..Default::default()
@@ -14460,7 +14460,7 @@ async fn raw_profile_llm_fetch_models(
         Some(key) => key,
         // Keyless local families still get model listing — their /v1/models
         // answers without auth (red-team pass).
-        None if octos_llm::registry::is_keyless(&family_id) => String::new(),
+        None if ra_llm::registry::is_keyless(&family_id) => String::new(),
         None => {
             return Ok(json!({
                 "profile_id": profile_id,
@@ -14480,13 +14480,13 @@ async fn raw_profile_llm_fetch_models(
     // typed outcome keeps "enter the model id manually" distinguishable from
     // "credential/endpoint invalid" — instead of collapsing every failure
     // into an empty list + `provider_unavailable`.
-    let route = octos_llm::discovery::resolve_model_discovery(
+    let route = ra_llm::discovery::resolve_model_discovery(
         Some(&family_id),
         api_type.as_deref(),
         nonempty(params.selection.model_id).as_deref(),
         base_url.as_deref(),
     );
-    let outcome = octos_llm::discovery::discover_models(
+    let outcome = ra_llm::discovery::discover_models(
         &route,
         &api_key,
         base_url.as_deref(),
@@ -14518,8 +14518,8 @@ fn build_test_llm_provider(
     model_id: &str,
     base_url: Option<String>,
     api_key: &str,
-) -> Result<Arc<dyn octos_llm::LlmProvider>, String> {
-    let params = octos_llm::registry::CreateParams {
+) -> Result<Arc<dyn ra_llm::LlmProvider>, String> {
+    let params = ra_llm::registry::CreateParams {
         // Empty means "keyless family" — let the factory apply its own
         // fallback instead of sending an empty Bearer token.
         api_key: (!api_key.is_empty()).then(|| api_key.to_owned()),
@@ -14529,12 +14529,12 @@ fn build_test_llm_provider(
         llm_timeout_secs: None,
         llm_connect_timeout_secs: None,
     };
-    match octos_llm::registry::lookup(family_id) {
+    match ra_llm::registry::lookup(family_id) {
         Some(entry) => (entry.create)(params).map_err(|error| format!("provider error: {error:#}")),
         None => {
             let url = base_url.as_deref().unwrap_or("https://api.openai.com/v1");
             Ok(Arc::new(
-                octos_llm::openai::OpenAIProvider::new(api_key, model_id)
+                ra_llm::openai::OpenAIProvider::new(api_key, model_id)
                     .with_base_url(url)
                     .with_provider_label(family_id),
             ))
@@ -14545,7 +14545,7 @@ fn build_test_llm_provider(
 fn dashboard_family_api_key_env(family_id: &str) -> Option<String> {
     // Key-env now comes from the provider registry (single source of truth),
     // not the retired dashboard providers.json. `lookup` resolves aliases too.
-    octos_llm::registry::lookup(family_id)
+    ra_llm::registry::lookup(family_id)
         .and_then(|entry| entry.api_key_env)
         .map(str::to_owned)
         .and_then(|env| nonempty(Some(env)))
@@ -14827,7 +14827,7 @@ fn snapshot_context_for_session(
     state: &Arc<AppState>,
     connection_profile_id: Option<&str>,
     session_id: &SessionKey,
-) -> Result<(bool, Option<octos_agent::SnapshotManager>), RpcError> {
+) -> Result<(bool, Option<ra_agent::SnapshotManager>), RpcError> {
     let profile_id = raw_scoped_llm_profile_id(None, Some(session_id), connection_profile_id)?;
     let runtime = resolve_session_profile_runtime(state, Some(&profile_id));
     let enabled = runtime
@@ -14838,18 +14838,18 @@ fn snapshot_context_for_session(
         .as_ref()
         .and_then(|rt| rt.snapshots.as_ref())
         .map(|cfg| cfg.keep_last)
-        .unwrap_or(octos_agent::DEFAULT_SNAPSHOT_KEEP_LAST);
+        .unwrap_or(ra_agent::DEFAULT_SNAPSHOT_KEEP_LAST);
     let Some(workspace_root) = session_workspace_root_for_state(state, session_id) else {
         return Ok((enabled, None));
     };
     let manager = runtime.and_then(|rt| {
-        octos_agent::SnapshotManager::new(rt.data_dir.join("snapshots"), workspace_root, keep_last)
+        ra_agent::SnapshotManager::new(rt.data_dir.join("snapshots"), workspace_root, keep_last)
     });
     Ok((enabled, manager))
 }
 
 /// Render one wire row per retained snapshot, newest first.
-fn snapshot_rows(manager: &octos_agent::SnapshotManager) -> Vec<Value> {
+fn snapshot_rows(manager: &ra_agent::SnapshotManager) -> Vec<Value> {
     manager
         .list_snapshots()
         .unwrap_or_default()
@@ -14908,7 +14908,7 @@ async fn raw_snapshot_restore(
             "snapshots are not available for this session (no workspace, or git is not installed)",
         ));
     };
-    let snapshot_id = octos_agent::SnapshotId::new(params.snapshot_id.clone());
+    let snapshot_id = ra_agent::SnapshotId::new(params.snapshot_id.clone());
     // Git work is blocking; keep it off the reactor.
     let manager = std::sync::Arc::new(manager);
     let restore_manager = std::sync::Arc::clone(&manager);
@@ -15976,8 +15976,8 @@ fn deliver_peer_send_input(
     peers_root: &Path,
     origin_session: &str,
     turn_id: &TurnId,
-    req: octos_agent::PeerSendInputRequest,
-) -> Result<octos_agent::PeerSendInputDelivery, String> {
+    req: ra_agent::PeerSendInputRequest,
+) -> Result<ra_agent::PeerSendInputDelivery, String> {
     // Resolve the identifier (peer NAME or slug) to the actual
     // slug BEFORE any auth / path / wire op — names are the
     // primary address. Unknown identifier → a clear error.
@@ -16015,12 +16015,12 @@ fn deliver_peer_send_input(
             &req.message,
         )?;
         if delivery == crate::peers::host_tools::PeerInputDelivery::AlreadySent {
-            return Ok(octos_agent::PeerSendInputDelivery::AlreadyQueued);
+            return Ok(ra_agent::PeerSendInputDelivery::AlreadyQueued);
         }
         if let Some(dir) = staged_peer_dir(peers_root, &slug) {
             crate::peers::record_peer_brief(&dir, &req.message);
         }
-        return Ok(octos_agent::PeerSendInputDelivery::Queued);
+        return Ok(ra_agent::PeerSendInputDelivery::Queued);
     }
     // Record the instruction as a numbered round (#2026), once,
     // BEFORE the path split so BOTH delivery routes (gateway
@@ -16062,7 +16062,7 @@ fn deliver_peer_send_input(
         };
         return tx
             .try_send(actor_msg)
-            .map(|()| octos_agent::PeerSendInputDelivery::Queued)
+            .map(|()| ra_agent::PeerSendInputDelivery::Queued)
             .map_err(|e| format!("peer session '{slug}' inbox is full or closed: {e}"));
     }
 
@@ -16105,13 +16105,13 @@ fn peer_send_input_answer_callback(
     origin_session: String,
     turn_id: TurnId,
     wait: std::time::Duration,
-) -> octos_agent::PeerSendInputAnswerCallback {
-    Arc::new(move |req: octos_agent::PeerSendInputRequest| {
+) -> ra_agent::PeerSendInputAnswerCallback {
+    Arc::new(move |req: ra_agent::PeerSendInputRequest| {
         let input_id = peer_send_input_occurrence_id(&origin_session, &turn_id, &req.occurrence_id);
         Box::pin(async move {
             crate::peers::host_tools::await_peer_input_answer(&input_id, wait)
                 .await
-                .map(|rejection| octos_agent::PeerSendInputRefusal(rejection.describe()))
+                .map(|rejection| ra_agent::PeerSendInputRefusal(rejection.describe()))
         })
     })
 }
@@ -16242,7 +16242,7 @@ fn raw_peer_tools_unregister(
 /// 3. UPCR-2026-035: a host session's live set (its app tools, and its
 ///    `generic_tools`, which narrow too).
 fn apply_turn_host_tool_rosters(
-    registry: &mut octos_agent::ToolRegistry,
+    registry: &mut ra_agent::ToolRegistry,
     data_dir: &Path,
     session_id: &SessionKey,
     turn_id: &str,
@@ -16743,7 +16743,7 @@ fn raw_peer_tool_result(
             "unknown status '{status}' (only \"awaiting_confirmation\")"
         )));
     } else if params.ok {
-        Some(octos_agent::HostToolCallOutcome::Ok(
+        Some(ra_agent::HostToolCallOutcome::Ok(
             params.data.unwrap_or(Value::Null),
         ))
     } else {
@@ -16776,7 +16776,7 @@ fn raw_peer_tool_result(
         } else {
             "host:error".to_owned()
         };
-        Some(octos_agent::HostToolCallOutcome::Error { kind, message })
+        Some(ra_agent::HostToolCallOutcome::Error { kind, message })
     };
     let reply = match outcome {
         Some(outcome) => HostReply::Final(outcome),
@@ -16833,7 +16833,7 @@ fn lane_provider_config(
 fn build_peer_lane_provider(
     config: &crate::config::Config,
     lane: &str,
-) -> Option<Arc<dyn octos_llm::LlmProvider>> {
+) -> Option<Arc<dyn ra_llm::LlmProvider>> {
     let Some(sp) = select_peer_lane(config, lane) else {
         tracing::warn!(
             lane,
@@ -16850,8 +16850,8 @@ fn build_peer_lane_provider(
         sp.api_type.as_deref(),
     ) {
         Ok(p) => {
-            let provider: Arc<dyn octos_llm::LlmProvider> =
-                Arc::new(octos_llm::RetryProvider::new(p));
+            let provider: Arc<dyn ra_llm::LlmProvider> =
+                Arc::new(ra_llm::RetryProvider::new(p));
             Some(provider)
         }
         Err(err) => {
@@ -16875,7 +16875,7 @@ fn resolve_peer_lane_provider(
     peers_root: &Path,
     slug: &str,
     config: &crate::config::Config,
-) -> Option<Arc<dyn octos_llm::LlmProvider>> {
+) -> Option<Arc<dyn ra_llm::LlmProvider>> {
     let lane = read_peer_model_lane(peers_root, slug)?;
     build_peer_lane_provider(config, &lane)
 }
@@ -16892,7 +16892,7 @@ fn resolve_peer_lane_provider(
 fn peer_lane_provider_for(
     session_id: &SessionKey,
     session_runtime: &crate::runtime::SessionRuntime,
-) -> Option<Arc<dyn octos_llm::LlmProvider>> {
+) -> Option<Arc<dyn ra_llm::LlmProvider>> {
     // UPCR-2026-034 — a request context runs on its owning peer's lane.
     let slug = match peer_slug_and_profile(session_id) {
         Some((_profile_id, slug)) => slug,
@@ -17405,7 +17405,7 @@ mod peer_awaiting_wake_tests {
             matches!(open_outcome, PeerAwaitingWakeOutcome::Woke),
             "an open peer's park wakes the master, got {open_outcome:?}"
         );
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("ledger exists");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("ledger exists");
         let open = ledger.list_open_escalations(&goal_id).unwrap();
         assert_eq!(open.len(), 1, "exactly the open peer's row was written");
         assert_eq!(open[0].peer_id, "active");
@@ -18001,7 +18001,7 @@ fn write_peer_result_if_peer_session(
     // in ra-agent (`result_md_owner_content_is_peer`); this side keeps
     // only its #1824-safe fd-anchored read, so the judgment can never
     // drift between the peer-result writer and the budget checkpoint.
-    .map(|owner| octos_agent::result_md_owner_content_is_peer(&owner))
+    .map(|owner| ra_agent::result_md_owner_content_is_peer(&owner))
     .unwrap_or(false);
     let latest_result = if peer_owns_result {
         tracing::info!(
@@ -18055,7 +18055,7 @@ fn write_peer_result_if_peer_session(
     drop(publish_guard);
     // A person's turn is the app's own conversation, not work the system
     // agent handed off: it must not re-arm the fleet synthesis on its own.
-    if origin.is_some_and(|origin| origin.kind == octos_core::ui_protocol::TurnOriginKind::Person) {
+    if origin.is_some_and(|origin| origin.kind == ra_core::ui_protocol::TurnOriginKind::Person) {
         absorb_person_round_into_fleet_marks(&runtime.data_dir.join("peers"), &peer_dir, slug);
     }
 
@@ -18191,7 +18191,7 @@ fn write_peer_result_if_peer_session(
                 // here. Marked all the same, so the master can tell a complete
                 // short report from an abridged long one.
                 let content_summary =
-                    octos_core::truncated_utf8(body, MAX_PEER_WAKE_SUMMARY_CHARS, " …[truncated]");
+                    ra_core::truncated_utf8(body, MAX_PEER_WAKE_SUMMARY_CHARS, " …[truncated]");
                 if let Err(err) = enqueue_goal_progress_wake(
                     &runtime.data_dir,
                     &originator,
@@ -18688,7 +18688,7 @@ struct PeerConsumptionRecord {
 }
 
 fn peer_consumption_leaf(master: &SessionKey) -> String {
-    format!(".consumed-{}", octos_core::safe_filename(&master.0))
+    format!(".consumed-{}", ra_core::safe_filename(&master.0))
 }
 
 fn peer_consumption_write_lock() -> &'static StdMutex<()> {
@@ -18840,7 +18840,7 @@ fn commit_gathered_peer_results(
 fn build_peer_gather_callback(
     peers_root: PathBuf,
     profile_id: String,
-) -> octos_agent::PeerGatherCallback {
+) -> ra_agent::PeerGatherCallback {
     build_peer_gather_callback_for_turn(peers_root, None, profile_id)
 }
 
@@ -18848,7 +18848,7 @@ fn build_peer_gather_callback_for_turn(
     peers_root: PathBuf,
     consumption: Option<(SessionKey, GatheredPeerResults)>,
     profile_id: String,
-) -> octos_agent::PeerGatherCallback {
+) -> ra_agent::PeerGatherCallback {
     Arc::new(move |idents: Option<Vec<String>>| {
         // The model may pass peer NAMES or slugs; resolve each to a slug for
         // the blackboard filter (an unresolved identifier matches nothing).
@@ -19030,7 +19030,7 @@ fn build_peer_close_callback(
     contracts: Arc<UiProtocolContractStores>,
     emit_closed: Arc<dyn Fn(PeerClosedEvent) + Send + Sync>,
     emit_cancelled: Arc<dyn Fn(ApprovalCancelledEvent) + Send + Sync>,
-) -> octos_agent::PeerCloseCallback {
+) -> ra_agent::PeerCloseCallback {
     Arc::new(move |ident: String| {
         // Resolve the identifier (peer NAME or slug) to the actual slug BEFORE
         // any auth / path / wire op — names are the primary address.
@@ -19460,7 +19460,7 @@ fn evaluate_peer_fleet_synthesis(
 fn peer_fleet_synthesized_stamp_path(peers_root: &Path, master: &str) -> PathBuf {
     peers_root.join(format!(
         ".synthesized-{}",
-        octos_core::safe_filename(master)
+        ra_core::safe_filename(master)
     ))
 }
 
@@ -19641,7 +19641,7 @@ fn write_sharing_context_round(
     outcome: TurnTerminalOutcome,
     content: &str,
 ) {
-    use octos_core::ui_protocol::TurnOriginKind;
+    use ra_core::ui_protocol::TurnOriginKind;
     let Some((slug, context_id)) = session_id
         .topic()
         .and_then(crate::peers::app_binding::parse_context_topic)
@@ -19699,7 +19699,7 @@ fn write_sharing_context_round(
             ".result-owner",
             peer_io::PEER_FILE_READ_CAP_SMALL,
         )
-        .map(|owner| octos_agent::result_md_owner_content_is_peer(&owner))
+        .map(|owner| ra_agent::result_md_owner_content_is_peer(&owner))
         .unwrap_or(false);
         if !peer_owns_result
             && let Err(err) = peer_io::write_peer_file_atomic(&peer_dir, "result.md", &text)
@@ -20403,61 +20403,61 @@ fn profile_llm_test_result(
 fn is_autonomy_method(method: &str) -> bool {
     matches!(
         method,
-        octos_core::ui_protocol::methods::AGENT_LIST
-            | octos_core::ui_protocol::methods::AGENT_STATUS_READ
-            | octos_core::ui_protocol::methods::AGENT_OUTPUT_READ
-            | octos_core::ui_protocol::methods::AGENT_ARTIFACT_LIST
-            | octos_core::ui_protocol::methods::AGENT_ARTIFACT_READ
-            | octos_core::ui_protocol::methods::TASK_ARTIFACT_LIST
-            | octos_core::ui_protocol::methods::TASK_ARTIFACT_READ
-            | octos_core::ui_protocol::methods::AGENT_INTERRUPT
-            | octos_core::ui_protocol::methods::AGENT_CLOSE
-            | octos_core::ui_protocol::methods::SESSION_GOAL_GET
-            | octos_core::ui_protocol::methods::SESSION_GOAL_SET
-            | octos_core::ui_protocol::methods::SESSION_GOAL_CLEAR
-            | octos_core::ui_protocol::methods::SESSION_GOAL_OPERATOR_TRANSITION
-            | octos_core::ui_protocol::methods::LOOP_CREATE
-            | octos_core::ui_protocol::methods::LOOP_LIST
-            | octos_core::ui_protocol::methods::LOOP_DELETE
-            | octos_core::ui_protocol::methods::LOOP_PAUSE
-            | octos_core::ui_protocol::methods::LOOP_RESUME
-            | octos_core::ui_protocol::methods::LOOP_FIRE_NOW
-            | octos_core::ui_protocol::methods::MONITOR_CREATE
-            | octos_core::ui_protocol::methods::MONITOR_LIST
-            | octos_core::ui_protocol::methods::MONITOR_PAUSE
-            | octos_core::ui_protocol::methods::MONITOR_RESUME
-            | octos_core::ui_protocol::methods::MONITOR_DELETE
+        ra_core::ui_protocol::methods::AGENT_LIST
+            | ra_core::ui_protocol::methods::AGENT_STATUS_READ
+            | ra_core::ui_protocol::methods::AGENT_OUTPUT_READ
+            | ra_core::ui_protocol::methods::AGENT_ARTIFACT_LIST
+            | ra_core::ui_protocol::methods::AGENT_ARTIFACT_READ
+            | ra_core::ui_protocol::methods::TASK_ARTIFACT_LIST
+            | ra_core::ui_protocol::methods::TASK_ARTIFACT_READ
+            | ra_core::ui_protocol::methods::AGENT_INTERRUPT
+            | ra_core::ui_protocol::methods::AGENT_CLOSE
+            | ra_core::ui_protocol::methods::SESSION_GOAL_GET
+            | ra_core::ui_protocol::methods::SESSION_GOAL_SET
+            | ra_core::ui_protocol::methods::SESSION_GOAL_CLEAR
+            | ra_core::ui_protocol::methods::SESSION_GOAL_OPERATOR_TRANSITION
+            | ra_core::ui_protocol::methods::LOOP_CREATE
+            | ra_core::ui_protocol::methods::LOOP_LIST
+            | ra_core::ui_protocol::methods::LOOP_DELETE
+            | ra_core::ui_protocol::methods::LOOP_PAUSE
+            | ra_core::ui_protocol::methods::LOOP_RESUME
+            | ra_core::ui_protocol::methods::LOOP_FIRE_NOW
+            | ra_core::ui_protocol::methods::MONITOR_CREATE
+            | ra_core::ui_protocol::methods::MONITOR_LIST
+            | ra_core::ui_protocol::methods::MONITOR_PAUSE
+            | ra_core::ui_protocol::methods::MONITOR_RESUME
+            | ra_core::ui_protocol::methods::MONITOR_DELETE
     )
 }
 
 fn autonomy_method_available(method: &str, features: ConnectionUiFeatures) -> bool {
     match method {
-        octos_core::ui_protocol::methods::AGENT_LIST
-        | octos_core::ui_protocol::methods::AGENT_STATUS_READ
-        | octos_core::ui_protocol::methods::AGENT_OUTPUT_READ
-        | octos_core::ui_protocol::methods::AGENT_ARTIFACT_LIST
-        | octos_core::ui_protocol::methods::AGENT_ARTIFACT_READ
-        | octos_core::ui_protocol::methods::TASK_ARTIFACT_LIST
-        | octos_core::ui_protocol::methods::TASK_ARTIFACT_READ
-        | octos_core::ui_protocol::methods::AGENT_INTERRUPT
-        | octos_core::ui_protocol::methods::AGENT_CLOSE => features.agent_control_available(),
-        octos_core::ui_protocol::methods::SESSION_GOAL_GET
-        | octos_core::ui_protocol::methods::SESSION_GOAL_SET
-        | octos_core::ui_protocol::methods::SESSION_GOAL_CLEAR
-        | octos_core::ui_protocol::methods::SESSION_GOAL_OPERATOR_TRANSITION => {
+        ra_core::ui_protocol::methods::AGENT_LIST
+        | ra_core::ui_protocol::methods::AGENT_STATUS_READ
+        | ra_core::ui_protocol::methods::AGENT_OUTPUT_READ
+        | ra_core::ui_protocol::methods::AGENT_ARTIFACT_LIST
+        | ra_core::ui_protocol::methods::AGENT_ARTIFACT_READ
+        | ra_core::ui_protocol::methods::TASK_ARTIFACT_LIST
+        | ra_core::ui_protocol::methods::TASK_ARTIFACT_READ
+        | ra_core::ui_protocol::methods::AGENT_INTERRUPT
+        | ra_core::ui_protocol::methods::AGENT_CLOSE => features.agent_control_available(),
+        ra_core::ui_protocol::methods::SESSION_GOAL_GET
+        | ra_core::ui_protocol::methods::SESSION_GOAL_SET
+        | ra_core::ui_protocol::methods::SESSION_GOAL_CLEAR
+        | ra_core::ui_protocol::methods::SESSION_GOAL_OPERATOR_TRANSITION => {
             features.goal_runtime_available()
         }
-        octos_core::ui_protocol::methods::LOOP_CREATE
-        | octos_core::ui_protocol::methods::LOOP_LIST
-        | octos_core::ui_protocol::methods::LOOP_DELETE
-        | octos_core::ui_protocol::methods::LOOP_PAUSE
-        | octos_core::ui_protocol::methods::LOOP_RESUME
-        | octos_core::ui_protocol::methods::LOOP_FIRE_NOW => features.loop_runtime_available(),
-        octos_core::ui_protocol::methods::MONITOR_CREATE
-        | octos_core::ui_protocol::methods::MONITOR_LIST
-        | octos_core::ui_protocol::methods::MONITOR_PAUSE
-        | octos_core::ui_protocol::methods::MONITOR_RESUME
-        | octos_core::ui_protocol::methods::MONITOR_DELETE => features.monitor_runtime_available(),
+        ra_core::ui_protocol::methods::LOOP_CREATE
+        | ra_core::ui_protocol::methods::LOOP_LIST
+        | ra_core::ui_protocol::methods::LOOP_DELETE
+        | ra_core::ui_protocol::methods::LOOP_PAUSE
+        | ra_core::ui_protocol::methods::LOOP_RESUME
+        | ra_core::ui_protocol::methods::LOOP_FIRE_NOW => features.loop_runtime_available(),
+        ra_core::ui_protocol::methods::MONITOR_CREATE
+        | ra_core::ui_protocol::methods::MONITOR_LIST
+        | ra_core::ui_protocol::methods::MONITOR_PAUSE
+        | ra_core::ui_protocol::methods::MONITOR_RESUME
+        | ra_core::ui_protocol::methods::MONITOR_DELETE => features.monitor_runtime_available(),
         _ => false,
     }
 }
@@ -20553,7 +20553,7 @@ fn raw_autonomy_rpc_with_orchestrator_and_ledger(
     orchestrator: &dyn AgentOrchestrator,
     profile_data_dir_for: Option<ProfileDataDirResolver<'_>>,
 ) -> Result<Value, RpcError> {
-    use octos_core::ui_protocol::methods;
+    use ra_core::ui_protocol::methods;
 
     let method = request.method.as_str();
     if !autonomy_method_available(method, features) {
@@ -21197,11 +21197,11 @@ async fn handle_raw_appui_rpc(
         APPUI_METHOD_AUTH_ME if features.stdio_transport => {
             Err(auth_unavailable_error(APPUI_METHOD_AUTH_ME))
         }
-        octos_core::ui_protocol::methods::CONTENT_LIST if features.stdio_transport => Err(
-            auth_unavailable_error(octos_core::ui_protocol::methods::CONTENT_LIST),
+        ra_core::ui_protocol::methods::CONTENT_LIST if features.stdio_transport => Err(
+            auth_unavailable_error(ra_core::ui_protocol::methods::CONTENT_LIST),
         ),
-        octos_core::ui_protocol::methods::CONTENT_DELETE if features.stdio_transport => Err(
-            auth_unavailable_error(octos_core::ui_protocol::methods::CONTENT_DELETE),
+        ra_core::ui_protocol::methods::CONTENT_DELETE if features.stdio_transport => Err(
+            auth_unavailable_error(ra_core::ui_protocol::methods::CONTENT_DELETE),
         ),
         APPUI_METHOD_AUTH_ME => Ok(json!({
             "email": "unknown account",
@@ -21351,7 +21351,7 @@ fn appui_continuation_target_from_raw_result(
     method: &str,
     result: &Value,
 ) -> Option<(SessionKey, String)> {
-    if method != octos_core::ui_protocol::methods::LOOP_FIRE_NOW
+    if method != ra_core::ui_protocol::methods::LOOP_FIRE_NOW
         || result
             .get("fire")
             .and_then(|fire| fire.get("queued"))
@@ -21485,31 +21485,31 @@ fn route_rpc_command(
     // not negotiated, regardless of whether the client sent any
     // feature header at all.
     let strict_gated = match method_str {
-        octos_core::ui_protocol::methods::SESSION_LIST
-        | octos_core::ui_protocol::methods::SESSION_SNAPSHOT
-        | octos_core::ui_protocol::methods::SESSION_MESSAGES_PAGE
-        | octos_core::ui_protocol::methods::SESSION_STATUS_GET
-        | octos_core::ui_protocol::methods::SESSION_FILES_LIST
-        | octos_core::ui_protocol::methods::SESSION_TASKS_LIST
-        | octos_core::ui_protocol::methods::SESSION_WORKSPACE_GET
-        | octos_core::ui_protocol::methods::SESSION_TITLE_SET
-        | octos_core::ui_protocol::methods::SESSION_DELETE
-        | octos_core::ui_protocol::methods::SYSTEM_STATUS_GET
-        | octos_core::ui_protocol::methods::CONTENT_LIST
-        | octos_core::ui_protocol::methods::CONTENT_DELETE
-        | octos_core::ui_protocol::methods::CONTENT_BULK_DELETE
-        | octos_core::ui_protocol::methods::MEMORY_OVERVIEW
-        | octos_core::ui_protocol::methods::MEMORY_ENTITY
-        | octos_core::ui_protocol::methods::MEMORY_SEARCH
-        | octos_core::ui_protocol::methods::MEMORY_LOAD
-        | octos_core::ui_protocol::methods::MEMORY_INGEST
-        | octos_core::ui_protocol::methods::CRON_LIST
-        | octos_core::ui_protocol::methods::CRON_TOGGLE => Some(features.auxiliary_rest_to_ws_v1),
+        ra_core::ui_protocol::methods::SESSION_LIST
+        | ra_core::ui_protocol::methods::SESSION_SNAPSHOT
+        | ra_core::ui_protocol::methods::SESSION_MESSAGES_PAGE
+        | ra_core::ui_protocol::methods::SESSION_STATUS_GET
+        | ra_core::ui_protocol::methods::SESSION_FILES_LIST
+        | ra_core::ui_protocol::methods::SESSION_TASKS_LIST
+        | ra_core::ui_protocol::methods::SESSION_WORKSPACE_GET
+        | ra_core::ui_protocol::methods::SESSION_TITLE_SET
+        | ra_core::ui_protocol::methods::SESSION_DELETE
+        | ra_core::ui_protocol::methods::SYSTEM_STATUS_GET
+        | ra_core::ui_protocol::methods::CONTENT_LIST
+        | ra_core::ui_protocol::methods::CONTENT_DELETE
+        | ra_core::ui_protocol::methods::CONTENT_BULK_DELETE
+        | ra_core::ui_protocol::methods::MEMORY_OVERVIEW
+        | ra_core::ui_protocol::methods::MEMORY_ENTITY
+        | ra_core::ui_protocol::methods::MEMORY_SEARCH
+        | ra_core::ui_protocol::methods::MEMORY_LOAD
+        | ra_core::ui_protocol::methods::MEMORY_INGEST
+        | ra_core::ui_protocol::methods::CRON_LIST
+        | ra_core::ui_protocol::methods::CRON_TOGGLE => Some(features.auxiliary_rest_to_ws_v1),
         // UPCR-2026-023: `user_question/respond` is strict opt-in. A client
         // that did not negotiate `user_question.v1` never received a
         // `user_question/requested`, so it has nothing to answer; reject the
         // method outright instead of routing a forged response.
-        octos_core::ui_protocol::methods::USER_QUESTION_RESPOND => Some(features.user_question_v1),
+        ra_core::ui_protocol::methods::USER_QUESTION_RESPOND => Some(features.user_question_v1),
         _ => None,
     };
     if let Some(false) = strict_gated {
@@ -21521,16 +21521,16 @@ fn route_rpc_command(
     // specific feature.
     if features.header_present {
         let gated = match method_str {
-            octos_core::ui_protocol::methods::SESSION_HYDRATE => Some(features.session_hydrate),
-            octos_core::ui_protocol::methods::THREAD_GRAPH_GET => Some(features.thread_graph),
-            octos_core::ui_protocol::methods::TURN_STATE_GET => Some(features.turn_state_get),
-            octos_core::ui_protocol::methods::TASK_LIST
-            | octos_core::ui_protocol::methods::TASK_CANCEL
-            | octos_core::ui_protocol::methods::TASK_RESTART_FROM_NODE => {
+            ra_core::ui_protocol::methods::SESSION_HYDRATE => Some(features.session_hydrate),
+            ra_core::ui_protocol::methods::THREAD_GRAPH_GET => Some(features.thread_graph),
+            ra_core::ui_protocol::methods::TURN_STATE_GET => Some(features.turn_state_get),
+            ra_core::ui_protocol::methods::TASK_LIST
+            | ra_core::ui_protocol::methods::TASK_CANCEL
+            | ra_core::ui_protocol::methods::TASK_RESTART_FROM_NODE => {
                 Some(features.harness_task_control)
             }
-            octos_core::ui_protocol::methods::TASK_ARTIFACT_LIST
-            | octos_core::ui_protocol::methods::TASK_ARTIFACT_READ => {
+            ra_core::ui_protocol::methods::TASK_ARTIFACT_LIST
+            | ra_core::ui_protocol::methods::TASK_ARTIFACT_READ => {
                 Some(features.harness_task_artifacts)
             }
             _ => None,
@@ -21624,8 +21624,8 @@ fn raw_method_is_dispatched(method: &str, stdio_transport: bool) -> bool {
     stdio_transport
         && matches!(
             method,
-            octos_core::ui_protocol::methods::CONTENT_LIST
-                | octos_core::ui_protocol::methods::CONTENT_DELETE
+            ra_core::ui_protocol::methods::CONTENT_LIST
+                | ra_core::ui_protocol::methods::CONTENT_DELETE
         )
 }
 
@@ -21648,24 +21648,24 @@ fn session_ingress_callable_method(method: &str) -> bool {
         method,
         APPUI_METHOD_PROFILE_LOCAL_CREATE
             | APPUI_METHOD_SERVER_SHUTDOWN
-            | octos_core::ui_protocol::methods::SESSION_LIST
-            | octos_core::ui_protocol::methods::SYSTEM_STATUS_GET
-            | octos_core::ui_protocol::methods::CONTENT_LIST
-            | octos_core::ui_protocol::methods::CONTENT_DELETE
-            | octos_core::ui_protocol::methods::CONTENT_BULK_DELETE
-            | octos_core::ui_protocol::methods::MEMORY_OVERVIEW
-            | octos_core::ui_protocol::methods::MEMORY_ENTITY
-            | octos_core::ui_protocol::methods::MEMORY_SEARCH
-            | octos_core::ui_protocol::methods::MEMORY_LOAD
-            | octos_core::ui_protocol::methods::MEMORY_INGEST
-            | octos_core::ui_protocol::methods::CRON_LIST
-            | octos_core::ui_protocol::methods::CRON_TOGGLE
-            | octos_core::ui_protocol::methods::SESSION_FORK
-            | octos_core::ui_protocol::methods::SMART_HOME_STATUS_GET
-            | octos_core::ui_protocol::methods::SMART_HOME_DEVICE_LIST
-            | octos_core::ui_protocol::methods::SMART_HOME_DEVICE_COMMAND
-            | octos_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_START
-            | octos_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_STOP
+            | ra_core::ui_protocol::methods::SESSION_LIST
+            | ra_core::ui_protocol::methods::SYSTEM_STATUS_GET
+            | ra_core::ui_protocol::methods::CONTENT_LIST
+            | ra_core::ui_protocol::methods::CONTENT_DELETE
+            | ra_core::ui_protocol::methods::CONTENT_BULK_DELETE
+            | ra_core::ui_protocol::methods::MEMORY_OVERVIEW
+            | ra_core::ui_protocol::methods::MEMORY_ENTITY
+            | ra_core::ui_protocol::methods::MEMORY_SEARCH
+            | ra_core::ui_protocol::methods::MEMORY_LOAD
+            | ra_core::ui_protocol::methods::MEMORY_INGEST
+            | ra_core::ui_protocol::methods::CRON_LIST
+            | ra_core::ui_protocol::methods::CRON_TOGGLE
+            | ra_core::ui_protocol::methods::SESSION_FORK
+            | ra_core::ui_protocol::methods::SMART_HOME_STATUS_GET
+            | ra_core::ui_protocol::methods::SMART_HOME_DEVICE_LIST
+            | ra_core::ui_protocol::methods::SMART_HOME_DEVICE_COMMAND
+            | ra_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_START
+            | ra_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_STOP
     )
 }
 
@@ -21771,7 +21771,7 @@ fn validate_session_ingress_command_scope(
 }
 
 pub(crate) fn ui_protocol_server_supported_methods() -> Vec<&'static str> {
-    let mut methods = octos_core::ui_protocol::UI_PROTOCOL_FIRST_SERVER_METHODS.to_vec();
+    let mut methods = ra_core::ui_protocol::UI_PROTOCOL_FIRST_SERVER_METHODS.to_vec();
     methods.extend(APPUI_EXTRA_METHODS.iter().copied());
     methods
 }
@@ -23187,7 +23187,7 @@ async fn open_session_result(
     // session's turns use. Stays `None` when no session runtime
     // materializes (profile-less open), which makes the snapshot fail open
     // (publish without compacting) rather than guess a window.
-    let mut open_context_provider: Option<Arc<dyn octos_llm::LlmProvider>> = None;
+    let mut open_context_provider: Option<Arc<dyn ra_llm::LlmProvider>> = None;
     // UPCR-2026-038: the declared `client_commands` the session runtime
     // accepted. Stays `None` when the open declared none or no runtime
     // materializes to apply them.
@@ -23523,8 +23523,8 @@ fn validate_session_sandbox_feature_gate(
 fn validate_requested_session_sandbox(
     features: ConnectionUiFeatures,
     params: &SessionOpenParams,
-    inherited: &octos_agent::SandboxConfig,
-) -> Result<Option<octos_agent::SandboxConfig>, RpcError> {
+    inherited: &ra_agent::SandboxConfig,
+) -> Result<Option<ra_agent::SandboxConfig>, RpcError> {
     validate_session_sandbox_feature_gate(features, params)?;
     let Some(requested) = params.sandbox.as_ref() else {
         return Ok(None);
@@ -24415,12 +24415,12 @@ fn workspace_policy_probe(root: Option<&Path>) -> Value {
         });
     };
     // #1147 codex P2: probe the canonical runtime policy filename
-    // (`octos_agent::workspace_policy::WORKSPACE_POLICY_FILE`,
+    // (`ra_agent::workspace_policy::WORKSPACE_POLICY_FILE`,
     // currently `.ra-workspace.toml`) — the previous `workspace_policy.toml`
     // hardcoded name didn't match what `SessionRuntime::bootstrap`
     // actually reads, so the probe reported `present=false` for
     // every real workspace.
-    let policy_path = root.join(octos_agent::workspace_policy::WORKSPACE_POLICY_FILE);
+    let policy_path = root.join(ra_agent::workspace_policy::WORKSPACE_POLICY_FILE);
     if !policy_path.exists() {
         return json!({
             "present": false,
@@ -24438,7 +24438,7 @@ fn workspace_policy_probe(root: Option<&Path>) -> Value {
             });
         }
     };
-    match toml::from_str::<octos_agent::workspace_policy::WorkspacePolicy>(&raw) {
+    match toml::from_str::<ra_agent::workspace_policy::WorkspacePolicy>(&raw) {
         Ok(policy) => json!({
             "present": true,
             "parse_error": null,
@@ -24683,12 +24683,12 @@ pub(crate) async fn ensure_session_profile_runtime(
             // only the outermost context, which is how "failed to open episode
             // store for profile 'x'" used to reach the TUI with its actual cause
             // (and its remedy) silently dropped.
-            if octos_memory::is_episode_store_locked(&error) && had_retired {
+            if ra_memory::is_episode_store_locked(&error) && had_retired {
                 // This process still holds the stores through the runtime a
                 // configuration change retired; it frees them when its
                 // in-flight work ends. Not a second ra process.
                 profile_runtime_switching_error(profile_id)
-            } else if octos_memory::is_episode_store_locked(&error) {
+            } else if ra_memory::is_episode_store_locked(&error) {
                 data_dir_locked_error(profile_id, &error)
             } else {
                 runtime_unavailable_error(format!(
@@ -24876,7 +24876,7 @@ pub(crate) async fn resolve_sessions_for_lookup(
     connection_profile_id: Option<&str>,
     routed_profile_id: Option<&str>,
     session_id: &SessionKey,
-) -> Option<Arc<tokio::sync::Mutex<octos_bus::SessionManager>>> {
+) -> Option<Arc<tokio::sync::Mutex<ra_bus::SessionManager>>> {
     let active_profile_id = session_id
         .profile_id()
         .or(connection_profile_id)
@@ -25315,7 +25315,7 @@ fn ui_protocol_session_workspace_dirs(
         SessionKey::with_profile(MAIN_PROFILE_ID, session_id.channel(), session_id.chat_id()),
         SessionKey::new(session_id.channel(), session_id.chat_id()),
     ] {
-        let encoded_base = octos_bus::session::encode_path_component(key.base_key());
+        let encoded_base = ra_bus::session::encode_path_component(key.base_key());
         let path = data_dir.join("users").join(encoded_base).join("workspace");
         if seen.insert(path.clone()) {
             dirs.push(path);
@@ -25559,7 +25559,7 @@ async fn handle_turn_start(
 fn voice_media_paths(media: &[FileRef]) -> Vec<String> {
     media
         .iter()
-        .filter(|file| file.mime.starts_with("audio/") || octos_bus::media::is_audio(&file.path))
+        .filter(|file| file.mime.starts_with("audio/") || ra_bus::media::is_audio(&file.path))
         .map(|file| file.path.clone())
         .collect()
 }
@@ -25654,7 +25654,7 @@ async fn handle_voice_admit(
                 return;
             }
         };
-    let materialized = octos_bus::file_handle::materialize_turn_uploads(
+    let materialized = ra_bus::file_handle::materialize_turn_uploads(
         &session_runtime.workspace_root,
         Some(session_runtime.profile.profile_id.as_str()),
         &audio_paths,
@@ -25996,7 +25996,7 @@ async fn handle_turn_start_with_accept(
             if params
                 .media
                 .iter()
-                .any(|m| octos_bus::media::is_audio(&m.path))
+                .any(|m| ra_bus::media::is_audio(&m.path))
             {
                 String::new()
             } else {
@@ -26081,9 +26081,9 @@ async fn handle_turn_start_with_accept(
     // Regular standalone turns are steerable; M9 protocol fixture turns are
     // not (they never run the agent loop, so a pushed input would silently
     // vanish — advertise that by registering no buffer).
-    let steer_buffer: Option<octos_agent::SharedSteerBuffer> = fixture
+    let steer_buffer: Option<ra_agent::SharedSteerBuffer> = fixture
         .is_none()
-        .then(|| Arc::new(octos_agent::SteerBuffer::default()));
+        .then(|| Arc::new(ra_agent::SteerBuffer::default()));
     let steer_buffer_for_turn = steer_buffer.clone();
     let resolved_profile_id = connection_profile_id
         .or(routed_profile_id)
@@ -26831,8 +26831,8 @@ async fn maybe_spawn_appui_master_continuation_runner(
     let (start_tx, start_rx) = tokio::sync::oneshot::channel();
     // Continuation turns run the ordinary agent loop, so they are steerable
     // like any regular turn (codex steers every RegularTask).
-    let steer_buffer: octos_agent::SharedSteerBuffer =
-        Arc::new(octos_agent::SteerBuffer::default());
+    let steer_buffer: ra_agent::SharedSteerBuffer =
+        Arc::new(ra_agent::SteerBuffer::default());
     let steer_buffer_for_turn = steer_buffer.clone();
 
     let ws_for_turn = ws.clone();
@@ -27435,13 +27435,13 @@ const BACKGROUND_ACTIVITY_QUEUE_CAPACITY: usize = 512;
 ///
 /// Nothing here is routed back into model context.
 pub(crate) fn spawn_background_activity_sink(state: Arc<AppState>) {
-    let (tx, mut rx) = mpsc::channel::<octos_core::ui_protocol::BackgroundActivityEvent>(
+    let (tx, mut rx) = mpsc::channel::<ra_core::ui_protocol::BackgroundActivityEvent>(
         BACKGROUND_ACTIVITY_QUEUE_CAPACITY,
     );
     // Best-effort, non-blocking producer side. `try_send` is the whole
     // contract: a producer must never await, block, or fail on the human sink.
     crate::autonomy::human_events::set_background_activity_sink(std::sync::Arc::new(
-        move |event: octos_core::ui_protocol::BackgroundActivityEvent| {
+        move |event: ra_core::ui_protocol::BackgroundActivityEvent| {
             if let Err(err) = tx.try_send(event) {
                 metrics::counter!("ws.background_activity.drop").increment(1);
                 tracing::debug!(
@@ -27480,12 +27480,12 @@ pub(crate) fn spawn_background_activity_sink(state: Arc<AppState>) {
 /// boundaries apply the receiver's own `coding.monitor_runtime.v1` capability
 /// gate and profile-scope filter.
 pub(crate) fn spawn_monitor_expired_sink(state: Arc<AppState>) {
-    let (tx, mut rx) = mpsc::channel::<octos_core::ui_protocol::MonitorExpiredEvent>(
+    let (tx, mut rx) = mpsc::channel::<ra_core::ui_protocol::MonitorExpiredEvent>(
         BACKGROUND_ACTIVITY_QUEUE_CAPACITY,
     );
     // Best-effort, non-blocking producer side — one caller is a watcher task.
     crate::autonomy::agent_orchestrator::set_monitor_expired_sink(std::sync::Arc::new(
-        move |event: octos_core::ui_protocol::MonitorExpiredEvent| {
+        move |event: ra_core::ui_protocol::MonitorExpiredEvent| {
             if let Err(err) = tx.try_send(event) {
                 metrics::counter!("ws.monitor_expired.drop").increment(1);
                 tracing::debug!(
@@ -28273,7 +28273,7 @@ fn refuse_foreign_host_turn_control(
 #[derive(Debug, Clone)]
 struct PeerTurnOrigin {
     /// `None`: an unlabelled turn (a host turn that set no origin).
-    origin: Option<octos_core::ui_protocol::TurnOrigin>,
+    origin: Option<ra_core::ui_protocol::TurnOrigin>,
 }
 
 fn turn_origin_error(kind: &str, message: impl Into<String>) -> RpcError {
@@ -28303,7 +28303,7 @@ fn resolve_peer_turn_origin(
     params: &TurnStartParams,
     routed_profile_id: Option<&str>,
 ) -> Result<Option<PeerTurnOrigin>, RpcError> {
-    use octos_core::ui_protocol::{TurnOrigin, TurnOriginKind};
+    use ra_core::ui_protocol::{TurnOrigin, TurnOriginKind};
     let requested = params.origin.as_ref();
     let not_allowed = || {
         turn_origin_error(
@@ -28396,7 +28396,7 @@ fn resolve_sharing_context_turn_origin(
     use crate::peers::app_binding::{
         context_session_key, parse_context_topic, read_context_binding,
     };
-    use octos_core::ui_protocol::{TurnOrigin, TurnOriginKind};
+    use ra_core::ui_protocol::{TurnOrigin, TurnOriginKind};
     let Some((slug, context_id)) = params.session_id.topic().and_then(parse_context_topic) else {
         return Ok(None);
     };
@@ -28456,7 +28456,7 @@ async fn handle_approval_respond(
     connection_profile_id: Option<&str>,
     external_owner: Option<ConnectionId>,
     id: String,
-    mut params: octos_core::ui_protocol::ApprovalRespondParams,
+    mut params: ra_core::ui_protocol::ApprovalRespondParams,
 ) {
     if let Err(error) = validate_session_scope(&params.session_id, None, connection_profile_id) {
         send_scope_error(ws, id, error);
@@ -28712,14 +28712,14 @@ async fn handle_approval_scopes_list(
     scopes: &ScopePolicy,
     connection_profile_id: Option<&str>,
     id: String,
-    params: octos_core::ui_protocol::ApprovalScopesListParams,
+    params: ra_core::ui_protocol::ApprovalScopesListParams,
 ) {
     if let Err(error) = validate_session_scope(&params.session_id, None, connection_profile_id) {
         send_scope_error(ws, id, error);
         return;
     }
 
-    let result = octos_core::ui_protocol::ApprovalScopesListResult {
+    let result = ra_core::ui_protocol::ApprovalScopesListResult {
         scopes: scopes.list_for_session(&params.session_id),
     };
     match serde_json::to_value(result) {
@@ -28743,7 +28743,7 @@ async fn handle_diff_preview_get(
     diff_previews: &PendingDiffPreviewStore,
     connection_profile_id: Option<&str>,
     id: String,
-    params: octos_core::ui_protocol::DiffPreviewGetParams,
+    params: ra_core::ui_protocol::DiffPreviewGetParams,
 ) {
     if let Err(error) = validate_session_scope(&params.session_id, None, connection_profile_id) {
         send_scope_error(ws, id, error);
@@ -28776,7 +28776,7 @@ async fn handle_task_output_read(
     state: &Arc<AppState>,
     connection_profile_id: Option<&str>,
     id: String,
-    params: octos_core::ui_protocol::TaskOutputReadParams,
+    params: ra_core::ui_protocol::TaskOutputReadParams,
 ) {
     if let Err(error) = validate_session_scope(&params.session_id, None, connection_profile_id) {
         send_scope_error(ws, id, error);
@@ -28816,7 +28816,7 @@ async fn handle_task_artifact_list(
         let _ = send_rpc_error(
             ws,
             Some(id),
-            RpcError::method_not_supported(octos_core::ui_protocol::methods::TASK_ARTIFACT_LIST),
+            RpcError::method_not_supported(ra_core::ui_protocol::methods::TASK_ARTIFACT_LIST),
         );
         return;
     }
@@ -28829,7 +28829,7 @@ async fn handle_task_artifact_list(
         Ok(result) => send_serialized_rpc_result(
             ws,
             id,
-            octos_core::ui_protocol::methods::TASK_ARTIFACT_LIST,
+            ra_core::ui_protocol::methods::TASK_ARTIFACT_LIST,
             result,
         ),
         Err(error) => {
@@ -28850,7 +28850,7 @@ async fn handle_task_artifact_read(
         let _ = send_rpc_error(
             ws,
             Some(id),
-            RpcError::method_not_supported(octos_core::ui_protocol::methods::TASK_ARTIFACT_READ),
+            RpcError::method_not_supported(ra_core::ui_protocol::methods::TASK_ARTIFACT_READ),
         );
         return;
     }
@@ -28868,7 +28868,7 @@ async fn handle_task_artifact_read(
         Ok(result) => send_serialized_rpc_result(
             ws,
             id,
-            octos_core::ui_protocol::methods::TASK_ARTIFACT_READ,
+            ra_core::ui_protocol::methods::TASK_ARTIFACT_READ,
             result,
         ),
         Err(error) => {
@@ -28915,7 +28915,7 @@ async fn handle_task_list(
                     send_serialized_rpc_result(
                         ws,
                         id,
-                        octos_core::ui_protocol::methods::TASK_LIST,
+                        ra_core::ui_protocol::methods::TASK_LIST,
                         result,
                     );
                 }
@@ -28934,7 +28934,7 @@ async fn handle_task_list(
                 topic: params.topic,
                 tasks,
             };
-            send_serialized_rpc_result(ws, id, octos_core::ui_protocol::methods::TASK_LIST, result);
+            send_serialized_rpc_result(ws, id, ra_core::ui_protocol::methods::TASK_LIST, result);
         }
         Err(error) => {
             let _ = send_rpc_error(ws, Some(id), error);
@@ -28992,7 +28992,7 @@ async fn handle_task_cancel(
                 Ok(()) => send_serialized_rpc_result(
                     ws,
                     id,
-                    octos_core::ui_protocol::methods::TASK_CANCEL,
+                    ra_core::ui_protocol::methods::TASK_CANCEL,
                     TaskCancelResult {
                         task_id,
                         status: UiTaskRuntimeState::Cancelled,
@@ -29026,7 +29026,7 @@ async fn handle_task_cancel(
             send_serialized_rpc_result(
                 ws,
                 id,
-                octos_core::ui_protocol::methods::TASK_CANCEL,
+                ra_core::ui_protocol::methods::TASK_CANCEL,
                 result,
             );
         }
@@ -29121,7 +29121,7 @@ fn gateway_session_tasks_path(session_id: &SessionKey, topic: Option<&str>) -> S
     );
     if let Some(topic) = topic.map(str::trim).filter(|topic| !topic.is_empty()) {
         path.push_str("?topic=");
-        path.push_str(&octos_bus::session::encode_path_component(topic));
+        path.push_str(&ra_bus::session::encode_path_component(topic));
     }
     path
 }
@@ -29174,11 +29174,11 @@ fn proxied_task_cancel_outcome(
         axum::http::StatusCode::OK => Ok(()),
         axum::http::StatusCode::NOT_FOUND => Err(task_cancel_rpc_error(
             task_id,
-            octos_agent::TaskCancelError::NotFound,
+            ra_agent::TaskCancelError::NotFound,
         )),
         axum::http::StatusCode::CONFLICT => Err(task_cancel_rpc_error(
             task_id,
-            octos_agent::TaskCancelError::AlreadyTerminal,
+            ra_agent::TaskCancelError::AlreadyTerminal,
         )),
         status => Err(RpcError::runtime_not_ready(format!(
             "gateway task/cancel proxy returned {status}"
@@ -29223,11 +29223,11 @@ async fn proxied_task_restart_outcome(
         }
         axum::http::StatusCode::NOT_FOUND => Err(task_relaunch_rpc_error(
             task_id,
-            octos_agent::TaskRelaunchError::NotFound,
+            ra_agent::TaskRelaunchError::NotFound,
         )),
         axum::http::StatusCode::CONFLICT => Err(task_relaunch_rpc_error(
             task_id,
-            octos_agent::TaskRelaunchError::StillActive,
+            ra_agent::TaskRelaunchError::StillActive,
         )),
         status => Err(RpcError::runtime_not_ready(format!(
             "gateway task/restart_from_node proxy returned {status}"
@@ -29288,7 +29288,7 @@ async fn handle_task_restart_from_node(
                 Ok(new_task_id) => send_serialized_rpc_result(
                     ws,
                     id,
-                    octos_core::ui_protocol::methods::TASK_RESTART_FROM_NODE,
+                    ra_core::ui_protocol::methods::TASK_RESTART_FROM_NODE,
                     TaskRestartFromNodeResult {
                         original_task_id: task_id,
                         new_task_id,
@@ -29310,7 +29310,7 @@ async fn handle_task_restart_from_node(
             return;
         }
     };
-    let opts = octos_agent::RelaunchOpts {
+    let opts = ra_agent::RelaunchOpts {
         from_node: from_node.clone(),
     };
     match ensure_task_in_session(state, session_id, &task_id).and_then(|()| {
@@ -29340,7 +29340,7 @@ async fn handle_task_restart_from_node(
             send_serialized_rpc_result(
                 ws,
                 id,
-                octos_core::ui_protocol::methods::TASK_RESTART_FROM_NODE,
+                ra_core::ui_protocol::methods::TASK_RESTART_FROM_NODE,
                 result,
             );
         }
@@ -29376,11 +29376,11 @@ fn hydrated_tool_names(messages: &[Message]) -> Vec<Option<String>> {
 
 /// A transcript row's tool calls as hydrate carries them (UPCR-2026-039):
 /// id and tool name, in call order, without the arguments.
-fn hydrated_tool_calls(msg: &Message) -> Vec<octos_core::ui_protocol::HydratedToolCall> {
+fn hydrated_tool_calls(msg: &Message) -> Vec<ra_core::ui_protocol::HydratedToolCall> {
     msg.tool_calls
         .iter()
         .flatten()
-        .map(|call| octos_core::ui_protocol::HydratedToolCall {
+        .map(|call| ra_core::ui_protocol::HydratedToolCall {
             tool_call_id: call.id.clone(),
             tool_name: call.name.clone(),
         })
@@ -29400,7 +29400,7 @@ fn hydrated_tool_calls(msg: &Message) -> Vec<octos_core::ui_protocol::HydratedTo
 fn hydrated_canonical_message_identities(
     session_id: &SessionKey,
     messages: &[Message],
-    envelopes: &[octos_core::ui_protocol::EnvelopeV2Notification],
+    envelopes: &[ra_core::ui_protocol::EnvelopeV2Notification],
 ) -> HashMap<usize, (String, bool)> {
     if envelopes.is_empty() {
         return HashMap::new();
@@ -29964,7 +29964,7 @@ async fn handle_session_hydrate(
     send_serialized_rpc_result(
         ws,
         id,
-        octos_core::ui_protocol::methods::SESSION_HYDRATE,
+        ra_core::ui_protocol::methods::SESSION_HYDRATE,
         result,
     );
 }
@@ -29996,7 +29996,7 @@ async fn handle_session_rollback(
     id: String,
     params: SessionRollbackParams,
 ) {
-    let method = octos_core::ui_protocol::methods::SESSION_ROLLBACK;
+    let method = ra_core::ui_protocol::methods::SESSION_ROLLBACK;
     if let Err(error) = validate_session_scope(&params.session_id, None, connection_profile_id) {
         send_scope_error(ws, id, error);
         return;
@@ -30272,9 +30272,9 @@ async fn handle_session_fork(
     connection_profile_id: Option<&str>,
     routed_profile_id: Option<&str>,
     id: String,
-    params: octos_core::ui_protocol::SessionForkParams,
+    params: ra_core::ui_protocol::SessionForkParams,
 ) {
-    let method = octos_core::ui_protocol::methods::SESSION_FORK;
+    let method = ra_core::ui_protocol::methods::SESSION_FORK;
     if let Err(error) = validate_session_scope(&params.session_id, None, connection_profile_id) {
         send_scope_error(ws, id, error);
         return;
@@ -30296,7 +30296,7 @@ async fn handle_session_fork(
     }
     // The child chat-id becomes a filesystem path component and a wire
     // session key half — hold it to the same charset as topic names.
-    if let Err(reason) = octos_bus::validate_topic_name(&params.new_chat_id) {
+    if let Err(reason) = ra_bus::validate_topic_name(&params.new_chat_id) {
         let _ = send_rpc_error(
             ws,
             Some(id),
@@ -30397,7 +30397,7 @@ async fn handle_session_fork(
         }
     };
 
-    let result = octos_core::ui_protocol::SessionForkResult {
+    let result = ra_core::ui_protocol::SessionForkResult {
         new_session_id: new_key,
         parent_session_id: params.session_id,
         copied_messages: copied,
@@ -30487,7 +30487,7 @@ async fn handle_thread_graph_get(
     send_serialized_rpc_result(
         ws,
         id,
-        octos_core::ui_protocol::methods::THREAD_GRAPH_GET,
+        ra_core::ui_protocol::methods::THREAD_GRAPH_GET,
         result,
     );
 }
@@ -30660,7 +30660,7 @@ async fn handle_turn_state_get(
     send_serialized_rpc_result(
         ws,
         id,
-        octos_core::ui_protocol::methods::TURN_STATE_GET,
+        ra_core::ui_protocol::methods::TURN_STATE_GET,
         result,
     );
 }
@@ -30699,12 +30699,12 @@ fn btw_test_slot_serial() -> &'static tokio::sync::Mutex<()> {
 /// Test-only provider override so handler tests can exercise the full
 /// `session/btw` flow without constructing a `ProfileRuntime`.
 #[cfg(test)]
-fn btw_test_provider_slot() -> &'static StdMutex<Option<Arc<dyn octos_llm::LlmProvider>>> {
-    static SLOT: OnceLock<StdMutex<Option<Arc<dyn octos_llm::LlmProvider>>>> = OnceLock::new();
+fn btw_test_provider_slot() -> &'static StdMutex<Option<Arc<dyn ra_llm::LlmProvider>>> {
+    static SLOT: OnceLock<StdMutex<Option<Arc<dyn ra_llm::LlmProvider>>>> = OnceLock::new();
     SLOT.get_or_init(|| StdMutex::new(None))
 }
 
-fn btw_test_provider() -> Option<Arc<dyn octos_llm::LlmProvider>> {
+fn btw_test_provider() -> Option<Arc<dyn ra_llm::LlmProvider>> {
     #[cfg(test)]
     if let Ok(slot) = btw_test_provider_slot().lock() {
         if let Some(llm) = slot.as_ref() {
@@ -30788,15 +30788,15 @@ const BTW_TIMEOUT_SECS: u64 = 30;
 /// carries the restrictions: no tools, brief answer, ephemeral exchange.
 /// The `ChatConfig` for a `session/btw` aside — split out so its cache
 /// economics are pinnable in isolation.
-fn btw_chat_config() -> octos_llm::ChatConfig {
-    octos_llm::ChatConfig {
+fn btw_chat_config() -> ra_llm::ChatConfig {
+    ra_llm::ChatConfig {
         max_tokens: Some(BTW_ANSWER_MAX_TOKENS),
         temperature: Some(0.2),
-        tool_choice: octos_llm::ToolChoice::None,
+        tool_choice: ra_llm::ToolChoice::None,
         // #2194 review: ONE restricted LLM call per aside — the prompt
         // (transcript tail + activity tail + question) is never replayed, so
         // a cache write is pure premium.
-        cache_retention: octos_llm::CacheRetention::None,
+        cache_retention: ra_llm::CacheRetention::None,
         ..Default::default()
     }
 }
@@ -31101,7 +31101,7 @@ async fn handle_session_btw(
         // came from. `profile_runtime` also carries the data dir for the
         // usage ledger; the test override provides a bare provider only.
         let (llm, profile_runtime): (
-            Arc<dyn octos_llm::LlmProvider>,
+            Arc<dyn ra_llm::LlmProvider>,
             Option<Arc<crate::runtime::ProfileRuntime>>,
         ) = match btw_test_provider() {
             Some(llm) => (llm, None),
@@ -31237,7 +31237,7 @@ async fn handle_session_btw(
             return;
         };
 
-        let result = octos_core::ui_protocol::SessionBtwResult {
+        let result = ra_core::ui_protocol::SessionBtwResult {
             session_id,
             answer,
             model: Some(metadata.model.clone()),
@@ -31245,7 +31245,7 @@ async fn handle_session_btw(
         send_serialized_rpc_result(
             &ws,
             id,
-            octos_core::ui_protocol::methods::SESSION_BTW,
+            ra_core::ui_protocol::methods::SESSION_BTW,
             result,
         );
     });
@@ -31292,7 +31292,7 @@ impl HydrateIncludeSet {
 
 /// Build the thread-graph projection used by both `session/hydrate` and
 /// `thread/graph/get`. Returns `(threads, orphans)`.
-fn build_thread_graph_entries(session: &octos_bus::Session) -> (Vec<ThreadGraphEntry>, Vec<u64>) {
+fn build_thread_graph_entries(session: &ra_bus::Session) -> (Vec<ThreadGraphEntry>, Vec<u64>) {
     use std::collections::BTreeMap;
 
     // Group messages by thread_id, recording each message's enumerated
@@ -31622,7 +31622,7 @@ fn rest_status_to_rpc_error(
         // REST handler returns a verbose body.
         let mut detail = detail;
         if detail.len() > 2048 {
-            octos_core::truncate_utf8(&mut detail, 2048, "…");
+            ra_core::truncate_utf8(&mut detail, 2048, "…");
         }
         data.insert("detail".into(), json!(detail));
     }
@@ -31745,7 +31745,7 @@ async fn handle_session_list(
         &busy_sessions,
     )
     .await;
-    let method = octos_core::ui_protocol::methods::SESSION_LIST;
+    let method = ra_core::ui_protocol::methods::SESSION_LIST;
     // Collection endpoint — no addressable session id. Treat any
     // (unexpected) 404 as a generic resource-not-found rather than
     // an `UNKNOWN_SESSION` miss.
@@ -31875,7 +31875,7 @@ struct SessionListScope {
 /// listing stays the byte-identical `{ sessions }` it always was, which is
 /// how a client tells the two apart for the same `{cwd}` request.
 fn session_list_result_value(sessions: Value, scope: Option<&SessionListScope>) -> Value {
-    serde_json::to_value(octos_core::ui_protocol::SessionListResult {
+    serde_json::to_value(ra_core::ui_protocol::SessionListResult {
         sessions,
         workspace_root: scope.map(|scope| scope.workspace_root.to_string_lossy().into_owned()),
         profile_id: scope.map(|scope| scope.profile_id.clone()),
@@ -31894,7 +31894,7 @@ async fn handle_launch_resolve(
     connection_profile_id: Option<&str>,
     features: ConnectionUiFeatures,
     id: String,
-    params: octos_core::ui_protocol::LaunchResolveParams,
+    params: ra_core::ui_protocol::LaunchResolveParams,
 ) {
     match resolve_launch_result(state, connection_profile_id, features, &params) {
         Ok(result) => {
@@ -31902,7 +31902,7 @@ async fn handle_launch_resolve(
             send_aux_rpc_result(
                 ws,
                 id,
-                octos_core::ui_protocol::methods::LAUNCH_RESOLVE,
+                ra_core::ui_protocol::methods::LAUNCH_RESOLVE,
                 body,
             );
         }
@@ -31919,10 +31919,10 @@ fn resolve_launch_result(
     state: &Arc<AppState>,
     connection_profile_id: Option<&str>,
     features: ConnectionUiFeatures,
-    params: &octos_core::ui_protocol::LaunchResolveParams,
-) -> Result<octos_core::ui_protocol::LaunchResolveResult, RpcError> {
+    params: &ra_core::ui_protocol::LaunchResolveParams,
+) -> Result<ra_core::ui_protocol::LaunchResolveResult, RpcError> {
     use crate::runtime::launch::{LaunchDecision, resolve_launch_decision, scan_folder_sessions};
-    use octos_core::ui_protocol::{LaunchDecisionKind, LaunchResolveResult};
+    use ra_core::ui_protocol::{LaunchDecisionKind, LaunchResolveResult};
 
     // The method is advertised only when `session.workspace_cwd.v1` is
     // negotiated; reject a client that calls it without the feature.
@@ -32065,7 +32065,7 @@ async fn handle_session_status_get(
         topic_params,
     )
     .await;
-    let method = octos_core::ui_protocol::methods::SESSION_STATUS_GET;
+    let method = ra_core::ui_protocol::methods::SESSION_STATUS_GET;
     let context = RestResourceContext::session(session_id_str);
     match rest_response_to_rpc_value(response, method, context).await {
         Ok(mut status) => {
@@ -32136,7 +32136,7 @@ async fn handle_session_files_list(
         axum_path(params.session_id),
     )
     .await;
-    let method = octos_core::ui_protocol::methods::SESSION_FILES_LIST;
+    let method = ra_core::ui_protocol::methods::SESSION_FILES_LIST;
     let context = RestResourceContext::session(session_id_str);
     match rest_response_to_rpc_value(response, method, context).await {
         Ok(files) => {
@@ -32169,7 +32169,7 @@ async fn handle_session_tasks_list(
         topic_params,
     )
     .await;
-    let method = octos_core::ui_protocol::methods::SESSION_TASKS_LIST;
+    let method = ra_core::ui_protocol::methods::SESSION_TASKS_LIST;
     let context = RestResourceContext::session(session_id_str);
     match rest_response_to_rpc_value(response, method, context).await {
         Ok(tasks) => {
@@ -32198,7 +32198,7 @@ async fn handle_session_workspace_get(
         axum_path(params.session_id),
     )
     .await;
-    let method = octos_core::ui_protocol::methods::SESSION_WORKSPACE_GET;
+    let method = ra_core::ui_protocol::methods::SESSION_WORKSPACE_GET;
     let context = RestResourceContext::session(session_id_str);
     match rest_response_to_rpc_value(response, method, context).await {
         Ok(contracts) => {
@@ -32221,7 +32221,7 @@ async fn handle_session_snapshot(
     // Snapshot is a single round trip that collapses the three REST
     // bootstrap calls (status, files, tasks). Run them concurrently
     // and surface the first error.
-    let method = octos_core::ui_protocol::methods::SESSION_SNAPSHOT;
+    let method = ra_core::ui_protocol::methods::SESSION_SNAPSHOT;
     let session_id_str = params.session_id.clone();
     let topic_params = axum::extract::Query(super::handlers::TopicQueryParams {
         topic: params.topic.clone(),
@@ -32309,7 +32309,7 @@ async fn handle_session_messages_page(
     id: String,
     params: SessionMessagesPageParams,
 ) {
-    let method = octos_core::ui_protocol::methods::SESSION_MESSAGES_PAGE;
+    let method = ra_core::ui_protocol::methods::SESSION_MESSAGES_PAGE;
     let limit = params
         .limit
         .unwrap_or(SESSION_MESSAGES_PAGE_DEFAULT_LIMIT)
@@ -32375,7 +32375,7 @@ async fn handle_session_title_set(
     id: String,
     params: SessionTitleSetParams,
 ) {
-    let method = octos_core::ui_protocol::methods::SESSION_TITLE_SET;
+    let method = ra_core::ui_protocol::methods::SESSION_TITLE_SET;
     let trimmed = params.title.trim();
     if trimmed.is_empty() {
         let _ = send_rpc_error(
@@ -32440,7 +32440,7 @@ async fn handle_session_delete(
     id: String,
     params: SessionDeleteParams,
 ) {
-    let method = octos_core::ui_protocol::methods::SESSION_DELETE;
+    let method = ra_core::ui_protocol::methods::SESSION_DELETE;
     let session_id_str = params.session_id.clone();
     let response = super::handlers::delete_session(
         State(state.clone()),
@@ -32472,7 +32472,7 @@ async fn handle_system_status_get(
     id: String,
     _params: SystemStatusGetParams,
 ) {
-    let method = octos_core::ui_protocol::methods::SYSTEM_STATUS_GET;
+    let method = ra_core::ui_protocol::methods::SYSTEM_STATUS_GET;
     let axum::Json(status) = super::handlers::status(State(state.clone())).await;
     match serde_json::to_value(&status) {
         Ok(value) => send_aux_rpc_result(ws, id, method, json!({ "status": value })),
@@ -32495,7 +32495,7 @@ async fn handle_content_list(
     id: String,
     params: ContentListParams,
 ) {
-    let method = octos_core::ui_protocol::methods::CONTENT_LIST;
+    let method = ra_core::ui_protocol::methods::CONTENT_LIST;
     let Some(identity) = identity.cloned() else {
         // Web PR #114 contract: SPA bridge listens for close-code 1008 to
         // trigger `crew:auth_expired` (clears token, routes to /login). The
@@ -32589,7 +32589,7 @@ async fn handle_content_delete(
     id: String,
     params: ContentDeleteParams,
 ) {
-    let method = octos_core::ui_protocol::methods::CONTENT_DELETE;
+    let method = ra_core::ui_protocol::methods::CONTENT_DELETE;
     let Some(identity) = identity.cloned() else {
         // Web PR #114 contract: see `close_ws_with_code` doc-comment. Codex
         // BLOCK (2026-05-13): close before error so it survives writer
@@ -32643,7 +32643,7 @@ async fn handle_content_bulk_delete(
     id: String,
     params: ContentBulkDeleteParams,
 ) {
-    let method = octos_core::ui_protocol::methods::CONTENT_BULK_DELETE;
+    let method = ra_core::ui_protocol::methods::CONTENT_BULK_DELETE;
     let Some(identity) = identity.cloned() else {
         // Web PR #114 contract: see `close_ws_with_code` doc-comment. Codex
         // BLOCK (2026-05-13): close before error so it survives writer
@@ -32660,17 +32660,17 @@ async fn handle_content_bulk_delete(
     // single oversized request from monopolizing the catalog for
     // even a small bounded window. Mirrored in
     // `ra-core::ui_protocol::CONTENT_BULK_DELETE_MAX_IDS`.
-    if params.ids.len() > octos_core::ui_protocol::CONTENT_BULK_DELETE_MAX_IDS {
+    if params.ids.len() > ra_core::ui_protocol::CONTENT_BULK_DELETE_MAX_IDS {
         let _ = send_rpc_error(
             ws,
             Some(id),
             RpcError::invalid_params(format!(
                 "{method}: ids count {} exceeds maximum of {}",
                 params.ids.len(),
-                octos_core::ui_protocol::CONTENT_BULK_DELETE_MAX_IDS,
+                ra_core::ui_protocol::CONTENT_BULK_DELETE_MAX_IDS,
             ))
             .with_data(json!({
-                "max_ids": octos_core::ui_protocol::CONTENT_BULK_DELETE_MAX_IDS,
+                "max_ids": ra_core::ui_protocol::CONTENT_BULK_DELETE_MAX_IDS,
                 "requested_ids": params.ids.len(),
             })),
         );
@@ -32730,7 +32730,7 @@ async fn handle_content_bulk_delete(
 /// Worst-case wire size is therefore the PLAIN SUM of the budgets:
 ///   96 (long_term) + 48 (today) + 7×24 (recent) + ~543 (entities —
 ///   bounded upstream at ≤ MAX_PANEL_ENTITIES=256 rows: summaries
-///   ≤ 100 raw bytes (`octos_memory::extract_abstract`) → ≤ 600
+///   ≤ 100 raw bytes (`ra_memory::extract_abstract`) → ≤ 600
 ///   escaped, names ≤ 255 raw → ≤ 1530 escaped (Unix filenames may
 ///   carry C0 controls at 6 wire bytes each), + per-row JSON
 ///   overhead) ≈ 855 KiB, under the frame cap with ~169 KiB margin.
@@ -32810,7 +32810,7 @@ async fn handle_memory_overview(
     id: String,
     _params: MemoryOverviewParams,
 ) {
-    let method = octos_core::ui_protocol::methods::MEMORY_OVERVIEW;
+    let method = ra_core::ui_protocol::methods::MEMORY_OVERVIEW;
     let Some(identity) = identity.cloned() else {
         // Web PR #114 contract: see `close_ws_with_code` doc-comment. Codex
         // BLOCK (2026-05-13): close before error so it survives writer
@@ -32869,7 +32869,7 @@ async fn handle_memory_entity(
     id: String,
     params: MemoryEntityParams,
 ) {
-    let method = octos_core::ui_protocol::methods::MEMORY_ENTITY;
+    let method = ra_core::ui_protocol::methods::MEMORY_ENTITY;
     let Some(identity) = identity.cloned() else {
         // Web PR #114 contract: see `close_ws_with_code` doc-comment. Codex
         // BLOCK (2026-05-13): close before error so it survives writer
@@ -33022,8 +33022,8 @@ fn parse_memory_time_bound(
 /// `1..=MEMORY_SEARCH_MAX_LIMIT`. Pure — unit-tested directly.
 fn memory_search_filter(
     params: &MemorySearchParams,
-) -> Result<octos_memory::SearchFilter, RpcError> {
-    let method = octos_core::ui_protocol::methods::MEMORY_SEARCH;
+) -> Result<ra_memory::SearchFilter, RpcError> {
+    let method = ra_core::ui_protocol::methods::MEMORY_SEARCH;
     if params.query.trim().is_empty() {
         return Err(RpcError::invalid_params(format!(
             "{method}: `query` must not be empty"
@@ -33031,7 +33031,7 @@ fn memory_search_filter(
     }
     let mut kinds = Vec::with_capacity(params.kinds.len());
     for kind in &params.kinds {
-        let parsed = octos_memory::RecordKind::parse(kind).ok_or_else(|| {
+        let parsed = ra_memory::RecordKind::parse(kind).ok_or_else(|| {
             RpcError::invalid_params(format!(
                 "{method}: unknown kind {kind:?} (expected episode, document or knowledge)"
             ))
@@ -33067,7 +33067,7 @@ fn memory_search_filter(
         .limit
         .unwrap_or(MEMORY_SEARCH_DEFAULT_LIMIT)
         .clamp(1, MEMORY_SEARCH_MAX_LIMIT);
-    Ok(octos_memory::SearchFilter {
+    Ok(ra_memory::SearchFilter {
         kinds,
         sources,
         since,
@@ -33091,7 +33091,7 @@ async fn handle_memory_search(
     id: String,
     params: MemorySearchParams,
 ) {
-    let method = octos_core::ui_protocol::methods::MEMORY_SEARCH;
+    let method = ra_core::ui_protocol::methods::MEMORY_SEARCH;
     let Some(identity) = identity.cloned() else {
         // Web PR #114 contract: see `close_ws_with_code` doc-comment —
         // close before error so it survives writer backpressure.
@@ -33177,7 +33177,7 @@ async fn handle_memory_load(
     id: String,
     params: MemoryLoadParams,
 ) {
-    let method = octos_core::ui_protocol::methods::MEMORY_LOAD;
+    let method = ra_core::ui_protocol::methods::MEMORY_LOAD;
     let Some(identity) = identity.cloned() else {
         if close_on_auth_unavailable {
             let _ = close_ws_with_code(ws, 1008, "auth_expired");
@@ -33298,7 +33298,7 @@ async fn handle_memory_load(
 /// Records + optional parallel vectors accepted by `memory/ingest`.
 #[derive(Debug)]
 struct ValidatedMemoryIngest {
-    records: Vec<octos_memory::Record>,
+    records: Vec<ra_memory::Record>,
     vectors: Option<Vec<Option<Vec<f32>>>>,
 }
 
@@ -33306,7 +33306,7 @@ struct ValidatedMemoryIngest {
 /// `invalid_params`, with `records[i]` in the message):
 /// at most [`MEMORY_INGEST_MAX_RECORDS`] records and at least one;
 /// `vectors`, when present, parallel to `records`; each record decodes
-/// as `octos_memory::Record` after its `kind` is parsed leniently
+/// as `ra_memory::Record` after its `kind` is parsed leniently
 /// (`RecordKind::parse`, so `doc` / `docs` are accepted); ids are
 /// non-empty and namespaced by kind (`doc:<source>:…`, `episode:…`);
 /// Knowledge records are refused outright (the bank is their write
@@ -33316,8 +33316,8 @@ struct ValidatedMemoryIngest {
 /// `promoted`) are reset; `RecallStore::upsert` re-merges them from
 /// the stored copy. Pure — unit-tested directly.
 fn validate_memory_ingest(params: MemoryIngestParams) -> Result<ValidatedMemoryIngest, RpcError> {
-    use octos_memory::{Record, RecordKind, Trust};
-    let method = octos_core::ui_protocol::methods::MEMORY_INGEST;
+    use ra_memory::{Record, RecordKind, Trust};
+    let method = ra_core::ui_protocol::methods::MEMORY_INGEST;
     let requested = params.records.len();
     if requested == 0 {
         return Err(RpcError::invalid_params(format!(
@@ -33439,7 +33439,7 @@ async fn handle_memory_ingest(
     id: String,
     params: MemoryIngestParams,
 ) {
-    let method = octos_core::ui_protocol::methods::MEMORY_INGEST;
+    let method = ra_core::ui_protocol::methods::MEMORY_INGEST;
     let Some(identity) = identity.cloned() else {
         if close_on_auth_unavailable {
             let _ = close_ws_with_code(ws, 1008, "auth_expired");
@@ -33464,7 +33464,7 @@ async fn handle_memory_ingest(
             }
         };
     let mut embedded = 0usize;
-    let (records, vectors): (Vec<octos_memory::Record>, Vec<Option<Vec<f32>>>) = match vectors {
+    let (records, vectors): (Vec<ra_memory::Record>, Vec<Option<Vec<f32>>>) = match vectors {
         Some(vectors) => (records, vectors),
         None => match runtime.embedder.as_ref().filter(|_| embed_requested) {
             Some(embedder) => {
@@ -33615,7 +33615,7 @@ async fn handle_cron_list(
     id: String,
     _params: CronListParams,
 ) {
-    let method = octos_core::ui_protocol::methods::CRON_LIST;
+    let method = ra_core::ui_protocol::methods::CRON_LIST;
     let Some(identity) = identity.cloned() else {
         // Web PR #114 contract: see `close_ws_with_code` doc-comment. Codex
         // BLOCK (2026-05-13): close before error so it survives writer
@@ -33680,7 +33680,7 @@ async fn handle_cron_toggle(
     id: String,
     params: CronToggleParams,
 ) {
-    let method = octos_core::ui_protocol::methods::CRON_TOGGLE;
+    let method = ra_core::ui_protocol::methods::CRON_TOGGLE;
     let Some(identity) = identity.cloned() else {
         // Web PR #114 contract: see `close_ws_with_code` doc-comment. Codex
         // BLOCK (2026-05-13): close before error so it survives writer
@@ -34062,8 +34062,8 @@ fn select_task_artifact(
 fn read_task_artifact_text(path: &str, data_dir: Option<&Path>) -> Option<String> {
     let resolved = data_dir
         .and_then(|data_dir| {
-            octos_bus::file_handle::resolve_scoped_file_handle(data_dir, path)
-                .or_else(|| octos_bus::file_handle::resolve_legacy_file_request(data_dir, path))
+            ra_bus::file_handle::resolve_scoped_file_handle(data_dir, path)
+                .or_else(|| ra_bus::file_handle::resolve_legacy_file_request(data_dir, path))
         })
         .or_else(|| Path::new(path).is_absolute().then(|| PathBuf::from(path)))?;
     std::fs::read(resolved)
@@ -34259,10 +34259,10 @@ fn ensure_task_in_session(
     }
 }
 
-fn task_cancel_rpc_error(task_id: &TaskId, error: octos_agent::TaskCancelError) -> RpcError {
+fn task_cancel_rpc_error(task_id: &TaskId, error: ra_agent::TaskCancelError) -> RpcError {
     match error {
-        octos_agent::TaskCancelError::NotFound => RpcError::unknown_task_id(task_id),
-        octos_agent::TaskCancelError::AlreadyTerminal => {
+        ra_agent::TaskCancelError::NotFound => RpcError::unknown_task_id(task_id),
+        ra_agent::TaskCancelError::AlreadyTerminal => {
             RpcError::invalid_params("task is already terminal")
                 .with_data(json!({ "kind": "task_already_terminal" }))
         }
@@ -34279,7 +34279,7 @@ fn resolve_router_for_session(
     session_id: &SessionKey,
     connection_profile_id: Option<&str>,
     routed_profile_id: Option<&str>,
-) -> Result<Option<Arc<octos_llm::AdaptiveRouter>>, RpcError> {
+) -> Result<Option<Arc<ra_llm::AdaptiveRouter>>, RpcError> {
     // Tenant-scope gate (P1). Without it the `session_id.profile_id()`-first
     // precedence below lets a tenant-B connection pass a `session_id` that
     // embeds tenant-A's profile and resolve — then `set_mode` mutate /
@@ -34354,13 +34354,13 @@ async fn handle_router_set_mode(
     connection_profile_id: Option<&str>,
     routed_profile_id: Option<&str>,
     id: String,
-    params: octos_core::ui_protocol::RouterSetModeParams,
+    params: ra_core::ui_protocol::RouterSetModeParams,
 ) {
-    let method = octos_core::ui_protocol::methods::ROUTER_SET_MODE;
+    let method = ra_core::ui_protocol::methods::ROUTER_SET_MODE;
     let mode = match params.mode.as_str() {
-        "off" => octos_llm::AdaptiveMode::Off,
-        "hedge" => octos_llm::AdaptiveMode::Hedge,
-        "lane" => octos_llm::AdaptiveMode::Lane,
+        "off" => ra_llm::AdaptiveMode::Off,
+        "hedge" => ra_llm::AdaptiveMode::Hedge,
+        "lane" => ra_llm::AdaptiveMode::Lane,
         other => {
             let _ = send_rpc_error(
                 ws,
@@ -34398,7 +34398,7 @@ async fn handle_router_set_mode(
         }
     };
     router.set_mode(mode);
-    let result = octos_core::ui_protocol::RouterSetModeResult { mode: params.mode };
+    let result = ra_core::ui_protocol::RouterSetModeResult { mode: params.mode };
     let value = match serde_json::to_value(&result) {
         Ok(v) => v,
         Err(error) => {
@@ -34422,9 +34422,9 @@ async fn handle_router_get_metrics(
     connection_profile_id: Option<&str>,
     routed_profile_id: Option<&str>,
     id: String,
-    params: octos_core::ui_protocol::RouterGetMetricsParams,
+    params: ra_core::ui_protocol::RouterGetMetricsParams,
 ) {
-    let method = octos_core::ui_protocol::methods::ROUTER_GET_METRICS;
+    let method = ra_core::ui_protocol::methods::ROUTER_GET_METRICS;
     let router = match resolve_router_for_session(
         state,
         &params.session_id,
@@ -34451,7 +34451,7 @@ async fn handle_router_get_metrics(
         }
     };
     let status = router.adaptive_status();
-    let result = octos_core::ui_protocol::RouterGetMetricsResult {
+    let result = ra_core::ui_protocol::RouterGetMetricsResult {
         provider_name: router.current_lane_key(),
         mode: status.mode.to_string(),
         qos_ranking: status.qos_ranking,
@@ -34481,9 +34481,9 @@ async fn handle_smart_home_status_get(
     identity: Option<&AuthIdentity>,
     close_on_auth_unavailable: bool,
     id: String,
-    _params: octos_core::ui_protocol::SmartHomeStatusGetParams,
+    _params: ra_core::ui_protocol::SmartHomeStatusGetParams,
 ) {
-    let method = octos_core::ui_protocol::methods::SMART_HOME_STATUS_GET;
+    let method = ra_core::ui_protocol::methods::SMART_HOME_STATUS_GET;
     let Some(identity) = identity.cloned() else {
         if close_on_auth_unavailable {
             let _ = close_ws_with_code(ws, 1008, "auth_expired");
@@ -34521,9 +34521,9 @@ async fn handle_smart_home_device_list(
     identity: Option<&AuthIdentity>,
     close_on_auth_unavailable: bool,
     id: String,
-    _params: octos_core::ui_protocol::SmartHomeDeviceListParams,
+    _params: ra_core::ui_protocol::SmartHomeDeviceListParams,
 ) {
-    let method = octos_core::ui_protocol::methods::SMART_HOME_DEVICE_LIST;
+    let method = ra_core::ui_protocol::methods::SMART_HOME_DEVICE_LIST;
     let Some(identity) = identity.cloned() else {
         if close_on_auth_unavailable {
             let _ = close_ws_with_code(ws, 1008, "auth_expired");
@@ -34563,9 +34563,9 @@ async fn handle_smart_home_device_command(
     identity: Option<&AuthIdentity>,
     close_on_auth_unavailable: bool,
     id: String,
-    params: octos_core::ui_protocol::SmartHomeDeviceCommandParams,
+    params: ra_core::ui_protocol::SmartHomeDeviceCommandParams,
 ) {
-    let method = octos_core::ui_protocol::methods::SMART_HOME_DEVICE_COMMAND;
+    let method = ra_core::ui_protocol::methods::SMART_HOME_DEVICE_COMMAND;
     let Some(identity) = identity.cloned() else {
         if close_on_auth_unavailable {
             let _ = close_ws_with_code(ws, 1008, "auth_expired");
@@ -34613,9 +34613,9 @@ async fn handle_smart_home_camera_stream_start(
     identity: Option<&AuthIdentity>,
     close_on_auth_unavailable: bool,
     id: String,
-    params: octos_core::ui_protocol::SmartHomeCameraStreamStartParams,
+    params: ra_core::ui_protocol::SmartHomeCameraStreamStartParams,
 ) {
-    let method = octos_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_START;
+    let method = ra_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_START;
     let Some(identity) = identity.cloned() else {
         if close_on_auth_unavailable {
             let _ = close_ws_with_code(ws, 1008, "auth_expired");
@@ -34655,9 +34655,9 @@ async fn handle_smart_home_camera_stream_stop(
     identity: Option<&AuthIdentity>,
     close_on_auth_unavailable: bool,
     id: String,
-    params: octos_core::ui_protocol::SmartHomeCameraStreamStopParams,
+    params: ra_core::ui_protocol::SmartHomeCameraStreamStopParams,
 ) {
-    let method = octos_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_STOP;
+    let method = ra_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_STOP;
     let Some(identity) = identity.cloned() else {
         if close_on_auth_unavailable {
             let _ = close_ws_with_code(ws, 1008, "auth_expired");
@@ -34689,10 +34689,10 @@ async fn handle_smart_home_camera_stream_stop(
     }
 }
 
-fn task_relaunch_rpc_error(task_id: &TaskId, error: octos_agent::TaskRelaunchError) -> RpcError {
+fn task_relaunch_rpc_error(task_id: &TaskId, error: ra_agent::TaskRelaunchError) -> RpcError {
     match error {
-        octos_agent::TaskRelaunchError::NotFound => RpcError::unknown_task_id(task_id),
-        octos_agent::TaskRelaunchError::StillActive => {
+        ra_agent::TaskRelaunchError::NotFound => RpcError::unknown_task_id(task_id),
+        ra_agent::TaskRelaunchError::StillActive => {
             RpcError::invalid_params("task is still active; cancel it before relaunching")
                 .with_data(json!({ "kind": "task_still_active" }))
         }
@@ -34735,7 +34735,7 @@ async fn run_m9_fixture_turn(
 ) {
     let session_id = params.session_id.clone();
     let turn_id = params.turn_id.clone();
-    let started = UiNotification::TurnStarted(octos_core::ui_protocol::TurnStartedEvent {
+    let started = UiNotification::TurnStarted(ra_core::ui_protocol::TurnStartedEvent {
         session_id: session_id.clone(),
         turn_id: turn_id.clone(),
         timestamp: Utc::now(),
@@ -35247,7 +35247,7 @@ async fn run_m9_fixture_turn(
 struct M14CodexP0SoakSpawnTool;
 
 #[async_trait::async_trait]
-impl octos_agent::tools::Tool for M14CodexP0SoakSpawnTool {
+impl ra_agent::tools::Tool for M14CodexP0SoakSpawnTool {
     fn name(&self) -> &str {
         "spawn"
     }
@@ -35264,18 +35264,18 @@ impl octos_agent::tools::Tool for M14CodexP0SoakSpawnTool {
         json!({"type": "object", "additionalProperties": true})
     }
 
-    async fn execute(&self, args: &Value) -> eyre::Result<octos_agent::ToolResult> {
-        self.execute_with_context(&octos_agent::tools::ToolContext::zero(), args)
+    async fn execute(&self, args: &Value) -> eyre::Result<ra_agent::ToolResult> {
+        self.execute_with_context(&ra_agent::tools::ToolContext::zero(), args)
             .await
     }
 
     async fn execute_with_context(
         &self,
-        ctx: &octos_agent::tools::ToolContext,
+        ctx: &ra_agent::tools::ToolContext,
         args: &Value,
-    ) -> eyre::Result<octos_agent::ToolResult> {
+    ) -> eyre::Result<ra_agent::ToolResult> {
         let Some(supervisor) = ctx.task_supervisor.as_ref() else {
-            return Ok(octos_agent::ToolResult {
+            return Ok(ra_agent::ToolResult {
                 output: "spawn delegate requires a task supervisor".to_owned(),
                 success: false,
                 ..Default::default()
@@ -35319,7 +35319,7 @@ impl octos_agent::tools::Tool for M14CodexP0SoakSpawnTool {
             }),
         );
 
-        Ok(octos_agent::ToolResult {
+        Ok(ra_agent::ToolResult {
             output: json!({
                 "task_id": task_id,
                 "status": "running",
@@ -35349,8 +35349,8 @@ fn m14_codex_tool_preview(output: &str) -> String {
 struct M14CodexToolCallEnv<'a> {
     ws: &'a WsConnection,
     ledger: &'a UiProtocolLedger,
-    registry: &'a octos_agent::ToolRegistry,
-    ctx: &'a octos_agent::tools::ToolContext,
+    registry: &'a ra_agent::ToolRegistry,
+    ctx: &'a ra_agent::tools::ToolContext,
     session_id: &'a SessionKey,
     turn_id: &'a TurnId,
 }
@@ -35361,7 +35361,7 @@ async fn m14_codex_tool_call(
     tool_name: &str,
     args: Value,
     expected_success: bool,
-) -> Result<octos_agent::ToolResult, String> {
+) -> Result<ra_agent::ToolResult, String> {
     let tool_call_id = format!("m14-codex-p0-{index}-{tool_name}-{}", env.turn_id.0);
     let topic = env.session_id.topic().map(ToOwned::to_owned);
     // Dual-emit like `forward_progress_event`: the raw lifecycle frames are
@@ -35454,10 +35454,10 @@ async fn run_m14_codex_p0_tool_parity_fixture_turn(
         };
     }
 
-    let mut registry = octos_agent::ToolRegistry::with_builtins(&workspace);
+    let mut registry = ra_agent::ToolRegistry::with_builtins(&workspace);
     registry.register(M14CodexP0SoakSpawnTool);
     let supervisor = registry.supervisor();
-    let mut ctx = octos_agent::tools::ToolContext::zero();
+    let mut ctx = ra_agent::tools::ToolContext::zero();
     ctx.task_supervisor = Some(supervisor.clone());
     ctx.parent_session_key = Some(session_id.to_string());
     let call_env = M14CodexToolCallEnv {
@@ -35777,7 +35777,7 @@ impl AppUiSupervisorEventSink for WsSupervisorEventSink {
         // live broadcast forwarder both observe them. Non-terminal updates
         // (spawned/running/heartbeats) stay ephemeral — appending each would
         // bloat replay history with redundant in-flight states.
-        if method == octos_core::ui_protocol::methods::AGENT_UPDATED {
+        if method == ra_core::ui_protocol::methods::AGENT_UPDATED {
             if let Some(event) = terminal_agent_updated_event(&params) {
                 let _ = send_notification_durable(
                     &self.ws,
@@ -35845,19 +35845,19 @@ fn default_native_code_review_specs() -> Vec<NativeCodeReviewSpec> {
         NativeCodeReviewSpec::new(
             "reviewer-api",
             "Ada Lovelace",
-            octos_agent::ROLE_REVIEWER,
+            ra_agent::ROLE_REVIEWER,
             "AppUI/API contract compatibility, wire protocol correctness, and client-visible state.",
         ),
         NativeCodeReviewSpec::new(
             "reviewer-tests",
             "Hypatia",
-            octos_agent::ROLE_REVIEWER,
+            ra_agent::ROLE_REVIEWER,
             "unit, integration, tmux UX soak, and missing evidence for regressions.",
         ),
         NativeCodeReviewSpec::new(
             "reviewer-policy",
             "Socrates",
-            octos_agent::ROLE_REVIEWER,
+            ra_agent::ROLE_REVIEWER,
             "sandbox, permissions, profile/runtime policy, MCP/tool exposure, and approval boundaries.",
         ),
     ]
@@ -36008,7 +36008,7 @@ async fn run_native_code_review_turn(
     mut interrupt_rx: mpsc::Receiver<()>,
 ) {
     let session_id = params.session_id.clone();
-    let started = UiNotification::TurnStarted(octos_core::ui_protocol::TurnStartedEvent {
+    let started = UiNotification::TurnStarted(ra_core::ui_protocol::TurnStartedEvent {
         session_id: session_id.clone(),
         turn_id: turn_id.clone(),
         timestamp: Utc::now(),
@@ -36151,7 +36151,7 @@ async fn run_native_code_review_turn(
     let target = review_target_summary(params.target.as_ref());
     let objective = review_objective(&params, &target);
     let review_runtime_policy_stamp =
-        octos_agent::RoleTemplate::for_name(octos_agent::ROLE_REVIEWER)
+        ra_agent::RoleTemplate::for_name(ra_agent::ROLE_REVIEWER)
             .map(|template| template.runtime_policy_stamp("supervisor", "native_review", None));
     let workspace_root = session_runtime.workspace_root.clone();
     let llm_provider = session_runtime.profile.llm.clone();
@@ -36185,7 +36185,7 @@ async fn run_native_code_review_turn(
     // agent's own turn-start refresh.
     session_runtime.agent.refresh_prompt_segments().await;
     let system_prompt_base = session_runtime.agent.system_prompt_snapshot();
-    let review_dispatch_policy = Arc::new(octos_agent::DispatchPolicy::from_agent_gates(
+    let review_dispatch_policy = Arc::new(ra_agent::DispatchPolicy::from_agent_gates(
         profile_runtime.tool_policy.clone(),
         true,
     ));
@@ -36208,7 +36208,7 @@ async fn run_native_code_review_turn(
             tool_call_id: None,
             runtime_detail: Some("launching model-backed native specialists".to_owned()),
             source: Some("supervisor".to_owned()),
-            role: Some(octos_agent::ROLE_REVIEWER.to_owned()),
+            role: Some(ra_agent::ROLE_REVIEWER.to_owned()),
             summary: Some("Launching native code review specialists".to_owned()),
             artifact_count: Some(0),
             runtime_policy_stamp: review_runtime_policy_stamp.clone(),
@@ -36350,7 +36350,7 @@ async fn run_native_code_review_turn(
                     ) {
                         let _ = send_raw_notification_ephemeral(
                             &ws,
-                            octos_core::ui_protocol::methods::AGENT_UPDATED,
+                            ra_core::ui_protocol::methods::AGENT_UPDATED,
                             json!({
                                 "session_id": session_id,
                                 "agent": agent,
@@ -36370,7 +36370,7 @@ async fn run_native_code_review_turn(
                         tool_call_id: None,
                         runtime_detail: Some("interrupted by client".to_owned()),
                         source: Some("supervisor".to_owned()),
-                        role: Some(octos_agent::ROLE_REVIEWER.to_owned()),
+                        role: Some(ra_agent::ROLE_REVIEWER.to_owned()),
                         summary: Some("Code review interrupted".to_owned()),
                         artifact_count: Some(0),
                         runtime_policy_stamp: review_runtime_policy_stamp.clone(),
@@ -36493,7 +36493,7 @@ async fn run_native_code_review_turn(
                 "{completed}/{expected_results} specialists completed"
             )),
             source: Some("supervisor".to_owned()),
-            role: Some(octos_agent::ROLE_REVIEWER.to_owned()),
+            role: Some(ra_agent::ROLE_REVIEWER.to_owned()),
             summary: Some(format!(
                 "Scatter-join complete: {completed}/{expected_results} specialists completed"
             )),
@@ -36596,7 +36596,7 @@ fn maybe_spawn_cli_review_specialist(
     objective: &str,
     target: &str,
     turn_id: &TurnId,
-    dispatch_policy: Arc<octos_agent::DispatchPolicy>,
+    dispatch_policy: Arc<ra_agent::DispatchPolicy>,
 ) {
     let Some(argv) = review_cli_argv() else {
         return;
@@ -36772,7 +36772,7 @@ fn review_mcp_timeout() -> std::time::Duration {
 }
 
 async fn model_join_review_summary(
-    llm: &dyn octos_llm::LlmProvider,
+    llm: &dyn ra_llm::LlmProvider,
     objective: &str,
     target: &str,
     results: &[NativeCodeReviewResult],
@@ -36854,15 +36854,15 @@ fn requested_final_marker(objective: &str) -> Option<String> {
 
 /// The `ChatConfig` for the final code-review join — split out so its cache
 /// economics are pinnable in isolation.
-fn review_join_chat_config() -> octos_llm::ChatConfig {
-    octos_llm::ChatConfig {
+fn review_join_chat_config() -> ra_llm::ChatConfig {
+    ra_llm::ChatConfig {
         max_tokens: Some(1800),
         temperature: Some(0.0),
-        tool_choice: octos_llm::ToolChoice::None,
+        tool_choice: ra_llm::ToolChoice::None,
         // #2194 review: the join runs once per review with a prompt unique
         // to that join (objective + target + specialist outputs) — never
         // replayed, so a cache write is pure premium.
-        cache_retention: octos_llm::CacheRetention::None,
+        cache_retention: ra_llm::CacheRetention::None,
         ..Default::default()
     }
 }
@@ -37109,7 +37109,7 @@ async fn run_m15_live_subagent_fixture_turn(
         };
         let _ = send_raw_notification_ephemeral(
             ws,
-            octos_core::ui_protocol::methods::AGENT_UPDATED,
+            ra_core::ui_protocol::methods::AGENT_UPDATED,
             json!({
                 "session_id": session_id,
                 "agent": agent,
@@ -37163,7 +37163,7 @@ async fn run_m15_live_subagent_fixture_turn(
                     ) {
                         let _ = send_raw_notification_ephemeral(
                             ws,
-                            octos_core::ui_protocol::methods::AGENT_UPDATED,
+                            ra_core::ui_protocol::methods::AGENT_UPDATED,
                             json!({
                                 "session_id": session_id,
                                 "agent": agent,
@@ -37472,7 +37472,7 @@ async fn seed_m9_task_output_fixture(
         .open(&session_path)
         .map_err(|error| format!("failed to materialize session file: {error}"))?;
 
-    let supervisor = octos_agent::TaskSupervisor::new();
+    let supervisor = ra_agent::TaskSupervisor::new();
     supervisor
         .enable_persistence(ui_protocol_task_output::task_state_path(
             &data_dir, session_id,
@@ -37503,7 +37503,7 @@ async fn seed_m9_task_output_fixture(
     supervisor.mark_running(&task_id);
     supervisor.mark_runtime_state(
         &task_id,
-        octos_agent::TaskRuntimeState::DeliveringOutputs,
+        ra_agent::TaskRuntimeState::DeliveringOutputs,
         Some(
             json!({
                 "workflow_kind": "m9_fixture",
@@ -37650,10 +37650,10 @@ fn appui_loop_assistant_reply_for_self_paced(
 
 /// Map the wire-level reasoning effort (ra-core) to ra-llm's enum.
 fn reasoning_effort_from_wire(
-    level: octos_core::ui_protocol::ReasoningEffortLevel,
-) -> octos_llm::ReasoningEffort {
-    use octos_core::ui_protocol::ReasoningEffortLevel as L;
-    use octos_llm::ReasoningEffort as E;
+    level: ra_core::ui_protocol::ReasoningEffortLevel,
+) -> ra_llm::ReasoningEffort {
+    use ra_core::ui_protocol::ReasoningEffortLevel as L;
+    use ra_llm::ReasoningEffort as E;
     match level {
         L::Low => E::Low,
         L::Medium => E::Medium,
@@ -37880,7 +37880,7 @@ fn goal_verifier_warning_event(
     session_id: &SessionKey,
     outcome: &crate::autonomy::goal_loop_runtime::GoalVerifierOutcome,
 ) -> UiNotification {
-    UiNotification::Warning(octos_core::ui_protocol::WarningEvent {
+    UiNotification::Warning(ra_core::ui_protocol::WarningEvent {
         session_id: session_id.clone(),
         turn_id: None,
         code: format!(
@@ -37904,7 +37904,7 @@ fn goal_verifier_failure_warning(
     // `\0~cwd-…` scope suffix, so every caller (the interactive sentinel
     // consumer in `run_standalone_turn` and the tests) routes through the
     // SAME normalization.
-    UiNotification::Warning(octos_core::ui_protocol::WarningEvent {
+    UiNotification::Warning(ra_core::ui_protocol::WarningEvent {
         session_id: crate::autonomy::agent_orchestrator::wire_key_from_goal_key(session_id),
         turn_id: None,
         code: format!("goal_verifier_{kind}"),
@@ -37914,7 +37914,7 @@ fn goal_verifier_failure_warning(
 
 async fn run_interactive_sentinel_completion(
     orchestrator: &InProcessAgentOrchestrator,
-    verifier_provider: Arc<dyn octos_llm::LlmProvider>,
+    verifier_provider: Arc<dyn ra_llm::LlmProvider>,
     pinned_goal_key: &SessionKey,
     charge_profile: &str,
     bound_goal_id: &str,
@@ -37957,8 +37957,8 @@ async fn run_interactive_sentinel_completion(
     // scopes ended; restore originating-session attribution around it. The
     // event carries the WIRE id, so strip the cwd scope off the pinned key.
     // evo-goal-verifier: the wrapper owns gate/charge/retry/ledger.
-    let outcome = octos_llm::with_router_context(
-        octos_llm::RouterContext {
+    let outcome = ra_llm::with_router_context(
+        ra_llm::RouterContext {
             session_id: Some(wire_key_from_goal_key(pinned_goal_key).to_string()),
             ..Default::default()
         },
@@ -38014,7 +38014,7 @@ async fn run_interactive_sentinel_completion(
 fn interrupted_goal_charge(
     interrupt_observed: bool,
     folded: u64,
-    tracker: &octos_agent::TokenTracker,
+    tracker: &ra_agent::TokenTracker,
 ) -> u64 {
     if interrupt_observed && folded == 0 {
         u64::from(
@@ -38164,7 +38164,7 @@ async fn run_standalone_turn(
     // canonical session path (same commit-observer emit the `turn/start`
     // prompt row gets) the moment it is folded into the conversation.
     // `None` for non-steerable turns.
-    steer_buffer: Option<octos_agent::SharedSteerBuffer>,
+    steer_buffer: Option<ra_agent::SharedSteerBuffer>,
     internal_master_continuation: bool,
     // #1128 codex P1 re-review #2 — when this turn is draining a
     // self-paced or maintenance LoopFire continuation, pass the loop
@@ -38219,7 +38219,7 @@ async fn run_standalone_turn(
 ) {
     let session_id = params.session_id.clone();
     let turn_id = params.turn_id.clone();
-    let started = UiNotification::TurnStarted(octos_core::ui_protocol::TurnStartedEvent {
+    let started = UiNotification::TurnStarted(ra_core::ui_protocol::TurnStartedEvent {
         session_id: session_id.clone(),
         turn_id: turn_id.clone(),
         timestamp: Utc::now(),
@@ -38483,7 +38483,7 @@ async fn run_standalone_turn(
         return;
     }
     let turn_end_hooks = session_runtime.profile.hook_executor.clone();
-    let turn_end_hook_ctx = octos_agent::HookContext {
+    let turn_end_hook_ctx = ra_agent::HookContext {
         session_id: Some(session_id.to_string()),
         profile_id: Some(session_runtime.profile.profile_id.clone()),
     };
@@ -38535,11 +38535,11 @@ async fn run_standalone_turn(
     // across turns, reconnects, and the per-turn agent rebuild. The
     // completed-run write below lands before the client can start the
     // next turn on this session, so the next hydration includes it.
-    let session_usage_base = octos_agent::SharedSessionUsage::default();
+    let session_usage_base = ra_agent::SharedSessionUsage::default();
     if let Some(ledger) = usage_ledger.as_ref() {
         match ledger.session_totals(&session_id.to_string()).await {
             Ok(totals) if totals.run_count > 0 => {
-                session_usage_base.seed(octos_agent::SessionUsageSnapshot {
+                session_usage_base.seed(ra_agent::SessionUsageSnapshot {
                     input_tokens: totals.input_tokens,
                     output_tokens: totals.output_tokens,
                     spend_usd: totals.estimated_cost_usd,
@@ -38613,7 +38613,7 @@ async fn run_standalone_turn(
     let voice_turn_hint = params
         .media
         .iter()
-        .any(|file_ref| octos_bus::media::is_audio(&file_ref.path));
+        .any(|file_ref| ra_bus::media::is_audio(&file_ref.path));
     let mut tool_registry = session_runtime.tools.snapshot_excluding(&[]);
     tool_registry.set_active_context(normalize_tool_context(params.tool_context.as_deref()));
     // Stamp the per-turn snapshot with this session's key so
@@ -38651,17 +38651,17 @@ async fn run_standalone_turn(
     if let Some(existing) = tool_registry.get("mofa_make").cloned() {
         if let Some(dispatcher) = existing
             .as_any()
-            .downcast_ref::<octos_agent::MofaMakeTool>()
+            .downcast_ref::<ra_agent::MofaMakeTool>()
         {
             let entries = dispatcher.entries();
-            let fresh_dispatcher = octos_agent::MofaMakeTool::new();
+            let fresh_dispatcher = ra_agent::MofaMakeTool::new();
             for entry in &entries {
                 fresh_dispatcher.register_or_replace(entry.clone());
             }
             tool_registry.register(fresh_dispatcher);
 
             if tool_registry.get("mofa_describe_content_type").is_some() {
-                let fresh_describe = octos_agent::MofaDescribeContentTypeTool::new();
+                let fresh_describe = ra_agent::MofaDescribeContentTypeTool::new();
                 for entry in &entries {
                     fresh_describe.register_or_replace(entry.clone());
                 }
@@ -38688,7 +38688,7 @@ async fn run_standalone_turn(
         .topic()
         .is_some_and(|topic| topic.starts_with("slides"));
     if is_slides_session {
-        tool_registry.retain(octos_agent::keep_tool_in_slides_session);
+        tool_registry.retain(ra_agent::keep_tool_in_slides_session);
     }
 
     let workspace_root: Option<PathBuf> = Some(session_runtime.workspace_root.clone());
@@ -38696,10 +38696,10 @@ async fn run_standalone_turn(
     // (`peers/<slug>/model`) runs its turns on that `sub_provider` instead of
     // the profile's primary; every other session (and any missing/unmatched/
     // unbuildable lane) falls back to the profile's primary provider.
-    let llm_provider: Arc<dyn octos_llm::LlmProvider> =
+    let llm_provider: Arc<dyn ra_llm::LlmProvider> =
         peer_lane_provider_for(&session_id, &session_runtime)
             .unwrap_or_else(|| session_runtime.profile.llm.clone());
-    let memory_store: Arc<octos_memory::EpisodeStore> = session_runtime.memory.episodes.clone();
+    let memory_store: Arc<ra_memory::EpisodeStore> = session_runtime.memory.episodes.clone();
     let mut agent_config = session_runtime.agent.agent_config();
     // A human-driven turn does not become unattended merely because it
     // arrived over OUP. Local chat/ACP and remote interactive clients share
@@ -38777,10 +38777,10 @@ async fn run_standalone_turn(
         .await;
     let combined_memory_segment = session_runtime
         .agent
-        .prompt_segment_snapshot(octos_agent::MEMORY_SEGMENT_NAME)
+        .prompt_segment_snapshot(ra_agent::MEMORY_SEGMENT_NAME)
         .unwrap_or_default();
     let volatile_memory_context = if app_context_allowed {
-        octos_agent::volatile_memory_content(
+        ra_agent::volatile_memory_content(
             &combined_memory_segment,
             session_runtime.memory.refresh_enabled,
         )
@@ -38788,11 +38788,11 @@ async fn run_standalone_turn(
         String::new()
     };
     let stable_memory_policy =
-        octos_agent::stable_memory_instructions(session_runtime.memory.refresh_enabled);
+        ra_agent::stable_memory_instructions(session_runtime.memory.refresh_enabled);
     let agent_snapshot = session_runtime
         .agent
         .system_prompt_snapshot_replacing_segment(
-            octos_agent::MEMORY_SEGMENT_NAME,
+            ra_agent::MEMORY_SEGMENT_NAME,
             &stable_memory_policy,
         );
     let system_prompt_base = if !app_context_allowed {
@@ -38960,7 +38960,7 @@ async fn run_standalone_turn(
     // equivalent in `session_actor.rs::deliver_background_notification`.
     //
     // The canonical persist
-    // (`octos_bus::session::persist_message_through_canonical_path`)
+    // (`ra_bus::session::persist_message_through_canonical_path`)
     // serialises with other writers via a per-key Tokio mutex, so this is
     // safe to invoke from a `tokio::spawn`-driven background task that may
     // complete after the originating turn has ended. After each persist we
@@ -39238,11 +39238,11 @@ async fn run_standalone_turn(
         if let Some(store) = state.task_query_store.as_ref() {
             store.register(&session_id, &task_supervisor, &bg_data_dir);
         }
-        tool_registry.register(octos_agent::CheckBackgroundTasksTool::new(
+        tool_registry.register(ra_agent::CheckBackgroundTasksTool::new(
             task_supervisor.clone(),
             session_id.to_string(),
         ));
-        tool_registry.register(octos_agent::ReadTaskOutputTool::new(
+        tool_registry.register(ra_agent::ReadTaskOutputTool::new(
             task_supervisor.clone(),
             session_id.to_string(),
             session_runtime.agent.subagent_output_router().cloned(),
@@ -39258,7 +39258,7 @@ async fn run_standalone_turn(
         let payload_context_manager = context_manager.clone();
         let payload_context_dir = session_runtime.sessions_root.clone();
         let payload_download_root = session_runtime.profile.data_dir.clone();
-        let background_result_sender: octos_agent::tools::spawn::BackgroundResultSender =
+        let background_result_sender: ra_agent::tools::spawn::BackgroundResultSender =
             std::sync::Arc::new(move |payload: BackgroundResultPayload| {
                 let sessions = payload_sessions.clone();
                 let data_dir = payload_data_dir.clone();
@@ -39391,7 +39391,7 @@ async fn run_standalone_turn(
         // delivery). Live reproducer on mini3 dspfac session
         // slides-1779207239761-u8pt1j.
         let (out_tx, mut out_rx) =
-            mpsc::channel::<octos_core::OutboundMessage>(SEND_FILE_CHANNEL_CAPACITY);
+            mpsc::channel::<ra_core::OutboundMessage>(SEND_FILE_CHANNEL_CAPACITY);
         let send_file_base = workspace_root
             .clone()
             .unwrap_or_else(|| bg_data_dir.clone());
@@ -39405,7 +39405,7 @@ async fn run_standalone_turn(
         let send_file_context_session = bg_session_id.0.clone();
 
         let (spawn_inbound_tx, _spawn_inbound_rx) = mpsc::channel::<InboundMessage>(32);
-        let mut spawn_tool = octos_agent::SpawnTool::with_context(
+        let mut spawn_tool = ra_agent::SpawnTool::with_context(
             llm_provider.clone(),
             memory_store.clone(),
             session_runtime.workspace_root.clone(),
@@ -39434,7 +39434,7 @@ async fn run_standalone_turn(
             session_runtime.profile.plugin_dirs.clone(),
             session_runtime.profile.plugin_env_template.clone(),
         )
-        .with_hook_context(octos_agent::HookContext {
+        .with_hook_context(ra_agent::HookContext {
             session_id: Some(session_id.to_string()),
             profile_id: Some(session_runtime.profile.profile_id.clone()),
         })
@@ -39585,7 +39585,7 @@ async fn run_standalone_turn(
         let child_context_data_dir = session_runtime.sessions_root.clone();
         let child_context_parent_session = session_id.clone();
         spawn_tool = spawn_tool.with_child_prompt_context_manager_factory(Arc::new(
-            move |request: octos_agent::tools::spawn::ChildPromptContextRequest| {
+            move |request: ra_agent::tools::spawn::ChildPromptContextRequest| {
                 let child_key = request.child_session_key.clone().unwrap_or_else(|| {
                     let worker_suffix: String = request
                         .worker_id
@@ -39659,13 +39659,13 @@ async fn run_standalone_turn(
             let factory_extras = send_file_extras.clone();
             let factory_session = send_file_context_session.clone();
             spawn_tool = spawn_tool.with_child_tool_factory(Arc::new(move || {
-                let mut tool = octos_agent::SendFileTool::new(factory_out_tx.clone())
+                let mut tool = ra_agent::SendFileTool::new(factory_out_tx.clone())
                     .with_base_dir(factory_base.clone());
                 for extra in &factory_extras {
                     tool = tool.with_extra_allowed_dir(extra.clone());
                 }
                 tool.set_context("api", &factory_session);
-                Arc::new(tool) as Arc<dyn octos_agent::tools::Tool>
+                Arc::new(tool) as Arc<dyn ra_agent::tools::Tool>
             }));
         }
         // NEW-07 fix: mirror the gateway path (`session_actor.rs:2744-2748`)
@@ -39827,7 +39827,7 @@ async fn run_standalone_turn(
                 Arc::new(AtomicU32::new(0)),
                 emit_staged,
             );
-            tool_registry.register(octos_agent::PeerHandoffTool::new(stage));
+            tool_registry.register(ra_agent::PeerHandoffTool::new(stage));
         }
 
         // #1801 v3 fan-in — `peer_gather`: the read half of the peer loop
@@ -39843,7 +39843,7 @@ async fn run_standalone_turn(
                 Some((session_id.clone(), gathered_peer_results.clone())),
                 session_runtime.profile.profile_id.clone(),
             );
-            tool_registry.register(octos_agent::PeerGatherTool::new(gather));
+            tool_registry.register(ra_agent::PeerGatherTool::new(gather));
         }
 
         // `peer_list` — the compact status INDEX companion to `peer_gather`:
@@ -39867,7 +39867,7 @@ async fn run_standalone_turn(
                 contracts.clone(),
                 session_runtime.profile.profile_id.clone(),
             );
-            tool_registry.register(octos_agent::PeerListTool::new(list));
+            tool_registry.register(ra_agent::PeerListTool::new(list));
         }
 
         // #436 — `peer_send_input`: cross-session input injection into a
@@ -39893,8 +39893,8 @@ async fn run_standalone_turn(
             // inject into it.
             let send_origin_session = session_id.to_string();
             let send_turn_id = turn_id.clone();
-            let send_input: octos_agent::PeerSendInputCallback =
-                Arc::new(move |req: octos_agent::PeerSendInputRequest| {
+            let send_input: ra_agent::PeerSendInputCallback =
+                Arc::new(move |req: ra_agent::PeerSendInputRequest| {
                     deliver_peer_send_input(
                         &send_profile_id,
                         &send_peers_root,
@@ -39909,7 +39909,7 @@ async fn run_standalone_turn(
                 crate::peers::host_tools::PEER_INPUT_ANSWER_WAIT,
             );
             tool_registry
-                .register(octos_agent::PeerSendInputTool::new(send_input).with_answer(answer));
+                .register(ra_agent::PeerSendInputTool::new(send_input).with_answer(answer));
 
             // `peer_close` — retire a running peer the caller created (#1842:
             // the close STOPS it — the callback interrupts its in-flight turn).
@@ -39956,7 +39956,7 @@ async fn run_standalone_turn(
                 emit_closed,
                 emit_cancelled,
             );
-            tool_registry.register(octos_agent::PeerCloseTool::new(close));
+            tool_registry.register(ra_agent::PeerCloseTool::new(close));
 
             // #peer-respond — answer a peer BLOCKED on an interactive prompt
             // (tool-approval or clarifying question) so the master acts as its
@@ -39982,8 +39982,8 @@ async fn run_standalone_turn(
                 Some(sessions) => Some(sessions.lock().await.data_dir()),
                 None => None,
             };
-            let respond: octos_agent::PeerRespondCallback =
-                Arc::new(move |req: octos_agent::PeerRespondRequest| {
+            let respond: ra_agent::PeerRespondCallback =
+                Arc::new(move |req: ra_agent::PeerRespondRequest| {
                     // #P1-5 — emit `approval/decided` + audit for a master
                     // approval via the SAME helpers the RPC handler uses,
                     // attributing the master session.
@@ -40003,7 +40003,7 @@ async fn run_standalone_turn(
                         req,
                     )
                 });
-            tool_registry.register(octos_agent::PeerRespondTool::new(respond));
+            tool_registry.register(ra_agent::PeerRespondTool::new(respond));
         }
 
         // Wire the PARENT `send_file` for the legacy non-contract
@@ -40019,7 +40019,7 @@ async fn run_standalone_turn(
         // so the SAME deps are used by both the parent tool and the
         // child factory wired into `spawn_tool`.
         let mut send_file_tool =
-            octos_agent::SendFileTool::new(out_tx).with_base_dir(send_file_base.clone());
+            ra_agent::SendFileTool::new(out_tx).with_base_dir(send_file_base.clone());
         for extra in &send_file_extras {
             send_file_tool = send_file_tool.with_extra_allowed_dir(extra.clone());
         }
@@ -40130,12 +40130,12 @@ async fn run_standalone_turn(
     // Without this wrap the heartbeat publishes into the channel-only path
     // and the SPA's tool-status bubble never refreshes for long-running
     // spawn_only tools (run_pipeline, podcast_generate, mofa_slides, ...).
-    let inner_reporter: Arc<dyn octos_agent::ProgressReporter> =
+    let inner_reporter: Arc<dyn ra_agent::ProgressReporter> =
         Arc::new(MetricsReporter::new(Arc::new(
             BoundedChannelReporter::new(progress_tx.clone(), progress_dropped.clone())
                 .with_thread_id(Some(turn_id.0.to_string())),
         )));
-    let reporter: Arc<dyn octos_agent::ProgressReporter> = Arc::new(
+    let reporter: Arc<dyn ra_agent::ProgressReporter> = Arc::new(
         super::ui_protocol_alpha2_bridge::LedgerToolProgressReporter::new(
             inner_reporter,
             ledger.clone(),
@@ -40483,7 +40483,7 @@ async fn run_standalone_turn(
     // #2246 — the per-turn rebuild starts from `Agent::new_shared`, so the
     // bootstrap agent's hook context does not carry over; re-apply it here
     // (same ids the session's spawn tool receives above).
-    request_agent = request_agent.with_hook_context(octos_agent::HookContext {
+    request_agent = request_agent.with_hook_context(ra_agent::HookContext {
         session_id: Some(session_id.to_string()),
         profile_id: Some(session_runtime.profile.profile_id.clone()),
     });
@@ -40572,7 +40572,7 @@ async fn run_standalone_turn(
     request_agent.wire_mofa_make_dispatcher();
 
     let agent_session_id = session_id.clone();
-    let approval_requester: Arc<dyn octos_agent::ToolApprovalRequester> =
+    let approval_requester: Arc<dyn ra_agent::ToolApprovalRequester> =
         Arc::new(UiProtocolApprovalRequester {
             ws: ws.clone(),
             ledger: ledger.clone(),
@@ -40589,7 +40589,7 @@ async fn run_standalone_turn(
     // connection negotiated `user_question.v1`. When unset the task-local stays
     // empty, so the agent's `ask_user_question` tool degrades to its
     // structured-metadata fallback and the turn never hard-blocks.
-    let user_question_requester: Option<Arc<dyn octos_agent::UserQuestionRequester>> =
+    let user_question_requester: Option<Arc<dyn ra_agent::UserQuestionRequester>> =
         features.user_question_v1.then(|| {
             Arc::new(SessionUserQuestionRequester {
                 ws: ws.clone(),
@@ -40599,7 +40599,7 @@ async fn run_standalone_turn(
                 peers_root: session_runtime.profile.data_dir.join("peers"),
                 session_id: session_id.clone(),
                 turn_id: turn_id.clone(),
-            }) as Arc<dyn octos_agent::UserQuestionRequester>
+            }) as Arc<dyn ra_agent::UserQuestionRequester>
         });
     // PR F (M8.10): capture the originating `TurnId` as a string so the
     // tokio::spawn closure (which moves everything it touches) can pre-stamp
@@ -40629,7 +40629,7 @@ async fn run_standalone_turn(
     if let Some(buffer) = steer_buffer.clone() {
         let steer_data_dir = sessions.lock().await.data_dir();
         let steer_session_id = session_id.clone();
-        let drained_callback: octos_agent::SteerDrainedCallback = Arc::new(move |texts| {
+        let drained_callback: ra_agent::SteerDrainedCallback = Arc::new(move |texts| {
             let data_dir = steer_data_dir.clone();
             let session_id = steer_session_id.clone();
             Box::pin(async move {
@@ -40675,7 +40675,7 @@ async fn run_standalone_turn(
         .iter()
         .map(|file_ref| file_ref.path.clone())
         .collect();
-    let mut turn_media_paths: Vec<String> = octos_bus::file_handle::materialize_turn_uploads(
+    let mut turn_media_paths: Vec<String> = ra_bus::file_handle::materialize_turn_uploads(
         &session_runtime.workspace_root,
         // #1377: bind to the session's OWNING TENANT so the materializer only
         // copies uploads owned by this tenant (cross-tenant handles dropped).
@@ -40709,7 +40709,7 @@ async fn run_standalone_turn(
             }
         })
         .collect();
-    let had_audio_media = asr_media.iter().any(|p| octos_bus::media::is_audio(p));
+    let had_audio_media = asr_media.iter().any(|p| ra_bus::media::is_audio(p));
     // Read the profile override for every voice turn instead of freezing it in
     // the cached SessionRuntime. A Settings save therefore affects the very
     // next utterance without restarting `ra serve`. Do not touch the store
@@ -40753,7 +40753,7 @@ async fn run_standalone_turn(
         crate::api::voice_turn::VoiceAsrOutcome {
             audio_count: asr_media
                 .iter()
-                .filter(|path| octos_bus::media::is_audio(path))
+                .filter(|path| ra_bus::media::is_audio(path))
                 .count(),
             accepted_transcripts: vec![admitted.transcript],
             rejected_count: 0,
@@ -40773,7 +40773,7 @@ async fn run_standalone_turn(
     );
     let had_non_audio_media = asr_media
         .iter()
-        .any(|path| !octos_bus::media::is_audio(path));
+        .any(|path| !ra_bus::media::is_audio(path));
     if should_short_circuit_no_speech(
         had_audio_media,
         had_non_audio_media,
@@ -40902,7 +40902,7 @@ async fn run_standalone_turn(
         // instead of re-transcribing the workspace audio file — with the
         // always-on voice skill present, an audio attachment otherwise lures
         // the agent into calling `voice_transcribe` / exploring the workspace.
-        turn_media_paths.retain(|p| !octos_bus::media::is_audio(p));
+        turn_media_paths.retain(|p| !ra_bus::media::is_audio(p));
     }
     // Voice fail-fast activation: `had_audio_input` (ASR produced spoken text)
     // is the authoritative voice flag. Run the agent under the FailFast LLM
@@ -40912,7 +40912,7 @@ async fn run_standalone_turn(
     // apology. Text turns leave the sink unset and keep the default Normal
     // policy (full retry ladder), byte-for-byte unchanged.
     let mut voice_failure_rx = if had_audio_input {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<octos_agent::TurnFailure>();
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<ra_agent::TurnFailure>();
         request_agent.set_voice_failure_sink(tx);
         Some(rx)
     } else {
@@ -40931,7 +40931,7 @@ async fn run_standalone_turn(
     // attribute events to the right session. Without this, sessions
     // sharing a profile-scoped router would re-emit one another's
     // failovers (the router fans out to all subscribers).
-    let router_ctx = octos_llm::RouterContext {
+    let router_ctx = ra_llm::RouterContext {
         session_id: Some(session_id.0.clone()),
         turn_id: Some(turn_id.0.to_string()),
     };
@@ -40944,7 +40944,7 @@ async fn run_standalone_turn(
     // session. Built-in defaults apply when the profile has no
     // `lane_routing` block, so fleet profiles see no behavior change
     // unless they opt in via config.
-    let lane_ctx = octos_llm::LaneContext::for_topic(
+    let lane_ctx = ra_llm::LaneContext::for_topic(
         session_id.topic(),
         session_runtime.profile.lane_routing.as_ref(),
     );
@@ -41026,7 +41026,7 @@ async fn run_standalone_turn(
     // spawned agent task below; the original `token_tracker` stays in THIS scope
     // so the drain loop can read an interrupted turn's partial spend after the
     // task future is dropped.
-    let token_tracker = std::sync::Arc::new(octos_agent::TokenTracker::new());
+    let token_tracker = std::sync::Arc::new(ra_agent::TokenTracker::new());
     let token_tracker_task = std::sync::Arc::clone(&token_tracker);
     // #2066 round 4 (codex fix 2) — the AppUI twin of the session actor's
     // #2003 in-flight heartbeat: keep this goal turn's dispatch marker fresh
@@ -41106,7 +41106,7 @@ async fn run_standalone_turn(
         // grounding) fire only when the client says this is a live camera turn
         // — never inferred from attachment types. Other attachment-context
         // fields stay at their serve-path defaults.
-        let turn_attachments = octos_agent::TurnAttachmentContext {
+        let turn_attachments = ra_agent::TurnAttachmentContext {
             live_video: params.live_video,
             ..Default::default()
         };
@@ -41123,12 +41123,12 @@ async fn run_standalone_turn(
         );
         let scoped_message_future: std::pin::Pin<
             Box<
-                dyn std::future::Future<Output = eyre::Result<octos_agent::ConversationResponse>>
+                dyn std::future::Future<Output = eyre::Result<ra_agent::ConversationResponse>>
                     + Send,
             >,
         > = match user_question_requester {
             Some(requester) => {
-                Box::pin(octos_agent::tools::USER_QUESTION_CTX.scope(requester, message_future))
+                Box::pin(ra_agent::tools::USER_QUESTION_CTX.scope(requester, message_future))
             }
             None => Box::pin(message_future),
         };
@@ -41137,17 +41137,17 @@ async fn run_standalone_turn(
         // matter how deep the agent loop recurses into `chat()`. Text turns run
         // Normal (full retry ladder), unchanged.
         let call_policy = if had_audio_input {
-            octos_llm::LlmCallPolicy::FailFast
+            ra_llm::LlmCallPolicy::FailFast
         } else {
-            octos_llm::LlmCallPolicy::Normal
+            ra_llm::LlmCallPolicy::Normal
         };
-        let result = octos_llm::with_llm_call_policy(
+        let result = ra_llm::with_llm_call_policy(
             call_policy,
-            octos_llm::with_router_context(
+            ra_llm::with_router_context(
                 router_ctx,
-                octos_llm::with_lane_context(
+                ra_llm::with_lane_context(
                     lane_ctx,
-                    octos_agent::tools::TOOL_APPROVAL_CTX
+                    ra_agent::tools::TOOL_APPROVAL_CTX
                         .scope(approval_requester, scoped_message_future),
                 ),
             ),
@@ -41166,12 +41166,12 @@ async fn run_standalone_turn(
         // Reuse the canonical persistence path for actual truncated output,
         // without turning an incomplete model response into a successful turn.
         let incomplete_message = result.as_ref().err().and_then(|error| {
-            error.downcast_ref::<octos_agent::IncompleteResponseError>()
+            error.downcast_ref::<ra_agent::IncompleteResponseError>()
                 .map(ToString::to_string)
         });
         let result = match result {
             Err(error) if incomplete_message.is_some() => Ok(error
-                .downcast_ref::<octos_agent::IncompleteResponseError>()
+                .downcast_ref::<ra_agent::IncompleteResponseError>()
                 .expect("incomplete carrier checked above").partial.clone()),
             result => result,
         };
@@ -41832,7 +41832,7 @@ async fn run_standalone_turn(
                 // inner error). Absent carrier (non-loop error) → zeros, the
                 // pre-#1969 behaviour.
                 let (err_tokens_in, err_tokens_out, err_tokens_cache) = error
-                    .downcast_ref::<octos_agent::PartialTurnUsage>()
+                    .downcast_ref::<ra_agent::PartialTurnUsage>()
                     .map(|partial| {
                         let usage = &partial.total;
                         (
@@ -41843,7 +41843,7 @@ async fn run_standalone_turn(
                         )
                     })
                     .unwrap_or((0, 0, 0));
-                let token_usage = error.downcast_ref::<octos_agent::PartialTurnUsage>()
+                let token_usage = error.downcast_ref::<ra_agent::PartialTurnUsage>()
                     .map(|partial| EnvelopeTokenUsage {
                         input_tokens: u64::from(partial.total.input_tokens),
                         output_tokens: u64::from(partial.total.output_tokens),
@@ -42146,7 +42146,7 @@ async fn run_standalone_turn(
                 crate::session_actor::emit_lifecycle_hook_payload(
                     turn_end_hooks.as_ref(),
                     &session_id,
-                    octos_agent::HookPayload::on_turn_end(
+                    ra_agent::HookPayload::on_turn_end(
                         turn_end_summary.clone(),
                         Some(&turn_end_hook_ctx),
                     ),
@@ -42235,10 +42235,10 @@ async fn run_standalone_turn(
                             voice_streamed_count = handle.await.unwrap_or(voice_streamed_count);
                         }
                         let code = match failure {
-                            octos_agent::TurnFailure::LlmError { error, .. } => {
+                            ra_agent::TurnFailure::LlmError { error, .. } => {
                                 error.variant_name()
                             }
-                            octos_agent::TurnFailure::EmptyResponse => "empty_response",
+                            ra_agent::TurnFailure::EmptyResponse => "empty_response",
                         };
                         (code, speech.to_string())
                     }
@@ -42294,7 +42294,7 @@ async fn run_standalone_turn(
                 crate::session_actor::emit_lifecycle_hook_payload(
                     turn_end_hooks.as_ref(),
                     &session_id,
-                    octos_agent::HookPayload::on_turn_end(
+                    ra_agent::HookPayload::on_turn_end(
                         turn_end_summary.clone(),
                         Some(&turn_end_hook_ctx),
                     ),
@@ -42471,7 +42471,7 @@ async fn run_standalone_turn(
             final_tokens_consumed,
             elapsed_seconds,
         ) {
-            match serde_json::from_value::<octos_core::ui_protocol::SessionGoalUpdatedEvent>(
+            match serde_json::from_value::<ra_core::ui_protocol::SessionGoalUpdatedEvent>(
                 goal_event_json,
             ) {
                 Ok(event) => {
@@ -42768,7 +42768,7 @@ async fn run_standalone_turn(
         crate::session_actor::emit_lifecycle_hook_payload(
             turn_end_hooks.as_ref(),
             &session_id,
-            octos_agent::HookPayload::on_turn_end(
+            ra_agent::HookPayload::on_turn_end(
                 turn_end_summary.clone(),
                 Some(&turn_end_hook_ctx),
             ),
@@ -42998,7 +42998,7 @@ async fn run_standalone_turn(
             let r_ref_images: Vec<String> = if params.live_video {
                 asr_media
                     .iter()
-                    .filter(|p| octos_bus::media::is_image(p))
+                    .filter(|p| ra_bus::media::is_image(p))
                     .cloned()
                     .collect()
             } else {
@@ -43033,13 +43033,13 @@ async fn run_standalone_turn(
                 let produce = async {
                     let rels: Vec<String> = match directive.kind {
                         VisualKind::Html => {
-                            let ctx = octos_agent::rich_output::RichHtmlContext {
+                            let ctx = ra_agent::rich_output::RichHtmlContext {
                                 transcript: r_transcript,
                                 spoken_reply: r_spoken,
                                 brief: directive.brief,
                                 illustration: false,
                             };
-                            match octos_agent::rich_output::author_html(r_provider.as_ref(), &ctx)
+                            match ra_agent::rich_output::author_html(r_provider.as_ref(), &ctx)
                                 .await
                             {
                                 Ok(html) => {
@@ -43075,19 +43075,19 @@ async fn run_standalone_turn(
                             // placeholder src), then inline the PNG as a data URI so
                             // the artifact is a single self-contained file. If image
                             // gen failed, fall back to a no-illustration document.
-                            let ctx = octos_agent::rich_output::RichHtmlContext {
+                            let ctx = ra_agent::rich_output::RichHtmlContext {
                                 transcript: r_transcript,
                                 spoken_reply: r_spoken,
                                 brief: directive.brief,
                                 illustration: png_bytes.is_some(),
                             };
-                            match octos_agent::rich_output::author_html(r_provider.as_ref(), &ctx)
+                            match ra_agent::rich_output::author_html(r_provider.as_ref(), &ctx)
                                 .await
                             {
                                 Ok(html) => {
                                     let html = match png_bytes {
                                         Some(bytes) => {
-                                            octos_agent::rich_output::inline_illustration(
+                                            ra_agent::rich_output::inline_illustration(
                                                 &html, &bytes,
                                             )
                                         }
@@ -43427,8 +43427,8 @@ async fn run_standalone_turn(
                 // Normal policy, so only the router context needs restoring.
                 // evo-goal-verifier: the wrapper owns gate/charge/retry/ledger;
                 // per-attempt usage is charged inside it.
-                let outcome = octos_llm::with_router_context(
-                    octos_llm::RouterContext {
+                let outcome = ra_llm::with_router_context(
+                    ra_llm::RouterContext {
                         session_id: Some(session_id.to_string()),
                         ..Default::default()
                     },
@@ -43485,7 +43485,7 @@ async fn run_standalone_turn(
         if let Some(goal_event_json) =
             orchestrator.session_goal_updated_event_json(goal_key, &goal_ctx.profile_id)
         {
-            match serde_json::from_value::<octos_core::ui_protocol::SessionGoalUpdatedEvent>(
+            match serde_json::from_value::<ra_core::ui_protocol::SessionGoalUpdatedEvent>(
                 goal_event_json,
             ) {
                 Ok(event) => {
@@ -43536,7 +43536,7 @@ async fn run_standalone_turn(
         if let Some(goal_event_json) = default_agent_orchestrator()
             .session_goal_updated_event_json(&turn_pinned_goal_key, &usage_profile_id)
         {
-            match serde_json::from_value::<octos_core::ui_protocol::SessionGoalUpdatedEvent>(
+            match serde_json::from_value::<ra_core::ui_protocol::SessionGoalUpdatedEvent>(
                 goal_event_json,
             ) {
                 Ok(event) => {
@@ -43640,7 +43640,7 @@ fn build_turn_session_result_from_done(event: &Value) -> Option<TurnSessionResul
 /// the turn being interrupted. Already-terminal tasks are skipped
 /// (`cancel` would return `AlreadyTerminal`); the call is idempotent.
 fn cancel_session_spawn_only_tasks(
-    supervisor: &octos_agent::TaskSupervisor,
+    supervisor: &ra_agent::TaskSupervisor,
     session_id: &SessionKey,
 ) {
     for task in supervisor.get_tasks_for_session(&session_id.to_string()) {
@@ -43692,8 +43692,8 @@ async fn transition_to_terminal(
 ///      failures (tool execution errors, plugin protocol errors, etc.)
 ///      where the report already carries the right text.
 fn classify_runtime_error_message(error: &eyre::Report) -> String {
-    use octos_agent::HarnessError;
-    use octos_llm::LlmError;
+    use ra_agent::HarnessError;
+    use ra_llm::LlmError;
     // Lane-attributed composites carry the complete account of which lanes
     // failed and which API style addressed each one. A typed cause names only
     // its carrier lane, so lead with the actionable typed message and retain
@@ -43758,7 +43758,7 @@ struct TurnCompletionDetails {
 /// (prefix only — a marker buried mid-text does not trigger), else None
 /// (the ordinary turn_error path applies unchanged).
 fn malformed_exhausted_detail_for_terminal(message: &str) -> Option<String> {
-    let rest = message.strip_prefix(octos_agent::MALFORMED_TOOLCALL_EXHAUSTED_MARKER)?;
+    let rest = message.strip_prefix(ra_agent::MALFORMED_TOOLCALL_EXHAUSTED_MARKER)?;
     let rest = rest.trim_start();
     let detail = rest.split(':').next().unwrap_or("").trim();
     (!detail.is_empty()).then(|| detail.to_owned())
@@ -43778,7 +43778,7 @@ async fn try_emit_terminal(
     // it has one. Settled (returned as `turn/steer_dropped`) after the state
     // flips to Terminal and BEFORE the terminal frame below — see
     // `settle_leftover_steers`.
-    steer_buffer: Option<&octos_agent::SharedSteerBuffer>,
+    steer_buffer: Option<&ra_agent::SharedSteerBuffer>,
     // Outer-loop #4 (§4.2): the peers root for a PEER session's build-cache
     // slot release at an error or interrupted terminal. `None` on paths that
     // cannot be a peer turn (M9 fixtures, review scatter-join, slash
@@ -43938,7 +43938,7 @@ async fn try_emit_terminal(
 /// `Skipped` and `Aborted` variants require future signal sources
 /// (deadline-skip plumbing, interrupt propagation) and are NOT
 /// Compact preview of a tool call's arguments for envelope display, bounded
-/// to [`octos_core::ui_protocol::ENVELOPE_TOOL_ARGUMENTS_PREVIEW_MAX`].
+/// to [`ra_core::ui_protocol::ENVELOPE_TOOL_ARGUMENTS_PREVIEW_MAX`].
 /// Object arguments render as `key: value` pairs (`command: "cargo test",
 /// timeout: 30`) — the human `shell(…)` reading, not raw JSON braces. This is
 /// display fidelity only; the full arguments stay on the live
@@ -43952,9 +43952,9 @@ fn envelope_tool_arguments_preview(arguments: &Value) -> String {
             .join(", "),
         other => other.to_string(),
     };
-    octos_core::truncated_utf8(
+    ra_core::truncated_utf8(
         &rendered,
-        octos_core::ui_protocol::ENVELOPE_TOOL_ARGUMENTS_PREVIEW_MAX,
+        ra_core::ui_protocol::ENVELOPE_TOOL_ARGUMENTS_PREVIEW_MAX,
         "…",
     )
 }
@@ -44022,7 +44022,7 @@ fn emit_progress_envelope(
     notification: &UiNotification,
     iteration: Option<u32>,
 ) {
-    use octos_core::ui_protocol::EnvelopeToolEndStatus;
+    use ra_core::ui_protocol::EnvelopeToolEndStatus;
     let (thread_id, payload): (String, PayloadV2) = match notification {
         UiNotification::MessageDelta(event) => {
             let thread = event.turn_id.0.to_string();
@@ -44089,9 +44089,9 @@ fn emit_progress_envelope(
                 // arbitrary-length tool output, and this string lands in
                 // the durable ledger + every hydrate replay.
                 EnvelopeToolEndStatus::Error => event.output_preview.as_deref().map(|s| {
-                    octos_core::truncated_utf8(
+                    ra_core::truncated_utf8(
                         s,
-                        octos_core::ui_protocol::ENVELOPE_TOOL_OUTPUT_PREVIEW_MAX,
+                        ra_core::ui_protocol::ENVELOPE_TOOL_OUTPUT_PREVIEW_MAX,
                         "…",
                     )
                 }),
@@ -44106,9 +44106,9 @@ fn emit_progress_envelope(
                     reason: None,
                     // Result excerpt for the `⎿ …` line under the card.
                     output_preview: event.output_preview.as_deref().map(|preview| {
-                        octos_core::truncated_utf8(
+                        ra_core::truncated_utf8(
                             preview,
-                            octos_core::ui_protocol::ENVELOPE_TOOL_OUTPUT_PREVIEW_MAX,
+                            ra_core::ui_protocol::ENVELOPE_TOOL_OUTPUT_PREVIEW_MAX,
                             "…",
                         )
                     }),
@@ -44592,7 +44592,7 @@ fn data_dir_locked_error(profile_id: &str, error: &eyre::Report) -> RpcError {
 }
 
 fn assistant_message_projection(
-    response: &octos_agent::ConversationResponse,
+    response: &ra_agent::ConversationResponse,
     message_index: usize,
     turn: &str,
 ) -> Option<MessageProjectionOverride> {
@@ -44608,7 +44608,7 @@ fn assistant_message_projection(
         })
 }
 
-fn final_assistant_segment_id(response: &octos_agent::ConversationResponse, turn: &str) -> String {
+fn final_assistant_segment_id(response: &ra_agent::ConversationResponse, turn: &str) -> String {
     let identity = super::events::assistant_segment_id_for_iteration(
         turn,
         response.assistant_segments.final_iteration,
@@ -44634,7 +44634,7 @@ fn final_assistant_segment_id(response: &octos_agent::ConversationResponse, turn
 }
 
 fn final_assistant_message_for_response(
-    response: &octos_agent::ConversationResponse,
+    response: &ra_agent::ConversationResponse,
 ) -> Option<Message> {
     if response.content.is_empty()
         || response
@@ -44878,7 +44878,7 @@ async fn abort_connection_turns(
             continue;
         }
         let mut aborted_state: Option<Arc<TokioMutex<TurnState>>> = None;
-        let mut aborted_steer: Option<octos_agent::SharedSteerBuffer> = None;
+        let mut aborted_steer: Option<ra_agent::SharedSteerBuffer> = None;
         let should_abort = active
             .get(&session_id)
             .is_some_and(|active| registered.matches(active));
@@ -45458,7 +45458,7 @@ const UNPREVIEWABLE_STUB: &str = "[oversized field omitted]";
 
 /// Per-byte JSON-escaped length of a UTF-8 byte buffer, EXCLUDING the
 /// surrounding quotes. Matches `serde_json`'s default string serialization
-/// (mirrors `octos_pipeline::fidelity`'s private byte-class helper; replicated
+/// (mirrors `ra_pipeline::fidelity`'s private byte-class helper; replicated
 /// here rather than taking a dependency edge on a private pipeline internal):
 /// * `"`, `\`, `\n`, `\r`, `\t`, backspace (0x08), form feed (0x0c) -> 2 bytes;
 /// * other C0 control bytes (no short escape) -> `\u00XX` = 6 bytes;
@@ -45798,7 +45798,7 @@ fn write_autonomy_runtime_policy_stamp(dir: &Path, session_id: &SessionKey, prof
 /// `scheduled_continuation_notifications`) so a manual `loop/fire_now` is not
 /// double-counted.
 fn autonomy_rpc_evidence_to_dir(dir: &Path, method: &str, result: &Value) -> Vec<UiNotification> {
-    use octos_core::ui_protocol::methods;
+    use ra_core::ui_protocol::methods;
     let notifications = autonomy_rpc_notifications(method, result);
     // Codex P2: `handle_raw_appui_rpc` routes EVERY raw RPC result here when an
     // evidence dir is active — including read-only `agent/list` /
@@ -45875,8 +45875,8 @@ fn autonomy_rpc_evidence_to_dir(dir: &Path, method: &str, result: &Value) -> Vec
 /// the evidence writer and (Codex P2) by the production dispatch so clients
 /// receive the protocol frames even when no soak evidence dir is set.
 fn autonomy_rpc_notifications(method: &str, result: &Value) -> Vec<UiNotification> {
-    use octos_core::ui_protocol::methods;
-    use octos_core::ui_protocol::{
+    use ra_core::ui_protocol::methods;
+    use ra_core::ui_protocol::{
         LoopUpdatedEvent, MonitorUpdatedEvent, SessionGoalClearedEvent, SessionGoalUpdatedEvent,
     };
     let mut notifications = Vec::new();
@@ -45940,7 +45940,7 @@ fn record_autonomy_rpc_evidence(method: &str, result: &Value) -> Vec<UiNotificat
     // artifact-list RESULT. Merge them here. This is the legitimate data
     // source for the index — NOT a side effect on an unrelated read — and only
     // touches the index file (never the policy stamp).
-    if method == octos_core::ui_protocol::methods::AGENT_ARTIFACT_LIST {
+    if method == ra_core::ui_protocol::methods::AGENT_ARTIFACT_LIST {
         if let Some(artifacts) = result.get("artifacts").and_then(Value::as_array) {
             if !artifacts.is_empty() {
                 let agent_id = result.get("agent_id").cloned().unwrap_or(Value::Null);
@@ -45970,7 +45970,7 @@ fn monitor_fired_notification(
     profile_id: &str,
     continuation: &QueuedMasterContinuation,
 ) -> Option<UiNotification> {
-    use octos_core::ui_protocol::MonitorFiredEvent;
+    use ra_core::ui_protocol::MonitorFiredEvent;
     match &continuation.reason {
         MasterContinuationReason::External(kind)
             if kind == crate::autonomy::agent_orchestrator::MONITOR_FIRED_EXTERNAL_KIND => {}
@@ -46031,7 +46031,7 @@ fn scheduled_continuation_to_dir(
     loop_id: Option<&str>,
     goal_id: Option<&str>,
 ) -> Vec<UiNotification> {
-    use octos_core::ui_protocol::{LoopFiredEvent, UiLoopFire};
+    use ra_core::ui_protocol::{LoopFiredEvent, UiLoopFire};
     let mut notifications = Vec::new();
     match reason {
         MasterContinuationReason::LoopFire => {
@@ -46112,7 +46112,7 @@ fn record_agent_evidence(method: &'static str, params: &Value) {
 /// (see that wrapper for semantics). Free of any env read so it is unit
 /// testable.
 fn agent_evidence_to_dir(dir: &Path, method: &'static str, params: &Value) {
-    use octos_core::ui_protocol::methods;
+    use ra_core::ui_protocol::methods;
     match method {
         methods::AGENT_UPDATED => {
             let Some(agent) = params.get("agent") else {
@@ -46264,7 +46264,7 @@ fn merge_artifact_index(dir: &Path, agent_id: &Value, artifacts: &[Value]) {
 /// `forward_terminal_agent_update_durable`) rather than the raw ephemeral
 /// helper. NO-OP unless `appui_evidence_dir()` is `Some`.
 fn record_task_evidence(notification: &UiNotification) {
-    use octos_core::ui_protocol::methods;
+    use ra_core::ui_protocol::methods;
     let Some(dir) = appui_evidence_dir() else {
         return;
     };
@@ -46398,7 +46398,7 @@ fn send_raw_notification_ephemeral(
     method: &'static str,
     params: Value,
 ) -> Result<(), SendError> {
-    use octos_core::ui_protocol::methods as ui_methods;
+    use ra_core::ui_protocol::methods as ui_methods;
     // Envelope-superseded legacy methods are off-limits to the raw
     // helper — they MUST flow through the typed `UiNotification` path
     // so `send_notification_ephemeral` / `send_notification_durable` /
@@ -46432,7 +46432,7 @@ fn send_raw_notification_ephemeral(
     // ledgers. NO-OP unless the live tmux soak set
     // `OCTOSCODE_M15_UX_OUTPUT_DIR`, so this is free in normal production.
     record_agent_evidence(method, &params);
-    let notification = octos_core::ui_protocol::RpcNotification::new(method, params);
+    let notification = ra_core::ui_protocol::RpcNotification::new(method, params);
     let frame = frame_for(&notification).ok_or(SendError::BackpressureDrop)?;
     ws.send_ephemeral(frame, method)
 }
@@ -46466,7 +46466,7 @@ pub(crate) enum SteerReturnSink<'a> {
 /// without a preceding `turn/steer_dropped` naming its steer may conclude the
 /// steer was consumed.
 pub(crate) fn settle_leftover_steers(
-    buffer: &octos_agent::SharedSteerBuffer,
+    buffer: &ra_agent::SharedSteerBuffer,
     sink: SteerReturnSink<'_>,
     session_id: &SessionKey,
     turn_id: &TurnId,
@@ -46510,7 +46510,7 @@ pub(crate) fn settle_leftover_steers(
 async fn transition_to_terminal_settling_steers(
     turn_state: &TokioMutex<TurnState>,
     expected_reason: TerminalReason,
-    steer_buffer: Option<&octos_agent::SharedSteerBuffer>,
+    steer_buffer: Option<&ra_agent::SharedSteerBuffer>,
     sink: SteerReturnSink<'_>,
     session_id: &SessionKey,
     turn_id: &TurnId,
@@ -46576,10 +46576,10 @@ fn send_turn_error_with_details(
 /// callers MUST skip emission in that case.
 pub(crate) fn build_router_status_event(
     session_id: &SessionKey,
-    router: &Arc<octos_llm::AdaptiveRouter>,
-) -> octos_core::ui_protocol::RouterStatusEvent {
+    router: &Arc<ra_llm::AdaptiveRouter>,
+) -> ra_core::ui_protocol::RouterStatusEvent {
     let status = router.adaptive_status();
-    octos_core::ui_protocol::RouterStatusEvent {
+    ra_core::ui_protocol::RouterStatusEvent {
         session_id: session_id.clone(),
         provider_name: router.current_lane_key(),
         mode: status.mode.to_string(),
@@ -46603,7 +46603,7 @@ fn emit_router_status_durable(
     ws: &WsConnection,
     ledger: &UiProtocolLedger,
     session_id: &SessionKey,
-    router: Option<&Arc<octos_llm::AdaptiveRouter>>,
+    router: Option<&Arc<ra_llm::AdaptiveRouter>>,
 ) {
     let Some(router) = router else {
         return;
@@ -46646,7 +46646,7 @@ pub(crate) fn spawn_router_failover_forwarder_for_test(
     ws: WsConnection,
     ledger: Arc<UiProtocolLedger>,
     session_id: SessionKey,
-    router: Option<Arc<octos_llm::AdaptiveRouter>>,
+    router: Option<Arc<ra_llm::AdaptiveRouter>>,
 ) -> Option<tokio::task::JoinHandle<()>> {
     spawn_router_failover_forwarder(ws, ledger, session_id, router)
 }
@@ -46655,7 +46655,7 @@ fn spawn_router_failover_forwarder(
     ws: WsConnection,
     ledger: Arc<UiProtocolLedger>,
     session_id: SessionKey,
-    router: Option<Arc<octos_llm::AdaptiveRouter>>,
+    router: Option<Arc<ra_llm::AdaptiveRouter>>,
 ) -> Option<tokio::task::JoinHandle<()>> {
     let router = router?;
     let mut rx = router.subscribe_failover();
@@ -46703,7 +46703,7 @@ fn spawn_router_failover_forwarder(
                         }
                     }
                     let notif = UiNotification::RouterFailover(
-                        octos_core::ui_protocol::RouterFailoverEvent {
+                        ra_core::ui_protocol::RouterFailoverEvent {
                             session_id: session_id.clone(),
                             from_provider: event.from_provider,
                             to_provider: event.to_provider,
@@ -46785,7 +46785,7 @@ const RPC_RESPONSE_TOO_LARGE_MESSAGE: &str = "response payload too large to deli
 /// wrong-id reply.
 fn minimal_rpc_error_frame(id: Option<String>, message: &'static str) -> Option<WsMessage> {
     let error = RpcError::new(
-        octos_core::ui_protocol::rpc_error_codes::INTERNAL_ERROR,
+        ra_core::ui_protocol::rpc_error_codes::INTERNAL_ERROR,
         message,
     );
     match app_ui_codec::to_compact_json(&RpcErrorResponse::new(id, error)) {
@@ -47359,7 +47359,7 @@ fn frame_from_ledger(event: UiProtocolLedgerEvent) -> Option<WsMessage> {
 fn ledger_event_method(event: &UiProtocolLedgerEvent) -> &'static str {
     match event {
         UiProtocolLedgerEvent::Notification(n) => n.method(),
-        UiProtocolLedgerEvent::Progress(_) => octos_core::ui_protocol::methods::PROGRESS_UPDATED,
+        UiProtocolLedgerEvent::Progress(_) => ra_core::ui_protocol::methods::PROGRESS_UPDATED,
     }
 }
 
@@ -47484,7 +47484,7 @@ fn emit_replay_lossy_opportunistic(
         last_durable_cursor: last_cursor,
     });
     let event = ledger.append_notification_from(lossy, ws.connection_id);
-    let method = octos_core::ui_protocol::methods::REPLAY_LOSSY.to_string();
+    let method = ra_core::ui_protocol::methods::REPLAY_LOSSY.to_string();
     let frame = match frame_from_ledger(event.event) {
         Some(frame) => frame,
         None => return,

@@ -8,9 +8,9 @@
 //!   ZAI_API_KEY=... cargo test -p ra-llm --test prompt_cache_live -- --ignored --nocapture
 
 use chrono::Utc;
-use octos_core::{Message, MessageRole};
-use octos_llm::anthropic::AnthropicProvider;
-use octos_llm::{ChatConfig, LlmProvider};
+use ra_core::{Message, MessageRole};
+use ra_llm::anthropic::AnthropicProvider;
+use ra_llm::{ChatConfig, LlmProvider};
 
 fn msg(role: MessageRole, content: impl Into<String>) -> Message {
     Message {

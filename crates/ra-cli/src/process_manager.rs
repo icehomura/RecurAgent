@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use eyre::{Result, bail};
-use octos_agent::sandbox::BLOCKED_ENV_VARS;
+use ra_agent::sandbox::BLOCKED_ENV_VARS;
 use serde::Serialize;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;

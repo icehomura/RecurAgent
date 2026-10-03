@@ -6,8 +6,8 @@
 //! own labels are ignored — this is the trust boundary the consolidator
 //! (design PR-4) relies on.
 
-use octos_core::MessageRole;
-use octos_memory::ExtractionItem;
+use ra_core::MessageRole;
+use ra_memory::ExtractionItem;
 use serde::Deserialize;
 
 use super::input::InputLine;

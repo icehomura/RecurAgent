@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use eyre::{Result, WrapErr};
 use futures::StreamExt;
-use octos_core::{InboundMessage, OutboundMessage};
+use ra_core::{InboundMessage, OutboundMessage};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
@@ -200,7 +200,7 @@ async fn imap_poll(config: &EmailConfig, tx: &mpsc::Sender<InboundMessage>) -> R
                 &subject,
             );
             let mut text_body = extract_text_body(&parsed).unwrap_or_default();
-            octos_core::truncate_utf8(&mut text_body, config.max_body_chars, "...");
+            ra_core::truncate_utf8(&mut text_body, config.max_body_chars, "...");
 
             if !text_body.is_empty() {
                 parsed_emails.push(ParsedEmail {
@@ -259,7 +259,7 @@ async fn imap_poll(config: &EmailConfig, tx: &mpsc::Sender<InboundMessage>) -> R
                 "references": email.references,
             }),
             message_id,
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         };
 
         if tx.send(inbound).await.is_err() {

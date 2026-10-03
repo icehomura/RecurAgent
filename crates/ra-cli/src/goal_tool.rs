@@ -20,9 +20,9 @@
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_agent::tools::{ConcurrencyClass, Tool, ToolContext, ToolResult};
-use octos_core::SessionKey;
-use octos_fleet::{
+use ra_agent::tools::{ConcurrencyClass, Tool, ToolContext, ToolResult};
+use ra_core::SessionKey;
+use ra_fleet::{
     AcceptanceCriterion, BASE_TOOLS, FsGrant, NetworkGrant, TaskSpec, Verifier, WorkerGrant,
 };
 use serde_json::{Value, json};
@@ -1171,7 +1171,7 @@ pub struct GoalUpdateTool {
     /// claims are graded on THIS provider instead of the grading turn's own
     /// `ctx.llm_provider`; `None` falls back to the turn provider — the
     /// pre-#1935 behavior, kept as the back-compat default.
-    verifier_llm: Option<std::sync::Arc<dyn octos_llm::LlmProvider>>,
+    verifier_llm: Option<std::sync::Arc<dyn ra_llm::LlmProvider>>,
 }
 
 impl GoalUpdateTool {
@@ -1193,7 +1193,7 @@ impl GoalUpdateTool {
     /// `goal_verifier` sub-provider lane instead of the turn's own provider.
     pub fn with_verifier_provider(
         mut self,
-        provider: std::sync::Arc<dyn octos_llm::LlmProvider>,
+        provider: std::sync::Arc<dyn ra_llm::LlmProvider>,
     ) -> Self {
         self.verifier_llm = Some(provider);
         self
@@ -1240,7 +1240,7 @@ fn completion_evidence_with_ledger(reason: &str, ledger_findings: &[Value]) -> S
         let by = f.get("created_by").and_then(Value::as_str).unwrap_or("?");
         let kind = f.get("kind").and_then(Value::as_str).unwrap_or("finding");
         let assertion = f.get("assertion").and_then(Value::as_str).unwrap_or("");
-        let assertion = octos_core::truncated_utf8(
+        let assertion = ra_core::truncated_utf8(
             assertion,
             MAX_LEDGER_EVIDENCE_ASSERTION_CHARS,
             " …[truncated]",
@@ -2093,23 +2093,23 @@ mod tests {
     struct CountingVerifierProvider {
         calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
         reply: &'static str,
-        usage: octos_llm::TokenUsage,
+        usage: ra_llm::TokenUsage,
     }
 
     #[async_trait]
-    impl octos_llm::LlmProvider for CountingVerifierProvider {
+    impl ra_llm::LlmProvider for CountingVerifierProvider {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> Result<octos_llm::ChatResponse> {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> Result<ra_llm::ChatResponse> {
             self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: Some(self.reply.to_string()),
                 reasoning_content: None,
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
+                stop_reason: ra_llm::StopReason::EndTurn,
                 usage: self.usage.clone(),
                 provider_index: Some(0),
             })
@@ -2138,16 +2138,16 @@ mod tests {
     }
 
     #[async_trait]
-    impl octos_llm::LlmProvider for FailingVerifierProvider {
+    impl ra_llm::LlmProvider for FailingVerifierProvider {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> Result<octos_llm::ChatResponse> {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> Result<ra_llm::ChatResponse> {
             self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            Err(eyre::eyre!(octos_llm::LlmError::new(
-                octos_llm::LlmErrorKind::ServerError { status: 503 },
+            Err(eyre::eyre!(ra_llm::LlmError::new(
+                ra_llm::LlmErrorKind::ServerError { status: 503 },
                 "always failing",
             )))
         }
@@ -2167,20 +2167,20 @@ mod tests {
     }
 
     #[async_trait]
-    impl octos_llm::LlmProvider for CapturingVerifierProvider {
+    impl ra_llm::LlmProvider for CapturingVerifierProvider {
         async fn chat(
             &self,
-            messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> Result<octos_llm::ChatResponse> {
+            messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> Result<ra_llm::ChatResponse> {
             *self.captured.lock().unwrap() = format!("{messages:?}");
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: Some(self.reply.to_string()),
                 reasoning_content: None,
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: Some(0),
             })
         }
@@ -2367,9 +2367,9 @@ mod tests {
         let ledger_dir = data_dir.path().join("goal-ledgers");
         std::fs::create_dir_all(&ledger_dir).unwrap();
         let ledger =
-            octos_fleet::GoalLedger::open(ledger_dir.join(format!("{goal_id}.db"))).unwrap();
+            ra_fleet::GoalLedger::open(ledger_dir.join(format!("{goal_id}.db"))).unwrap();
         ledger
-            .upsert_goal(&octos_fleet::Goal {
+            .upsert_goal(&ra_fleet::Goal {
                 goal_id: goal_id.clone(),
                 objective: "audit every file under src/ and record findings".to_owned(),
                 status: "active".to_owned(),
@@ -2383,7 +2383,7 @@ mod tests {
             })
             .unwrap();
         ledger
-            .append_finding(&octos_fleet::Finding {
+            .append_finding(&ra_fleet::Finding {
                 rowid: None,
                 finding_id: "f-1".to_owned(),
                 seq: 1,
@@ -2468,7 +2468,7 @@ mod tests {
         let lane_provider = std::sync::Arc::new(CountingVerifierProvider {
             calls: lane_calls.clone(),
             reply: "DONE",
-            usage: octos_llm::TokenUsage {
+            usage: ra_llm::TokenUsage {
                 input_tokens: 40,
                 output_tokens: 2,
                 ..Default::default()
@@ -2479,7 +2479,7 @@ mod tests {
             // If the tool wrongly grades on the turn provider, the verdict
             // flips NotDone and the assertions below fail loudly.
             reply: "NOT_DONE: wrong lane",
-            usage: octos_llm::TokenUsage::default(),
+            usage: ra_llm::TokenUsage::default(),
         });
 
         let tool = GoalUpdateTool::new("verifier-lane-prof").with_verifier_provider(lane_provider);
@@ -2541,7 +2541,7 @@ mod tests {
         let turn_provider = std::sync::Arc::new(CountingVerifierProvider {
             calls: turn_calls.clone(),
             reply: "DONE",
-            usage: octos_llm::TokenUsage {
+            usage: ra_llm::TokenUsage {
                 input_tokens: 7,
                 output_tokens: 1,
                 ..Default::default()
@@ -2593,7 +2593,7 @@ mod tests {
         let verifier = std::sync::Arc::new(CountingVerifierProvider {
             calls: calls.clone(),
             reply: "NOT_DONE: evidence missing",
-            usage: octos_llm::TokenUsage {
+            usage: ra_llm::TokenUsage {
                 input_tokens: 20,
                 output_tokens: 8,
                 ..Default::default()
@@ -2754,9 +2754,9 @@ mod tests {
         let ledger_dir = data_dir.path().join("goal-ledgers");
         std::fs::create_dir_all(&ledger_dir).unwrap();
         let ledger =
-            octos_fleet::GoalLedger::open(ledger_dir.join(format!("{goal_id}.db"))).unwrap();
+            ra_fleet::GoalLedger::open(ledger_dir.join(format!("{goal_id}.db"))).unwrap();
         ledger
-            .upsert_goal(&octos_fleet::Goal {
+            .upsert_goal(&ra_fleet::Goal {
                 goal_id: goal_id.clone(),
                 objective: "surface open escalations".to_owned(),
                 status: "active".to_owned(),
@@ -2770,7 +2770,7 @@ mod tests {
             })
             .unwrap();
         ledger
-            .append_escalation(&octos_fleet::Escalation {
+            .append_escalation(&ra_fleet::Escalation {
                 escalation_id: "esc-helper-1".to_owned(),
                 goal_id: goal_id.clone(),
                 task_id: None,

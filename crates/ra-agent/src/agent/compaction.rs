@@ -1,6 +1,6 @@
 //! Context window trimming and fallback truncation.
 
-use octos_core::{Message, MessageRole};
+use ra_core::{Message, MessageRole};
 use tracing::{info, warn};
 
 use super::Agent;
@@ -11,7 +11,7 @@ use crate::prompt_context::{PromptContextPhase, PromptContextRequest};
 impl Agent {
     pub(super) fn trim_to_context_window(&self, messages: &mut Vec<Message>) -> bool {
         use crate::compaction::{MIN_RECENT_MESSAGES, compact_messages, find_recent_boundary};
-        use octos_llm::context::{estimate_message_tokens, estimate_tokens};
+        use ra_llm::context::{estimate_message_tokens, estimate_tokens};
 
         if self.prompt_context_manager.is_some() {
             return false;
@@ -318,12 +318,12 @@ impl Agent {
 
     /// Simple truncation fallback when even recent messages exceed budget.
     pub(super) fn fallback_truncate(&self, messages: &mut Vec<Message>, limit: u32) -> bool {
-        let system_tokens = octos_llm::context::estimate_message_tokens(&messages[0]);
+        let system_tokens = ra_llm::context::estimate_message_tokens(&messages[0]);
         let mut kept_tokens = system_tokens;
         let mut keep_from = messages.len();
 
         for i in (1..messages.len()).rev() {
-            let msg_tokens = octos_llm::context::estimate_message_tokens(&messages[i]);
+            let msg_tokens = ra_llm::context::estimate_message_tokens(&messages[i]);
             if kept_tokens + msg_tokens > limit {
                 break;
             }

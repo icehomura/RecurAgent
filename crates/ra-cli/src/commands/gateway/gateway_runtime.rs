@@ -15,12 +15,12 @@ use std::time::Duration;
 
 use colored::Colorize;
 use eyre::{Result, WrapErr};
-use octos_agent::{AgentConfig, HookContext, HookExecutor, ToolRegistry};
-use octos_bus::{
+use ra_agent::{AgentConfig, HookContext, HookExecutor, ToolRegistry};
+use ra_bus::{
     ActiveSessionStore, ChannelManager, CronService, HeartbeatService, SessionManager, create_bus,
 };
-use octos_llm::{AdaptiveRouter, LlmProvider, ProviderRouter, RetryProvider, SwappableProvider};
-use octos_memory::{EpisodeStore, MemoryStore};
+use ra_llm::{AdaptiveRouter, LlmProvider, ProviderRouter, RetryProvider, SwappableProvider};
+use ra_memory::{EpisodeStore, MemoryStore};
 use tokio::sync::{Mutex, Notify, RwLock, Semaphore};
 use tracing::{info, warn};
 
@@ -47,7 +47,7 @@ use crate::session_actor::{
 use crate::status_layers::StatusComposer;
 
 #[cfg(feature = "matrix")]
-use octos_core::MAIN_PROFILE_ID;
+use ra_core::MAIN_PROFILE_ID;
 
 #[cfg(feature = "matrix")]
 use super::matrix_integration::*;
@@ -65,7 +65,7 @@ fn gateway_serve_asr_language(
 }
 
 // `large_enum_variant`: the `Inbound` variant carries an
-// `octos_core::InboundMessage`, which holds `serde_json::Value` fields. When a
+// `ra_core::InboundMessage`, which holds `serde_json::Value` fields. When a
 // workspace crate enables serde_json's `preserve_order` feature (the `ra acp`
 // bridge's `agent-client-protocol` dependency requires it, and Cargo unifies
 // features workspace-wide), `Value::Object` switches from `BTreeMap` to
@@ -79,7 +79,7 @@ enum GatewayLoopEvent {
     Shutdown,
     InboundClosed,
     SessionDeleted(String),
-    Inbound(octos_core::InboundMessage),
+    Inbound(ra_core::InboundMessage),
 }
 
 fn handle_session_delete_recv(
@@ -96,7 +96,7 @@ fn handle_session_delete_recv(
 }
 
 async fn next_gateway_loop_event(
-    agent_handle: &mut octos_bus::AgentHandle,
+    agent_handle: &mut ra_bus::AgentHandle,
     session_delete_rx: &mut tokio::sync::mpsc::UnboundedReceiver<String>,
     session_delete_rx_open: &mut bool,
     shutdown: &AtomicBool,
@@ -137,7 +137,7 @@ use crate::skills_scope::{discover_asr_url, discover_ominix_url, push_runtime_pl
 
 async fn apply_profile_runtime_contracts(
     profile: &UserProfile,
-    tool_config: &octos_agent::ToolConfigStore,
+    tool_config: &ra_agent::ToolConfigStore,
 ) -> Result<()> {
     if let Some(deep_crawl) = profile.config.deep_crawl.as_ref() {
         match deep_crawl.page_settle_ms {
@@ -174,7 +174,7 @@ pub(super) struct GatewayRuntime {
     data_dir: PathBuf,
 
     // Messaging
-    agent_handle: octos_bus::AgentHandle,
+    agent_handle: ra_bus::AgentHandle,
     channel_mgr: ChannelManager,
 
     // ASR / voice
@@ -200,7 +200,7 @@ pub(super) struct GatewayRuntime {
     system_prompt: Arc<std::sync::RwLock<crate::commands::gateway::prompt::GatewayPromptParts>>,
     max_history: Arc<AtomicUsize>,
     config_rx: tokio::sync::watch::Receiver<Option<ConfigChange>>,
-    tool_config: Arc<octos_agent::ToolConfigStore>,
+    tool_config: Arc<ra_agent::ToolConfigStore>,
     shutdown: Arc<AtomicBool>,
     shutdown_notify: Arc<Notify>,
 
@@ -217,7 +217,7 @@ pub(super) struct GatewayRuntime {
 
     // Matrix (feature-gated)
     #[cfg(feature = "matrix")]
-    matrix_channel: Option<Arc<octos_bus::MatrixChannel>>,
+    matrix_channel: Option<Arc<ra_bus::MatrixChannel>>,
 }
 
 impl GatewayRuntime {
@@ -562,7 +562,7 @@ impl GatewayRuntime {
             eprintln!("[gateway] memory store opened");
             store
         };
-        let recall: Arc<octos_memory::RecallStore> = if let Some(rt) = profile_runtime.as_ref() {
+        let recall: Arc<ra_memory::RecallStore> = if let Some(rt) = profile_runtime.as_ref() {
             rt.recall.clone()
         } else {
             let embedder_for_recall = create_embedder(&config);
@@ -586,11 +586,11 @@ impl GatewayRuntime {
         };
 
         // Bootstrap bundled app-skills and platform skills into layered dirs
-        let n = octos_agent::bootstrap::bootstrap_bundled_skills(&project_dir);
+        let n = ra_agent::bootstrap::bootstrap_bundled_skills(&project_dir);
         if n > 0 {
             info!(count = n, "bootstrapped bundled app-skills");
         }
-        let n = octos_agent::bootstrap::bootstrap_platform_skills(&project_dir);
+        let n = ra_agent::bootstrap::bootstrap_platform_skills(&project_dir);
         if n > 0 {
             info!(count = n, "bootstrapped platform skills");
         }
@@ -605,14 +605,14 @@ impl GatewayRuntime {
         // factory only searched `<data_dir>/...` when `--ra-home` was set,
         // so the bundle landed where the tool never looked.) Installed
         // pipelines of the same name still win (bundled dir is searched last).
-        let n = octos_agent::bootstrap::bootstrap_bundled_pipelines(&effective_octos_home);
+        let n = ra_agent::bootstrap::bootstrap_bundled_pipelines(&effective_octos_home);
         if n > 0 {
             info!(count = n, "bootstrapped bundled pipelines");
         }
 
         // Voice transcription via voice platform skill binary (after bootstrap)
         let voice_binary_path = project_dir
-            .join(octos_agent::bootstrap::PLATFORM_SKILLS_DIR)
+            .join(ra_agent::bootstrap::PLATFORM_SKILLS_DIR)
             .join("voice")
             .join("main");
         let ominix_url = discover_ominix_url();
@@ -688,7 +688,7 @@ impl GatewayRuntime {
         let heartbeat_service = Arc::new(HeartbeatService::new(
             &cwd,
             heartbeat_inbound_tx,
-            octos_bus::heartbeat::DEFAULT_INTERVAL_SECS,
+            ra_bus::heartbeat::DEFAULT_INTERVAL_SECS,
         ));
         heartbeat_service.start();
 
@@ -696,12 +696,12 @@ impl GatewayRuntime {
         // `ProfileRuntime::bootstrap` when profile-mode took the
         // bootstrap path; otherwise (config-mode / CLI-override path)
         // open it inline as before.
-        let tool_config: Arc<octos_agent::ToolConfigStore> =
+        let tool_config: Arc<ra_agent::ToolConfigStore> =
             if let Some(rt) = profile_runtime.as_ref() {
                 rt.tool_config.clone()
             } else {
                 Arc::new(
-                    octos_agent::ToolConfigStore::open(&data_dir)
+                    ra_agent::ToolConfigStore::open(&data_dir)
                         .await
                         .wrap_err("failed to open tool config store")?,
                 )
@@ -725,8 +725,8 @@ impl GatewayRuntime {
         // factory and the ActorFactory share this handle (codex P3:
         // duplicate resolves doubled keychain lookups and logs).
         let gateway_embedder =
-            create_embedder(&config).map(|e| e as Arc<dyn octos_llm::EmbeddingProvider>);
-        let provider_policy_for_factory: Option<octos_agent::ToolPolicy>;
+            create_embedder(&config).map(|e| e as Arc<dyn ra_llm::EmbeddingProvider>);
+        let provider_policy_for_factory: Option<ra_agent::ToolPolicy>;
         let worker_prompt_for_factory: Option<String>;
         let provider_router_for_factory: Option<Arc<ProviderRouter>>;
         let pipeline_factory: Option<
@@ -751,7 +751,7 @@ impl GatewayRuntime {
         let shutdown_notify = Arc::new(Notify::new());
         let shutdown_notify_clone = shutdown_notify.clone();
         #[cfg(feature = "matrix")]
-        let mut matrix_channel: Option<Arc<octos_bus::MatrixChannel>> = None;
+        let mut matrix_channel: Option<Arc<ra_bus::MatrixChannel>> = None;
 
         let mut tools;
         let mut plugin_result;
@@ -788,7 +788,7 @@ impl GatewayRuntime {
                 tools = rt.tool_specs.snapshot_excluding(&[]);
                 // Rebind cwd onto the snapshotted registry — bootstrap
                 // builds against `data_dir`, gateway runs against `cwd`.
-                let sandbox_for_rebind = octos_agent::create_sandbox(&sandbox_config);
+                let sandbox_for_rebind = ra_agent::create_sandbox(&sandbox_config);
                 tools = tools.rebind_cwd(&cwd, sandbox_for_rebind);
                 tools.set_output_dir_hint(
                     data_dir.join("skill-output").to_string_lossy().to_string(),
@@ -801,7 +801,7 @@ impl GatewayRuntime {
                 // override; the no-op case is harmless).
                 if let Some(secs) = gw_config.browser_timeout_secs {
                     tools.register(
-                        octos_agent::BrowserTool::with_timeout(std::time::Duration::from_secs(
+                        ra_agent::BrowserTool::with_timeout(std::time::Duration::from_secs(
                             secs,
                         ))
                         .with_config(tool_config.clone()),
@@ -812,7 +812,7 @@ impl GatewayRuntime {
                 // the per-profile / skill MCP servers bootstrap already
                 // started against the profile's data dir).
                 if !config.mcp_servers.is_empty() {
-                    match octos_agent::McpClient::start(&config.mcp_servers).await {
+                    match ra_agent::McpClient::start(&config.mcp_servers).await {
                         Ok(client) => client.register_tools(&mut tools),
                         Err(e) => warn!("gateway MCP initialization failed: {e}"),
                     }
@@ -822,7 +822,7 @@ impl GatewayRuntime {
                 // recorded outputs so downstream gateway wiring (system
                 // prompt fragments, hook executor merge, base-tool pin
                 // set extension) sees the same shape it always did.
-                plugin_result = octos_agent::PluginLoadResult {
+                plugin_result = ra_agent::PluginLoadResult {
                     tool_count: rt.plugin_tool_names.len(),
                     tool_names: rt.plugin_tool_names.clone(),
                     loaded_actions: rt.skill_actions.clone(),
@@ -841,7 +841,7 @@ impl GatewayRuntime {
                 // Non-profile / CLI-override path: full inline assembly
                 // as before. Bootstrap can't run here (no UserProfile),
                 // so gateway is the sole owner of the registry build.
-                let sandbox = octos_agent::create_sandbox(&sandbox_config);
+                let sandbox = ra_agent::create_sandbox(&sandbox_config);
                 tools = ToolRegistry::with_builtins_and_sandbox(&cwd, sandbox);
                 tools.set_output_dir_hint(
                     data_dir.join("skill-output").to_string_lossy().to_string(),
@@ -849,7 +849,7 @@ impl GatewayRuntime {
                 tools.inject_tool_config(tool_config.clone());
                 if !profile_search_keys.is_empty() {
                     tools.register(
-                        octos_agent::WebSearchTool::new()
+                        ra_agent::WebSearchTool::new()
                             .with_config(tool_config.clone())
                             .with_provider_keys(profile_search_keys.clone()),
                     );
@@ -857,7 +857,7 @@ impl GatewayRuntime {
 
                 if let Some(secs) = gw_config.browser_timeout_secs {
                     tools.register(
-                        octos_agent::BrowserTool::with_timeout(std::time::Duration::from_secs(
+                        ra_agent::BrowserTool::with_timeout(std::time::Duration::from_secs(
                             secs,
                         ))
                         .with_config(tool_config.clone()),
@@ -865,7 +865,7 @@ impl GatewayRuntime {
                 }
 
                 if !config.mcp_servers.is_empty() {
-                    match octos_agent::McpClient::start(&config.mcp_servers).await {
+                    match ra_agent::McpClient::start(&config.mcp_servers).await {
                         Ok(client) => client.register_tools(&mut tools),
                         Err(e) => warn!("MCP initialization failed: {e}"),
                     }
@@ -873,22 +873,22 @@ impl GatewayRuntime {
 
                 let plugin_work_dir = data_dir.join("skill-output");
                 let mut plugin_dirs = crate::skills_scope::build_account_plugin_dirs(&data_dir);
-                let bundled_dir = project_dir.join(octos_agent::bootstrap::BUNDLED_APP_SKILLS_DIR);
+                let bundled_dir = project_dir.join(ra_agent::bootstrap::BUNDLED_APP_SKILLS_DIR);
                 if bundled_dir.exists() && !plugin_dirs.contains(&bundled_dir) {
                     plugin_dirs.push(bundled_dir);
                 }
-                let platform_dir = project_dir.join(octos_agent::bootstrap::PLATFORM_SKILLS_DIR);
+                let platform_dir = project_dir.join(ra_agent::bootstrap::PLATFORM_SKILLS_DIR);
                 if platform_dir.exists() && !plugin_dirs.contains(&platform_dir) {
                     plugin_dirs.push(platform_dir);
                 }
-                plugin_result = octos_agent::PluginLoadResult::default();
+                plugin_result = ra_agent::PluginLoadResult::default();
                 if !plugin_dirs.is_empty() {
                     let synthesis_config = build_synthesis_config(&config, &provider_name);
-                    match octos_agent::PluginLoader::load_into_with_options_and_filter(
+                    match ra_agent::PluginLoader::load_into_with_options_and_filter(
                         &mut tools,
                         &plugin_dirs,
                         &plugin_env,
-                        octos_agent::PluginLoadOptions {
+                        ra_agent::PluginLoadOptions {
                             work_dir: Some(&plugin_work_dir),
                             synthesis_config,
                             // Section B: opt-in strict signature enforcement.
@@ -905,13 +905,13 @@ impl GatewayRuntime {
                     }
                     // SPEC-VENDOR-NODE-V1 HTTP tool discovery — hard-fail per
                     // @ymote's Finding 2 contract (see chat.rs).
-                    octos_agent::plugins::register_http_skills_on_startup(&mut tools, &plugin_dirs)
+                    ra_agent::plugins::register_http_skills_on_startup(&mut tools, &plugin_dirs)
                         .await
                         .wrap_err("HTTP tool discovery failed at gateway boot")?;
                 }
 
                 if !plugin_result.mcp_servers.is_empty() {
-                    match octos_agent::McpClient::start(&plugin_result.mcp_servers).await {
+                    match ra_agent::McpClient::start(&plugin_result.mcp_servers).await {
                         Ok(client) => client.register_tools(&mut tools),
                         Err(e) => warn!("skill MCP initialization failed: {e}"),
                     }
@@ -1066,7 +1066,7 @@ impl GatewayRuntime {
             // Capture config for per-session SpawnTool and PipelineTool creation
             provider_policy_for_factory = tools.provider_policy().cloned();
             worker_prompt_for_factory =
-                Some(load_prompt("worker", octos_agent::DEFAULT_WORKER_PROMPT));
+                Some(load_prompt("worker", ra_agent::DEFAULT_WORKER_PROMPT));
             provider_router_for_factory = provider_router.clone();
 
             // Seed QoS scores on the router for fallback ranking
@@ -1086,10 +1086,10 @@ impl GatewayRuntime {
             }
 
             // Skill management tool (install/remove/search skills for this profile)
-            tools.register(octos_agent::ManageSkillsTool::new(data_dir.join("skills")));
+            tools.register(ra_agent::ManageSkillsTool::new(data_dir.join("skills")));
 
             // Research synthesis tool (shared, no per-session state)
-            tools.register(octos_agent::SynthesizeResearchTool::new(
+            tools.register(ra_agent::SynthesizeResearchTool::new(
                 llm.clone(),
                 data_dir.clone(),
             ));
@@ -1117,10 +1117,10 @@ impl GatewayRuntime {
 
                 struct DefaultPipelineToolFactory {
                     llm: Arc<dyn LlmProvider>,
-                    memory: Arc<octos_memory::EpisodeStore>,
+                    memory: Arc<ra_memory::EpisodeStore>,
                     cwd: PathBuf,
                     data_dir: PathBuf,
-                    policy: Option<octos_agent::ToolPolicy>,
+                    policy: Option<ra_agent::ToolPolicy>,
                     plugin_dirs: Vec<PathBuf>,
                     router: Option<Arc<ProviderRouter>>,
                     /// Gap 4.1 BLOCKER 2: always-resolved ra root
@@ -1136,15 +1136,15 @@ impl GatewayRuntime {
                     /// pipeline-spawned agents inherit hybrid scored +
                     /// filtered memory recall instead of the cwd-only
                     /// unfiltered fallback.
-                    embedder: Option<Arc<dyn octos_llm::EmbeddingProvider>>,
+                    embedder: Option<Arc<dyn ra_llm::EmbeddingProvider>>,
                 }
 
                 impl crate::session_actor::PipelineToolFactory for DefaultPipelineToolFactory {
                     fn create(
                         &self,
-                        sandbox: &octos_agent::SandboxConfig,
-                    ) -> Arc<dyn octos_agent::Tool> {
-                        let mut pt = octos_pipeline::RunPipelineTool::new(
+                        sandbox: &ra_agent::SandboxConfig,
+                    ) -> Arc<dyn ra_agent::Tool> {
+                        let mut pt = ra_pipeline::RunPipelineTool::new(
                             self.llm.clone(),
                             self.memory.clone(),
                             self.cwd.clone(),
@@ -1198,21 +1198,21 @@ impl GatewayRuntime {
 
             // Memory bank tools
             tools.register(
-                octos_agent::RecallMemoryTool::new(memory_store.clone())
+                ra_agent::RecallMemoryTool::new(memory_store.clone())
                     .with_recall(recall.clone(), gateway_embedder.clone()),
             );
-            tools.register(octos_agent::MemorySearchTool::new(
+            tools.register(ra_agent::MemorySearchTool::new(
                 recall.clone(),
                 gateway_embedder.clone(),
             ));
-            tools.register(octos_agent::MemoryLoadTool::new(
+            tools.register(ra_agent::MemoryLoadTool::new(
                 recall.clone(),
                 memory_store.clone(),
             ));
-            tools.register(octos_agent::SaveMemoryTool::new(memory_store.clone()));
-            tools.register(octos_agent::RecordMemoryUseTool::new(memory_store.clone()));
+            tools.register(ra_agent::SaveMemoryTool::new(memory_store.clone()));
+            tools.register(ra_agent::RecordMemoryUseTool::new(memory_store.clone()));
             if crate::config::MemoryConfig::refresh_enabled(config.memory.as_ref()) {
-                tools.register(octos_agent::MemoryNoteTool::new(memory_store.clone()));
+                tools.register(ra_agent::MemoryNoteTool::new(memory_store.clone()));
             }
 
             // Runtime model switching tool
@@ -1231,12 +1231,12 @@ impl GatewayRuntime {
                 .clone()
                 .unwrap_or_else(|| "http://127.0.0.1:8080".to_string());
             let admin_token = std::env::var("OCTOS_ADMIN_TOKEN").unwrap_or_default();
-            let admin_ctx = Arc::new(octos_agent::AdminApiContext {
+            let admin_ctx = Arc::new(ra_agent::AdminApiContext {
                 http: reqwest::Client::new(),
                 serve_url,
                 admin_token,
             });
-            octos_agent::register_admin_api_tools(&mut tools, admin_ctx);
+            ra_agent::register_admin_api_tools(&mut tools, admin_ctx);
             info!("admin mode: added admin API tools on top of full tool set");
         }
 
@@ -1299,13 +1299,13 @@ impl GatewayRuntime {
             resolve_gateway_max_iterations(cmd.max_iterations, config.max_iterations);
         let session_timeout_secs = gw_config
             .session_timeout_secs
-            .unwrap_or(octos_agent::DEFAULT_SESSION_TIMEOUT_SECS);
+            .unwrap_or(ra_agent::DEFAULT_SESSION_TIMEOUT_SECS);
         let agent_config = AgentConfig {
             max_iterations,
             save_episodes: true,
             tool_timeout_secs: gw_config
                 .tool_timeout_secs
-                .unwrap_or(octos_agent::DEFAULT_TOOL_TIMEOUT_SECS),
+                .unwrap_or(ra_agent::DEFAULT_TOOL_TIMEOUT_SECS),
             // Agent wall-clock timeout matches session timeout so pipelines
             // can run up to 30 minutes without the agent loop aborting early.
             max_timeout: Some(std::time::Duration::from_secs(session_timeout_secs)),
@@ -1390,7 +1390,7 @@ impl GatewayRuntime {
         // SubAgentOutputRouter rooted under the gateway data dir. Every
         // actor spawned by this factory clones the Arc so dashboards see
         // a consistent on-disk layout across sessions.
-        let subagent_output_router = Arc::new(octos_agent::SubAgentOutputRouter::new(
+        let subagent_output_router = Arc::new(ra_agent::SubAgentOutputRouter::new(
             data_dir.join("subagent-outputs"),
         ));
         let usage_ledger = Arc::new(
@@ -1598,29 +1598,29 @@ impl GatewayRuntime {
                 #[cfg(feature = "api")]
                 task_cancel: Some(Arc::new(move |task_id: &str| {
                     match task_cancel_store.cancel_task(task_id) {
-                        Ok(()) => octos_bus::TaskCancelOutcome::Cancelled,
-                        Err(octos_agent::TaskCancelError::NotFound) => {
-                            octos_bus::TaskCancelOutcome::NotFound
+                        Ok(()) => ra_bus::TaskCancelOutcome::Cancelled,
+                        Err(ra_agent::TaskCancelError::NotFound) => {
+                            ra_bus::TaskCancelOutcome::NotFound
                         }
-                        Err(octos_agent::TaskCancelError::AlreadyTerminal) => {
-                            octos_bus::TaskCancelOutcome::AlreadyTerminal
+                        Err(ra_agent::TaskCancelError::AlreadyTerminal) => {
+                            ra_bus::TaskCancelOutcome::AlreadyTerminal
                         }
                     }
                 })),
                 #[cfg(feature = "api")]
                 task_relaunch: Some(Arc::new(move |task_id: &str, from_node: Option<&str>| {
-                    let opts = octos_agent::RelaunchOpts {
+                    let opts = ra_agent::RelaunchOpts {
                         from_node: from_node.map(str::to_string),
                     };
                     match task_relaunch_store.relaunch_task(task_id, opts) {
                         Ok(new_task_id) => {
-                            octos_bus::TaskRelaunchOutcome::Relaunched { new_task_id }
+                            ra_bus::TaskRelaunchOutcome::Relaunched { new_task_id }
                         }
-                        Err(octos_agent::TaskRelaunchError::NotFound) => {
-                            octos_bus::TaskRelaunchOutcome::NotFound
+                        Err(ra_agent::TaskRelaunchError::NotFound) => {
+                            ra_bus::TaskRelaunchOutcome::NotFound
                         }
-                        Err(octos_agent::TaskRelaunchError::StillActive) => {
-                            octos_bus::TaskRelaunchOutcome::StillActive
+                        Err(ra_agent::TaskRelaunchError::StillActive) => {
+                            ra_bus::TaskRelaunchOutcome::StillActive
                         }
                     }
                 })),
@@ -1937,7 +1937,7 @@ impl GatewayRuntime {
             let isolation_tenant: Option<String> = dispatch_profile_id
                 .clone()
                 .or_else(|| self.profile_id.clone())
-                .or_else(|| Some(octos_core::MAIN_PROFILE_ID.to_string()));
+                .or_else(|| Some(ra_core::MAIN_PROFILE_ID.to_string()));
 
             // Drop cross-tenant uploads from `inbound.media` BEFORE
             // `process_media` resolves images or transcribes audio — a foreign
@@ -1946,9 +1946,9 @@ impl GatewayRuntime {
             // cannot undo (codex round-3 P1).
             if let Some(tenant) = isolation_tenant.as_deref() {
                 inbound.media.retain(|entry| {
-                    match octos_bus::file_handle::resolve_upload_reference(entry) {
+                    match ra_bus::file_handle::resolve_upload_reference(entry) {
                         Some(resolved) => {
-                            let owned = octos_bus::file_handle::upload_owned_by_tenant(
+                            let owned = ra_bus::file_handle::upload_owned_by_tenant(
                                 &resolved,
                                 Some(tenant),
                             );
@@ -1974,7 +1974,7 @@ impl GatewayRuntime {
                 && inbound
                     .media
                     .iter()
-                    .any(|path| octos_bus::media::is_audio(path));
+                    .any(|path| ra_bus::media::is_audio(path));
             let effective_asr_language = if has_audio_media {
                 let asr_profile_id = dispatch_profile_id
                     .as_deref()
@@ -2102,7 +2102,7 @@ impl GatewayRuntime {
                 if reply_channel == "api" {
                     let _ = self
                         .agent_handle
-                        .send_outbound(octos_core::OutboundMessage {
+                        .send_outbound(ra_core::OutboundMessage {
                             channel: reply_channel.clone(),
                             chat_id: reply_chat_id.clone(),
                             content: String::new(),
@@ -2369,8 +2369,8 @@ mod tests {
         assert!(CLI_SHUTDOWN_TIMEOUT <= Duration::from_secs(1));
     }
 
-    fn make_inbound(content: &str) -> octos_core::InboundMessage {
-        octos_core::InboundMessage {
+    fn make_inbound(content: &str) -> ra_core::InboundMessage {
+        ra_core::InboundMessage {
             channel: "email".into(),
             sender_id: "sender@example.com".into(),
             chat_id: "sender@example.com".into(),
@@ -2379,7 +2379,7 @@ mod tests {
             media: vec![],
             metadata: serde_json::json!({}),
             message_id: None,
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         }
     }
 
@@ -2414,7 +2414,7 @@ mod tests {
 
     #[tokio::test]
     async fn notify_wake_does_not_starve_next_inbound_message() {
-        let (mut agent_handle, publisher) = octos_bus::create_bus();
+        let (mut agent_handle, publisher) = ra_bus::create_bus();
         let inbound_tx = publisher.inbound_sender();
         let (_delete_tx, mut delete_rx) = mpsc::unbounded_channel();
         let mut session_delete_rx_open = true;
@@ -2452,7 +2452,7 @@ mod tests {
 
     #[tokio::test]
     async fn closed_session_delete_receiver_does_not_starve_next_inbound_message() {
-        let (mut agent_handle, publisher) = octos_bus::create_bus();
+        let (mut agent_handle, publisher) = ra_bus::create_bus();
         let inbound_tx = publisher.inbound_sender();
         let (delete_tx, mut delete_rx) = mpsc::unbounded_channel::<String>();
         let mut session_delete_rx_open = true;

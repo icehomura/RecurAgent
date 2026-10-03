@@ -7,8 +7,8 @@
 //! program an LLM (or operator) composes. Capability is taken from
 //! `contract_for`, never from the IR.
 
-use octos_pipeline::compose::compose_l2;
-use octos_pipeline::graph::HandlerKind;
+use ra_pipeline::compose::compose_l2;
+use ra_pipeline::graph::HandlerKind;
 use std::sync::Arc;
 
 const DEEP_RESEARCH_IR: &str = r#"{
@@ -118,11 +118,11 @@ fn deep_research_ir_composes_to_a_dynamic_web_research_pipeline() {
 #[tokio::test]
 #[ignore = "requires DEEPSEEK_API_KEY (real LLM); optional web-search backend"]
 async fn deep_research_ir_runs_end_to_end() {
-    use octos_llm::LlmProvider;
-    use octos_llm::openai::OpenAIProvider;
-    use octos_memory::EpisodeStore;
-    use octos_pipeline::executor::{ExecutorConfig, PipelineExecutor};
-    use octos_pipeline::profile::ValidationProfile;
+    use ra_llm::LlmProvider;
+    use ra_llm::openai::OpenAIProvider;
+    use ra_memory::EpisodeStore;
+    use ra_pipeline::executor::{ExecutorConfig, PipelineExecutor};
+    use ra_pipeline::profile::ValidationProfile;
 
     let key = std::env::var("DEEPSEEK_API_KEY").expect("DEEPSEEK_API_KEY required");
     let dir = tempfile::TempDir::new().unwrap();
@@ -145,13 +145,13 @@ async fn deep_research_ir_runs_end_to_end() {
         max_pipeline_fanout_total: Some(8),
         checkpoint_store: None,
         hook_executor: None,
-        workspace_context: octos_pipeline::context::PipelineContext::default(),
-        host_context: octos_pipeline::host_context::PipelineHostContext::default(),
+        workspace_context: ra_pipeline::context::PipelineContext::default(),
+        host_context: ra_pipeline::host_context::PipelineHostContext::default(),
         embedder: None,
         catalog_dir: None,
         // #1607: pipeline validators run under a no-op sandbox in tests
         // (host-independent — command validators run the argv directly).
-        sandbox: octos_agent::SandboxConfig::default(),
+        sandbox: ra_agent::SandboxConfig::default(),
     };
     let exec = PipelineExecutor::new(config);
 

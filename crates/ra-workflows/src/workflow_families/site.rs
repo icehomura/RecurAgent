@@ -1,5 +1,5 @@
 use crate::workflow_runtime::WorkflowInstance;
-use octos_agent::WorkspacePolicy;
+use ra_agent::WorkspacePolicy;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SiteTemplate {

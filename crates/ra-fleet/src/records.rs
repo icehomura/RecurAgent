@@ -7,7 +7,7 @@
 //! data: this crate has **zero** LLM / `ra-agent` dependency; the
 //! executor, keeper, and outbox consumer live in later PRs.
 
-use octos_core::SessionKey;
+use ra_core::SessionKey;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

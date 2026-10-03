@@ -3,7 +3,7 @@
 //! Providers can use this to avoid duplicating response-building logic
 //! when converting a stream of `StreamEvent`s into a final `ChatResponse`.
 
-use octos_core::ToolCall;
+use ra_core::ToolCall;
 
 use crate::types::{ChatResponse, StopReason, StreamEvent, TokenUsage};
 

@@ -13,9 +13,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use octos_agent::{AgentSummaryGenerator, AppendResult, SubAgentOutputRouter, TaskSupervisor};
-use octos_core::Message;
-use octos_llm::{
+use ra_agent::{AgentSummaryGenerator, AppendResult, SubAgentOutputRouter, TaskSupervisor};
+use ra_core::Message;
+use ra_llm::{
     ChatConfig, ChatResponse, ChatStream, LlmProvider, StopReason, TokenUsage, ToolSpec,
 };
 
@@ -143,7 +143,7 @@ async fn end_to_end_router_and_summary_cover_one_mb_with_three_ticks() {
     assert_eq!(detail["summary"], "uploading artifact");
     assert_eq!(detail["tick"], 3);
     // coarse lifecycle state stays Running while summaries fire
-    assert_eq!(task.status, octos_agent::TaskStatus::Running);
+    assert_eq!(task.status, ra_agent::TaskStatus::Running);
 
     // router has the data on disk
     let disk_path = router.path_for(session_id, task_id);

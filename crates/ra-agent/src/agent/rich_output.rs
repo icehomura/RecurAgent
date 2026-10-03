@@ -22,8 +22,8 @@
 //! either.
 
 use base64::{Engine, engine::general_purpose::STANDARD};
-use octos_core::Message;
-use octos_llm::{ChatConfig, LlmProvider, ReasoningEffort, ToolChoice};
+use ra_core::Message;
+use ra_llm::{ChatConfig, LlmProvider, ReasoningEffort, ToolChoice};
 
 /// Fixed `src` token the model is told to use for the embedded illustration.
 /// The backend swaps it for an inlined `data:` URI before delivery, so the
@@ -108,7 +108,7 @@ pub async fn author_html(llm: &dyn LlmProvider, ctx: &RichHtmlContext) -> eyre::
         // request is dominated by the per-turn dynamic user block (transcript
         // + spoken reply + brief), and the breakpoint lands on that block, so
         // a cache write is never read back.
-        cache_retention: octos_llm::CacheRetention::None,
+        cache_retention: ra_llm::CacheRetention::None,
         ..Default::default()
     };
     let resp = llm.chat(&messages, &[], &config).await?;
@@ -132,7 +132,7 @@ pub async fn author_html(llm: &dyn LlmProvider, ctx: &RichHtmlContext) -> eyre::
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use octos_llm::{ChatResponse, ChatStream, StopReason, TokenUsage, ToolSpec};
+    use ra_llm::{ChatResponse, ChatStream, StopReason, TokenUsage, ToolSpec};
     use std::sync::Arc;
 
     struct StubProvider {
@@ -176,7 +176,7 @@ mod tests {
     }
 
     struct RetentionProbeProvider {
-        seen: Arc<std::sync::Mutex<Option<octos_llm::CacheRetention>>>,
+        seen: Arc<std::sync::Mutex<Option<ra_llm::CacheRetention>>>,
     }
 
     #[async_trait]
@@ -236,7 +236,7 @@ mod tests {
         assert!(html.contains("<body>ok</body>"));
         assert_eq!(
             *seen.lock().unwrap(),
-            Some(octos_llm::CacheRetention::None),
+            Some(ra_llm::CacheRetention::None),
             "one-shot rich-output authoring must not request cache writes"
         );
     }

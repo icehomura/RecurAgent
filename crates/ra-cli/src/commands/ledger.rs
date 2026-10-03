@@ -45,9 +45,9 @@ pub struct LedgerTailArgs {
 #[derive(Debug, Serialize)]
 pub(crate) struct LedgerTailView {
     pub goal_id: String,
-    pub findings: Vec<octos_fleet::Finding>,
-    pub escalations: Vec<octos_fleet::Escalation>,
-    pub decisions: Vec<octos_fleet::Decision>,
+    pub findings: Vec<ra_fleet::Finding>,
+    pub escalations: Vec<ra_fleet::Escalation>,
+    pub decisions: Vec<ra_fleet::Decision>,
 }
 
 fn goal_ledger_db_path(data_dir: &Path, goal_id: &str) -> PathBuf {
@@ -91,7 +91,7 @@ pub(crate) fn load_ledger_tail(
             data_dir.display()
         ));
     }
-    let ledger = octos_fleet::GoalLedger::open(&db_path)?;
+    let ledger = ra_fleet::GoalLedger::open(&db_path)?;
     let findings = tail_vec(ledger.list_findings_since(goal_id, 0)?, limit);
     let escalations = tail_vec(ledger.list_open_escalations(goal_id)?, limit);
     let decisions = tail_vec(ledger.list_decisions(goal_id)?, limit);
@@ -152,9 +152,9 @@ mod tests {
     fn seed_ledger(data_dir: &Path, goal_id: &str, with_finding: bool) {
         let db_path = goal_ledger_db_path(data_dir, goal_id);
         std::fs::create_dir_all(db_path.parent().expect("parent")).expect("mkdir");
-        let ledger = octos_fleet::GoalLedger::open(&db_path).expect("open");
+        let ledger = ra_fleet::GoalLedger::open(&db_path).expect("open");
         ledger
-            .upsert_goal(&octos_fleet::Goal {
+            .upsert_goal(&ra_fleet::Goal {
                 goal_id: goal_id.to_owned(),
                 objective: "fixture".to_owned(),
                 status: "active".to_owned(),
@@ -169,7 +169,7 @@ mod tests {
             .expect("seed goal");
         if with_finding {
             ledger
-                .append_finding(&octos_fleet::Finding {
+                .append_finding(&ra_fleet::Finding {
                     rowid: None,
                     finding_id: "f-1".to_owned(),
                     seq: 1,

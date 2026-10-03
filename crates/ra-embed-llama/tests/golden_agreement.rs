@@ -30,7 +30,7 @@
 
 use std::path::PathBuf;
 
-use octos_embed_llama::LlamaEmbedder;
+use ra_embed_llama::LlamaEmbedder;
 
 const GOLDEN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/golden_mlx.json");
 

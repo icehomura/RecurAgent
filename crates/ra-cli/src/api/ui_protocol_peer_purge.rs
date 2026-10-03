@@ -149,7 +149,7 @@ async fn erase_transcript_in(root: &Path, session: &SessionKey, errors: &mut Vec
         return 0;
     }
     let mut removed = 0;
-    match octos_bus::SessionManager::open(root) {
+    match ra_bus::SessionManager::open(root) {
         Ok(mut manager) => {
             let flat = manager.session_path(session);
             if let Err(error) = manager.clear(session).await {
@@ -165,10 +165,10 @@ async fn erase_transcript_in(root: &Path, session: &SessionKey, errors: &mut Vec
         Err(error) => errors.push(format!("session store {}: {error}", root.display())),
     }
     let topic = session.topic().unwrap_or("default");
-    let encoded_topic = octos_bus::session::encode_path_component(topic);
+    let encoded_topic = ra_bus::session::encode_path_component(topic);
     let user_sessions = root
         .join("users")
-        .join(octos_bus::session::encode_path_component(
+        .join(ra_bus::session::encode_path_component(
             session.base_key(),
         ))
         .join("sessions");

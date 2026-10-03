@@ -12,14 +12,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use eyre::{Result, WrapErr};
-use octos_agent::plugins::LoadedSkillAction;
-use octos_agent::{
+use ra_agent::plugins::LoadedSkillAction;
+use ra_agent::{
     HookExecutor, PluginLoadOptions, PluginLoadResult, PluginLoader, SandboxConfig,
     ToolConfigStore, ToolPolicy, ToolRegistry, create_sandbox,
 };
-use octos_bus::CronService;
-use octos_llm::{AdaptiveRouter, LlmProvider, QosCatalog};
-use octos_memory::{EpisodeStore, MemoryStore};
+use ra_bus::CronService;
+use ra_llm::{AdaptiveRouter, LlmProvider, QosCatalog};
+use ra_memory::{EpisodeStore, MemoryStore};
 use tracing::{info, warn};
 
 use crate::commands::chat;
@@ -59,14 +59,14 @@ pub struct ProfilePluginReloadConfig {
     plugin_dirs: Vec<PathBuf>,
     plugin_env: Vec<(String, String)>,
     work_dir: PathBuf,
-    synthesis_config: Option<octos_agent::plugins::SynthesisConfig>,
+    synthesis_config: Option<ra_agent::plugins::SynthesisConfig>,
     require_signed: bool,
     verified_cache_dir: PathBuf,
     tool_policy: Option<ToolPolicy>,
     context_filter: Vec<String>,
-    host_hooks: Vec<octos_agent::HookConfig>,
+    host_hooks: Vec<ra_agent::HookConfig>,
     gateway_system_prompt: Option<String>,
-    skill_filter: Option<octos_agent::SkillFilter>,
+    skill_filter: Option<ra_agent::SkillFilter>,
 }
 
 /// Shared owner for profile services whose shutdown cannot be tied to one
@@ -92,8 +92,8 @@ impl Drop for ProfileRuntimeLifecycle {
 pub(crate) struct SharedProfileResources {
     memory: Arc<EpisodeStore>,
     memory_store: Arc<MemoryStore>,
-    recall: Arc<octos_memory::RecallStore>,
-    embedder: Option<Arc<dyn octos_llm::EmbeddingProvider>>,
+    recall: Arc<ra_memory::RecallStore>,
+    embedder: Option<Arc<dyn ra_llm::EmbeddingProvider>>,
     tool_config: Arc<ToolConfigStore>,
     cron_service: Option<Arc<CronService>>,
     runtime_lifecycle: Option<Arc<ProfileRuntimeLifecycle>>,
@@ -159,11 +159,11 @@ impl RetiredProfileRuntime {
 /// before. Mirrors the gateway's sub-provider registration
 /// (`gateway_runtime.rs`) but deliberately omits the primary/fallback
 /// auto-registration to keep the research lane isolated.
-fn build_sub_provider_router(config: &Config) -> Option<Arc<octos_llm::ProviderRouter>> {
+fn build_sub_provider_router(config: &Config) -> Option<Arc<ra_llm::ProviderRouter>> {
     if config.sub_providers.is_empty() {
         return None;
     }
-    let router = Arc::new(octos_llm::ProviderRouter::new());
+    let router = Arc::new(ra_llm::ProviderRouter::new());
     let mut registered = 0usize;
     for sp in &config.sub_providers {
         // Per-sub-provider key override, matching the gateway path: an explicit
@@ -186,7 +186,7 @@ fn build_sub_provider_router(config: &Config) -> Option<Arc<octos_llm::ProviderR
             Ok(p) => {
                 router.register_with_full_meta(
                     &sp.key,
-                    Arc::new(octos_llm::RetryProvider::new(p)),
+                    Arc::new(ra_llm::RetryProvider::new(p)),
                     sp.description.clone(),
                     sp.default_context_window,
                     sp.max_output_tokens,
@@ -274,7 +274,7 @@ pub fn build_goal_verifier_provider(config: &Config) -> Option<Arc<dyn LlmProvid
         sp.base_url.clone(),
         sp.api_type.as_deref(),
     ) {
-        Ok(provider) => Some(Arc::new(octos_llm::RetryProvider::new(provider))),
+        Ok(provider) => Some(Arc::new(ra_llm::RetryProvider::new(provider))),
         Err(error) => {
             warn!(
                 lane = GOAL_VERIFIER_LANE_KEY,
@@ -463,9 +463,9 @@ pub struct ProfileRuntime {
 
     /// Local frontend overrides applied by the canonical session bootstrap.
     /// OUP still owns per-turn intent, context, persistence and cancellation.
-    pub session_defaults: Option<octos_agent::AgentConfig>,
+    pub session_defaults: Option<ra_agent::AgentConfig>,
     /// Optional operator-selected coding tool/agent profile (chat and ACP).
-    pub agent_profile: Option<Arc<octos_agent::profile::ProfileDefinition>>,
+    pub agent_profile: Option<Arc<ra_agent::profile::ProfileDefinition>>,
 
     /// Post-edit formatting opt-in (`config.format_after_edit`, issue
     /// #1774) that per-session agents inherit. When true, successful
@@ -476,7 +476,7 @@ pub struct ProfileRuntime {
 
     /// #1768: opt-in workspace-snapshot config per-session agents use to
     /// build their `SnapshotManager` (None/disabled = no snapshots).
-    pub snapshots: Option<octos_agent::SnapshotConfig>,
+    pub snapshots: Option<ra_agent::SnapshotConfig>,
 
     /// The base [`ToolRegistry`] template — builtins + plugins +
     /// MCP agents + the LRU pin set — but **NOT** workspace-bound.
@@ -512,8 +512,8 @@ pub struct ProfileRuntime {
     /// canonical assembler) and then appending every fragment in
     /// [`Self::plugin_prompt_fragments`]. Every [`super::SessionRuntime`]
     /// bootstrapped from this profile copies the value onto its
-    /// per-session [`octos_agent::Agent`] via
-    /// [`octos_agent::Agent::with_system_prompt`]. This is the M11-F
+    /// per-session [`ra_agent::Agent`] via
+    /// [`ra_agent::Agent::with_system_prompt`]. This is the M11-F
     /// regression fix (#891) — the previous serve-mode
     /// `try_create_agent` helper called the same build + append loop
     /// inline, but M11-F deleted that helper and routed everything
@@ -537,7 +537,7 @@ pub struct ProfileRuntime {
     /// alongside `plugin_tool_names` / `plugin_prompt_fragments` so
     /// gateway can reuse the bootstrap's `PluginLoadResult` without
     /// re-running plugin discovery.
-    pub plugin_hooks: Vec<octos_agent::HookConfig>,
+    pub plugin_hooks: Vec<ra_agent::HookConfig>,
 
     /// Profile-owned coding review fanout template. `None` means the
     /// AppUI `/review` path should use its built-in default
@@ -548,7 +548,7 @@ pub struct ProfileRuntime {
     /// Phase 4 (docs/ROBRIX-PHASE4-APPROVAL-FLOW-ADR.md): per-profile
     /// human-approval rules, converted once at bootstrap and inherited by
     /// every per-session Agent this profile spawns.
-    pub human_approval_rules: Option<octos_agent::HumanApprovalRules>,
+    pub human_approval_rules: Option<ra_agent::HumanApprovalRules>,
 
     /// Long-lived [`EpisodeStore`] for this profile (redb at
     /// `<data_dir>/episodes.redb`). Shared across all sessions of
@@ -564,14 +564,14 @@ pub struct ProfileRuntime {
     /// `recall-index/`) — app records, mirrored episodes and bank pages
     /// behind `memory_search` / `memory_load` and `memory/ingest`
     /// (docs/adr/personal-memory-tiers.md).
-    pub recall: Arc<octos_memory::RecallStore>,
+    pub recall: Arc<ra_memory::RecallStore>,
 
     /// The profile's embedding provider (None when no `embedding`
     /// config and no resolvable key). Sessions hand this to
     /// SpawnTool / DelegateTool so worker agents embed the episodes
     /// they save and run hybrid scored+filtered recall — without it
     /// workers stored episodes vectorless and recall silently skipped.
-    pub embedder: Option<Arc<dyn octos_llm::EmbeddingProvider>>,
+    pub embedder: Option<Arc<dyn ra_llm::EmbeddingProvider>>,
     /// Resolved `memory.max_inject_tokens` for per-session memory segments.
     pub memory_inject_tokens: usize,
     /// Resolved `memory.refresh.enabled` — gates the capture-policy text in
@@ -611,8 +611,8 @@ pub struct ProfileRuntime {
     ///
     /// Gateway-path parity: when a session LLM calls `spawn(allowed_tools =
     /// ["run_pipeline", ...])`, the spawned child's
-    /// [`octos_agent::ToolRegistry`] must contain `run_pipeline` so the
-    /// spawn preflight ([`octos_agent::tools::spawn::
+    /// [`ra_agent::ToolRegistry`] must contain `run_pipeline` so the
+    /// spawn preflight ([`ra_agent::tools::spawn::
     /// ensure_subagent_tools_available`]) succeeds. The gateway path threads
     /// a [`crate::session_actor::PipelineToolFactory`] through
     /// [`crate::session_actor::SessionActor::build_session_tools`] (see
@@ -645,7 +645,7 @@ pub struct ProfileRuntime {
     /// HookExecutor::new(all_hooks)))`. M11-F lost that wiring on every
     /// per-session agent build. We assemble the executor once at
     /// profile-bootstrap time and propagate it onto every per-session
-    /// [`octos_agent::Agent`] (via [`super::SessionRuntime::bootstrap`]'s
+    /// [`ra_agent::Agent`] (via [`super::SessionRuntime::bootstrap`]'s
     /// `with_hooks`) AND onto the request-rebuilt agents in both
     /// `ws_standalone_agent` and the UI Protocol per-turn rebuild
     /// loop. `None` keeps the legacy behaviour when no hooks are
@@ -656,14 +656,14 @@ pub struct ProfileRuntime {
     /// only; built-in defaults always apply on top of this).
     ///
     /// When `Some`, the session-actor and the WS turn handler use this
-    /// to resolve `session.topic()` to a [`octos_llm::Lane`] and pass
-    /// it to the chat call via [`octos_llm::with_lane_context`]. When
-    /// `None`, the built-in defaults from `octos_llm::lane` still apply
+    /// to resolve `session.topic()` to a [`ra_llm::Lane`] and pass
+    /// it to the chat call via [`ra_llm::with_lane_context`]. When
+    /// `None`, the built-in defaults from `ra_llm::lane` still apply
     /// for the well-known prefixes (slides / site / podcast / research
     /// / code); profiles that haven't opted into RFC-3 see no behavior
-    /// change because the [`octos_llm::AdaptiveRouter`] silently falls
+    /// change because the [`ra_llm::AdaptiveRouter`] silently falls
     /// through when zero candidates match.
-    pub lane_routing: Option<octos_llm::LaneRoutingConfig>,
+    pub lane_routing: Option<ra_llm::LaneRoutingConfig>,
 
     /// The profile's resolved voice (ASR/TTS) configuration, captured at
     /// bootstrap from `config.voice` (defaults applied when the profile has no
@@ -680,7 +680,7 @@ pub struct ProfileRuntime {
 /// gracefully (the companion process — `Gateway`).
 ///
 /// See the type-level docs on
-/// [`octos_memory::EpisodeStore`](EpisodeStore) for why the role
+/// [`ra_memory::EpisodeStore`](EpisodeStore) for why the role
 /// split exists: redb is single-writer-single-process, and `ra
 /// serve` + `ra gateway` are separate OS processes that both
 /// bootstrap the same profile. Serve owns the canonical store;
@@ -740,7 +740,7 @@ async fn build_profile_plugin_layer(
             }
             Err(error) => warn!(profile_id, %error, "plugin loading failed"),
         }
-        octos_agent::plugins::register_http_skills_on_startup(&mut tools, &reload.plugin_dirs)
+        ra_agent::plugins::register_http_skills_on_startup(&mut tools, &reload.plugin_dirs)
             .await
             .wrap_err_with(|| {
                 format!("HTTP tool discovery failed during profile {profile_id} plugin reload")
@@ -748,7 +748,7 @@ async fn build_profile_plugin_layer(
     }
 
     if !plugin_result.mcp_servers.is_empty() {
-        match octos_agent::McpClient::start(&plugin_result.mcp_servers).await {
+        match ra_agent::McpClient::start(&plugin_result.mcp_servers).await {
             Ok(client) => client.register_tools(&mut tools),
             Err(error) => warn!(
                 profile_id,
@@ -829,23 +829,23 @@ impl ProfileRuntime {
         });
 
         tools.register(
-            octos_agent::RecallMemoryTool::new(self.memory_store.clone())
+            ra_agent::RecallMemoryTool::new(self.memory_store.clone())
                 .with_recall(self.recall.clone(), self.embedder.clone()),
         );
-        tools.register(octos_agent::MemorySearchTool::new(
+        tools.register(ra_agent::MemorySearchTool::new(
             self.recall.clone(),
             self.embedder.clone(),
         ));
-        tools.register(octos_agent::MemoryLoadTool::new(
+        tools.register(ra_agent::MemoryLoadTool::new(
             self.recall.clone(),
             self.memory_store.clone(),
         ));
-        tools.register(octos_agent::SaveMemoryTool::new(self.memory_store.clone()));
-        tools.register(octos_agent::RecordMemoryUseTool::new(
+        tools.register(ra_agent::SaveMemoryTool::new(self.memory_store.clone()));
+        tools.register(ra_agent::RecordMemoryUseTool::new(
             self.memory_store.clone(),
         ));
         if self.memory_refresh_enabled {
-            tools.register(octos_agent::MemoryNoteTool::new(self.memory_store.clone()));
+            tools.register(ra_agent::MemoryNoteTool::new(self.memory_store.clone()));
         }
         if let Some(ref factory) = pipeline_factory {
             tools.register_arc(factory.create(&self.default_sandbox));
@@ -898,7 +898,7 @@ impl ProfileRuntime {
         // coding_default_hooks contract. The hook child's working directory
         // comes from the per-turn payload cwd (the workspace root), not the
         // executor, so one profile-level executor serves every session.
-        let mut all_hooks = octos_agent::workspace_policy::coding_default_hooks();
+        let mut all_hooks = ra_agent::workspace_policy::coding_default_hooks();
         all_hooks.extend(reload.host_hooks.clone());
         all_hooks.extend(plugin_result.hooks.clone());
         // #2153 finding 2: coalesce a burst of edits so a whole-project
@@ -1231,10 +1231,10 @@ impl ProfileRuntime {
             )
         } else {
             let embedder =
-                chat::create_embedder(&config).map(|e| e as Arc<dyn octos_llm::EmbeddingProvider>);
+                chat::create_embedder(&config).map(|e| e as Arc<dyn ra_llm::EmbeddingProvider>);
             let index_dimension = embedder
                 .as_ref()
-                .map_or(octos_memory::EPISODIC_INDEX_DIMENSION, |e| e.dimension());
+                .map_or(ra_memory::EPISODIC_INDEX_DIMENSION, |e| e.dimension());
 
             let memory_open_result = match role {
                 BootstrapRole::Serve => {
@@ -1330,7 +1330,7 @@ impl ProfileRuntime {
         let search_keys = profile_search_provider_keys(profile);
         if !search_keys.is_empty() {
             tools.register(
-                octos_agent::WebSearchTool::new()
+                ra_agent::WebSearchTool::new()
                     .with_config(tool_config.clone())
                     .with_provider_keys(search_keys),
             );
@@ -1339,7 +1339,7 @@ impl ProfileRuntime {
         // Step 11: BrowserTool with profile-configured timeout.
         if let Some(secs) = profile.config.gateway.browser_timeout_secs {
             tools.register(
-                octos_agent::BrowserTool::with_timeout(std::time::Duration::from_secs(secs))
+                ra_agent::BrowserTool::with_timeout(std::time::Duration::from_secs(secs))
                     .with_config(tool_config.clone()),
             );
         }
@@ -1348,7 +1348,7 @@ impl ProfileRuntime {
         // empty for profile-only deployments; gateway / serve top-
         // level configs may add more on top).
         if !config.mcp_servers.is_empty() {
-            match octos_agent::McpClient::start(&config.mcp_servers).await {
+            match ra_agent::McpClient::start(&config.mcp_servers).await {
                 Ok(client) => client.register_tools(&mut tools),
                 Err(e) => warn!(profile_id = %profile.id, error = %e, "MCP initialization failed"),
             }
@@ -1373,7 +1373,7 @@ impl ProfileRuntime {
         let plugin_work_dir = data_dir.join("skill-output");
         let _ = std::fs::create_dir_all(&plugin_work_dir);
         let mut plugin_dirs = Config::plugin_dirs_from_project(&effective_octos_home);
-        let platform_dir = effective_octos_home.join(octos_agent::bootstrap::PLATFORM_SKILLS_DIR);
+        let platform_dir = effective_octos_home.join(ra_agent::bootstrap::PLATFORM_SKILLS_DIR);
         if platform_dir.exists() && !plugin_dirs.contains(&platform_dir) {
             plugin_dirs.push(platform_dir);
         }
@@ -1429,21 +1429,21 @@ impl ProfileRuntime {
         // Memory bank tools — registered profile-side so every
         // session inherits the same memory_store.
         tools.register(
-            octos_agent::RecallMemoryTool::new(memory_store.clone())
+            ra_agent::RecallMemoryTool::new(memory_store.clone())
                 .with_recall(recall.clone(), embedder.clone()),
         );
-        tools.register(octos_agent::MemorySearchTool::new(
+        tools.register(ra_agent::MemorySearchTool::new(
             recall.clone(),
             embedder.clone(),
         ));
-        tools.register(octos_agent::MemoryLoadTool::new(
+        tools.register(ra_agent::MemoryLoadTool::new(
             recall.clone(),
             memory_store.clone(),
         ));
-        tools.register(octos_agent::SaveMemoryTool::new(memory_store.clone()));
-        tools.register(octos_agent::RecordMemoryUseTool::new(memory_store.clone()));
+        tools.register(ra_agent::SaveMemoryTool::new(memory_store.clone()));
+        tools.register(ra_agent::RecordMemoryUseTool::new(memory_store.clone()));
         if crate::config::MemoryConfig::refresh_enabled(config.memory.as_ref()) {
-            tools.register(octos_agent::MemoryNoteTool::new(memory_store.clone()));
+            tools.register(ra_agent::MemoryNoteTool::new(memory_store.clone()));
         }
 
         // REG-7 follow-up: register `run_pipeline` at profile scope so
@@ -1476,7 +1476,7 @@ impl ProfileRuntime {
         // bubble doesn't block on the long-running pipeline. The
         // message text mirrors session_actor.rs:2287-2291 verbatim.
         // `RunPipelineTool::with_provider_router` takes
-        // `octos_llm::ProviderRouter` (a sub-provider routing
+        // `ra_llm::ProviderRouter` (a sub-provider routing
         // registry assembled from `config.sub_providers` in the
         // gateway path). The serve path doesn't build that table
         // — the adaptive router that lives on `ProfileRuntime`
@@ -1522,13 +1522,13 @@ impl ProfileRuntime {
                 /// `RunPipelineTool::with_embedder` so pipeline-spawned
                 /// agents inherit the contamination-safe hybrid scored
                 /// + filtered memory recall path.
-                embedder: Option<Arc<dyn octos_llm::EmbeddingProvider>>,
+                embedder: Option<Arc<dyn ra_llm::EmbeddingProvider>>,
                 /// Isolated per-node model router built from the profile's
                 /// `sub_providers` (e.g. `deep_research`'s `cheap`/`strong`
                 /// nodes). Registers ONLY sub-providers, so per-node failover
                 /// trips its own breakers and never disturbs the coding
                 /// provider/cache. `None` ⇒ nodes use the shared coding `llm`.
-                provider_router: Option<Arc<octos_llm::ProviderRouter>>,
+                provider_router: Option<Arc<ra_llm::ProviderRouter>>,
             }
 
             impl crate::session_actor::PipelineToolFactory for AppUiPipelineToolFactory {
@@ -1542,8 +1542,8 @@ impl ProfileRuntime {
                     Some(Arc::new(factory))
                 }
 
-                fn create(&self, sandbox: &SandboxConfig) -> Arc<dyn octos_agent::tools::Tool> {
-                    let mut pt = octos_pipeline::RunPipelineTool::new(
+                fn create(&self, sandbox: &SandboxConfig) -> Arc<dyn ra_agent::tools::Tool> {
+                    let mut pt = ra_pipeline::RunPipelineTool::new(
                         self.llm.clone(),
                         self.memory.clone(),
                         self.data_dir.clone(),
@@ -1777,7 +1777,7 @@ impl ProfileRuntime {
 
         // M11-F regression fix REG-3: assemble the lifecycle hook
         // executor once per profile and propagate the `Arc` onto every
-        // per-session [`octos_agent::Agent`].
+        // per-session [`ra_agent::Agent`].
         //
         // Pre-M11-F `serve.rs::try_create_agent` merged `config.hooks +
         // plugin_result.hooks` into `Vec<HookConfig>`, wrapped it in
@@ -1805,7 +1805,7 @@ impl ProfileRuntime {
         // coding_default_hooks contract. The hook child's working directory
         // comes from the per-turn payload cwd (the workspace root), not the
         // executor, so one profile-level executor serves every session.
-        let mut all_hooks = octos_agent::workspace_policy::coding_default_hooks();
+        let mut all_hooks = ra_agent::workspace_policy::coding_default_hooks();
         all_hooks.extend(config.hooks.clone());
         all_hooks.extend(plugin_result.hooks.clone());
         // #2153 finding 2: coalesce a burst of edits so a whole-project
@@ -1989,14 +1989,14 @@ impl ProfileRuntime {
 pub(crate) async fn open_recall_store(
     data_dir: &Path,
     config: &Config,
-    embedder: Option<&dyn octos_llm::EmbeddingProvider>,
-) -> Result<Arc<octos_memory::RecallStore>> {
+    embedder: Option<&dyn ra_llm::EmbeddingProvider>,
+) -> Result<Arc<ra_memory::RecallStore>> {
     // One handle per data dir per process: profiles routed by the gateway
     // and the serve/gateway bootstrap share it instead of contending for
     // the redb lock (a second open in the same process would only get the
     // in-memory fallback).
     static SHARED: std::sync::OnceLock<
-        std::sync::Mutex<HashMap<PathBuf, Arc<octos_memory::RecallStore>>>,
+        std::sync::Mutex<HashMap<PathBuf, Arc<ra_memory::RecallStore>>>,
     > = std::sync::OnceLock::new();
     let key = std::fs::canonicalize(data_dir).unwrap_or_else(|_| data_dir.to_path_buf());
     if let Some(existing) = SHARED
@@ -2011,7 +2011,7 @@ pub(crate) async fn open_recall_store(
     let recall_config = recall_config_for(config, embedder);
     let dir = data_dir.to_path_buf();
     let store = tokio::task::spawn_blocking(move || {
-        octos_memory::RecallStore::open_or_degraded(&dir, recall_config)
+        ra_memory::RecallStore::open_or_degraded(&dir, recall_config)
     })
     .await
     .wrap_err("recall store open task failed")??;
@@ -2031,11 +2031,11 @@ pub(crate) async fn open_recall_store(
 pub(crate) async fn open_recall_store_strict(
     data_dir: &Path,
     config: &Config,
-    embedder: Option<&dyn octos_llm::EmbeddingProvider>,
-) -> Result<octos_memory::RecallStore> {
+    embedder: Option<&dyn ra_llm::EmbeddingProvider>,
+) -> Result<ra_memory::RecallStore> {
     let recall_config = recall_config_for(config, embedder);
     let dir = data_dir.to_path_buf();
-    tokio::task::spawn_blocking(move || octos_memory::RecallStore::open(&dir, recall_config))
+    tokio::task::spawn_blocking(move || ra_memory::RecallStore::open(&dir, recall_config))
         .await
         .wrap_err("recall store open task failed")?
 }
@@ -2043,9 +2043,9 @@ pub(crate) async fn open_recall_store_strict(
 /// The Recall geometry the runtime uses for `config` + `embedder`.
 pub(crate) fn recall_config_for(
     config: &Config,
-    embedder: Option<&dyn octos_llm::EmbeddingProvider>,
-) -> octos_memory::RecallConfig {
-    let mut recall_config = octos_memory::RecallConfig::default();
+    embedder: Option<&dyn ra_llm::EmbeddingProvider>,
+) -> ra_memory::RecallConfig {
+    let mut recall_config = ra_memory::RecallConfig::default();
     if let Some(dim) = config.memory.as_ref().and_then(|m| m.recall_dimension) {
         recall_config.dimension = dim.max(8);
     }
@@ -2074,14 +2074,14 @@ pub(crate) fn recall_config_for(
 
 /// Background upkeep for the Recall/Knowledge index at profile bootstrap.
 pub(crate) fn spawn_recall_maintenance(
-    recall: Arc<octos_memory::RecallStore>,
+    recall: Arc<ra_memory::RecallStore>,
     memory_store: Arc<MemoryStore>,
-    embedder: Option<Arc<dyn octos_llm::EmbeddingProvider>>,
+    embedder: Option<Arc<dyn ra_llm::EmbeddingProvider>>,
     profile_id: String,
 ) {
     tokio::spawn(async move {
         if let Err(e) =
-            octos_agent::memory_index::sync_bank(&memory_store, &recall, embedder.as_deref()).await
+            ra_agent::memory_index::sync_bank(&memory_store, &recall, embedder.as_deref()).await
         {
             tracing::warn!(profile = %profile_id, error = %e, "recall: bank sync failed");
         }
@@ -2090,7 +2090,7 @@ pub(crate) fn spawn_recall_maintenance(
             // on a large store) instead of stopping after the first batch.
             let mut total = 0usize;
             loop {
-                match octos_agent::memory_index::backfill_vectors(&recall, e, 512).await {
+                match ra_agent::memory_index::backfill_vectors(&recall, e, 512).await {
                     Ok(0) => break,
                     Ok(n) => total += n,
                     Err(err) => {
@@ -2134,9 +2134,9 @@ mod tests {
     #[cfg(unix)]
     use crate::runtime::SessionRuntime;
     use chrono::Utc;
-    use octos_agent::SandboxConfig;
+    use ra_agent::SandboxConfig;
     #[cfg(unix)]
-    use octos_core::SessionKey;
+    use ra_core::SessionKey;
     use std::collections::HashMap;
 
     fn gemini_profile(id: &str, model: &str) -> UserProfile {
@@ -2725,7 +2725,7 @@ mod tests {
         // this to render an actionable remedy, and it must be able to tell
         // lock contention from corruption without string matching.
         assert!(
-            octos_memory::is_episode_store_locked(&err),
+            ra_memory::is_episode_store_locked(&err),
             "bootstrap must preserve the typed lock cause through its own \
              wrap_err context; got: {err:?}",
         );
@@ -3314,7 +3314,7 @@ mod tests {
             .expect("hook_executor must carry the coding defaults");
         assert_eq!(
             executor.configs().len(),
-            octos_agent::workspace_policy::coding_default_hooks().len(),
+            ra_agent::workspace_policy::coding_default_hooks().len(),
             "no config/plugin hooks: executor must hold exactly the coding defaults",
         );
     }
@@ -3335,7 +3335,7 @@ mod tests {
     ///   1. Bootstrapping a profile with a valid LLM env var.
     ///   2. Asserting `pipeline_factory.is_some()`.
     ///   3. Building a `ToolRegistry` with the factory's tool and the
-    ///      `octos_agent` builtins, then asserting the registry's
+    ///      `ra_agent` builtins, then asserting the registry's
     ///      `get("run_pipeline")` returns `Some` — the same predicate
     ///      `ensure_subagent_tools_available` uses (see
     ///      `crates/ra-agent/src/tools/spawn.rs::ensure_subagent_tools_available`).
@@ -3355,7 +3355,7 @@ mod tests {
             .pipeline_factory
             .as_ref()
             .expect("pipeline_factory must be Some after a successful bootstrap");
-        let pt = factory.create(&octos_agent::SandboxConfig::default());
+        let pt = factory.create(&ra_agent::SandboxConfig::default());
         assert_eq!(
             pt.name(),
             "run_pipeline",
@@ -3369,8 +3369,8 @@ mod tests {
         // SpawnTool wiring), so success here proves the
         // `ensure_subagent_tools_available` preflight will pass for
         // `allowed_tools=["run_pipeline"]`.
-        let mut child_registry = octos_agent::ToolRegistry::with_builtins(&data_dir);
-        child_registry.register_arc(factory.create(&octos_agent::SandboxConfig::default()));
+        let mut child_registry = ra_agent::ToolRegistry::with_builtins(&data_dir);
+        child_registry.register_arc(factory.create(&ra_agent::SandboxConfig::default()));
         assert!(
             child_registry.get("run_pipeline").is_some(),
             "spawned child registry must carry `run_pipeline` so the spawn preflight succeeds",

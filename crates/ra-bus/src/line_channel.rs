@@ -19,7 +19,7 @@ use axum::{Router, extract::State, http::HeaderMap, response::IntoResponse, rout
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::Utc;
 use eyre::{Result, WrapErr};
-use octos_core::{InboundMessage, OutboundMessage};
+use ra_core::{InboundMessage, OutboundMessage};
 use reqwest::Client;
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
@@ -465,7 +465,7 @@ impl LineChannel {
                 }
             }),
             message_id: Some(message_id.to_string()),
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         })
     }
 

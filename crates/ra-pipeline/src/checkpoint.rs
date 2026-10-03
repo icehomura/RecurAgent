@@ -256,7 +256,7 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::TokenUsage;
+    use ra_core::TokenUsage;
     use tempfile::TempDir;
 
     fn make_outcome(node_id: &str, status: OutcomeStatus) -> NodeOutcome {

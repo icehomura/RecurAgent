@@ -8,9 +8,9 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use octos_agent::progress::{ProgressEvent, ProgressReporter};
-use octos_bus::{ActiveSessionStore, Channel};
-use octos_core::{METADATA_SENDER_USER_ID, OutboundMessage, SessionKey};
+use ra_agent::progress::{ProgressEvent, ProgressReporter};
+use ra_bus::{ActiveSessionStore, Channel};
+use ra_core::{METADATA_SENDER_USER_ID, OutboundMessage, SessionKey};
 use tokio::sync::{RwLock, mpsc};
 use tracing::{debug, warn};
 
@@ -186,7 +186,7 @@ impl ProgressReporter for ChannelStreamReporter {
             } => {
                 let mut payload = serde_json::json!({
                     "type": "agent_progress",
-                    "message": octos_agent::progress::agent_progress_message(
+                    "message": ra_agent::progress::agent_progress_message(
                         iteration,
                         active_tokens,
                         elapsed,
@@ -873,7 +873,7 @@ mod tests {
     use std::sync::Arc;
 
     use async_trait::async_trait;
-    use octos_core::{InboundMessage, METADATA_SENDER_USER_ID};
+    use ra_core::{InboundMessage, METADATA_SENDER_USER_ID};
     use tokio::sync::{Mutex, mpsc};
 
     /// PR F (M8.10): record every `_bound` call's `thread_id`
@@ -964,7 +964,7 @@ mod tests {
 
     #[test]
     fn should_map_stream_retry_to_buffer_reset() {
-        use octos_agent::progress::ProgressEvent;
+        use ra_agent::progress::ProgressEvent;
 
         let (tx, mut rx) = mpsc::unbounded_channel();
         let reporter = ChannelStreamReporter::new(tx);
@@ -980,7 +980,7 @@ mod tests {
     /// variant that produces a `RawSse` event to confirm none are missed.
     #[test]
     fn should_inject_thread_id_into_every_raw_sse_event() {
-        use octos_agent::progress::ProgressEvent;
+        use ra_agent::progress::ProgressEvent;
         use std::time::Duration;
 
         let (tx, mut rx) = mpsc::unbounded_channel();
@@ -1059,7 +1059,7 @@ mod tests {
     /// consumers, not just the UI-protocol bridge.
     #[test]
     fn cost_update_carries_model_into_raw_sse_payload() {
-        use octos_agent::progress::ProgressEvent;
+        use ra_agent::progress::ProgressEvent;
 
         let (tx, mut rx) = mpsc::unbounded_channel();
         let reporter = ChannelStreamReporter::new(tx);
@@ -1088,7 +1088,7 @@ mod tests {
     /// BoundedChannel (`event_to_json`) path.
     #[test]
     fn cost_update_carries_context_window_into_raw_sse_payload() {
-        use octos_agent::progress::ProgressEvent;
+        use ra_agent::progress::ProgressEvent;
 
         let (tx, mut rx) = mpsc::unbounded_channel();
         let reporter = ChannelStreamReporter::new(tx);
@@ -1118,7 +1118,7 @@ mod tests {
     /// don't trip.
     #[test]
     fn cost_update_omits_model_when_absent() {
-        use octos_agent::progress::ProgressEvent;
+        use ra_agent::progress::ProgressEvent;
 
         let (tx, mut rx) = mpsc::unbounded_channel();
         let reporter = ChannelStreamReporter::new(tx);
@@ -1150,7 +1150,7 @@ mod tests {
     /// clients that expect the field to be absent.
     #[test]
     fn should_omit_thread_id_when_not_bound() {
-        use octos_agent::progress::ProgressEvent;
+        use ra_agent::progress::ProgressEvent;
 
         let (tx, mut rx) = mpsc::unbounded_channel();
         let reporter = ChannelStreamReporter::new(tx);
@@ -1289,7 +1289,7 @@ mod tests {
             None,
             None,
             active_sessions,
-            octos_core::SessionKey::new("matrix", "!room:localhost"),
+            ra_core::SessionKey::new("matrix", "!room:localhost"),
             Some("@octosbot:localhost".to_string()),
             None,
             None,

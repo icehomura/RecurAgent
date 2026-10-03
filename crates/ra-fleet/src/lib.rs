@@ -8,7 +8,7 @@
 //!
 //! This crate is deliberately **self-contained**: its only dependencies
 //! are `redb`, `serde`/`serde_json`, `tokio`, `uuid`, `eyre`, and
-//! `ra-core` (for [`octos_core::SessionKey`]). It has **zero** LLM /
+//! `ra-core` (for [`ra_core::SessionKey`]). It has **zero** LLM /
 //! `ra-agent` dependency and is **not** wired into any live path —
 //! the closed task-worker, the outbox consumer, and the keeper land in
 //! later PRs. Everything here is unit-testable against a tempdir redb.

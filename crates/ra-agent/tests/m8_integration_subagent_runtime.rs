@@ -17,13 +17,13 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use octos_agent::{
+use ra_agent::{
     Agent, AgentConfig, AgentSummaryGenerator, SubAgentOutputRouter, TaskStatus, TaskSupervisor,
     Tool, ToolRegistry, ToolResult, subagent_summary::DEFAULT_SUBAGENT_SUMMARY_TICK,
 };
-use octos_core::{AgentId, Message, ToolCall};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_core::{AgentId, Message, ToolCall};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 
 /// Bookkeeping for a fake spawn_only background tool — captures how
@@ -280,7 +280,7 @@ async fn spawn_only_runtime_starts_summary_watcher_after_min_runtime() {
     let (cheap_provider, llm_calls) = CheapMock::new("doing stuff");
 
     let activity_buf = std::sync::Arc::new(std::sync::Mutex::new(vec!["line".to_string()]));
-    let activity = octos_agent::subagent_summary::ActivitySource::Fixed(activity_buf);
+    let activity = ra_agent::subagent_summary::ActivitySource::Fixed(activity_buf);
     let generator = AgentSummaryGenerator::with_activity_source(
         cheap_provider,
         Arc::new(activity),
@@ -354,7 +354,7 @@ async fn spawn_only_runtime_stops_summary_watcher_and_marks_terminal() {
     );
 
     let activity_buf = std::sync::Arc::new(std::sync::Mutex::new(vec!["x".to_string()]));
-    let activity = octos_agent::subagent_summary::ActivitySource::Fixed(activity_buf);
+    let activity = ra_agent::subagent_summary::ActivitySource::Fixed(activity_buf);
     let (cheap, _) = CheapMock::new("ok");
     let generator = Arc::new(
         AgentSummaryGenerator::with_activity_source(
@@ -433,7 +433,7 @@ async fn task_runtime_detail_updates_from_real_watcher_not_only_manual_summarize
     let (cheap, _) = CheapMock::new("running smoothly");
     let activity_buf =
         std::sync::Arc::new(std::sync::Mutex::new(vec!["doing the thing".to_string()]));
-    let activity = octos_agent::subagent_summary::ActivitySource::Fixed(activity_buf);
+    let activity = ra_agent::subagent_summary::ActivitySource::Fixed(activity_buf);
     let generator =
         AgentSummaryGenerator::with_activity_source(cheap, Arc::new(activity), supervisor.clone())
             .with_tick(Duration::from_millis(50))

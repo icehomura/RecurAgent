@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
 use futures::StreamExt;
-use octos_core::{Message, MessageRole};
+use ra_core::{Message, MessageRole};
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -215,7 +215,7 @@ impl AnthropicProvider {
             system: {
                 let system_parts: Vec<&str> = messages
                     .iter()
-                    .filter(|m| m.role == octos_core::MessageRole::System)
+                    .filter(|m| m.role == ra_core::MessageRole::System)
                     .map(|m| m.content.as_str())
                     .collect();
                 if system_parts.is_empty() {
@@ -762,7 +762,7 @@ enum AnthropicContentBlock {
         cache_control: Option<AnthropicCacheControl>,
     },
     /// Prior assistant tool invocation, round-tripped from
-    /// [`octos_core::Message::tool_calls`]. Anthropic requires the original
+    /// [`ra_core::Message::tool_calls`]. Anthropic requires the original
     /// `tool_use` block in the assistant turn for the following
     /// `tool_result` to pair with — without it the request 400s.
     /// (No `cache_control` field: message breakpoints only ever land on
@@ -900,11 +900,11 @@ fn build_anthropic_messages(
         std::collections::HashSet::new();
 
     for (index, m) in messages.iter().enumerate() {
-        if m.role == octos_core::MessageRole::System {
+        if m.role == ra_core::MessageRole::System {
             continue;
         }
         match m.role {
-            octos_core::MessageRole::Assistant => {
+            ra_core::MessageRole::Assistant => {
                 merging_tool_results = false;
                 if let Some(content) = build_assistant_anthropic_content(m) {
                     pending_tool_use_ids = m
@@ -924,7 +924,7 @@ fn build_anthropic_messages(
                 // previously-emitted message is unchanged — leave the pending
                 // window as-is.
             }
-            octos_core::MessageRole::Tool => {
+            ra_core::MessageRole::Tool => {
                 let block = m
                     .tool_call_id
                     .as_deref()
@@ -1236,7 +1236,7 @@ fn anthropic_response_to_chat_response(api_response: AnthropicResponse) -> ChatR
             }
             ContentBlock::Unknown => {}
             ContentBlock::ToolUse { id, name, input } => {
-                tool_calls.push(octos_core::ToolCall {
+                tool_calls.push(ra_core::ToolCall {
                     id,
                     name,
                     arguments: input,
@@ -1421,7 +1421,7 @@ fn map_anthropic_sse(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::{Message, MessageRole};
+    use ra_core::{Message, MessageRole};
 
     fn msg(role: MessageRole, content: &str) -> Message {
         Message {
@@ -1511,8 +1511,8 @@ mod tests {
 
     // --- tool_use / tool_result round-trip tests ---
 
-    fn tool_call(id: &str, name: &str, args: serde_json::Value) -> octos_core::ToolCall {
-        octos_core::ToolCall {
+    fn tool_call(id: &str, name: &str, args: serde_json::Value) -> ra_core::ToolCall {
+        ra_core::ToolCall {
             id: id.to_string(),
             name: name.to_string(),
             arguments: args,
@@ -1538,7 +1538,7 @@ mod tests {
             timestamp: chrono::Utc::now(),
         };
         let mut assistant = mk(MessageRole::Assistant, "");
-        assistant.tool_calls = Some(vec![octos_core::ToolCall {
+        assistant.tool_calls = Some(vec![ra_core::ToolCall {
             id: "call_1".into(),
             name: "view_image".into(),
             arguments: serde_json::json!({"path": "grab.png"}),
@@ -1571,7 +1571,7 @@ mod tests {
         msgs.push(mk(MessageRole::Assistant, "a red circle"));
         msgs.push(mk(MessageRole::User, "and the size?"));
         let mut assistant = mk(MessageRole::Assistant, "");
-        assistant.tool_calls = Some(vec![octos_core::ToolCall {
+        assistant.tool_calls = Some(vec![ra_core::ToolCall {
             id: "call_2".into(),
             name: "shell".into(),
             arguments: serde_json::json!({"cmd": "file grab.png"}),

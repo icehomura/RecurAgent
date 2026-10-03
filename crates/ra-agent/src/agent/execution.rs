@@ -58,8 +58,8 @@
 use std::time::{Duration, Instant};
 
 use eyre::Result;
-use octos_core::{Message, MessageRole, TokenUsage};
-use octos_llm::ChatResponse;
+use ra_core::{Message, MessageRole, TokenUsage};
+use ra_llm::ChatResponse;
 use tokio::task::JoinHandle;
 use tracing::{debug, info, warn};
 
@@ -556,7 +556,7 @@ impl Agent {
             let payload = HookPayload::after_tool(
                 &pending.request.tool_name,
                 &pending.tool_id,
-                octos_core::truncated_utf8(&result.output, 500, "..."),
+                ra_core::truncated_utf8(&result.output, 500, "..."),
                 result.success,
                 tool_start.elapsed().as_millis() as u64,
                 Some(&pending.tool_args),
@@ -576,8 +576,8 @@ impl Agent {
                 // to its limit FIRST, then append feedback — mirrors the
                 // spawned dispatch site so a downstream cap cannot cut the
                 // checker feedback appended last.
-                let limit = octos_core::tool_output_limit(&pending.request.tool_name);
-                result.output = octos_core::truncate_head_tail(&result.output, limit, 0.7);
+                let limit = ra_core::tool_output_limit(&pending.request.tool_name);
+                result.output = ra_core::truncate_head_tail(&result.output, limit, 0.7);
                 result.output.push_str("\n\n[hook] ");
                 result.output.push_str(&feedback);
             }
@@ -607,7 +607,7 @@ impl Agent {
     /// closure is now reachable from two call sites.
     fn spawn_tool_task(
         &self,
-        tool_call: &octos_core::ToolCall,
+        tool_call: &ra_core::ToolCall,
         explicit_send_file_requested: bool,
         turn_attachment_ctx: &crate::tools::TurnAttachmentContext,
     ) -> JoinHandle<ToolCallResult> {
@@ -707,8 +707,8 @@ impl Agent {
         // filtered to `CodeCapable`). The verifier is a simple completion check
         // that routes fine on the default lane; attribution + policy are what
         // matter, and neither regresses a lane-less child.
-        let captured_call_policy = octos_llm::current_llm_call_policy();
-        let captured_router_ctx = octos_llm::current_router_context();
+        let captured_call_policy = ra_llm::current_llm_call_policy();
+        let captured_router_ctx = ra_llm::current_router_context();
 
         tokio::spawn(async move {
             let tool_start = Instant::now();
@@ -749,7 +749,7 @@ impl Agent {
                             name: tc_name.clone(),
                             tool_id: tc_id.clone(),
                             success: false,
-                            output_preview: octos_core::truncated_utf8(&deny_msg, 200, "..."),
+                            output_preview: ra_core::truncated_utf8(&deny_msg, 200, "..."),
                             duration: tool_start.elapsed(),
                         });
                         return (
@@ -817,7 +817,7 @@ impl Agent {
                             name: tc_name.clone(),
                             tool_id: tc_id.clone(),
                             success: false,
-                            output_preview: octos_core::truncated_utf8(&deny_msg, 200, "..."),
+                            output_preview: ra_core::truncated_utf8(&deny_msg, 200, "..."),
                             duration: tool_start.elapsed(),
                         });
                         return (
@@ -873,7 +873,7 @@ impl Agent {
                             name: tc_name.clone(),
                             tool_id: tc_id.clone(),
                             success: false,
-                            output_preview: octos_core::truncated_utf8(&err_msg, 200, "..."),
+                            output_preview: ra_core::truncated_utf8(&err_msg, 200, "..."),
                             duration: tool_start.elapsed(),
                         });
                         return (
@@ -967,7 +967,7 @@ impl Agent {
                         name: tc_name.clone(),
                         tool_id: tc_id.clone(),
                         success: false,
-                        output_preview: octos_core::truncated_utf8(&cap_msg, 200, "..."),
+                        output_preview: ra_core::truncated_utf8(&cap_msg, 200, "..."),
                         duration: tool_start.elapsed(),
                     });
                     return (
@@ -2197,9 +2197,9 @@ impl Agent {
             // defaults. Lane is intentionally NOT restored here (codex #4 — see
             // the capture comment above). Independent of the approval/question
             // bridges below; wrapped innermost so those still apply.
-            let exec_future = octos_llm::with_router_context(
+            let exec_future = ra_llm::with_router_context(
                 captured_router_ctx,
-                octos_llm::with_llm_call_policy(captured_call_policy, exec_future),
+                ra_llm::with_llm_call_policy(captured_call_policy, exec_future),
             );
             let result = match (&captured_approval_ctx, &captured_user_question_ctx) {
                 (Some(approval), Some(question)) => {
@@ -2293,7 +2293,7 @@ impl Agent {
                     let tool_files_to_send = tool_result.files_to_send.clone();
                     // Media the tool wants the model to see rides on the
                     // tool message's `media`; each provider renders it in
-                    // its own shape for the current batch (octos_llm::tool_media).
+                    // its own shape for the current batch (ra_llm::tool_media).
                     let tool_model_media: Vec<String> = tool_result
                         .model_media
                         .iter()
@@ -2301,7 +2301,7 @@ impl Agent {
                         .collect();
 
                     let output_preview =
-                        octos_core::truncated_utf8(&tool_result.output, 200, "...");
+                        ra_core::truncated_utf8(&tool_result.output, 200, "...");
 
                     reporter.report(ProgressEvent::ToolCompleted {
                         name: tc_name.clone(),
@@ -2393,7 +2393,7 @@ impl Agent {
                 let payload = HookPayload::after_tool(
                     &tc_name,
                     &tc_id,
-                    octos_core::truncated_utf8(&content, 500, "..."),
+                    ra_core::truncated_utf8(&content, 500, "..."),
                     tool_success,
                     duration.as_millis() as u64,
                     Some(&effective_args),
@@ -2428,8 +2428,8 @@ impl Agent {
             // `untruncated_len - content.len()` re-derivation, which
             // undercounted by the marker's own length and told the model two
             // disagreeing numbers about one cut.
-            let limit = octos_core::tool_output_limit(&tc_name);
-            let report = octos_core::truncate_head_tail_report(&content, limit, 0.7);
+            let limit = ra_core::tool_output_limit(&tc_name);
+            let report = ra_core::truncate_head_tail_report(&content, limit, 0.7);
             let mut content = report.content;
             if report.truncated {
                 if let Some(recovery) = tools.get(&tc_name).and_then(|tool| {
@@ -2637,13 +2637,13 @@ impl Agent {
                     )
                 })
                 .collect();
-            let calls: Vec<&octos_core::ToolCall> = response.tool_calls.iter().collect();
+            let calls: Vec<&ra_core::ToolCall> = response.tool_calls.iter().collect();
             join_parallel_handles(handles, &calls, tool_timeout).await
         } else if all_exclusive {
             // Serial admission: run each tool in LLM call order, bail out of
             // the remaining calls if any one errors and emit synthetic
             // "cancelled" results so the LLM still sees every tool_call_id.
-            let calls: Vec<&octos_core::ToolCall> = response.tool_calls.iter().collect();
+            let calls: Vec<&ra_core::ToolCall> = response.tool_calls.iter().collect();
             self.run_serial_calls(
                 &calls,
                 /* start_cancelled */ false,
@@ -2765,7 +2765,7 @@ impl Agent {
     /// interrupt/abort draining the pending question — never from this wrap.
     async fn run_serial_calls(
         &self,
-        calls: &[&octos_core::ToolCall],
+        calls: &[&ra_core::ToolCall],
         start_cancelled: bool,
         explicit_send_file_requested: bool,
         turn_attachment_ctx: &crate::tools::TurnAttachmentContext,
@@ -2882,8 +2882,8 @@ impl Agent {
         // Partition into the two phases, remembering each call's original
         // batch position for reassembly. Order within each partition is LLM
         // call order (`enumerate` over the original list).
-        let mut safe_calls: Vec<(usize, &octos_core::ToolCall)> = Vec::new();
-        let mut exclusive_calls: Vec<(usize, &octos_core::ToolCall)> = Vec::new();
+        let mut safe_calls: Vec<(usize, &ra_core::ToolCall)> = Vec::new();
+        let mut exclusive_calls: Vec<(usize, &ra_core::ToolCall)> = Vec::new();
         for (idx, tool_call) in response.tool_calls.iter().enumerate() {
             if self.tools.concurrency_class(&tool_call.name) == ConcurrencyClass::Exclusive {
                 exclusive_calls.push((idx, tool_call));
@@ -2900,7 +2900,7 @@ impl Agent {
                 self.spawn_tool_task(tool_call, explicit_send_file_requested, turn_attachment_ctx)
             })
             .collect();
-        let safe_refs: Vec<&octos_core::ToolCall> =
+        let safe_refs: Vec<&ra_core::ToolCall> =
             safe_calls.iter().map(|(_, tool_call)| *tool_call).collect();
         let safe_results = join_parallel_handles(handles, &safe_refs, tool_timeout).await;
 
@@ -2917,7 +2917,7 @@ impl Agent {
         }
 
         // Phase 2 — Exclusive calls serially in LLM call order.
-        let exclusive_refs: Vec<&octos_core::ToolCall> = exclusive_calls
+        let exclusive_refs: Vec<&ra_core::ToolCall> = exclusive_calls
             .iter()
             .map(|(_, tool_call)| *tool_call)
             .collect();
@@ -2986,7 +2986,7 @@ async fn abort_and_join_with_grace<T>(handle: &mut JoinHandle<T>, grace: Duratio
 
 async fn join_parallel_handles(
     handles: Vec<JoinHandle<ToolCallResult>>,
-    calls: &[&octos_core::ToolCall],
+    calls: &[&ra_core::ToolCall],
     tool_timeout: Option<Duration>,
 ) -> Vec<ToolCallResult> {
     match tool_timeout {
@@ -3028,7 +3028,7 @@ async fn join_parallel_handles(
 
 /// Build a synthetic tool-result message for a peer that was cancelled after
 /// a sibling tool errored in a serial (M8.8) batch.
-fn cancelled_result(tool_call: &octos_core::ToolCall) -> ToolCallResult {
+fn cancelled_result(tool_call: &ra_core::ToolCall) -> ToolCallResult {
     (
         Message {
             role: MessageRole::Tool,
@@ -3060,7 +3060,7 @@ fn cancelled_result(tool_call: &octos_core::ToolCall) -> ToolCallResult {
 /// synth-ack gate in loop_runner can suppress the fabricated "Background
 /// work started" bubble without content-prefix matching. The spawned task
 /// itself is NOT aborted — it keeps running detached for cleanup.
-fn timed_out_result(tool_call: &octos_core::ToolCall, elapsed_secs: u64) -> ToolCallResult {
+fn timed_out_result(tool_call: &ra_core::ToolCall, elapsed_secs: u64) -> ToolCallResult {
     (
         Message {
             role: MessageRole::Tool,
@@ -3087,7 +3087,7 @@ fn timed_out_result(tool_call: &octos_core::ToolCall, elapsed_secs: u64) -> Tool
 }
 
 /// Build a tool-result message describing a panic inside a spawned tool task.
-fn panic_result(tool_call: &octos_core::ToolCall, reason: &str) -> ToolCallResult {
+fn panic_result(tool_call: &ra_core::ToolCall, reason: &str) -> ToolCallResult {
     (
         Message {
             role: MessageRole::Tool,
@@ -3591,11 +3591,11 @@ mod tests {
     use std::sync::Arc;
 
     use async_trait::async_trait;
-    use octos_core::{AgentId, ToolCall};
-    use octos_llm::{
+    use ra_core::{AgentId, ToolCall};
+    use ra_llm::{
         ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage as LlmTokenUsage, ToolSpec,
     };
-    use octos_memory::EpisodeStore;
+    use ra_memory::EpisodeStore;
 
     use crate::agent::{Agent, AgentConfig};
     use crate::tools::{Tool, ToolRegistry, ToolResult};
@@ -3608,7 +3608,7 @@ mod tests {
     impl LlmProvider for NoChatProvider {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
+            _messages: &[ra_core::Message],
             _tools: &[ToolSpec],
             _config: &ChatConfig,
         ) -> eyre::Result<ChatResponse> {
@@ -3716,14 +3716,14 @@ mod tests {
         // would break role alternation on Anthropic and root a stray
         // thread in the transcript.
         assert_eq!(messages.len(), 2);
-        assert_eq!(messages[0].role, octos_core::MessageRole::Tool);
+        assert_eq!(messages[0].role, ra_core::MessageRole::Tool);
         assert_eq!(messages[0].tool_call_id.as_deref(), Some("call_see"));
         assert_eq!(messages[0].content, "SEEING_TOOL_OUTPUT");
         assert_eq!(
             messages[0].media,
             vec![image.to_string_lossy().into_owned()]
         );
-        assert_eq!(messages[1].role, octos_core::MessageRole::Tool);
+        assert_eq!(messages[1].role, ra_core::MessageRole::Tool);
         assert!(messages[1].media.is_empty());
     }
 
@@ -3880,7 +3880,7 @@ mod tests {
         tool_calls: Vec<ToolCall>,
         tools: ToolRegistry,
         config: AgentConfig,
-    ) -> (Vec<octos_core::Message>, Vec<(String, bool)>) {
+    ) -> (Vec<ra_core::Message>, Vec<(String, bool)>) {
         let dir = tempfile::tempdir().unwrap();
         let provider: Arc<dyn LlmProvider> = Arc::new(NoChatProvider);
         let memory = Arc::new(EpisodeStore::open(dir.path().join("memory")).await.unwrap());
@@ -3903,7 +3903,7 @@ mod tests {
     async fn run_batch(
         tool_calls: Vec<ToolCall>,
         tools: ToolRegistry,
-    ) -> (Vec<octos_core::Message>, Vec<(String, bool)>) {
+    ) -> (Vec<ra_core::Message>, Vec<(String, bool)>) {
         run_batch_with_config(
             tool_calls,
             tools,
@@ -3919,7 +3919,7 @@ mod tests {
         first: &str,
         second: &str,
         tools: ToolRegistry,
-    ) -> Vec<octos_core::Message> {
+    ) -> Vec<ra_core::Message> {
         let (messages, _success_by_id) = run_batch(
             vec![
                 tool_call("call_first", first),
@@ -4512,7 +4512,7 @@ mod tests {
         }
     }
 
-    fn result_for<'a>(messages: &'a [octos_core::Message], id: &str) -> &'a octos_core::Message {
+    fn result_for<'a>(messages: &'a [ra_core::Message], id: &str) -> &'a ra_core::Message {
         messages
             .iter()
             .find(|m| m.tool_call_id.as_deref() == Some(id))

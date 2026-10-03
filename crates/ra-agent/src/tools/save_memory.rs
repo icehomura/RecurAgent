@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
-use octos_memory::MemoryStore;
+use ra_memory::MemoryStore;
 use serde::Deserialize;
 
 use super::{ConcurrencyClass, Tool, ToolResult};
@@ -97,8 +97,8 @@ impl Tool for SaveMemoryTool {
         // Names reserved for recall_memory's registry load must not become
         // bank entities — recall_memory would resolve them to MEMORY.md and
         // the entity would be permanently unreachable (codex #1608 P2).
-        if octos_memory::is_reserved_memory_name(&input.name)
-            || octos_memory::is_reserved_memory_name(&slug)
+        if ra_memory::is_reserved_memory_name(&input.name)
+            || ra_memory::is_reserved_memory_name(&slug)
         {
             return Ok(ToolResult {
                 output: format!(
@@ -113,7 +113,7 @@ impl Tool for SaveMemoryTool {
         // Write-time threat gate (#1585): entity pages are loaded into the
         // prompt via recall_memory and the memory-bank index; refuse content
         // that reads as instruction-override / exfiltration.
-        if let Some(threat) = octos_memory::guard::first_threat(&input.content) {
+        if let Some(threat) = ra_memory::guard::first_threat(&input.content) {
             return Ok(ToolResult {
                 output: format!(
                     "Memory content rejected by the content guard ({threat}). \

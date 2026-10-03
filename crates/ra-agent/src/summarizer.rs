@@ -19,10 +19,10 @@
 use std::sync::{Arc, Mutex};
 
 use eyre::{Result, WrapErr, eyre};
-use octos_core::{
+use ra_core::{
     DecisionRecord, FileRecord, Message, SESSION_SUMMARY_SCHEMA_VERSION, SessionSummary,
 };
-use octos_llm::{ChatConfig, LlmProvider, ResponseFormat};
+use ra_llm::{ChatConfig, LlmProvider, ResponseFormat};
 use tokio::runtime::Handle;
 use tracing::warn;
 
@@ -53,7 +53,7 @@ pub trait Summarizer: Send + Sync {
     /// Return a bounded summary of `messages`.
     ///
     /// Implementors MUST respect `budget_tokens`. The extractive fallback
-    /// measures token count via `octos_llm::context::estimate_tokens`, so
+    /// measures token count via `ra_llm::context::estimate_tokens`, so
     /// approximate adherence is acceptable — but wildly overshooting the
     /// budget is a contract violation and will be rejected by the runtime.
     fn summarize(&self, messages: &[Message], budget_tokens: u32) -> Result<String>;
@@ -303,7 +303,7 @@ rather than appending duplicates.\n\n",
             // One-shot: every iterative-summarizer prompt differs (prior
             // summary + new turns) and is sent exactly once — opt out of the
             // 1.25x cache-write premium.
-            cache_retention: octos_llm::CacheRetention::None,
+            cache_retention: ra_llm::CacheRetention::None,
             prompt_cache_context: None,
             media_scope_root: None,
         };
@@ -546,9 +546,9 @@ impl Summarizer for LlmIterativeSummarizer {
 }
 
 /// Helper so crate modules can reference the stale-decision prefix without
-/// importing the constant from `octos_core` in every call site.
+/// importing the constant from `ra_core` in every call site.
 pub(crate) fn stale_decision_prefix() -> &'static str {
-    octos_core::STALE_DECISION_PREFIX
+    ra_core::STALE_DECISION_PREFIX
 }
 
 /// Map a declared [`CompactionSummarizerKind`] to a concrete `Summarizer`
@@ -593,7 +593,7 @@ pub fn default_summarizer_for_with_provider(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::MessageRole;
+    use ra_core::MessageRole;
 
     fn user(content: &str) -> Message {
         Message {
@@ -625,7 +625,7 @@ mod tests {
     }
 
     struct RetentionProbeProvider {
-        seen: Arc<std::sync::Mutex<Option<octos_llm::CacheRetention>>>,
+        seen: Arc<std::sync::Mutex<Option<ra_llm::CacheRetention>>>,
     }
 
     #[async_trait::async_trait]
@@ -633,16 +633,16 @@ mod tests {
         async fn chat(
             &self,
             _messages: &[Message],
-            _tools: &[octos_llm::ToolSpec],
+            _tools: &[ra_llm::ToolSpec],
             config: &ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             *self.seen.lock().unwrap() = Some(config.cache_retention);
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: Some(r#"{"goal":"ship the feature"}"#.into()),
                 reasoning_content: None,
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: None,
             })
         }
@@ -650,9 +650,9 @@ mod tests {
         async fn chat_stream(
             &self,
             _messages: &[Message],
-            _tools: &[octos_llm::ToolSpec],
+            _tools: &[ra_llm::ToolSpec],
             _config: &ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatStream> {
+        ) -> eyre::Result<ra_llm::ChatStream> {
             unimplemented!("probe does not stream")
         }
 
@@ -679,7 +679,7 @@ mod tests {
             .expect("probe provider yields a valid SessionSummary");
         assert_eq!(
             *seen.lock().unwrap(),
-            Some(octos_llm::CacheRetention::None),
+            Some(ra_llm::CacheRetention::None),
             "one-shot iterative summaries must not request cache writes"
         );
     }

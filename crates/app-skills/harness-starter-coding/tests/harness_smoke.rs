@@ -3,9 +3,9 @@
 use std::path::{Path, PathBuf};
 
 use harness_starter_coding::{PatchHunk, ProposePatchInput, propose_patch};
-use octos_agent::task_supervisor::{TaskLifecycleState, TaskRuntimeState, TaskSupervisor};
-use octos_agent::workspace_policy::{WorkspacePolicy, WorkspacePolicyKind};
-use octos_plugin::PluginManifest;
+use ra_agent::task_supervisor::{TaskLifecycleState, TaskRuntimeState, TaskSupervisor};
+use ra_agent::workspace_policy::{WorkspacePolicy, WorkspacePolicyKind};
+use ra_plugin::PluginManifest;
 
 fn crate_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

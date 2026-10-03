@@ -19,8 +19,8 @@ fn main() {
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
 fn main() {
-    assert!(octos_sandbox::confine_host_managed().is_err());
-    assert!(octos_sandbox::host_managed_command(&std::env::current_exe().unwrap()).is_err());
+    assert!(ra_sandbox::confine_host_managed().is_err());
+    assert!(ra_sandbox::host_managed_command(&std::env::current_exe().unwrap()).is_err());
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -49,7 +49,7 @@ fn run() {
             command.env_clear().current_dir("/");
             command
         } else {
-            octos_sandbox::host_managed_command(&executable).unwrap()
+            ra_sandbox::host_managed_command(&executable).unwrap()
         };
         let mut child = command
             .args([
@@ -104,7 +104,7 @@ fn probe(args: &[String]) {
     let inherited_fd: i32 = args[4].parse().unwrap();
     let parent: i32 = args[5].parse().unwrap();
     if args[0] != "parent" {
-        octos_sandbox::confine_host_managed().unwrap();
+        ra_sandbox::confine_host_managed().unwrap();
     }
     assert!(std::fs::read(private).is_err(), "private file read escaped");
     assert!(
@@ -244,7 +244,7 @@ fn smoke_real_octos(binary: &std::path::Path) {
         .build()
         .unwrap();
     runtime.block_on(async {
-        let mut command = octos_sandbox::host_managed_command(binary).unwrap();
+        let mut command = ra_sandbox::host_managed_command(binary).unwrap();
         command.args(["acp", "--host-managed"]).stdin(Stdio::piped())
             .stdout(Stdio::piped()).stderr(Stdio::piped());
         let mut child = tokio::process::Command::from(command).kill_on_drop(true).spawn().unwrap();

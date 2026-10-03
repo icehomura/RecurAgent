@@ -12,10 +12,10 @@
 //! Use a normal photo (jpg/png/webp). Vertex rejects degenerate images
 //! ("Provided image is not valid"), so a 1x1 placeholder won't do.
 
-use octos_core::{Message, MessageRole};
-use octos_llm::gemini::GeminiProvider;
-use octos_llm::vertex_auth::ServiceAccount;
-use octos_llm::{ChatConfig, LlmProvider, ToolSpec};
+use ra_core::{Message, MessageRole};
+use ra_llm::gemini::GeminiProvider;
+use ra_llm::vertex_auth::ServiceAccount;
+use ra_llm::{ChatConfig, LlmProvider, ToolSpec};
 
 fn user_with_image(text: &str, image_path: &str) -> Message {
     Message {

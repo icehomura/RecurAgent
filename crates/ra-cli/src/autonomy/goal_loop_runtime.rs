@@ -274,7 +274,7 @@ pub enum GoalRuntimeState {
 /// Loop-engineering (addyosmani.com/blog/loop-engineering): a `/goal` should run
 /// "until a verifiable stopping condition is met, with a separate model checking
 /// completion rather than the agent self-grading." This is the goal-level
-/// analogue of [`octos_agent`]'s `VerifierVerdict::ReadyToAnswer`: the agent's
+/// analogue of [`ra_agent`]'s `VerifierVerdict::ReadyToAnswer`: the agent's
 /// own `<goal:complete>` sentinel is only a *claim*; a separate cheap-lane
 /// verifier must independently return [`GoalCompletionVerdict::Done`] before the
 /// goal may transition to `Completed`. Any `NotDone` keeps the goal `Active`.
@@ -384,7 +384,7 @@ pub struct GoalVerifierOutcome {
     /// open; the message names the remediation path.
     pub diagnostic: Option<String>,
     /// Usage summed per-field across every attempt, billed or not.
-    pub usage: octos_llm::TokenUsage,
+    pub usage: ra_llm::TokenUsage,
 }
 
 impl GoalVerifierOutcome {

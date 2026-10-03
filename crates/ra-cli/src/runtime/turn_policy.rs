@@ -20,7 +20,7 @@ pub(crate) fn max_iterations(configured: Option<u32>, intent: TurnIntent) -> u32
     }
     match intent {
         #[cfg(any(feature = "api", test))]
-        TurnIntent::Interactive => octos_agent::AgentConfig::default().max_iterations,
+        TurnIntent::Interactive => ra_agent::AgentConfig::default().max_iterations,
         TurnIntent::Autonomous => AUTONOMOUS_MAX_ITERATIONS,
     }
 }
@@ -34,7 +34,7 @@ mod tests {
         assert_eq!(max_iterations(None, TurnIntent::Interactive), 0);
         assert_eq!(
             max_iterations(None, TurnIntent::Interactive),
-            octos_agent::AgentConfig::default().max_iterations
+            ra_agent::AgentConfig::default().max_iterations
         );
     }
 

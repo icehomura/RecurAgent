@@ -3773,7 +3773,7 @@ pub struct MemorySearchParams {
 }
 
 /// Result for `memory/search`. Each hit is the JSON of
-/// `octos_memory::Hit` — `{ id, kind, source, title, abstract, score,
+/// `ra_memory::Hit` — `{ id, kind, source, title, abstract, score,
 /// timestamp, trust }` — ranked best first. App-sourced hits carry
 /// `trust: "untrusted"`; callers must treat their text as data.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3789,7 +3789,7 @@ pub struct MemoryLoadParams {
 }
 
 /// Result for `memory/load`. `record` is the JSON of
-/// `octos_memory::Record`. For Knowledge records (`id` starts with
+/// `ra_memory::Record`. For Knowledge records (`id` starts with
 /// `bank:`) `page` carries the bank page markdown, capped at the same
 /// RPC-layer byte budget as `memory/entity` (`page_truncated` reports
 /// the cap; capped text is a clean UTF-8 prefix). For Recall records
@@ -3805,7 +3805,7 @@ pub struct MemoryLoadResult {
 }
 
 /// Params for `memory/ingest` — write app records into the Recall
-/// index. Each element of `records` is an `octos_memory::Record` JSON
+/// index. Each element of `records` is an `ra_memory::Record` JSON
 /// (`id`, `kind`, `source`, `timestamp`, `title`, `abstract` required;
 /// `parent`, `body`, `trust`, `fingerprint` optional). `vectors`, when
 /// supplied, is parallel to `records` (one optional embedding each);
@@ -3822,7 +3822,7 @@ pub struct MemoryIngestParams {
     pub embed: Option<bool>,
 }
 
-/// Result for `memory/ingest` — the `octos_memory::UpsertReport`
+/// Result for `memory/ingest` — the `ra_memory::UpsertReport`
 /// counts: how many records were new, changed, or already identical
 /// (by fingerprint), how many vectors were stored, and how many of
 /// those the server embedded itself.
@@ -3877,7 +3877,7 @@ pub struct CronToggleResult {
 // ----- Wave4-A `router/*` + `queue/state` -----
 
 /// Wave4-A `router/set_mode` params. `mode` is the lowercase string
-/// rendering of `octos_llm::AdaptiveMode` — `"off"`, `"hedge"`, or
+/// rendering of `ra_llm::AdaptiveMode` — `"off"`, `"hedge"`, or
 /// `"lane"`. The string is intentional (a) so the wire stays decoupled
 /// from `ra-llm`'s enum variant numeric layout and (b) so client
 /// implementations don't have to negotiate over numeric values.
@@ -6598,7 +6598,7 @@ pub struct SessionEventBridgedEvent {
 }
 
 /// Wave4-A — adaptive router status snapshot pushed alongside `turn/started`
-/// and `turn/completed`. Mirrors `octos_llm::AdaptiveStatus` plus the
+/// and `turn/completed`. Mirrors `ra_llm::AdaptiveStatus` plus the
 /// information needed by clients to render the routing pill / lane debug
 /// view.
 ///

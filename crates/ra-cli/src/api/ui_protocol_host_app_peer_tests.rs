@@ -152,7 +152,7 @@ async fn segment(runtime: &crate::runtime::SessionRuntime) -> String {
     runtime.agent.refresh_prompt_segments().await;
     runtime
         .agent
-        .prompt_segment_snapshot(octos_agent::MEMORY_SEGMENT_NAME)
+        .prompt_segment_snapshot(ra_agent::MEMORY_SEGMENT_NAME)
         .unwrap_or_default()
 }
 
@@ -920,7 +920,7 @@ async fn should_give_a_kernel_provisioned_app_session_no_shared_zones() {
     );
     assert!(!matches!(
         scope.classify_lexical_path(&fx.data_dir.join("research/notes.md")),
-        octos_core::PathClassification::InSharedZone { .. }
+        ra_core::PathClassification::InSharedZone { .. }
     ));
 }
 

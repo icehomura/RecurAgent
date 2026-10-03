@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use metrics::counter;
-use octos_core::TaskId;
+use ra_core::TaskId;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -3133,7 +3133,7 @@ impl TaskSupervisor {
             let mut tasks = self.tasks.lock().unwrap_or_else(|e| e.into_inner());
             match tasks.get_mut(task_id) {
                 Some(task) => {
-                    task.final_output = Some(octos_core::truncated_utf8(
+                    task.final_output = Some(ra_core::truncated_utf8(
                         output,
                         FINAL_OUTPUT_CAP_BYTES,
                         "\n…[final output truncated]",

@@ -2,14 +2,14 @@
 //!
 //! These tests stand in for the audit's `mcp_backend_respects_*` and
 //! `cli_backend_respects_*` cases. The swarm crate exposes a single
-//! [`octos_swarm::McpAgentBackend`] trait that every backend funnels
+//! [`ra_swarm::McpAgentBackend`] trait that every backend funnels
 //! through (stdio, HTTP, native sub-agent via SpawnTool), so a fake
 //! backend covers all three execution paths from the gate's
 //! perspective. Each test asserts:
 //!
 //! 1. The fake backend is **not** invoked when the gate denies
 //!    (`dispatch_count == 0`).
-//! 2. The synthesised [`octos_swarm::SubtaskOutcome`] carries a stable
+//! 2. The synthesised [`ra_swarm::SubtaskOutcome`] carries a stable
 //!    `last_dispatch_outcome` label so the harness observability
 //!    channel renders the denial uniformly across topologies.
 //! 3. With a default (no-op) policy the existing tests' behaviour is
@@ -22,11 +22,11 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use async_trait::async_trait;
-use octos_agent::tools::mcp_agent::{
+use ra_agent::tools::mcp_agent::{
     DispatchOutcome, DispatchRequest, DispatchResponse, McpAgentBackend,
 };
-use octos_agent::{ToolApprovalDecision, ToolApprovalRequest, ToolApprovalRequester, ToolPolicy};
-use octos_swarm::{
+use ra_agent::{ToolApprovalDecision, ToolApprovalRequest, ToolApprovalRequester, ToolPolicy};
+use ra_swarm::{
     ContractSpec, DispatchPolicy, Swarm, SwarmBudget, SwarmContext, SwarmOutcomeKind, SwarmTopology,
 };
 

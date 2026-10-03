@@ -39,7 +39,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_core::Message;
+use ra_core::Message;
 
 use crate::config::ChatConfig;
 use crate::local_discovery::{

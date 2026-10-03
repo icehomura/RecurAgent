@@ -71,16 +71,16 @@ use agent_client_protocol::{
 };
 
 #[cfg(feature = "api")]
-use octos_agent::Agent;
+use ra_agent::Agent;
 #[cfg(feature = "api")]
-use octos_llm::LlmProvider;
+use ra_llm::LlmProvider;
 #[cfg(feature = "api")]
 use tokio::sync::Mutex;
 
 #[cfg(feature = "api")]
-use octos_bus::session::SessionManager;
+use ra_bus::session::SessionManager;
 #[cfg(feature = "api")]
-use octos_core::SessionKey;
+use ra_core::SessionKey;
 
 use super::Executable;
 mod host_managed;
@@ -170,7 +170,7 @@ impl Executable for AcpCommand {
     fn execute(self) -> Result<()> {
         // Confinement must precede worker threads, config loading and ACP input.
         if self.host_managed {
-            let confinement = octos_sandbox::confine_host_managed()?;
+            let confinement = ra_sandbox::confine_host_managed()?;
             return tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(1)
                 .max_blocking_threads(4)
@@ -238,7 +238,7 @@ pub trait SessionAgentFactory: Send + Sync {
     /// profile-scoped; an unscoped ACP key would collide across profiles running
     /// the same session id and would not isolate them.
     fn session_profile_id(&self) -> String {
-        octos_core::MAIN_PROFILE_ID.to_string()
+        ra_core::MAIN_PROFILE_ID.to_string()
     }
 }
 
@@ -312,7 +312,7 @@ impl SessionAgentFactory for ConfigAgentFactory {
         self.profile
             .clone()
             .filter(|id| !id.contains('/'))
-            .unwrap_or_else(|| octos_core::MAIN_PROFILE_ID.to_string())
+            .unwrap_or_else(|| ra_core::MAIN_PROFILE_ID.to_string())
     }
 }
 

@@ -1417,7 +1417,7 @@ pub async fn update_my_profile(
 #[derive(Serialize)]
 pub struct VoicesResponse {
     /// Voices the engine can actually synthesize (ref audio present).
-    pub voices: Vec<octos_llm::ominix::VoiceInfo>,
+    pub voices: Vec<ra_llm::ominix::VoiceInfo>,
     /// This user's currently effective reply voice (live override > persisted
     /// per-profile default > serve default).
     pub current: String,
@@ -1442,7 +1442,7 @@ pub async fn list_voices(
 
     let registry_path = crate::api::voices::registry_path();
     let (mut voices, registry_default) =
-        match octos_llm::ominix::VoicesRegistry::load(&registry_path) {
+        match ra_llm::ominix::VoicesRegistry::load(&registry_path) {
             // Scope the listing to this tenant: shared presets + voices this
             // profile owns. A clone cloned by another tenant must not appear.
             Ok(reg) => (
@@ -1484,7 +1484,7 @@ pub async fn list_voices(
 
     // Degrade gracefully: an unreadable registry still shows the current voice.
     if voices.is_empty() && !current.is_empty() {
-        voices.push(octos_llm::ominix::VoiceInfo {
+        voices.push(ra_llm::ominix::VoiceInfo {
             id: current.clone(),
             aliases: Vec::new(),
         });
@@ -1524,7 +1524,7 @@ pub async fn set_my_voice(
 
     // Validate + canonicalise (id or alias → canonical id) against the registry.
     let registry_path = crate::api::voices::registry_path();
-    let registry = octos_llm::ominix::VoicesRegistry::load(&registry_path).map_err(|e| {
+    let registry = ra_llm::ominix::VoicesRegistry::load(&registry_path).map_err(|e| {
         tracing::warn!(error = %e, path = %registry_path.display(), "voice registry unavailable");
         (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -2066,7 +2066,7 @@ pub async fn voice_readiness(
 /// profile owns).
 fn local_tts_voice_available(profile_id: &str, effective_voice: &str) -> bool {
     let registry_path = crate::api::voices::registry_path();
-    match octos_llm::ominix::VoicesRegistry::load(&registry_path) {
+    match ra_llm::ominix::VoicesRegistry::load(&registry_path) {
         Ok(reg) => voice_available_in_registry(&reg, profile_id, effective_voice),
         Err(_) => false,
     }
@@ -2076,7 +2076,7 @@ fn local_tts_voice_available(profile_id: &str, effective_voice: &str) -> bool {
 /// selected-voice semantics are unit-testable without touching
 /// `~/.OminiX/models/voices.json`.
 fn voice_available_in_registry(
-    reg: &octos_llm::ominix::VoicesRegistry,
+    reg: &ra_llm::ominix::VoicesRegistry,
     profile_id: &str,
     effective_voice: &str,
 ) -> bool {
@@ -2781,7 +2781,7 @@ fn matrix_sync_invite_detail(
 
 fn resolve_invite_channel_index(
     profile: &UserProfile,
-    store: &octos_bus::MatrixInviteStore,
+    store: &ra_bus::MatrixInviteStore,
     room_id: &str,
     requested: Option<usize>,
 ) -> Result<usize, (StatusCode, String)> {
@@ -2874,7 +2874,7 @@ pub async fn my_matrix_invites(
     let profile = resolve_my_profile(&identity, ps, &state, &headers)
         .map_err(|s| (s, "profile not found".into()))?;
     let data_dir = ps.resolve_data_dir(&profile);
-    let store = octos_bus::MatrixInviteStore::for_profile_data_dir(&data_dir);
+    let store = ra_bus::MatrixInviteStore::for_profile_data_dir(&data_dir);
     let invites = store
         .list(false)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -2897,7 +2897,7 @@ pub async fn accept_my_matrix_invite(
     let mut profile = resolve_my_profile(&identity, ps, &state, &headers)
         .map_err(|s| (s, "profile not found".into()))?;
     let data_dir = ps.resolve_data_dir(&profile);
-    let store = octos_bus::MatrixInviteStore::for_profile_data_dir(&data_dir);
+    let store = ra_bus::MatrixInviteStore::for_profile_data_dir(&data_dir);
     let channel_index =
         resolve_invite_channel_index(&profile, &store, &room_id, req.channel_index)?;
     let config = matrix_user_channel_config(&profile, channel_index)?;
@@ -2951,7 +2951,7 @@ pub async fn reject_my_matrix_invite(
     let profile = resolve_my_profile(&identity, ps, &state, &headers)
         .map_err(|s| (s, "profile not found".into()))?;
     let data_dir = ps.resolve_data_dir(&profile);
-    let store = octos_bus::MatrixInviteStore::for_profile_data_dir(&data_dir);
+    let store = ra_bus::MatrixInviteStore::for_profile_data_dir(&data_dir);
     let channel_index =
         resolve_invite_channel_index(&profile, &store, &room_id, req.channel_index)?;
     let config = matrix_user_channel_config(&profile, channel_index)?;
@@ -2987,7 +2987,7 @@ pub async fn dismiss_my_matrix_invite(
     let profile = resolve_my_profile(&identity, ps, &state, &headers)
         .map_err(|s| (s, "profile not found".into()))?;
     let data_dir = ps.resolve_data_dir(&profile);
-    let store = octos_bus::MatrixInviteStore::for_profile_data_dir(&data_dir);
+    let store = ra_bus::MatrixInviteStore::for_profile_data_dir(&data_dir);
     let channel_index =
         resolve_invite_channel_index(&profile, &store, &room_id, req.channel_index)?;
     let dismissed = store
@@ -4619,7 +4619,7 @@ mod tests {
     /// Registry with: a shared preset `doubao` (ref exists, alias `vivian`),
     /// a shared preset `ghost` whose ref audio is missing, and a per-profile
     /// clone owned by tenant `other` (exists on disk, invisible to others).
-    fn readiness_registry(dir: &std::path::Path) -> octos_llm::ominix::VoicesRegistry {
+    fn readiness_registry(dir: &std::path::Path) -> ra_llm::ominix::VoicesRegistry {
         std::fs::create_dir_all(dir.join("ref_audios")).unwrap();
         std::fs::write(dir.join("ref_audios/doubao_ref.wav"), b"fake").unwrap();
         let clone_dir = dir.join("profiles/other/data/voice_profiles");
@@ -4641,7 +4641,7 @@ mod tests {
             }
         })
         .to_string();
-        octos_llm::ominix::VoicesRegistry::parse(&json).unwrap()
+        ra_llm::ominix::VoicesRegistry::parse(&json).unwrap()
     }
 
     #[test]
@@ -4677,7 +4677,7 @@ mod tests {
         // enough (mirrors the engine default an empty-voice turn gets).
         assert!(voice_available_in_registry(&reg, "me", ""));
         // ...but an empty/ref-less registry is still not ready.
-        let empty = octos_llm::ominix::VoicesRegistry::parse(
+        let empty = ra_llm::ominix::VoicesRegistry::parse(
             r#"{ "default_voice": "", "models_base_path": "", "voices": {} }"#,
         )
         .unwrap();
@@ -5064,7 +5064,7 @@ mod tests {
             State(state.clone()),
             axum::extract::ConnectInfo(std::net::SocketAddr::from(([127, 0, 0, 1], 40000))),
             HeaderMap::new(),
-            Json(octos_core::ui_protocol::ProfileLocalCreateParams {
+            Json(ra_core::ui_protocol::ProfileLocalCreateParams {
                 requested_id: None,
                 name: "Ada".into(),
                 username: "ada".into(),

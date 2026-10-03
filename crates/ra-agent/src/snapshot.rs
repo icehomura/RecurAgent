@@ -773,7 +773,7 @@ impl SnapshotManager {
         if cleaned.is_empty() {
             return "snapshot".to_string();
         }
-        octos_core::truncated_utf8(cleaned, MAX_LABEL_BYTES, "…")
+        ra_core::truncated_utf8(cleaned, MAX_LABEL_BYTES, "…")
     }
 }
 

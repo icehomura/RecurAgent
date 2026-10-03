@@ -58,7 +58,7 @@ const DEFAULT_MAX_DEPTH: u32 = 3;
 const DEFAULT_MAX_PAGES: u32 = 50;
 
 /// Two-second waits for a self-clearing challenge page (see
-/// `octos_research::access::interstitial_text`).
+/// `ra_research::access::interstitial_text`).
 const INTERSTITIAL_WAITS: u32 = 5;
 
 /// Largest rendered HTML returned per page when `include_html` is set.
@@ -69,7 +69,7 @@ const MAX_CRAWL_DELAY_SECS: u64 = 10;
 /// Product token appended to the browser's own User-Agent so sites can tell
 /// this is an automated ra reader (policy: no disguised automation; see
 /// SKILL.md "Automation policy").
-const UA_SUFFIX: &str = "octos-research/1.0 (+https://github.com/octos-org/octos)";
+const UA_SUFFIX: &str = "ra-research/1.0 (+https://github.com/octos-org/octos)";
 
 /// Environment variables to block when launching Chrome.
 const BLOCKED_ENV_VARS: &[&str] = &[
@@ -571,7 +571,7 @@ async fn extract_links(ws: &mut WsStream, session_id: &str) -> Vec<String> {
 fn is_bot_blocked(text: &str) -> bool {
     let lower = text.to_lowercase();
     // The shared list (Chinese sites' WAF pages included), on short text.
-    octos_research::access::challenge_text(text)
+    ra_research::access::challenge_text(text)
         || lower.contains("performing security verification")
         || lower.contains("press & hold to confirm you are")
         || lower.contains("please verify you are a human")
@@ -585,10 +585,10 @@ fn is_bot_blocked(text: &str) -> bool {
 // SSRF protection
 // ---------------------------------------------------------------------------
 
-/// SSRF check (shared `octos_research::net`): http(s) only, no private,
+/// SSRF check (shared `ra_research::net`): http(s) only, no private,
 /// loopback, link-local/metadata or reserved address, DNS fail-closed.
 async fn check_ssrf(url_str: &str) -> Option<String> {
-    octos_research::net::check_url(url_str).await.err()
+    ra_research::net::check_url(url_str).await.err()
 }
 
 /// Per-host verdicts for in-browser request interception (one DNS lookup
@@ -848,7 +848,7 @@ async fn crawl_single_page(
     // A check that clears itself in a real browser ("Just a moment…",
     // "正在进行安全检测…"): wait for it, up to ~10 s, instead of giving up.
     let mut waited = 0;
-    while waited < INTERSTITIAL_WAITS && octos_research::access::interstitial_text(&text) {
+    while waited < INTERSTITIAL_WAITS && ra_research::access::interstitial_text(&text) {
         pump_events(ws, Duration::from_secs(2)).await;
         waited += 1;
         if let Ok(t) = extract_text(ws, session_id).await {
@@ -958,22 +958,22 @@ async fn set_identifiable_user_agent(ws: &mut WsStream, session_id: &str) {
 /// Whether robots.txt is applied: operator setting `OCTOS_RESPECT_ROBOTS`,
 /// default off (env lookup injected for tests).
 fn robots_enabled(lookup: impl Fn(&str) -> Option<String>) -> bool {
-    octos_research::respect_robots(lookup)
+    ra_research::respect_robots(lookup)
 }
 
 /// robots.txt check for one URL (RFC 9309 via `ra-research`), fetched
 /// once per origin with an identifiable User-Agent.
 async fn robots_check(
-    cache: &octos_research::RobotsCache,
+    cache: &ra_research::RobotsCache,
     url: &str,
-) -> octos_research::robots::RobotsDecision {
+) -> ra_research::robots::RobotsDecision {
     cache
-        .check(url, octos_research::AGENT_TOKEN, |robots_url| async move {
-            match octos_research::net::safe_get(&robots_url, Duration::from_secs(10)).await {
+        .check(url, ra_research::AGENT_TOKEN, |robots_url| async move {
+            match ra_research::net::safe_get(&robots_url, Duration::from_secs(10)).await {
                 Ok(resp) => {
                     let status = resp.status().as_u16();
                     // Cap: 500 KiB is the RFC 9309 minimum a parser must handle.
-                    let body = octos_research::net::read_capped(resp, 512 * 1024)
+                    let body = ra_research::net::read_capped(resp, 512 * 1024)
                         .await
                         .unwrap_or_default();
                     (Some(status), body)
@@ -1251,7 +1251,7 @@ async fn run() -> Output {
             ..Default::default()
         };
     }
-    let robots = octos_research::RobotsCache::new();
+    let robots = ra_research::RobotsCache::new();
     let respect_robots = robots_enabled(|k| std::env::var(k).ok());
 
     // BFS crawl
@@ -1313,7 +1313,7 @@ async fn run() -> Output {
         let decision = if respect_robots {
             robots_check(&robots, &url).await
         } else {
-            octos_research::robots::RobotsDecision {
+            ra_research::robots::RobotsDecision {
                 allowed: true,
                 crawl_delay: None,
                 reason: "robots_off",
@@ -1384,7 +1384,7 @@ async fn run() -> Output {
 
                 // Sign-in, sign-up and sign-out pages hold no content; an
                 // explicit path_prefix (already applied above) crawls them.
-                if input.path_prefix.is_none() && octos_research::urls::is_account_link(&normalized)
+                if input.path_prefix.is_none() && ra_research::urls::is_account_link(&normalized)
                 {
                     if !skipped_account.contains(&normalized) {
                         skipped_account.push(normalized);
@@ -1436,7 +1436,7 @@ async fn run() -> Output {
     output.push('\n');
     if !skipped_account.is_empty() {
         output.push_str(&format!(
-            "## Not followed: {} sign-in/sign-up link(s) (octos_research::urls::is_account_link; set path_prefix to crawl under one)\n",
+            "## Not followed: {} sign-in/sign-up link(s) (ra_research::urls::is_account_link; set path_prefix to crawl under one)\n",
             skipped_account.len()
         ));
         for u in skipped_account.iter().take(20) {
@@ -1685,14 +1685,14 @@ mod tests {
         // Split so this test does not match itself.
         let needle = ["'web", "driver'"].concat();
         assert!(!src.contains(&needle), "no webdriver-hiding script");
-        assert!(UA_SUFFIX.contains(octos_research::AGENT_TOKEN));
+        assert!(UA_SUFFIX.contains(ra_research::AGENT_TOKEN));
     }
 
     #[test]
     fn should_skip_robots_txt_unless_the_operator_enables_it() {
         assert!(!robots_enabled(|_| None));
         assert!(robots_enabled(|k| {
-            (k == octos_research::RESPECT_ROBOTS_ENV).then(|| "1".to_string())
+            (k == ra_research::RESPECT_ROBOTS_ENV).then(|| "1".to_string())
         }));
     }
 

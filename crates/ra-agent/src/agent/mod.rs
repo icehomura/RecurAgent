@@ -30,9 +30,9 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, RwLock};
 
-use octos_core::{AgentId, Message, SessionScope, TokenUsage};
-use octos_llm::{EmbeddingProvider, LlmProvider, ProviderMetadata};
-use octos_memory::EpisodeStore;
+use ra_core::{AgentId, Message, SessionScope, TokenUsage};
+use ra_llm::{EmbeddingProvider, LlmProvider, ProviderMetadata};
+use ra_memory::EpisodeStore;
 
 pub use prompt_segments::PromptSegmentProvider;
 
@@ -105,7 +105,7 @@ pub struct AgentConfig {
     pub chat_sampling_params: Option<serde_json::Map<String, serde_json::Value>>,
     /// Reasoning effort for thinking models. Flows into `ChatConfig::reasoning_effort`;
     /// providers translate it per model (no-op for models without a reasoning style).
-    pub reasoning_effort: Option<octos_llm::ReasoningEffort>,
+    pub reasoning_effort: Option<ra_llm::ReasoningEffort>,
     /// Suppress the generic auto-send loop for tool `files_to_send`.
     /// Background spawned workers rely on their outer workflow/session runtime
     /// to persist terminal results exactly once.
@@ -136,7 +136,7 @@ pub struct AgentConfig {
     /// phases. `StreamTimeouts` only starts ticking inside `consume_stream`,
     /// so a provider that hangs while returning response headers would
     /// otherwise inherit the long production request timeout. Only applied
-    /// under [`octos_llm::LlmCallPolicy::FailFast`] (voice turns). Default 30s;
+    /// under [`ra_llm::LlmCallPolicy::FailFast`] (voice turns). Default 30s;
     /// env override `OCTOS_VOICE_LLM_DEADLINE_SECS`.
     pub voice_overall_deadline: std::time::Duration,
     /// Post-edit formatting (issue #1774): when true, a successful
@@ -372,7 +372,7 @@ pub struct Agent {
     pub(super) embedder: Option<Arc<dyn EmbeddingProvider>>,
     /// Recall/Knowledge index; saved episodes are mirrored into it so
     /// `memory_search` sees them (docs/adr/personal-memory-tiers.md).
-    pub(super) recall: Option<Arc<octos_memory::RecallStore>>,
+    pub(super) recall: Option<Arc<ra_memory::RecallStore>>,
     /// Whether THIS conversation has already saved its episode (#1587
     /// write side). Set on the first compaction; subsequent compactions
     /// skip. One conversation episode per session — bounded regardless of
@@ -523,7 +523,7 @@ pub struct Agent {
     /// multi-tenant). Threaded onto every per-tool
     /// [`crate::tools::ToolContext`] so the same scope is visible to
     /// tools and to pipeline workers via
-    /// [`octos_pipeline::PipelineHostContext::from_tool_context`].
+    /// [`ra_pipeline::PipelineHostContext::from_tool_context`].
     ///
     /// `None` keeps pre-Phase-1 behaviour byte-for-byte — no consumer
     /// reads the field yet. Phase 2 PRs will migrate file tools,
@@ -561,7 +561,7 @@ pub struct Agent {
     /// verifier sidecars unless a caller opts in explicitly.
     pub(super) verifier_config: Option<AgentVerifierConfig>,
     /// Voice-turn failure projection sink (Task 8). When the agent loop runs
-    /// under [`octos_llm::LlmCallPolicy::FailFast`] and a FOREGROUND LLM call
+    /// under [`ra_llm::LlmCallPolicy::FailFast`] and a FOREGROUND LLM call
     /// fails terminally, the loop emits a single [`crate::TurnFailure`] here so
     /// the voice closeout (ra-cli) can render a spoken error/empty message.
     /// `None` keeps pre-Task-8 behaviour byte-for-byte — the original
@@ -932,7 +932,7 @@ impl Agent {
     }
 
     /// Attach the voice-turn failure projection sink (Task 8). When set and the
-    /// loop runs under [`octos_llm::LlmCallPolicy::FailFast`], a single
+    /// loop runs under [`ra_llm::LlmCallPolicy::FailFast`], a single
     /// [`crate::TurnFailure`] is emitted on terminal foreground-LLM failure
     /// (empty response or classified LLM error). Hook-deny LLM failures are
     /// intentionally excluded so the existing permission behaviour is
@@ -1091,7 +1091,7 @@ impl Agent {
     /// landed by PR #1198). Threaded into every per-tool
     /// [`crate::tools::ToolContext`] so the same scope is visible to
     /// the foreground branch, the spawn_only background branch, and —
-    /// via [`octos_pipeline::PipelineHostContext::from_tool_context`] —
+    /// via [`ra_pipeline::PipelineHostContext::from_tool_context`] —
     /// to pipeline workers.
     ///
     /// Phase 1 is additive: no consumer reads the field yet. Setting
@@ -1193,7 +1193,7 @@ impl Agent {
 
     /// Attach the Recall/Knowledge index so saved episodes are mirrored
     /// into it (and memory prompt segments can rank bank pages).
-    pub fn with_recall(mut self, recall: Arc<octos_memory::RecallStore>) -> Self {
+    pub fn with_recall(mut self, recall: Arc<ra_memory::RecallStore>) -> Self {
         self.recall = Some(recall);
         self
     }
@@ -1649,9 +1649,9 @@ mod profile_integration_tests {
     //! is the behaviour-parity gate called out in the milestone issue.
 
     use super::*;
-    use octos_core::AgentId;
-    use octos_llm::{ChatResponse, LlmProvider, ToolSpec};
-    use octos_memory::EpisodeStore;
+    use ra_core::AgentId;
+    use ra_llm::{ChatResponse, LlmProvider, ToolSpec};
+    use ra_memory::EpisodeStore;
 
     #[test]
     fn clamp_env_secs_floor_one_keeps_guard_live() {
@@ -1678,9 +1678,9 @@ mod profile_integration_tests {
     impl LlmProvider for NoopProvider {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
+            _messages: &[ra_core::Message],
             _tools: &[ToolSpec],
-            _config: &octos_llm::ChatConfig,
+            _config: &ra_llm::ChatConfig,
         ) -> eyre::Result<ChatResponse> {
             eyre::bail!("unused in profile integration tests")
         }

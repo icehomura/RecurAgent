@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_core::Message;
-use octos_llm::{
+use ra_core::Message;
+use ra_llm::{
     AdaptiveConfig, AdaptiveRouter, ChatConfig, ChatResponse, ContextWindowOverride,
     FallbackProvider, LlmProvider, MiddlewareStack, ProviderChain, ProviderRouter, RetryProvider,
     SemaphoreThrottledProvider, StopReason, SwappableProvider, TokenUsage, ToolSpec,

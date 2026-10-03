@@ -747,13 +747,13 @@ impl CliAgentBackend {
         match tokio::time::timeout(self.dispatch_timeout, child.wait_with_output()).await {
             Ok(Ok(output)) => {
                 let mut stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-                octos_core::truncate_utf8(&mut stdout, MAX_CLI_CAPTURE_BYTES, "\n[truncated]");
+                ra_core::truncate_utf8(&mut stdout, MAX_CLI_CAPTURE_BYTES, "\n[truncated]");
                 let trimmed = stdout.trim_end().to_string();
                 if output.status.success() {
                     DispatchResponse::success(trimmed, Vec::new())
                 } else {
                     let mut stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-                    octos_core::truncate_utf8(&mut stderr, MAX_CLI_CAPTURE_BYTES, "\n[truncated]");
+                    ra_core::truncate_utf8(&mut stderr, MAX_CLI_CAPTURE_BYTES, "\n[truncated]");
                     let code = output
                         .status
                         .code()

@@ -14,7 +14,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use eyre::{Result, WrapErr};
 use futures::StreamExt;
-use octos_core::{InboundMessage, OutboundMessage};
+use ra_core::{InboundMessage, OutboundMessage};
 use reqwest::Client;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
@@ -1207,7 +1207,7 @@ impl FeishuChannel {
                 }
             }),
             message_id: Some(message_id.to_string()),
-            origin: octos_core::MessageOrigin::ExternalUser,
+            origin: ra_core::MessageOrigin::ExternalUser,
         })
     }
 

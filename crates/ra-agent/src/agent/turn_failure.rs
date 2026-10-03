@@ -2,7 +2,7 @@
 //! loop's original `eyre::Report` — the text path still returns/relies on it.
 
 use crate::harness_errors::HarnessError;
-use octos_llm::ChatResponse;
+use ra_llm::ChatResponse;
 
 /// Cloneable projection sent to the voice closeout (via a typed oneshot).
 #[derive(Clone, Debug)]
@@ -25,7 +25,7 @@ pub fn is_voice_empty_response(resp: &ChatResponse) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use octos_llm::{ChatResponse, StopReason, TokenUsage};
+    use ra_llm::{ChatResponse, StopReason, TokenUsage};
     use serde_json::json;
 
     use super::*;
@@ -35,7 +35,7 @@ mod tests {
             content: Some(content.to_string()),
             reasoning_content: reasoning.map(|s| s.to_string()),
             tool_calls: (0..tools)
-                .map(|i| octos_core::ToolCall {
+                .map(|i| ra_core::ToolCall {
                     id: format!("call_{i}"),
                     name: "dummy".to_string(),
                     arguments: json!({}),

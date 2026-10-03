@@ -17,7 +17,7 @@
 //! - semver parse/compare helpers + a pure [`plan`] producing an [`UpdatePlan`]
 //!   (NO network, NO mutation);
 //! - generic local checks (terminal, config/data-dir writability) and a
-//!   [`protocol_skew_check`] adapter over `octos_core::ui_protocol`'s pure
+//!   [`protocol_skew_check`] adapter over `ra_core::ui_protocol`'s pure
 //!   comparator.
 //!
 //! Stage 1 deliberately carries **no** network/update deps (no `reqwest`, no

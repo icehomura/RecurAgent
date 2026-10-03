@@ -8,7 +8,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use octos_bus::{ChannelManager, SessionManager};
+use ra_bus::{ChannelManager, SessionManager};
 use tokio::sync::{Mutex, Notify};
 
 use crate::config::ChannelEntry;
@@ -69,11 +69,11 @@ pub type TaskQueryFn = Arc<dyn Fn(&str) -> serde_json::Value + Send + Sync>;
 pub type SessionDeletedCallback = Arc<dyn Fn(&str) + Send + Sync>;
 /// M7.9 / W2: cancel callback signature shared with the api adapter.
 #[cfg(feature = "api")]
-pub type TaskCancelCb = Arc<dyn Fn(&str) -> octos_bus::TaskCancelOutcome + Send + Sync>;
+pub type TaskCancelCb = Arc<dyn Fn(&str) -> ra_bus::TaskCancelOutcome + Send + Sync>;
 /// M7.9 / W2: relaunch callback signature shared with the api adapter.
 #[cfg(feature = "api")]
 pub type TaskRelaunchCb =
-    Arc<dyn Fn(&str, Option<&str>) -> octos_bus::TaskRelaunchOutcome + Send + Sync>;
+    Arc<dyn Fn(&str, Option<&str>) -> ra_bus::TaskRelaunchOutcome + Send + Sync>;
 
 /// Context needed by adapters that require extra parameters beyond the common set.
 #[allow(dead_code)]
@@ -100,7 +100,7 @@ pub struct ChannelRegistrationCtx<'a> {
     /// Callback to stop the session actor when a session is deleted via API.
     pub on_session_deleted: Option<SessionDeletedCallback>,
     #[cfg(feature = "matrix")]
-    pub matrix_channel: &'a mut Option<Arc<octos_bus::MatrixChannel>>,
+    pub matrix_channel: &'a mut Option<Arc<ra_bus::MatrixChannel>>,
 }
 
 /// Register all configured channels with the channel manager.

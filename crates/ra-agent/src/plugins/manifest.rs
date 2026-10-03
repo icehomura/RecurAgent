@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use octos_plugin::{HardwareLifecycle, ToolDiscovery};
+use ra_plugin::{HardwareLifecycle, ToolDiscovery};
 use serde::{Deserialize, Deserializer};
 
 /// A plugin manifest (manifest.json).
@@ -1239,7 +1239,7 @@ mod tests {
             hooks: vec![],
             prompts: None,
             hardware_lifecycle: None,
-            tool_discovery: octos_plugin::ToolDiscovery::Static,
+            tool_discovery: ra_plugin::ToolDiscovery::Static,
             required_safety_tier: crate::permissions::SafetyTier::default(),
             tool_overrides: HashMap::new(),
             discovery: None,

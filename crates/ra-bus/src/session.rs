@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use eyre::Result;
 use lru::LruCache;
 use metrics::counter;
-use octos_core::{Message, MessageRole, SessionKey};
+use ra_core::{Message, MessageRole, SessionKey};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
@@ -290,7 +290,7 @@ pub(crate) fn derive_thread_id_for_legacy_load(
     message: &Message,
     history: &[Message],
 ) -> Option<String> {
-    use octos_core::MessageRole;
+    use ra_core::MessageRole;
 
     match message.role {
         MessageRole::System => None,
@@ -353,7 +353,7 @@ pub(crate) fn derive_thread_id_for_new_write(
     message: &Message,
     _history: &[Message],
 ) -> Result<Option<String>> {
-    use octos_core::MessageRole;
+    use ra_core::MessageRole;
 
     match message.role {
         MessageRole::System => Ok(None),
@@ -390,7 +390,7 @@ pub(crate) fn derive_thread_id_for_new_write(
 ///   tool result).
 /// - `System`: untouched (`None` — system messages aren't thread-scoped).
 pub(crate) fn synthesize_thread_ids(messages: &mut [Message]) {
-    use octos_core::MessageRole;
+    use ra_core::MessageRole;
 
     let mut current_thread: Option<String> = None;
     for (seq, message) in messages.iter_mut().enumerate() {
@@ -1418,7 +1418,7 @@ impl Session {
             let mut user_msg: Option<Message> = None;
             let mut responses: Vec<Message> = Vec::with_capacity(messages.len());
             for msg in messages {
-                if user_msg.is_none() && matches!(msg.role, octos_core::MessageRole::User) {
+                if user_msg.is_none() && matches!(msg.role, ra_core::MessageRole::User) {
                     user_msg = Some(msg.clone());
                 } else {
                     responses.push(msg.clone());
@@ -1665,7 +1665,7 @@ fn last_prompt_preview(content: &str) -> Option<String> {
     if text.is_empty() {
         return None;
     }
-    Some(octos_core::truncated_utf8(
+    Some(ra_core::truncated_utf8(
         text,
         LAST_PROMPT_PREVIEW_BYTES,
         "…",

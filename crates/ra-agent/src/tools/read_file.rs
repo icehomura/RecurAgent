@@ -236,9 +236,9 @@ impl Tool for ReadFileTool {
         // past the loop's blind head/tail cut. Byte-mode also clamps to the
         // tighter window bound inside; this is the uniform outer backstop.
         if self.window_armed() {
-            octos_core::truncate_utf8(
+            ra_core::truncate_utf8(
                 &mut result.output,
-                octos_core::tool_output_limit(self.name()),
+                ra_core::tool_output_limit(self.name()),
                 "",
             );
         }
@@ -490,7 +490,7 @@ impl ReadFileTool {
         // ARMED, the refusal is subsumed by the window: page one plus an exact
         // continuation is strictly more useful than a hint with no content.
         if start_line.is_none() && end_line.is_none() && !window_armed {
-            let budget = octos_core::tool_output_limit("read_file");
+            let budget = ra_core::tool_output_limit("read_file");
             if file_size > budget {
                 return Ok(ToolResult {
                     output: format!(
@@ -649,7 +649,7 @@ impl ReadFileTool {
         // simple, provably-safe budget. Decided before the "(showing lines)"
         // footer below — when the cut fires, that footer would name lines
         // the cut drops, so the advising footer replaces it.
-        let output_limit = octos_core::tool_output_limit("read_file");
+        let output_limit = ra_core::tool_output_limit("read_file");
         let cut_budget = output_limit - super::read_window::FOOTER_RESERVE;
         let unarmed_cut = !window_armed && output.len() > cut_budget;
 
@@ -739,11 +739,11 @@ impl ReadFileTool {
                     // FOOTER_RESERVE — so this never cuts; it is the enforced
                     // guarantee that the loop's blind backstop never fires on
                     // an unarmed read either.
-                    octos_core::truncate_utf8(&mut output, output_limit, "");
+                    ra_core::truncate_utf8(&mut output, output_limit, "");
                     cut_shown_to = Some(shown_to);
                 }
                 None => {
-                    octos_core::truncate_utf8(&mut output, cut_budget, "\n... (content truncated)");
+                    ra_core::truncate_utf8(&mut output, cut_budget, "\n... (content truncated)");
                     skip_cache_put = true;
                 }
             }
@@ -836,7 +836,7 @@ impl ReadFileTool {
 /// loop's blind head/tail backstop (#2124), which must never mangle a footer.
 fn clamp_armed_return(mut output: String) -> String {
     let bound = super::read_window::WINDOW_MAX_BYTES + super::read_window::FOOTER_RESERVE;
-    octos_core::truncate_utf8(&mut output, bound, "");
+    ra_core::truncate_utf8(&mut output, bound, "");
     output
 }
 
@@ -1272,7 +1272,7 @@ mod tests {
     // Phase 2-C: SessionScope integration tests for ReadFileTool.
     // -----------------------------------------------------------------------
 
-    use octos_core::SessionScope;
+    use ra_core::SessionScope;
 
     fn ctx_with_scope(scope: SessionScope) -> ToolContext {
         let mut ctx = ToolContext::zero();
@@ -1720,7 +1720,7 @@ mod tests {
     #[tokio::test]
     async fn oversized_unbounded_read_returns_a_range_hint_not_the_body() {
         let dir = tempfile::tempdir().unwrap();
-        let budget = octos_core::tool_output_limit("read_file");
+        let budget = ra_core::tool_output_limit("read_file");
         // Comfortably over the budget, but well under the 10MB hard cap.
         let line = "abcdefghij\n";
         let big = line.repeat(budget / line.len() + 2_000);
@@ -1917,7 +1917,7 @@ mod tests {
             r.output
         );
         assert!(
-            r.output.len() <= octos_core::tool_output_limit("read_file"),
+            r.output.len() <= ra_core::tool_output_limit("read_file"),
             "the tool's own advising cut must keep the loop's blind backstop from \
              ever firing on an armed read: {} bytes",
             r.output.len()
@@ -1960,7 +1960,7 @@ mod tests {
             r.output
         );
         assert!(r.output.contains("offset: 2001"), "{}", r.output);
-        assert!(r.output.len() <= octos_core::tool_output_limit("read_file"));
+        assert!(r.output.len() <= ra_core::tool_output_limit("read_file"));
     }
 
     #[tokio::test]
@@ -1980,7 +1980,7 @@ mod tests {
             "an explicit range past the window is clamped with the same footer: {}",
             r.output
         );
-        assert!(r.output.len() <= octos_core::tool_output_limit("read_file"));
+        assert!(r.output.len() <= ra_core::tool_output_limit("read_file"));
     }
 
     #[tokio::test]
@@ -2141,7 +2141,7 @@ mod tests {
                 ),
                 (success, len, fnv),
                 "unarmed output changed for {args}: {:?}...",
-                octos_core::truncated_utf8(&r.output, 200, "")
+                ra_core::truncated_utf8(&r.output, 200, "")
             );
         }
     }
@@ -2208,7 +2208,7 @@ mod tests {
             "the advice names how to continue past the giant line: {}",
             page2.output
         );
-        assert!(page2.output.len() <= octos_core::tool_output_limit("read_file"));
+        assert!(page2.output.len() <= ra_core::tool_output_limit("read_file"));
 
         // And the advised byte-mode call actually returns the line's bytes.
         let bytes = tool
@@ -2221,7 +2221,7 @@ mod tests {
         assert!(
             bytes.output.starts_with(&"G".repeat(20)),
             "raw byte mode returns the giant line's bytes without a gutter: {}",
-            octos_core::truncated_utf8(&bytes.output, 120, "...")
+            ra_core::truncated_utf8(&bytes.output, 120, "...")
         );
         assert!(
             bytes.output.contains("byte_offset: 32"),
@@ -2375,7 +2375,7 @@ mod tests {
             advice.output
         );
         assert!(
-            advice.output.len() <= octos_core::tool_output_limit("read_file"),
+            advice.output.len() <= ra_core::tool_output_limit("read_file"),
             "an armed return may never exceed the loop cap, whatever the \
              path spelling: {} bytes",
             advice.output.len()
@@ -2461,7 +2461,7 @@ mod tests {
             first.output
         );
         assert!(
-            first.output.len() <= octos_core::tool_output_limit("read_file"),
+            first.output.len() <= ra_core::tool_output_limit("read_file"),
             "the advising cut keeps the page under the loop's cap, so its blind \
              backstop never fires and the recorded range is honest end-to-end: \
              {} bytes",

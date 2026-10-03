@@ -200,7 +200,7 @@ pub fn email_to_user_id(email: &str) -> String {
     // names are short registry words, so the suffix stays within the
     // 64-char slug limit; the registration collision loop appends
     // `-N` if `api-user` is taken.
-    if octos_core::is_reserved_channel_name(&id) {
+    if ra_core::is_reserved_channel_name(&id) {
         format!("{id}-user")
     } else {
         id

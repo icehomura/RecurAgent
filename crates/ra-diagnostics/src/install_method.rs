@@ -448,7 +448,7 @@ mod tests {
         );
         assert_eq!(
             InstallMethod::CargoGit.upgrade_hint(&spec).unwrap(),
-            "cargo install --git https://github.com/octos-org/octos octos-cli --force"
+            "cargo install --git https://github.com/octos-org/octos ra-cli --force"
         );
         assert!(
             InstallMethod::Unknown

@@ -5,7 +5,7 @@
 //! ```
 //!
 //! With `--features browser`, results pages that need a browser (Google)
-//! load in the person's browser (see `octos_research::browser`; `OCTOS_BROWSER`
+//! load in the person's browser (see `ra_research::browser`; `OCTOS_BROWSER`
 //! picks the mode).
 //!
 //! Uses the built-in engines with keys and settings from the environment,
@@ -14,7 +14,7 @@
 
 use std::collections::BTreeMap;
 
-use octos_research::metasearch::{Metasearch, SearchRequest, default_fetch};
+use ra_research::metasearch::{Metasearch, SearchRequest, default_fetch};
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
@@ -51,5 +51,5 @@ async fn main() {
     });
     println!("{}", serde_json::to_string_pretty(&out).unwrap());
     #[cfg(feature = "browser")]
-    octos_research::browser::close_shared().await;
+    ra_research::browser::close_shared().await;
 }

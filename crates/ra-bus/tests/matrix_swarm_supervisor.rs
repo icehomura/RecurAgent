@@ -24,7 +24,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::{Method, StatusCode, Uri};
 use axum::response::IntoResponse;
 use axum::routing::{any, get, post, put};
-use octos_bus::matrix_channel::{
+use ra_bus::matrix_channel::{
     BotRouter, MatrixChannel, MatrixRoomId, MatrixUserId, SWARM_SUPERVISOR_EVENT_SCHEMA_V1,
     SteeringInput, SwarmHarnessEvent, SwarmSupervisorParams,
 };

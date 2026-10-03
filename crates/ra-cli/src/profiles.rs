@@ -92,7 +92,7 @@ pub fn effective_profile_asr_language(
     serve_default: Option<&str>,
 ) -> Result<Option<String>> {
     let profile_override = match (profile_store, profile_id) {
-        (Some(_), Some(profile_id)) if profile_id == octos_core::MAIN_PROFILE_ID => None,
+        (Some(_), Some(profile_id)) if profile_id == ra_core::MAIN_PROFILE_ID => None,
         (Some(store), Some(profile_id)) => {
             let profile = store
                 .get(profile_id)?
@@ -198,7 +198,7 @@ pub struct ProfileConfig {
     /// and the runtime field was hard-zeroed, so a profile-level
     /// `[[mcp_servers]]` block silently never registered any tools.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub mcp_servers: Vec<octos_agent::McpServerConfig>,
+    pub mcp_servers: Vec<ra_agent::McpServerConfig>,
     /// Per-tenant reply-voice (TTS timbre) choice. Voice route/ASR settings stay
     /// platform-level on the serve config; only the chosen timbre is per-user.
     /// Applied at profile bootstrap over the shared `VoiceConfig.default_voice`
@@ -272,7 +272,7 @@ pub struct ProfileConfig {
     pub env_vars: HashMap<String, String>,
     /// Lifecycle hooks for agent events (per-profile).
     #[serde(default)]
-    pub hooks: Vec<octos_agent::HookConfig>,
+    pub hooks: Vec<ra_agent::HookConfig>,
     /// #2168: per-profile tool-visibility policy (allow / deny / require_tags,
     /// with `group:*` support). Projected into `Config.tool_policy`, which the
     /// serve path already applies — it just had no way to be set from a
@@ -290,7 +290,7 @@ pub struct ProfileConfig {
     /// profile prefer a **`deny`** list of the heavy web/research/media tools,
     /// which keeps every coding + channel + task tool intact.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tool_policy: Option<octos_agent::ToolPolicy>,
+    pub tool_policy: Option<ra_agent::ToolPolicy>,
     /// Human-approval rules for tool calls requiring a human decision
     /// (per-profile; see `docs/ROBRIX-PHASE4-APPROVAL-FLOW-ADR.md`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -306,7 +306,7 @@ pub struct ProfileConfig {
     /// #1768: opt-in git-backed workspace snapshots before mutating tools
     /// (`snapshots.enabled` + `keep_last`). Default OFF.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub snapshots: Option<octos_agent::SnapshotConfig>,
+    pub snapshots: Option<ra_agent::SnapshotConfig>,
     /// Build-cache pool configuration (outer-loop #3; design
     /// docs/build-cache-pool.md §2). Projected into
     /// `Config.build_cache`. Absent = defaults.
@@ -314,7 +314,7 @@ pub struct ProfileConfig {
     pub build_cache: Option<crate::build_cache::BuildCacheConfig>,
     /// Sandbox configuration for tool isolation.
     #[serde(default)]
-    pub sandbox: octos_agent::SandboxConfig,
+    pub sandbox: ra_agent::SandboxConfig,
     /// Adaptive routing configuration (QoS weights, mode, etc.).
     #[serde(default)]
     pub adaptive_routing: Option<crate::config::AdaptiveRoutingConfig>,
@@ -322,7 +322,7 @@ pub struct ProfileConfig {
     /// (M7.4). Absent or empty => no enforcement; the ledger still
     /// records attributions so operators can audit spend retroactively.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cost_budget: Option<octos_agent::CostBudgetPolicy>,
+    pub cost_budget: Option<ra_agent::CostBudgetPolicy>,
     /// Matrix-specific profile config (e.g. swarm supervisor rooms).
     ///
     /// Absent → behaves exactly like pre-M7.3 Matrix deployments. Present →
@@ -333,7 +333,7 @@ pub struct ProfileConfig {
     /// Content-classified smart routing configuration (M6.6).
     /// Missing config defaults to `enabled: false` (invariant #3 of issue #493).
     #[serde(default)]
-    pub content_routing: Option<octos_llm::RoutingConfig>,
+    pub content_routing: Option<ra_llm::RoutingConfig>,
     /// Credential pool configuration (M6.5). Named pools of API keys / OAuth
     /// tokens with persistent cooldowns and rotation strategies.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -347,10 +347,10 @@ pub struct ProfileConfig {
     pub plugins: crate::config::PluginsConfig,
     /// RFC-3 (#1292) — per-topic model lane routing. When set, the
     /// session-actor and the WS turn handler resolve the session's
-    /// `topic()` to a [`octos_llm::Lane`] using these overrides on
+    /// `topic()` to a [`ra_llm::Lane`] using these overrides on
     /// top of the built-in defaults, then scope the LLM chat call
-    /// inside [`octos_llm::with_lane_context`] so the
-    /// [`octos_llm::AdaptiveRouter`] narrows its candidate set to
+    /// inside [`ra_llm::with_lane_context`] so the
+    /// [`ra_llm::AdaptiveRouter`] narrows its candidate set to
     /// the lane's `(provider, model)` list before scoring.
     ///
     /// Absent / `None` ⇒ pre-RFC-3 behavior: the router uses the
@@ -359,7 +359,7 @@ pub struct ProfileConfig {
     /// `research`, etc.) — the per-profile field only carries
     /// **overrides**.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lane_routing: Option<octos_llm::LaneRoutingConfig>,
+    pub lane_routing: Option<ra_llm::LaneRoutingConfig>,
     /// Skill-layering (v1) selection layer. Merged through
     /// [`ProfileStore::effective_config`] alongside hooks / env / sandbox /
     /// plugins so a profile inherits the operator's default skill selection
@@ -440,21 +440,21 @@ impl ProfileSkillsConfig {
     }
 
     /// Lower this selection layer into the crate-agnostic
-    /// [`octos_agent::SkillFilter`] handed to the plugin loader and the
-    /// [`octos_agent::SkillsLoader`]. Rules are collapsed last-wins per id.
-    pub fn to_agent_filter(&self) -> octos_agent::SkillFilter {
+    /// [`ra_agent::SkillFilter`] handed to the plugin loader and the
+    /// [`ra_agent::SkillsLoader`]. Rules are collapsed last-wins per id.
+    pub fn to_agent_filter(&self) -> ra_agent::SkillFilter {
         let mut last: std::collections::HashMap<&str, bool> = std::collections::HashMap::new();
         for rule in &self.rules {
             last.insert(rule.id.as_str(), rule.enabled);
         }
         match self.effective_mode() {
-            SkillSelectionMode::AllDiscovered => octos_agent::SkillFilter::AllExcept(
+            SkillSelectionMode::AllDiscovered => ra_agent::SkillFilter::AllExcept(
                 last.into_iter()
                     .filter(|(_, enabled)| !*enabled)
                     .map(|(id, _)| id.to_string())
                     .collect(),
             ),
-            SkillSelectionMode::AllowList => octos_agent::SkillFilter::Only(
+            SkillSelectionMode::AllowList => ra_agent::SkillFilter::Only(
                 last.into_iter()
                     .filter(|(_, enabled)| *enabled)
                     .map(|(id, _)| id.to_string())
@@ -541,18 +541,18 @@ pub struct SlidesAppConfig {
 pub struct RobotConfig {
     /// Realtime heartbeat + sensor-context-injection contract.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub realtime: Option<octos_agent::RealtimeConfig>,
+    pub realtime: Option<ra_agent::RealtimeConfig>,
 }
 
 /// Current schema version for [`SwarmSupervisorConfig`].
 ///
 /// Older configs that omit `schema_version` are accepted as v1 via
 /// [`default_swarm_supervisor_schema_version`]. Tracks
-/// [`octos_agent::SWARM_SUPERVISOR_CONFIG_SCHEMA_VERSION`] — the two MUST
+/// [`ra_agent::SWARM_SUPERVISOR_CONFIG_SCHEMA_VERSION`] — the two MUST
 /// stay in lock-step so the agent-side ABI compat checks and the CLI-side
 /// profile loader agree on the serialized shape.
 pub const SWARM_SUPERVISOR_CONFIG_SCHEMA_VERSION: u32 =
-    octos_agent::SWARM_SUPERVISOR_CONFIG_SCHEMA_VERSION;
+    ra_agent::SWARM_SUPERVISOR_CONFIG_SCHEMA_VERSION;
 
 fn default_swarm_supervisor_schema_version() -> u32 {
     SWARM_SUPERVISOR_CONFIG_SCHEMA_VERSION
@@ -649,7 +649,7 @@ fn default_swarm_room_prefix() -> String {
 #[serde(deny_unknown_fields)]
 pub struct CredentialPoolConfig {
     /// Schema version for forward compatibility (M4.6 pattern).
-    #[serde(default = "octos_agent::default_credential_pool_config_schema_version")]
+    #[serde(default = "ra_agent::default_credential_pool_config_schema_version")]
     pub schema_version: u32,
     /// Named pools keyed by integration id (e.g. `"anthropic"`, `"openai"`).
     #[serde(default)]
@@ -659,7 +659,7 @@ pub struct CredentialPoolConfig {
 impl Default for CredentialPoolConfig {
     fn default() -> Self {
         Self {
-            schema_version: octos_agent::default_credential_pool_config_schema_version(),
+            schema_version: ra_agent::default_credential_pool_config_schema_version(),
             pools: HashMap::new(),
         }
     }
@@ -771,25 +771,25 @@ pub struct ProfileConfigPatch {
     #[serde(default)]
     pub env_vars: Option<HashMap<String, String>>,
     #[serde(default)]
-    pub hooks: Option<Vec<octos_agent::HookConfig>>,
+    pub hooks: Option<Vec<ra_agent::HookConfig>>,
     #[serde(default)]
     pub admin_mode: Option<bool>,
     #[serde(default)]
-    pub sandbox: Option<octos_agent::SandboxConfig>,
+    pub sandbox: Option<ra_agent::SandboxConfig>,
     #[serde(default)]
     pub adaptive_routing: PatchField<crate::config::AdaptiveRoutingConfig>,
     #[serde(default)]
-    pub cost_budget: PatchField<octos_agent::CostBudgetPolicy>,
+    pub cost_budget: PatchField<ra_agent::CostBudgetPolicy>,
     #[serde(default)]
     pub matrix: PatchField<MatrixProfileConfig>,
     #[serde(default)]
-    pub content_routing: PatchField<octos_llm::RoutingConfig>,
+    pub content_routing: PatchField<ra_llm::RoutingConfig>,
     #[serde(default)]
     pub credential_pool: PatchField<CredentialPoolConfig>,
     #[serde(default)]
     pub plugins: Option<crate::config::PluginsConfig>,
     #[serde(default)]
-    pub lane_routing: PatchField<octos_llm::LaneRoutingConfig>,
+    pub lane_routing: PatchField<ra_llm::LaneRoutingConfig>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -838,7 +838,7 @@ pub struct LlmModelSelectionConfig {
     pub route: Option<LlmRouteConfig>,
     /// Optional model behavior hints for custom or proxy-hosted models.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub model_hints: Option<octos_llm::openai::ModelHints>,
+    pub model_hints: Option<ra_llm::openai::ModelHints>,
     /// Published output price in USD per million tokens (for routing).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cost_per_m: Option<f64>,
@@ -865,7 +865,7 @@ pub struct LlmModelSelectionConfig {
     /// (`ui_protocol_reasoning_effort.rs`) wins over it, and it in turn wins
     /// over the profile gateway `reasoning_effort`. `None` = inherit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reasoning_effort: Option<octos_llm::ReasoningEffort>,
+    pub reasoning_effort: Option<ra_llm::ReasoningEffort>,
     /// Operator override for the effective context window, in tokens. When
     /// set it takes precedence over BOTH the static catalog and the runtime
     /// probe (#2135): the provider is wrapped in `ContextWindowOverride` as
@@ -1729,7 +1729,7 @@ impl ProfileStore {
                             // as unparsable JSON above) keeps one legacy
                             // record from bricking the deployment; the
                             // warning tells the operator to rename it.
-                            if octos_core::is_reserved_channel_name(&profile.id) {
+                            if ra_core::is_reserved_channel_name(&profile.id) {
                                 tracing::warn!(
                                     path = %path.display(),
                                     id = %profile.id,
@@ -1770,7 +1770,7 @@ impl ProfileStore {
         // produces ambiguous session keys (`api:telegram:123` parses as
         // a bare channel key), so it must not handle sessions. The
         // error names the fix instead of letting the record limp along.
-        if octos_core::is_reserved_channel_name(&profile.id) {
+        if ra_core::is_reserved_channel_name(&profile.id) {
             bail!(
                 "profile '{}' uses a reserved channel name as its id and cannot be loaded; \
                  rename the profile file and its `id` field (e.g. `{}-bot`) — channel-named \
@@ -2289,10 +2289,10 @@ fn merge_plugins_defaults(
 /// `read_allow_paths` (subset clamp) enforce a floor a profile can tighten but
 /// not loosen.
 fn merge_sandbox_defaults(
-    base: &octos_agent::SandboxConfig,
-    defaults: &octos_agent::SandboxConfig,
-) -> octos_agent::SandboxConfig {
-    let type_default = octos_agent::SandboxConfig::default();
+    base: &ra_agent::SandboxConfig,
+    defaults: &ra_agent::SandboxConfig,
+) -> ra_agent::SandboxConfig {
+    let type_default = ra_agent::SandboxConfig::default();
     let mut eff = base.clone();
 
     // Presence-aware fill: inherit a defaults field only where the profile left
@@ -2722,7 +2722,7 @@ fn validate_profile_id(id: &str) -> Result<()> {
     // would persist a wrongly-scoped child (codex #1613 r4). This
     // reservation applies ONLY to profile ids — see
     // validate_public_subdomain (codex #1613 r5 P2).
-    if octos_core::is_reserved_channel_name(id) {
+    if ra_core::is_reserved_channel_name(id) {
         bail!("profile ID must not be a reserved channel name (e.g. api, slack, line)");
     }
     Ok(())
@@ -3902,7 +3902,7 @@ mod tests {
         // roster only reaches the built-in `coding` ProfileDefinition). A
         // profile-level tool_policy must now reach the runtime Config, where the
         // serve path already applies it.
-        let policy: octos_agent::ToolPolicy = serde_json::from_value(serde_json::json!({
+        let policy: ra_agent::ToolPolicy = serde_json::from_value(serde_json::json!({
             "allow": ["read_file", "write_file", "group:runtime", "check", "update_plan"]
         }))
         .expect("valid tool policy");
@@ -3938,9 +3938,9 @@ mod tests {
         // #2168 review (item 4): tool_policy inherits like its sibling Option
         // fields — an operator profile-default applies when the profile has
         // none, and the profile's own always wins.
-        let default_policy: octos_agent::ToolPolicy =
+        let default_policy: ra_agent::ToolPolicy =
             serde_json::from_value(serde_json::json!({ "deny": ["group:web"] })).unwrap();
-        let own_policy: octos_agent::ToolPolicy =
+        let own_policy: ra_agent::ToolPolicy =
             serde_json::from_value(serde_json::json!({ "allow": ["read_file"] })).unwrap();
         let defaults = ProfileConfig {
             tool_policy: Some(default_policy.clone()),
@@ -4108,13 +4108,13 @@ mod tests {
                             api_key_env: Some("AUTODL_API_KEY".into()),
                             api_type: Some("openai".into()),
                         }),
-                        model_hints: Some(octos_llm::openai::ModelHints {
+                        model_hints: Some(ra_llm::openai::ModelHints {
                             uses_completion_tokens: true,
                             fixed_temperature: false,
                             lacks_vision: false,
                             lacks_video: false,
                             merge_system_messages: false,
-                            reasoning_style: octos_llm::openai::ReasoningStyle::None,
+                            reasoning_style: ra_llm::openai::ReasoningStyle::None,
                         }),
                         cost_per_m: Some(4.5),
                         strong: Some(true),
@@ -4135,13 +4135,13 @@ mod tests {
                             api_key_env: Some("WISEMODEL_API_KEY".into()),
                             api_type: Some("openai".into()),
                         }),
-                        model_hints: Some(octos_llm::openai::ModelHints {
+                        model_hints: Some(ra_llm::openai::ModelHints {
                             uses_completion_tokens: false,
                             fixed_temperature: false,
                             lacks_vision: false,
                             lacks_video: false,
                             merge_system_messages: true,
-                            reasoning_style: octos_llm::openai::ReasoningStyle::None,
+                            reasoning_style: ra_llm::openai::ReasoningStyle::None,
                         }),
                         cost_per_m: Some(3.2),
                         strong: Some(true),
@@ -4301,10 +4301,10 @@ mod tests {
     #[test]
     fn test_profile_config_patch_updates_plugin_and_lane_policy() {
         let mut config = ProfileConfig::default();
-        let mut lane_routing = octos_llm::LaneRoutingConfig::default();
+        let mut lane_routing = ra_llm::LaneRoutingConfig::default();
         lane_routing
             .topic_lanes
-            .insert("code".into(), octos_llm::Lane::CodeCapable);
+            .insert("code".into(), ra_llm::Lane::CodeCapable);
 
         config.apply_patch(ProfileConfigPatch {
             plugins: Some(crate::config::PluginsConfig {
@@ -5166,7 +5166,7 @@ mod tests {
         };
 
         let mut changed = base.clone();
-        changed.config.tool_policy = Some(octos_agent::ToolPolicy {
+        changed.config.tool_policy = Some(ra_agent::ToolPolicy {
             deny: vec!["bash".into()],
             ..Default::default()
         });
@@ -5178,7 +5178,7 @@ mod tests {
 
         // Policy-to-policy edit and policy removal are the same transition class.
         let mut edited = changed.clone();
-        edited.config.tool_policy = Some(octos_agent::ToolPolicy {
+        edited.config.tool_policy = Some(ra_agent::ToolPolicy {
             allow: vec!["read_file".into()],
             ..Default::default()
         });
@@ -5286,7 +5286,7 @@ mod tests {
             public_subdomain: None,
             config: ProfileConfig {
                 robot: Some(RobotConfig {
-                    realtime: Some(octos_agent::RealtimeConfig {
+                    realtime: Some(ra_agent::RealtimeConfig {
                         enabled: false,
                         ..Default::default()
                     }),
@@ -5298,7 +5298,7 @@ mod tests {
         };
         let mut changed = base.clone();
         changed.config.robot = Some(RobotConfig {
-            realtime: Some(octos_agent::RealtimeConfig {
+            realtime: Some(ra_agent::RealtimeConfig {
                 enabled: true,
                 heartbeat_timeout_ms: 250,
                 ..Default::default()
@@ -5383,10 +5383,10 @@ mod tests {
             updated_at: Utc::now(),
         };
 
-        let mut lane_routing = octos_llm::LaneRoutingConfig::default();
+        let mut lane_routing = ra_llm::LaneRoutingConfig::default();
         lane_routing
             .topic_lanes
-            .insert("code".into(), octos_llm::Lane::CodeCapable);
+            .insert("code".into(), ra_llm::Lane::CodeCapable);
 
         let mut changed = base.clone();
         changed.config.admin_mode = true;
@@ -5395,7 +5395,7 @@ mod tests {
             enabled: true,
             ..Default::default()
         });
-        changed.config.content_routing = Some(octos_llm::RoutingConfig {
+        changed.config.content_routing = Some(ra_llm::RoutingConfig {
             enabled: true,
             ..Default::default()
         });
@@ -6237,9 +6237,9 @@ mod tests {
         }
     }
 
-    fn tool_hook(cmd: &str) -> octos_agent::HookConfig {
-        octos_agent::HookConfig {
-            event: octos_agent::HookEvent::BeforeToolCall,
+    fn tool_hook(cmd: &str) -> ra_agent::HookConfig {
+        ra_agent::HookConfig {
+            event: ra_agent::HookEvent::BeforeToolCall,
             command: vec![cmd.to_string()],
             timeout_ms: 5000,
             tool_filter: Vec::new(),
@@ -6276,7 +6276,7 @@ mod tests {
             plugins: crate::config::PluginsConfig {
                 require_signed: true,
             },
-            sandbox: octos_agent::SandboxConfig {
+            sandbox: ra_agent::SandboxConfig {
                 allow_network: true,
                 ..Default::default()
             },
@@ -6358,7 +6358,7 @@ mod tests {
             approval_policy: Some(crate::config::ApprovalPolicyConfig::default()),
             // Non-default sandbox: workspace_write=false differs from the
             // profile's own non-default sandbox below.
-            sandbox: octos_agent::SandboxConfig {
+            sandbox: ra_agent::SandboxConfig {
                 workspace_write: false,
                 ..Default::default()
             },
@@ -6380,7 +6380,7 @@ mod tests {
         profile.config.plugins = crate::config::PluginsConfig {
             require_signed: true,
         };
-        profile.config.sandbox = octos_agent::SandboxConfig {
+        profile.config.sandbox = ra_agent::SandboxConfig {
             allow_network: true,
             ..Default::default()
         };
@@ -6518,7 +6518,7 @@ mod tests {
         let data_root = tempfile::tempdir().unwrap();
 
         let defaults = ProfileConfig {
-            sandbox: octos_agent::SandboxConfig {
+            sandbox: ra_agent::SandboxConfig {
                 workspace_write: false, // read-only workspace floor
                 allow_network: true,    // network allowed by default
                 ..Default::default()
@@ -6530,7 +6530,7 @@ mod tests {
 
         let mut profile = inheritance_profile("gwen");
         // Profile sets ONLY read_allow_paths, leaving every other field unset.
-        profile.config.sandbox = octos_agent::SandboxConfig {
+        profile.config.sandbox = ra_agent::SandboxConfig {
             read_allow_paths: vec!["/work".into()],
             ..Default::default()
         };
@@ -6549,8 +6549,8 @@ mod tests {
         // that omits the field and cannot be loosened by one that sets false.
         assert!(
             merge_sandbox_defaults(
-                &octos_agent::SandboxConfig::default(),
-                &octos_agent::SandboxConfig {
+                &ra_agent::SandboxConfig::default(),
+                &ra_agent::SandboxConfig {
                     fail_closed: true,
                     ..Default::default()
                 },
@@ -6560,19 +6560,19 @@ mod tests {
         );
         assert!(
             merge_sandbox_defaults(
-                &octos_agent::SandboxConfig {
+                &ra_agent::SandboxConfig {
                     fail_closed: true,
                     ..Default::default()
                 },
-                &octos_agent::SandboxConfig::default(),
+                &ra_agent::SandboxConfig::default(),
             )
             .fail_closed,
             "a profile may tighten fail_closed over permissive defaults"
         );
         assert!(
             !merge_sandbox_defaults(
-                &octos_agent::SandboxConfig::default(),
-                &octos_agent::SandboxConfig::default(),
+                &ra_agent::SandboxConfig::default(),
+                &ra_agent::SandboxConfig::default(),
             )
             .fail_closed,
             "fail_closed stays off when neither side sets it"
@@ -6774,7 +6774,7 @@ mod tests {
         let data_root = tempfile::tempdir().unwrap();
 
         let defaults = ProfileConfig {
-            sandbox: octos_agent::SandboxConfig {
+            sandbox: ra_agent::SandboxConfig {
                 read_allow_paths: vec!["/srv/data".into()],
                 ..Default::default()
             },
@@ -6786,7 +6786,7 @@ mod tests {
         // A profile that widens beyond the operator root has the out-of-floor
         // path dropped, keeping only the subpath under `/srv/data`.
         let mut widen = inheritance_profile("ivan");
-        widen.config.sandbox = octos_agent::SandboxConfig {
+        widen.config.sandbox = ra_agent::SandboxConfig {
             read_allow_paths: vec!["/srv/data/tenant".into(), "/etc/secret".into()],
             ..Default::default()
         };
@@ -6800,7 +6800,7 @@ mod tests {
         // A profile whose paths are ALL outside the floor is clamped back to
         // the operator's set (never silently widened to allow-all).
         let mut escape = inheritance_profile("judy");
-        escape.config.sandbox = octos_agent::SandboxConfig {
+        escape.config.sandbox = ra_agent::SandboxConfig {
             read_allow_paths: vec!["/etc/secret".into()],
             ..Default::default()
         };
@@ -6815,7 +6815,7 @@ mod tests {
         // through the subset check: `/srv/data/../../etc` resolves to `/etc`,
         // outside the floor, so it is dropped and the list clamps to defaults.
         let mut traverse = inheritance_profile("mallory");
-        traverse.config.sandbox = octos_agent::SandboxConfig {
+        traverse.config.sandbox = ra_agent::SandboxConfig {
             read_allow_paths: vec!["/srv/data/../../etc".into()],
             ..Default::default()
         };
@@ -6829,7 +6829,7 @@ mod tests {
         // Sibling-prefix guard: `/srv/database` must not count as within
         // `/srv/data` (string prefix ≠ path containment).
         let mut sibling = inheritance_profile("neil");
-        sibling.config.sandbox = octos_agent::SandboxConfig {
+        sibling.config.sandbox = ra_agent::SandboxConfig {
             read_allow_paths: vec!["/srv/database".into()],
             ..Default::default()
         };
@@ -6851,7 +6851,7 @@ mod tests {
         let defaults = ProfileConfig {
             hooks: vec![tool_hook("default-hook")],
             env_vars: HashMap::from([("DEFAULT_ONLY".to_string(), "d".to_string())]),
-            sandbox: octos_agent::SandboxConfig {
+            sandbox: ra_agent::SandboxConfig {
                 workspace_write: false,
                 ..Default::default()
             },
@@ -7048,7 +7048,7 @@ mod tests {
         assert_eq!(
             effective_profile_asr_language(
                 Some(&store),
-                Some(octos_core::MAIN_PROFILE_ID),
+                Some(ra_core::MAIN_PROFILE_ID),
                 Some("English"),
             )
             .unwrap(),

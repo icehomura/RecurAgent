@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use octos_research::metasearch::{Config, Metasearch, Registry, ReqwestFetch, SearchRequest};
+use ra_research::metasearch::{Config, Metasearch, Registry, ReqwestFetch, SearchRequest};
 
 async fn smoke(engine: &str, query: &str, category: &str) {
     let mut registry = Registry::default();

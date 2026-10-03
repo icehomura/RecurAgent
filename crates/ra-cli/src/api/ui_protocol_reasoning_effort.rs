@@ -12,7 +12,7 @@
 //! the full [`SessionKey`] (base + topic) under
 //! `<data_dir>/users/<encoded base>/sessions/<encoded topic>.reasoning_effort.json`.
 //! Because the key embeds the topic, the path is deterministic regardless of
-//! which per-profile [`octos_bus::SessionManager`] instance computes it — the
+//! which per-profile [`ra_bus::SessionManager`] instance computes it — the
 //! persist-on-turn site (`run_standalone_turn`) and the surface-on-open site
 //! (`open_session_result`) resolve to the same `data_dir` root and therefore
 //! the same file.
@@ -25,8 +25,8 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use octos_core::SessionKey;
-use octos_core::ui_protocol::ReasoningEffortLevel;
+use ra_core::SessionKey;
+use ra_core::ui_protocol::ReasoningEffortLevel;
 use serde::{Deserialize, Serialize};
 
 /// On-disk record. A struct (rather than a bare enum) so future per-session
@@ -43,12 +43,12 @@ struct ReasoningEffortRecord {
 /// identically (encoded base key + encoded topic, defaulting the empty topic to
 /// `"default"`).
 pub(crate) fn reasoning_effort_path(data_dir: &Path, session_id: &SessionKey) -> PathBuf {
-    let encoded_base = octos_bus::session::encode_path_component(session_id.base_key());
+    let encoded_base = ra_bus::session::encode_path_component(session_id.base_key());
     let topic = session_id
         .topic()
         .filter(|topic| !topic.is_empty())
         .unwrap_or("default");
-    let encoded_topic = octos_bus::session::encode_path_component(topic);
+    let encoded_topic = ra_bus::session::encode_path_component(topic);
 
     data_dir
         .join("users")

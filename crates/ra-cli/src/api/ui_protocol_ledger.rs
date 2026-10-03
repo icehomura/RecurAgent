@@ -58,8 +58,8 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use octos_core::SessionKey;
-use octos_core::ui_protocol::{
+use ra_core::SessionKey;
+use ra_core::ui_protocol::{
     EnvelopeV2, EnvelopeV2Notification, PayloadV2, RpcError, RpcNotification, SessionOpened,
     TaskRuntimeState, TurnCompletedEvent, TurnErrorEvent, TurnId, UiCursor, UiNotification,
     UiProgressEvent, methods,
@@ -1138,17 +1138,17 @@ impl UiProtocolLedger {
         };
         let mut tasks: std::collections::HashMap<
             String,
-            octos_core::ui_protocol::TaskUpdatedEvent,
+            ra_core::ui_protocol::TaskUpdatedEvent,
         > = std::collections::HashMap::new();
         let mut started_turns: std::collections::HashMap<
             String,
-            (SessionKey, octos_core::TurnId, Option<String>),
+            (SessionKey, ra_core::TurnId, Option<String>),
         > = std::collections::HashMap::new();
         let mut terminal_turns: std::collections::HashSet<String> =
             std::collections::HashSet::new();
         let mut agents: std::collections::HashMap<
             String,
-            octos_core::ui_protocol::AgentUpdatedEvent,
+            ra_core::ui_protocol::AgentUpdatedEvent,
         > = std::collections::HashMap::new();
         for event in &events {
             let UiProtocolLedgerEvent::Notification(notification) = &event.event else {
@@ -2473,7 +2473,7 @@ impl UiProtocolLedger {
                 .get(&(session_id.clone(), thread.clone()))
                 .cloned()
                 .unwrap_or_else(|| self.recover_thread_seq_state(session_id, &thread, inner));
-            file.attachment_owner = Some(octos_core::ui_protocol::AttachmentOwnerV2 {
+            file.attachment_owner = Some(ra_core::ui_protocol::AttachmentOwnerV2 {
                 assistant_segment_id: state
                     .assistant_segment_id
                     .or_else(|| legacy_attachment_owner(inner, session_id, &thread)),
@@ -3820,7 +3820,7 @@ fn cheap_record_seq(line: &str) -> Option<u64> {
 /// The redactor is infallible and idempotent, so ordinary payloads stay
 /// byte-identical and a row scrubbed on the wire is unchanged at append.
 pub(crate) fn redact_ui_notification_secrets(notification: &mut UiNotification) {
-    use octos_core::secret_redaction::{redact_secrets_in_text, redact_secrets_in_value};
+    use ra_core::secret_redaction::{redact_secrets_in_text, redact_secrets_in_value};
     fn redact_text_in_place(text: &mut String) {
         if let std::borrow::Cow::Owned(redacted) = redact_secrets_in_text(text) {
             *text = redacted;
@@ -3967,7 +3967,7 @@ fn list_log_files(session_dir: &Path) -> std::io::Result<Vec<PathBuf>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::ui_protocol::{MessageDeltaEvent, TurnId, rpc_error_codes};
+    use ra_core::ui_protocol::{MessageDeltaEvent, TurnId, rpc_error_codes};
     use std::time::Duration as StdDuration;
 
     fn stage_assistant_owner_watermark_crash(
@@ -4065,7 +4065,7 @@ mod tests {
             };
             assert_eq!(source.envelope.seq, if previous.is_some() { 3 } else { 2 });
             let attached = ledger.append_notification(UiNotification::FileAttached(
-                octos_core::ui_protocol::FileAttachedEvent {
+                ra_core::ui_protocol::FileAttachedEvent {
                     session_id: session.clone(),
                     topic: None,
                     turn_id: turn.clone(),
@@ -4757,7 +4757,7 @@ mod tests {
         terminal: UiNotification,
     ) {
         ledger.append_notification(UiNotification::TurnStarted(
-            octos_core::ui_protocol::TurnStartedEvent {
+            ra_core::ui_protocol::TurnStartedEvent {
                 session_id: session_id.clone(),
                 turn_id: turn_id.clone(),
                 timestamp: chrono::Utc::now(),
@@ -4935,7 +4935,7 @@ mod tests {
         let session_id = SessionKey("local:turn-scoped-trimmed".into());
         let turn_id = TurnId::new();
         ledger.append_notification(UiNotification::TurnStarted(
-            octos_core::ui_protocol::TurnStartedEvent {
+            ra_core::ui_protocol::TurnStartedEvent {
                 session_id: session_id.clone(),
                 turn_id: turn_id.clone(),
                 timestamp: chrono::Utc::now(),
@@ -5000,12 +5000,12 @@ mod tests {
     fn recovery_sweeps_rows_orphaned_by_restart() {
         let temp = tempfile::tempdir().expect("tempdir");
         let session_id = SessionKey("local:orphan-sweep".into());
-        let turn_id = octos_core::TurnId::new();
-        let ghost_task = octos_core::TaskId::new();
+        let turn_id = ra_core::TurnId::new();
+        let ghost_task = ra_core::TaskId::new();
         {
             let config = LedgerConfig::durable(temp.path().into());
             let ledger = UiProtocolLedger::with_config(config);
-            let task: octos_core::ui_protocol::TaskUpdatedEvent = serde_json::from_value(json!({
+            let task: ra_core::ui_protocol::TaskUpdatedEvent = serde_json::from_value(json!({
                 "session_id": session_id.0.clone(),
                 "task_id": ghost_task.to_string(),
                 "title": "astro dev server",
@@ -5013,7 +5013,7 @@ mod tests {
             }))
             .expect("task event");
             ledger.append_notification(UiNotification::TaskUpdated(task));
-            let started: octos_core::ui_protocol::TurnStartedEvent =
+            let started: ra_core::ui_protocol::TurnStartedEvent =
                 serde_json::from_value(json!({
                     "session_id": session_id.0,
                     "turn_id": turn_id.0,
@@ -5021,7 +5021,7 @@ mod tests {
                 }))
                 .expect("turn started");
             ledger.append_notification(UiNotification::TurnStarted(started));
-            let agent: octos_core::ui_protocol::AgentUpdatedEvent = serde_json::from_value(json!({
+            let agent: ra_core::ui_protocol::AgentUpdatedEvent = serde_json::from_value(json!({
                 "session_id": session_id.0,
                 "agent": {
                     "agent_id": "agent-ghost",
@@ -5055,7 +5055,7 @@ mod tests {
             };
             match notification {
                 UiNotification::TaskUpdated(task)
-                    if task.state == octos_core::ui_protocol::TaskRuntimeState::Cancelled
+                    if task.state == ra_core::ui_protocol::TaskRuntimeState::Cancelled
                         && task.runtime_detail.as_deref() == Some("orphaned_by_restart") =>
                 {
                     task_terminal = true;
@@ -5213,11 +5213,11 @@ mod tests {
     fn recovery_sweeps_orphans_in_scoped_dirs_with_wire_session_ids() {
         let temp = tempfile::tempdir().expect("tempdir");
         let key = SessionKey("glm:local:tui#coding".into());
-        let turn_id = octos_core::TurnId::new();
+        let turn_id = ra_core::TurnId::new();
         {
             let ledger = UiProtocolLedger::with_config(LedgerConfig::durable(temp.path().into()));
             ledger.set_session_scope(&key, Some("aaaa111122223333".into()));
-            let started: octos_core::ui_protocol::TurnStartedEvent =
+            let started: ra_core::ui_protocol::TurnStartedEvent =
                 serde_json::from_value(json!({
                     "session_id": key.0,
                     "turn_id": turn_id.0,
@@ -6164,7 +6164,7 @@ mod tests {
                 PayloadV2::AssistantPersisted {
                     text: "assistant".into(),
                     assistant_segment_id: "thread-live:assistant:1".into(),
-                    meta: octos_core::ui_protocol::MessageMeta {
+                    meta: ra_core::ui_protocol::MessageMeta {
                         message_id: "msg-1".into(),
                         persisted_at: chrono::Utc::now(),
                         media: vec![],
@@ -6424,9 +6424,9 @@ mod tests {
                 &session_id,
                 thread_id.clone(),
                 PayloadV2::TurnTerminal {
-                    outcome: octos_core::ui_protocol::TurnTerminalOutcome::Completed,
+                    outcome: ra_core::ui_protocol::TurnTerminalOutcome::Completed,
                     error: None,
-                    token_usage: Some(octos_core::ui_protocol::EnvelopeTokenUsage::default()),
+                    token_usage: Some(ra_core::ui_protocol::EnvelopeTokenUsage::default()),
                 },
                 None,
             )
@@ -6453,9 +6453,9 @@ mod tests {
             &session_id,
             thread_id,
             PayloadV2::TurnTerminal {
-                outcome: octos_core::ui_protocol::TurnTerminalOutcome::Completed,
+                outcome: ra_core::ui_protocol::TurnTerminalOutcome::Completed,
                 error: None,
-                token_usage: Some(octos_core::ui_protocol::EnvelopeTokenUsage::default()),
+                token_usage: Some(ra_core::ui_protocol::EnvelopeTokenUsage::default()),
             },
             None,
         );
@@ -6695,9 +6695,9 @@ mod tests {
                 &session_id,
                 thread_id.clone(),
                 PayloadV2::TurnTerminal {
-                    outcome: octos_core::ui_protocol::TurnTerminalOutcome::Completed,
+                    outcome: ra_core::ui_protocol::TurnTerminalOutcome::Completed,
                     error: None,
-                    token_usage: Some(octos_core::ui_protocol::EnvelopeTokenUsage::default()),
+                    token_usage: Some(ra_core::ui_protocol::EnvelopeTokenUsage::default()),
                 },
                 None,
             )
@@ -6873,9 +6873,9 @@ mod tests {
                     &session_id,
                     thread_id.clone(),
                     PayloadV2::TurnTerminal {
-                        outcome: octos_core::ui_protocol::TurnTerminalOutcome::Completed,
+                        outcome: ra_core::ui_protocol::TurnTerminalOutcome::Completed,
                         error: None,
-                        token_usage: Some(octos_core::ui_protocol::EnvelopeTokenUsage::default()),
+                        token_usage: Some(ra_core::ui_protocol::EnvelopeTokenUsage::default()),
                     },
                     None,
                 )
@@ -6971,7 +6971,7 @@ mod tests {
 
     #[test]
     fn legacy_envelope_tagged_progress_deserializes() {
-        use octos_core::ui_protocol::UiProgressMetadata;
+        use ra_core::ui_protocol::UiProgressMetadata;
         let session = SessionKey("local:legacy-progress".into());
         let event = UiProtocolLedgerEvent::Progress(UiProgressEvent {
             session_id: session,
@@ -7284,7 +7284,7 @@ mod tests {
         turn_id: &TurnId,
         arguments: serde_json::Value,
     ) -> UiNotification {
-        UiNotification::ToolStarted(octos_core::ui_protocol::ToolStartedEvent {
+        UiNotification::ToolStarted(ra_core::ui_protocol::ToolStartedEvent {
             session_id: session.clone(),
             topic: None,
             turn_id: turn_id.clone(),
@@ -7316,7 +7316,7 @@ mod tests {
         assert_eq!(arguments["query"], "todo");
         assert_eq!(
             arguments["env"]["OPENAI_API_KEY"],
-            octos_core::secret_redaction::REDACTED_PLACEHOLDER
+            ra_core::secret_redaction::REDACTED_PLACEHOLDER
         );
         let cmd = arguments["cmd"].as_str().expect("cmd survives as text");
         assert!(
@@ -7331,7 +7331,7 @@ mod tests {
             cmd.contains("https://api.example"),
             "non-secret command tail must survive: {cmd}"
         );
-        assert!(cmd.contains(octos_core::secret_redaction::REDACTED_PLACEHOLDER));
+        assert!(cmd.contains(ra_core::secret_redaction::REDACTED_PLACEHOLDER));
     }
 
     #[test]
@@ -7394,7 +7394,7 @@ mod tests {
             !on_disk.contains(LEAKED_OPENAI_KEY) && !on_disk.contains(LEAKED_BEARER_KEY),
             "the persisted record must not carry key material: {on_disk}"
         );
-        assert!(on_disk.contains(octos_core::secret_redaction::REDACTED_PLACEHOLDER));
+        assert!(on_disk.contains(ra_core::secret_redaction::REDACTED_PLACEHOLDER));
         assert!(on_disk.contains("src/main.rs") && on_disk.contains("todo"));
 
         let replay = ledger
@@ -7453,7 +7453,7 @@ mod tests {
                 !json.contains(LEAKED_BEARER_KEY),
                 "bearer token leaked: {json}"
             );
-            assert!(json.contains(octos_core::secret_redaction::REDACTED_PLACEHOLDER));
+            assert!(json.contains(ra_core::secret_redaction::REDACTED_PLACEHOLDER));
             assert!(json.contains("curl"));
         }
         let on_disk = session_log_bytes(temp.path(), &session);
@@ -7465,7 +7465,7 @@ mod tests {
     /// scrubbed before the durable row and every hydrate replay.
     #[test]
     fn should_redact_approval_requested_command_before_durable_ledger_and_replay() {
-        use octos_core::ui_protocol::{
+        use ra_core::ui_protocol::{
             ApprovalCommandDetails, ApprovalId, ApprovalRequestedEvent, ApprovalTypedDetails,
         };
         let temp = tempfile::tempdir().expect("tempdir");
@@ -7504,7 +7504,7 @@ mod tests {
         assert!(appended_json.contains("/workspace"));
         let on_disk = session_log_bytes(temp.path(), &session);
         assert!(!on_disk.contains(LEAKED_BEARER_KEY), "persisted: {on_disk}");
-        assert!(on_disk.contains(octos_core::secret_redaction::REDACTED_PLACEHOLDER));
+        assert!(on_disk.contains(ra_core::secret_redaction::REDACTED_PLACEHOLDER));
 
         let replay = ledger
             .replay_after(
@@ -7546,7 +7546,7 @@ mod tests {
     /// for the audit file only; the durable UI ledger row must match.
     #[test]
     fn should_redact_client_note_in_durable_approval_decided_row() {
-        use octos_core::ui_protocol::{ApprovalDecidedEvent, ApprovalDecision, ApprovalId};
+        use ra_core::ui_protocol::{ApprovalDecidedEvent, ApprovalDecision, ApprovalId};
         let temp = tempfile::tempdir().expect("tempdir");
         let ledger = UiProtocolLedger::with_config(LedgerConfig::durable(temp.path().into()));
         let session = SessionKey("local:redact-approval-decided".into());
@@ -7586,7 +7586,7 @@ mod tests {
             format!("OPENAI_API_KEY={LEAKED_OPENAI_KEY}\nDATABASE_URL=postgres://localhost/db\n");
 
         let completed = ledger.append_notification(UiNotification::ToolCompleted(
-            octos_core::ui_protocol::ToolCompletedEvent {
+            ra_core::ui_protocol::ToolCompletedEvent {
                 session_id: session.clone(),
                 topic: None,
                 turn_id: turn_id.clone(),
@@ -7610,7 +7610,7 @@ mod tests {
                 thread_id.clone(),
                 PayloadV2::ToolEnd {
                     tool_call_id: "tc-out".into(),
-                    status: octos_core::ui_protocol::EnvelopeToolEndStatus::Error,
+                    status: ra_core::ui_protocol::EnvelopeToolEndStatus::Error,
                     error: Some(preview.clone()),
                     reason: None,
                     output_preview: Some(preview.clone()),
@@ -7625,7 +7625,7 @@ mod tests {
                 thread_id,
                 PayloadV2::ToolEnd {
                     tool_call_id: "tc-out".into(),
-                    status: octos_core::ui_protocol::EnvelopeToolEndStatus::Complete,
+                    status: ra_core::ui_protocol::EnvelopeToolEndStatus::Complete,
                     error: None,
                     reason: None,
                     output_preview: Some(preview),
@@ -7714,7 +7714,7 @@ mod tests {
     // ---------- #2625: durable external-prompt marker ----------
 
     fn external_marker_approval(session: &SessionKey) -> UiNotification {
-        use octos_core::ui_protocol::{ApprovalId, ApprovalRequestedEvent};
+        use ra_core::ui_protocol::{ApprovalId, ApprovalRequestedEvent};
         UiNotification::ApprovalRequested(ApprovalRequestedEvent::generic(
             session.clone(),
             ApprovalId::new(),
@@ -7829,7 +7829,7 @@ mod tests {
         // Recovery rebuilds the session's set of external prompt ids, so an
         // event appended after a session reload is still marked with the
         // owner table empty.
-        use octos_core::ui_protocol::ApprovalCancelledEvent;
+        use ra_core::ui_protocol::ApprovalCancelledEvent;
         let temp = tempfile::tempdir().expect("tempdir");
         let session = SessionKey("local:ledger-2625-reload".into());
         let config = LedgerConfig::durable(temp.path().into());

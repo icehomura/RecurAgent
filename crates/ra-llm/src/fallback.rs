@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_core::Message;
+use ra_core::Message;
 use tracing::warn;
 
 use crate::config::ChatConfig;
@@ -328,7 +328,7 @@ mod tests {
 
     use async_trait::async_trait;
     use eyre::Result;
-    use octos_core::Message;
+    use ra_core::Message;
 
     use super::FallbackProvider;
     use crate::config::ChatConfig;
@@ -859,7 +859,7 @@ mod provider_index_tests {
 mod lane_attribution_tests {
     use std::sync::Arc;
 
-    use octos_core::Message;
+    use ra_core::Message;
     use wiremock::matchers::method;
     use wiremock::{Mock, MockServer, ResponseTemplate};
 

@@ -724,7 +724,7 @@ impl Tool for UpdateProfileTool {
             input
                 .model
                 .as_deref()
-                .and_then(octos_llm::registry::detect_provider)
+                .and_then(ra_llm::registry::detect_provider)
                 .map(String::from)
         });
 

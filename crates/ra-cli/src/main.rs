@@ -4,7 +4,7 @@ use clap::{CommandFactory, FromArgMatches};
 use color_eyre::eyre::Result;
 
 #[cfg_attr(not(feature = "api"), allow(unused_imports))]
-use octos_cli::commands::{self, Args, Executable};
+use ra_cli::commands::{self, Args, Executable};
 
 /// Interactive = at least one of stdout/stderr is a TTY. When running as a
 /// launchd daemon both are redirected to /dev/null, so this returns false and
@@ -84,7 +84,7 @@ fn main() -> Result<()> {
     // handling exactly as `Args::parse()` did), materialize the typed Args, then
     // merge the layered `cli.<cmd>` startup defaults BEFORE any downstream reads
     // of the subcommand. Precedence: explicit CLI flag > env var > config.json
-    // `cli.<cmd>` > built-in default (see `octos_cli::config_layer`).
+    // `cli.<cmd>` > built-in default (see `ra_cli::config_layer`).
     let matches = Args::command().get_matches();
     let mut args = Args::from_arg_matches(&matches).unwrap_or_else(|error| error.exit());
     // Protected children must enter confinement before config, credentials,
@@ -92,7 +92,7 @@ fn main() -> Result<()> {
     if matches!(&args.command, commands::Command::Acp(command) if command.host_managed) {
         return args.command.execute();
     }
-    octos_cli::config_layer::apply(&mut args, &matches)?;
+    ra_cli::config_layer::apply(&mut args, &matches)?;
 
     // Determine log directory for serve command (enables rolling file logs)
     #[allow(unused_mut)]

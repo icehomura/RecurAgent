@@ -40,10 +40,10 @@ impl Executable for McpCommand {
                 .enable_all()
                 .build()
                 .wrap_err("failed to create tokio runtime")?
-                .block_on(octos_agent::mcp_auth::login(&url, &scopes))
+                .block_on(ra_agent::mcp_auth::login(&url, &scopes))
                 .wrap_err_with(|| format!("MCP login failed for {url}")),
             McpAction::Logout { url } => {
-                let removed = octos_agent::mcp_auth::delete_tokens(&url)
+                let removed = ra_agent::mcp_auth::delete_tokens(&url)
                     .wrap_err_with(|| format!("MCP logout failed for {url}"))?;
                 if removed {
                     println!("Removed stored OAuth tokens for {url}.");

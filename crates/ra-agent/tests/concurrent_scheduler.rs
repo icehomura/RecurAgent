@@ -24,10 +24,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use octos_agent::{Agent, AgentConfig, ConcurrencyClass, Tool, ToolRegistry, ToolResult};
-use octos_core::{AgentId, Message, ToolCall};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_agent::{Agent, AgentConfig, ConcurrencyClass, Tool, ToolRegistry, ToolResult};
+use ra_core::{AgentId, Message, ToolCall};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 
 /// Per-call timing record captured by [`ProbeTool`].
@@ -499,14 +499,14 @@ async fn executor_preserves_tool_call_ids_across_cascade() {
     // Every tool_call_id issued by the LLM must appear in the result
     // messages, whether the call executed or was cancelled. This is what
     // the LLM relies on to correlate responses with its outstanding calls.
-    use octos_agent::ProgressEvent;
+    use ra_agent::ProgressEvent;
 
     // Collect tool-completion events to verify each call_id roundtrips.
     #[derive(Default)]
     struct Collector {
         events: Mutex<Vec<(String, String, bool)>>, // (name, tool_id, success)
     }
-    impl octos_agent::ProgressReporter for Collector {
+    impl ra_agent::ProgressReporter for Collector {
         fn report(&self, event: ProgressEvent) {
             if let ProgressEvent::ToolCompleted {
                 name,
@@ -579,7 +579,7 @@ async fn executor_preserves_tool_call_ids_across_cascade() {
     let tool_msgs: Vec<&Message> = resp
         .messages
         .iter()
-        .filter(|m| m.role == octos_core::MessageRole::Tool)
+        .filter(|m| m.role == ra_core::MessageRole::Tool)
         .collect();
     let ids: Vec<&str> = tool_msgs
         .iter()

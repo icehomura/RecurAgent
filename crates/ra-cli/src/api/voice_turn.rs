@@ -6,8 +6,8 @@
 
 use std::path::{Path, PathBuf};
 
-use octos_core::{Message, MessageRole};
-use octos_llm::ominix::OminixClient;
+use ra_core::{Message, MessageRole};
+use ra_llm::ominix::OminixClient;
 
 use crate::config::CloudTtsConfig;
 
@@ -58,7 +58,7 @@ fn ominix_base_url() -> String {
 pub(crate) fn audio_paths(media: &[String]) -> Vec<String> {
     media
         .iter()
-        .filter(|p| octos_bus::media::is_audio(p))
+        .filter(|p| ra_bus::media::is_audio(p))
         .cloned()
         .collect()
 }
@@ -801,7 +801,7 @@ fn image_skill_call(
 /// `ref_images` (e.g. this turn's camera frame) are forwarded to ground the
 /// illustration on the real subject; omitted from the args entirely when empty.
 pub(crate) async fn run_illustration_image(
-    registry: &std::sync::Arc<octos_agent::ToolRegistry>,
+    registry: &std::sync::Arc<ra_agent::ToolRegistry>,
     brief: &str,
     out_dir: &Path,
     ref_images: &[String],
@@ -840,7 +840,7 @@ pub(crate) async fn run_illustration_image(
 /// relative names. Skill not installed / execution failed → empty vec. The
 /// caller delivers them via files_attached.
 pub(crate) async fn run_image_skill(
-    registry: &std::sync::Arc<octos_agent::ToolRegistry>,
+    registry: &std::sync::Arc<ra_agent::ToolRegistry>,
     d: &VisualDirective,
     out_dir: &Path,
 ) -> Vec<String> {
@@ -1266,16 +1266,16 @@ const SPEAK_FILTERED: &str = "这个我可能没法回答。";
 const SPEAK_GENERIC: &str = "抱歉，我这边出了点小问题，稍后再试。";
 const SPEAK_EMPTY: &str = "我好像没太听清，再说一遍？";
 
-/// Map a fail-fast [`octos_agent::TurnFailure`] to a short spoken line.
+/// Map a fail-fast [`ra_agent::TurnFailure`] to a short spoken line.
 ///
-/// Strongly-typed [`octos_agent::HarnessError`] variants map directly;
+/// Strongly-typed [`ra_agent::HarnessError`] variants map directly;
 /// `Internal` / `ProviderUnavailable` (where a streaming 429 loses its
 /// quota/rate-limit signal through `classify_report`) fall back to a
 /// raw-detail substring scan so the most common 429 still hits the right
 /// line. `ContentFiltered` is never spoken as "didn't catch that". Returns a
 /// `&'static str` so the caller feeds it straight through the normal TTS path.
-pub(crate) fn voice_error_speech(f: &octos_agent::TurnFailure) -> &'static str {
-    use octos_agent::{HarnessError as H, TurnFailure};
+pub(crate) fn voice_error_speech(f: &ra_agent::TurnFailure) -> &'static str {
+    use ra_agent::{HarnessError as H, TurnFailure};
     let (error, raw) = match f {
         TurnFailure::EmptyResponse => return SPEAK_EMPTY,
         TurnFailure::LlmError { error, raw_detail } => (error, raw_detail.to_lowercase()),
@@ -1304,7 +1304,7 @@ pub(crate) fn voice_error_speech(f: &octos_agent::TurnFailure) -> &'static str {
 
 #[cfg(test)]
 mod voice_error_speech_tests {
-    use octos_agent::{HarnessError, TurnFailure};
+    use ra_agent::{HarnessError, TurnFailure};
 
     use super::voice_error_speech;
 
@@ -1961,7 +1961,7 @@ mod tests {
 
     #[tokio::test]
     async fn run_image_skill_delivers_relative_filenames() {
-        use octos_agent::{Tool, ToolRegistry, ToolResult};
+        use ra_agent::{Tool, ToolRegistry, ToolResult};
         use std::path::PathBuf;
 
         struct FakeImageTool;
@@ -1999,7 +1999,7 @@ mod tests {
 
     #[tokio::test]
     async fn run_image_skill_empty_when_skill_missing() {
-        use octos_agent::ToolRegistry;
+        use ra_agent::ToolRegistry;
         let reg = std::sync::Arc::new(ToolRegistry::new());
         let d = VisualDirective {
             kind: VisualKind::Image,
@@ -2014,7 +2014,7 @@ mod tests {
 
     #[tokio::test]
     async fn run_illustration_image_returns_produced_path() {
-        use octos_agent::{Tool, ToolRegistry, ToolResult};
+        use ra_agent::{Tool, ToolRegistry, ToolResult};
         use std::path::PathBuf;
 
         struct FakeMofaImage;
@@ -2053,7 +2053,7 @@ mod tests {
 
     #[tokio::test]
     async fn run_illustration_image_omits_ref_images_when_none() {
-        use octos_agent::{Tool, ToolRegistry, ToolResult};
+        use ra_agent::{Tool, ToolRegistry, ToolResult};
         use std::path::PathBuf;
 
         struct NoRefTool;
@@ -2089,7 +2089,7 @@ mod tests {
 
     #[tokio::test]
     async fn run_illustration_image_none_when_skill_missing() {
-        use octos_agent::ToolRegistry;
+        use ra_agent::ToolRegistry;
         let reg = std::sync::Arc::new(ToolRegistry::new());
         assert!(
             run_illustration_image(&reg, "x", Path::new("/tmp"), &[])
@@ -2103,7 +2103,7 @@ mod tests {
     // mapping delivered nothing for a plain "generate an image" request).
     #[tokio::test]
     async fn run_image_skill_image_kind_uses_mofa_image_and_delivers_file() {
-        use octos_agent::{Tool, ToolRegistry, ToolResult};
+        use ra_agent::{Tool, ToolRegistry, ToolResult};
         use std::path::PathBuf;
 
         struct FakeMofaImage;

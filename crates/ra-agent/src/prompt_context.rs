@@ -6,7 +6,7 @@
 //! final model prompt can still be prepared by the server-owned context ledger
 //! immediately before each LLM call.
 
-use octos_core::Message;
+use ra_core::Message;
 
 /// Loop phase at which the prompt context bridge is invoked.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

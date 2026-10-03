@@ -21,8 +21,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use octos_agent::harness_events::{HarnessEvent, HarnessEventPayload};
-use octos_agent::tools::mcp_agent::{
+use ra_agent::harness_events::{HarnessEvent, HarnessEventPayload};
+use ra_agent::tools::mcp_agent::{
     DispatchOutcome, DispatchRequest, HttpMcpAgent, McpAgentBackend, McpAgentBackendConfig,
     StdioMcpAgent, build_backend_from_config, build_dispatch_event_payload, dispatch_with_metrics,
 };
@@ -506,7 +506,7 @@ async fn should_emit_sub_agent_dispatch_event_on_typed_payload() {
     );
 
     let event = HarnessEvent {
-        schema: octos_agent::harness_events::HARNESS_EVENT_SCHEMA_V1.to_string(),
+        schema: ra_agent::harness_events::HARNESS_EVENT_SCHEMA_V1.to_string(),
         payload,
     };
     event.validate().expect("event must validate");
@@ -521,7 +521,7 @@ async fn should_emit_sub_agent_dispatch_event_on_typed_payload() {
             assert_eq!(data.phase.as_deref(), Some("dispatch"));
             assert_eq!(
                 data.schema_version,
-                octos_agent::abi_schema::SUB_AGENT_DISPATCH_SCHEMA_VERSION
+                ra_agent::abi_schema::SUB_AGENT_DISPATCH_SCHEMA_VERSION
             );
         }
         other => panic!("wrong payload: {other:?}"),

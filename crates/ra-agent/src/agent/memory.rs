@@ -1,7 +1,7 @@
 //! Initial message building and episodic memory context for the agent.
 
-use octos_core::{Message, MessageRole, Task};
-use octos_memory::{Episode, HybridScore};
+use ra_core::{Message, MessageRole, Task};
+use ra_memory::{Episode, HybridScore};
 use tracing::{info, warn};
 
 use super::Agent;
@@ -175,7 +175,7 @@ impl Agent {
         if !self.config.save_episodes || self.embedder.is_none() {
             return;
         }
-        let summary_truncated = octos_core::truncated_utf8(&summary, 500, "...");
+        let summary_truncated = ra_core::truncated_utf8(&summary, 500, "...");
         if summary_truncated.trim().is_empty() {
             return;
         }
@@ -185,14 +185,14 @@ impl Agent {
             .map(std::path::Path::to_path_buf)
             .unwrap_or_else(|| std::path::PathBuf::from("."));
 
-        let mut episode = octos_memory::Episode::new(
-            octos_core::TaskId::new(),
+        let mut episode = ra_memory::Episode::new(
+            ra_core::TaskId::new(),
             self.id.clone(),
             cwd,
             summary_truncated.clone(),
-            octos_memory::EpisodeOutcome::Success,
+            ra_memory::EpisodeOutcome::Success,
         );
-        episode.source = octos_memory::EpisodeSource::Conversation;
+        episode.source = ra_memory::EpisodeSource::Conversation;
         let ep_id = episode.id.clone();
         // Save ONCE per session, at the first compaction. Preflight
         // compaction fires on iteration 1 of EVERY turn once the
@@ -210,7 +210,7 @@ impl Agent {
         {
             return;
         }
-        let mirror = octos_memory::record_from_episode(&episode);
+        let mirror = ra_memory::record_from_episode(&episode);
         if let Err(e) = self.memory.store(episode).await {
             warn!(error = %e, "failed to save conversation episode");
             // Allow a retry on the next compaction — the save didn't land.
@@ -276,11 +276,11 @@ impl Agent {
 
         // Query episodic memory for relevant past experiences
         let query = match &task.kind {
-            octos_core::TaskKind::Plan { goal } => goal.clone(),
-            octos_core::TaskKind::Code { instruction, .. } => instruction.clone(),
-            octos_core::TaskKind::Review { .. } => "code review".to_string(),
-            octos_core::TaskKind::Test { command } => command.clone(),
-            octos_core::TaskKind::Custom { name, .. } => name.clone(),
+            ra_core::TaskKind::Plan { goal } => goal.clone(),
+            ra_core::TaskKind::Code { instruction, .. } => instruction.clone(),
+            ra_core::TaskKind::Review { .. } => "code review".to_string(),
+            ra_core::TaskKind::Test { command } => command.clone(),
+            ra_core::TaskKind::Custom { name, .. } => name.clone(),
         };
 
         // Episodic recall (embedder-gated contamination guard lives in the
@@ -296,8 +296,8 @@ impl Agent {
 
         // Add the task as user message
         let task_content = match &task.kind {
-            octos_core::TaskKind::Plan { goal } => format!("Plan how to accomplish: {goal}"),
-            octos_core::TaskKind::Code { instruction, files } => {
+            ra_core::TaskKind::Plan { goal } => format!("Plan how to accomplish: {goal}"),
+            ra_core::TaskKind::Code { instruction, files } => {
                 let files_str = files
                     .iter()
                     .map(|f| f.display().to_string())
@@ -305,9 +305,9 @@ impl Agent {
                     .join(", ");
                 format!("Code task: {instruction}\nFiles in scope: {files_str}")
             }
-            octos_core::TaskKind::Review { diff } => format!("Review this diff:\n{diff}"),
-            octos_core::TaskKind::Test { command } => format!("Run test: {command}"),
-            octos_core::TaskKind::Custom { name, params } => {
+            ra_core::TaskKind::Review { diff } => format!("Review this diff:\n{diff}"),
+            ra_core::TaskKind::Test { command } => format!("Run test: {command}"),
+            ra_core::TaskKind::Custom { name, params } => {
                 format!("Custom task '{name}': {params}")
             }
         };
@@ -378,10 +378,10 @@ where
             "### {} ({})\n{}\n",
             ep.task_id,
             match ep.outcome {
-                octos_memory::EpisodeOutcome::Success => "succeeded",
-                octos_memory::EpisodeOutcome::Failure => "failed",
-                octos_memory::EpisodeOutcome::Blocked => "blocked",
-                octos_memory::EpisodeOutcome::Cancelled => "cancelled",
+                ra_memory::EpisodeOutcome::Success => "succeeded",
+                ra_memory::EpisodeOutcome::Failure => "failed",
+                ra_memory::EpisodeOutcome::Blocked => "blocked",
+                ra_memory::EpisodeOutcome::Cancelled => "cancelled",
             },
             ep.summary
         ));
@@ -399,8 +399,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::{AgentId, TaskId};
-    use octos_memory::{Episode, EpisodeOutcome, HybridScore};
+    use ra_core::{AgentId, TaskId};
+    use ra_memory::{Episode, EpisodeOutcome, HybridScore};
     use std::path::PathBuf;
 
     fn make_episode(summary: &str) -> Episode {
@@ -722,19 +722,19 @@ mod tests {
     struct EndTurnProvider;
 
     #[async_trait::async_trait]
-    impl octos_llm::LlmProvider for EndTurnProvider {
+    impl ra_llm::LlmProvider for EndTurnProvider {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
-            Ok(octos_llm::ChatResponse {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
+            Ok(ra_llm::ChatResponse {
                 content: Some(String::new()),
                 reasoning_content: None,
                 tool_calls: vec![],
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage::default(),
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage::default(),
                 provider_index: None,
             })
         }
@@ -764,17 +764,17 @@ mod tests {
     struct ConstEmbedder;
 
     #[async_trait::async_trait]
-    impl octos_llm::EmbeddingProvider for ConstEmbedder {
+    impl ra_llm::EmbeddingProvider for ConstEmbedder {
         async fn embed(&self, texts: &[&str]) -> eyre::Result<Vec<Vec<f32>>> {
             Ok(vec![Self::vector(); texts.len()])
         }
         fn dimension(&self) -> usize {
-            octos_memory::EPISODIC_INDEX_DIMENSION
+            ra_memory::EPISODIC_INDEX_DIMENSION
         }
     }
     impl ConstEmbedder {
         fn vector() -> Vec<f32> {
-            let mut v = vec![0.0_f32; octos_memory::EPISODIC_INDEX_DIMENSION];
+            let mut v = vec![0.0_f32; ra_memory::EPISODIC_INDEX_DIMENSION];
             v[0] = 1.0;
             v
         }
@@ -783,7 +783,7 @@ mod tests {
     #[tokio::test]
     async fn recall_returns_experiences_when_embedder_present_and_match() {
         use crate::{Agent, tools::ToolRegistry};
-        use octos_memory::EpisodeStore;
+        use ra_memory::EpisodeStore;
         use std::sync::Arc;
 
         let dir = tempfile::tempdir().unwrap();
@@ -805,7 +805,7 @@ mod tests {
             .await
             .unwrap();
 
-        let provider: Arc<dyn octos_llm::LlmProvider> = Arc::new(EndTurnProvider);
+        let provider: Arc<dyn ra_llm::LlmProvider> = Arc::new(EndTurnProvider);
         let tools = ToolRegistry::with_builtins(&workspace);
         let agent = Agent::new(AgentId::new("chat"), provider, tools, memory)
             .with_embedder(Arc::new(ConstEmbedder));
@@ -821,14 +821,14 @@ mod tests {
     #[tokio::test]
     async fn save_conversation_episode_stores_recallable_episode() {
         use crate::{Agent, tools::ToolRegistry};
-        use octos_memory::EpisodeStore;
+        use ra_memory::EpisodeStore;
         use std::sync::Arc;
 
         let dir = tempfile::tempdir().unwrap();
         let workspace = dir.path().to_path_buf();
         let memory = Arc::new(EpisodeStore::open(workspace.join("memory")).await.unwrap());
 
-        let provider: Arc<dyn octos_llm::LlmProvider> = Arc::new(EndTurnProvider);
+        let provider: Arc<dyn ra_llm::LlmProvider> = Arc::new(EndTurnProvider);
         let tools = ToolRegistry::with_builtins(&workspace);
         let agent = Agent::new(AgentId::new("chat"), provider, tools, memory.clone())
             .with_embedder(Arc::new(ConstEmbedder));
@@ -854,7 +854,7 @@ mod tests {
     #[tokio::test]
     async fn task_recall_excludes_conversation_episodes() {
         use crate::{Agent, tools::ToolRegistry};
-        use octos_memory::EpisodeStore;
+        use ra_memory::EpisodeStore;
         use std::sync::Arc;
 
         let dir = tempfile::tempdir().unwrap();
@@ -868,7 +868,7 @@ mod tests {
             "Chatted about a code review of the parser".to_string(),
             EpisodeOutcome::Success,
         );
-        conv.source = octos_memory::EpisodeSource::Conversation;
+        conv.source = ra_memory::EpisodeSource::Conversation;
         let conv_id = conv.id.clone();
         memory.store(conv).await.unwrap();
         memory
@@ -876,7 +876,7 @@ mod tests {
             .await
             .unwrap();
 
-        let provider: Arc<dyn octos_llm::LlmProvider> = Arc::new(EndTurnProvider);
+        let provider: Arc<dyn ra_llm::LlmProvider> = Arc::new(EndTurnProvider);
         let tools = ToolRegistry::with_builtins(&workspace);
         let agent = Agent::new(AgentId::new("worker"), provider, tools, memory)
             .with_embedder(Arc::new(ConstEmbedder));
@@ -903,13 +903,13 @@ mod tests {
     #[tokio::test]
     async fn save_conversation_episode_saves_once_per_session() {
         use crate::{Agent, tools::ToolRegistry};
-        use octos_memory::EpisodeStore;
+        use ra_memory::EpisodeStore;
         use std::sync::Arc;
 
         let dir = tempfile::tempdir().unwrap();
         let workspace = dir.path().to_path_buf();
         let memory = Arc::new(EpisodeStore::open(workspace.join("memory")).await.unwrap());
-        let provider: Arc<dyn octos_llm::LlmProvider> = Arc::new(EndTurnProvider);
+        let provider: Arc<dyn ra_llm::LlmProvider> = Arc::new(EndTurnProvider);
         let tools = ToolRegistry::with_builtins(&workspace);
         let agent = Agent::new(AgentId::new("chat"), provider, tools, memory.clone())
             .with_embedder(Arc::new(ConstEmbedder));
@@ -943,13 +943,13 @@ mod tests {
     #[tokio::test]
     async fn save_conversation_episode_is_noop_without_embedder() {
         use crate::{Agent, tools::ToolRegistry};
-        use octos_memory::EpisodeStore;
+        use ra_memory::EpisodeStore;
         use std::sync::Arc;
 
         let dir = tempfile::tempdir().unwrap();
         let workspace = dir.path().to_path_buf();
         let memory = Arc::new(EpisodeStore::open(workspace.join("memory")).await.unwrap());
-        let provider: Arc<dyn octos_llm::LlmProvider> = Arc::new(EndTurnProvider);
+        let provider: Arc<dyn ra_llm::LlmProvider> = Arc::new(EndTurnProvider);
         let tools = ToolRegistry::with_builtins(&workspace);
         // No embedder: an unembedded conversation episode is invisible to
         // recall, so we must not store it at all.
@@ -969,7 +969,7 @@ mod tests {
     #[tokio::test]
     async fn recall_is_noop_without_embedder() {
         use crate::{Agent, tools::ToolRegistry};
-        use octos_memory::EpisodeStore;
+        use ra_memory::EpisodeStore;
         use std::sync::Arc;
 
         let dir = tempfile::tempdir().unwrap();
@@ -986,7 +986,7 @@ mod tests {
             .await
             .unwrap();
 
-        let provider: Arc<dyn octos_llm::LlmProvider> = Arc::new(EndTurnProvider);
+        let provider: Arc<dyn ra_llm::LlmProvider> = Arc::new(EndTurnProvider);
         let tools = ToolRegistry::with_builtins(&workspace);
         // Agent::new defaults embedder = None.
         let agent = Agent::new(AgentId::new("chat"), provider, tools, memory);
@@ -1003,8 +1003,8 @@ mod tests {
     #[tokio::test]
     async fn no_embedder_path_does_not_inject_shared_vocab_episode() {
         use crate::{Agent, tools::ToolRegistry};
-        use octos_core::{TaskContext, TaskKind};
-        use octos_memory::EpisodeStore;
+        use ra_core::{TaskContext, TaskKind};
+        use ra_memory::EpisodeStore;
         use std::sync::Arc;
 
         let dir = tempfile::tempdir().unwrap();
@@ -1039,11 +1039,11 @@ mod tests {
         );
 
         // Agent::new defaults embedder=None — the no-embedder path.
-        let provider: Arc<dyn octos_llm::LlmProvider> = Arc::new(EndTurnProvider);
+        let provider: Arc<dyn ra_llm::LlmProvider> = Arc::new(EndTurnProvider);
         let tools = ToolRegistry::with_builtins(&workspace);
         let agent = Agent::new(AgentId::new("reviewer"), provider, tools, memory);
 
-        let task = octos_core::Task::new(
+        let task = ra_core::Task::new(
             TaskKind::Custom {
                 name: "review the incident history report".to_string(),
                 params: serde_json::Value::Null,

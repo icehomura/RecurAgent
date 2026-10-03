@@ -9,14 +9,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use eyre::{Result, WrapErr};
-use octos_agent::sandbox::create_sandbox;
-use octos_agent::workspace_policy::{WorkspacePolicy, write_workspace_policy_if_absent};
-use octos_agent::{
+use ra_agent::sandbox::create_sandbox;
+use ra_agent::workspace_policy::{WorkspacePolicy, write_workspace_policy_if_absent};
+use ra_agent::{
     Agent, AgentConfig, AgentSummaryGenerator, EffectivePermissions, FileStateCache, SandboxConfig,
     SubAgentOutputRouter, ToolRegistry,
 };
-use octos_bus::SessionManager;
-use octos_core::{
+use ra_bus::SessionManager;
+use ra_core::{
     AgentId, DEFAULT_MULTI_TENANT_SHARED_ZONE_NAMES, SessionKey, SessionScope, is_safe_session_id,
 };
 
@@ -187,7 +187,7 @@ fn context_read_view(
 fn with_context_read_view(
     scope: Option<Arc<SessionScope>>,
     binding: &crate::peers::app_binding::SessionAppBinding,
-) -> Result<Option<Arc<SessionScope>>, octos_core::SessionScopeError> {
+) -> Result<Option<Arc<SessionScope>>, ra_core::SessionScopeError> {
     match (scope, context_read_view(binding)) {
         (Some(scope), Some((root, excluded))) => Ok(Some(Arc::new(
             (*scope).clone().with_read_only_view(root, excluded)?,
@@ -488,7 +488,7 @@ impl SessionRuntime {
                 .join("runtime")
                 .join("read-only")
                 .join(workspace_hash)
-                .join(octos_bus::session::encode_path_component(&session_key.0))
+                .join(ra_bus::session::encode_path_component(&session_key.0))
                 .join("skill-output")
         };
 
@@ -512,7 +512,7 @@ impl SessionRuntime {
         let mut sandbox = sandbox_override
             .unwrap_or_else(|| permissions.apply_to_sandbox(&profile.default_sandbox));
         if let Some((root, excluded)) = context_read_view(&bootstrapped_binding) {
-            sandbox.read_only_view = Some(Box::new(octos_agent::SandboxReadOnlyView {
+            sandbox.read_only_view = Some(Box::new(ra_agent::SandboxReadOnlyView {
                 root,
                 excluded,
             }));
@@ -724,7 +724,7 @@ impl SessionRuntime {
                     // later replaced by a symlink to `/etc` would otherwise be
                     // legitimised as `InSkillDir`.
                     let skill_dirs =
-                        octos_core::canonicalize_skill_read_zones(&profile.plugin_dirs);
+                        ra_core::canonicalize_skill_read_zones(&profile.plugin_dirs);
                     let scope = scope.with_skill_read_zones(skill_dirs).unwrap_or_else(|err| {
                         tracing::warn!(
                             profile_id = %profile.profile_id,
@@ -803,7 +803,7 @@ impl SessionRuntime {
         .with_recall(memory.recall.clone());
 
         if let Some(coding_profile) = profile.agent_profile.clone() {
-            let definitions = Arc::new(octos_agent::agents::AgentDefinitions::load_dir(
+            let definitions = Arc::new(ra_agent::agents::AgentDefinitions::load_dir(
                 &workspace_root.join("agents"),
             )?);
             coding_profile.validate_against_registry(&definitions)?;
@@ -824,7 +824,7 @@ impl SessionRuntime {
         // the session's own repo/index is never touched; silently unavailable
         // without a git binary (`SnapshotManager::new` returns None, logs once).
         if let Some(snapshot_cfg) = profile.snapshots.as_ref().filter(|cfg| cfg.enabled) {
-            if let Some(manager) = octos_agent::SnapshotManager::new(
+            if let Some(manager) = ra_agent::SnapshotManager::new(
                 profile.data_dir.join("snapshots"),
                 workspace_root.clone(),
                 snapshot_cfg.keep_last,
@@ -846,8 +846,8 @@ impl SessionRuntime {
             .get_injectable_context(profile.memory_inject_tokens)
             .await;
         agent.set_prompt_segment(
-            octos_agent::MEMORY_SEGMENT_NAME,
-            octos_agent::compose_memory_segment(&memory_ctx, memory.refresh_enabled),
+            ra_agent::MEMORY_SEGMENT_NAME,
+            ra_agent::compose_memory_segment(&memory_ctx, memory.refresh_enabled),
         );
         // Contract parity with chat.rs: `memory.refresh.enabled = false`
         // means NO per-turn memory re-read — the segment stays as seeded
@@ -858,7 +858,7 @@ impl SessionRuntime {
         // advertises the profile-only `memory_note` path.
         if profile.memory_refresh_enabled || memory.namespace.is_some() {
             agent.add_prompt_segment_provider(Arc::new(
-                octos_agent::MemorySegmentProvider::new(
+                ra_agent::MemorySegmentProvider::new(
                     memory.memory_store.clone(),
                     profile.memory_inject_tokens,
                     memory.refresh_enabled,
@@ -873,7 +873,7 @@ impl SessionRuntime {
         }
 
         // M11-F regression fix REG-3: propagate the profile-scope
-        // [`octos_agent::HookExecutor`] onto the per-session agent.
+        // [`ra_agent::HookExecutor`] onto the per-session agent.
         // `ProfileRuntime::bootstrap` assembled it once from
         // `config.hooks + plugin_result.hooks`; without this chain
         // call, the api-mode agent would silently lose every
@@ -889,7 +889,7 @@ impl SessionRuntime {
         // `before_llm_call` / `after_llm_call` / `after_tool_call` payloads
         // with no `session_id` / `profile_id` (gateway sessions were already
         // covered via `ActorFactory::hook_context_template`).
-        agent = agent.with_hook_context(octos_agent::HookContext {
+        agent = agent.with_hook_context(ra_agent::HookContext {
             session_id: Some(session_key.to_string()),
             profile_id: Some(profile.profile_id.clone()),
         });
@@ -1075,7 +1075,7 @@ pub(crate) fn resolve_sessions_root(
 pub(crate) fn project_sessions_root(canonical_cwd: &Path, profile_id: &str) -> PathBuf {
     canonical_cwd
         .join(".ra")
-        .join(octos_bus::session::encode_path_component(profile_id))
+        .join(ra_bus::session::encode_path_component(profile_id))
 }
 
 /// Record `profile_id` as the folder's sticky profile at
@@ -1230,7 +1230,7 @@ context_ledgers/
 /// TOCTOU window where two same-key bootstraps both see the file as
 /// absent and both call `write_workspace_policy` — the second
 /// truncates the first via `std::fs::write`. We delegate to
-/// `octos_agent::workspace_policy::write_workspace_policy_if_absent`,
+/// `ra_agent::workspace_policy::write_workspace_policy_if_absent`,
 /// which uses `OpenOptions::create_new` — a single
 /// `open(O_CREAT|O_EXCL)` syscall on Unix and the equivalent on
 /// Windows — so it fails closed with `AlreadyExists` instead of
@@ -1244,8 +1244,8 @@ fn bootstrap_session_policy(workspace_root: &Path) -> Result<()> {
     // the generic `for_session()` policy, so a repo full of Rust got the
     // same contract as a podcast workspace. The detector keys on observable
     // manifests (Cargo.toml / package.json / pyproject.toml), not LLM input.
-    let policy = match octos_agent::workspace_policy::detect_workspace_policy_kind(workspace_root) {
-        octos_agent::workspace_policy::WorkspacePolicyKind::Coding => WorkspacePolicy::for_coding(),
+    let policy = match ra_agent::workspace_policy::detect_workspace_policy_kind(workspace_root) {
+        ra_agent::workspace_policy::WorkspacePolicyKind::Coding => WorkspacePolicy::for_coding(),
         _ => WorkspacePolicy::for_session(),
     };
     write_workspace_policy_if_absent(workspace_root, &policy)
@@ -1336,7 +1336,7 @@ fn resolve_workspace_root(
         return validate_workspace_hint(&hint);
     }
 
-    let encoded_base = octos_bus::session::encode_path_component(session_key.base_key());
+    let encoded_base = ra_bus::session::encode_path_component(session_key.base_key());
     let path = profile
         .data_dir
         .join("users")
@@ -1415,7 +1415,7 @@ mod tests {
             &profile,
             SessionKey::with_profile("main", "cli", "read-only-migration"),
             Some(workspace.path().to_owned()),
-            octos_agent::EffectivePermissions::read_only(),
+            ra_agent::EffectivePermissions::read_only(),
         )
         .await
         .unwrap();
@@ -1504,7 +1504,7 @@ mod tests {
         let data = tempfile::tempdir().unwrap();
         let workspace = tempfile::tempdir().unwrap();
         let mut profile = make_profile(data.path().to_owned()).await;
-        let coding = octos_agent::profile::ProfileDefinition::from_toml_str(
+        let coding = ra_agent::profile::ProfileDefinition::from_toml_str(
             r#"version = 1
 name = "minimal"
 [tools]
@@ -1518,7 +1518,7 @@ tools = ["read_file"]
             &profile,
             SessionKey::with_profile("main", "acp", "narrow"),
             Some(workspace.path().to_owned()),
-            octos_agent::EffectivePermissions::workspace_write(),
+            ra_agent::EffectivePermissions::workspace_write(),
         )
         .await
         .unwrap();
@@ -1530,18 +1530,18 @@ tools = ["read_file"]
         assert!(runtime.tools.get("run_pipeline").is_none());
     }
 
-    use octos_agent::sandbox::create_sandbox;
-    use octos_agent::workspace_contract::{SpawnTaskContractResult, enforce_spawn_task_contract};
-    use octos_agent::workspace_policy::{
+    use ra_agent::sandbox::create_sandbox;
+    use ra_agent::workspace_contract::{SpawnTaskContractResult, enforce_spawn_task_contract};
+    use ra_agent::workspace_policy::{
         WORKSPACE_POLICY_FILE, WorkspacePolicy, read_workspace_policy,
     };
-    use octos_agent::{
+    use ra_agent::{
         ApprovalPolicy, EffectivePermissions, PermissionProfile, RuntimeMode, SandboxConfig,
         SandboxMode, ToolRegistry,
     };
-    use octos_core::Message;
-    use octos_llm::{ChatConfig, ChatResponse, LlmProvider, ToolSpec};
-    use octos_memory::{EpisodeStore, MemoryStore};
+    use ra_core::Message;
+    use ra_llm::{ChatConfig, ChatResponse, LlmProvider, ToolSpec};
+    use ra_memory::{EpisodeStore, MemoryStore};
     use tempfile::TempDir;
 
     use crate::runtime::ProfileRuntime;
@@ -1587,10 +1587,10 @@ tools = ["read_file"]
         let memory = Arc::new(EpisodeStore::open(&data_dir).await.unwrap());
         let memory_store = Arc::new(MemoryStore::open(&data_dir).await.unwrap());
         let recall = Arc::new(
-            octos_memory::RecallStore::open(&data_dir, octos_memory::RecallConfig::default())
+            ra_memory::RecallStore::open(&data_dir, ra_memory::RecallConfig::default())
                 .unwrap(),
         );
-        let tool_config = Arc::new(octos_agent::ToolConfigStore::open(&data_dir).await.unwrap());
+        let tool_config = Arc::new(ra_agent::ToolConfigStore::open(&data_dir).await.unwrap());
         let base_tools =
             ToolRegistry::with_builtins_and_sandbox(&data_dir, create_sandbox(&sandbox));
         Arc::new(ProfileRuntime {
@@ -1766,7 +1766,7 @@ tools = ["read_file"]
             max_output_tokens: Some(32768),
             llm_temperature: Some(0.7),
             llm_sampling_params: Some(sp),
-            reasoning_effort: Some(octos_llm::ReasoningEffort::High),
+            reasoning_effort: Some(ra_llm::ReasoningEffort::High),
             ..Default::default()
         });
         let rt = SessionRuntime::bootstrap(&profile, SessionKey::new("appui", "gw"), None)
@@ -1780,7 +1780,7 @@ tools = ["read_file"]
                 .and_then(|m| m.get("repeat_penalty").cloned()),
             Some(serde_json::json!(1.1))
         );
-        assert_eq!(cfg.reasoning_effort, Some(octos_llm::ReasoningEffort::High));
+        assert_eq!(cfg.reasoning_effort, Some(ra_llm::ReasoningEffort::High));
     }
 
     #[tokio::test]
@@ -1798,7 +1798,7 @@ tools = ["read_file"]
             let cfg = Arc::get_mut(&mut profile).unwrap();
             cfg.config.model_temperature = Some(0.4);
             cfg.config.model_top_p = Some(0.9);
-            cfg.config.model_reasoning_effort = Some(octos_llm::ReasoningEffort::High);
+            cfg.config.model_reasoning_effort = Some(ra_llm::ReasoningEffort::High);
             let mut sp = serde_json::Map::new();
             sp.insert("repeat_penalty".to_string(), serde_json::json!(1.1));
             sp.insert("top_p".to_string(), serde_json::json!(0.8));
@@ -1806,7 +1806,7 @@ tools = ["read_file"]
                 max_output_tokens: Some(32768),
                 llm_temperature: Some(0.7),
                 llm_sampling_params: Some(sp),
-                reasoning_effort: Some(octos_llm::ReasoningEffort::Low),
+                reasoning_effort: Some(ra_llm::ReasoningEffort::Low),
                 ..Default::default()
             });
         }
@@ -1822,7 +1822,7 @@ tools = ["read_file"]
         );
         assert_eq!(
             cfg.reasoning_effort,
-            Some(octos_llm::ReasoningEffort::High),
+            Some(ra_llm::ReasoningEffort::High),
             "model default must win over gateway reasoning_effort"
         );
         // Typed model top_p overrides the same-named passthrough key…
@@ -2031,7 +2031,7 @@ tools = ["read_file"]
             .await
             .expect("bootstrap");
 
-        let expected_encoded = octos_bus::session::encode_path_component(key.base_key());
+        let expected_encoded = ra_bus::session::encode_path_component(key.base_key());
         let expected = data_dir
             .join("users")
             .join(expected_encoded)
@@ -2191,7 +2191,7 @@ tools = ["read_file"]
     /// runtime's scope rather than an independently-built one.
     #[tokio::test]
     async fn ui_protocol_ws_turn_agent_inherits_session_scope() {
-        use octos_agent::Agent;
+        use ra_agent::Agent;
 
         let tmp = TempDir::new().unwrap();
         let data_dir = tmp.path().join("profile-data");
@@ -2273,7 +2273,7 @@ tools = ["read_file"]
     /// now carry a propagated, workspace-matched scope.
     #[tokio::test]
     async fn ui_protocol_ws_turn_agent_propagates_session_scope_on_workspace_hint() {
-        use octos_agent::Agent;
+        use ra_agent::Agent;
 
         let tmp = TempDir::new().unwrap();
         let data_dir = tmp.path().join("profile-data");
@@ -2434,16 +2434,16 @@ tools = ["read_file"]
     /// per-session agent.
     async fn make_profile_with_hooks(
         data_dir: PathBuf,
-        executor: Arc<octos_agent::HookExecutor>,
+        executor: Arc<ra_agent::HookExecutor>,
     ) -> Arc<ProfileRuntime> {
         std::fs::create_dir_all(&data_dir).unwrap();
         let memory = Arc::new(EpisodeStore::open(&data_dir).await.unwrap());
         let memory_store = Arc::new(MemoryStore::open(&data_dir).await.unwrap());
         let recall = Arc::new(
-            octos_memory::RecallStore::open(&data_dir, octos_memory::RecallConfig::default())
+            ra_memory::RecallStore::open(&data_dir, ra_memory::RecallConfig::default())
                 .unwrap(),
         );
-        let tool_config = Arc::new(octos_agent::ToolConfigStore::open(&data_dir).await.unwrap());
+        let tool_config = Arc::new(ra_agent::ToolConfigStore::open(&data_dir).await.unwrap());
         let sandbox = SandboxConfig::default();
         let base_tools =
             ToolRegistry::with_builtins_and_sandbox(&data_dir, create_sandbox(&sandbox));
@@ -2509,15 +2509,15 @@ tools = ["read_file"]
     async fn session_runtime_agent_inherits_profile_hooks() {
         let tmp = TempDir::new().unwrap();
         let data_dir = tmp.path().join("profile-data");
-        let hook = octos_agent::HookConfig {
-            event: octos_agent::HookEvent::BeforeLlmCall,
+        let hook = ra_agent::HookConfig {
+            event: ra_agent::HookEvent::BeforeLlmCall,
             command: vec!["/bin/true".to_string()],
             timeout_ms: 1000,
             tool_filter: Vec::new(),
             path_filter: Vec::new(),
             requires_bin: None,
         };
-        let executor = Arc::new(octos_agent::HookExecutor::new(vec![hook]));
+        let executor = Arc::new(ra_agent::HookExecutor::new(vec![hook]));
         let profile = make_profile_with_hooks(data_dir, executor.clone()).await;
 
         let key = SessionKey::new("api", "hook-probe");
@@ -2544,15 +2544,15 @@ tools = ["read_file"]
     async fn session_runtime_agent_carries_hook_context_ids() {
         let tmp = TempDir::new().unwrap();
         let data_dir = tmp.path().join("profile-data");
-        let hook = octos_agent::HookConfig {
-            event: octos_agent::HookEvent::BeforeLlmCall,
+        let hook = ra_agent::HookConfig {
+            event: ra_agent::HookEvent::BeforeLlmCall,
             command: vec!["/bin/true".to_string()],
             timeout_ms: 1000,
             tool_filter: Vec::new(),
             path_filter: Vec::new(),
             requires_bin: None,
         };
-        let executor = Arc::new(octos_agent::HookExecutor::new(vec![hook]));
+        let executor = Arc::new(ra_agent::HookExecutor::new(vec![hook]));
         let profile = make_profile_with_hooks(data_dir, executor).await;
 
         let key = SessionKey::new("api", "hook-probe");
@@ -2589,7 +2589,7 @@ tools = ["read_file"]
             &[],
             SystemTime::now(),
             None,
-            Arc::new(octos_agent::sandbox::NoSandbox),
+            Arc::new(ra_agent::sandbox::NoSandbox),
         )
         .await;
 

@@ -147,7 +147,7 @@ fn show_system_status(cwd: &std::path::Path) -> Result<()> {
         let is_var_set = |name: &str| std::env::var(name).is_ok_and(|v| !v.is_empty());
         let mut is_set = is_var_set(env_var);
         if !is_set {
-            if let Some(entry) = octos_llm::registry::lookup(&label.to_lowercase()) {
+            if let Some(entry) = ra_llm::registry::lookup(&label.to_lowercase()) {
                 is_set = entry.key_env_names().any(is_var_set);
             }
         }

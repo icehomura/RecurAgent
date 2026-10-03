@@ -7,9 +7,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_core::Message;
-use octos_llm::credential_pool::rotation_reason;
-use octos_llm::{
+use ra_core::Message;
+use ra_llm::credential_pool::rotation_reason;
+use ra_llm::{
     AdaptiveConfig, AdaptiveRouter, ChatConfig, ChatResponse, Credential, CredentialPool, ErrorId,
     InMemoryRotationEventSink, LlmProvider, OAuthRefresher, PersistentCredentialPool,
     PersistentCredentialPoolOptions, RotationStrategy, StopReason, TokenUsage, ToolSpec,

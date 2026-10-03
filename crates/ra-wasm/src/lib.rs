@@ -1,5 +1,5 @@
 //! ra-wasm: a **browser/JS client-side** binding of ra's protocol +
-//! utility types ([`octos_core`]).
+//! utility types ([`ra_core`]).
 //!
 //! Use it from a web frontend to (de)serialize the `ra serve` WS/REST
 //! protocol and to model messages / tasks / IDs — all client-side. The actual
@@ -37,9 +37,9 @@
 //! code — all `unsafe` is macro-generated and upheld by wasm-bindgen.
 #![allow(unsafe_code)]
 
-use octos_core::app_ui_codec::{self, AppUiFrame};
-use octos_core::ui_protocol::{RpcError, RpcNotification, RpcRequest};
-use octos_core::{ClientMessageId, Message, SessionKey, TaskId, ThreadId, TurnId};
+use ra_core::app_ui_codec::{self, AppUiFrame};
+use ra_core::ui_protocol::{RpcError, RpcNotification, RpcRequest};
+use ra_core::{ClientMessageId, Message, SessionKey, TaskId, ThreadId, TurnId};
 use serde::Serialize;
 use serde_json::{Value, json};
 use wasm_bindgen::JsCast;
@@ -170,7 +170,7 @@ fn checked_byte_len(max_bytes: f64) -> Result<usize, RpcError> {
 
 fn truncate_utf8_impl(s: &str, max_bytes: f64, suffix: &str) -> Result<String, RpcError> {
     let max = checked_byte_len(max_bytes)?;
-    Ok(octos_core::truncated_utf8(s, max, suffix))
+    Ok(ra_core::truncated_utf8(s, max, suffix))
 }
 
 /// UTF-8 safe truncation: returns a copy of `s` clamped to `max_bytes` bytes at
@@ -179,7 +179,7 @@ fn truncate_utf8_impl(s: &str, max_bytes: f64, suffix: &str) -> Result<String, R
 ///
 /// `max_bytes` is a JS number that must be a finite integer in `0..=2^32-1`
 /// (throws a structured `invalid_params` error otherwise — a `usize` ABI would
-/// silently wrap on `wasm32`). Wraps [`octos_core::truncated_utf8`].
+/// silently wrap on `wasm32`). Wraps [`ra_core::truncated_utf8`].
 #[wasm_bindgen]
 pub fn truncate_utf8(s: &str, max_bytes: f64, suffix: &str) -> Result<String, JsValue> {
     truncate_utf8_impl(s, max_bytes, suffix).map_err(rpc_error_to_js)
@@ -187,17 +187,17 @@ pub fn truncate_utf8(s: &str, max_bytes: f64, suffix: &str) -> Result<String, Js
 
 /// Turn an arbitrary string into a filesystem-safe filename stem
 /// (percent-encoded, clamped, collision-resistant). Wraps
-/// [`octos_core::safe_filename`].
+/// [`ra_core::safe_filename`].
 #[wasm_bindgen]
 pub fn safe_filename(name: &str) -> String {
-    octos_core::safe_filename(name)
+    ra_core::safe_filename(name)
 }
 
 /// Default per-tool output byte limit used by the server (client-side mirror
-/// for UIs that show truncation hints). Wraps [`octos_core::tool_output_limit`].
+/// for UIs that show truncation hints). Wraps [`ra_core::tool_output_limit`].
 #[wasm_bindgen]
 pub fn tool_output_limit(tool_name: &str) -> usize {
-    octos_core::tool_output_limit(tool_name)
+    ra_core::tool_output_limit(tool_name)
 }
 
 // ===========================================================================
@@ -326,7 +326,7 @@ pub fn session_key_profile_id(key: &str) -> Option<String> {
 /// The UI protocol identifier string (`ra-ui/v1alpha1`).
 #[wasm_bindgen]
 pub fn ui_protocol_version() -> String {
-    octos_core::ui_protocol::UI_PROTOCOL_V1.to_string()
+    ra_core::ui_protocol::UI_PROTOCOL_V1.to_string()
 }
 
 /// Maximum accepted JSON-RPC text-frame size (bytes) for UI transports.
@@ -338,7 +338,7 @@ pub fn max_text_frame_bytes() -> usize {
 /// The JSON-RPC version string (`2.0`) every AppUI wire frame must carry.
 #[wasm_bindgen]
 pub fn jsonrpc_version() -> String {
-    octos_core::ui_protocol::JSON_RPC_VERSION.to_string()
+    ra_core::ui_protocol::JSON_RPC_VERSION.to_string()
 }
 
 // ===========================================================================
@@ -463,7 +463,7 @@ pub fn encode_rpc_request_ndjson(
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod host_tests {
     use super::*;
-    use octos_core::ui_protocol::{InputItem, TurnStartParams, rpc_error_codes};
+    use ra_core::ui_protocol::{InputItem, TurnStartParams, rpc_error_codes};
 
     #[test]
     fn truncate_utf8_passthrough_when_within_limit() {
@@ -517,7 +517,7 @@ mod host_tests {
         // Re-parse via ra-core's `TaskId: FromStr` (Uuid::parse_str under
         // the hood) so the host test needs no direct `uuid` dependency.
         assert!(
-            a.parse::<octos_core::TaskId>().is_ok(),
+            a.parse::<ra_core::TaskId>().is_ok(),
             "must be a valid uuid: {a}"
         );
     }

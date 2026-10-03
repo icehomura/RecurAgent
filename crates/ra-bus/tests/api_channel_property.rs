@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use chrono::{TimeZone, Utc};
 use eyre::{Result, ensure, eyre};
-use octos_bus::{ApiChannel, Channel, SessionManager};
-use octos_core::OutboundMessage;
+use ra_bus::{ApiChannel, Channel, SessionManager};
+use ra_core::OutboundMessage;
 use proptest::prelude::*;
 use serde_json::Value;
 use tokio::sync::Mutex;

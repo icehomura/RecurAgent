@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use eyre::Result;
 use futures::StreamExt;
-use octos_core::{Message, MessageRole};
-use octos_llm::{ChatResponse, ChatStream, StopReason, StreamError, StreamEvent};
+use ra_core::{Message, MessageRole};
+use ra_llm::{ChatResponse, ChatStream, StopReason, StreamError, StreamEvent};
 use tracing::warn;
 
 use super::Agent;
@@ -101,7 +101,7 @@ impl Agent {
         // minutes for the first token) and caps the overall at the voice
         // deadline. Normal turns keep the generous production thresholds.
         let thresholds =
-            if octos_llm::current_llm_call_policy() == octos_llm::LlmCallPolicy::FailFast {
+            if ra_llm::current_llm_call_policy() == ra_llm::LlmCallPolicy::FailFast {
                 StreamTimeouts {
                     first_token_grace_secs: super::VOICE_STREAM_TTFT_SECS,
                     inter_chunk_idle_secs: super::VOICE_STREAM_IDLE_SECS,
@@ -186,10 +186,10 @@ impl Agent {
         // client's thinking-display toggle governs them — otherwise the raw
         // tags render live in transcripts even though the post-stream strip
         // below cleans the FINAL content (mini4, 2026-07-17).
-        let mut think_splitter = octos_llm::ThinkTagStreamSplitter::new();
+        let mut think_splitter = ra_llm::ThinkTagStreamSplitter::new();
         // (id, name, args_json, metadata)
         let mut tool_calls: Vec<(String, String, String, Option<serde_json::Value>)> = Vec::new();
-        let mut usage = octos_llm::TokenUsage::default();
+        let mut usage = ra_llm::TokenUsage::default();
         let mut stop_reason = StopReason::EndTurn;
         let mut provider_index = None;
 
@@ -424,7 +424,7 @@ impl Agent {
         // Strip <think> tags from accumulated streaming content (some models
         // embed chain-of-thought in <think> tags via TextDelta instead of
         // using ReasoningDelta events).
-        let (text, think_extracted) = octos_llm::strip_think_tags(&text);
+        let (text, think_extracted) = ra_llm::strip_think_tags(&text);
         if let Some(ref extracted) = think_extracted {
             if reasoning.is_empty() {
                 reasoning = extracted.clone();
@@ -448,7 +448,7 @@ impl Agent {
         // its `extract_json_string_field` helper are deleted in the same
         // PR — with the boundary in place they were treating symptoms of
         // the missing invariant, not addressing it.
-        let mut parsed_tool_calls: Vec<octos_core::ToolCall> = Vec::with_capacity(tool_calls.len());
+        let mut parsed_tool_calls: Vec<ra_core::ToolCall> = Vec::with_capacity(tool_calls.len());
         for (id, name, args, metadata) in tool_calls.into_iter() {
             if name.is_empty() {
                 continue;
@@ -473,14 +473,14 @@ impl Agent {
                 id
             };
             match serde_json::from_str(&args) {
-                Ok(arguments) => parsed_tool_calls.push(octos_core::ToolCall {
+                Ok(arguments) => parsed_tool_calls.push(ra_core::ToolCall {
                     id,
                     name,
                     arguments,
                     metadata,
                 }),
                 Err(e) => {
-                    let truncated_raw = octos_core::truncated_utf8(&args, 200, "...");
+                    let truncated_raw = ra_core::truncated_utf8(&args, 200, "...");
                     // #1712: distinguish a TRUNCATED call from a genuinely
                     // malformed one. When the turn hit the output token cap
                     // (`finish_reason=length` → StopReason::MaxTokens), the
@@ -606,7 +606,7 @@ impl Agent {
         provider_index: Option<usize>,
     ) -> Option<f64> {
         let metadata = self.llm.provider_metadata_for_index(provider_index);
-        octos_llm::pricing::model_pricing(&metadata.model).map(|p| {
+        ra_llm::pricing::model_pricing(&metadata.model).map(|p| {
             p.cost_with_cache_for_metadata(
                 &metadata,
                 input_tokens,
@@ -640,7 +640,7 @@ impl Agent {
         let metadata = self
             .llm
             .provider_metadata_for_index(response.provider_index);
-        let pricing = octos_llm::pricing::model_pricing(&metadata.model);
+        let pricing = ra_llm::pricing::model_pricing(&metadata.model);
         let response_cost = attributed_cost.or_else(|| {
             pricing.map(|p| {
                 p.cost_with_cache_for_metadata(
@@ -695,7 +695,7 @@ impl Agent {
         // report the right model with the primary slot's window.
         let context_window = match response.provider_index {
             Some(_) if !metadata.model.is_empty() => {
-                octos_llm::context::context_window_tokens(&metadata.model)
+                ra_llm::context::context_window_tokens(&metadata.model)
             }
             _ => self.llm.context_window(),
         };
@@ -770,12 +770,12 @@ mod tests {
     use eyre::Result;
     use futures::StreamExt;
     use futures::stream;
-    use octos_core::{AgentId, Message};
-    use octos_llm::{
+    use ra_core::{AgentId, Message};
+    use ra_llm::{
         ChatConfig, ChatResponse, ChatStream, LlmProvider, StopReason, StreamError, StreamEvent,
         TokenUsage as LlmTokenUsage, ToolSpec,
     };
-    use octos_memory::EpisodeStore;
+    use ra_memory::EpisodeStore;
     use serde_json::json;
     use tempfile::TempDir;
 
@@ -848,17 +848,17 @@ mod tests {
             self.provider
         }
 
-        fn provider_metadata(&self) -> octos_llm::ProviderMetadata {
+        fn provider_metadata(&self) -> ra_llm::ProviderMetadata {
             // #2194 R4: real providers source their cache lane from their TYPE.
             // Mirror that so these pricing tests exercise the metadata lane the
             // production path now uses: an Anthropic-protocol slot reports the
             // Anthropic lane, everything else the residual lane.
             let lane = if self.provider == "anthropic" {
-                octos_llm::CacheLane::Anthropic
+                ra_llm::CacheLane::Anthropic
             } else {
-                octos_llm::CacheLane::Residual
+                ra_llm::CacheLane::Residual
             };
-            octos_llm::ProviderMetadata::new(self.provider, self.model_id(), None)
+            ra_llm::ProviderMetadata::new(self.provider, self.model_id(), None)
                 .with_cache_lane(lane)
         }
     }
@@ -890,7 +890,7 @@ mod tests {
             .response_usage_cost(100_000, 10_000, 10_000, 2_000, None)
             .expect("claude-opus-4 has catalog pricing");
 
-        let pricing = octos_llm::pricing::model_pricing("claude-opus-4").unwrap();
+        let pricing = ra_llm::pricing::model_pricing("claude-opus-4").unwrap();
         let naive = pricing.cost(100_000, 10_000);
         let expected = pricing.cost_with_cache(100_000, 10_000, 10_000, 2_000);
         assert!(
@@ -925,7 +925,7 @@ mod tests {
             .response_usage_cost(100_000, 10_000, 10_000, 2_000, None)
             .expect("claude-opus-4 has catalog pricing");
 
-        let pricing = octos_llm::pricing::model_pricing("claude-opus-4").unwrap();
+        let pricing = ra_llm::pricing::model_pricing("claude-opus-4").unwrap();
         // reads folded in at full input rate + 2k writes at 1.25x.
         let expected = pricing.cost(100_000 + 10_000, 10_000)
             + (2_000.0 / 1_000_000.0) * pricing.input_per_million * 1.25;

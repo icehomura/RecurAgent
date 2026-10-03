@@ -6,7 +6,7 @@
 //! 1. CASes the attempt `Leased/Launching → Running` — a `Superseded` outcome
 //!    is a lost race (`Aborted`), a store `Err` is infra (`RecordError`);
 //! 2. builds a [`Task`] from the task's brief + acceptance criteria;
-//! 3. mints a fresh closed-registry [`octos_agent::Agent`];
+//! 3. mints a fresh closed-registry [`ra_agent::Agent`];
 //! 4. runs it under a HARD [`tokio::time::timeout`] (the agent loop has no
 //!    internal wall-clock deadline);
 //! 5. maps the result to an [`AcceptanceVerdict`] — a timeout/infra-error is
@@ -18,7 +18,7 @@
 //! # Known v1 limitations (documented, not yet fixed)
 //!
 //! - **Token under-commit on non-success paths (P2-2).** A timeout or infra
-//!   error drops the [`octos_core::TaskResult`], so its [`TokenUsage`] is lost
+//!   error drops the [`ra_core::TaskResult`], so its [`TokenUsage`] is lost
 //!   and the attempt commits `0` tokens against the fleet budget (see
 //!   [`Computed::terminated`]). Upstream `turn_state` also does not fold
 //!   `reasoning_tokens`, so even a committed count can under-report. This is a
@@ -44,14 +44,14 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use octos_agent::TokenTracker;
-use octos_agent::sandbox::Sandbox;
-use octos_agent::validators::{
+use ra_agent::TokenTracker;
+use ra_agent::sandbox::Sandbox;
+use ra_agent::validators::{
     ValidatorInvocation, ValidatorOutcome, ValidatorPhase, ValidatorRunner, ValidatorStatus,
 };
-use octos_agent::workspace_policy::{Validator, ValidatorPhaseKind, ValidatorSpec};
-use octos_core::{Message, Task, TaskContext, TaskKind, TaskResult, TokenUsage};
-use octos_fleet::{
+use ra_agent::workspace_policy::{Validator, ValidatorPhaseKind, ValidatorSpec};
+use ra_core::{Message, Task, TaskContext, TaskKind, TaskResult, TokenUsage};
+use ra_fleet::{
     AcceptanceVerdict, ChildResultSnapshot, CompleteOutcome, EscalationRequest, EvidenceRef, Fleet,
     FleetKernelStore, MarkRunningOutcome, TaskView, Verifier,
 };
@@ -917,7 +917,7 @@ fn sandboxed_git_command(
     // exactly as the shell tool does, so a worker-planted `.git` `filter.*`/hook
     // that dumps `env` during the populate/commit never sees controller secrets
     // (a Full-network worker would otherwise exfiltrate them).
-    octos_agent::sanitize_default_subprocess_env(&mut command);
+    ra_agent::sanitize_default_subprocess_env(&mut command);
     command
 }
 
@@ -964,7 +964,7 @@ async fn run_sandboxed_git(
         Ok(Err(e)) => Err(format!("sandboxed git op wait failed: {e}")),
         Err(_elapsed) => {
             if let Some(pid) = pid {
-                octos_agent::kill_child_process(pid).await;
+                ra_agent::kill_child_process(pid).await;
             }
             Err(format!(
                 "sandboxed git op timed out after {}s (killed)",
@@ -987,7 +987,7 @@ async fn populate_worktree(
     deadline: Duration,
 ) -> Option<String> {
     worktree?;
-    let cmd = octos_core::worktree_populate_command();
+    let cmd = ra_core::worktree_populate_command();
     // require_success = true (fix 4): a non-zero `git reset --hard` left the tree
     // unpopulated — FAIL the attempt rather than run the agent in an empty tree.
     match run_sandboxed_git(sandbox, checkout, &cmd, deadline, true).await {
@@ -1039,7 +1039,7 @@ async fn settle_worktree_deliverable(
     // → Terminated; a non-zero EXIT is not gated on (the branch-advance check
     // below is authoritative).
     let message = format!("fleet {task_id} deliverable");
-    let commit_cmd = octos_core::deliverable_commit_command(&message);
+    let commit_cmd = ra_core::deliverable_commit_command(&message);
     // require_success = false: the commit's exit code is NOT authoritative (a
     // clean tree no-ops at exit 0; a worker's own broken filter is contained, not
     // infra). The branch-advance check below is the authority.
@@ -1056,7 +1056,7 @@ async fn settle_worktree_deliverable(
 
     // Authoritative: did the branch advance past its base? (Read host-side,
     // hooks-disabled — a read-only `rev-parse`, no code-exec surface.)
-    match octos_core::branch_advanced_past(&ctx.repo_root, &ctx.branch, &ctx.base_commit) {
+    match ra_core::branch_advanced_past(&ctx.repo_root, &ctx.branch, &ctx.base_commit) {
         Ok(true) => (verdict, error),
         Ok(false) => {
             let reason = format!(
@@ -1174,8 +1174,8 @@ fn mechanical(id: &str, spec: ValidatorSpec) -> Validator {
 mod tests {
     use super::*;
     use crate::testutil::*;
-    use octos_agent::sandbox::NoSandbox;
-    use octos_fleet::{AttemptStatus, ChildStatus};
+    use ra_agent::sandbox::NoSandbox;
+    use ra_fleet::{AttemptStatus, ChildStatus};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
     use tempfile::TempDir;
@@ -1356,7 +1356,7 @@ mod tests {
 
         async fn run_with(
             seen: Arc<std::sync::Mutex<Vec<SandboxGrant>>>,
-            grant: octos_fleet::WorkerGrant,
+            grant: ra_fleet::WorkerGrant,
             worktree: Option<WorktreeContext>,
         ) {
             let (_sd, store) = fresh_store().await;
@@ -1410,13 +1410,13 @@ mod tests {
         };
 
         // Minimal grant, scratch (no worktree) → no raw egress, cwd-only.
-        run_with(seen.clone(), octos_fleet::WorkerGrant::minimal(), None).await;
+        run_with(seen.clone(), ra_fleet::WorkerGrant::minimal(), None).await;
         // Full network grant, scratch → raw egress, but STILL cwd-only (no worktree).
         run_with(
             seen.clone(),
-            octos_fleet::WorkerGrant {
-                network: octos_fleet::NetworkGrant::Full,
-                ..octos_fleet::WorkerGrant::minimal()
+            ra_fleet::WorkerGrant {
+                network: ra_fleet::NetworkGrant::Full,
+                ..ra_fleet::WorkerGrant::minimal()
             },
             None,
         )
@@ -1424,10 +1424,10 @@ mod tests {
         // A worktree attempt → repo_git_dir set to the checkout's `<repo>/.git`.
         run_with(
             seen.clone(),
-            octos_fleet::WorkerGrant {
-                network: octos_fleet::NetworkGrant::Full,
-                fs: octos_fleet::FsGrant::Host,
-                ..octos_fleet::WorkerGrant::minimal()
+            ra_fleet::WorkerGrant {
+                network: ra_fleet::NetworkGrant::Full,
+                fs: ra_fleet::FsGrant::Host,
+                ..ra_fleet::WorkerGrant::minimal()
             },
             Some(dummy_worktree()),
         )
@@ -1667,7 +1667,7 @@ mod tests {
     /// built and every command would refuse one by one.
     #[tokio::test]
     async fn run_attempt_terminates_when_sandbox_resolution_refuses() {
-        use octos_agent::sandbox::{RefusingSandbox, SandboxUnavailable};
+        use ra_agent::sandbox::{RefusingSandbox, SandboxUnavailable};
 
         let (_sd, store) = fresh_store().await;
         let fleet = create_fleet(
@@ -2216,7 +2216,7 @@ mod tests {
                 assert_eq!(request.reason, "cannot reach example.com");
                 assert_eq!(
                     request.requested_grant.network,
-                    octos_fleet::NetworkGrant::Hosts(vec!["example.com".into()]),
+                    ra_fleet::NetworkGrant::Hosts(vec!["example.com".into()]),
                 );
             }
             other => panic!("expected Escalated, got {other:?}"),
@@ -2287,7 +2287,7 @@ mod tests {
             .await
             .unwrap()
         {
-            octos_fleet::LaunchOutcome::Launched { attempt_id } => attempt_id,
+            ra_fleet::LaunchOutcome::Launched { attempt_id } => attempt_id,
             other => panic!("expected Launched, got {other:?}"),
         };
 
@@ -2501,20 +2501,20 @@ mod tests {
 
         // Keeper approves a WIDER grant (adds web_fetch under a Hosts allowlist)
         // via the targeted SetGrant edit → Blocked → Ready.
-        let widened = octos_fleet::WorkerGrant {
-            network: octos_fleet::NetworkGrant::Hosts(vec!["example.com".into()]),
+        let widened = ra_fleet::WorkerGrant {
+            network: ra_fleet::NetworkGrant::Hosts(vec!["example.com".into()]),
             tools: vec![
                 "read_file".into(),
                 "write_file".into(),
                 "shell".into(),
                 "web_fetch".into(),
             ],
-            ..octos_fleet::WorkerGrant::minimal()
+            ..ra_fleet::WorkerGrant::minimal()
         };
         let rev = fleet.view().await.unwrap().revision;
         let edit = fleet
             .apply_edit(
-                octos_fleet::PlanEdit::SetGrant {
+                ra_fleet::PlanEdit::SetGrant {
                     task_id: "a".into(),
                     grant: widened.clone(),
                 },
@@ -2525,7 +2525,7 @@ mod tests {
             .unwrap();
         assert!(matches!(
             edit,
-            octos_fleet::PlanMutateOutcome::Mutated { .. }
+            ra_fleet::PlanMutateOutcome::Mutated { .. }
         ));
 
         // Attempt 2: FRESH launch (the child is Ready again) — its registry must

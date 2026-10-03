@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use eyre::Result;
-use octos_agent::{SkillFilter, SkillsLoader};
+use ra_agent::{SkillFilter, SkillsLoader};
 
 use crate::profiles::{ProfileStore, SkillSelectionMode, UserProfile};
 

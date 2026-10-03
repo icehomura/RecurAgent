@@ -250,7 +250,7 @@ pub struct ValidationCtx<'a> {
     pub items: &'a HashMap<String, &'a ExtractionItem>,
     /// Usage stats by entry id / bank slug (#1586). A recently-used entry
     /// is kept alive against age-based auto-archive.
-    pub usage: &'a std::collections::BTreeMap<String, octos_memory::UsageStat>,
+    pub usage: &'a std::collections::BTreeMap<String, ra_memory::UsageStat>,
     /// This run performed INIT — only `add` ops are allowed (0-loss).
     pub init_mode: bool,
     pub today: NaiveDate,
@@ -369,7 +369,7 @@ fn sanitize_text(kind: &str, text: &str) -> Result<String, String> {
     // consolidation model SYNTHESIZES entry text — a hostile note that
     // slipped a rephrase past ingress must still not reach MEMORY.md.
     // Every entry-text path (add/update) funnels through here.
-    if let Some(threat) = octos_memory::guard::first_threat(text) {
+    if let Some(threat) = ra_memory::guard::first_threat(text) {
         return Err(format!(
             "{kind} text rejected by the memory content guard ({threat}); \
              drop this content or restate it as a plain fact"
@@ -872,7 +872,7 @@ mod tests {
         frozen: HashSet<String>,
         notes: Vec<NoteFile>,
         items: Vec<ExtractionItem>,
-        usage: std::collections::BTreeMap<String, octos_memory::UsageStat>,
+        usage: std::collections::BTreeMap<String, ra_memory::UsageStat>,
         init_mode: bool,
     }
 
@@ -1239,7 +1239,7 @@ mod tests {
         let mut fx = Fixture::default();
         fx.usage.insert(
             "^mbbbbbb".into(),
-            octos_memory::UsageStat {
+            ra_memory::UsageStat {
                 count: 3,
                 last_used: "2026-07-01".into(),
             },
@@ -1263,7 +1263,7 @@ mod tests {
         let mut fx = Fixture::default();
         fx.usage.insert(
             "^mbbbbbb".into(),
-            octos_memory::UsageStat {
+            ra_memory::UsageStat {
                 count: 9,
                 last_used: "2026-01-01".into(),
             },

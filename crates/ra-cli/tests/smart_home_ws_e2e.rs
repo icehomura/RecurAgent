@@ -20,8 +20,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::{Sink, SinkExt, Stream, StreamExt};
-use octos_cli::api::{AppState, build_router};
-use octos_cli::profiles::{ProfileConfig, ProfileStore, SmartHomeConfig, UserProfile};
+use ra_cli::api::{AppState, build_router};
+use ra_cli::profiles::{ProfileConfig, ProfileStore, SmartHomeConfig, UserProfile};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio_tungstenite::connect_async;
@@ -135,7 +135,7 @@ async fn smart_home_status_get_reports_not_configured_without_bridge() {
     let body = rpc(
         &mut ws,
         "status",
-        octos_core::ui_protocol::methods::SMART_HOME_STATUS_GET,
+        ra_core::ui_protocol::methods::SMART_HOME_STATUS_GET,
         json!({}),
     )
     .await;
@@ -162,7 +162,7 @@ async fn smart_home_status_get_reports_configured_with_bridge() {
     let body = rpc(
         &mut ws,
         "status",
-        octos_core::ui_protocol::methods::SMART_HOME_STATUS_GET,
+        ra_core::ui_protocol::methods::SMART_HOME_STATUS_GET,
         json!({}),
     )
     .await;
@@ -202,7 +202,7 @@ async fn smart_home_device_list_round_trips_through_real_bridge() {
     let body = rpc(
         &mut ws,
         "devices",
-        octos_core::ui_protocol::methods::SMART_HOME_DEVICE_LIST,
+        ra_core::ui_protocol::methods::SMART_HOME_DEVICE_LIST,
         json!({}),
     )
     .await;
@@ -226,7 +226,7 @@ async fn smart_home_device_list_maps_not_configured_to_json_rpc_error() {
     let body = rpc(
         &mut ws,
         "devices-error",
-        octos_core::ui_protocol::methods::SMART_HOME_DEVICE_LIST,
+        ra_core::ui_protocol::methods::SMART_HOME_DEVICE_LIST,
         json!({}),
     )
     .await;
@@ -268,7 +268,7 @@ async fn smart_home_device_command_posts_to_real_bridge() {
     let body = rpc(
         &mut ws,
         "command",
-        octos_core::ui_protocol::methods::SMART_HOME_DEVICE_COMMAND,
+        ra_core::ui_protocol::methods::SMART_HOME_DEVICE_COMMAND,
         json!({ "device_id": "real_tv", "params": { "action": "volume_up" } }),
     )
     .await;
@@ -322,7 +322,7 @@ async fn smart_home_camera_stream_start_and_stop_round_trip() {
     let start_body = rpc(
         &mut ws,
         "stream-start",
-        octos_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_START,
+        ra_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_START,
         json!({ "device_id": "cam1", "quality": 2 }),
     )
     .await;
@@ -335,7 +335,7 @@ async fn smart_home_camera_stream_start_and_stop_round_trip() {
     let stop_body = rpc(
         &mut ws,
         "stream-stop",
-        octos_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_STOP,
+        ra_core::ui_protocol::methods::SMART_HOME_CAMERA_STREAM_STOP,
         json!({ "device_id": "cam1" }),
     )
     .await;

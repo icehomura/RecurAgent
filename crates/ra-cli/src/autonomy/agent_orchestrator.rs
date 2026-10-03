@@ -29,20 +29,20 @@ use super::supervisor_store::{
 };
 use super::workspace_scope::WorkspaceScope;
 use chrono::Utc;
-use octos_agent::tools::mcp_agent::DispatchContextContract;
-use octos_agent::{Agent, AgentConfig, RoleTemplate, SpawnOnlyFailureSignal, ToolRegistry};
-use octos_core::ui_protocol::{
+use ra_agent::tools::mcp_agent::DispatchContextContract;
+use ra_agent::{Agent, AgentConfig, RoleTemplate, SpawnOnlyFailureSignal, ToolRegistry};
+use ra_core::ui_protocol::{
     MonitorExpiredEvent, OutputCursor, RpcError, autonomy_error_kinds as kinds, methods,
     rpc_error_codes,
 };
-use octos_core::{AgentId, MAIN_PROFILE_ID, SessionKey, TaskId};
-use octos_fleet::{
+use ra_core::{AgentId, MAIN_PROFILE_ID, SessionKey, TaskId};
+use ra_fleet::{
     AcceptanceVerdict, CompleteOutcome, DenyEscalationOutcome, Fleet, FleetBudget,
     FleetKernelStore, LaunchOutcome, PlanEdit, PlanMutateOutcome, TaskSpec, WorkerGrant,
 };
-use octos_fleet_worker::FleetWorkerPool;
-use octos_llm::LlmProvider;
-use octos_memory::EpisodeStore;
+use ra_fleet_worker::FleetWorkerPool;
+use ra_llm::LlmProvider;
+use ra_memory::EpisodeStore;
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
@@ -395,10 +395,10 @@ impl PeerSendInputEnqueueOutcome {
     pub(crate) fn into_callback_result(
         self,
         slug: &str,
-    ) -> Result<octos_agent::PeerSendInputDelivery, String> {
+    ) -> Result<ra_agent::PeerSendInputDelivery, String> {
         match self {
-            Self::Queued => Ok(octos_agent::PeerSendInputDelivery::Queued),
-            Self::Duplicate => Ok(octos_agent::PeerSendInputDelivery::AlreadyQueued),
+            Self::Queued => Ok(ra_agent::PeerSendInputDelivery::Queued),
+            Self::Duplicate => Ok(ra_agent::PeerSendInputDelivery::AlreadyQueued),
             Self::PersistFailed => Err(format!(
                 "failed to durably queue input for peer '{slug}' (storage write \
                  error) — the injection was not delivered; try again"
@@ -890,7 +890,7 @@ fn next_goal_task_binding_generation() -> u64 {
 /// from (`<profile_data_dir>/goal-ledgers/<goal_id>.db`).
 #[derive(Debug, Clone)]
 struct GoalTaskLedgerBinding {
-    goal_row: octos_fleet::Goal,
+    goal_row: ra_fleet::Goal,
     title: String,
     assigned_peer: Option<String>,
     profile_data_dir: PathBuf,
@@ -932,7 +932,7 @@ impl GoalTaskLedgerBinding {
     /// [`InProcessAgentOrchestrator::stash_goal_task_binding`], assigns
     /// both authoritatively when the binding enters the map.
     fn new_unstashed(
-        goal_row: octos_fleet::Goal,
+        goal_row: ra_fleet::Goal,
         title: String,
         assigned_peer: Option<String>,
         profile_data_dir: PathBuf,
@@ -955,8 +955,8 @@ impl GoalTaskLedgerBinding {
     /// kind (peers and supervisor-spawned specialists), whose `tool_call_id`
     /// IS the agent id; every other kind has no peer identity.
     fn for_task(
-        goal_row: octos_fleet::Goal,
-        task: &octos_agent::BackgroundTask,
+        goal_row: ra_fleet::Goal,
+        task: &ra_agent::BackgroundTask,
         profile_data_dir: PathBuf,
     ) -> Self {
         let assigned_peer = (task.tool_name == "native_agent" && !task.tool_call_id.is_empty())
@@ -1103,7 +1103,7 @@ pub(crate) struct NativeSpecialistLaunchRequest {
     pub(crate) agent_config: Option<AgentConfig>,
     pub(crate) task_ledger_path: Option<PathBuf>,
     pub(crate) event_tx: Option<NativeSpecialistEventSender>,
-    pub(crate) dispatch_policy: Option<Arc<octos_agent::DispatchPolicy>>,
+    pub(crate) dispatch_policy: Option<Arc<ra_agent::DispatchPolicy>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1124,7 +1124,7 @@ pub(crate) struct NativeSpecialistRunResult {
 /// so store-backed local orchestrators (tests, in-process peers) are gated
 /// against their OWN delivered marks, not the process global's.
 pub(crate) fn upsert_background_task_agent(
-    task: &octos_agent::BackgroundTask,
+    task: &ra_agent::BackgroundTask,
     runtime_profile_id: Option<&str>,
 ) -> Result<Option<(SessionKey, Value)>, RpcError> {
     default_agent_orchestrator().upsert_background_task_agent(task, runtime_profile_id)
@@ -1133,7 +1133,7 @@ pub(crate) fn upsert_background_task_agent(
 impl InProcessAgentOrchestrator {
     pub(crate) fn upsert_background_task_agent(
         &self,
-        task: &octos_agent::BackgroundTask,
+        task: &ra_agent::BackgroundTask,
         runtime_profile_id: Option<&str>,
     ) -> Result<Option<(SessionKey, Value)>, RpcError> {
         let Some(session_id) = background_task_session_id(task) else {
@@ -1360,7 +1360,7 @@ impl InProcessAgentOrchestrator {
 /// `None` falls back to the session-key-derived profile inside
 /// `upsert_background_task_agent` / `background_task_session_id`.
 pub(crate) fn route_terminal_event_to_continuation_queue(
-    event: &octos_agent::TerminalEvent,
+    event: &ra_agent::TerminalEvent,
     runtime_profile_id: Option<&str>,
 ) {
     default_agent_orchestrator()
@@ -1370,7 +1370,7 @@ pub(crate) fn route_terminal_event_to_continuation_queue(
 impl InProcessAgentOrchestrator {
     pub(crate) fn route_terminal_event_to_continuation_queue(
         &self,
-        event: &octos_agent::TerminalEvent,
+        event: &ra_agent::TerminalEvent,
         runtime_profile_id: Option<&str>,
     ) {
         // #2054 settling does NOT live here (review round 2): this sink never
@@ -1379,7 +1379,7 @@ impl InProcessAgentOrchestrator {
         // correction. The goal-ledger settle rides the change feed instead —
         // see `install_goal_task_row_settle_listener`.
         match &event.outcome {
-            octos_agent::TerminalOutcome::Completed => {
+            ra_agent::TerminalOutcome::Completed => {
                 // Mirror the terminal agent record; the upsert's terminal
                 // transition enqueues the autonomous ChildCompleted re-entry
                 // under the resolved profile.
@@ -1390,7 +1390,7 @@ impl InProcessAgentOrchestrator {
                     "terminal task mirror admission failed");
                 }
             }
-            octos_agent::TerminalOutcome::Failed(signal) => {
+            ra_agent::TerminalOutcome::Failed(signal) => {
                 // Synth-ack-as-prompt-selection: only the ack-emitted failures
                 // get a recovery turn. The non-ack cases (the LLM already saw a
                 // sibling error or a `[VALIDATION FAILED]` synchronous result)
@@ -1442,7 +1442,7 @@ impl InProcessAgentOrchestrator {
 }
 
 /// #2054 / #2056 — THE terminal-authority rule for a supervisor task row.
-/// Returns the [`octos_fleet::TaskSettleAuthority`] the ledger write carries
+/// Returns the [`ra_fleet::TaskSettleAuthority`] the ledger write carries
 /// and whether a successful settle RELEASES the binding, or `None` when the
 /// task is not terminal at all.
 ///
@@ -1462,25 +1462,25 @@ impl InProcessAgentOrchestrator {
 /// rule would admit 2 over 1 — turning a lost delivery into a corrupted
 /// verdict. Rank 0 can only ever displace "no verdict".
 fn terminal_settle_authority(
-    task: &octos_agent::BackgroundTask,
-) -> Option<(octos_fleet::TaskSettleAuthority, bool)> {
+    task: &ra_agent::BackgroundTask,
+) -> Option<(ra_fleet::TaskSettleAuthority, bool)> {
     match task.status {
-        octos_agent::TaskStatus::Completed => {
-            Some((octos_fleet::TaskSettleAuthority::Completion, true))
+        ra_agent::TaskStatus::Completed => {
+            Some((ra_fleet::TaskSettleAuthority::Completion, true))
         }
-        octos_agent::TaskStatus::Cancelled => {
-            Some((octos_fleet::TaskSettleAuthority::FinalFailure, true))
+        ra_agent::TaskStatus::Cancelled => {
+            Some((ra_fleet::TaskSettleAuthority::FinalFailure, true))
         }
-        octos_agent::TaskStatus::Failed if task.failed_by_observer => {
-            Some((octos_fleet::TaskSettleAuthority::ProvisionalFailure, false))
+        ra_agent::TaskStatus::Failed if task.failed_by_observer => {
+            Some((ra_fleet::TaskSettleAuthority::ProvisionalFailure, false))
         }
-        octos_agent::TaskStatus::Failed => {
-            Some((octos_fleet::TaskSettleAuthority::FinalFailure, true))
+        ra_agent::TaskStatus::Failed => {
+            Some((ra_fleet::TaskSettleAuthority::FinalFailure, true))
         }
-        octos_agent::TaskStatus::Spawned | octos_agent::TaskStatus::Running => None,
+        ra_agent::TaskStatus::Spawned | ra_agent::TaskStatus::Running => None,
         // #27c — a PARKED task carries no settle verdict (it awaits client
         // re-attachment); rank it with the non-verdict statuses.
-        octos_agent::TaskStatus::Parked => None,
+        ra_agent::TaskStatus::Parked => None,
     }
 }
 
@@ -1495,7 +1495,7 @@ pub(crate) const GOAL_TASK_ROW_SETTLE_LISTENER_KEY: &str = "goal-task-row-settle
 /// supervisor. See [`InProcessAgentOrchestrator::settle_goal_task_row_from_change`]
 /// for why settling rides the change feed rather than the `on_terminal`
 /// sink (cancel coverage + the failed→complete owner correction).
-pub(crate) fn install_goal_task_row_settle_listener(supervisor: &octos_agent::TaskSupervisor) {
+pub(crate) fn install_goal_task_row_settle_listener(supervisor: &ra_agent::TaskSupervisor) {
     supervisor.set_on_change_listener(GOAL_TASK_ROW_SETTLE_LISTENER_KEY, |task| {
         default_agent_orchestrator().settle_goal_task_row_from_change(task);
     });
@@ -1518,7 +1518,7 @@ pub(crate) fn install_goal_task_row_settle_listener(supervisor: &octos_agent::Ta
 /// the active-only filter meant the sweep silently did nothing for every one
 /// of them.
 pub(crate) fn install_goal_task_row_observers(
-    supervisor: &octos_agent::TaskSupervisor,
+    supervisor: &ra_agent::TaskSupervisor,
     profile_data_dir: &Path,
     resolve_register_binding: impl Fn() -> Option<(String, String)> + Send + Sync + 'static,
     resolve_restore_binding: impl Fn() -> Option<(String, String)> + Send + Sync + 'static,
@@ -1566,10 +1566,10 @@ pub(crate) fn install_goal_task_row_observers(
 /// (reconciliation + peer adoption). Registration observer and settle
 /// listener are identical to the resolver variant.
 pub(crate) fn install_goal_task_row_observers_composed(
-    supervisor: &octos_agent::TaskSupervisor,
+    supervisor: &ra_agent::TaskSupervisor,
     profile_data_dir: &Path,
     resolve_register_binding: impl Fn() -> Option<(String, String)> + Send + Sync + 'static,
-    on_restore: impl Fn(&[octos_agent::BackgroundTask]) + Send + Sync + 'static,
+    on_restore: impl Fn(&[ra_agent::BackgroundTask]) + Send + Sync + 'static,
 ) {
     let data_dir = profile_data_dir.to_path_buf();
     supervisor.set_on_register(move |task| {
@@ -1609,10 +1609,10 @@ pub(crate) fn install_goal_task_row_observers_composed(
 /// #8 — the boxed extra consumer composed into the shared `on_restore`
 /// callback (see `install_goal_task_row_observers_resolving_at_callback_
 /// composed`). A type alias keeps clippy's `type_complexity` happy.
-type ExtraRestoreConsumer = Box<dyn Fn(&[octos_agent::BackgroundTask]) + Send + Sync + 'static>;
+type ExtraRestoreConsumer = Box<dyn Fn(&[ra_agent::BackgroundTask]) + Send + Sync + 'static>;
 
 fn install_goal_task_row_observers_resolving_at_callback_composed(
-    supervisor: &octos_agent::TaskSupervisor,
+    supervisor: &ra_agent::TaskSupervisor,
     session_id: &SessionKey,
     profile_id: &str,
     profile_data_dir: &Path,
@@ -1677,7 +1677,7 @@ fn install_goal_task_row_observers_resolving_at_callback_composed(
 /// full resolver contract; this is the goal-only variant (no restore-time
 /// composition).
 pub(crate) fn install_goal_task_row_observers_resolving_at_callback(
-    supervisor: &octos_agent::TaskSupervisor,
+    supervisor: &ra_agent::TaskSupervisor,
     session_id: &SessionKey,
     profile_id: &str,
     profile_data_dir: &Path,
@@ -1710,10 +1710,10 @@ pub(crate) fn install_goal_task_row_observers_resolving_at_callback(
 /// fires the change-feed settle (wired by the same installer), which is what
 /// lands the adopted row's ledger flip.
 pub(crate) fn install_peer_restore_observers_composed(
-    supervisor: &octos_agent::TaskSupervisor,
+    supervisor: &ra_agent::TaskSupervisor,
     profile_data_dir: &Path,
     resolve_register_binding: impl Fn() -> Option<(String, String)> + Send + Sync + 'static,
-    on_restore: impl Fn(&[octos_agent::BackgroundTask]) + Send + Sync + 'static,
+    on_restore: impl Fn(&[ra_agent::BackgroundTask]) + Send + Sync + 'static,
 ) {
     install_goal_task_row_observers_composed(
         supervisor,
@@ -1753,13 +1753,13 @@ pub(crate) fn install_peer_restore_observers_composed(
 /// inner supervisor state until process shutdown. When the upgrade fails the
 /// session is gone, and there is nothing left to adopt or reconcile for, so
 /// the callback simply no-ops. The same applies to child supervisors that
-/// INHERIT the composed callback ([`octos_agent::TaskSupervisor::
+/// INHERIT the composed callback ([`ra_agent::TaskSupervisor::
 /// inherit_registration_observers`], e.g. the `snapshot_excluding` path): a
 /// child restoring after the parent's last owner dropped skips the adoption
 /// half, while the goal-reconcile half still runs over the child's own
 /// restored rows.
 pub(crate) fn install_peer_restore_observers_resolving_at_callback(
-    supervisor: &Arc<octos_agent::TaskSupervisor>,
+    supervisor: &Arc<ra_agent::TaskSupervisor>,
     session_id: &SessionKey,
     profile_id: &str,
     profile_data_dir: &Path,
@@ -2219,7 +2219,7 @@ impl InProcessAgentOrchestrator {
     /// Install the profile's cron service so `loop/delete` can reap the cron
     /// jobs that loop created. Mirrors [`Self::set_fleet_store`]; called at
     /// serve boot, absent everywhere else.
-    pub(crate) fn set_cron_service(&self, service: std::sync::Arc<octos_bus::CronService>) {
+    pub(crate) fn set_cron_service(&self, service: std::sync::Arc<ra_bus::CronService>) {
         let mut state = self.state();
         state.cron_service = Some(service);
     }
@@ -2920,7 +2920,7 @@ impl InProcessAgentOrchestrator {
             agent_id
         );
         if let Some(policy) = dispatch_policy.as_ref() {
-            let backend = octos_agent::DispatchBackendMetadata::sandboxed(
+            let backend = ra_agent::DispatchBackendMetadata::sandboxed(
                 NATIVE_SPECIALIST_BACKEND_KIND,
                 cwd.to_string_lossy().into_owned(),
             );
@@ -2928,10 +2928,10 @@ impl InProcessAgentOrchestrator {
                 "task": task.as_str(),
                 "cwd": cwd.to_string_lossy().into_owned(),
             });
-            if let Err(denial) = octos_agent::enforce_dispatch_gates_for_backend(
+            if let Err(denial) = ra_agent::enforce_dispatch_gates_for_backend(
                 policy.as_ref(),
                 &backend,
-                octos_agent::DispatchTarget {
+                ra_agent::DispatchTarget {
                     dispatch_id: &agent_id,
                     tool_name: NATIVE_SPECIALIST_BACKEND_KIND,
                     task: &task_payload,
@@ -3027,7 +3027,7 @@ impl InProcessAgentOrchestrator {
             supervisor.mark_running(&raw_task_id);
             supervisor.mark_runtime_state(
                 &raw_task_id,
-                octos_agent::TaskRuntimeState::ExecutingTool,
+                ra_agent::TaskRuntimeState::ExecutingTool,
                 Some(
                     json!({
                         "workflow_kind": "native_specialist",
@@ -4474,11 +4474,11 @@ impl InProcessAgentOrchestrator {
             if path.extension().and_then(|e| e.to_str()) != Some("db") {
                 continue;
             }
-            let Ok(ledger) = octos_fleet::GoalLedger::open(&path) else {
+            let Ok(ledger) = ra_fleet::GoalLedger::open(&path) else {
                 continue;
             };
             let Ok(Some((owner, claimed_at))) =
-                ledger.kv_get_with_time(octos_fleet::GoalLedger::MAIN_TREE_OWNER_KEY)
+                ledger.kv_get_with_time(ra_fleet::GoalLedger::MAIN_TREE_OWNER_KEY)
             else {
                 continue;
             };
@@ -4506,7 +4506,7 @@ impl InProcessAgentOrchestrator {
             return;
         }
         let ledger_path = Self::goal_ledger_path(profile_data_dir, goal_id);
-        let ledger = match octos_fleet::GoalLedger::open(&ledger_path) {
+        let ledger = match ra_fleet::GoalLedger::open(&ledger_path) {
             Ok(ledger) => ledger,
             Err(error) => {
                 tracing::warn!(%error, ledger = %ledger_path.display(),
@@ -4547,7 +4547,7 @@ impl InProcessAgentOrchestrator {
         main_tree_root: std::path::PathBuf,
     ) {
         let profile_data_dir_for_closure = profile_data_dir.clone();
-        octos_agent::tools::shell::set_main_tree_sovereignty_provider(Some(std::sync::Arc::new(
+        ra_agent::tools::shell::set_main_tree_sovereignty_provider(Some(std::sync::Arc::new(
             move |caller_goal_id: Option<&str>| {
                 let root = main_tree_root.clone();
                 // Read the main tree's CURRENT branch (fail-open on any error).
@@ -4577,7 +4577,7 @@ impl InProcessAgentOrchestrator {
                 // tree has one true owner, so any hit is authoritative).
                 let owner_goal_id =
                     orchestrator.scan_main_tree_owner(&profile_data_dir_for_closure);
-                Some(octos_agent::tools::shell::MainTreeSovereigntyContext {
+                Some(ra_agent::tools::shell::MainTreeSovereigntyContext {
                     main_tree_root: root,
                     main_tree_branch: branch,
                     owner_goal_id,
@@ -4828,7 +4828,7 @@ impl InProcessAgentOrchestrator {
         session_id: &SessionKey,
         profile_id: &str,
         expected_goal_id: Option<&str>,
-        usage: &octos_llm::TokenUsage,
+        usage: &ra_llm::TokenUsage,
     ) -> Option<Value> {
         let expected_goal_id = expected_goal_id?;
         let tokens = u64::from(usage.input_tokens).saturating_add(u64::from(usage.output_tokens));
@@ -4935,7 +4935,7 @@ impl InProcessAgentOrchestrator {
                     replayed: false,
                     replayed_of_ts_ms: None,
                     diagnostic: Some(diagnostic),
-                    usage: octos_llm::TokenUsage::default(),
+                    usage: ra_llm::TokenUsage::default(),
                 };
             }
             VerifierGateLookup::Replay(record) => {
@@ -4949,7 +4949,7 @@ impl InProcessAgentOrchestrator {
                     replayed: true,
                     replayed_of_ts_ms: Some(record.ts_ms),
                     diagnostic: None,
-                    usage: octos_llm::TokenUsage::default(),
+                    usage: ra_llm::TokenUsage::default(),
                 };
             }
             VerifierGateLookup::Miss => {}
@@ -4974,7 +4974,7 @@ impl InProcessAgentOrchestrator {
                     replayed: false,
                     replayed_of_ts_ms: None,
                     diagnostic: Some(diagnostic),
-                    usage: octos_llm::TokenUsage::default(),
+                    usage: ra_llm::TokenUsage::default(),
                 };
             }
         }
@@ -4983,7 +4983,7 @@ impl InProcessAgentOrchestrator {
         // retryable CallFailed or EmptyResponse, and only while the goal is
         // still active after the previous per-attempt charge.
         let mut attempts: u32 = 0;
-        let mut usage = octos_llm::TokenUsage::default();
+        let mut usage = ra_llm::TokenUsage::default();
         let (verdict, outcome_kind, missing_evidence, call_error, record_reason);
         loop {
             attempts += 1;
@@ -6549,7 +6549,7 @@ impl InProcessAgentOrchestrator {
         if !ledger_path.is_file() {
             return Vec::new();
         }
-        let Ok(ledger) = octos_fleet::GoalLedger::open(&ledger_path) else {
+        let Ok(ledger) = ra_fleet::GoalLedger::open(&ledger_path) else {
             return Vec::new();
         };
         // Read all findings for this goal (no cursor — goal_get is called
@@ -6603,7 +6603,7 @@ impl InProcessAgentOrchestrator {
         // NOTE: `GoalLedger::open` is read-write + `CREATE TABLE IF NOT
         // EXISTS` DDL (WAL) — inherited from every existing reader, incl. the
         // findings dump above; there is no read-only open variant yet.
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).ok()?;
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).ok()?;
         // Tasks by status. HONEST-SEMANTICS caveat: production's only task
         // writer today is the `running` FK stub in
         // [`Self::model_goal_record_peer_finding`] and nothing ever updates a
@@ -6925,7 +6925,7 @@ impl InProcessAgentOrchestrator {
     /// unconditionally: row said `active`, decision said `cleared`. Now: when
     /// the guarded upsert reports the write was NOT admitted and this is a
     /// status transition, re-read the row and retry ONCE via a targeted
-    /// status-CAS ([`octos_fleet::GoalLedger::cas_goal_status`]) — the status
+    /// status-CAS ([`ra_fleet::GoalLedger::cas_goal_status`]) — the status
     /// lands with the row's counters untouched (they are authoritative). The
     /// retry is ORDERING-GATED: it runs only when the snapshot is at least as
     /// new as the row (`snapshot.updated_at_ms >= row.updated_at_ms`), so an
@@ -6954,9 +6954,9 @@ impl InProcessAgentOrchestrator {
             sanitize_filename_for_ledger(&snapshot.goal_id)
         ));
         let opened = if retry_contended_open {
-            octos_fleet::GoalLedger::open_with_busy_retry(&ledger_path)
+            ra_fleet::GoalLedger::open_with_busy_retry(&ledger_path)
         } else {
-            octos_fleet::GoalLedger::open(&ledger_path)
+            ra_fleet::GoalLedger::open(&ledger_path)
         };
         let ledger = match opened {
             Ok(ledger) => ledger,
@@ -6967,7 +6967,7 @@ impl InProcessAgentOrchestrator {
             }
         };
         let snapshot_ts = snapshot.updated_at_ms.max(0) as u64;
-        let row = octos_fleet::Goal {
+        let row = ra_fleet::Goal {
             goal_id: snapshot.goal_id.clone(),
             objective: snapshot.objective.clone(),
             status: snapshot.status.clone(),
@@ -7043,7 +7043,7 @@ impl InProcessAgentOrchestrator {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
-        let decision = octos_fleet::Decision {
+        let decision = ra_fleet::Decision {
             decision_id: format!("dec-{}-{}", snapshot.goal_id, uuid::Uuid::now_v7()),
             goal_id: snapshot.goal_id.clone(),
             task_id: None,
@@ -7071,7 +7071,7 @@ impl InProcessAgentOrchestrator {
     /// #2064(b) — durably settle a late (post-clear) turn charge into the
     /// cleared goals-row. #2066 round 2 (codex R6): the settle is a
     /// COUNTERS-ONLY additive delta
-    /// ([`octos_fleet::GoalLedger::settle_cleared_goal_cost_delta`]) — never
+    /// ([`ra_fleet::GoalLedger::settle_cleared_goal_cost_delta`]) — never
     /// an absolute snapshot. The round-1 snapshot upsert was arrival-order
     /// dependent (its monotonic `updated_at >= AND tokens >=` clauses meant a
     /// clear-stamp landing AFTER the settle could reject or a settle landing
@@ -7099,7 +7099,7 @@ impl InProcessAgentOrchestrator {
     /// before the stamp would store `lag + delta`, which the stamp then
     /// collapses back to the base whenever the lag exceeds the delta (the
     /// normal case: the lag is a whole goal's history). See
-    /// [`octos_fleet::GoalLedger::settle_cleared_goal_cost_delta`].
+    /// [`ra_fleet::GoalLedger::settle_cleared_goal_cost_delta`].
     fn offload_cleared_goal_settle(
         base_snapshot: AutonomyGoalRecord,
         ledger_data_dir: std::path::PathBuf,
@@ -7115,7 +7115,7 @@ impl InProcessAgentOrchestrator {
                 "{}.db",
                 sanitize_filename_for_ledger(&base_snapshot.goal_id)
             ));
-            let ledger = match octos_fleet::GoalLedger::open(&ledger_path) {
+            let ledger = match ra_fleet::GoalLedger::open(&ledger_path) {
                 Ok(ledger) => ledger,
                 Err(error) => {
                     tracing::warn!(%error, ledger = %ledger_path.display(),
@@ -7123,7 +7123,7 @@ impl InProcessAgentOrchestrator {
                     return;
                 }
             };
-            let base = octos_fleet::Goal {
+            let base = ra_fleet::Goal {
                 goal_id: base_snapshot.goal_id.clone(),
                 objective: base_snapshot.objective.clone(),
                 status: "cleared".to_owned(),
@@ -7171,7 +7171,7 @@ impl InProcessAgentOrchestrator {
     /// order-dependent: a same-millisecond stamp landing after the settle
     /// overwrote the settled delta; a newer-timestamp settle made a later
     /// stamp reject and lose the entire pre-clear lag). The dedicated writer
-    /// ([`octos_fleet::GoalLedger::stamp_goal_cleared`]) MAX-merges counters
+    /// ([`ra_fleet::GoalLedger::stamp_goal_cleared`]) MAX-merges counters
     /// per column and CASEs status, so it commutes with the settle deltas in
     /// every arrival order. The audit decision is gated on the STORED status
     /// (a `complete` row keeps `complete` and gets no `cleared` decision —
@@ -7192,7 +7192,7 @@ impl InProcessAgentOrchestrator {
             "{}.db",
             sanitize_filename_for_ledger(&snapshot.goal_id)
         ));
-        let ledger = match octos_fleet::GoalLedger::open(&ledger_path) {
+        let ledger = match ra_fleet::GoalLedger::open(&ledger_path) {
             Ok(ledger) => ledger,
             Err(error) => {
                 tracing::warn!(%error, ledger = %ledger_path.display(),
@@ -7200,7 +7200,7 @@ impl InProcessAgentOrchestrator {
                 return;
             }
         };
-        let row = octos_fleet::Goal {
+        let row = ra_fleet::Goal {
             goal_id: snapshot.goal_id.clone(),
             objective: snapshot.objective.clone(),
             status: "cleared".to_owned(),
@@ -7235,7 +7235,7 @@ impl InProcessAgentOrchestrator {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
-        let decision = octos_fleet::Decision {
+        let decision = ra_fleet::Decision {
             decision_id: format!("dec-{}-{}", snapshot.goal_id, uuid::Uuid::now_v7()),
             goal_id: snapshot.goal_id.clone(),
             task_id: None,
@@ -7551,7 +7551,7 @@ impl InProcessAgentOrchestrator {
                 }
                 // The FRESH snapshot (post-charge, post-flip) feeds the ledger
                 // upsert below, so the goals row finally carries real numbers.
-                octos_fleet::Goal {
+                ra_fleet::Goal {
                     goal_id: goal_id.to_owned(),
                     objective: snapshot.objective.clone(),
                     status: snapshot.status.clone(),
@@ -7585,7 +7585,7 @@ impl InProcessAgentOrchestrator {
             )
         })?;
         let ledger_path = ledger_dir.join(format!("{}.db", sanitize_filename_for_ledger(goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path)
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path)
             .map_err(|e| format!("failed to open goal ledger {}: {e}", ledger_path.display()))?;
         // FK constraint: findings reference goals(goal_id), so we must upsert
         // the goal row BEFORE appending a finding. #1957 — write the goal's REAL
@@ -7604,7 +7604,7 @@ impl InProcessAgentOrchestrator {
         // and this stub must PRESERVE it rather than rely on a swallowed
         // UNIQUE violation.
         if let Some(task_id_str) = task_id {
-            let task_stub = octos_fleet::Task {
+            let task_stub = ra_fleet::Task {
                 task_id: task_id_str.to_owned(),
                 goal_id: goal_id.to_owned(),
                 title: String::new(), // unknown at this layer
@@ -7617,7 +7617,7 @@ impl InProcessAgentOrchestrator {
             let _ = ledger.create_task_if_absent(&task_stub);
         }
         let finding_id = format!("peer-{}-{}", peer_slug, uuid::Uuid::now_v7());
-        let finding = octos_fleet::Finding {
+        let finding = ra_fleet::Finding {
             rowid: None,
             finding_id: finding_id.clone(),
             seq: 0, // assigned by store on insert
@@ -7627,7 +7627,7 @@ impl InProcessAgentOrchestrator {
             lifecycle: "observed".to_owned(),
             confidence: "medium".to_owned(),
             review_state: "unreviewed".to_owned(),
-            assertion: octos_core::truncated_utf8(
+            assertion: ra_core::truncated_utf8(
                 content,
                 MAX_PEER_FINDING_ASSERTION_CHARS,
                 " …[truncated]",
@@ -7702,7 +7702,7 @@ impl InProcessAgentOrchestrator {
                     goal.fleet_id.as_deref() == Some(fleet_id.as_str())
                         && goal.profile_id == profile_id
                 })
-                .map(|goal| octos_fleet::Goal {
+                .map(|goal| ra_fleet::Goal {
                     goal_id: goal.goal_id.clone(),
                     objective: goal.objective.clone(),
                     status: goal.status.clone(),
@@ -7730,7 +7730,7 @@ impl InProcessAgentOrchestrator {
             return;
         }
         let ledger_path = ledger_dir.join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
-        let Ok(ledger) = octos_fleet::GoalLedger::open(&ledger_path) else {
+        let Ok(ledger) = ra_fleet::GoalLedger::open(&ledger_path) else {
             tracing::warn!(path = %ledger_path.display(), "write-grant denial: cannot open ledger; dropping finding");
             return;
         };
@@ -7742,7 +7742,7 @@ impl InProcessAgentOrchestrator {
             .unwrap_or(0);
         // #2055 — if-absent upsert preserves a registration-created (and
         // possibly already-settled) row; see model_goal_record_peer_finding.
-        let task_stub = octos_fleet::Task {
+        let task_stub = ra_fleet::Task {
             task_id: task_id.clone(),
             goal_id: goal_id.clone(),
             title: String::new(),
@@ -7753,7 +7753,7 @@ impl InProcessAgentOrchestrator {
             updated_at_ms: now_ms,
         };
         let _ = ledger.create_task_if_absent(&task_stub);
-        let finding = octos_fleet::Finding {
+        let finding = ra_fleet::Finding {
             rowid: None,
             finding_id: format!("denied-{fleet_id}-{}", uuid::Uuid::now_v7()),
             seq: 0,
@@ -7823,7 +7823,7 @@ impl InProcessAgentOrchestrator {
                             || key.to_string() == originator_session
                             || key.base_key() == originator_session)
                 })
-                .map(|(_, goal)| octos_fleet::Goal {
+                .map(|(_, goal)| ra_fleet::Goal {
                     goal_id: goal_id.to_owned(),
                     objective: goal.objective.clone(),
                     status: goal.status.clone(),
@@ -7851,7 +7851,7 @@ impl InProcessAgentOrchestrator {
             )
         })?;
         let ledger_path = ledger_dir.join(format!("{}.db", sanitize_filename_for_ledger(goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path)
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path)
             .map_err(|e| format!("failed to open goal ledger {}: {e}", ledger_path.display()))?;
         // FK constraint: escalations reference goals(goal_id) — upsert the goal
         // row (with REAL fields, #1957) BEFORE appending an escalation.
@@ -7866,7 +7866,7 @@ impl InProcessAgentOrchestrator {
         // #2055 — if-absent upsert preserves a registration-created (and
         // possibly already-settled) row.
         if let Some(task_id_str) = task_id {
-            let task_stub = octos_fleet::Task {
+            let task_stub = ra_fleet::Task {
                 task_id: task_id_str.to_owned(),
                 goal_id: goal_id.to_owned(),
                 title: String::new(),
@@ -7879,7 +7879,7 @@ impl InProcessAgentOrchestrator {
             let _ = ledger.create_task_if_absent(&task_stub);
         }
         let escalation_id = format!("esc-{}-{}", peer_slug, uuid::Uuid::now_v7());
-        let escalation = octos_fleet::Escalation {
+        let escalation = ra_fleet::Escalation {
             escalation_id: escalation_id.clone(),
             goal_id: goal_id.to_owned(),
             task_id: task_id.map(str::to_owned),
@@ -7944,7 +7944,7 @@ impl InProcessAgentOrchestrator {
         if !ledger_path.exists() {
             return Ok(0);
         }
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path)
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path)
             .map_err(|e| format!("failed to open goal ledger {}: {e}", ledger_path.display()))?;
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -7975,7 +7975,7 @@ impl InProcessAgentOrchestrator {
         if !ledger_path.is_file() {
             return Vec::new();
         }
-        let Ok(ledger) = octos_fleet::GoalLedger::open(&ledger_path) else {
+        let Ok(ledger) = ra_fleet::GoalLedger::open(&ledger_path) else {
             return Vec::new();
         };
         let now_ms = now_ms_u64();
@@ -8076,7 +8076,7 @@ impl InProcessAgentOrchestrator {
                 );
                 continue;
             }
-            let Ok(ledger) = octos_fleet::GoalLedger::open(&path) else {
+            let Ok(ledger) = ra_fleet::GoalLedger::open(&path) else {
                 continue;
             };
             let Ok(candidates) = ledger.list_expired_open_escalations(now_ms) else {
@@ -8186,7 +8186,7 @@ impl InProcessAgentOrchestrator {
         profile_data_dir: &Path,
         profile_id: &str,
         goal_id: &str,
-        task: &octos_agent::BackgroundTask,
+        task: &ra_agent::BackgroundTask,
     ) {
         // Round 3 — opportunistic retention purge on every map touch (no
         // background sweeper): expired correction windows drop here.
@@ -8241,13 +8241,13 @@ impl InProcessAgentOrchestrator {
         &self,
         profile_id: &str,
         goal_id: &str,
-    ) -> Option<octos_fleet::Goal> {
+    ) -> Option<ra_fleet::Goal> {
         let state = self.state();
         state
             .goals
             .values()
             .find(|goal| goal.goal_id == goal_id && goal.profile_id == profile_id)
-            .map(|goal| octos_fleet::Goal {
+            .map(|goal| ra_fleet::Goal {
                 goal_id: goal.goal_id.clone(),
                 objective: goal.objective.clone(),
                 status: goal.status.clone(),
@@ -8316,10 +8316,10 @@ impl InProcessAgentOrchestrator {
 
     /// #2055 — the blocking half of [`Self::record_goal_task_registration`]:
     /// FK-parent goals row via the never-updating
-    /// [`octos_fleet::GoalLedger::create_goal_if_absent`] (the bundled
+    /// [`ra_fleet::GoalLedger::create_goal_if_absent`] (the bundled
     /// SQLite enforces `foreign_keys=1`, and this can be the ledger file's
     /// very first write), then the `running` task row via the idempotent
-    /// [`octos_fleet::GoalLedger::create_task_if_absent`] — so
+    /// [`ra_fleet::GoalLedger::create_task_if_absent`] — so
     /// re-registration across relaunch/restart preserves an existing row and
     /// its status, including one the settle side already wrote terminal.
     /// Runs on the blocking pool (or a non-executor thread), so the
@@ -8339,7 +8339,7 @@ impl InProcessAgentOrchestrator {
             return;
         }
         let now = now_ms_u64();
-        let row = octos_fleet::Task {
+        let row = ra_fleet::Task {
             task_id: task_id.to_owned(),
             goal_id: binding.goal_row.goal_id.clone(),
             title: binding.title.clone(),
@@ -8349,7 +8349,7 @@ impl InProcessAgentOrchestrator {
             created_at_ms: now,
             updated_at_ms: now,
         };
-        let written = octos_fleet::GoalLedger::open_with_busy_retry(binding.ledger_path())
+        let written = ra_fleet::GoalLedger::open_with_busy_retry(binding.ledger_path())
             .and_then(|ledger| {
                 ledger.create_goal_if_absent(&binding.goal_row)?;
                 ledger.create_task_if_absent(&row)
@@ -8453,11 +8453,11 @@ impl InProcessAgentOrchestrator {
         profile_data_dir: &Path,
         profile_id: &str,
         goal_id: &str,
-        restored: &[octos_agent::BackgroundTask],
+        restored: &[ra_agent::BackgroundTask],
     ) {
         // Terminal rows only, keyed by task id — the same authority rule the
         // live change-feed settle applies (`terminal_settle_authority`).
-        let terminal: HashMap<String, octos_agent::BackgroundTask> = restored
+        let terminal: HashMap<String, ra_agent::BackgroundTask> = restored
             .iter()
             .filter(|task| terminal_settle_authority(task).is_some())
             .map(|task| (task.id.clone(), task.clone()))
@@ -8498,8 +8498,8 @@ impl InProcessAgentOrchestrator {
         &self,
         profile_data_dir: &Path,
         goal_id: &str,
-        goal_row: octos_fleet::Goal,
-        terminal: HashMap<String, octos_agent::BackgroundTask>,
+        goal_row: ra_fleet::Goal,
+        terminal: HashMap<String, ra_agent::BackgroundTask>,
     ) {
         let ledger_path = Self::goal_ledger_path(profile_data_dir, &goal_row.goal_id);
         if !ledger_path.exists() {
@@ -8508,7 +8508,7 @@ impl InProcessAgentOrchestrator {
             // nothing, on every restore. (One metadata probe, no SQLite open.)
             return;
         }
-        let candidates = match octos_fleet::GoalLedger::open_with_busy_retry(&ledger_path)
+        let candidates = match ra_fleet::GoalLedger::open_with_busy_retry(&ledger_path)
             .and_then(|ledger| ledger.tasks_open_to_correction(goal_id))
         {
             Ok(candidates) => candidates,
@@ -8604,7 +8604,7 @@ impl InProcessAgentOrchestrator {
     /// purged out from under its own chain (`TaskTerminalGuard` clears
     /// liveness before the final transition, so the liveness consult alone
     /// cannot protect it).
-    pub(crate) fn settle_goal_task_row_from_change(&self, task: &octos_agent::BackgroundTask) {
+    pub(crate) fn settle_goal_task_row_from_change(&self, task: &ra_agent::BackgroundTask) {
         let Some((authority, remove_on_success)) = terminal_settle_authority(task) else {
             return;
         };
@@ -8706,10 +8706,10 @@ impl InProcessAgentOrchestrator {
     /// #2054 — the blocking half of the change-feed settle. SELF-SUFFICIENT:
     /// seeds the FK-parent goals row and the task row (as `running`) if the
     /// creation offload has not landed yet, then applies the
-    /// authority-ranked [`octos_fleet::GoalLedger::settle_task_status`] —
+    /// authority-ranked [`ra_fleet::GoalLedger::settle_task_status`] —
     /// creation-then-settle and settle-then-creation converge, and the
     /// persisted rank makes the outcome independent of write delivery order
-    /// (see [`octos_fleet::TaskSettleAuthority`]). An `Ok(false)` from the
+    /// (see [`ra_fleet::TaskSettleAuthority`]). An `Ok(false)` from the
     /// ranked write is a normal no-op (redelivery or an outranked write).
     ///
     /// Staleness fence (round 4): before EVERY write attempt — the first and
@@ -8737,7 +8737,7 @@ impl InProcessAgentOrchestrator {
         &self,
         binding: &GoalTaskLedgerBinding,
         task_id: &str,
-        authority: octos_fleet::TaskSettleAuthority,
+        authority: ra_fleet::TaskSettleAuthority,
         remove_on_success: bool,
         attempt: u32,
         flight: GoalTaskSettleFlightGuard,
@@ -8778,7 +8778,7 @@ impl InProcessAgentOrchestrator {
         }
         let ledger_dir = Self::goal_ledger_dir(&binding.profile_data_dir);
         let now = now_ms_u64();
-        let seed_row = octos_fleet::Task {
+        let seed_row = ra_fleet::Task {
             task_id: task_id.to_owned(),
             goal_id: binding.goal_row.goal_id.clone(),
             title: binding.title.clone(),
@@ -8790,7 +8790,7 @@ impl InProcessAgentOrchestrator {
         };
         let written = std::fs::create_dir_all(&ledger_dir)
             .map_err(|error| eyre::eyre!("ledger dir unavailable: {error}"))
-            .and_then(|()| octos_fleet::GoalLedger::open_with_busy_retry(binding.ledger_path()))
+            .and_then(|()| ra_fleet::GoalLedger::open_with_busy_retry(binding.ledger_path()))
             .and_then(|ledger| {
                 ledger.create_goal_if_absent(&binding.goal_row)?;
                 ledger.create_task_if_absent(&seed_row)?;
@@ -8917,7 +8917,7 @@ impl InProcessAgentOrchestrator {
     /// windows older than [`PROVISIONAL_CORRECTION_RETENTION`], but NEVER a
     /// live task's: eligibility requires BOTH an expired `retained_since`
     /// stamp AND the process-global worker liveness
-    /// ([`octos_agent::task_is_live`]) reporting the worker gone — a
+    /// ([`ra_agent::task_is_live`]) reporting the worker gone — a
     /// still-running provisionally-failed worker keeps its correction
     /// window however long it runs. A binding with no stamp (task live or
     /// settle still retrying) is never eligible at all. Called
@@ -8939,7 +8939,7 @@ impl InProcessAgentOrchestrator {
                 match binding.retained_since {
                     Some(retained_since) => {
                         retained_since.elapsed() < PROVISIONAL_CORRECTION_RETENTION
-                            || octos_agent::task_is_live(task_id)
+                            || ra_agent::task_is_live(task_id)
                     }
                     None => true,
                 }
@@ -9533,7 +9533,7 @@ impl InProcessAgentOrchestrator {
         // exists): a task the operator already resolved is not grantable. This is
         // the out-of-txn early-out; `set_task_grant` re-checks `Blocked` INSIDE
         // the write-txn (the authoritative CAS against a racing deny).
-        if task.status != octos_fleet::ChildStatus::Blocked {
+        if task.status != ra_fleet::ChildStatus::Blocked {
             return Err(format!(
                 "task `{task_id}` is not Blocked on an escalation (status {:?}) — nothing to grant",
                 task.status
@@ -9808,7 +9808,7 @@ impl InProcessAgentOrchestrator {
     /// ([`Self::spawn_fleet_settle_monitor`]) the moment a dispatched attempt's
     /// background run resolves (its terminal store write — `complete_child` /
     /// `record_escalation` — has already committed by then, see
-    /// `octos_fleet_worker::run_attempt`). Recomputes the fleet's completion
+    /// `ra_fleet_worker::run_attempt`). Recomputes the fleet's completion
     /// state from the store and drives the SAME
     /// [`Self::drive_goal_terminal_transition`] the `goal_get` snapshot
     /// backstop uses — so a fully-succeeded fleet completes its goal (and a
@@ -9849,7 +9849,7 @@ impl InProcessAgentOrchestrator {
         let failed_tasks: Vec<&str> = view
             .tasks
             .iter()
-            .filter(|t| t.status == octos_fleet::ChildStatus::Failed)
+            .filter(|t| t.status == ra_fleet::ChildStatus::Failed)
             .map(|t| t.task_id.as_str())
             .collect();
         // #1964 — the keeper profile's data dir installed at serve boot beside
@@ -9879,7 +9879,7 @@ impl InProcessAgentOrchestrator {
     ///
     /// #1865 review FIX 3 — a `JoinError` (panic/abort) means the attempt did
     /// NOT settle its own child: the drop-guard's `Terminated` settle is
-    /// SPAWNED separately (see `octos_fleet_worker::LaunchGuard`) and usually
+    /// SPAWNED separately (see `ra_fleet_worker::LaunchGuard`) and usually
     /// commits AFTER this handle resolves, so the immediate reconcile can read
     /// a still-`Running` child and no-op. On that path only, ONE delayed
     /// re-reconcile (~2s — generous against a spawned store write that takes
@@ -9892,7 +9892,7 @@ impl InProcessAgentOrchestrator {
         key: &SessionKey,
         profile_id: &str,
         fleet_id: &str,
-        handle: Option<tokio::task::JoinHandle<octos_fleet_worker::AttemptOutcome>>,
+        handle: Option<tokio::task::JoinHandle<ra_fleet_worker::AttemptOutcome>>,
     ) {
         let Some(handle) = handle else { return };
         let orchestrator = self.clone();
@@ -9988,7 +9988,7 @@ impl InProcessAgentOrchestrator {
         let failed_tasks: Vec<&str> = view
             .tasks
             .iter()
-            .filter(|t| t.status == octos_fleet::ChildStatus::Failed)
+            .filter(|t| t.status == ra_fleet::ChildStatus::Failed)
             .map(|t| t.task_id.as_str())
             .collect();
         // Shared with the eager paths (`model_deny_escalation` + the #1865
@@ -10744,7 +10744,7 @@ impl AgentOrchestrator for InProcessAgentOrchestrator {
             // become reachable by every successful parent-controls-child
             // caller. See `redact_artifact_secrets` for the full pattern
             // set (intentionally a conservative subset of
-            // `octos_agent::sanitize` so legitimate evidence payloads —
+            // `ra_agent::sanitize` so legitimate evidence payloads —
             // long hex digests, base64 blobs — pass through unchanged).
             let content = artifact
                 .content
@@ -12033,7 +12033,7 @@ struct ClearedGoalTombstone {
     /// the base row for `create_goal_if_absent` when the goal never synced a
     /// ledger row. #2066 round 2 (codex R6): late charges are NOT folded in
     /// here; each charge settles as a COUNTERS-ONLY additive delta
-    /// ([`octos_fleet::GoalLedger::settle_cleared_goal_cost_delta`]), which
+    /// ([`ra_fleet::GoalLedger::settle_cleared_goal_cost_delta`]), which
     /// commutes with the clear's status stamp in every arrival order.
     snapshot: AutonomyGoalRecord,
     /// The profile data dir the clear RPC resolved — the settle writes the
@@ -12548,7 +12548,7 @@ impl InProcessAgentOrchestrator {
 
         let mut preview = lines.join("\n");
         if preview.len() > MONITOR_LINES_PREVIEW_CAP {
-            octos_core::truncate_utf8(&mut preview, MONITOR_LINES_PREVIEW_CAP, " [...]");
+            ra_core::truncate_utf8(&mut preview, MONITOR_LINES_PREVIEW_CAP, " [...]");
         }
         let mut request = MasterContinuationRequest::new(
             MONITOR_FIRED_GROUP,
@@ -13160,7 +13160,7 @@ struct AutonomyRuntimeState {
     /// deleted loop's cron jobs. `None` in tests and in-process orchestrators
     /// that never stood one up — the reap is then a no-op, never an error.
     ///
-    cron_service: Option<std::sync::Arc<octos_bus::CronService>>,
+    cron_service: Option<std::sync::Arc<ra_bus::CronService>>,
     /// #1857 PR 5a — live fleet worker pool the goal keeper dispatches ready
     /// tasks onto (`model_dispatch_fleet`). Installed at serve boot from the
     /// keeper profile's `ProfileRuntime` (`set_fleet_pool`); `None` on the
@@ -14079,11 +14079,11 @@ mod workspace_r5_tests {
     }
 
     // Scoped purge tests need the diagnostic from an abnormal peer lifetime.
-    fn failed_peer(session: &SessionKey, stamp: &str) -> octos_agent::BackgroundTask {
+    fn failed_peer(session: &SessionKey, stamp: &str) -> ra_agent::BackgroundTask {
         peer_outcome(session, stamp, false)
     }
 
-    fn completed_peer(session: &SessionKey, stamp: &str) -> octos_agent::BackgroundTask {
+    fn completed_peer(session: &SessionKey, stamp: &str) -> ra_agent::BackgroundTask {
         peer_outcome(session, stamp, true)
     }
 
@@ -14091,8 +14091,8 @@ mod workspace_r5_tests {
         session: &SessionKey,
         stamp: &str,
         completed: bool,
-    ) -> octos_agent::BackgroundTask {
-        let supervisor = octos_agent::TaskSupervisor::new();
+    ) -> ra_agent::BackgroundTask {
+        let supervisor = ra_agent::TaskSupervisor::new();
         let id = supervisor
             .try_register_peer_with_workspace(
                 "peer_handoff",
@@ -14924,7 +14924,7 @@ mod workspace_r5_tests {
     fn workspace_r5_legacy_other_tool_hex_looking_cwd_stays_literal() {
         let source = tempfile::tempdir().unwrap();
         let session = SessionKey::with_profile("workspace-r5", "api", "other-tool");
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         let id = supervisor
             .try_register_peer_with_workspace(
                 "shell",
@@ -15688,7 +15688,7 @@ fn read_peer_file_for_ledger(peer_dir: &std::path::Path, leaf: &str) -> Option<S
 /// surfaced escalation's advisory requested grant reads back the same way the
 /// keeper would specify it in `goal_grant`.
 fn grant_to_json(grant: &WorkerGrant) -> Value {
-    use octos_fleet::{FsGrant, NetworkGrant};
+    use ra_fleet::{FsGrant, NetworkGrant};
     let network = match &grant.network {
         NetworkGrant::None => json!({ "mode": "none" }),
         NetworkGrant::Full => json!({ "mode": "full" }),
@@ -16427,7 +16427,7 @@ fn detect_goal_complete_sentinel(content: &str) -> bool {
 /// (`crate::runtime::profile::build_goal_verifier_provider`), else the
 /// grading session's own provider (the pre-#1935 back-compat default).
 ///
-/// Also returns the verifier LLM call's [`octos_llm::TokenUsage`] so the
+/// Also returns the verifier LLM call's [`ra_llm::TokenUsage`] so the
 /// caller can fold it into goal-budget accounting (#1958) — the verifier
 /// makes a real provider call, so its tokens must not be silently dropped.
 /// ALL four verifier sites (the three sentinel accountants and the
@@ -16456,7 +16456,7 @@ pub(crate) struct SingleVerifierCall {
     /// Truncated provider error text (CallFailed only), for the ledger and
     /// call-site rendering. The original error is preserved, never dropped.
     pub call_error: Option<String>,
-    pub usage: octos_llm::TokenUsage,
+    pub usage: ra_llm::TokenUsage,
 }
 
 /// Max chars of a provider error kept in the structured result / ledger.
@@ -16480,7 +16480,7 @@ evidence in the reply. If anything required is missing, unverified, or merely \
 asserted, it is NOT done.\n\nAnswer with EXACTLY one line:\n`DONE` if the \
 objective is fully met, or `NOT_DONE: <short reason>` otherwise."
     );
-    let config = octos_llm::ChatConfig {
+    let config = ra_llm::ChatConfig {
         // #23 — 200 was enough for a one-line DONE/NOT_DONE on a NON-reasoning
         // model, but reasoning models (k3, o-series) spend thinking tokens from
         // the SAME budget: with max_tokens=200 the model burned all 200 on
@@ -16500,11 +16500,11 @@ objective is fully met, or `NOT_DONE: <short reason>` otherwise."
         sampling_params: None,
         // One-shot: each verdict prompt embeds its own objective + evidence
         // and is never replayed, so skip prompt-cache writes.
-        cache_retention: octos_llm::CacheRetention::None,
+        cache_retention: ra_llm::CacheRetention::None,
         prompt_cache_context: None,
         media_scope_root: None,
     };
-    let messages = vec![octos_core::Message::user(prompt)];
+    let messages = vec![ra_core::Message::user(prompt)];
     match provider.chat(&messages, &[], &config).await {
         Ok(response) => {
             let reasoning_present = response
@@ -16554,7 +16554,7 @@ objective is fully met, or `NOT_DONE: <short reason>` otherwise."
             // default to non-retryable (conservative — no second call).
             let retryable = error
                 .chain()
-                .filter_map(|cause| cause.downcast_ref::<octos_llm::LlmError>())
+                .filter_map(|cause| cause.downcast_ref::<ra_llm::LlmError>())
                 .next()
                 .is_some_and(|llm| llm.is_retryable());
             // PR-2273 P2-②: ONE bounded, Unicode-safe error string feeds
@@ -16575,7 +16575,7 @@ objective is fully met, or `NOT_DONE: <short reason>` otherwise."
                 missing_evidence: None,
                 call_error_retryable: retryable,
                 call_error: Some(text),
-                usage: octos_llm::TokenUsage::default(),
+                usage: ra_llm::TokenUsage::default(),
             }
         }
     }
@@ -16586,10 +16586,10 @@ objective is fully met, or `NOT_DONE: <short reason>` otherwise."
 /// `Option<SemanticCheckpointReport>` (a report, not a counter); the later
 /// writer's value wins.
 pub(crate) fn sum_token_usage(
-    a: &octos_llm::TokenUsage,
-    b: &octos_llm::TokenUsage,
-) -> octos_llm::TokenUsage {
-    octos_llm::TokenUsage {
+    a: &ra_llm::TokenUsage,
+    b: &ra_llm::TokenUsage,
+) -> ra_llm::TokenUsage {
+    ra_llm::TokenUsage {
         input_tokens: a.input_tokens.saturating_add(b.input_tokens),
         output_tokens: a.output_tokens.saturating_add(b.output_tokens),
         reasoning_tokens: a.reasoning_tokens.saturating_add(b.reasoning_tokens),
@@ -16659,7 +16659,7 @@ pub(crate) struct VerifierLedgerRecord {
     /// Audit mirror of the summed usage; the AUTHORITATIVE counter is the
     /// goals row's tokens_used (charged per attempt). Do not aggregate
     /// this field for accounting.
-    pub usage: octos_llm::TokenUsage,
+    pub usage: ra_llm::TokenUsage,
     #[serde(default)]
     pub missing_evidence: Option<String>,
     /// PR-2273 P2-③: bounded NotDone reason (currently written for
@@ -18655,7 +18655,7 @@ fn agent_continuation_group_id(agent: &AutonomyAgentRecord) -> String {
     )
 }
 
-fn background_task_session_id(task: &octos_agent::BackgroundTask) -> Option<SessionKey> {
+fn background_task_session_id(task: &ra_agent::BackgroundTask) -> Option<SessionKey> {
     task.session_key
         .as_deref()
         .or(task.parent_session_key.as_deref())
@@ -18664,7 +18664,7 @@ fn background_task_session_id(task: &octos_agent::BackgroundTask) -> Option<Sess
         .map(|value| SessionKey(value.to_owned()))
 }
 
-fn background_task_agent_id(task: &octos_agent::BackgroundTask) -> String {
+fn background_task_agent_id(task: &ra_agent::BackgroundTask) -> String {
     task.child_session_key
         .as_deref()
         .filter(|value| !value.is_empty())
@@ -18680,19 +18680,19 @@ fn background_task_agent_id(task: &octos_agent::BackgroundTask) -> String {
         .unwrap_or_else(|| format!("task-{}", task.id))
 }
 
-fn background_task_agent_status(task: &octos_agent::BackgroundTask) -> String {
+fn background_task_agent_status(task: &ra_agent::BackgroundTask) -> String {
     match &task.status {
-        octos_agent::TaskStatus::Spawned | octos_agent::TaskStatus::Running => "running",
-        octos_agent::TaskStatus::Completed => "completed",
-        octos_agent::TaskStatus::Failed => "failed",
-        octos_agent::TaskStatus::Cancelled => "interrupted",
+        ra_agent::TaskStatus::Spawned | ra_agent::TaskStatus::Running => "running",
+        ra_agent::TaskStatus::Completed => "completed",
+        ra_agent::TaskStatus::Failed => "failed",
+        ra_agent::TaskStatus::Cancelled => "interrupted",
         // #27c — awaiting client re-attach (peer orphan); not a verdict.
-        octos_agent::TaskStatus::Parked => "parked",
+        ra_agent::TaskStatus::Parked => "parked",
     }
     .to_owned()
 }
 
-fn background_task_backend_kind(task: &octos_agent::BackgroundTask) -> String {
+fn background_task_backend_kind(task: &ra_agent::BackgroundTask) -> String {
     // register() allocates a child_session_key for peers too. The typed tool
     // identity must win: a peer row tracks its lifetime, not a spawned turn.
     if task.tool_name == "peer_handoff" {
@@ -18704,7 +18704,7 @@ fn background_task_backend_kind(task: &octos_agent::BackgroundTask) -> String {
     }
 }
 
-fn background_task_nickname(task: &octos_agent::BackgroundTask) -> String {
+fn background_task_nickname(task: &ra_agent::BackgroundTask) -> String {
     let phase = task
         .runtime_detail
         .as_deref()
@@ -18722,7 +18722,7 @@ fn background_task_nickname(task: &octos_agent::BackgroundTask) -> String {
     }
 }
 
-fn background_task_last_task(task: &octos_agent::BackgroundTask) -> Option<String> {
+fn background_task_last_task(task: &ra_agent::BackgroundTask) -> Option<String> {
     if let Some(error) = task.error.as_deref().filter(|error| !error.is_empty()) {
         return Some(error.chars().take(1200).collect());
     }
@@ -18752,7 +18752,7 @@ fn background_task_last_task(task: &octos_agent::BackgroundTask) -> Option<Strin
 }
 
 fn background_task_workspace(
-    task: &octos_agent::BackgroundTask,
+    task: &ra_agent::BackgroundTask,
 ) -> std::io::Result<(Option<String>, Option<WorkspaceScope>)> {
     let scope = match task
         .workspace_root
@@ -18770,7 +18770,7 @@ fn background_task_workspace(
     Ok((scope.as_ref().map(WorkspaceScope::display_path), scope))
 }
 
-fn background_task_artifacts(task: &octos_agent::BackgroundTask) -> Vec<AgentArtifactRecord> {
+fn background_task_artifacts(task: &ra_agent::BackgroundTask) -> Vec<AgentArtifactRecord> {
     task.output_files
         .iter()
         .enumerate()
@@ -20027,7 +20027,7 @@ fn autonomy_monitor_group_id(record: &AutonomyMonitorRecord) -> String {
 }
 
 /// #1977 — the wire `monitor` snapshot. Field names MUST match
-/// `octos_core::ui_protocol::UiMonitorRecord` so the RPC-result →
+/// `ra_core::ui_protocol::UiMonitorRecord` so the RPC-result →
 /// `monitor/updated` notification bridge deserializes it directly.
 fn autonomy_monitor_json(record: &AutonomyMonitorRecord) -> Value {
     json!({
@@ -21385,16 +21385,16 @@ mod tests {
     impl LlmProvider for NativeTruncatedProvider {
         async fn chat(
             &self,
-            messages: &[octos_core::Message],
-            tools: &[octos_llm::ToolSpec],
-            config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+            messages: &[ra_core::Message],
+            tools: &[ra_llm::ToolSpec],
+            config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             let mut response = NativeMockProvider {
                 content: Ok("actual unfinished specialist analysis".into()),
             }
             .chat(messages, tools, config)
             .await?;
-            response.stop_reason = octos_llm::StopReason::MaxTokens;
+            response.stop_reason = ra_llm::StopReason::MaxTokens;
             Ok(response)
         }
         fn model_id(&self) -> &str {
@@ -21409,17 +21409,17 @@ mod tests {
     impl LlmProvider for NativeMockProvider {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             match &self.content {
-                Ok(content) => Ok(octos_llm::ChatResponse {
+                Ok(content) => Ok(ra_llm::ChatResponse {
                     content: Some(content.clone()),
                     reasoning_content: None,
                     tool_calls: Vec::new(),
-                    stop_reason: octos_llm::StopReason::EndTurn,
-                    usage: octos_llm::TokenUsage {
+                    stop_reason: ra_llm::StopReason::EndTurn,
+                    usage: ra_llm::TokenUsage {
                         input_tokens: 3,
                         output_tokens: 5,
                         ..Default::default()
@@ -21449,17 +21449,17 @@ mod tests {
     impl LlmProvider for MaxTokensCapturingProvider {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             *self.seen_max_tokens.lock().unwrap() = config.max_tokens;
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: Some("DONE".to_owned()),
                 reasoning_content: None,
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage {
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage {
                     input_tokens: 10,
                     output_tokens: 3,
                     ..Default::default()
@@ -21506,14 +21506,14 @@ mod tests {
     /// guard (fix H1) lets the mock agent actually run. (ra-fleet-worker's
     /// testutil holds the twin used by its own tests.)
     struct MarkerSandbox;
-    impl octos_agent::sandbox::Sandbox for MarkerSandbox {
+    impl ra_agent::sandbox::Sandbox for MarkerSandbox {
         fn wrap_command(
             &self,
             shell_command: &str,
             cwd: &std::path::Path,
         ) -> tokio::process::Command {
-            octos_agent::sandbox::Sandbox::wrap_command(
-                &octos_agent::sandbox::NoSandbox,
+            ra_agent::sandbox::Sandbox::wrap_command(
+                &ra_agent::sandbox::NoSandbox,
                 shell_command,
                 cwd,
             )
@@ -21546,21 +21546,21 @@ mod tests {
     ) -> (tempfile::TempDir, Arc<FleetWorkerPool>) {
         let mem_dir = tempfile::TempDir::new().expect("mem tempdir");
         let memory = Arc::new(
-            octos_memory::EpisodeStore::open(mem_dir.path())
+            ra_memory::EpisodeStore::open(mem_dir.path())
                 .await
                 .expect("open episode store"),
         );
-        let sandbox_factory: octos_fleet_worker::SandboxFactory = Arc::new(|_cwd, _grant| {
-            Arc::new(MarkerSandbox) as Arc<dyn octos_agent::sandbox::Sandbox>
+        let sandbox_factory: ra_fleet_worker::SandboxFactory = Arc::new(|_cwd, _grant| {
+            Arc::new(MarkerSandbox) as Arc<dyn ra_agent::sandbox::Sandbox>
         });
-        let factory = Arc::new(octos_fleet_worker::AgentFactory::new(
+        let factory = Arc::new(ra_fleet_worker::AgentFactory::new(
             Arc::new(NativeMockProvider {
                 content: Ok("done".to_owned()),
             }),
             memory,
             sandbox_factory,
         ));
-        let cfg = octos_fleet_worker::PoolConfig {
+        let cfg = ra_fleet_worker::PoolConfig {
             global_concurrency: 2,
             per_fleet_concurrency: 2,
             deadline: std::time::Duration::from_secs(30),
@@ -21606,7 +21606,7 @@ mod tests {
             detail: "do the thing".to_owned(),
             deps: Vec::new(),
             acceptance: Vec::new(),
-            grant: octos_fleet::WorkerGrant::minimal(),
+            grant: ra_fleet::WorkerGrant::minimal(),
         }]
     }
 
@@ -21779,7 +21779,7 @@ mod tests {
                 .unwrap()
                 .unwrap()
                 .status;
-            if status == octos_fleet::ChildStatus::Succeeded {
+            if status == ra_fleet::ChildStatus::Succeeded {
                 break;
             }
             assert!(
@@ -21799,7 +21799,7 @@ mod tests {
             else {
                 break;
             };
-            if ev.kind == octos_fleet::FleetEventKind::ChildDone && ev.fleet_id == fleet_id {
+            if ev.kind == ra_fleet::FleetEventKind::ChildDone && ev.fleet_id == fleet_id {
                 found_child_done = true;
                 break;
             }
@@ -21859,7 +21859,7 @@ mod tests {
         assert!(
             matches!(
                 outcome,
-                octos_fleet_worker::AttemptOutcome::Completed { .. }
+                ra_fleet_worker::AttemptOutcome::Completed { .. }
             ),
             "the mock attempt must complete accepted, got {outcome:?}",
         );
@@ -21934,7 +21934,7 @@ mod tests {
         let child = store.get_child("frecon", "t1").await.unwrap().unwrap();
         assert_eq!(
             child.status,
-            octos_fleet::ChildStatus::Ready,
+            ra_fleet::ChildStatus::Ready,
             "the child must return to Ready for this boot to relaunch",
         );
     }
@@ -22272,7 +22272,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             child.status,
-            octos_fleet::ChildStatus::Ready,
+            ra_fleet::ChildStatus::Ready,
             "the foreign fleet's task must NOT have been dispatched",
         );
     }
@@ -22359,7 +22359,7 @@ mod tests {
         store: &FleetKernelStore,
         fleet_id: &str,
         task_id: &str,
-    ) -> octos_fleet::EscalationRequest {
+    ) -> ra_fleet::EscalationRequest {
         let attempt = match store
             .launch_child(fleet_id, task_id, 100, now_ms_u64(), 1, 60_000)
             .await
@@ -22369,11 +22369,11 @@ mod tests {
             other => panic!("launch {task_id}: {other:?}"),
         };
         store.mark_running(task_id, &attempt).await.unwrap();
-        let request = octos_fleet::EscalationRequest {
-            requested_grant: octos_fleet::WorkerGrant {
-                network: octos_fleet::NetworkGrant::Hosts(vec!["example.com".into()]),
+        let request = ra_fleet::EscalationRequest {
+            requested_grant: ra_fleet::WorkerGrant {
+                network: ra_fleet::NetworkGrant::Hosts(vec!["example.com".into()]),
                 tools: vec!["read_file".into(), "web_fetch".into()],
-                ..octos_fleet::WorkerGrant::minimal()
+                ..ra_fleet::WorkerGrant::minimal()
             },
             reason: "needs example.com".into(),
         };
@@ -22432,19 +22432,19 @@ mod tests {
                 .unwrap()
                 .unwrap()
                 .status,
-            octos_fleet::ChildStatus::Blocked,
+            ra_fleet::ChildStatus::Blocked,
         );
 
         // The keeper approves a WIDER grant (adds web_fetch under a Hosts list).
-        let grant = octos_fleet::WorkerGrant {
-            network: octos_fleet::NetworkGrant::Hosts(vec!["example.com".into()]),
+        let grant = ra_fleet::WorkerGrant {
+            network: ra_fleet::NetworkGrant::Hosts(vec!["example.com".into()]),
             tools: vec![
                 "read_file".into(),
                 "write_file".into(),
                 "shell".into(),
                 "web_fetch".into(),
             ],
-            ..octos_fleet::WorkerGrant::minimal()
+            ..ra_fleet::WorkerGrant::minimal()
         };
         let out = orchestrator
             .model_grant_escalation(&wire, "tenant-a", "t1", Some(grant.clone()), now_ms_u64())
@@ -22471,7 +22471,7 @@ mod tests {
         assert!(child.pending_escalation.is_none(), "escalation cleared");
         assert_ne!(
             child.status,
-            octos_fleet::ChildStatus::Blocked,
+            ra_fleet::ChildStatus::Blocked,
             "the child resumed out of Blocked",
         );
     }
@@ -22489,9 +22489,9 @@ mod tests {
         let fleet_id = seed_planned_goal(&orchestrator, &wire, work.path()).await;
         block_task_on_escalation(&store, &fleet_id, "t1").await;
 
-        let bad = octos_fleet::WorkerGrant {
+        let bad = ra_fleet::WorkerGrant {
             tools: vec!["read_file".into(), "definitely_not_a_tool".into()],
-            ..octos_fleet::WorkerGrant::minimal()
+            ..ra_fleet::WorkerGrant::minimal()
         };
         let err = orchestrator
             .model_grant_escalation(&wire, "tenant-a", "t1", Some(bad), now_ms_u64())
@@ -22500,7 +22500,7 @@ mod tests {
         assert!(err.contains("invalid grant"), "unexpected error: {err}");
         // Nothing applied — the task is STILL Blocked with its request intact.
         let child = store.get_child(&fleet_id, "t1").await.unwrap().unwrap();
-        assert_eq!(child.status, octos_fleet::ChildStatus::Blocked);
+        assert_eq!(child.status, ra_fleet::ChildStatus::Blocked);
         assert!(child.pending_escalation.is_some());
     }
 
@@ -22532,7 +22532,7 @@ mod tests {
         let child = store.get_child(&fleet_id, "t1").await.unwrap().unwrap();
         assert_eq!(
             child.status,
-            octos_fleet::ChildStatus::Failed,
+            ra_fleet::ChildStatus::Failed,
             "denial is terminal — the fleet cannot wedge on a Blocked child",
         );
         assert!(child.pending_escalation.is_none());
@@ -22643,7 +22643,7 @@ mod tests {
                 detail: String::new(),
                 deps: vec![],
                 acceptance: vec![],
-                grant: octos_fleet::WorkerGrant::minimal(),
+                grant: ra_fleet::WorkerGrant::minimal(),
             },
             TaskSpec {
                 task_id: "b".into(),
@@ -22651,7 +22651,7 @@ mod tests {
                 detail: String::new(),
                 deps: vec!["a".into()],
                 acceptance: vec![],
-                grant: octos_fleet::WorkerGrant::minimal(),
+                grant: ra_fleet::WorkerGrant::minimal(),
             },
         ];
         let plan = orchestrator
@@ -22717,7 +22717,7 @@ mod tests {
                 AcceptanceVerdict::Rejected {
                     reason: "acceptance failed".into(),
                 },
-                octos_fleet::ChildResultSnapshot::default(),
+                ra_fleet::ChildResultSnapshot::default(),
                 50,
                 1,
                 now_ms_u64(),
@@ -22732,7 +22732,7 @@ mod tests {
                 .unwrap()
                 .unwrap()
                 .status,
-            octos_fleet::ChildStatus::Failed,
+            ra_fleet::ChildStatus::Failed,
         );
 
         // The goal is still `active` (a normal completion emits a ChildDone wake
@@ -22835,14 +22835,14 @@ mod tests {
             title: "will fail acceptance".to_owned(),
             detail: "no-op".to_owned(),
             deps: Vec::new(),
-            acceptance: vec![octos_fleet::AcceptanceCriterion {
+            acceptance: vec![ra_fleet::AcceptanceCriterion {
                 id: "must-exist".into(),
                 description: "requires a file the attempt never writes".into(),
-                verifier: octos_fleet::Verifier::FileExists {
+                verifier: ra_fleet::Verifier::FileExists {
                     path: "never-written.txt".into(),
                 },
             }],
-            grant: octos_fleet::WorkerGrant::minimal(),
+            grant: ra_fleet::WorkerGrant::minimal(),
         }];
         orchestrator
             .model_create_fleet_plan(&wire, "tenant-a", tasks, 1_000)
@@ -22924,7 +22924,7 @@ mod tests {
             .join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         let (ledger, decisions) = loop {
-            if let Ok(ledger) = octos_fleet::GoalLedger::open(&ledger_path) {
+            if let Ok(ledger) = ra_fleet::GoalLedger::open(&ledger_path) {
                 let status = ledger.get_goal(&goal_id).ok().flatten().map(|g| g.status);
                 let decisions = ledger.list_decisions(&goal_id).unwrap_or_default();
                 if status.as_deref() == Some("complete") && !decisions.is_empty() {
@@ -23003,7 +23003,7 @@ mod tests {
 
         let ledger_path = InProcessAgentOrchestrator::goal_ledger_dir(data_dir.path())
             .join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         let row = ledger
             .get_goal(&goal_id)
             .expect("query ledger")
@@ -23081,7 +23081,7 @@ mod tests {
 
         let ledger_path = InProcessAgentOrchestrator::goal_ledger_dir(data_dir.path())
             .join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         let row = ledger
             .get_goal(&goal_id)
             .expect("query ledger")
@@ -23128,7 +23128,7 @@ mod tests {
                 "t1",
                 &attempt,
                 AcceptanceVerdict::Accepted { evidence: vec![] },
-                octos_fleet::ChildResultSnapshot::default(),
+                ra_fleet::ChildResultSnapshot::default(),
                 10,
                 1,
                 now_ms_u64(),
@@ -23283,7 +23283,7 @@ mod tests {
                     AcceptanceVerdict::Terminated {
                         reason: "attempt interrupted before completion".into(),
                     },
-                    octos_fleet::ChildResultSnapshot::default(),
+                    ra_fleet::ChildResultSnapshot::default(),
                     0,
                     1,
                     now_ms_u64(),
@@ -23292,7 +23292,7 @@ mod tests {
         });
 
         // A JoinHandle that resolves as a JoinError (task panicked).
-        let handle: tokio::task::JoinHandle<octos_fleet_worker::AttemptOutcome> =
+        let handle: tokio::task::JoinHandle<ra_fleet_worker::AttemptOutcome> =
             tokio::spawn(async { panic!("simulated fleet worker panic") });
         orchestrator.spawn_fleet_settle_monitor(&scoped, "tenant-a", &fleet_id, Some(handle));
 
@@ -23350,7 +23350,7 @@ mod tests {
         // The denied task keeps its minimal grant (the request was never applied).
         let plan = store.get_plan(&fleet_id).await.unwrap().unwrap();
         let t1 = plan.tasks.iter().find(|t| t.task_id == "t1").unwrap();
-        assert_eq!(t1.grant, octos_fleet::WorkerGrant::minimal());
+        assert_eq!(t1.grant, ra_fleet::WorkerGrant::minimal());
     }
 
     /// The ownership gate covers BOTH new tools: a stale/foreign `goal.fleet_id`
@@ -23411,7 +23411,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(child.status, octos_fleet::ChildStatus::Ready);
+        assert_eq!(child.status, ra_fleet::ChildStatus::Ready);
     }
 
     /// `goal_get`'s fleet snapshot surfaces a pending escalation (Blocked status
@@ -23528,7 +23528,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let orch = InProcessAgentOrchestrator::default();
         let events = obstruct_admission_store(&orch, dir.path());
-        let source = octos_agent::TaskSupervisor::new();
+        let source = ra_agent::TaskSupervisor::new();
         let session = SessionKey::with_profile("tenant-a", "api", "mirror-admission-r5");
         let id = source.register("shell", "mirror-r5", Some(&session.0));
         source.mark_completed(&id, Vec::new());
@@ -23601,10 +23601,10 @@ mod tests {
     impl LlmProvider for AdmissionCountingProvider {
         async fn chat(
             &self,
-            messages: &[octos_core::Message],
-            tools: &[octos_llm::ToolSpec],
-            config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+            messages: &[ra_core::Message],
+            tools: &[ra_llm::ToolSpec],
+            config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             NativeMockProvider {
                 content: Ok("done".into()),
@@ -23768,10 +23768,10 @@ mod tests {
             .supervisor()
             .get_task(&task_id)
             .expect("supervised task");
-        assert_eq!(task.status, octos_agent::TaskStatus::Completed);
-        assert_eq!(task.runtime_state, octos_agent::TaskRuntimeState::Completed);
+        assert_eq!(task.status, ra_agent::TaskStatus::Completed);
+        assert_eq!(task.runtime_state, ra_agent::TaskRuntimeState::Completed);
         assert_eq!(task.source.as_deref(), Some("supervisor"));
-        assert_eq!(task.role.as_deref(), Some(octos_agent::ROLE_REVIEWER));
+        assert_eq!(task.role.as_deref(), Some(ra_agent::ROLE_REVIEWER));
         assert_eq!(task.artifact_count, Some(1));
         assert_eq!(
             task.runtime_policy_stamp
@@ -23842,7 +23842,7 @@ mod tests {
             .supervisor()
             .get_task(&result.task_id.unwrap().to_string())
             .unwrap();
-        assert_eq!(task.status, octos_agent::TaskStatus::Failed);
+        assert_eq!(task.status, ra_agent::TaskStatus::Failed);
         assert_eq!(task.artifact_count, Some(result.artifacts.len() as u32));
     }
 
@@ -23852,7 +23852,7 @@ mod tests {
         let orchestrator = InProcessAgentOrchestrator::default();
         let tools = Arc::new(ToolRegistry::with_builtins_and_sandbox(
             dir.path(),
-            octos_agent::create_sandbox(&octos_agent::SandboxConfig::default()),
+            ra_agent::create_sandbox(&ra_agent::SandboxConfig::default()),
         ));
         let memory = Arc::new(
             EpisodeStore::open(dir.path().join("memory"))
@@ -23862,7 +23862,7 @@ mod tests {
         let llm: Arc<dyn LlmProvider> = Arc::new(NativeMockProvider {
             content: Ok("native specialist respected sandbox policy".to_owned()),
         });
-        let policy = Arc::new(octos_agent::DispatchPolicy {
+        let policy = Arc::new(ra_agent::DispatchPolicy {
             require_sandboxed: true,
             ..Default::default()
         });
@@ -23959,8 +23959,8 @@ mod tests {
             .supervisor()
             .get_task(&result.task_id.unwrap().to_string())
             .expect("supervised task");
-        assert_eq!(task.status, octos_agent::TaskStatus::Failed);
-        assert_eq!(task.runtime_state, octos_agent::TaskRuntimeState::Failed);
+        assert_eq!(task.status, ra_agent::TaskStatus::Failed);
+        assert_eq!(task.runtime_state, ra_agent::TaskRuntimeState::Failed);
     }
 
     #[test]
@@ -25369,7 +25369,7 @@ mod tests {
 
     #[test]
     fn peer_terminal_wake_should_classify_real_registration_before_child_session() {
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         for tool in ["peer_handoff", "spawn", "peer_handoff_other"] {
             let id = supervisor.register(tool, tool, Some("peer-classification-master"));
             let task = supervisor.get_task(&id).unwrap();
@@ -25699,7 +25699,7 @@ mod tests {
         // of empty text — idempotently across repeated upserts.
         let session_id = SessionKey::with_profile("tenant-a", "api", "bg-final-output");
         let now = Utc::now();
-        let task = octos_agent::BackgroundTask {
+        let task = ra_agent::BackgroundTask {
             id: "bg-final-1".into(),
             tool_name: "review-child".into(),
             tool_call_id: "call-final-1".into(),
@@ -25710,8 +25710,8 @@ mod tests {
             child_joined_at: None,
             child_failure_action: None,
             task_ledger_path: None,
-            status: octos_agent::TaskStatus::Completed,
-            runtime_state: octos_agent::TaskRuntimeState::Completed,
+            status: ra_agent::TaskStatus::Completed,
+            runtime_state: ra_agent::TaskRuntimeState::Completed,
             runtime_detail: None,
             started_at: now,
             updated_at: now,
@@ -25767,7 +25767,7 @@ mod tests {
     fn background_task_mirror_uses_agent_orchestrator_and_queues_continuations() {
         let session_id = SessionKey::with_profile("tenant-a", "api", "background-task");
         let now = Utc::now();
-        let task = octos_agent::BackgroundTask {
+        let task = ra_agent::BackgroundTask {
             id: "bg-1".into(),
             tool_name: "run_pipeline".into(),
             tool_call_id: "call-1".into(),
@@ -25778,8 +25778,8 @@ mod tests {
             child_joined_at: None,
             child_failure_action: None,
             task_ledger_path: None,
-            status: octos_agent::TaskStatus::Completed,
-            runtime_state: octos_agent::TaskRuntimeState::Completed,
+            status: ra_agent::TaskStatus::Completed,
+            runtime_state: ra_agent::TaskRuntimeState::Completed,
             runtime_detail: Some(
                 json!({
                     "workflow_kind": "code_review",
@@ -26637,7 +26637,7 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let session_id = SessionKey::with_profile("tenant-qrs", "api", "queued-seed");
         let now = Utc::now();
-        let make_task = |final_output: Option<&str>| octos_agent::BackgroundTask {
+        let make_task = |final_output: Option<&str>| ra_agent::BackgroundTask {
             id: "bg-queued-1".into(),
             tool_name: "review-child".into(),
             tool_call_id: "call-queued-1".into(),
@@ -26648,8 +26648,8 @@ mod tests {
             child_joined_at: None,
             child_failure_action: None,
             task_ledger_path: None,
-            status: octos_agent::TaskStatus::Completed,
-            runtime_state: octos_agent::TaskRuntimeState::Completed,
+            status: ra_agent::TaskStatus::Completed,
+            runtime_state: ra_agent::TaskRuntimeState::Completed,
             runtime_detail: None,
             started_at: now,
             updated_at: now,
@@ -28350,15 +28350,15 @@ mod tests {
         session: &SessionKey,
         task_id: &str,
         completed_at: chrono::DateTime<Utc>,
-        status: octos_agent::TaskStatus,
-    ) -> octos_agent::BackgroundTask {
+        status: ra_agent::TaskStatus,
+    ) -> ra_agent::BackgroundTask {
         let runtime_state = match status {
-            octos_agent::TaskStatus::Completed => octos_agent::TaskRuntimeState::Completed,
-            octos_agent::TaskStatus::Failed => octos_agent::TaskRuntimeState::Failed,
-            octos_agent::TaskStatus::Cancelled => octos_agent::TaskRuntimeState::Cancelled,
-            _ => octos_agent::TaskRuntimeState::ExecutingTool,
+            ra_agent::TaskStatus::Completed => ra_agent::TaskRuntimeState::Completed,
+            ra_agent::TaskStatus::Failed => ra_agent::TaskRuntimeState::Failed,
+            ra_agent::TaskStatus::Cancelled => ra_agent::TaskRuntimeState::Cancelled,
+            _ => ra_agent::TaskRuntimeState::ExecutingTool,
         };
-        octos_agent::BackgroundTask {
+        ra_agent::BackgroundTask {
             id: task_id.into(),
             tool_name: "spawn".into(),
             tool_call_id: format!("call-{task_id}"),
@@ -28729,7 +28729,7 @@ mod tests {
     /// `workspace` metadata on the ChildCompleted.
     #[cfg(test)]
     fn bind_peer_task_with_wired_terminal_sink(
-        supervisor: &octos_agent::TaskSupervisor,
+        supervisor: &ra_agent::TaskSupervisor,
         orchestrator: &InProcessAgentOrchestrator,
         registry_key: String,
         session_id: &SessionKey,
@@ -28768,7 +28768,7 @@ mod tests {
         let session_id = SessionKey::with_profile(profile, "api", "peer-unstamped");
         let workspace = "/tmp/ws-peer-unstamped";
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         let orchestrator = InProcessAgentOrchestrator::default();
         orchestrator
             .configure_supervisor_store(dir.path())
@@ -28835,7 +28835,7 @@ mod tests {
         let session_id = SessionKey::with_profile(profile, "api", "peer-neg");
         let workspace = "/tmp/ws-peer-neg";
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         let orchestrator = InProcessAgentOrchestrator::default();
         orchestrator
             .configure_supervisor_store(dir.path())
@@ -28883,7 +28883,7 @@ mod tests {
         let workspace = "/tmp/ws-peer-adopted";
         let peers_root = dir.path().join("peers");
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         let orchestrator = InProcessAgentOrchestrator::default();
         orchestrator
             .configure_supervisor_store(dir.path())
@@ -29060,7 +29060,7 @@ mod tests {
                 &session_id,
                 task_id,
                 Utc::now() - chrono::Duration::seconds(60),
-                octos_agent::TaskStatus::Completed,
+                ra_agent::TaskStatus::Completed,
             );
             assert!(
                 fresh
@@ -29138,7 +29138,7 @@ mod tests {
             &session_id,
             "new-live",
             Utc::now(),
-            octos_agent::TaskStatus::Completed,
+            ra_agent::TaskStatus::Completed,
         );
         assert!(
             fresh
@@ -29173,7 +29173,7 @@ mod tests {
         let session_queue = SessionKey::with_profile("tenant-queue", "api", "fail-queue");
         let now = Utc::now();
         let make_event = |session: &SessionKey, task_id: &str| {
-            let task = octos_agent::BackgroundTask {
+            let task = ra_agent::BackgroundTask {
                 id: task_id.into(),
                 tool_name: "mofa_slides".into(),
                 tool_call_id: "call-legacy".into(),
@@ -29184,8 +29184,8 @@ mod tests {
                 child_joined_at: None,
                 child_failure_action: None,
                 task_ledger_path: None,
-                status: octos_agent::TaskStatus::Failed,
-                runtime_state: octos_agent::TaskRuntimeState::Failed,
+                status: ra_agent::TaskStatus::Failed,
+                runtime_state: ra_agent::TaskRuntimeState::Failed,
                 runtime_detail: None,
                 started_at: now,
                 updated_at: now,
@@ -29206,11 +29206,11 @@ mod tests {
                 workspace_root: None,
                 relaunched_from: None,
             };
-            octos_agent::TerminalEvent {
+            ra_agent::TerminalEvent {
                 task: task.clone(),
                 synth_ack_emitted: true,
-                outcome: octos_agent::TerminalOutcome::Failed(
-                    octos_agent::SpawnOnlyFailureSignal {
+                outcome: ra_agent::TerminalOutcome::Failed(
+                    ra_agent::SpawnOnlyFailureSignal {
                         task_id: task.id.clone(),
                         tool_name: task.tool_name.clone(),
                         tool_input: task.tool_input.clone().unwrap(),
@@ -29267,7 +29267,7 @@ mod tests {
     /// a tokio runtime run the ledger I/O inline (deterministic); the
     /// offload branch has its own `#[tokio::test]` coverage.
     fn wire_supervisor_for_goal_task_rows(
-        supervisor: &octos_agent::TaskSupervisor,
+        supervisor: &ra_agent::TaskSupervisor,
         session: &SessionKey,
         profile: &str,
         data_dir: &std::path::Path,
@@ -29324,13 +29324,13 @@ mod tests {
             .goal_id_for_test(&wire)
             .expect("goal id");
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
 
         let task_id = supervisor.register("web_probe", "call-rows-1", Some(&wire.to_string()));
         assert!(!task_id.is_empty(), "registration succeeds");
 
-        let ledger = octos_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
+        let ledger = ra_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
             .expect("ledger exists after registration");
         let row = ledger
             .get_task(&task_id)
@@ -29378,14 +29378,14 @@ mod tests {
             .goal_id_for_test(&wire)
             .expect("goal id");
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
 
         let task_id = supervisor.register("web_probe", "call-rows-2", Some(&wire.to_string()));
         supervisor.mark_running(&task_id);
         supervisor.mark_failed(&task_id, "probe exited 1".to_string());
 
-        let ledger = octos_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
+        let ledger = ra_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
             .expect("open ledger");
         let row = ledger.get_task(&task_id).expect("read row").expect("row");
         assert_eq!(
@@ -29412,14 +29412,14 @@ mod tests {
             .goal_id_for_test(&wire)
             .expect("goal id");
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
 
         let task_id = supervisor.register("web_probe", "call-rows-cancel", Some(&wire.to_string()));
         supervisor.mark_running(&task_id);
         supervisor.cancel(&task_id).expect("cancel");
 
-        let ledger = octos_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
+        let ledger = ra_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
             .expect("open ledger");
         let row = ledger.get_task(&task_id).expect("read row").expect("row");
         assert_eq!(
@@ -29448,7 +29448,7 @@ mod tests {
             .goal_id_for_test(&wire)
             .expect("goal id");
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
 
         let task_id = supervisor.register(
@@ -29459,7 +29459,7 @@ mod tests {
         supervisor.mark_running(&task_id);
         supervisor.mark_failed_observed(&task_id, "unknown tool: write_file".to_string());
 
-        let ledger = octos_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
+        let ledger = ra_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
             .expect("open ledger");
         let row = ledger.get_task(&task_id).expect("read row").expect("row");
         assert_eq!(row.status, "failed", "the provisional failure lands first");
@@ -29494,7 +29494,7 @@ mod tests {
             .goal_id_for_test(&wire)
             .expect("goal id");
 
-        let parent_registry = octos_agent::ToolRegistry::new();
+        let parent_registry = ra_agent::ToolRegistry::new();
         wire_supervisor_for_goal_task_rows(
             &parent_registry.supervisor(),
             &wire,
@@ -29506,7 +29506,7 @@ mod tests {
         let child = child_registry.supervisor();
         let task_id = child.register("nested_probe", "call-rows-nested", Some(&wire.to_string()));
 
-        let ledger = octos_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
+        let ledger = ra_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
             .expect("open ledger");
         let row = ledger
             .get_task(&task_id)
@@ -29534,16 +29534,16 @@ mod tests {
     impl LlmProvider for NestedSpawnScriptProvider {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             let first = !self.spawned.swap(true, std::sync::atomic::Ordering::SeqCst);
             if first {
-                Ok(octos_llm::ChatResponse {
+                Ok(ra_llm::ChatResponse {
                     content: None,
                     reasoning_content: None,
-                    tool_calls: vec![octos_core::ToolCall {
+                    tool_calls: vec![ra_core::ToolCall {
                         id: "call-nested-grandchild".to_string(),
                         name: "spawn_agent".to_string(),
                         arguments: serde_json::json!({
@@ -29552,17 +29552,17 @@ mod tests {
                         }),
                         metadata: None,
                     }],
-                    stop_reason: octos_llm::StopReason::ToolUse,
-                    usage: octos_llm::TokenUsage::default(),
+                    stop_reason: ra_llm::StopReason::ToolUse,
+                    usage: ra_llm::TokenUsage::default(),
                     provider_index: None,
                 })
             } else {
-                Ok(octos_llm::ChatResponse {
+                Ok(ra_llm::ChatResponse {
                     content: Some("done".to_string()),
                     reasoning_content: None,
                     tool_calls: Vec::new(),
-                    stop_reason: octos_llm::StopReason::EndTurn,
-                    usage: octos_llm::TokenUsage::default(),
+                    stop_reason: ra_llm::StopReason::EndTurn,
+                    usage: ra_llm::TokenUsage::default(),
                     provider_index: None,
                 })
             }
@@ -29599,16 +29599,16 @@ mod tests {
 
         // The parent (session) supervisor, wired through the SHARED
         // production installer.
-        let supervisor = Arc::new(octos_agent::TaskSupervisor::new());
+        let supervisor = Arc::new(ra_agent::TaskSupervisor::new());
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
 
         let memory = Arc::new(
-            octos_memory::EpisodeStore::open(dir.path().join("memory"))
+            ra_memory::EpisodeStore::open(dir.path().join("memory"))
                 .await
                 .expect("episode store"),
         );
         let (inbound_tx, _inbound_rx) = tokio::sync::mpsc::channel(16);
-        let spawn_tool = octos_agent::SpawnTool::new(
+        let spawn_tool = ra_agent::SpawnTool::new(
             Arc::new(NestedSpawnScriptProvider {
                 spawned: std::sync::atomic::AtomicBool::new(false),
             }),
@@ -29625,7 +29625,7 @@ mod tests {
 
         // No "mode" key: background IS the default, and the default is the
         // branch under test.
-        let result = octos_agent::Tool::execute(
+        let result = ra_agent::Tool::execute(
             &spawn_tool,
             &serde_json::json!({
                 "task": "spawn one nested helper, then finish",
@@ -29665,7 +29665,7 @@ mod tests {
             let path = ledger_path.clone();
             let gid = goal_id.clone();
             titles = tokio::task::spawn_blocking(move || {
-                octos_fleet::GoalLedger::open(&path)
+                ra_fleet::GoalLedger::open(&path)
                     .ok()
                     .and_then(|ledger| ledger.tasks_for_goal(&gid).ok())
                     .unwrap_or_default()
@@ -29704,7 +29704,7 @@ mod tests {
         task_id: &str,
     ) -> GoalTaskLedgerBinding {
         let mut binding = GoalTaskLedgerBinding::new_unstashed(
-            octos_fleet::Goal {
+            ra_fleet::Goal {
                 goal_id: goal_id.to_string(),
                 objective: "converge".to_string(),
                 status: "active".to_string(),
@@ -29761,7 +29761,7 @@ mod tests {
         orchestrator.settle_goal_task_row_blocking(
             &binding,
             "task-order",
-            octos_fleet::TaskSettleAuthority::Completion,
+            ra_fleet::TaskSettleAuthority::Completion,
             true,
             0,
             test_flight_for(&orchestrator, "task-order", &binding),
@@ -29769,7 +29769,7 @@ mod tests {
         // The creation offload arrives LATE and must not resurrect it.
         InProcessAgentOrchestrator::record_goal_task_row_blocking(&binding, "task-order");
 
-        let ledger = octos_fleet::GoalLedger::open(binding.ledger_path()).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(binding.ledger_path()).expect("open ledger");
         let row = ledger
             .get_task("task-order")
             .expect("read row")
@@ -29792,8 +29792,8 @@ mod tests {
     /// below is what makes any of them harmless.
     #[test]
     fn every_authority_order_converges_through_the_blocking_cores() {
-        use octos_fleet::TaskSettleAuthority::{Completion, FinalFailure, ProvisionalFailure};
-        let three_event_orders: [[octos_fleet::TaskSettleAuthority; 3]; 6] = [
+        use ra_fleet::TaskSettleAuthority::{Completion, FinalFailure, ProvisionalFailure};
+        let three_event_orders: [[ra_fleet::TaskSettleAuthority; 3]; 6] = [
             [ProvisionalFailure, Completion, FinalFailure],
             [ProvisionalFailure, FinalFailure, Completion],
             [Completion, ProvisionalFailure, FinalFailure],
@@ -29816,7 +29816,7 @@ mod tests {
                     test_flight_for(&orchestrator, &task_id, &binding),
                 );
             }
-            let ledger = octos_fleet::GoalLedger::open(binding.ledger_path()).expect("open ledger");
+            let ledger = ra_fleet::GoalLedger::open(binding.ledger_path()).expect("open ledger");
             let row = ledger.get_task(&task_id).expect("read").expect("row");
             assert_eq!(
                 row.status, "failed",
@@ -29844,7 +29844,7 @@ mod tests {
                     test_flight_for(&orchestrator, &task_id, &binding),
                 );
             }
-            let ledger = octos_fleet::GoalLedger::open(binding.ledger_path()).expect("open ledger");
+            let ledger = ra_fleet::GoalLedger::open(binding.ledger_path()).expect("open ledger");
             let row = ledger.get_task(&task_id).expect("read").expect("row");
             assert_eq!(
                 row.status, "complete",
@@ -29874,7 +29874,7 @@ mod tests {
         orchestrator.settle_goal_task_row_blocking(
             &binding,
             "task-gen-stale",
-            octos_fleet::TaskSettleAuthority::FinalFailure,
+            ra_fleet::TaskSettleAuthority::FinalFailure,
             true,
             0,
             stale_flight,
@@ -29882,7 +29882,7 @@ mod tests {
 
         // The stale chain died BEFORE any write: no ledger file, no row.
         assert!(
-            octos_fleet::GoalLedger::open(binding.ledger_path())
+            ra_fleet::GoalLedger::open(binding.ledger_path())
                 .ok()
                 .and_then(|ledger| ledger.get_task("task-gen-stale").ok().flatten())
                 .is_none(),
@@ -29910,14 +29910,14 @@ mod tests {
         let wire = SessionKey::with_profile(profile, "api", "goal-task-rows-purge-live");
         seed_goal(default_agent_orchestrator(), &wire, profile);
 
-        let supervisor = Arc::new(octos_agent::TaskSupervisor::new());
+        let supervisor = Arc::new(ra_agent::TaskSupervisor::new());
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
         let task_id = supervisor.register("web_probe", "call-purge-alive", Some(&wire.to_string()));
         supervisor.mark_running(&task_id);
         // Arm the process-global liveness for this worker (the guard is what
         // real workers hold for their whole critical section).
         let live_guard =
-            octos_agent::TaskTerminalGuard::new(Arc::clone(&supervisor), task_id.clone());
+            ra_agent::TaskTerminalGuard::new(Arc::clone(&supervisor), task_id.clone());
         supervisor.mark_failed_observed(&task_id, "flaky".to_string());
 
         // Backdate the correction window past the deadline.
@@ -29956,7 +29956,7 @@ mod tests {
         let wire = SessionKey::with_profile(profile, "api", "goal-task-rows-purge");
         seed_goal(default_agent_orchestrator(), &wire, profile);
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
 
         let live_id = supervisor.register("web_probe", "call-purge-live", Some(&wire.to_string()));
@@ -30011,7 +30011,7 @@ mod tests {
             let path = ledger_path.to_path_buf();
             let id = task_id.to_owned();
             let found = tokio::task::spawn_blocking(move || {
-                octos_fleet::GoalLedger::open(&path)
+                ra_fleet::GoalLedger::open(&path)
                     .ok()
                     .and_then(|ledger| ledger.get_task(&id).ok().flatten())
                     .map(|row| row.status)
@@ -30078,7 +30078,7 @@ mod tests {
             let path = ledger_path.clone();
             tokio::task::spawn_blocking(move || {
                 std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-                octos_fleet::GoalLedger::open(&path).unwrap();
+                ra_fleet::GoalLedger::open(&path).unwrap();
             })
             .await
             .unwrap();
@@ -30102,7 +30102,7 @@ mod tests {
             tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
         let register_started = std::time::Instant::now();
         let task_id =
@@ -30169,7 +30169,7 @@ mod tests {
             .expect("goal id");
         let ledger_path = goal_task_ledger_path(dir.path(), &goal_id);
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
         let task_id = supervisor.register("web_probe", "call-rows-retry", Some(&wire.to_string()));
 
@@ -30247,7 +30247,7 @@ mod tests {
         orchestrator.settle_goal_task_row_blocking(
             &binding,
             "task-scoped-a",
-            octos_fleet::TaskSettleAuthority::Completion,
+            ra_fleet::TaskSettleAuthority::Completion,
             false,
             0,
             test_flight_for(&orchestrator, "task-scoped-a", &binding),
@@ -30280,7 +30280,7 @@ mod tests {
             .expect("goal id");
         let ledger_path = goal_task_ledger_path(dir.path(), &goal_id);
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
         let task_id = supervisor.register(
             "review_worker",
@@ -30522,7 +30522,7 @@ mod tests {
                 orchestrator.settle_goal_task_row_blocking(
                     &binding,
                     "task-dropfut",
-                    octos_fleet::TaskSettleAuthority::FinalFailure,
+                    ra_fleet::TaskSettleAuthority::FinalFailure,
                     true,
                     0,
                     flight,
@@ -30607,7 +30607,7 @@ mod tests {
         let profile = "tenant-taskrows-flight";
         let wire = SessionKey::with_profile(profile, "api", "goal-task-rows-flight");
         seed_goal(default_agent_orchestrator(), &wire, profile);
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
         let task_id = supervisor.register("web_probe", "call-flight-1", Some(&wire.to_string()));
         supervisor.mark_running(&task_id);
@@ -30645,7 +30645,7 @@ mod tests {
         orchestrator.settle_goal_task_row_blocking(
             &binding,
             "task-exhaust",
-            octos_fleet::TaskSettleAuthority::FinalFailure,
+            ra_fleet::TaskSettleAuthority::FinalFailure,
             true,
             0,
             test_flight_for(&orchestrator, "task-exhaust", &binding),
@@ -30685,7 +30685,7 @@ mod tests {
         orchestrator3.settle_goal_task_row_blocking(
             &stale,
             "task-stale-flight",
-            octos_fleet::TaskSettleAuthority::FinalFailure,
+            ra_fleet::TaskSettleAuthority::FinalFailure,
             true,
             0,
             stale_flight,
@@ -30714,7 +30714,7 @@ mod tests {
         let wire = SessionKey::with_profile(profile, "api", "goal-task-rows-nogoal");
         // Deliberately NO seed_goal.
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
 
         let task_id = supervisor.register("web_probe", "call-rows-3", Some(&wire.to_string()));
@@ -30742,7 +30742,7 @@ mod tests {
         )
         .unwrap();
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
 
         let task_id = supervisor.register("web_probe", "call-rows-4", Some(&wire.to_string()));
@@ -30752,7 +30752,7 @@ mod tests {
         );
         assert_eq!(
             supervisor.get_task(&task_id).unwrap().status,
-            octos_agent::TaskStatus::Spawned
+            ra_agent::TaskStatus::Spawned
         );
     }
 
@@ -30770,7 +30770,7 @@ mod tests {
             .goal_id_for_test(&wire)
             .expect("goal id");
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
         let task_id = supervisor.register("web_probe", "call-rows-5", Some(&wire.to_string()));
 
@@ -30786,7 +30786,7 @@ mod tests {
         supervisor.mark_running(&task_id);
         supervisor.mark_completed(&task_id, vec![]);
 
-        let ledger = octos_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
+        let ledger = ra_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
             .expect("open ledger");
         let row = ledger.get_task(&task_id).expect("read row").expect("row");
         assert_eq!(row.status, "complete");
@@ -30827,7 +30827,7 @@ mod tests {
         // Staging turn (the pre-restart supervisor): register + bind the peer
         // task, persist the staged dir with brief + result + the task-id
         // binding — what the WS `emit_staged` callback now writes.
-        let staging = octos_agent::TaskSupervisor::new();
+        let staging = ra_agent::TaskSupervisor::new();
         staging
             .enable_persistence(&jsonl)
             .expect("staging persistence");
@@ -30862,7 +30862,7 @@ mod tests {
         // (goal-only halves inert here: no goal) so the restore has ALREADY
         // been delivered when the NEXT boot replays — no stale undelivered
         // flag.
-        let sweep_boot = octos_agent::TaskSupervisor::new();
+        let sweep_boot = ra_agent::TaskSupervisor::new();
         install_peer_restore_observers_composed(&sweep_boot, &data_dir, || None, |_restored| {});
         sweep_boot
             .enable_persistence(&jsonl)
@@ -30873,7 +30873,7 @@ mod tests {
         // Next turn's fresh per-turn supervisor: restoring the SHARED ledger
         // fires the composed observer with the row Parked, and the adoption
         // half adopts it.
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         let adopt_supervisor = supervisor.clone();
         let adopt_profile = profile.to_owned();
         let adopt_master = wire.to_string();
@@ -30897,7 +30897,7 @@ mod tests {
         let row = supervisor.get_task(&task_id).expect("peer row");
         assert_eq!(
             row.status,
-            octos_agent::TaskStatus::Completed,
+            ra_agent::TaskStatus::Completed,
             "the composed per-turn restore observer must adopt the parked peer \
              row whose result.md is already on the blackboard",
         );
@@ -30934,7 +30934,7 @@ mod tests {
         let peers_root = dir.path().join("peers");
 
         // ── boot 1 (staging turn) ─────────────────────────────────────────
-        let staging = octos_agent::TaskSupervisor::new();
+        let staging = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&staging, &wire, profile, dir.path());
         staging
             .enable_persistence(&jsonl)
@@ -30970,7 +30970,7 @@ mod tests {
         // the ledger row stays `running`.
         simulate_process_restart_losing_binding(&task_id);
         {
-            let ledger = octos_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
+            let ledger = ra_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
                 .expect("ledger exists after registration");
             assert_eq!(
                 ledger
@@ -30991,7 +30991,7 @@ mod tests {
         // append is the durable part. Wired with the REAL production gateway
         // installer so its restore is delivered NOW (adoption finds no
         // Parked row yet, no-op) — no stale undelivered flag for boot 3.
-        let sweep_boot = Arc::new(octos_agent::TaskSupervisor::new());
+        let sweep_boot = Arc::new(ra_agent::TaskSupervisor::new());
         install_peer_restore_observers_resolving_at_callback(
             &sweep_boot,
             &wire,
@@ -31005,7 +31005,7 @@ mod tests {
         drop(sweep_boot);
 
         // ── boot 3 (gateway restore shape, post-park) ─────────────────────
-        let supervisor = Arc::new(octos_agent::TaskSupervisor::new());
+        let supervisor = Arc::new(ra_agent::TaskSupervisor::new());
         install_peer_restore_observers_resolving_at_callback(
             &supervisor,
             &wire,
@@ -31019,7 +31019,7 @@ mod tests {
 
         // Adoption ran: the parked row completed with the blackboard result…
         let row = supervisor.get_task(&task_id).expect("peer row");
-        assert_eq!(row.status, octos_agent::TaskStatus::Completed);
+        assert_eq!(row.status, ra_agent::TaskStatus::Completed);
         assert_eq!(
             row.output_files,
             vec![
@@ -31033,7 +31033,7 @@ mod tests {
         // …and the goal ledger row settled THROUGH the adoption: the binding
         // was re-stashed before `mark_completed`, so the change-feed settle
         // (synchronous in a non-tokio test) landed the terminal verdict.
-        let ledger = octos_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
+        let ledger = ra_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
             .expect("ledger");
         assert_eq!(
             ledger
@@ -31070,7 +31070,7 @@ mod tests {
     fn restore_observer_installation_does_not_pin_supervisor_state() {
         let dir = tempfile::TempDir::new().unwrap();
         let wire = SessionKey::with_profile("tenant-restore-cycle", "api", "restore-cycle");
-        let supervisor = Arc::new(octos_agent::TaskSupervisor::new());
+        let supervisor = Arc::new(ra_agent::TaskSupervisor::new());
         let alive = supervisor.on_restore_slot_alive_probe_for_test();
         install_peer_restore_observers_resolving_at_callback(
             &supervisor,
@@ -31096,7 +31096,7 @@ mod tests {
     fn inherited_restore_observer_no_ops_after_parent_supervisor_dropped() {
         let dir = tempfile::TempDir::new().unwrap();
         let wire = SessionKey::with_profile("tenant-restore-cycle", "api", "restore-cycle-child");
-        let parent = Arc::new(octos_agent::TaskSupervisor::new());
+        let parent = Arc::new(ra_agent::TaskSupervisor::new());
         let parent_alive = parent.on_restore_slot_alive_probe_for_test();
         install_peer_restore_observers_resolving_at_callback(
             &parent,
@@ -31104,7 +31104,7 @@ mod tests {
             "tenant-restore-cycle",
             dir.path(),
         );
-        let child = octos_agent::TaskSupervisor::new();
+        let child = ra_agent::TaskSupervisor::new();
         child.inherit_registration_observers(&parent);
         drop(parent);
         assert!(
@@ -31139,7 +31139,7 @@ mod tests {
         let jsonl = dir.path().join("tasks.jsonl");
 
         // ── boot 1 ──────────────────────────────────────────────────────
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
         supervisor.enable_persistence(&jsonl).expect("persistence");
         let task_id = supervisor.register("web_probe", "call-2056-1", Some(&wire.to_string()));
@@ -31149,7 +31149,7 @@ mod tests {
 
         let ledger_path = goal_task_ledger_path(dir.path(), &goal_id);
         {
-            let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+            let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
             let row = ledger.get_task(&task_id).expect("read row").expect("row");
             assert_eq!(
                 row.status, "running",
@@ -31158,11 +31158,11 @@ mod tests {
         }
 
         // ── boot 2 ──────────────────────────────────────────────────────
-        let rebooted = octos_agent::TaskSupervisor::new();
+        let rebooted = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&rebooted, &wire, profile, dir.path());
         rebooted.enable_persistence(&jsonl).expect("persistence");
 
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         let row = ledger.get_task(&task_id).expect("read row").expect("row");
         assert_eq!(
             row.status, "complete",
@@ -31170,7 +31170,7 @@ mod tests {
         );
         assert_eq!(
             ledger.task_authority(&task_id).expect("authority"),
-            Some(octos_fleet::TaskSettleAuthority::Completion.rank()),
+            Some(ra_fleet::TaskSettleAuthority::Completion.rank()),
             "the reconcile persists the SAME authority rank the live path would"
         );
     }
@@ -31193,7 +31193,7 @@ mod tests {
         let jsonl = dir.path().join("tasks.jsonl");
         let ledger_path = goal_task_ledger_path(dir.path(), &goal_id);
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
         supervisor.enable_persistence(&jsonl).expect("persistence");
         let task_id = supervisor.register("web_probe", "call-2056-async", Some(&wire.to_string()));
@@ -31202,7 +31202,7 @@ mod tests {
         simulate_process_restart_losing_binding(&task_id);
         supervisor.mark_completed(&task_id, vec![]);
 
-        let rebooted = octos_agent::TaskSupervisor::new();
+        let rebooted = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&rebooted, &wire, profile, dir.path());
         rebooted.enable_persistence(&jsonl).expect("persistence");
 
@@ -31215,7 +31215,7 @@ mod tests {
     async fn await_ledger_task_status(ledger_path: &std::path::Path, task_id: &str, status: &str) {
         for _ in 0..250 {
             if ledger_path.exists()
-                && let Ok(ledger) = octos_fleet::GoalLedger::open(ledger_path)
+                && let Ok(ledger) = ra_fleet::GoalLedger::open(ledger_path)
                 && let Ok(Some(row)) = ledger.get_task(task_id)
                 && row.status == status
             {
@@ -31247,7 +31247,7 @@ mod tests {
         let jsonl = dir.path().join("tasks.jsonl");
         let stale_jsonl = dir.path().join("tasks-stale.jsonl");
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
         supervisor.enable_persistence(&jsonl).expect("persistence");
         let task_id = supervisor.register("web_probe", "call-2056-2", Some(&wire.to_string()));
@@ -31259,7 +31259,7 @@ mod tests {
 
         let ledger_path = goal_task_ledger_path(dir.path(), &goal_id);
         let (settled_at, settled_authority) = {
-            let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+            let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
             let row = ledger.get_task(&task_id).expect("read row").expect("row");
             assert_eq!(
                 row.status, "complete",
@@ -31273,18 +31273,18 @@ mod tests {
 
         // Reboot from the STALE jsonl: the row rebuilds non-terminal, and the
         // orphan sweep marks it `Failed` — owner-final authority.
-        let rebooted = octos_agent::TaskSupervisor::new();
+        let rebooted = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&rebooted, &wire, profile, dir.path());
         rebooted
             .enable_persistence(&stale_jsonl)
             .expect("persistence");
         assert_eq!(
             rebooted.get_task(&task_id).expect("task").status,
-            octos_agent::TaskStatus::Failed,
+            ra_agent::TaskStatus::Failed,
             "precondition: the orphan sweep reaped the stale row as failed",
         );
 
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         let row = ledger.get_task(&task_id).expect("read row").expect("row");
         assert_eq!(
             row.status, "complete",
@@ -31318,7 +31318,7 @@ mod tests {
             .expect("goal id");
         let jsonl = dir.path().join("tasks.jsonl");
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
         supervisor.enable_persistence(&jsonl).expect("persistence");
         let task_id = supervisor.register("web_probe", "call-2056-3", Some(&wire.to_string()));
@@ -31326,7 +31326,7 @@ mod tests {
         supervisor.mark_completed(&task_id, vec![]);
 
         let ledger_path = goal_task_ledger_path(dir.path(), &goal_id);
-        let probe = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let probe = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         let row_before = probe.get_task(&task_id).expect("read row").expect("row");
         assert_eq!(
             row_before.status, "complete",
@@ -31335,7 +31335,7 @@ mod tests {
         let version_before = probe.data_version().expect("data_version");
         let attempts_before = goal_task_settle_attempts_for(&task_id);
 
-        let rebooted = octos_agent::TaskSupervisor::new();
+        let rebooted = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&rebooted, &wire, profile, dir.path());
         rebooted.enable_persistence(&jsonl).expect("persistence");
 
@@ -31377,7 +31377,7 @@ mod tests {
             .expect("goal id");
         let jsonl = dir.path().join("tasks.jsonl");
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
         supervisor.enable_persistence(&jsonl).expect("persistence");
         let task_id = supervisor.register("web_probe", "call-2056-4", Some(&wire.to_string()));
@@ -31390,7 +31390,7 @@ mod tests {
             .goal_task_binding_generation_for_test(&task_id)
             .expect("the binding survives an undelivered terminal");
 
-        let rebooted = octos_agent::TaskSupervisor::new();
+        let rebooted = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&rebooted, &wire, profile, dir.path());
         rebooted.enable_persistence(&jsonl).expect("persistence");
 
@@ -31399,7 +31399,7 @@ mod tests {
             Some(generation),
             "the sweep must not re-stash a binding a live chain is fenced against"
         );
-        let ledger = octos_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
+        let ledger = ra_fleet::GoalLedger::open(goal_task_ledger_path(dir.path(), &goal_id))
             .expect("open ledger");
         let row = ledger.get_task(&task_id).expect("read row").expect("row");
         assert_eq!(
@@ -31434,7 +31434,7 @@ mod tests {
         let jsonl = dir.path().join("tasks.jsonl");
         let ledger_path = goal_task_ledger_path(dir.path(), &goal_id);
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
         supervisor.enable_persistence(&jsonl).expect("persistence");
         let task_id = supervisor.register("web_probe", "call-2056-prov", Some(&wire.to_string()));
@@ -31442,10 +31442,10 @@ mod tests {
         supervisor.mark_failed_observed(&task_id, "harness classified a mid-run error".to_owned());
 
         {
-            let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+            let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
             assert_eq!(
                 ledger.task_authority(&task_id).expect("authority"),
-                Some(octos_fleet::TaskSettleAuthority::ProvisionalFailure.rank()),
+                Some(ra_fleet::TaskSettleAuthority::ProvisionalFailure.rank()),
                 "precondition: the observer verdict landed at provisional rank",
             );
             assert!(
@@ -31459,7 +31459,7 @@ mod tests {
         simulate_process_restart_losing_binding(&task_id);
         supervisor.mark_completed(&task_id, vec![]);
         {
-            let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+            let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
             let row = ledger.get_task(&task_id).expect("read row").expect("row");
             assert_eq!(
                 row.status, "failed",
@@ -31467,11 +31467,11 @@ mod tests {
             );
         }
 
-        let rebooted = octos_agent::TaskSupervisor::new();
+        let rebooted = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&rebooted, &wire, profile, dir.path());
         rebooted.enable_persistence(&jsonl).expect("persistence");
 
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         let row = ledger.get_task(&task_id).expect("read row").expect("row");
         assert_eq!(
             row.status, "complete",
@@ -31479,7 +31479,7 @@ mod tests {
         );
         assert_eq!(
             ledger.task_authority(&task_id).expect("authority"),
-            Some(octos_fleet::TaskSettleAuthority::Completion.rank()),
+            Some(ra_fleet::TaskSettleAuthority::Completion.rank()),
         );
     }
 
@@ -31503,7 +31503,7 @@ mod tests {
         let jsonl = dir.path().join("tasks.jsonl");
         let ledger_path = goal_task_ledger_path(dir.path(), &goal_id);
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
         supervisor.enable_persistence(&jsonl).expect("persistence");
         let task_id = supervisor.register("web_probe", "call-2056-late", Some(&wire.to_string()));
@@ -31512,11 +31512,11 @@ mod tests {
         supervisor.mark_completed(&task_id, vec![]);
 
         // Reboot in the hostile order: restore first, wire second.
-        let rebooted = octos_agent::TaskSupervisor::new();
+        let rebooted = ra_agent::TaskSupervisor::new();
         rebooted.enable_persistence(&jsonl).expect("persistence");
         wire_supervisor_for_goal_task_rows(&rebooted, &wire, profile, dir.path());
 
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         let row = ledger.get_task(&task_id).expect("read row").expect("row");
         assert_eq!(
             row.status, "complete",
@@ -31553,7 +31553,7 @@ mod tests {
         let jsonl = dir.path().join("tasks.jsonl");
         let ledger_path = goal_task_ledger_path(dir.path(), &goal_id);
 
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&supervisor, &wire, profile, dir.path());
         supervisor.enable_persistence(&jsonl).expect("persistence");
         let task_id = supervisor.register("web_probe", "call-2056-budget", Some(&wire.to_string()));
@@ -31587,11 +31587,11 @@ mod tests {
             "precondition: the registration resolver refuses a non-active goal",
         );
 
-        let rebooted = octos_agent::TaskSupervisor::new();
+        let rebooted = ra_agent::TaskSupervisor::new();
         wire_supervisor_for_goal_task_rows(&rebooted, &wire, profile, dir.path());
         rebooted.enable_persistence(&jsonl).expect("persistence");
 
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         let row = ledger.get_task(&task_id).expect("read row").expect("row");
         assert_eq!(
             row.status, "complete",
@@ -32037,7 +32037,7 @@ mod tests {
         let session_id = SessionKey::with_profile("tenant-toctou-acked", "api", "spawn-fail-acked");
         let profile = "tenant-toctou-acked";
         let now = Utc::now();
-        let task = octos_agent::BackgroundTask {
+        let task = ra_agent::BackgroundTask {
             id: "01900000-0000-7000-8000-00000000acked".into(),
             tool_name: "mofa_slides".into(),
             tool_call_id: "call-acked".into(),
@@ -32048,8 +32048,8 @@ mod tests {
             child_joined_at: None,
             child_failure_action: None,
             task_ledger_path: None,
-            status: octos_agent::TaskStatus::Failed,
-            runtime_state: octos_agent::TaskRuntimeState::Failed,
+            status: ra_agent::TaskStatus::Failed,
+            runtime_state: ra_agent::TaskRuntimeState::Failed,
             runtime_detail: None,
             started_at: now,
             updated_at: now,
@@ -32070,7 +32070,7 @@ mod tests {
             workspace_root: None,
             relaunched_from: None,
         };
-        let signal = octos_agent::SpawnOnlyFailureSignal {
+        let signal = ra_agent::SpawnOnlyFailureSignal {
             task_id: task.id.clone(),
             tool_name: task.tool_name.clone(),
             tool_input: task.tool_input.clone().unwrap(),
@@ -32079,12 +32079,12 @@ mod tests {
             parent_session_key: task.parent_session_key.clone(),
             originating_client_message_id: None,
         };
-        let event = octos_agent::TerminalEvent {
+        let event = ra_agent::TerminalEvent {
             task,
             // ACKED: the synth-ack fired, so the unified consumer renders the
             // recovery body (does NOT prompt-suppress).
             synth_ack_emitted: true,
-            outcome: octos_agent::TerminalOutcome::Failed(signal.clone()),
+            outcome: ra_agent::TerminalOutcome::Failed(signal.clone()),
         };
 
         // 1. Legacy `on_failure` WS enqueue (ui_protocol.rs set_on_failure_signal).
@@ -32137,7 +32137,7 @@ mod tests {
             SessionKey::with_profile("tenant-toctou-preack", "api", "spawn-fail-preack");
         let profile = "tenant-toctou-preack";
         let now = Utc::now();
-        let task = octos_agent::BackgroundTask {
+        let task = ra_agent::BackgroundTask {
             id: "01900000-0000-7000-8000-0000000preack".into(),
             tool_name: "mofa_slides".into(),
             tool_call_id: "call-preack".into(),
@@ -32148,8 +32148,8 @@ mod tests {
             child_joined_at: None,
             child_failure_action: None,
             task_ledger_path: None,
-            status: octos_agent::TaskStatus::Failed,
-            runtime_state: octos_agent::TaskRuntimeState::Failed,
+            status: ra_agent::TaskStatus::Failed,
+            runtime_state: ra_agent::TaskRuntimeState::Failed,
             runtime_detail: None,
             started_at: now,
             updated_at: now,
@@ -32170,7 +32170,7 @@ mod tests {
             workspace_root: None,
             relaunched_from: None,
         };
-        let signal = octos_agent::SpawnOnlyFailureSignal {
+        let signal = ra_agent::SpawnOnlyFailureSignal {
             task_id: task.id.clone(),
             tool_name: task.tool_name.clone(),
             tool_input: task.tool_input.clone().unwrap(),
@@ -32182,10 +32182,10 @@ mod tests {
         // The unified terminal event for a fail-before-ack carries
         // `synth_ack_emitted = false` (the ack had not been recorded when the
         // event was built), which the consumer prompt-suppresses.
-        let unified_event = octos_agent::TerminalEvent {
+        let unified_event = ra_agent::TerminalEvent {
             task,
             synth_ack_emitted: false,
-            outcome: octos_agent::TerminalOutcome::Failed(signal.clone()),
+            outcome: ra_agent::TerminalOutcome::Failed(signal.clone()),
         };
 
         // 1. Unified `notify_terminal` fires first on the failed transition but
@@ -32253,7 +32253,7 @@ mod tests {
             "precondition: AppUI session key carries no profile prefix"
         );
         let now = Utc::now();
-        let task = octos_agent::BackgroundTask {
+        let task = ra_agent::BackgroundTask {
             id: "01900000-0000-7000-8000-0000000000c1".into(),
             tool_name: "spawn".into(),
             tool_call_id: "call-bp1".into(),
@@ -32264,8 +32264,8 @@ mod tests {
             child_joined_at: None,
             child_failure_action: None,
             task_ledger_path: None,
-            status: octos_agent::TaskStatus::Completed,
-            runtime_state: octos_agent::TaskRuntimeState::Completed,
+            status: ra_agent::TaskStatus::Completed,
+            runtime_state: ra_agent::TaskRuntimeState::Completed,
             runtime_detail: None,
             started_at: now,
             updated_at: now,
@@ -33293,7 +33293,7 @@ mod tests {
 
         let ledger_path = InProcessAgentOrchestrator::goal_ledger_dir(data_dir.path())
             .join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         let row = ledger
             .get_goal(&goal_id)
             .expect("query ledger")
@@ -33308,15 +33308,15 @@ mod tests {
     /// #1967 test helper — seed a goal ledger at
     /// `<data_dir>/goal-ledgers/<goal_id>.db` with its goals row, returning
     /// the opened ledger for direct escalation writes.
-    fn seed_goal_ledger(data_dir: &std::path::Path, goal_id: &str) -> octos_fleet::GoalLedger {
+    fn seed_goal_ledger(data_dir: &std::path::Path, goal_id: &str) -> ra_fleet::GoalLedger {
         let ledger_dir = InProcessAgentOrchestrator::goal_ledger_dir(data_dir);
         std::fs::create_dir_all(&ledger_dir).unwrap();
-        let ledger = octos_fleet::GoalLedger::open(
+        let ledger = ra_fleet::GoalLedger::open(
             ledger_dir.join(format!("{}.db", sanitize_filename_for_ledger(goal_id))),
         )
         .expect("open ledger");
         ledger
-            .upsert_goal(&octos_fleet::Goal {
+            .upsert_goal(&ra_fleet::Goal {
                 goal_id: goal_id.to_owned(),
                 objective: "escalation lifecycle".to_owned(),
                 status: "active".to_owned(),
@@ -33341,8 +33341,8 @@ mod tests {
         created_at_ms: u64,
         default_action: Option<&str>,
         default_after_secs: Option<i64>,
-    ) -> octos_fleet::Escalation {
-        octos_fleet::Escalation {
+    ) -> ra_fleet::Escalation {
+        ra_fleet::Escalation {
             escalation_id: escalation_id.to_owned(),
             goal_id: goal_id.to_owned(),
             task_id: None,
@@ -33552,9 +33552,9 @@ mod tests {
         let outside = data_dir.path().join("outside");
         std::fs::create_dir_all(&outside).unwrap();
         let target_db = outside.join("foreign.db");
-        let foreign = octos_fleet::GoalLedger::open(&target_db).expect("open foreign ledger");
+        let foreign = ra_fleet::GoalLedger::open(&target_db).expect("open foreign ledger");
         foreign
-            .upsert_goal(&octos_fleet::Goal {
+            .upsert_goal(&ra_fleet::Goal {
                 goal_id: "g-foreign".to_owned(),
                 objective: "not ours".to_owned(),
                 status: "active".to_owned(),
@@ -34040,7 +34040,7 @@ mod tests {
             supervisor_metadata_str(&persisted.metadata, "status"),
             Some("archived")
         );
-        let ledger = octos_fleet::GoalLedger::open(InProcessAgentOrchestrator::goal_ledger_path(
+        let ledger = ra_fleet::GoalLedger::open(InProcessAgentOrchestrator::goal_ledger_path(
             dir.path(),
             &goal_id,
         ))
@@ -34574,7 +34574,7 @@ mod tests {
             .expect("clear");
         let ledger_path = InProcessAgentOrchestrator::goal_ledger_dir(data_dir.path())
             .join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         let row = ledger
             .get_goal(&goal_id)
             .expect("query")
@@ -34667,7 +34667,7 @@ mod tests {
         );
         let ledger_path = InProcessAgentOrchestrator::goal_ledger_dir(data_dir.path())
             .join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         let row = ledger
             .get_goal(&goal_id)
             .expect("query")
@@ -34729,7 +34729,7 @@ mod tests {
             .expect("clear");
         let ledger_path = InProcessAgentOrchestrator::goal_ledger_dir(data_dir.path())
             .join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         let row = ledger
             .get_goal(&goal_id)
             .expect("query")
@@ -34875,7 +34875,7 @@ mod tests {
                 .is_none()
         );
 
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         let row = ledger
             .get_goal(&goal_id)
             .expect("query")
@@ -34928,7 +34928,7 @@ mod tests {
             .expect("clear");
         let ledger_path = InProcessAgentOrchestrator::goal_ledger_dir(data_dir.path())
             .join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         assert!(
             orchestrator
                 .charge_active_goal_tokens(&session_id, "tenant-a", "goal_zz", 5_000, 7)
@@ -34991,7 +34991,7 @@ mod tests {
         let idle_ledger_path = InProcessAgentOrchestrator::goal_ledger_dir(data_dir.path()).join(
             format!("{}.db", sanitize_filename_for_ledger(&idle_goal_id)),
         );
-        let idle_ledger = octos_fleet::GoalLedger::open(&idle_ledger_path).expect("open ledger");
+        let idle_ledger = ra_fleet::GoalLedger::open(&idle_ledger_path).expect("open ledger");
         assert_eq!(
             idle_ledger
                 .get_goal(&idle_goal_id)
@@ -35044,7 +35044,7 @@ mod tests {
             .join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         loop {
-            if let Ok(ledger) = octos_fleet::GoalLedger::open(&ledger_path) {
+            if let Ok(ledger) = ra_fleet::GoalLedger::open(&ledger_path) {
                 if let Ok(Some(row)) = ledger.get_goal(&goal_id) {
                     if row.tokens_used == 5_000 && row.status == "cleared" {
                         break;
@@ -35099,7 +35099,7 @@ mod tests {
         );
         let ledger_path = InProcessAgentOrchestrator::goal_ledger_dir(data_dir.path())
             .join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         assert_eq!(
             ledger
                 .get_goal(&goal_id)
@@ -35188,7 +35188,7 @@ mod tests {
         );
         let ledger_path = InProcessAgentOrchestrator::goal_ledger_dir(data_dir.path())
             .join(format!("{}.db", sanitize_filename_for_ledger(&old_goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         let old_row = ledger
             .get_goal(&old_goal_id)
             .expect("query")
@@ -36111,7 +36111,7 @@ mod tests {
         );
         let ledger_path = InProcessAgentOrchestrator::goal_ledger_dir(data_dir.path())
             .join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         assert_eq!(
             ledger
                 .get_goal(&goal_id)
@@ -36659,7 +36659,7 @@ mod tests {
             .expect("set active goal");
         let goal_id = orchestrator.goal_id_for_session(&session_id);
 
-        let usage = octos_llm::TokenUsage {
+        let usage = ra_llm::TokenUsage {
             input_tokens: 120,
             output_tokens: 30,
             ..Default::default()
@@ -36710,7 +36710,7 @@ mod tests {
                     &session_id,
                     "tenant-a",
                     goal_id.as_deref(),
-                    &octos_llm::TokenUsage::default(),
+                    &ra_llm::TokenUsage::default(),
                 )
                 .is_none(),
             "zero verifier usage ⇒ no charge",
@@ -36765,7 +36765,7 @@ mod tests {
         );
 
         // The VERIFIER charge must still land on the budget_limited goal…
-        let usage = octos_llm::TokenUsage {
+        let usage = ra_llm::TokenUsage {
             input_tokens: 40,
             output_tokens: 10,
             ..Default::default()
@@ -37745,7 +37745,7 @@ mod tests {
             .path()
             .join("goal-ledgers")
             .join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open goal ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open goal ledger");
         let goal_row = ledger
             .get_goal(&goal_id)
             .expect("read goals row")
@@ -39122,16 +39122,16 @@ mod tests {
         impl LlmProvider for BacktickProvider {
             async fn chat(
                 &self,
-                _messages: &[octos_core::Message],
-                _tools: &[octos_llm::ToolSpec],
-                _config: &octos_llm::ChatConfig,
-            ) -> eyre::Result<octos_llm::ChatResponse> {
-                Ok(octos_llm::ChatResponse {
+                _messages: &[ra_core::Message],
+                _tools: &[ra_llm::ToolSpec],
+                _config: &ra_llm::ChatConfig,
+            ) -> eyre::Result<ra_llm::ChatResponse> {
+                Ok(ra_llm::ChatResponse {
                     content: Some("`DONE`".to_string()),
                     reasoning_content: None,
                     tool_calls: Vec::new(),
-                    stop_reason: octos_llm::StopReason::EndTurn,
-                    usage: octos_llm::TokenUsage::default(),
+                    stop_reason: ra_llm::StopReason::EndTurn,
+                    usage: ra_llm::TokenUsage::default(),
                     provider_index: Some(0),
                 })
             }
@@ -39169,7 +39169,7 @@ mod tests {
     enum ScriptedReply {
         Ok {
             content: &'static str,
-            usage: octos_llm::TokenUsage,
+            usage: ra_llm::TokenUsage,
         },
         ErrRetryable(&'static str),
         ErrAuth(&'static str),
@@ -39194,10 +39194,10 @@ mod tests {
     impl LlmProvider for ScriptedVerifierProvider {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             use std::sync::atomic::Ordering;
             self.chats.fetch_add(1, Ordering::SeqCst);
             // FIFO: replies are served in the order the test queued them.
@@ -39213,31 +39213,31 @@ mod tests {
                 }
             };
             match next {
-                Some(ScriptedReply::Ok { content, usage }) => Ok(octos_llm::ChatResponse {
+                Some(ScriptedReply::Ok { content, usage }) => Ok(ra_llm::ChatResponse {
                     content: Some(content.to_owned()),
                     reasoning_content: None,
                     tool_calls: Vec::new(),
-                    stop_reason: octos_llm::StopReason::EndTurn,
+                    stop_reason: ra_llm::StopReason::EndTurn,
                     usage,
                     provider_index: None,
                 }),
                 Some(ScriptedReply::ErrRetryable(msg)) => {
-                    Err(eyre::eyre!(octos_llm::LlmError::new(
-                        octos_llm::LlmErrorKind::ServerError { status: 503 },
+                    Err(eyre::eyre!(ra_llm::LlmError::new(
+                        ra_llm::LlmErrorKind::ServerError { status: 503 },
                         msg,
                     )))
                 }
                 Some(ScriptedReply::ErrAuth(msg)) => {
-                    Err(eyre::eyre!(octos_llm::LlmError::auth(msg)))
+                    Err(eyre::eyre!(ra_llm::LlmError::auth(msg)))
                 }
-                None => Ok(octos_llm::ChatResponse {
+                None => Ok(ra_llm::ChatResponse {
                     // Exhausted script: a benign non-verdict so the wrapper
                     // classifies InvalidResponse instead of panicking.
                     content: Some("SCRIPT-EXHAUSTED".to_owned()),
                     reasoning_content: None,
                     tool_calls: Vec::new(),
-                    stop_reason: octos_llm::StopReason::EndTurn,
-                    usage: octos_llm::TokenUsage::default(),
+                    stop_reason: ra_llm::StopReason::EndTurn,
+                    usage: ra_llm::TokenUsage::default(),
                     provider_index: None,
                 }),
             }
@@ -39256,8 +39256,8 @@ mod tests {
         reasoning: u32,
         cache_read: u32,
         cache_write: u32,
-    ) -> octos_llm::TokenUsage {
-        octos_llm::TokenUsage {
+    ) -> ra_llm::TokenUsage {
+        ra_llm::TokenUsage {
             input_tokens: input,
             output_tokens: output,
             reasoning_tokens: reasoning,
@@ -39291,21 +39291,21 @@ mod tests {
     impl LlmProvider for BarrierVerifierProvider {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
             use std::sync::atomic::Ordering;
             self.chats.fetch_add(1, Ordering::SeqCst);
             // Park until the test hands this chat a permit. The receiver
             // sits behind a tokio mutex so `chat(&self)` can drive it; the
             // guard never crosses the provider boundary.
             let _permit = self.release.lock().await.recv().await;
-            Ok(octos_llm::ChatResponse {
+            Ok(ra_llm::ChatResponse {
                 content: Some("DONE".to_owned()),
                 reasoning_content: None,
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
+                stop_reason: ra_llm::StopReason::EndTurn,
                 usage: usage_of(1, 1, 0, 0, 0),
                 provider_index: None,
             })
@@ -40444,10 +40444,10 @@ mod tests {
         impl LlmProvider for LongMultibyteErrorProvider {
             async fn chat(
                 &self,
-                _m: &[octos_core::Message],
-                _t: &[octos_llm::ToolSpec],
-                _c: &octos_llm::ChatConfig,
-            ) -> eyre::Result<octos_llm::ChatResponse> {
+                _m: &[ra_core::Message],
+                _t: &[ra_llm::ToolSpec],
+                _c: &ra_llm::ChatConfig,
+            ) -> eyre::Result<ra_llm::ChatResponse> {
                 // 600 emoji, each 4 bytes — far past VERIFIER_CALL_ERROR_CHARS.
                 Err(eyre::eyre!("{}", "💡".repeat(600)))
             }
@@ -43283,20 +43283,20 @@ mod tests {
         impl LlmProvider for SleepyProvider {
             async fn chat(
                 &self,
-                _messages: &[octos_core::Message],
-                _tools: &[octos_llm::ToolSpec],
-                _config: &octos_llm::ChatConfig,
-            ) -> eyre::Result<octos_llm::ChatResponse> {
+                _messages: &[ra_core::Message],
+                _tools: &[ra_llm::ToolSpec],
+                _config: &ra_llm::ChatConfig,
+            ) -> eyre::Result<ra_llm::ChatResponse> {
                 // Sleep "forever" — interrupt_agent must short-
                 // circuit this. We do still bound it so a failing
                 // cancellation path doesn't hang CI; 30s is far
                 // beyond the 5s test timeout.
                 tokio::time::sleep(Duration::from_secs(30)).await;
-                Ok(octos_llm::ChatResponse {
+                Ok(ra_llm::ChatResponse {
                     content: Some("never".into()),
                     reasoning_content: None,
                     tool_calls: Vec::new(),
-                    stop_reason: octos_llm::StopReason::EndTurn,
+                    stop_reason: ra_llm::StopReason::EndTurn,
                     usage: Default::default(),
                     provider_index: None,
                 })
@@ -44136,7 +44136,7 @@ mod tests {
         let fleet_id = plan["fleet_id"].as_str().expect("fleet id").to_owned();
         assert_eq!(
             store.get_fleet(&fleet_id).await.unwrap().unwrap().status,
-            octos_fleet::FleetStatus::Active,
+            ra_fleet::FleetStatus::Active,
         );
 
         let cleared = orchestrator
@@ -44153,7 +44153,7 @@ mod tests {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
             let status = store.get_fleet(&fleet_id).await.unwrap().unwrap().status;
-            if status == octos_fleet::FleetStatus::Cancelled {
+            if status == ra_fleet::FleetStatus::Cancelled {
                 break;
             }
             assert!(
@@ -44213,9 +44213,9 @@ mod tests {
         let ledger_dir = InProcessAgentOrchestrator::goal_ledger_dir(&profile_dir);
         std::fs::create_dir_all(&ledger_dir).unwrap();
         let ledger_path = ledger_dir.join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         ledger
-            .upsert_goal(&octos_fleet::Goal {
+            .upsert_goal(&ra_fleet::Goal {
                 goal_id: goal_id.clone(),
                 objective: "ship the thing".into(),
                 status: "active".into(),
@@ -44256,7 +44256,7 @@ mod tests {
     /// #2068 — a goal transition must sync `time_used_seconds` into the
     /// durable row alongside `tokens_used`. The wall-clock dimension is
     /// charged by every accountant and persisted to the supervisor store,
-    /// but the `octos_fleet::Goal` conversion silently DROPPED it (the
+    /// but the `ra_fleet::Goal` conversion silently DROPPED it (the
     /// ledger had no time column at all), so the durable row's idea of what
     /// a goal cost was permanently missing half the answer.
     #[test]
@@ -44286,7 +44286,7 @@ mod tests {
 
         let ledger_path = InProcessAgentOrchestrator::goal_ledger_dir(&profile_dir)
             .join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         let row = ledger
             .get_goal(&goal_id)
             .expect("read row")
@@ -44335,9 +44335,9 @@ mod tests {
         let ledger_dir = InProcessAgentOrchestrator::goal_ledger_dir(dir.path());
         std::fs::create_dir_all(&ledger_dir).unwrap();
         let ledger_path = ledger_dir.join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         ledger
-            .upsert_goal(&octos_fleet::Goal {
+            .upsert_goal(&ra_fleet::Goal {
                 goal_id: goal_id.clone(),
                 objective: "ship the thing".into(),
                 status: "active".into(),
@@ -44393,9 +44393,9 @@ mod tests {
         let ledger_dir = InProcessAgentOrchestrator::goal_ledger_dir(dir.path());
         std::fs::create_dir_all(&ledger_dir).unwrap();
         let ledger_path = ledger_dir.join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         ledger
-            .upsert_goal(&octos_fleet::Goal {
+            .upsert_goal(&ra_fleet::Goal {
                 goal_id: goal_id.clone(),
                 objective: "ship the thing".into(),
                 status: "active".into(),
@@ -44457,9 +44457,9 @@ mod tests {
         std::fs::create_dir_all(&ledger_dir).unwrap();
         let ledger_path =
             ledger_dir.join(format!("{}.db", sanitize_filename_for_ledger("goal_stale")));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         ledger
-            .upsert_goal(&octos_fleet::Goal {
+            .upsert_goal(&ra_fleet::Goal {
                 goal_id: "goal_stale".into(),
                 objective: "obj".into(),
                 status: "cleared".into(),
@@ -44541,9 +44541,9 @@ mod tests {
         let ledger_dir = InProcessAgentOrchestrator::goal_ledger_dir(dir.path());
         std::fs::create_dir_all(&ledger_dir).unwrap();
         let ledger_path = ledger_dir.join(format!("{}.db", sanitize_filename_for_ledger(&goal_id)));
-        let ledger = octos_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&ledger_path).expect("open ledger");
         ledger
-            .upsert_goal(&octos_fleet::Goal {
+            .upsert_goal(&ra_fleet::Goal {
                 goal_id: goal_id.clone(),
                 objective: "ship the thing".into(),
                 status: "complete".into(),
@@ -46438,7 +46438,7 @@ mod tests {
     struct SovereigntyProviderCleanup;
     impl Drop for SovereigntyProviderCleanup {
         fn drop(&mut self) {
-            octos_agent::tools::shell::set_main_tree_sovereignty_provider(None);
+            ra_agent::tools::shell::set_main_tree_sovereignty_provider(None);
         }
     }
 
@@ -46517,9 +46517,9 @@ mod tests {
 
         // goal_99 claims FIRST (earlier timestamp); goal_01 claims later.
         // Lexicographic order would pick goal_01 — the timestamp must win.
-        let ledger_99 = octos_fleet::GoalLedger::open(ledger_dir.join("goal_99.db")).unwrap();
+        let ledger_99 = ra_fleet::GoalLedger::open(ledger_dir.join("goal_99.db")).unwrap();
         ledger_99.claim_main_tree_owner("goal_99", 1_000).unwrap();
-        let ledger_01 = octos_fleet::GoalLedger::open(ledger_dir.join("goal_01.db")).unwrap();
+        let ledger_01 = ra_fleet::GoalLedger::open(ledger_dir.join("goal_01.db")).unwrap();
         ledger_01.claim_main_tree_owner("goal_01", 2_000).unwrap();
 
         assert_eq!(
@@ -46543,9 +46543,9 @@ mod tests {
         // in scan_main_tree_owner), so goal_02 beats goal_10 ("goal_02" <
         // "goal_10" as STRINGS — the numeric reading would pick 02 anyway;
         // inverted pair below pins the string order explicitly).
-        let ledger_10 = octos_fleet::GoalLedger::open(ledger_dir.join("goal_10.db")).unwrap();
+        let ledger_10 = ra_fleet::GoalLedger::open(ledger_dir.join("goal_10.db")).unwrap();
         ledger_10.claim_main_tree_owner("goal_10", 5_000).unwrap();
-        let ledger_2 = octos_fleet::GoalLedger::open(ledger_dir.join("goal_02.db")).unwrap();
+        let ledger_2 = ra_fleet::GoalLedger::open(ledger_dir.join("goal_02.db")).unwrap();
         ledger_2.claim_main_tree_owner("goal_02", 5_000).unwrap();
 
         assert_eq!(
@@ -46575,7 +46575,7 @@ mod tests {
         // goal_01 — bound caller on a non-default branch — is CLAIMED as the
         // owner by the provider itself (the "first goal to branch the tree"
         // rule), and sees that claim echoed in its context.
-        let provider = octos_agent::tools::shell::main_tree_sovereignty_provider()
+        let provider = ra_agent::tools::shell::main_tree_sovereignty_provider()
             .expect("provider installed");
         let goal_01_ctx = provider(Some("goal_01")).expect("context returned");
         assert_eq!(
@@ -46610,7 +46610,7 @@ mod tests {
 
         // The REAL denial predicate on the INSTALLED provider's contexts:
         // goal_02's cross-goal checkout is refused with the fence hint…
-        let denial = octos_agent::tools::shell::tree_sovereignty_denial(
+        let denial = ra_agent::tools::shell::tree_sovereignty_denial(
             "git checkout feat/goal-02-stream",
             &main_tree,
             &goal_02_ctx,
@@ -46622,7 +46622,7 @@ mod tests {
         );
         // …while goal_01's own checkout of the same target passes through.
         assert!(
-            octos_agent::tools::shell::tree_sovereignty_denial(
+            ra_agent::tools::shell::tree_sovereignty_denial(
                 "git checkout feat/goal-02-stream",
                 &main_tree,
                 &goal_01_ctx,
@@ -46650,7 +46650,7 @@ mod tests {
             profile_data_dir.clone(),
             main_tree.clone(),
         );
-        let provider = octos_agent::tools::shell::main_tree_sovereignty_provider()
+        let provider = ra_agent::tools::shell::main_tree_sovereignty_provider()
             .expect("provider installed");
         let ctx = provider(Some("goal_01")).expect("context returned");
         assert_eq!(ctx.main_tree_branch.as_deref(), Some("main"));
@@ -46659,7 +46659,7 @@ mod tests {
             "no non-default branch → no claim → no owner"
         );
         assert!(
-            octos_agent::tools::shell::tree_sovereignty_denial(
+            ra_agent::tools::shell::tree_sovereignty_denial(
                 "git checkout feat/anything",
                 &main_tree,
                 &ctx,
@@ -47423,13 +47423,13 @@ mod tests {
         let target = Arc::new(Mutex::new(first.clone()));
         let terminal_calls = Arc::new(AtomicUsize::new(0));
         let change_calls = Arc::new(AtomicUsize::new(0));
-        let events = Arc::new(Mutex::new(Vec::<octos_agent::TerminalEvent>::new()));
+        let events = Arc::new(Mutex::new(Vec::<ra_agent::TerminalEvent>::new()));
         let terminal_sink = {
             let target = target.clone();
             let calls = terminal_calls.clone();
             let events = events.clone();
-            Arc::new(move |event: &octos_agent::TerminalEvent| {
-                if matches!(event.outcome, octos_agent::TerminalOutcome::Completed) {
+            Arc::new(move |event: &ra_agent::TerminalEvent| {
+                if matches!(event.outcome, ra_agent::TerminalOutcome::Completed) {
                     calls.fetch_add(1, Ordering::SeqCst);
                     events.lock().unwrap().push(event.clone());
                     let runtime = target.lock().unwrap().clone();
@@ -47442,8 +47442,8 @@ mod tests {
         let change_sink = {
             let target = target.clone();
             let calls = change_calls.clone();
-            Arc::new(move |task: &octos_agent::BackgroundTask| {
-                if task.status == octos_agent::TaskStatus::Completed {
+            Arc::new(move |task: &ra_agent::BackgroundTask| {
+                if task.status == ra_agent::TaskStatus::Completed {
                     calls.fetch_add(1, Ordering::SeqCst);
                     let runtime = target.lock().unwrap().clone();
                     let _ = runtime
@@ -47452,7 +47452,7 @@ mod tests {
                 }
             })
         };
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         supervisor.set_on_terminal({
             let sink = terminal_sink.clone();
             move |event| sink(event)
@@ -49517,7 +49517,7 @@ mod tests {
         orch.configure_supervisor_store(dir.path()).unwrap();
         let profile = "cancel-r5";
         let session = SessionKey::with_profile(profile, "api", "real-cancel");
-        let supervisor = octos_agent::TaskSupervisor::new();
+        let supervisor = ra_agent::TaskSupervisor::new();
         let runtime = orch.clone();
         supervisor.set_on_change(move |task| {
             runtime

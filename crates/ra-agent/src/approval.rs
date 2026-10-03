@@ -364,7 +364,7 @@ fn string_arg(args: &serde_json::Value, key: &str) -> Option<String> {
 
 fn compact_tool_args(args: &serde_json::Value) -> String {
     let serialized = serde_json::to_string(args).unwrap_or_else(|_| "{}".to_string());
-    octos_core::truncated_utf8(&serialized, 180, "...")
+    ra_core::truncated_utf8(&serialized, 180, "...")
 }
 
 fn next_request_id() -> String {

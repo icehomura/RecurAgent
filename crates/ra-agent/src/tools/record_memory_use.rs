@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
-use octos_memory::MemoryStore;
+use ra_memory::MemoryStore;
 use serde::Deserialize;
 
 use super::{Tool, ToolResult};

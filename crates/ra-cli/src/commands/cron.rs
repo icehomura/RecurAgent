@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use clap::{Args, Subcommand};
 use colored::Colorize;
 use eyre::{Result, WrapErr};
-use octos_bus::cron_types::{CronJob, CronPayload, CronSchedule, CronStore};
+use ra_bus::cron_types::{CronJob, CronPayload, CronSchedule, CronStore};
 
 use super::Executable;
 

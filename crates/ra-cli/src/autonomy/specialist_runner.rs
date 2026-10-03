@@ -9,11 +9,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use octos_agent::tools::mcp_agent::{
+use ra_agent::tools::mcp_agent::{
     DispatchContextContract, DispatchOutcome, DispatchRequest, DispatchResponse, McpAgentBackend,
 };
-use octos_core::ui_protocol::{OutputCursor, methods};
-use octos_core::{SessionKey, TaskId};
+use ra_core::ui_protocol::{OutputCursor, methods};
+use ra_core::{SessionKey, TaskId};
 use serde_json::{Value, json};
 use tokio::time::MissedTickBehavior;
 
@@ -60,7 +60,7 @@ pub(crate) struct SupervisedCliSpecialist {
     pub(crate) spec: SupervisedSpecialistSpec,
     pub(crate) command: CliAgentCommandConfig,
     pub(crate) heartbeat_interval: Duration,
-    pub(crate) dispatch_policy: Option<Arc<octos_agent::DispatchPolicy>>,
+    pub(crate) dispatch_policy: Option<Arc<ra_agent::DispatchPolicy>>,
 }
 
 #[derive(Clone)]
@@ -71,7 +71,7 @@ pub(crate) struct SupervisedMcpSpecialist {
     pub(crate) task: Value,
     pub(crate) timeout: Duration,
     pub(crate) heartbeat_interval: Duration,
-    pub(crate) dispatch_policy: Option<Arc<octos_agent::DispatchPolicy>>,
+    pub(crate) dispatch_policy: Option<Arc<ra_agent::DispatchPolicy>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,7 +98,7 @@ impl SupervisedCliSpecialist {
         self
     }
 
-    pub(crate) fn with_dispatch_policy(mut self, policy: Arc<octos_agent::DispatchPolicy>) -> Self {
+    pub(crate) fn with_dispatch_policy(mut self, policy: Arc<ra_agent::DispatchPolicy>) -> Self {
         self.dispatch_policy = Some(policy);
         self
     }
@@ -132,7 +132,7 @@ impl SupervisedMcpSpecialist {
         self
     }
 
-    pub(crate) fn with_dispatch_policy(mut self, policy: Arc<octos_agent::DispatchPolicy>) -> Self {
+    pub(crate) fn with_dispatch_policy(mut self, policy: Arc<ra_agent::DispatchPolicy>) -> Self {
         self.dispatch_policy = Some(policy);
         self
     }
@@ -189,7 +189,7 @@ pub(crate) async fn run_supervised_cli_specialist(
 
     if let Some(policy) = request.dispatch_policy.as_ref() {
         let endpoint = request.command.program.to_string_lossy().into_owned();
-        let backend = octos_agent::DispatchBackendMetadata::unsandboxed("cli", endpoint);
+        let backend = ra_agent::DispatchBackendMetadata::unsandboxed("cli", endpoint);
         let task = json!({
             "task": request.spec.task.as_deref(),
             "cwd": request.spec.cwd.as_ref().map(|path| path.to_string_lossy().into_owned()),
@@ -197,10 +197,10 @@ pub(crate) async fn run_supervised_cli_specialist(
             "args": request.command.args.clone(),
             "env": request.command.env.clone(),
         });
-        if let Err(denial) = octos_agent::enforce_dispatch_gates_for_backend(
+        if let Err(denial) = ra_agent::enforce_dispatch_gates_for_backend(
             policy.as_ref(),
             &backend,
-            octos_agent::DispatchTarget {
+            ra_agent::DispatchTarget {
                 dispatch_id: &request.spec.agent_id,
                 tool_name: &request.spec.backend_kind,
                 task: &task,
@@ -286,11 +286,11 @@ pub(crate) async fn run_supervised_mcp_specialist(
 
     if let Some(policy) = request.dispatch_policy.as_ref() {
         let backend =
-            octos_agent::DispatchBackendMetadata::from_mcp_backend(request.backend.as_ref());
-        if let Err(denial) = octos_agent::enforce_dispatch_gates_for_backend(
+            ra_agent::DispatchBackendMetadata::from_mcp_backend(request.backend.as_ref());
+        if let Err(denial) = ra_agent::enforce_dispatch_gates_for_backend(
             policy.as_ref(),
             &backend,
-            octos_agent::DispatchTarget {
+            ra_agent::DispatchTarget {
                 dispatch_id: &request.spec.agent_id,
                 tool_name: &request.tool_name,
                 task: &request.task,
@@ -463,7 +463,7 @@ fn finish_mcp_run(
     })
 }
 
-fn dispatch_policy_denial_message(denial: &octos_agent::GateDenial) -> String {
+fn dispatch_policy_denial_message(denial: &ra_agent::GateDenial) -> String {
     format!(
         "dispatch rejected by policy ({}): {}",
         denial.last_dispatch_outcome, denial.reason
@@ -946,19 +946,19 @@ printf 'done\n'
 
     #[cfg(unix)]
     #[async_trait]
-    impl octos_llm::LlmProvider for OneTurnNativeProvider {
+    impl ra_llm::LlmProvider for OneTurnNativeProvider {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> eyre::Result<octos_llm::ChatResponse> {
-            Ok(octos_llm::ChatResponse {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> eyre::Result<ra_llm::ChatResponse> {
+            Ok(ra_llm::ChatResponse {
                 content: Some("native done".to_owned()),
                 reasoning_content: None,
                 tool_calls: Vec::new(),
-                stop_reason: octos_llm::StopReason::EndTurn,
-                usage: octos_llm::TokenUsage {
+                stop_reason: ra_llm::StopReason::EndTurn,
+                usage: ra_llm::TokenUsage {
                     input_tokens: 1,
                     output_tokens: 1,
                     ..Default::default()
@@ -1075,11 +1075,11 @@ printf 'done\n'
                 cwd: raw_root.clone(),
                 llm: Arc::new(OneTurnNativeProvider),
                 memory: Arc::new(
-                    octos_memory::EpisodeStore::open(dir.path().join("native-memory"))
+                    ra_memory::EpisodeStore::open(dir.path().join("native-memory"))
                         .await
                         .unwrap(),
                 ),
-                tools: Arc::new(octos_agent::ToolRegistry::with_builtins(dir.path())),
+                tools: Arc::new(ra_agent::ToolRegistry::with_builtins(dir.path())),
                 system_prompt: None,
                 agent_config: None,
                 task_ledger_path: None,
@@ -1517,12 +1517,12 @@ printf 'done\n'
     struct DenyRequester;
 
     #[async_trait]
-    impl octos_agent::ToolApprovalRequester for DenyRequester {
+    impl ra_agent::ToolApprovalRequester for DenyRequester {
         async fn request_approval(
             &self,
-            _request: octos_agent::ToolApprovalRequest,
-        ) -> octos_agent::ToolApprovalDecision {
-            octos_agent::ToolApprovalDecision::Deny
+            _request: ra_agent::ToolApprovalRequest,
+        ) -> ra_agent::ToolApprovalDecision {
+            ra_agent::ToolApprovalDecision::Deny
         }
     }
 
@@ -1541,7 +1541,7 @@ printf spawned > "$1"
         let orchestrator = InProcessAgentOrchestrator::default();
         let sink = RecordingSink::default();
         let spec = sample_spec(&dir, "cli-policy-approval");
-        let policy = Arc::new(octos_agent::DispatchPolicy {
+        let policy = Arc::new(ra_agent::DispatchPolicy {
             require_approval: true,
             approval_requester: Some(Arc::new(DenyRequester)),
             ..Default::default()
@@ -1585,7 +1585,7 @@ printf spawned > "$1"
         let spec = sample_spec(&dir, "cli-policy-env");
         let mut allowlist = HashSet::new();
         allowlist.insert("ALLOWED_ONLY".to_owned());
-        let policy = Arc::new(octos_agent::DispatchPolicy {
+        let policy = Arc::new(ra_agent::DispatchPolicy {
             env_allowlist: Some(allowlist),
             ..Default::default()
         });
@@ -1621,7 +1621,7 @@ printf spawned > "$1"
         let sink = RecordingSink::default();
         let mut spec = sample_spec(&dir, "mcp-policy-approval");
         spec.backend_kind = "mcp_test".to_owned();
-        let policy = Arc::new(octos_agent::DispatchPolicy {
+        let policy = Arc::new(ra_agent::DispatchPolicy {
             require_approval: true,
             approval_requester: Some(Arc::new(DenyRequester)),
             ..Default::default()
@@ -1654,7 +1654,7 @@ printf spawned > "$1"
         let sink = RecordingSink::default();
         let mut spec = sample_spec(&dir, "mcp-policy-sandbox");
         spec.backend_kind = "mcp_test".to_owned();
-        let policy = Arc::new(octos_agent::DispatchPolicy {
+        let policy = Arc::new(ra_agent::DispatchPolicy {
             require_sandboxed: true,
             ..Default::default()
         });

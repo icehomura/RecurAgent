@@ -1,7 +1,7 @@
 //! M7.2a — integration tests for the MCP server dispatch.
 //!
 //! These tests exercise the real `Agent` loop via the exposed
-//! [`McpSessionDispatch`](octos_agent::mcp_server::McpSessionDispatch)
+//! [`McpSessionDispatch`](ra_agent::mcp_server::McpSessionDispatch)
 //! implementation. A stub LLM provider drives the loop so the tests
 //! never need a real provider — the full path is: MCP request →
 //! session dispatch → Agent::run_task → workspace contract enforcement
@@ -23,13 +23,13 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use octos_agent::mcp_server::{McpSessionDispatch, SessionLifecycleObserver};
-use octos_agent::task_supervisor::TaskLifecycleState;
-use octos_agent::validators::ValidatorStatus;
-use octos_agent::{SandboxConfig, SandboxMode};
-use octos_cli::commands::mcp_serve::{AgentLlmFactory, RealSessionDispatch, SessionDispatchConfig};
-use octos_core::{Message, MessageRole, ToolCall};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_agent::mcp_server::{McpSessionDispatch, SessionLifecycleObserver};
+use ra_agent::task_supervisor::TaskLifecycleState;
+use ra_agent::validators::ValidatorStatus;
+use ra_agent::{SandboxConfig, SandboxMode};
+use ra_cli::commands::mcp_serve::{AgentLlmFactory, RealSessionDispatch, SessionDispatchConfig};
+use ra_core::{Message, MessageRole, ToolCall};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
@@ -784,12 +784,12 @@ async fn should_not_leak_internal_iteration_messages_via_dispatch() {
 
 #[tokio::test]
 async fn should_populate_validator_results_when_workspace_policy_declares_validators() {
-    use octos_agent::workspace_policy::{
+    use ra_agent::workspace_policy::{
         Validator, ValidatorPhaseKind, ValidatorSpec, WorkspacePolicy, WorkspacePolicyKind,
         WorkspaceSnapshotTrigger, WorkspaceTrackingPolicy, WorkspaceVersionControlPolicy,
         WorkspaceVersionControlProvider, write_workspace_policy,
     };
-    use octos_agent::{
+    use ra_agent::{
         ValidationPolicy, WorkspaceArtifactsPolicy, workspace_policy::WorkspacePolicyWorkspace,
     };
 
@@ -802,7 +802,7 @@ async fn should_populate_validator_results_when_workspace_policy_declares_valida
     // Write a workspace policy with a typed file-existence validator so the
     // dispatch has something concrete to run at completion phase.
     let policy = WorkspacePolicy {
-        schema_version: octos_agent::WORKSPACE_POLICY_SCHEMA_VERSION,
+        schema_version: ra_agent::WORKSPACE_POLICY_SCHEMA_VERSION,
         workspace: WorkspacePolicyWorkspace {
             kind: WorkspacePolicyKind::Slides,
         },
@@ -875,7 +875,7 @@ async fn should_populate_validator_results_when_workspace_policy_declares_valida
 async fn should_block_shell_write_outside_workspace_via_sandbox() {
     // Probe the resolved backend: NoSandbox wraps with `sh`/`cmd`, an
     // enforcing backend wraps with `sandbox-exec`/`bwrap`/`docker`.
-    let sandbox = octos_agent::create_sandbox(&SandboxConfig::default());
+    let sandbox = ra_agent::create_sandbox(&SandboxConfig::default());
     let program = sandbox
         .wrap_command("true", std::path::Path::new("."))
         .as_std()

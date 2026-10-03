@@ -45,7 +45,7 @@ pub enum RecoveryDecision {
 }
 
 /// Failure signal threaded into [`build_recovery_prompt`]. Mirrors
-/// `octos_agent::SpawnOnlyFailureSignal` in shape so the LLM sees the
+/// `ra_agent::SpawnOnlyFailureSignal` in shape so the LLM sees the
 /// same recovery contract whether it is recovering a spawn_only task
 /// or a pipeline node.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -168,7 +168,7 @@ pub async fn recover_node(
                     "Recovery skipped for node '{}': pipeline shutdown signal raised before retry.",
                     node.id
                 ),
-                token_usage: octos_core::TokenUsage::default(),
+                token_usage: ra_core::TokenUsage::default(),
                 files_modified: vec![],
             },
             retried: false,
@@ -235,7 +235,7 @@ fn extract_suggested_alternatives(content: &str) -> Vec<String> {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use octos_core::TokenUsage;
+    use ra_core::TokenUsage;
     use std::sync::atomic::AtomicU32;
 
     /// Minimal handler that fails the first time and passes on retry.

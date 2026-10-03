@@ -9,10 +9,10 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use octos_agent::{Agent, AgentConfig, ReadTaskOutputTool, Tool, ToolRegistry, ToolResult};
-use octos_core::{AgentId, Message, ToolCall};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_agent::{Agent, AgentConfig, ReadTaskOutputTool, Tool, ToolRegistry, ToolResult};
+use ra_core::{AgentId, Message, ToolCall};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 
 struct ScriptedLlm {
@@ -183,7 +183,7 @@ async fn spawn_only_intercept_returns_task_handle_envelope_not_full_output() {
         .messages
         .iter()
         .find(|m| {
-            matches!(m.role, octos_core::MessageRole::Tool)
+            matches!(m.role, ra_core::MessageRole::Tool)
                 && m.tool_call_id
                     .as_deref()
                     .is_some_and(|id| id.contains("call-handle-1"))
@@ -272,7 +272,7 @@ async fn spawn_only_intercept_falls_back_to_legacy_text_without_reader() {
         .messages
         .iter()
         .find(|m| {
-            matches!(m.role, octos_core::MessageRole::Tool)
+            matches!(m.role, ra_core::MessageRole::Tool)
                 && m.tool_call_id
                     .as_deref()
                     .is_some_and(|id| id.contains("call-legacy-1"))

@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
-use octos_research::metasearch::{
+use ra_research::metasearch::{
     Config, Fetch, FetchFuture, HttpRequest, HttpResponse, Metasearch, Registry, ReqwestFetch,
     SearchRequest,
 };
@@ -305,7 +305,7 @@ async fn main() {
         req.langs = case.langs.iter().map(|l| l.to_string()).collect();
         req.since = case
             .since
-            .map(|s| octos_research::date::Since::parse(s, now).unwrap());
+            .map(|s| ra_research::date::Since::parse(s, now).unwrap());
         let resp = ms.search(&req).await;
         let report = &resp.engines[0];
         let mut seen = rec.seen.lock().unwrap().clone();

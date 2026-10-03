@@ -500,7 +500,7 @@ impl Tool for HostRoutedTool {
                 command: None,
                 cwd: None,
                 once_only: true,
-                host_tool: Some(octos_core::ui_protocol::ApprovalHostToolDetails {
+                host_tool: Some(ra_core::ui_protocol::ApprovalHostToolDetails {
                     app: self.decl.owner_app().to_owned(),
                     tool: self.decl.name.clone(),
                     args: args.clone(),

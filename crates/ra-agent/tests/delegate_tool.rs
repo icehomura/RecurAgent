@@ -5,19 +5,19 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use async_trait::async_trait;
-use octos_agent::harness_errors::HarnessError;
-use octos_agent::task_supervisor::{TaskLifecycleState, TaskStatus, TaskSupervisor};
-use octos_agent::tools::spawn::ChildPromptContextRequest;
-use octos_agent::tools::{
+use ra_agent::harness_errors::HarnessError;
+use ra_agent::task_supervisor::{TaskLifecycleState, TaskStatus, TaskSupervisor};
+use ra_agent::tools::spawn::ChildPromptContextRequest;
+use ra_agent::tools::{
     DELEGATED_DENY_GROUP, DelegateTool, DepthBudget, MAX_DEPTH, Tool, ToolPolicy,
     build_delegated_child_policy,
 };
-use octos_agent::{
+use ra_agent::{
     PromptContextManager, PromptContextPhase, PromptContextReport, PromptContextRequest,
 };
-use octos_core::Message;
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_core::Message;
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 
 /// Minimal LLM provider — always returns a scripted natural-language reply
@@ -329,9 +329,9 @@ async fn should_deliver_child_artifact_through_contract_gate() {
     let dir = TempDir::new().unwrap();
     let repo_root = dir.path().join("slides/demo");
     std::fs::create_dir_all(&repo_root).unwrap();
-    octos_agent::write_workspace_policy(
+    ra_agent::write_workspace_policy(
         &repo_root,
-        &octos_agent::WorkspacePolicy::for_kind(octos_agent::WorkspaceProjectKind::Slides),
+        &ra_agent::WorkspacePolicy::for_kind(ra_agent::WorkspaceProjectKind::Slides),
     )
     .unwrap();
     // Declared policy is present, but required deliverables are missing —
@@ -448,8 +448,8 @@ async fn should_route_delegation_event_through_tool_context_sink() {
     // `ToolContext` when dispatched through `execute_with_context`. This
     // proves the tool actually reads from the typed context rather than
     // relying on its own builder-only wiring.
-    use octos_agent::progress::SilentReporter;
-    use octos_agent::tools::ToolContext;
+    use ra_agent::progress::SilentReporter;
+    use ra_agent::tools::ToolContext;
     use std::sync::Arc;
 
     let dir = TempDir::new().unwrap();

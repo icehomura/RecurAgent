@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
-use octos_memory::{MemoryStore, NoteKind, NoteOrigin, StagingNote};
+use ra_memory::{MemoryStore, NoteKind, NoteOrigin, StagingNote};
 use serde::Deserialize;
 
 use super::{TOOL_CTX, Tool, ToolResult};
@@ -146,7 +146,7 @@ impl Tool for MemoryNoteTool {
                 // actionable error instead of a store-level rejection
                 // (codex round-2 P2: this field is interpolated into the
                 // consolidation prompt header).
-                Some(id) if octos_memory::is_valid_entry_id(id) => Some(id.to_string()),
+                Some(id) if ra_memory::is_valid_entry_id(id) => Some(id.to_string()),
                 Some(id) => {
                     return Ok(ToolResult {
                         output: format!(

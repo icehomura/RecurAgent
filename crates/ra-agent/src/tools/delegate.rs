@@ -36,9 +36,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
 use metrics::counter;
-use octos_core::{AgentId, Task, TaskContext, TaskId, TaskKind};
-use octos_llm::LlmProvider;
-use octos_memory::EpisodeStore;
+use ra_core::{AgentId, Task, TaskContext, TaskId, TaskKind};
+use ra_llm::LlmProvider;
+use ra_memory::EpisodeStore;
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
@@ -266,7 +266,7 @@ pub struct DelegateTool {
     /// Parent's embedding provider, propagated onto child workers so
     /// their saved episodes are embedded and their episodic recall runs
     /// (same NEW-06 propagation contract as SpawnTool / RunPipelineTool).
-    embedder: Option<Arc<dyn octos_llm::EmbeddingProvider>>,
+    embedder: Option<Arc<dyn ra_llm::EmbeddingProvider>>,
     /// Caller-owned context-manager factory for delegated child agents.
     child_prompt_context_manager_factory: Option<ChildPromptContextManagerFactory>,
     /// #1607 (codex-review follow-up): the session sandbox threaded from the
@@ -347,13 +347,13 @@ impl DelegateTool {
     }
 
     /// Propagate the parent's embedding provider onto delegated children.
-    pub fn with_embedder(mut self, embedder: Arc<dyn octos_llm::EmbeddingProvider>) -> Self {
+    pub fn with_embedder(mut self, embedder: Arc<dyn ra_llm::EmbeddingProvider>) -> Self {
         self.embedder = Some(embedder);
         self
     }
 
     /// Test-only visibility: whether an embedder was threaded through.
-    pub fn embedder_for_test(&self) -> Option<&Arc<dyn octos_llm::EmbeddingProvider>> {
+    pub fn embedder_for_test(&self) -> Option<&Arc<dyn ra_llm::EmbeddingProvider>> {
         self.embedder.as_ref()
     }
 
@@ -370,7 +370,7 @@ impl DelegateTool {
     /// sugar for optional parent embedders.
     pub fn with_optional_embedder(
         mut self,
-        embedder: Option<Arc<dyn octos_llm::EmbeddingProvider>>,
+        embedder: Option<Arc<dyn ra_llm::EmbeddingProvider>>,
     ) -> Self {
         self.embedder = embedder.or(self.embedder);
         self
@@ -902,7 +902,7 @@ mod tests {
     struct StubEmbedder;
 
     #[async_trait]
-    impl octos_llm::EmbeddingProvider for StubEmbedder {
+    impl ra_llm::EmbeddingProvider for StubEmbedder {
         async fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>> {
             Ok(vec![vec![0.0_f32; 1]; texts.len()])
         }
@@ -915,13 +915,13 @@ mod tests {
     struct NoopLlm;
 
     #[async_trait]
-    impl octos_llm::LlmProvider for NoopLlm {
+    impl ra_llm::LlmProvider for NoopLlm {
         async fn chat(
             &self,
-            _messages: &[octos_core::Message],
-            _tools: &[octos_llm::ToolSpec],
-            _config: &octos_llm::ChatConfig,
-        ) -> Result<octos_llm::ChatResponse> {
+            _messages: &[ra_core::Message],
+            _tools: &[ra_llm::ToolSpec],
+            _config: &ra_llm::ChatConfig,
+        ) -> Result<ra_llm::ChatResponse> {
             eyre::bail!("not called in these tests")
         }
         fn provider_name(&self) -> &str {
@@ -951,7 +951,7 @@ mod tests {
     /// vectorless and their recall silently skips.
     #[tokio::test]
     async fn should_store_embedder_and_fork_it_into_child_tools() {
-        let embedder = Arc::new(StubEmbedder) as Arc<dyn octos_llm::EmbeddingProvider>;
+        let embedder = Arc::new(StubEmbedder) as Arc<dyn ra_llm::EmbeddingProvider>;
         let tool = embedder_probe_tool().await.with_embedder(embedder);
         assert!(tool.embedder_for_test().is_some());
 

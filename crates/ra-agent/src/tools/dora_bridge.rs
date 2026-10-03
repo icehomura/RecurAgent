@@ -11,7 +11,7 @@
 //! This module is the canonical location. The historical `ra-dora-mcp`
 //! crate now re-exports these items for backward compatibility; new code
 //! should depend on `ra-agent` directly and use
-//! `octos_agent::tools::dora_bridge::*`.
+//! `ra_agent::tools::dora_bridge::*`.
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

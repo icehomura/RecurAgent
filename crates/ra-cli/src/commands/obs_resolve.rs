@@ -159,9 +159,9 @@ mod tests {
         let ledgers = data_root.join("goal-ledgers");
         std::fs::create_dir_all(&ledgers).expect("ledgers dir");
         let db = ledgers.join("goal_05.db");
-        let ledger = octos_fleet::GoalLedger::open(&db).expect("open ledger");
+        let ledger = ra_fleet::GoalLedger::open(&db).expect("open ledger");
         ledger
-            .upsert_goal(&octos_fleet::Goal {
+            .upsert_goal(&ra_fleet::Goal {
                 goal_id: "goal_05".to_owned(),
                 objective: "real-layout fixture".to_owned(),
                 status: "blocked".to_owned(),

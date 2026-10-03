@@ -6,7 +6,7 @@
 
 use std::io::Read;
 
-use octos_pipeline::profile::{ValidationProfile, validate_under_profile};
+use ra_pipeline::profile::{ValidationProfile, validate_under_profile};
 
 fn read_input() -> String {
     if let Some(path) = std::env::args().nth(1) {
@@ -20,14 +20,14 @@ fn read_input() -> String {
 
 fn main() {
     let dot = read_input();
-    let graph = match octos_pipeline::parser::parse_dot(&dot) {
+    let graph = match ra_pipeline::parser::parse_dot(&dot) {
         Ok(g) => g,
         Err(e) => {
             println!("FAIL\tparse: {e}");
             std::process::exit(1);
         }
     };
-    if let Err(cycle) = octos_pipeline::validate::detect_cycles_ignoring_marked_back_edges(&graph) {
+    if let Err(cycle) = ra_pipeline::validate::detect_cycles_ignoring_marked_back_edges(&graph) {
         println!("FAIL\tcycle: {cycle}");
         std::process::exit(1);
     }

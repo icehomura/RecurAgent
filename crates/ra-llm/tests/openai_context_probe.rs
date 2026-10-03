@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use octos_llm::{ContextWindowOverride, LlmProvider, RetryProvider, registry};
+use ra_llm::{ContextWindowOverride, LlmProvider, RetryProvider, registry};
 use serde_json::json;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};

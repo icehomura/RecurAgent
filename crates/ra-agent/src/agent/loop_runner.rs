@@ -6,9 +6,9 @@ use std::time::Instant;
 use std::{collections::HashMap, collections::HashSet, collections::VecDeque};
 
 use eyre::Result;
-use octos_core::{Message, MessageRole, Task, TaskResult, TokenUsage};
-use octos_llm::{ChatConfig, ChatResponse, StopReason};
-use octos_memory::{Episode, EpisodeOutcome};
+use ra_core::{Message, MessageRole, Task, TaskResult, TokenUsage};
+use ra_llm::{ChatConfig, ChatResponse, StopReason};
+use ra_memory::{Episode, EpisodeOutcome};
 use tracing::{Instrument, info, info_span, warn};
 
 use super::activity::{ActivityTrackingReporter, LoopActivityState};
@@ -198,9 +198,9 @@ fn inspect_workspace_contract_failures(working_dir: &std::path::Path) -> Option<
 }
 
 fn split_tool_calls(
-    tool_calls: &[octos_core::ToolCall],
+    tool_calls: &[ra_core::ToolCall],
     batch_size: usize,
-) -> Vec<&[octos_core::ToolCall]> {
+) -> Vec<&[ra_core::ToolCall]> {
     debug_assert!(batch_size > 0);
     tool_calls.chunks(batch_size).collect()
 }
@@ -616,7 +616,7 @@ impl Agent {
     ///
     /// Called ONLY from the foreground LLM call sites (not from tool/verifier
     /// dispatch). When the loop runs under
-    /// [`octos_llm::LlmCallPolicy::FailFast`] and a foreground LLM call fails,
+    /// [`ra_llm::LlmCallPolicy::FailFast`] and a foreground LLM call fails,
     /// this:
     ///   1. Excludes hook-deny errors (`"LLM call denied by hook"`): returns
     ///      `false` WITHOUT emitting a [`crate::TurnFailure`] so the caller
@@ -632,7 +632,7 @@ impl Agent {
     /// Returns `false` under Normal policy so non-FailFast behaviour — and the
     /// entire `handle_loop_error_with_dispatch` path — is unchanged.
     fn failfast_llm_bail(&self, report: &eyre::Report) -> bool {
-        if octos_llm::current_llm_call_policy() != octos_llm::LlmCallPolicy::FailFast {
+        if ra_llm::current_llm_call_policy() != ra_llm::LlmCallPolicy::FailFast {
             return false;
         }
         // Exclude hook-deny: preserve existing permission behaviour (no
@@ -1030,7 +1030,7 @@ impl Agent {
                 // from the per-turn attachment context (the audio is already
                 // transcribed into `user_content` by this point), and image
                 // detection looks at the outgoing `media`.
-                let has_image = media.iter().any(|p| octos_llm::vision::is_image(p));
+                let has_image = media.iter().any(|p| ra_llm::vision::is_image(p));
                 // Live-video is an EXPLICIT per-turn signal carried on the turn
                 // context (set by the ingress from `inbound.metadata.live_video`),
                 // not inferred from attachments: a spoken note plus an uploaded
@@ -1471,7 +1471,7 @@ impl Agent {
                         // `thinking` budget from `max_tokens`, and a changed
                         // thinking config invalidates the message cache.
                         let mut checkpoint_config = call_config.clone();
-                        checkpoint_config.tool_choice = octos_llm::ToolChoice::None;
+                        checkpoint_config.tool_choice = ra_llm::ToolChoice::None;
                         if checkpoint_config.reasoning_effort.is_none() {
                             checkpoint_config.max_tokens = Some(
                                 checkpoint_config
@@ -1586,8 +1586,8 @@ impl Agent {
                             // TERMINAL — do NOT make the adaptive 2nd call.
                             // Emit the voice EmptyResponse projection once and
                             // bail with the original error.
-                            if octos_llm::current_llm_call_policy()
-                                == octos_llm::LlmCallPolicy::FailFast
+                            if ra_llm::current_llm_call_policy()
+                                == ra_llm::LlmCallPolicy::FailFast
                             {
                                 if let Some(sink) = &self.voice_failure_sink {
                                     let _ = sink.send(crate::TurnFailure::EmptyResponse);
@@ -1655,11 +1655,11 @@ impl Agent {
                                 .chain()
                                 .any(|cause| {
                                     cause
-                                        .downcast_ref::<octos_llm::StreamError>()
+                                        .downcast_ref::<ra_llm::StreamError>()
                                         .is_some_and(|se| {
                                             matches!(
                                                 se,
-                                                octos_llm::StreamError::MalformedArgs { .. }
+                                                ra_llm::StreamError::MalformedArgs { .. }
                                             )
                                         })
                                 });
@@ -2703,7 +2703,7 @@ impl Agent {
                             None => stop.message(),
                         };
                         return Ok(TaskResult {
-                            schema_version: octos_core::TASK_RESULT_SCHEMA_VERSION,
+                            schema_version: ra_core::TASK_RESULT_SCHEMA_VERSION,
                             success: false,
                             output,
                             files_modified,
@@ -2893,7 +2893,7 @@ impl Agent {
                         if self.config.save_episodes {
                             let summary = final_response.content.clone().unwrap_or_default();
                             let summary_truncated =
-                                octos_core::truncated_utf8(&summary, 500, "...");
+                                ra_core::truncated_utf8(&summary, 500, "...");
 
                             let mut episode = Episode::new(
                                 task.id.clone(),
@@ -2904,7 +2904,7 @@ impl Agent {
                             );
                             episode.files_modified = files_modified.clone();
                             let ep_id = episode.id.clone();
-                            let mirror = octos_memory::record_from_episode(&episode);
+                            let mirror = ra_memory::record_from_episode(&episode);
 
                             if let Err(e) = self.memory.store(episode).await {
                                 warn!(error = %e, "failed to save episode to memory");
@@ -3174,13 +3174,13 @@ impl Agent {
             };
         }
         TaskResult {
-            schema_version: octos_core::TASK_RESULT_SCHEMA_VERSION,
+            schema_version: ra_core::TASK_RESULT_SCHEMA_VERSION,
             success,
             output,
             files_modified,
             files_to_send,
             subtasks: Vec::new(),
-            token_usage: octos_core::TokenUsage {
+            token_usage: ra_core::TokenUsage {
                 input_tokens: usage.input_tokens,
                 output_tokens: usage.output_tokens,
                 cache_read_tokens: usage.cache_read_tokens,
@@ -3774,7 +3774,7 @@ fn check_per_tool_limit(
         .is_none_or(|max_calls| usage.tool_calls.get(tool_name).copied().unwrap_or(0) < *max_calls)
 }
 
-fn session_limit_message(tool_call: &octos_core::ToolCall, content: String) -> Message {
+fn session_limit_message(tool_call: &ra_core::ToolCall, content: String) -> Message {
     Message {
         role: MessageRole::Tool,
         content,
@@ -4383,7 +4383,7 @@ fn response_with_max_token_fragments(
 
 fn shell_retry_limit_message(content: &str) -> String {
     let latest_output =
-        octos_core::truncated_utf8(content.trim(), 1200, "\n... (shell output truncated)");
+        ra_core::truncated_utf8(content.trim(), 1200, "\n... (shell output truncated)");
     format!(
         "[SHELL RETRY LIMIT] Repeated shell repair attempts did not converge. Stop retrying shell and summarize the blocker.\n\nLatest shell output:\n{latest_output}"
     )

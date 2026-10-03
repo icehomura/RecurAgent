@@ -10,8 +10,8 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-use octos_core::SessionKey;
-use octos_core::ui_protocol::{
+use ra_core::SessionKey;
+use ra_core::ui_protocol::{
     QuestionId, RpcError, TurnId, UserQuestionAnswer, UserQuestionRequestedEvent,
     UserQuestionRespondParams, UserQuestionRespondResult, methods, rpc_error_codes,
 };
@@ -291,7 +291,7 @@ impl PendingQuestionStore {
 /// server validates the client payload against server-held state before
 /// resolving the runtime waiter, so a bad answer never reaches the tool.
 fn validate_answers(
-    questions: &[octos_core::ui_protocol::UserQuestion],
+    questions: &[ra_core::ui_protocol::UserQuestion],
     answers: &[UserQuestionAnswer],
 ) -> Result<(), String> {
     if answers.len() != questions.len() {
@@ -365,7 +365,7 @@ fn question_stale_error(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::ui_protocol::{QuestionId, TurnId, UserQuestion, UserQuestionOption};
+    use ra_core::ui_protocol::{QuestionId, TurnId, UserQuestion, UserQuestionOption};
 
     fn sample_event(
         session_id: SessionKey,

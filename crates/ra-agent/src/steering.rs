@@ -6,7 +6,7 @@
 //! TODO: Wire `SteeringReceiver` into the agent loop (`agent.rs`) to drain
 //! pending messages between iterations and handle Cancel/RequestPause.
 
-use octos_core::Message;
+use ra_core::Message;
 use tokio::sync::mpsc;
 
 /// Per-turn pending-input buffer for mid-turn prompt injection ("steer").
@@ -108,7 +108,7 @@ pub fn drain_pending(rx: &mut SteeringReceiver) -> Vec<SteeringMessage> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use octos_core::MessageRole;
+    use ra_core::MessageRole;
 
     #[tokio::test]
     async fn should_send_and_receive_follow_up() {

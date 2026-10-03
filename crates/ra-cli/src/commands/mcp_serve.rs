@@ -1,7 +1,7 @@
 //! M7.2 — `ra mcp-serve` subcommand.
 //!
 //! Exposes ra as an MCP server so outer orchestrators can invoke it
-//! as a sub-agent. See [`octos_agent::mcp_server`] for the transport and
+//! as a sub-agent. See [`ra_agent::mcp_server`] for the transport and
 //! session-level tool semantics.
 //!
 //! # Transports
@@ -13,16 +13,16 @@
 //! # Session dispatch (M7.2a)
 //!
 //! The [`RealSessionDispatch`] implementation wires outer MCP calls into
-//! the existing [`Agent`](octos_agent::Agent) loop. Every `run_ra_session`
+//! the existing [`Agent`](ra_agent::Agent) loop. Every `run_ra_session`
 //! MCP invocation:
 //!
 //! 1. Loads [`ProfileConfig`](crate::profiles::ProfileConfig)-style config
 //!    from disk (when present) and builds the LLM provider via the same
 //!    factory chat/gateway use.
 //! 2. Marks the session `Running` on the supplied
-//!    [`SessionLifecycleObserver`](octos_agent::mcp_server::SessionLifecycleObserver).
-//! 3. Constructs a single-shot [`Agent`](octos_agent::Agent) and runs the
-//!    supplied prompt as a [`Task`](octos_core::Task) — the same code path
+//!    [`SessionLifecycleObserver`](ra_agent::mcp_server::SessionLifecycleObserver).
+//! 3. Constructs a single-shot [`Agent`](ra_agent::Agent) and runs the
+//!    supplied prompt as a [`Task`](ra_core::Task) — the same code path
 //!    the local chat command uses, including workspace-contract enforcement.
 //! 4. Marks the session `Verifying`, resolves the contract artifact (either
 //!    the caller-supplied `expected_artifact` or the workspace contract's
@@ -43,26 +43,26 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use clap::{Args, ValueEnum};
 use eyre::{Result, WrapErr};
-use octos_agent::arc_task::{
+use ra_agent::arc_task::{
     ARC_AGENT_TASK_SCHEMA_V1, parse_arc_agent_task_input, validate_arc_artifact_location,
     validate_arc_response,
 };
-use octos_agent::mcp_server::{
+use ra_agent::mcp_server::{
     McpServer, McpServerError, McpSessionCost, McpSessionDispatch, McpSessionOutcome,
     OCTOS_MCP_SERVER_TOKEN_ENV, SessionLifecycleObserver,
 };
-use octos_agent::task_supervisor::{TaskLifecycleState, TaskSupervisor};
-use octos_agent::validators::{
+use ra_agent::task_supervisor::{TaskLifecycleState, TaskSupervisor};
+use ra_agent::validators::{
     ValidatorInvocation, ValidatorOutcome, ValidatorPhase, ValidatorRunner,
     run_workspace_validators,
 };
-use octos_agent::{
+use ra_agent::{
     Agent, AgentConfig, ApprovalPolicy, EffectivePermissions, HarnessEvent, SandboxConfig,
     SandboxMode, ToolPolicy, ToolRegistry, create_sandbox,
 };
-use octos_core::{AgentId, Task, TaskContext, TaskKind};
-use octos_llm::LlmProvider;
-use octos_memory::EpisodeStore;
+use ra_core::{AgentId, Task, TaskContext, TaskKind};
+use ra_llm::LlmProvider;
+use ra_memory::EpisodeStore;
 use serde_json::Value;
 
 use super::Executable;
@@ -237,8 +237,8 @@ fn mcp_http_router(
             .headers()
             .get(AUTHORIZATION)
             .and_then(|value| value.to_str().ok());
-        let authorized = octos_agent::mcp_server::parse_bearer_token(provided)
-            .is_some_and(|candidate| octos_agent::mcp_server::constant_time_eq(&candidate, &token));
+        let authorized = ra_agent::mcp_server::parse_bearer_token(provided)
+            .is_some_and(|candidate| ra_agent::mcp_server::constant_time_eq(&candidate, &token));
         if !authorized {
             return (StatusCode::UNAUTHORIZED, "authentication required").into_response();
         }
@@ -338,7 +338,7 @@ pub struct SessionDispatchConfig {
     /// authenticated (http) — never fully trusted. Confining shell/exec to the
     /// workspace via the OS sandbox is what stops `run_ra_session` from
     /// reading, writing, or executing outside `cwd`. Defaults to
-    /// [`SandboxMode::Auto`](octos_agent::SandboxMode) via
+    /// [`SandboxMode::Auto`](ra_agent::SandboxMode) via
     /// [`SandboxConfig::default`].
     pub sandbox: SandboxConfig,
     /// Operator-configured global tool deny/allow policy. Applied to the
@@ -365,7 +365,7 @@ impl SessionDispatchConfig {
     /// interactive approver in server mode, so any tool call that would prompt
     /// fails at the tool boundary rather than silently proceeding. Auto mode
     /// resolves to `sandbox-exec` on macOS / `bwrap` on Linux.
-    fn sandbox_backend(&self) -> (SandboxConfig, Box<dyn octos_agent::Sandbox>) {
+    fn sandbox_backend(&self) -> (SandboxConfig, Box<dyn ra_agent::Sandbox>) {
         let permissions = self.permissions();
         let effective = permissions.apply_to_sandbox(&self.sandbox);
         let backend = create_sandbox(&effective);
@@ -457,7 +457,7 @@ impl AgentLlmFactory {
 /// The per-session [`ToolRegistry`] is built with
 /// [`ToolRegistry::with_builtins_and_sandbox`] using the
 /// [`SessionDispatchConfig::sandbox`] policy (default
-/// [`SandboxMode::Auto`](octos_agent::SandboxMode)). This confines
+/// [`SandboxMode::Auto`](ra_agent::SandboxMode)). This confines
 /// `shell`/`exec_command`/`bash` and the file tools to the workspace `cwd`,
 /// exactly as `ra chat`/`ra gateway` do. Without it the outer MCP caller
 /// — which is only parent-trusted (stdio) or bearer-authenticated (http) — can
@@ -612,10 +612,10 @@ impl McpSessionDispatch for RealSessionDispatch {
         // the local chat + session-actor wiring — the MCP-served child
         // session must honour the same preflight-token budget and preserved
         // artifacts declared in workspace_policy.toml.
-        if let Ok(Some(workspace_policy)) = octos_agent::read_workspace_policy(&self.config.cwd) {
+        if let Ok(Some(workspace_policy)) = ra_agent::read_workspace_policy(&self.config.cwd) {
             if let Some(compaction_policy) = workspace_policy.compaction.clone() {
-                use octos_agent::compaction::CompactionRunner;
-                use octos_agent::workspace_policy::CompactionSummarizerKind;
+                use ra_agent::compaction::CompactionRunner;
+                use ra_agent::workspace_policy::CompactionSummarizerKind;
                 let runner = match compaction_policy.summarizer {
                     CompactionSummarizerKind::LlmIterative => {
                         CompactionRunner::with_provider(compaction_policy, llm.clone())
@@ -652,8 +652,8 @@ impl McpSessionDispatch for RealSessionDispatch {
                 },
                 TaskContext {
                     working_dir: self.config.cwd.clone(),
-                    working_memory: vec![octos_core::Message {
-                        role: octos_core::MessageRole::User,
+                    working_memory: vec![ra_core::Message {
+                        role: ra_core::MessageRole::User,
                         content: prompt,
                         media: vec![],
                         tool_calls: None,
@@ -862,7 +862,7 @@ async fn run_completion_validators(
     tools: &Arc<ToolRegistry>,
     sandbox: &SandboxConfig,
 ) -> Vec<ValidatorOutcome> {
-    let Ok(Some(policy)) = octos_agent::read_workspace_policy(workspace_root) else {
+    let Ok(Some(policy)) = ra_agent::read_workspace_policy(workspace_root) else {
         return Vec::new();
     };
     if policy.validation.validators.is_empty() {
@@ -905,7 +905,7 @@ fn resolve_artifact_path(
         };
         return Some(absolute);
     }
-    if let Ok(Some(policy)) = octos_agent::read_workspace_policy(cwd) {
+    if let Ok(Some(policy)) = ra_agent::read_workspace_policy(cwd) {
         if let Some(pattern) = policy.artifacts.entries.get(artifact_name) {
             let candidate = if std::path::Path::new(pattern).is_absolute() {
                 PathBuf::from(pattern)
@@ -983,7 +983,7 @@ mod tests {
         // which was the M7.2 dispatch RCE (`with_builtins` hardcoded NoSandbox).
         let default = mk(SandboxConfig::default());
         assert!(default.sandbox.enabled);
-        assert_eq!(default.sandbox.mode, octos_agent::SandboxMode::Auto);
+        assert_eq!(default.sandbox.mode, ra_agent::SandboxMode::Auto);
     }
 
     #[test]
@@ -1011,7 +1011,7 @@ mod tests {
 
     #[test]
     fn mcp_session_cost_includes_all_counters() {
-        let usage = octos_core::TokenUsage {
+        let usage = ra_core::TokenUsage {
             input_tokens: 12,
             output_tokens: 7,
             reasoning_tokens: 3,
@@ -1050,11 +1050,11 @@ mod http_transport_tests {
     use std::sync::Arc;
 
     use async_trait::async_trait;
-    use octos_agent::mcp_server::{
+    use ra_agent::mcp_server::{
         McpServer, McpServerError, McpSessionCost, McpSessionDispatch, McpSessionOutcome,
         SessionLifecycleObserver,
     };
-    use octos_agent::task_supervisor::{TaskLifecycleState, TaskSupervisor};
+    use ra_agent::task_supervisor::{TaskLifecycleState, TaskSupervisor};
     use serde_json::Value;
 
     use super::mcp_http_router;

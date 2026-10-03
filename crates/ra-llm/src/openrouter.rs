@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use eyre::{Result, WrapErr};
 use futures::StreamExt;
-use octos_core::{Message, MessageRole};
+use ra_core::{Message, MessageRole};
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -561,7 +561,7 @@ fn openrouter_response_to_chat_response(
     let tool_calls = tool_calls
         .unwrap_or_default()
         .into_iter()
-        .map(|tc| octos_core::ToolCall {
+        .map(|tc| ra_core::ToolCall {
             id: tc.id,
             name: tc.function.name,
             arguments: serde_json::from_str(&tc.function.arguments).unwrap_or_default(),
@@ -608,7 +608,7 @@ fn openrouter_response_to_chat_response(
 mod tests {
     use super::*;
     use crate::config::PromptCacheContext;
-    use octos_core::{Message, MessageRole};
+    use ra_core::{Message, MessageRole};
 
     fn text_msg(role: MessageRole, content: &str) -> Message {
         Message {
@@ -630,7 +630,7 @@ mod tests {
         // `"type":"function"` (error 1214 "Tool type cannot be empty"), which
         // failed every agent turn on `z-ai/*` models at the first tool result.
         let mut msg = text_msg(MessageRole::Assistant, "");
-        msg.tool_calls = Some(vec![octos_core::ToolCall {
+        msg.tool_calls = Some(vec![ra_core::ToolCall {
             id: "call_1".into(),
             name: "read_file".into(),
             arguments: serde_json::json!({"path": "a.rs"}),
@@ -1084,7 +1084,7 @@ mod tests {
 
 #[cfg(test)]
 mod lane_attributed_operational_errors {
-    use octos_core::Message;
+    use ra_core::Message;
     use wiremock::matchers::method;
     use wiremock::{Mock, MockServer, ResponseTemplate};
 

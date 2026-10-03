@@ -5,7 +5,7 @@ from a single Rust definition by [uniffi](https://mozilla.github.io/uniffi-rs/)
 (v0.29).
 
 It is a thin wrapper over the **native core** in
-[`ra-ffi`](../ra-ffi) (`octos_ffi::RaRuntime`). All the real work —
+[`ra-ffi`](../ra-ffi) (`ra_ffi::RaRuntime`). All the real work —
 provider construction, the agent loop, the embedder, and the **hardened
 credential path** (single key resolution + pinning + secret-scrubbing of error
 text) — lives in that one core, shared with the C-ABI. This crate only adds

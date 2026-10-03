@@ -7,20 +7,20 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use eyre::{Result, WrapErr};
-use octos_agent::TokenTracker;
-use octos_agent::hooks::{HookContext, HookEvent, HookExecutor, HookPayload};
-use octos_agent::progress::ProgressEvent;
-use octos_agent::tools::TOOL_CTX;
-use octos_core::{Message, MessageRole, TokenUsage};
-use octos_llm::{ChatConfig, LlmProvider, ProviderRouter, SemaphoreThrottledProvider};
-use octos_memory::EpisodeStore;
+use ra_agent::TokenTracker;
+use ra_agent::hooks::{HookContext, HookEvent, HookExecutor, HookPayload};
+use ra_agent::progress::ProgressEvent;
+use ra_agent::tools::TOOL_CTX;
+use ra_core::{Message, MessageRole, TokenUsage};
+use ra_llm::{ChatConfig, LlmProvider, ProviderRouter, SemaphoreThrottledProvider};
+use ra_memory::EpisodeStore;
 use serde::Deserialize;
 use tracing::{info, warn};
 
-use octos_agent::cost_ledger::{CostAttributionEvent, ReservationHandle};
-use octos_agent::validators::ValidatorPhase;
-use octos_agent::workspace_contract::run_declared_validators;
-use octos_agent::workspace_policy::Validator as WorkspaceValidator;
+use ra_agent::cost_ledger::{CostAttributionEvent, ReservationHandle};
+use ra_agent::validators::ValidatorPhase;
+use ra_agent::workspace_contract::run_declared_validators;
+use ra_agent::workspace_policy::Validator as WorkspaceValidator;
 
 use crate::checkpoint::{CheckpointStore, PersistedCheckpoint};
 use crate::condition;
@@ -193,7 +193,7 @@ fn project_node_usd(model: Option<&str>) -> f64 {
     let Some(model) = model else {
         return MIN_PER_NODE_PROJECTED_USD;
     };
-    match octos_agent::cost_ledger::project_cost_usd(model, 2_000, 2_000) {
+    match ra_agent::cost_ledger::project_cost_usd(model, 2_000, 2_000) {
         Some(cost) if cost > 0.0 => cost,
         _ => MIN_PER_NODE_PROJECTED_USD,
     }
@@ -389,7 +389,7 @@ pub struct ExecutorConfig {
     pub provider_router: Option<Arc<ProviderRouter>>,
     pub memory: Arc<EpisodeStore>,
     pub working_dir: PathBuf,
-    pub provider_policy: Option<octos_agent::ToolPolicy>,
+    pub provider_policy: Option<ra_agent::ToolPolicy>,
     pub plugin_dirs: Vec<PathBuf>,
     /// Section B (codex review P1.1): pipeline-level strict-signing policy.
     /// When `true`, the per-node `CodergenHandler` rejects unsigned plugins
@@ -442,14 +442,14 @@ pub struct ExecutorConfig {
     /// pre-M8 invocation site bitwise identical.
     pub host_context: crate::host_context::PipelineHostContext,
     /// NEW-06 fix: parent-session embedder forwarded onto every per-
-    /// node worker [`octos_agent::Agent`] so episodic memory recall
+    /// node worker [`ra_agent::Agent`] so episodic memory recall
     /// stays on the contamination-safe hybrid scored + filtered path.
     ///
     /// `None` means per-node workers SKIP episodic recall entirely (the
-    /// no-embedder branch in `octos_agent::agent::memory`) — BM25-only cwd
+    /// no-embedder branch in `ra_agent::agent::memory`) — BM25-only cwd
     /// recall can't separate cross-task episodes, so injecting it would leak
     /// stale unrelated memory; skipping is the contamination-safe choice.
-    pub embedder: Option<Arc<dyn octos_llm::EmbeddingProvider>>,
+    pub embedder: Option<Arc<dyn ra_llm::EmbeddingProvider>>,
     /// Phase 2-A — directory used to load `pipeline_models.json` and
     /// `model_catalog.json` for per-node model assignment, plus to
     /// surface profile-level defaults that must not move when
@@ -477,7 +477,7 @@ pub struct ExecutorConfig {
     /// exec tools use. Default (`SandboxConfig::default()` → `NoSandbox` on a
     /// host without a backend) runs command validators directly — byte-for-byte
     /// identical to the pre-#1607 path.
-    pub sandbox: octos_agent::SandboxConfig,
+    pub sandbox: ra_agent::SandboxConfig,
 }
 
 /// A single planned sub-task from the LLM planner.
@@ -605,7 +605,7 @@ const HARNESS_EVENT_ENVELOPE_RESERVE: usize = 6 * 1024;
 const _: () = {
     assert!(
         HARNESS_EVENT_ENVELOPE_RESERVE + NODE_MESSAGE_ESCAPED_BUDGET + 6 * (NODE_ID_MAX_CHARS + 32)
-            < octos_agent::harness_events::MAX_HARNESS_EVENT_LINE_BYTES
+            < ra_agent::harness_events::MAX_HARNESS_EVENT_LINE_BYTES
     );
 };
 
@@ -620,7 +620,7 @@ const _: () = {
 /// consumers are unaffected.
 ///
 /// Blocker 1 — the assembled event is bounded so its SERIALIZED line stays
-/// provably under [`MAX_HARNESS_EVENT_LINE_BYTES`](octos_agent::harness_events::MAX_HARNESS_EVENT_LINE_BYTES);
+/// provably under [`MAX_HARNESS_EVENT_LINE_BYTES`](ra_agent::harness_events::MAX_HARNESS_EVENT_LINE_BYTES);
 /// otherwise the reader silently DROPS oversized lines, which would defeat the
 /// gap (back to opaque). `node_id` — UNBOUNDED at the call sites and copied
 /// verbatim into `extra` (which the Progress validator does NOT inspect) — is
@@ -655,7 +655,7 @@ pub(crate) fn emit_pipeline_node_event(
     // The sink context (session/task ids) is needed to assemble the candidate
     // event so we can measure its SERIALIZED line. No context ⇒ nothing to
     // write (same no-op semantics as the registered-emit path).
-    let Some(context) = octos_agent::harness_events::lookup_event_sink_context(&sink) else {
+    let Some(context) = ra_agent::harness_events::lookup_event_sink_context(&sink) else {
         return;
     };
     emit_node_event_to_sink(
@@ -684,7 +684,7 @@ pub(crate) fn emit_pipeline_node_event(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn emit_node_event_to_sink(
     sink: &str,
-    context: &octos_agent::harness_events::HarnessEventSinkContext,
+    context: &ra_agent::harness_events::HarnessEventSinkContext,
     pipeline_id: &str,
     phase: &str,
     message: &str,
@@ -710,7 +710,7 @@ pub(crate) fn emit_node_event_to_sink(
     // AND a bounded line contribution. A parsed graph id is never empty (the
     // parser defaults to "pipeline"), so the non-empty validator rule holds.
     let bounded_workflow =
-        bound_str_to_escaped_budget(pipeline_id, octos_agent::harness_events::MAX_WORKFLOW_BYTES);
+        bound_str_to_escaped_budget(pipeline_id, ra_agent::harness_events::MAX_WORKFLOW_BYTES);
 
     // Bound node_id to a small cap (UTF-8 safe; Gap-3.4 truncation appends a
     // marker when it shortens). This is the free-form key the call sites can't
@@ -731,7 +731,7 @@ pub(crate) fn emit_node_event_to_sink(
     // jointly fit. The bounded message + envelope live in the reserve; the
     // assembled line is ALSO measured against the actual serialized length
     // below, so this only seeds an initial preview cap.
-    let free_budget = octos_agent::harness_events::MAX_HARNESS_EVENT_LINE_BYTES
+    let free_budget = ra_agent::harness_events::MAX_HARNESS_EVENT_LINE_BYTES
         .saturating_sub(HARNESS_EVENT_ENVELOPE_RESERVE)
         .saturating_sub(NODE_MESSAGE_ESCAPED_BUDGET);
     let node_escaped = crate::fidelity::json_escaped_len(&bounded_node_id);
@@ -768,8 +768,8 @@ pub(crate) fn emit_node_event_to_sink(
         extra
     };
 
-    let cap = octos_agent::harness_events::MAX_HARNESS_EVENT_LINE_BYTES;
-    let mut event = octos_agent::harness_events::HarnessEvent::progress_with_extra(
+    let cap = ra_agent::harness_events::MAX_HARNESS_EVENT_LINE_BYTES;
+    let mut event = ra_agent::harness_events::HarnessEvent::progress_with_extra(
         context.session_id.clone(),
         context.task_id.clone(),
         Some(bounded_workflow.clone()),
@@ -788,7 +788,7 @@ pub(crate) fn emit_node_event_to_sink(
                 // Shrink by the overshoot (plus a small margin) — never below 0.
                 let overshoot = line.len().saturating_sub(cap) + 64;
                 preview_budget = preview_budget.saturating_sub(overshoot.max(preview_budget / 2));
-                event = octos_agent::harness_events::HarnessEvent::progress_with_extra(
+                event = ra_agent::harness_events::HarnessEvent::progress_with_extra(
                     context.session_id.clone(),
                     context.task_id.clone(),
                     Some(bounded_workflow.clone()),
@@ -802,7 +802,7 @@ pub(crate) fn emit_node_event_to_sink(
         }
     }
     // `write_event_to_sink` re-validates + writes the single line atomically.
-    let _ = octos_agent::harness_events::write_event_to_sink(sink, &event);
+    let _ = ra_agent::harness_events::write_event_to_sink(sink, &event);
 }
 
 /// Bound `s` so its JSON-escaped length is `<= budget`, snapping the kept
@@ -843,7 +843,7 @@ fn bound_str_to_escaped_budget(s: &str, budget: usize) -> String {
 /// `node_completed` on EVERY exit path (normal completion, an early `?`-return,
 /// a panic unwind, or a cancellation that drops the run future mid-node).
 ///
-/// Mirrors the [`ProcessGroupKillGuard`](octos_agent) "limits degrade, never
+/// Mirrors the [`ProcessGroupKillGuard`](ra_agent) "limits degrade, never
 /// leak" pattern: the guard emits `node_started` at construction (ARM), and its
 /// `Drop` emits a terminal `node_completed { success: false }` UNLESS the node
 /// completed normally — in which case [`NodeProgressGuard::complete`] emitted
@@ -867,7 +867,7 @@ fn bound_str_to_escaped_budget(s: &str, budget: usize) -> String {
 struct NodeProgressGuard {
     /// `Some` only when a sink was attached at arm time; `None` ⇒ inert guard.
     sink: Option<String>,
-    context: Option<octos_agent::harness_events::HarnessEventSinkContext>,
+    context: Option<ra_agent::harness_events::HarnessEventSinkContext>,
     pipeline_id: String,
     node_id: String,
     label: String,
@@ -896,7 +896,7 @@ impl NodeProgressGuard {
             .flatten();
         let context = sink
             .as_deref()
-            .and_then(octos_agent::harness_events::lookup_event_sink_context);
+            .and_then(ra_agent::harness_events::lookup_event_sink_context);
 
         let mut guard = Self {
             sink,
@@ -1102,7 +1102,7 @@ fn spawn_pipeline_heartbeat(
                 if let Some(secs) = eta {
                     extra.insert("eta_secs".to_string(), serde_json::Value::from(secs));
                 }
-                let _ = octos_agent::harness_events::emit_registered_progress_event_with_extra(
+                let _ = ra_agent::harness_events::emit_registered_progress_event_with_extra(
                     sink,
                     Some(snap.pipeline_id.as_str()),
                     "heartbeat",
@@ -1209,7 +1209,7 @@ async fn plan_dynamic_tasks(
         // #2194 review: ONE planning call per dynamic node, its prompt built
         // from that node's planning_prompt + the user query — never replayed,
         // so a cache write is pure premium.
-        cache_retention: octos_llm::CacheRetention::None,
+        cache_retention: ra_llm::CacheRetention::None,
         ..Default::default()
     };
 
@@ -2069,7 +2069,7 @@ impl PipelineExecutor {
         let actual_cost = if node_cost_total > 0.0 {
             node_cost_total
         } else {
-            octos_agent::cost_ledger::project_cost_usd(
+            ra_agent::cost_ledger::project_cost_usd(
                 "pipeline-aggregate",
                 usage.input_tokens,
                 usage.output_tokens,
@@ -2167,9 +2167,9 @@ impl PipelineExecutor {
             // validators to it. `with_builtins` would store `NoSandbox`,
             // letting a workspace-declared command validator escape to the
             // host from a sandboxed pipeline.
-            let registry = octos_agent::ToolRegistry::with_builtins_and_sandbox(
+            let registry = ra_agent::ToolRegistry::with_builtins_and_sandbox(
                 &self.config.working_dir,
-                octos_agent::create_sandbox(&self.config.sandbox),
+                ra_agent::create_sandbox(&self.config.sandbox),
             );
             run_declared_validators(
                 &registry,
@@ -2178,7 +2178,7 @@ impl PipelineExecutor {
                 "pipeline",
                 ValidatorPhase::Completion,
                 None,
-                std::sync::Arc::from(octos_agent::create_sandbox(&self.config.sandbox)),
+                std::sync::Arc::from(ra_agent::create_sandbox(&self.config.sandbox)),
             )
             .await?;
         }
@@ -2251,9 +2251,9 @@ impl PipelineExecutor {
         // #1607 (codex-review follow-up): carry the session sandbox so
         // per-node command validators run confined (see
         // `run_terminal_validators`).
-        let registry = octos_agent::ToolRegistry::with_builtins_and_sandbox(
+        let registry = ra_agent::ToolRegistry::with_builtins_and_sandbox(
             &self.config.working_dir,
-            octos_agent::create_sandbox(&self.config.sandbox),
+            ra_agent::create_sandbox(&self.config.sandbox),
         );
         run_declared_validators(
             &registry,
@@ -2262,7 +2262,7 @@ impl PipelineExecutor {
             &format!("pipeline-node-{node_id}"),
             ValidatorPhase::Completion,
             None,
-            std::sync::Arc::from(octos_agent::create_sandbox(&self.config.sandbox)),
+            std::sync::Arc::from(ra_agent::create_sandbox(&self.config.sandbox)),
         )
         .await
         .map(|_| ())
@@ -2277,7 +2277,7 @@ impl PipelineExecutor {
     /// invoking run_pipeline pill.
     ///
     /// NEW-18b — uses the supervisor's strict
-    /// [`octos_agent::task_supervisor::TaskSupervisor::try_register_node_task`]
+    /// [`ra_agent::task_supervisor::TaskSupervisor::try_register_node_task`]
     /// entry point so a child registration against an already-terminal
     /// parent (e.g. orphan-swept on restart) is refused. Returns:
     /// * `Ok(None)` when no supervisor is wired (legacy callers).
@@ -3978,7 +3978,7 @@ impl PipelineExecutor {
             let node_cost_committed = node_reservation.is_some();
             drop(node_reservation);
 
-            let actual_usd = octos_agent::cost_ledger::project_cost_usd(
+            let actual_usd = ra_agent::cost_ledger::project_cost_usd(
                 node_with_prompt.model.as_deref().unwrap_or("pipeline-node"),
                 outcome.token_usage.input_tokens,
                 outcome.token_usage.output_tokens,
@@ -4838,7 +4838,7 @@ impl PipelineExecutor {
 
         let node_cost_committed = node_reservation.is_some();
         drop(node_reservation);
-        let actual_usd = octos_agent::cost_ledger::project_cost_usd(
+        let actual_usd = ra_agent::cost_ledger::project_cost_usd(
             node_with_prompt.model.as_deref().unwrap_or("pipeline-node"),
             outcome.token_usage.input_tokens,
             outcome.token_usage.output_tokens,

@@ -25,13 +25,13 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use octos_agent::tools::ToolPolicy;
-use octos_agent::{
+use ra_agent::tools::ToolPolicy;
+use ra_agent::{
     Agent, AgentConfig, ProgressEvent, ProgressReporter, Tool, ToolRegistry, ToolResult,
 };
-use octos_core::{AgentId, Message, ToolCall};
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_core::{AgentId, Message, ToolCall};
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, TokenUsage, ToolSpec};
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 
 // =========================================================================
@@ -240,7 +240,7 @@ async fn preflight_failure_emits_tool_completed_to_clear_chip() {
     // Sanity: the LLM saw a synchronous [VALIDATION FAILED] result.
     assert!(
         response.messages.iter().any(|m| {
-            matches!(m.role, octos_core::MessageRole::Tool)
+            matches!(m.role, ra_core::MessageRole::Tool)
                 && m.content.contains("[VALIDATION FAILED]")
         }),
         "expected a synchronous [VALIDATION FAILED] Tool message; got: {:#?}",
@@ -329,7 +329,7 @@ async fn policy_deny_emits_tool_completed_to_clear_chip() {
     // Sanity: the LLM saw a synchronous [POLICY DENIED] result.
     assert!(
         response.messages.iter().any(|m| {
-            matches!(m.role, octos_core::MessageRole::Tool) && m.content.contains("[POLICY DENIED]")
+            matches!(m.role, ra_core::MessageRole::Tool) && m.content.contains("[POLICY DENIED]")
         }),
         "expected a synchronous [POLICY DENIED] Tool message; got: {:#?}",
         response.messages

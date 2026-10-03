@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use octos_agent::SkillsLoader;
+use ra_agent::SkillsLoader;
 
 use crate::persona_service::PersonaService;
 
@@ -123,7 +123,7 @@ pub async fn build_system_prompt(
     data_dir: &Path,
     project_dir: &Path,
     skills_loader: &SkillsLoader,
-    tool_config: &octos_agent::ToolConfigStore,
+    tool_config: &ra_agent::ToolConfigStore,
 ) -> GatewayPromptParts {
     let compiled = include_str!("../../prompts/gateway_default.txt");
     let runtime = super::super::load_prompt("gateway", compiled);
@@ -168,7 +168,7 @@ pub async fn build_system_prompt(
 
     // ---- memory slot ----------------------------------------------------
     // Memory is NOT inlined here anymore: every model call flows through a
-    // per-session `octos_agent::Agent`, which owns the memory as a named
+    // per-session `ra_agent::Agent`, which owns the memory as a named
     // prompt segment refreshed at each turn start (chat.rs pattern —
     // fingerprint stat per turn). Inlining it in this base String froze it
     // at build time. The split preserves the slot's POSITION.

@@ -1,19 +1,19 @@
 //! Swarm-local glue around the shared dispatch-policy gate.
 //!
 //! The gate type and enforcement logic live in
-//! [`octos_agent::dispatch_policy`] — both
+//! [`ra_agent::dispatch_policy`] — both
 //! [`crate::dispatcher::Swarm::dispatch_once`] and the
-//! [`octos_agent::tools::SpawnTool`] `agent_mcp` branch route through
+//! [`ra_agent::tools::SpawnTool`] `agent_mcp` branch route through
 //! the same checks so a single bypass cannot reopen the audit's #701
 //! / #714 finding.
 //!
 //! This module keeps a swarm-side adapter ([`enforce_or_outcome`])
-//! that folds a [`octos_agent::GateDenial`] into a swarm-local
+//! that folds a [`ra_agent::GateDenial`] into a swarm-local
 //! [`crate::SubtaskOutcome`] so the existing event / metrics path
 //! does not have to learn the agent crate's failure type.
 
-use octos_agent::tools::mcp_agent::McpAgentBackend;
-use octos_agent::{DispatchPolicy, DispatchTarget, enforce_dispatch_gates};
+use ra_agent::tools::mcp_agent::McpAgentBackend;
+use ra_agent::{DispatchPolicy, DispatchTarget, enforce_dispatch_gates};
 
 use crate::result::{SubtaskOutcome, SubtaskStatus};
 use crate::topology::ContractSpec;
@@ -52,8 +52,8 @@ pub(crate) async fn enforce_or_outcome(
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use octos_agent::ToolPolicy;
-    use octos_agent::tools::mcp_agent::{DispatchOutcome, DispatchRequest, DispatchResponse};
+    use ra_agent::ToolPolicy;
+    use ra_agent::tools::mcp_agent::{DispatchOutcome, DispatchRequest, DispatchResponse};
 
     struct StubBackend;
 

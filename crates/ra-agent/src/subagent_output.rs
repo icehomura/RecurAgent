@@ -153,15 +153,15 @@ impl SubAgentOutputRouter {
     /// reserved drive / NTFS alternate-data-stream separator on Windows and
     /// makes `create_dir_all` fail with `NotADirectory` (os error 267). Both
     /// components are therefore percent-encoded through
-    /// [`octos_core::safe_filename`] — the same filename-safety scheme used
+    /// [`ra_core::safe_filename`] — the same filename-safety scheme used
     /// for session files elsewhere in the workspace — before they touch the
     /// filesystem. This is the single source of truth for the on-disk path;
     /// `ensure_handle` derives its directory from here, so writes and reads
     /// always resolve to the same file on every platform.
     pub fn path_for(&self, session_id: &str, task_id: &str) -> PathBuf {
         self.root
-            .join(octos_core::safe_filename(session_id))
-            .join(format!("{}.out", octos_core::safe_filename(task_id)))
+            .join(ra_core::safe_filename(session_id))
+            .join(format!("{}.out", ra_core::safe_filename(task_id)))
     }
 
     /// Append raw bytes to the output file for `task_id`, honoring both

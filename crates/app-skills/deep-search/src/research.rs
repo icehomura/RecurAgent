@@ -1,6 +1,6 @@
 //! Search providers, controls and the polite page reader for deep-search.
 //!
-//! Provider order (see `octos_research::plan`): the ra metasearch first
+//! Provider order (see `ra_research::plan`): the ra metasearch first
 //! (key-less OctoScript engines over official APIs and feeds: GDELT, Hacker
 //! News, Wikipedia, arXiv, ...; disable with `OCTOS_METASEARCH=0` to call
 //! GDELT + Google News RSS directly for news), then a
@@ -20,12 +20,12 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use futures::stream::{self, StreamExt};
-use octos_research::date::Since;
-use octos_research::extract::PageMeta;
-use octos_research::plan::{self, Category, PlanInput, Provider};
-use octos_research::providers as free;
-use octos_research::reader;
-use octos_research::{Filters, HostThrottle, OneOrMany, SearchHit};
+use ra_research::date::Since;
+use ra_research::extract::PageMeta;
+use ra_research::plan::{self, Category, PlanInput, Provider};
+use ra_research::providers as free;
+use ra_research::reader;
+use ra_research::{Filters, HostThrottle, OneOrMany, SearchHit};
 
 use crate::Input;
 
@@ -66,7 +66,7 @@ impl Options {
             None | Some("") => None,
             Some(s) => Some(Since::parse(s, now)?),
         };
-        let query_by_lang = octos_research::lang::parse_query_by_lang(&input.query_by_lang)?;
+        let query_by_lang = ra_research::lang::parse_query_by_lang(&input.query_by_lang)?;
         let mut langs = input.lang.clone().into_vec();
         // Languages with their own query are searched (and, when the caller
         // restricted languages, kept) too.
@@ -113,7 +113,7 @@ impl Options {
     /// query script, else "provider default" (`None`).
     pub fn search_langs(&self, query: &str) -> Vec<Option<String>> {
         let mut langs: Vec<Option<String>> = if self.filters.langs.is_empty() {
-            vec![octos_research::lang::guess_from_script(query).map(String::from)]
+            vec![ra_research::lang::guess_from_script(query).map(String::from)]
         } else {
             self.filters.langs.iter().cloned().map(Some).collect()
         };
@@ -127,7 +127,7 @@ impl Options {
 
     /// The query for one language round.
     pub fn query_for<'a>(&'a self, query: &'a str, lang: Option<&str>) -> &'a str {
-        octos_research::lang::query_for(query, &self.query_by_lang, lang)
+        ra_research::lang::query_for(query, &self.query_by_lang, lang)
     }
 
     pub fn is_news(&self, query: &str) -> bool {
@@ -141,7 +141,7 @@ impl Options {
         v["category"] = serde_json::json!(self.category);
         v["render"] = serde_json::json!(if self.render { "auto" } else { "off" });
         v["respect_robots"] =
-            serde_json::json!(octos_research::respect_robots(|k| std::env::var(k).ok()));
+            serde_json::json!(ra_research::respect_robots(|k| std::env::var(k).ok()));
         v
     }
 }
@@ -182,7 +182,7 @@ pub(crate) fn api_client() -> &'static reqwest::Client {
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
             .timeout(Duration::from_secs(15))
-            .user_agent(octos_research::USER_AGENT)
+            .user_agent(ra_research::USER_AGENT)
             .build()
             .unwrap_or_else(|_| reqwest::Client::new())
     })
@@ -215,14 +215,14 @@ fn keyed_available() -> Vec<Provider> {
 /// Whether results-page search (DuckDuckGo HTML, Bing in headless Chrome)
 /// is on: yes unless `OCTOS_ALLOW_SERP_SCRAPE=0`.
 pub(crate) fn serp_scrape_allowed() -> bool {
-    octos_research::serp_scrape_allowed(|k| std::env::var(k).ok())
+    ra_research::serp_scrape_allowed(|k| std::env::var(k).ok())
 }
 
 /// Upgrade visibility: when a results-page provider runs only because of
 /// the new default, say so once on stderr (the skill's log).
 fn default_notice_once() {
     static NOTICE: std::sync::Once = std::sync::Once::new();
-    if let Some(notice) = octos_research::serp_scrape_default_notice(|k| std::env::var(k).ok()) {
+    if let Some(notice) = ra_research::serp_scrape_default_notice(|k| std::env::var(k).ok()) {
         NOTICE.call_once(|| eprintln!("[deep-search] {notice}"));
     }
 }
@@ -231,8 +231,8 @@ fn default_notice_once() {
 pub(crate) fn auto_plan(news: bool, allow_serp_scrape: bool) -> Vec<Provider> {
     plan::plan(&PlanInput {
         news,
-        metasearch: octos_research::metasearch::enabled(|k| std::env::var(k).ok()),
-        searxng_configured: env_nonempty(octos_research::SEARXNG_URL_ENV).is_some(),
+        metasearch: ra_research::metasearch::enabled(|k| std::env::var(k).ok()),
+        searxng_configured: env_nonempty(ra_research::SEARXNG_URL_ENV).is_some(),
         keyed: keyed_available(),
         allow_serp_scrape,
     })
@@ -268,7 +268,7 @@ pub(crate) async fn search_round(
             Some(p) if p.is_serp_scrape() && !opts.allow_serp_scrape => out.errors.push(format!(
                 "{}: disabled (scraping search-results pages needs {}=1)",
                 p.id(),
-                octos_research::SERP_SCRAPE_ENV
+                ra_research::SERP_SCRAPE_ENV
             )),
             Some(p) => {
                 run_parallel(opts, &[p], query, lang, count, &mut out).await;
@@ -333,7 +333,7 @@ async fn run_parallel(
     let mut seen: HashSet<String> = out
         .hits
         .iter()
-        .map(|h| octos_research::urls::dedup_key(&h.url))
+        .map(|h| ra_research::urls::dedup_key(&h.url))
         .collect();
     for (p, r) in results {
         match r {
@@ -355,7 +355,7 @@ async fn run_parallel(
                     out.answer.push_str(po.answer.trim());
                 }
                 for h in po.hits {
-                    if seen.insert(octos_research::urls::dedup_key(&h.url)) {
+                    if seen.insert(ra_research::urls::dedup_key(&h.url)) {
                         out.hits.push(h);
                     }
                 }
@@ -390,7 +390,7 @@ async fn run_provider(
     let since = opts.filters.since.as_ref();
     let bucket = since.map(|s| s.bucket(opts.now));
     let news = opts.is_news(query);
-    let lang_primary = lang.map(octos_research::lang::primary);
+    let lang_primary = lang.map(ra_research::lang::primary);
     let key = |k: &str| env_nonempty(k).ok_or_else(|| format!("{k} not set"));
     let hits = match p {
         Provider::Metasearch => metasearch_round(opts, query, lang, count).await?,
@@ -417,7 +417,7 @@ async fn run_provider(
             }
         }
         Provider::Searxng => {
-            let base = key(octos_research::SEARXNG_URL_ENV)?;
+            let base = key(ra_research::SEARXNG_URL_ENV)?;
             let url = free::searxng_request_url(&base, query, lang, since, news, opts.now)?;
             let body = get_text(client.get(url), "SearXNG").await?;
             let mut hits = free::parse_searxng(&body)?;
@@ -555,12 +555,12 @@ async fn run_provider(
 
 /// The process-wide metasearch (shares rate limits, cache and engine
 /// health across rounds).
-fn metasearch() -> &'static octos_research::metasearch::Metasearch {
-    static M: OnceLock<octos_research::metasearch::Metasearch> = OnceLock::new();
+fn metasearch() -> &'static ra_research::metasearch::Metasearch {
+    static M: OnceLock<ra_research::metasearch::Metasearch> = OnceLock::new();
     M.get_or_init(|| {
         // Engines that render (Google) load in the person's browser.
-        octos_research::metasearch::Metasearch::from_env(
-            octos_research::metasearch::default_fetch(),
+        ra_research::metasearch::Metasearch::from_env(
+            ra_research::metasearch::default_fetch(),
             &Default::default(),
         )
     })
@@ -574,7 +574,7 @@ async fn metasearch_round(
     count: u8,
 ) -> Result<ProviderOut, String> {
     let since = opts.filters.since.as_ref();
-    let mut req = octos_research::metasearch::SearchRequest::new(
+    let mut req = ra_research::metasearch::SearchRequest::new(
         query,
         opts.category.metasearch_category(query, since, opts.now),
     );
@@ -651,7 +651,7 @@ pub(crate) fn parse_serper(text: &str) -> Result<ProviderOut, String> {
         .flatten()
         .filter_map(|r| {
             let mut h = hit(s(r, "link"), s(r, "title"), s(r, "snippet"), "serper")?;
-            h.published = octos_research::date::to_iso(s(r, "date"));
+            h.published = ra_research::date::to_iso(s(r, "date"));
             Some(h)
         })
         .collect();
@@ -674,7 +674,7 @@ pub(crate) fn parse_tavily(text: &str) -> Result<ProviderOut, String> {
         .flatten()
         .filter_map(|r| {
             let mut h = hit(s(r, "url"), s(r, "title"), s(r, "content"), "tavily")?;
-            h.published = octos_research::date::to_iso(s(r, "published_date"));
+            h.published = ra_research::date::to_iso(s(r, "published_date"));
             Some(h)
         })
         .collect();
@@ -693,8 +693,8 @@ pub(crate) fn parse_brave(text: &str) -> Result<ProviderOut, String> {
         .flatten()
         .filter_map(|r| {
             let mut h = hit(s(r, "url"), s(r, "title"), s(r, "description"), "brave")?;
-            h.published = octos_research::date::to_iso(s(r, "page_age"));
-            h.lang = octos_research::lang::normalize(s(r, "language"));
+            h.published = ra_research::date::to_iso(s(r, "page_age"));
+            h.lang = ra_research::lang::normalize(s(r, "language"));
             Some(h)
         })
         .collect();
@@ -738,7 +738,7 @@ pub(crate) fn parse_perplexity(text: &str) -> Result<ProviderOut, String> {
         .flatten()
         .filter_map(|r| {
             let mut h = hit(s(r, "url"), s(r, "title"), "", "perplexity")?;
-            h.published = octos_research::date::to_iso(s(r, "date"));
+            h.published = ra_research::date::to_iso(s(r, "date"));
             Some(h)
         })
         .collect();
@@ -775,7 +775,7 @@ impl ReadPage {
     /// Canonical URL for the item: the page's own canonical link, else the
     /// final URL, both without tracking parameters.
     pub fn canonical_url(&self) -> String {
-        octos_research::urls::canonicalize(
+        ra_research::urls::canonicalize(
             self.meta.canonical.as_deref().unwrap_or(&self.final_url),
         )
     }
@@ -797,7 +797,7 @@ impl ReadPage {
     }
 }
 
-/// deep-search's use of the shared polite reader (`octos_research::reader`:
+/// deep-search's use of the shared polite reader (`ra_research::reader`:
 /// SSRF + DNS pinning, robots.txt, per-host spacing, size caps, and
 /// post-render SSRF re-validation), with the `deep_crawl` browser as the
 /// renderer.
@@ -821,7 +821,7 @@ impl Reader {
             inner: reader::Reader::new(reader::ReaderConfig {
                 host_interval: Duration::from_millis(interval_ms),
                 keep_html: true,
-                respect_robots: octos_research::respect_robots(|k| std::env::var(k).ok()),
+                respect_robots: ra_research::respect_robots(|k| std::env::var(k).ok()),
                 fallback_text: Some(crate::html_to_text),
                 renderer,
                 ..Default::default()
@@ -831,7 +831,7 @@ impl Reader {
 
     /// Read one page. A failure is recorded as a skipped URL with its
     /// reason and final URL.
-    pub async fn read(&self, url: &str) -> Result<ReadPage, octos_research::ReadError> {
+    pub async fn read(&self, url: &str) -> Result<ReadPage, ra_research::ReadError> {
         self.inner.read(url).await.map(ReadPage::from_shared)
     }
 
@@ -862,7 +862,7 @@ impl Reader {
     pub async fn read_all(
         &self,
         urls: &[String],
-    ) -> Vec<Result<ReadPage, octos_research::ReadError>> {
+    ) -> Vec<Result<ReadPage, ra_research::ReadError>> {
         stream::iter(urls.iter())
             .map(|u| self.read(u))
             .buffered(READ_CONCURRENCY)
@@ -1080,7 +1080,7 @@ mod tests {
             .accept_rendered("http://93.184.216.34/start", rendered)
             .await
             .unwrap_err();
-        assert_eq!(err.reason, octos_research::ReadFailure::Blocked, "{err}");
+        assert_eq!(err.reason, ra_research::ReadFailure::Blocked, "{err}");
         assert!(err.to_string().contains("169.254.169.254"), "{err}");
     }
 
@@ -1100,14 +1100,14 @@ mod tests {
         .to_string();
         let err = parse_render_output(&stdout, "https://publisher.example/story").unwrap_err();
         assert_eq!(
-            octos_research::ReadError::from_render_error(&err).reason,
-            octos_research::ReadFailure::BotChallenge
+            ra_research::ReadError::from_render_error(&err).reason,
+            ra_research::ReadFailure::BotChallenge
         );
     }
 
     #[tokio::test]
     async fn should_not_consult_robots_txt_by_default() {
-        if std::env::var(octos_research::RESPECT_ROBOTS_ENV).is_ok() {
+        if std::env::var(ra_research::RESPECT_ROBOTS_ENV).is_ok() {
             return; // operator setting present in this environment
         }
         let r = Reader::new(false);
@@ -1136,7 +1136,7 @@ mod tests {
         }
         // The metasearch is the first free provider for every category
         // (GDELT runs inside it), unless OCTOS_METASEARCH=0.
-        if octos_research::metasearch::enabled(|k| std::env::var(k).ok()) {
+        if ra_research::metasearch::enabled(|k| std::env::var(k).ok()) {
             assert_eq!(auto_plan(true, false)[0], Provider::Metasearch);
             assert_eq!(auto_plan(false, false)[0], Provider::Metasearch);
         } else {
@@ -1149,7 +1149,7 @@ mod tests {
         let order = auto_plan(false, true);
         let ddg = order.iter().position(|p| *p == Provider::DuckDuckGo);
         let bing = order.iter().position(|p| *p == Provider::BingBrowser);
-        if octos_research::metasearch::enabled(|k| std::env::var(k).ok()) {
+        if ra_research::metasearch::enabled(|k| std::env::var(k).ok()) {
             // The metasearch's own DuckDuckGo and Bing engines ask them.
             assert!(ddg.is_none() && bing.is_none(), "{order:?}");
         } else {
@@ -1170,7 +1170,7 @@ mod tests {
         assert!(
             out.errors
                 .iter()
-                .any(|e| e.contains(octos_research::SERP_SCRAPE_ENV)),
+                .any(|e| e.contains(ra_research::SERP_SCRAPE_ENV)),
             "{:?}",
             out.errors
         );

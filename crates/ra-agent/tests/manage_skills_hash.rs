@@ -17,7 +17,7 @@
 use sha2::{Digest, Sha256};
 use std::io::Write;
 
-use octos_agent::tools::manage_skills::install_bytes_into_dir;
+use ra_agent::tools::manage_skills::install_bytes_into_dir;
 
 /// Build an in-memory `.tar.gz` archive containing one file named `main`
 /// with the supplied payload bytes. Returns the raw archive bytes — both

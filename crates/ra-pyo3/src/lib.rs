@@ -1,6 +1,6 @@
 //! ra-pyo3: a **native** Python extension for embedding ra, built with
 //! [pyo3](https://pyo3.rs/) over the native core exposed by `ra-ffi`
-//! ([`octos_ffi::RaRuntime`]).
+//! ([`ra_ffi::RaRuntime`]).
 //!
 //! This is the *recommended* Python binding. The sibling `ra-uniffi` crate
 //! generates a *reference* Python module too, but its real purpose is Swift /
@@ -10,7 +10,7 @@
 //! Like `ra-uniffi`, this crate is a thin wrapper: it adds NO logic beyond
 //! type marshalling. The hardened credential path (single key resolution +
 //! pinning + exact secret-scrub of the caller's own key) lives entirely in
-//! `ra-ffi`'s [`octos_ffi::RaRuntime::from_config`], so it exists in
+//! `ra-ffi`'s [`ra_ffi::RaRuntime::from_config`], so it exists in
 //! exactly one place, shared by the C-ABI, uniffi, and this pyo3 surface.
 //!
 //! # The `python` feature (default OFF)

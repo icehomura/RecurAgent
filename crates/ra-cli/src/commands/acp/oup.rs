@@ -6,7 +6,7 @@ use super::*;
 mod tests;
 use crate::commands::oup_session::{OupFrontend, OupSession};
 use crate::commands::oup_text::AssistantTextProjection;
-use octos_core::ui_protocol::{
+use ra_core::ui_protocol::{
     ApprovalDecision, ApprovalRespondParams, EnvelopeToolEndStatus, PayloadV2, UiCommand,
     UiNotification,
 };
@@ -63,7 +63,7 @@ async fn open(
             state.clone(),
             key,
             &cwd,
-            octos_agent::EffectivePermissions::workspace_write(),
+            ra_agent::EffectivePermissions::workspace_write(),
             false,
         )
         .await
@@ -77,7 +77,7 @@ async fn open(
             segments: std::sync::Mutex::new(AssistantTextProjection::default()),
             peers: crate::commands::oup_peers::OupPeerHost::new(
                 state,
-                octos_agent::EffectivePermissions::workspace_write(),
+                ra_agent::EffectivePermissions::workspace_write(),
             ),
         }))
     })
@@ -218,7 +218,7 @@ impl Frontend {
         Ok(())
     }
 
-    fn replay(&self, history: octos_core::ui_protocol::SessionHydrateResult) -> Result<()> {
+    fn replay(&self, history: ra_core::ui_protocol::SessionHydrateResult) -> Result<()> {
         let messages = history.messages.unwrap_or_default();
         let last_answers: HashMap<_, _> = messages
             .iter()
@@ -259,7 +259,7 @@ impl Frontend {
     }
 }
 
-fn replay_message(message: octos_core::ui_protocol::HydratedMessage) -> Vec<SessionUpdate> {
+fn replay_message(message: ra_core::ui_protocol::HydratedMessage) -> Vec<SessionUpdate> {
     let mut updates = Vec::new();
     if message.role == "assistant"
         && let Some(reasoning) = message

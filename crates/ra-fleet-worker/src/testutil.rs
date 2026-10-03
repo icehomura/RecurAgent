@@ -8,14 +8,14 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use eyre::Result;
-use octos_agent::sandbox::{NoSandbox, Sandbox};
-use octos_core::{Message, SessionKey};
-use octos_fleet::{
+use ra_agent::sandbox::{NoSandbox, Sandbox};
+use ra_core::{Message, SessionKey};
+use ra_fleet::{
     AcceptanceCriterion, Fleet, FleetBudget, FleetKernelStore, FsGrant, LaunchOutcome,
     NetworkGrant, TaskSpec, Verifier, WorkerGrant,
 };
-use octos_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, ToolSpec};
-use octos_memory::EpisodeStore;
+use ra_llm::{ChatConfig, ChatResponse, LlmProvider, StopReason, ToolSpec};
+use ra_memory::EpisodeStore;
 use tempfile::TempDir;
 use tokio::process::Command;
 
@@ -180,7 +180,7 @@ pub async fn create_fleet_with_root(
 
 /// Init a git repo at `dir` with one commit, so `HEAD` is valid for the
 /// worktree `add -b … HEAD`. Returns `false` if git is unavailable (the caller
-/// should skip the test). Mirrors the helper in `octos_core::git_worktree`.
+/// should skip the test). Mirrors the helper in `ra_core::git_worktree`.
 pub fn git_init_repo(dir: &Path) -> bool {
     use std::process::Command as StdCommand;
     if StdCommand::new("git").arg("--version").output().is_err() {
@@ -261,7 +261,7 @@ impl LlmProvider for GitCommitProvider {
             return Ok(ChatResponse {
                 content: None,
                 reasoning_content: None,
-                tool_calls: vec![octos_core::ToolCall {
+                tool_calls: vec![ra_core::ToolCall {
                     id: "call_commit".to_string(),
                     name: "shell".to_string(),
                     arguments: serde_json::json!({ "command": command }),
@@ -372,7 +372,7 @@ impl LlmProvider for HangCleanFilterProvider {
             return Ok(ChatResponse {
                 content: None,
                 reasoning_content: None,
-                tool_calls: vec![octos_core::ToolCall {
+                tool_calls: vec![ra_core::ToolCall {
                     id: "call_plant".to_string(),
                     name: "shell".to_string(),
                     arguments: serde_json::json!({ "command": command }),
@@ -437,8 +437,8 @@ pub async fn factory_for_with(
     (dir, factory)
 }
 
-fn usage() -> octos_llm::TokenUsage {
-    octos_llm::TokenUsage {
+fn usage() -> ra_llm::TokenUsage {
+    ra_llm::TokenUsage {
         input_tokens: 7,
         output_tokens: 3,
         ..Default::default()
@@ -495,7 +495,7 @@ impl LlmProvider for WriteFileProvider {
             return Ok(ChatResponse {
                 content: None,
                 reasoning_content: None,
-                tool_calls: vec![octos_core::ToolCall {
+                tool_calls: vec![ra_core::ToolCall {
                     id: "call_write".to_string(),
                     name: "write_file".to_string(),
                     arguments: serde_json::json!({
@@ -557,7 +557,7 @@ impl LlmProvider for EscalateProvider {
             return Ok(ChatResponse {
                 content: None,
                 reasoning_content: None,
-                tool_calls: vec![octos_core::ToolCall {
+                tool_calls: vec![ra_core::ToolCall {
                     id: "call_escalate".to_string(),
                     name: "escalate".to_string(),
                     arguments: serde_json::json!({
@@ -616,7 +616,7 @@ impl LlmProvider for RecordingWriteProvider {
             return Ok(ChatResponse {
                 content: None,
                 reasoning_content: None,
-                tool_calls: vec![octos_core::ToolCall {
+                tool_calls: vec![ra_core::ToolCall {
                     id: "call_write".to_string(),
                     name: "write_file".to_string(),
                     arguments: serde_json::json!({
