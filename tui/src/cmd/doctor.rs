@@ -473,11 +473,19 @@ pub fn locate_ra_tui() -> LocatedBinaries {
 }
 
 /// `ra` (the backend) discovered across `$PATH` + the known install prefixes,
-/// plus `$RA_PREFIX`/`~/.ra/bin` and a legacy `$OCTOS_PREFIX`/`~/.ra/bin`.
-/// Same PATH-vs-off-PATH bookkeeping as [`locate_ra_tui`].
+/// plus the sibling of the running `ra-tui`, `$RA_PREFIX`/`~/.ra/bin`, and a
+/// legacy `$OCTOS_PREFIX`/`~/.ra/bin`. Same candidate set as
+/// `backend_ensure`'s resolver. Same PATH-vs-off-PATH bookkeeping as
+/// [`locate_ra_tui`].
 fn locate_backend() -> LocatedBinaries {
     let exe_name = if cfg!(windows) { "ra.exe" } else { "ra" };
     let mut dirs = default_install_dirs();
+    if let Some(sibling_dir) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(Path::to_path_buf))
+    {
+        dirs.push(sibling_dir);
+    }
     if let Some(prefix) = crate::env::env_compat("RA_PREFIX", "OCTOS_PREFIX") {
         dirs.push(PathBuf::from(prefix));
     }
@@ -650,7 +658,26 @@ fn installations_checks() -> Vec<Check> {
         ),
         installs_check("ra-tui", &locate_ra_tui()),
         installs_check("ra", &locate_backend()),
+        resolved_backend_check(),
     ]
+}
+
+/// Report which candidate `backend_ensure` would actually launch — the same
+/// candidate order as the resolver (sibling of `ra-tui`, `PATH`, ra install
+/// dir, legacy ra install) — so a doctor run names the backend a launch
+/// would use instead of leaving the user to infer it from the install list.
+fn resolved_backend_check() -> Check {
+    match crate::backend_ensure::resolved_backend_report() {
+        Some((path, label)) => {
+            Check::pass(CAT_INSTALLS, "resolved backend", label).with_value(path.display().to_string())
+        }
+        None => Check::warn(
+            CAT_INSTALLS,
+            "resolved backend",
+            "no ra backend found — build this repo (`cargo build --bin ra`) or pass --stdio-command",
+            "build ra or configure an explicit stdio command",
+        ),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1865,6 +1892,8 @@ mod tests {
         // Both binaries get an install-summary row.
         assert!(checks.iter().any(|c| c.name == "ra-tui installs"));
         assert!(checks.iter().any(|c| c.name == "ra installs"));
+        // The resolver's chosen backend is named explicitly.
+        assert!(checks.iter().any(|c| c.name == "resolved backend"));
     }
 
     #[test]

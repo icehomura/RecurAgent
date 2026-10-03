@@ -27,10 +27,13 @@ and is why the TUI can be rebuilt without touching the kernel.
    (`$RA_PREFIX`), (d) a legacy `~/.ra/bin/ra` (protocol-compatible). `DEFAULT_STDIO_COMMAND` is
    `ra serve --stdio --solo`; the version parser reads the leading `X.Y.Z` from
    `ra 2.0.3-rc.13 (…)`; and no upstream install is attempted — a missing backend errors with
-   `cargo build --bin ra` / `--stdio-command` guidance (`run_installer()` returns that same error).
-   Residual: the upstream installer/download helpers stay compiled but unreachable (dead-code warnings)
-   until follow-up #2 removes them, and `doctor`/`update` still print the `octos`/`octoscode` brand
-   surfaces (follow-up #2).
+   `cargo build --bin ra` / `--stdio-command` guidance. The upstream installer/download helpers were
+   **deleted** (nothing is auto-installed). The child-PATH prepend is derived from the *chosen*
+   resolution (`OnPath` ⇒ prepend nothing, `AtPath(p)` ⇒ `p.parent()`), so an outdated sibling that
+   lost to a `PATH` `ra` can never be prepended back into the launch; on Windows a legacy-only backend
+   is launched by rewriting just the program token (`ra` → `ra`) and prepending its dir, since
+   `cmd /C` can't take an embedded path. `doctor` reports which candidate resolves and scans the same
+   set (sibling, `PATH`, `~/.ra/bin`, legacy `~/.ra/bin`).
 2. **Brand/env sweep** — `OCTOSCODE_*` / `OCTOS_*` env vars → `RA_TUI_*` / `RA_*` with dual-read
    fallback; `~/.ra` and `.ra/` → `~/.ra` and `.ra/` with legacy fallback; user-visible
    strings (`octoscode`, `Octos`) → `ra`/`ra`.
