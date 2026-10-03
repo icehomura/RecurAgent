@@ -25,6 +25,10 @@ use super::Executable;
 
 /// Exit code emitted by `--check` when a newer release is available.
 const EXIT_UPDATE_AVAILABLE: i32 = 10;
+/// Exit code emitted by `--check` when there is no release channel to check
+/// (this fork ships from the source tree) — the same contract the terminal
+/// client uses for the same situation.
+const EXIT_NO_CHANNEL: i32 = 3;
 /// Exit code emitted by `--check` on a network/API error (non-10 nonzero).
 const EXIT_CHECK_ERROR: i32 = 2;
 
@@ -40,19 +44,19 @@ pub struct UpdateCommand {
     pub json: bool,
 }
 
-/// Build the ra-server [`ProductSpec`]. `current_version` is the CLI's OWN
+/// Build the ra server [`ProductSpec`]. `current_version` is the CLI's OWN
 /// `CARGO_PKG_VERSION`, passed IN here — never the diagnostics crate's.
-fn octos_server_spec() -> ProductSpec {
+///
+/// No published release channel exists for this fork (it ships from the source
+/// tree), so no GitHub repo / brew formula / npm package is advertised.
+fn ra_server_spec() -> ProductSpec {
     ProductSpec::new(
-        "ra",                   // binary on PATH
-        "ra",                   // package / display name
+        "ra",                      // binary on PATH
+        "ra",                      // package / display name
         env!("CARGO_PKG_VERSION"), // passed IN — ra-cli's own version
-        "octos-org/octos",         // github repo
-        "ra-bundle",            // asset prefix → ra-bundle-<triple>
+        "",                        // no upstream release channel
+        "ra-bundle",               // asset prefix (used only if a channel is added)
     )
-    .with_github_token_env("OCTOS_GITHUB_TOKEN")
-    .with_brew_formula("octos-org/octos/octos")
-    .with_npm_package("@octos-org/octos")
     .with_cargo_install("ra-cli")
     .with_cargo_dist_app("ra")
 }
@@ -66,7 +70,30 @@ impl Executable for UpdateCommand {
             return Ok(());
         }
 
-        let spec = octos_server_spec();
+        let spec = ra_server_spec();
+        // No published release channel in this fork: say so instead of asking
+        // an upstream project's Releases API about a binary it never shipped.
+        if spec.github_repo.trim().is_empty() {
+            let message = "ra ships from the source tree; there is no upstream release channel.";
+            let rebuild = "cargo build --release --bin ra";
+            if self.json {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "check": true,
+                        "current_version": spec.current_version,
+                        "source": "ra repository (source build)",
+                        "update_available": false,
+                        "upgrade_command": null,
+                        "rebuild_command": rebuild,
+                    })
+                );
+            } else {
+                println!("ra {} {message}", spec.current_version);
+                println!("  To update, rebuild from source: {rebuild}");
+            }
+            std::process::exit(EXIT_NO_CHANNEL);
+        }
         let method = detect(&spec);
         match update_check(&spec, &method) {
             Ok(plan) => {
@@ -101,7 +128,7 @@ impl Executable for UpdateCommand {
 
 /// Bare `ra update` Stage-2 message: not yet wired, here's the hint.
 fn print_not_yet_wired() {
-    let spec = octos_server_spec();
+    let spec = ra_server_spec();
     let method = detect(&spec);
     println!(
         "self-update for this install method ({}) is not yet wired (Stage 3); \
@@ -187,7 +214,7 @@ mod tests {
     use super::*;
 
     fn spec() -> ProductSpec {
-        octos_server_spec()
+        ra_server_spec()
     }
 
     #[test]

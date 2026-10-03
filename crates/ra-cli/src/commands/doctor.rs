@@ -119,19 +119,21 @@ pub struct DoctorCommand {
     pub data_dir: Option<PathBuf>,
 }
 
-/// Build the ra-server [`ProductSpec`]. `current_version` is the CLI's OWN
+/// Build the ra server [`ProductSpec`]. `current_version` is the CLI's OWN
 /// `CARGO_PKG_VERSION`, passed IN here — never the diagnostics crate's.
-fn octos_server_spec() -> ProductSpec {
+///
+/// There is deliberately **no published release channel** for this fork: it
+/// ships from the source tree, so no GitHub repo, brew formula or npm package is
+/// advertised. `ra update --check` and the doctor network checks report that
+/// instead of pointing at an upstream project.
+fn ra_server_spec() -> ProductSpec {
     ProductSpec::new(
-        "ra",                   // binary on PATH
-        "ra",                   // package / display name
+        "ra",                      // binary on PATH
+        "ra",                      // package / display name
         env!("CARGO_PKG_VERSION"), // passed IN — ra-cli's own version
-        "octos-org/octos",         // github repo
-        "ra-bundle",            // asset prefix → ra-bundle-<triple>
+        "",                        // no upstream release channel
+        "ra-bundle",               // asset prefix (used only if a channel is added)
     )
-    .with_github_token_env("OCTOS_GITHUB_TOKEN")
-    .with_brew_formula("octos-org/octos/octos")
-    .with_npm_package("@octos-org/octos")
     .with_cargo_install("ra-cli")
     .with_cargo_dist_app("ra")
 }
@@ -191,7 +193,7 @@ fn render_notes(report: &Report) -> String {
 /// Stage-2 Network category (GitHub reachability + newer-release check) so unit
 /// tests stay offline/deterministic; the real command always passes `true`.
 fn build_report(cmd: &DoctorCommand, with_network: bool) -> Result<Report> {
-    let spec = octos_server_spec();
+    let spec = ra_server_spec();
     let mut report = Report::default();
 
     // --- Binary & version --------------------------------------------------
@@ -346,23 +348,39 @@ fn build_report(cmd: &DoctorCommand, with_network: bool) -> Result<Report> {
 fn installations_checks(ra: &ProductSpec) -> Vec<Check> {
     let mut checks = vec![
         installs_check("ra", &locate_with_octos_bin(ra)),
-        installs_check("octoscode", &locate(&octoscode_spec())),
+        installs_check("ra-tui", &locate(&ra_tui_spec())),
     ];
-    // The client was renamed octos-tui -> octoscode. Enumerating only the new
-    // name would report "none found" to anyone who has not upgraded yet —
-    // wrong, and worst for exactly the user who needs `doctor` to explain
-    // things. Look for the old binary too, and surface it ONLY when a copy is
-    // actually present so the section does not grow a permanent empty row.
-    // Drop this once the rename has settled.
-    let legacy = locate(&octoscode_legacy_spec());
-    if !install_rows(&legacy).is_empty() {
-        checks.push(installs_check("octos-tui (legacy name)", &legacy));
+    // The terminal client was renamed octos-tui -> octoscode -> ra-tui.
+    // Enumerating only the current name would report "none found" to anyone who
+    // has not upgraded yet — wrong, and worst for exactly the user who needs
+    // `doctor` to explain things. Look for both older names too, and surface
+    // each ONLY when a copy is actually present so the section does not grow
+    // permanent empty rows. Drop these once the renames have settled.
+    for (label, spec) in [
+        ("octoscode (legacy name)", octoscode_spec()),
+        ("octos-tui (legacy name)", octoscode_legacy_spec()),
+    ] {
+        let legacy = locate(&spec);
+        if !install_rows(&legacy).is_empty() {
+            checks.push(installs_check(label, &legacy));
+        }
     }
     checks
 }
 
-/// Minimal spec for LOCATING the octoscode client binary — only `binary_name`
+/// Minimal spec for LOCATING the terminal-client binary — only `binary_name`
 /// matters for enumeration; the rest are placeholders.
+fn ra_tui_spec() -> ProductSpec {
+    ProductSpec::new(
+        "ra-tui",
+        "ra-tui",
+        "0.0.0",
+        "",             // no release channel (source-built)
+        "ra-tui",
+    )
+}
+
+/// Pre-rename spec, so a not-yet-upgraded `octoscode` copy is still found.
 fn octoscode_spec() -> ProductSpec {
     ProductSpec::new(
         "octoscode",
@@ -503,8 +521,19 @@ fn network_checks(spec: &ProductSpec, method: &InstallMethod) -> Vec<Check> {
             CAT_NETWORK,
             "GitHub reachable",
             format!("could not reach api.github.com: {reason}"),
-            "check network/proxy/DNS, or set OCTOS_GITHUB_TOKEN to dodge rate limits",
+            "check network/proxy/DNS",
         )),
+    }
+
+    // No published release channel in this fork: there is no upstream release to
+    // compare against, so say that instead of asking an upstream project's API.
+    if spec.github_repo.trim().is_empty() {
+        checks.push(Check::pass(
+            CAT_NETWORK,
+            "release channel",
+            "none — this build ships from the ra source tree (rebuild with `cargo build --release --bin ra` to update)",
+        ));
+        return checks;
     }
 
     // Best-effort "newer release available" via the shared planner. Only attempt
@@ -1186,7 +1215,7 @@ fn profile_checks(profiles: &[DiscoveredProfile]) -> Vec<Check> {
         checks.push(Check::pass(
             CAT_PROFILES,
             "profiles",
-            "none yet — created by octoscode onboarding (or `ra serve` solo mode)",
+            "none yet — created by ra-tui onboarding (or `ra serve` solo mode)",
         ));
         return checks;
     }
@@ -2095,14 +2124,14 @@ mod tests {
 
     #[test]
     fn installations_checks_cover_both_octos_and_octoscode() {
-        let checks = installations_checks(&octos_server_spec());
+        let checks = installations_checks(&ra_server_spec());
         assert!(checks.iter().any(|c| c.name == "ra installs"));
         assert!(checks.iter().any(|c| c.name == "octoscode installs"));
     }
 
     #[test]
     fn spec_carries_cli_version_not_diagnostics_crate_version() {
-        let spec = octos_server_spec();
+        let spec = ra_server_spec();
         assert_eq!(spec.current_version, env!("CARGO_PKG_VERSION"));
         assert_eq!(spec.binary_name, "ra");
         assert_eq!(spec.github_repo, "octos-org/octos");
