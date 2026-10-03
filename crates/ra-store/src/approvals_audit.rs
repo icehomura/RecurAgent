@@ -25,11 +25,6 @@ pub const DEFAULT_ROTATE_BYTES: u64 = 10 * 1024 * 1024;
 /// Default retention window: 90 days.
 pub const DEFAULT_RETENTION_DAYS: i64 = 90;
 
-const ENV_ENABLED: &str = "OCTOS_APPROVALS_AUDIT_ENABLED";
-const ENV_DIR: &str = "OCTOS_APPROVALS_AUDIT_DIR";
-const ENV_ROTATE_BYTES: &str = "OCTOS_APPROVALS_AUDIT_ROTATE_BYTES";
-const ENV_RETENTION_DAYS: &str = "OCTOS_APPROVALS_AUDIT_RETENTION_DAYS";
-
 const AUDIT_RECORD_SCHEMA_VERSION: u32 = 1;
 
 /// Configuration for the approvals audit log. When the cli grows a profile
@@ -69,22 +64,23 @@ impl Default for ApprovalsAuditConfig {
 }
 
 impl ApprovalsAuditConfig {
+    /// Read the `RA_APPROVALS_AUDIT_*` knobs; the legacy
+    /// `OCTOS_APPROVALS_AUDIT_*` names are still honoured through
+    /// [`ra_core::brand::env_compat_str`].
     pub fn from_env() -> Self {
         let mut cfg = Self::default();
-        if let Ok(v) = std::env::var(ENV_ENABLED) {
+        if let Some(v) = ra_core::brand::env_compat_str("APPROVALS_AUDIT_ENABLED") {
             cfg.enabled = parse_bool(&v).unwrap_or(cfg.enabled);
         }
-        if let Ok(v) = std::env::var(ENV_DIR) {
-            if !v.is_empty() {
-                cfg.directory = Some(PathBuf::from(v));
-            }
+        if let Some(v) = ra_core::brand::env_compat_str("APPROVALS_AUDIT_DIR") {
+            cfg.directory = Some(PathBuf::from(v));
         }
-        if let Ok(v) = std::env::var(ENV_ROTATE_BYTES) {
+        if let Some(v) = ra_core::brand::env_compat_str("APPROVALS_AUDIT_ROTATE_BYTES") {
             if let Ok(parsed) = v.parse::<u64>() {
                 cfg.rotate_bytes = parsed;
             }
         }
-        if let Ok(v) = std::env::var(ENV_RETENTION_DAYS) {
+        if let Some(v) = ra_core::brand::env_compat_str("APPROVALS_AUDIT_RETENTION_DAYS") {
             if let Ok(parsed) = v.parse::<i64>() {
                 cfg.retention_days = parsed;
             }
@@ -410,5 +406,36 @@ mod tests {
                 .expect("write");
         }
         assert!(!stale_path.exists(), "stale audit file should be swept");
+    }
+
+    #[test]
+    #[allow(unsafe_code)]
+    fn from_env_prefers_ra_and_falls_back_to_legacy() {
+        // Serialized: process-env mutation races every parallel test that
+        // reads the approvals-audit knobs.
+        static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let prev_new = std::env::var_os("RA_APPROVALS_AUDIT_ENABLED");
+        let prev_legacy = std::env::var_os("OCTOS_APPROVALS_AUDIT_ENABLED");
+
+        // RA_ wins over the legacy name.
+        unsafe {
+            std::env::set_var("RA_APPROVALS_AUDIT_ENABLED", "0");
+            std::env::set_var("OCTOS_APPROVALS_AUDIT_ENABLED", "1");
+        }
+        assert!(!ApprovalsAuditConfig::from_env().enabled);
+
+        // With only the legacy name set, the fallback still applies.
+        unsafe { std::env::remove_var("RA_APPROVALS_AUDIT_ENABLED") };
+        assert!(ApprovalsAuditConfig::from_env().enabled);
+
+        match prev_new {
+            Some(v) => unsafe { std::env::set_var("RA_APPROVALS_AUDIT_ENABLED", v) },
+            None => unsafe { std::env::remove_var("RA_APPROVALS_AUDIT_ENABLED") },
+        }
+        match prev_legacy {
+            Some(v) => unsafe { std::env::set_var("OCTOS_APPROVALS_AUDIT_ENABLED", v) },
+            None => unsafe { std::env::remove_var("OCTOS_APPROVALS_AUDIT_ENABLED") },
+        }
     }
 }
