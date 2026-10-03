@@ -12,8 +12,8 @@ fn main() {
         std::process::exit(77);
     }
     run();
-    if let Some(binary) = std::env::var_os("OCTOS_HOST_MANAGED_BINARY") {
-        smoke_real_octos(std::path::Path::new(&binary));
+    if let Some(binary) = ra_core::brand::env_compat("HOST_MANAGED_BINARY") {
+        smoke_real_binary(std::path::Path::new(&binary));
     }
 }
 
@@ -235,7 +235,7 @@ fn check_parent_memory(parent: i32) {
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-fn smoke_real_octos(binary: &std::path::Path) {
+fn smoke_real_binary(binary: &std::path::Path) {
     use serde_json::json;
     use std::process::Stdio;
     use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
