@@ -3075,9 +3075,18 @@ pub(crate) async fn create_agent_session_deferred_mcp(
         // Extension observers and their event futures run on this runtime's
         // worker threads. Size them explicitly: unsized they inherit the PE
         // default and a deep future can abort the process with no unwinding
-        // (`STATUS_STACK_OVERFLOW`). Matches the `ra` binary's worker
-        // reservation.
-        const EVENT_RUNTIME_STACK_BYTES: usize = 64 * 1024 * 1024;
+        // (`STATUS_STACK_OVERFLOW`). Same reserve as the `ra` binary's worker
+        // reservation (`main::RUNTIME_WORKER_STACK_BYTES`), from the same
+        // measured basis: a complete offline agent turn — including a `dag`
+        // whose node runs `run_code` (dag_tool + ptc_bridge + QuickJS) — holds
+        // at 724992 B (708 KiB) and aborts at 720896 B (704 KiB), flat to DAG
+        // N=256 (probe `agent::tests::probe_full_turn_stack_scaling`, commit
+        // `905433d68`). That probe uses a mock provider, so real transport
+        // (TLS/HTTP) and session persistence (sqlite/JSONL) are unexercised
+        // (`-Zprint-type-sizes` puts those frames at <= ~30 KiB each); 16 MiB
+        // keeps ~23x headroom over the floor. Bead `bd-qtffv` tracks verifying
+        // the transport-heavy chains and going lower.
+        const EVENT_RUNTIME_STACK_BYTES: usize = 16 * 1024 * 1024;
         match asupersync::runtime::RuntimeBuilder::new()
             .thread_stack_size(EVENT_RUNTIME_STACK_BYTES)
             .build()
