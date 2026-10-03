@@ -22807,4 +22807,250 @@ mod tests {
             assert!(result.is_ok(), "no advisor → turn unaffected");
         });
     }
+
+    // ---- full-turn stack measurement ----
+
+    /// TEMP measurement probe (kept `#[ignore]`d as a reusable tool): drives a
+    /// COMPLETE agent turn — session → agent loop → provider stream → tool call
+    /// → tool result → follow-up stream — on a caller thread with an explicit
+    /// stack, mirroring the FTUI driver's
+    /// `RuntimeBuilder::new().thread_stack_size(..)` + `block_on` shape.
+    ///
+    /// `TURN_PROBE_SHAPE`:
+    ///   `tool` (default) — the model calls `probe_count_tool`, the loop runs
+    ///   it, then the model answers with text;
+    ///   `dag_run_code` — the model calls `dag` with a single `run_code` node,
+    ///   so `dag_tool` + `ptc_bridge` + the QuickJS realm all enter the turn.
+    #[test]
+    #[ignore = "measurement probe: TURN_PROBE_STACK_BYTES + TURN_PROBE_SHAPE"]
+    #[allow(clippy::too_many_lines)]
+    fn probe_full_turn_stack_scaling() {
+        let stack: usize = std::env::var("TURN_PROBE_STACK_BYTES")
+            .expect("TURN_PROBE_STACK_BYTES")
+            .parse()
+            .expect("stack bytes");
+        let shape = std::env::var("TURN_PROBE_SHAPE").unwrap_or_else(|_| "tool".to_string());
+        let handle = std::thread::Builder::new()
+            .name("turn-probe".into())
+            .stack_size(stack)
+            .spawn(move || {
+                let runtime = RuntimeBuilder::new()
+                    .thread_stack_size(stack)
+                    .build()
+                    .expect("runtime");
+                runtime.block_on(async move {
+                    let (tool_name, args) = if shape == "dag_run_code" {
+                        (
+                            "dag",
+                            json!({
+                                "nodes": [{
+                                    "id": 1,
+                                    "toolName": "run_code",
+                                    "args": {"code": "return 1;", "timeoutMs": 30_000},
+                                    "dependsOn": [],
+                                }]
+                            }),
+                        )
+                    } else {
+                        ("probe_count_tool", json!({}))
+                    };
+                    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+                    let seen: Arc<std::sync::Mutex<Vec<String>>> =
+                        Arc::new(std::sync::Mutex::new(Vec::new()));
+                    let provider: Arc<dyn Provider> =
+                        Arc::new(ProbeTurnProvider::new(tool_name, args, Arc::clone(&seen)));
+                    let temp_dir = tempfile::tempdir().expect("tempdir");
+                    // `DagTool` holds only a `Weak` to the shared registry, so
+                    // the owning handle must outlive the turn.
+                    let shared_registry = if shape == "dag_run_code" {
+                        Some(crate::tools::SharedToolRegistry::new(ToolRegistry::new(
+                            &["run_code"],
+                            temp_dir.path(),
+                            None,
+                        )))
+                    } else {
+                        None
+                    };
+                    let tools = match shared_registry.as_ref() {
+                        Some(shared) => ToolRegistry::from_tools(vec![Box::new(
+                            crate::dag_tool::DagTool::new(shared),
+                        )]),
+                        None => ToolRegistry::from_tools(vec![Box::new(ProbeCountTool {
+                            calls: Arc::clone(&calls),
+                        })]),
+                    };
+                    let agent = Agent::new(provider, tools, AgentConfig::default());
+                    let session = Arc::new(Mutex::new(Session::in_memory()));
+                    let mut agent_session = AgentSession::new(
+                        agent,
+                        session,
+                        false,
+                        ResolvedCompactionSettings::default(),
+                    );
+                    let result = agent_session
+                        .run_text("go".to_string(), |_| {})
+                        .await
+                        .expect("full turn completes");
+                    assert_eq!(result.stop_reason, StopReason::Stop, "turn must finish");
+                    if shape == "dag_run_code" {
+                        let observed = seen.lock().expect("seen lock").join("\n");
+                        assert!(
+                            observed.contains("1 succeeded"),
+                            "dag run_code node must have executed; observed: {observed}"
+                        );
+                    } else {
+                        assert_eq!(
+                            calls.load(Ordering::SeqCst),
+                            1,
+                            "probe_count_tool must run exactly once"
+                        );
+                    }
+                });
+            })
+            .expect("spawn probe");
+        handle.join().expect("probe thread must not abort");
+    }
+
+    #[derive(Debug)]
+    struct ProbeCountTool {
+        calls: Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    #[async_trait]
+    #[allow(clippy::unnecessary_literal_bound)]
+    impl Tool for ProbeCountTool {
+        fn name(&self) -> &str {
+            "probe_count_tool"
+        }
+
+        fn label(&self) -> &str {
+            "probe_count_tool"
+        }
+
+        fn description(&self) -> &str {
+            "full-turn probe counting tool"
+        }
+
+        fn parameters(&self) -> Value {
+            json!({ "type": "object" })
+        }
+
+        async fn execute(
+            &self,
+            _tool_call_id: &str,
+            _input: Value,
+            _on_update: Option<Box<dyn Fn(ToolUpdate) + Send + Sync>>,
+        ) -> crate::error::Result<ToolOutput> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(ToolOutput {
+                content: vec![ContentBlock::Text(TextContent::new("ok"))],
+                details: None,
+                is_error: false,
+            })
+        }
+    }
+
+    /// Provider for [`probe_full_turn_stack_scaling`]: one scripted tool call,
+    /// then a text answer; records the tool-result text it sees on the follow-up
+    /// stream so the probe can prove the tool really ran.
+    #[derive(Debug)]
+    struct ProbeTurnProvider {
+        stream_calls: std::sync::atomic::AtomicUsize,
+        tool_name: &'static str,
+        args: Value,
+        seen: Arc<std::sync::Mutex<Vec<String>>>,
+    }
+
+    impl ProbeTurnProvider {
+        fn new(tool_name: &'static str, args: Value, seen: Arc<std::sync::Mutex<Vec<String>>>) -> Self {
+            Self {
+                stream_calls: std::sync::atomic::AtomicUsize::new(0),
+                tool_name,
+                args,
+                seen,
+            }
+        }
+
+        fn assistant_message(
+            &self,
+            stop_reason: StopReason,
+            content: Vec<ContentBlock>,
+        ) -> AssistantMessage {
+            AssistantMessage {
+                content,
+                api: self.api().to_string(),
+                provider: self.name().to_string(),
+                model: self.model_id().to_string(),
+                usage: Usage::default(),
+                stop_reason,
+                stop_details: None,
+                error_message: None,
+                timestamp: 0,
+            }
+        }
+    }
+
+    #[async_trait]
+    #[allow(clippy::unnecessary_literal_bound)]
+    impl Provider for ProbeTurnProvider {
+        fn name(&self) -> &str {
+            "test-provider"
+        }
+
+        fn api(&self) -> &str {
+            "test-api"
+        }
+
+        fn model_id(&self) -> &str {
+            "test-model"
+        }
+
+        async fn stream(
+            &self,
+            context: &Context<'_>,
+            _options: &StreamOptions,
+        ) -> crate::error::Result<
+            Pin<Box<dyn Stream<Item = crate::error::Result<StreamEvent>> + Send>>,
+        > {
+            let call_index = self.stream_calls.fetch_add(1, Ordering::SeqCst);
+            let partial = self.assistant_message(StopReason::Stop, Vec::new());
+            let (reason, message) = if call_index == 0 {
+                (
+                    StopReason::ToolUse,
+                    self.assistant_message(
+                        StopReason::ToolUse,
+                        vec![ContentBlock::ToolCall(ToolCall {
+                            id: "probe-call-1".to_string(),
+                            name: self.tool_name.to_string(),
+                            arguments: self.args.clone(),
+                            thought_signature: None,
+                        })],
+                    ),
+                )
+            } else {
+                if let Ok(mut seen) = self.seen.lock() {
+                    seen.push(
+                        context
+                            .messages
+                            .iter()
+                            .map(|message| format!("{message:?}"))
+                            .collect::<Vec<_>>()
+                            .join("\n"),
+                    );
+                }
+                (
+                    StopReason::Stop,
+                    self.assistant_message(
+                        StopReason::Stop,
+                        vec![ContentBlock::Text(TextContent::new("done"))],
+                    ),
+                )
+            };
+            let events = vec![
+                Ok(StreamEvent::Start { partial }),
+                Ok(StreamEvent::Done { reason, message }),
+            ];
+            Ok(Box::pin(futures::stream::iter(events)))
+        }
+    }
 }
