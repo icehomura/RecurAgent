@@ -20,7 +20,11 @@ fn repo_root() -> PathBuf {
 
 fn read(rel: &str) -> String {
     let path = repo_root().join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|err| panic!("read {}: {err}", path.display()))
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|err| panic!("read {}: {err}", path.display()));
+    // Windows checkouts may materialize CRLF; the contract pins LF-anchored
+    // fenced blocks, so normalize line endings before matching.
+    text.replace("\r\n", "\n")
 }
 
 /// v1 ACK grammar: `ACK(done|wontdo|blocked): <non-empty explanation>`.

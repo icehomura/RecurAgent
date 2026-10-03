@@ -1,4 +1,4 @@
-# octoscode UI strings — 简体中文 (Simplified Chinese).
+# ra-tui UI strings — 简体中文 (Simplified Chinese).
 # Mirror the key structure of en.yml. Native-speaker review welcome.
 composer:
   placeholder: "让 ra 帮你改代码……"
@@ -1047,9 +1047,9 @@ menu:
     item:
       ready:
         label: "下一步：开始使用“%{profile}”的会话"
-        desc: "在此运行 `octoscode`（此文件夹已为“%{profile}”激活），或在其他文件夹运行 `octoscode --profile-id %{profile}`。"
+        desc: "在此运行 `ra-tui`（此文件夹已为“%{profile}”激活），或在其他文件夹运行 `ra-tui --profile-id %{profile}`。"
         label_generic: "下一步：开始一个会话"
-        desc_generic: "在此运行 `octoscode` —— 此文件夹现已为你的大脑激活。"
+        desc_generic: "在此运行 `ra-tui` —— 此文件夹现已为你的大脑激活。"
       open:
         label: "立即在此打开会话"
         desc: "立即在此文件夹使用“%{profile}”开始工作——无需重启。"
@@ -1155,7 +1155,7 @@ menu:
         desc: 加载仪表盘模型系列和供应商线路
         label: 加载供应商目录
       catalog_refresh:
-        desc: 使用 profile/llm/catalog。目录结构由 ra/dashboard 管理。
+        desc: 使用 profile/llm/catalog。目录结构由 ra dashboard 管理。
         label: 刷新仪表盘供应商目录
       catalog_reload:
         label: 重新加载供应商目录
@@ -1175,7 +1175,7 @@ menu:
         label: 创建本地档案
       exit:
         desc: "不创建档案直接退出。提示：启动时加 --profile-id <id> 可跳过此界面。"
-        label: "退出 octoscode"
+        label: "退出 ra-tui"
       local_email:
         desc: 使用 /onboard email <地址>。邮箱仅为本地元数据。
       local_name:
@@ -1726,7 +1726,7 @@ status:
   doctor_caps_not_received_recovery: "请等待 `config/capabilities/list` 或重新连接传输。"
   doctor_appui_target: "ra UI 目标：%{target}"
   doctor_no_transport: "未配置 ra UI 传输"
-  doctor_no_transport_recovery: "请使用 octoscode --stdio-command \"octos serve --stdio\" 或 octoscode --endpoint ws://<host>:<port>/api/ui-protocol/ws 重新启动。"
+  doctor_no_transport_recovery: "请使用 ra-tui --stdio-command \"ra serve --stdio\" 或 ra-tui --endpoint ws://<host>:<port>/api/ui-protocol/ws 重新启动。"
   onboarding_doctor_summary: "引导诊断 — %{summary}"
   doctor_outcome:
     pass: "通过"

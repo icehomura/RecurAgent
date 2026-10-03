@@ -1,4 +1,4 @@
-# octoscode UI strings — English (source / fallback locale).
+# ra-tui UI strings — English (source / fallback locale).
 #
 # Keys are dotted via nested YAML. Add a key here and its translation in
 # zh.yml (and any future locale). Use `%{var}` for interpolation, e.g.
@@ -917,7 +917,7 @@ status:
   doctor_caps_not_received_recovery: "Wait for `config/capabilities/list` or reconnect the transport."
   doctor_appui_target: "ra UI target: %{target}"
   doctor_no_transport: "no ra UI transport configured"
-  doctor_no_transport_recovery: "Relaunch with `octoscode --stdio-command \"octos serve --stdio\"` or `octoscode --endpoint ws://<host>:<port>/api/ui-protocol/ws`."
+  doctor_no_transport_recovery: "Relaunch with `ra-tui --stdio-command \"ra serve --stdio\"` or `ra-tui --endpoint ws://<host>:<port>/api/ui-protocol/ws`."
   onboarding_doctor_summary: "Onboarding doctor — %{summary}"
   doctor_outcome:
     pass: "PASS"
@@ -1595,9 +1595,9 @@ menu:
     item:
       ready:
         label: "Next: start a session with “%{profile}”"
-        desc: "Run `octoscode` here (this folder is activated for “%{profile}”), or `octoscode --profile-id %{profile}` from another folder."
+        desc: "Run `ra-tui` here (this folder is activated for “%{profile}”), or `ra-tui --profile-id %{profile}` from another folder."
         label_generic: "Next: start a session"
-        desc_generic: "Run `octoscode` here — this folder is now activated for your brain."
+        desc_generic: "Run `ra-tui` here — this folder is now activated for your brain."
       open:
         label: "Open a session here now"
         desc: "Start working with “%{profile}” in this folder right now — no relaunch needed."
@@ -1703,7 +1703,7 @@ menu:
         desc: Load dashboard model families and provider routes
         label: Load provider catalog
       catalog_refresh:
-        desc: Uses profile/llm/catalog. The catalog schema is owned by ra/dashboard.
+        desc: Uses profile/llm/catalog. The catalog schema is owned by the ra dashboard.
         label: Refresh dashboard provider catalog
       catalog_reload:
         label: Reload provider catalog
@@ -1723,7 +1723,7 @@ menu:
         label: Create local profile
       exit:
         desc: "Quit without creating a profile. Tip: launch with --profile-id <id> to skip this screen."
-        label: Exit octoscode
+        label: Exit ra-tui
       local_email:
         desc: Use /onboard email <address>. Email is local metadata only.
       local_name:

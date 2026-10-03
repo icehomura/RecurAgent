@@ -418,7 +418,7 @@ pub fn scrollbar_thumb(metrics: TranscriptScrollMetrics, track: Rect) -> Option<
     })
 }
 
-/// UX2 A.1: render the OCTOS wordmark as a bordered window/header spanning the
+/// UX2 A.1: render the ra wordmark as a bordered window/header spanning the
 /// top of the onboarding screen. `height >= 11` draws the full figlet; a
 /// shorter box draws just the tagline. The box content is centered using
 /// `unicode-width` column math so the CJK tagline and the box-drawing art stay
@@ -500,7 +500,7 @@ pub(super) fn render_onboarding_first_launch_layout(
         .split(frame.area());
 
     let menu = active_menu_surface(app);
-    // UX2 A.1: three-region onboarding layout. TOP = the OCTOS banner header
+    // UX2 A.1: three-region onboarding layout. TOP = the ra banner header
     // (shown on EVERY step, not just the welcome screen); MAIN = the wizard menu
     // (the numbered step list + the active step's inputs/rows on the left); RIGHT
     // = the per-step explanation/teaching panel, carried as the menu's preview so
@@ -1167,7 +1167,7 @@ pub(super) fn render_artifacts(app: &AppState, palette: Palette) -> Paragraph<'s
         .wrap(Wrap { trim: false })
 }
 
-/// Claude-Code-style launch banner: a rounded box with the OCTOS logo, a
+/// Claude-Code-style launch banner: a rounded box with the ra logo, a
 /// greeting, and the workspace path. No right-hand panel (per product call).
 /// Rendered at the TOP of the transcript area for an empty session.
 pub(super) fn render_launch_banner(

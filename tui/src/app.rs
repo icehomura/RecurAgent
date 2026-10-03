@@ -741,15 +741,15 @@ fn session_strip_height(app: &AppState) -> u16 {
     if app.sessions.len() >= 2 { 1 } else { 0 }
 }
 
-/// OCTOS figlet wordmark shown in the MAIN window on the first-launch
+/// ra figlet wordmark shown in the MAIN window on the first-launch
 /// onboarding entry screen (it used to live in a right-side preview pane).
 const ONBOARDING_LOGO_ART: &str = "\
- ██████╗  ██████╗████████╗ ██████╗ ███████╗
-██╔═══██╗██╔════╝╚══██╔══╝██╔═══██╗██╔════╝
-██║   ██║██║        ██║   ██║   ██║███████╗
-██║   ██║██║        ██║   ██║   ██║╚════██║
-╚██████╔╝╚██████╗   ██║   ╚██████╔╝███████║
- ╚═════╝  ╚═════╝   ╚═╝    ╚═════╝ ╚══════╝";
+██████╗  █████╗ 
+██╔══██╗██╔══██╗
+██████╔╝███████║
+██╔══██╗██╔══██║
+██║  ██║██║  ██║
+╚═╝  ╚═╝╚═╝  ╚═╝";
 
 /// Display width of the figlet wordmark (max over its lines), measured with
 /// `unicode-width` so the box-drawing glyphs are counted by display columns.
@@ -761,7 +761,7 @@ fn onboarding_logo_art_width() -> usize {
         .unwrap_or(0)
 }
 
-/// UX2 A.1: rows to spend on the OCTOS banner HEADER across the top of every
+/// UX2 A.1: rows to spend on the ra banner HEADER across the top of every
 /// onboarding step. Taken ONLY from the surplus above what the menu itself
 /// needs (`menu_needed`) so the step list, its inputs, and the explanation pane
 /// are never clipped on short terminals. Full bordered figlet box when there is
@@ -5311,7 +5311,7 @@ pub(crate) fn harness_status_lines_impl(
     let mut spans: Vec<Span<'static>> = Vec::new();
     // Water-wave gradient on "spinner + phase" (e.g. "◠ Working"): a bright crest
     // ripples across the label, advanced by the ~25ms animation redraw via the
-    // shared process clock. Uses Color::Rgb like the rest of octoscode's themes
+    // shared process clock. Uses Color::Rgb like the rest of ra-tui's themes
     // (truecolor-assuming, so it works over SSH where COLORTERM isn't forwarded);
     // the non-RGB Terminal theme degrades to a neutral-grey ripple via rgb_of.
     let label = format!("{} {}", spinner_frame(), phase);

@@ -221,7 +221,7 @@ pub fn run(cli: Cli) -> Result<()> {
     guard.live_inline_viewport = Some(terminal.viewport_area);
 
     // i18n: select the UI language before the first render. `t!()` reads this
-    // process-global locale, chosen at launch via --lang / OCTOS_LANG / LANG
+    // process-global locale, chosen at launch via --lang / RA_LANG / LANG
     // and switchable at runtime by the `/lang <code>` command (which re-sets
     // the locale + rebuilds the open menu; the next frame repaints).
     rust_i18n::set_locale(cli.lang.code());

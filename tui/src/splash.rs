@@ -1,18 +1,18 @@
-//! Startup splash: a ttfx-rendered OCTOS logo animation played on the main
+//! Startup splash: a ttfx-rendered ra logo animation played on the main
 //! screen before the event loop claims the terminal.
 //! Contract: specs/task-startup-splash.spec.
 
 use unicode_width::UnicodeWidthStr;
 
-/// Block-letter OCTOS. 44 columns wide, 6 rows tall; all glyphs are
+/// Block-letter ra. 16 columns wide, 6 rows tall; all glyphs are
 /// single-width so ttfx canvas geometry matches `lines()`/width math.
 const LOGO: &str = "\
- ██████╗  ██████╗████████╗ ██████╗ ███████╗
-██╔═══██╗██╔════╝╚══██╔══╝██╔═══██╗██╔════╝
-██║   ██║██║        ██║   ██║   ██║███████╗
-██║   ██║██║        ██║   ██║   ██║╚════██║
-╚██████╔╝╚██████╗   ██║   ╚██████╔╝███████║
- ╚═════╝  ╚═════╝   ╚═╝    ╚═════╝ ╚══════╝";
+██████╗  █████╗ 
+██╔══██╗██╔══██╗
+██████╔╝███████║
+██╔══██╗██╔══██║
+██║  ██║██║  ██║
+╚═╝  ╚═╝╚═╝  ╚═╝";
 
 /// Curated effects as ttfx CLI arg lists (`ttfx <name> [args…]` must parse).
 /// Each runs to natural completion at startup, so members are limited to
@@ -46,7 +46,7 @@ pub const SPLASH_EFFECTS: [&[&str]; 9] = [
 
 /// The animated input: logo plus a version footer line.
 pub fn splash_text() -> String {
-    format!("{LOGO}\n\noctoscode v{}", env!("CARGO_PKG_VERSION"))
+    format!("{LOGO}\n\nra-tui v{}", env!("CARGO_PKG_VERSION"))
 }
 
 /// Widest line / line count of the splash text, for the gate and printer.
@@ -61,7 +61,7 @@ fn text_dimensions(text: &str) -> (u16, u16) {
 #[derive(Debug, Clone, Copy)]
 pub struct SplashGate {
     pub no_splash_flag: bool,
-    /// OCTOSCODE_NO_SPLASH is set (any value).
+    /// RA_TUI_NO_SPLASH (legacy OCTOSCODE_NO_SPLASH) is set.
     pub env_disabled: bool,
     pub stdout_is_tty: bool,
     /// CI env var is set (any value).
@@ -88,7 +88,7 @@ pub fn pick_effect_args(seed: u64) -> &'static [&'static str] {
     SPLASH_EFFECTS[rng.choice_index(SPLASH_EFFECTS.len())]
 }
 
-/// Curated entry for a specific effect name (`OCTOSCODE_SPLASH_EFFECT=matrix`
+/// Curated entry for a specific effect name (`RA_TUI_SPLASH_EFFECT=matrix`
 /// pins the pick). Curated-only on purpose: arbitrary ttfx effects would break
 /// the duration guarantees the list encodes.
 pub fn effect_args_for(name: &str) -> Option<&'static [&'static str]> {
@@ -250,7 +250,7 @@ impl SplashSession {
             }
         }
         // Move the cursor back UP to the canvas top row (paint left it at the
-        // bottom row) instead of parking below the canvas. octoscode's TUI is
+        // bottom row) instead of parking below the canvas. ra-tui's TUI is
         // an INLINE VIEWPORT that starts at the current cursor row — parking
         // below would push the launch banner `rows` lines down and leave
         // splash residue above it (Bug 2). With the cursor on the canvas top
@@ -315,7 +315,7 @@ pub fn play(cli: &crate::cli::Cli) {
     let (term_cols, term_rows) = crossterm::terminal::size().unwrap_or((0, 0));
     let gate = SplashGate {
         no_splash_flag: cli.no_splash,
-        env_disabled: std::env::var_os("OCTOSCODE_NO_SPLASH").is_some(),
+        env_disabled: crate::env::env_compat("RA_TUI_NO_SPLASH", "OCTOSCODE_NO_SPLASH").is_some(),
         stdout_is_tty: std::io::stdout().is_terminal(),
         ci: std::env::var_os("CI").is_some(),
         term_cols,
@@ -332,10 +332,10 @@ fn play_inner(theme: &crate::cli::ThemeName) -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| u64::from(d.subsec_nanos()) ^ d.as_secs())
         .unwrap_or(0);
-    // OCTOSCODE_SPLASH_EFFECT pins a curated effect by name (e.g. `matrix`);
-    // unset or unknown names fall back to the seeded random pick.
-    let effect_args = std::env::var("OCTOSCODE_SPLASH_EFFECT")
-        .ok()
+    // RA_TUI_SPLASH_EFFECT (legacy OCTOSCODE_SPLASH_EFFECT) pins a curated
+    // effect by name (e.g. `matrix`); unset or unknown names fall back to the
+    // seeded random pick.
+    let effect_args = crate::env::env_compat("RA_TUI_SPLASH_EFFECT", "OCTOSCODE_SPLASH_EFFECT")
         .and_then(|name| effect_args_for(name.trim()))
         .unwrap_or_else(|| pick_effect_args(seed));
 
@@ -378,7 +378,7 @@ fn play_inner(theme: &crate::cli::ThemeName) -> Result<()> {
     let mut stdout = std::io::stdout().lock();
     crossterm::execute!(stdout, crossterm::cursor::Hide).ok();
 
-    // NO cursor::MoveTo(0, 0): octoscode's TUI is an inline viewport that
+    // NO cursor::MoveTo(0, 0): ra-tui's TUI is an inline viewport that
     // starts at the CURRENT cursor row — jumping to screen row 0 would paint
     // the splash over shell scrollback and then leave the banner starting
     // `rows` lines below (Bug 2). The splash plays from the cursor row, and

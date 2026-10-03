@@ -1,8 +1,8 @@
-# octoscode Architecture
+# ra-tui Architecture
 
 ## Scope
 
-`octoscode` is a standalone terminal client for the Octos UI Protocol.
+`ra-tui` is a standalone terminal client for the ra UI Protocol.
 In protocol mode it does not run the ra agent, execute tools, approve
 commands, maintain the durable ledger, or own provider/model configuration.
 Those responsibilities belong to the `ra serve` process.
@@ -31,7 +31,7 @@ The server owns:
 User keyboard
   |
   v
-octoscode
+ra-tui
   src/event_loop.rs       terminal draw/read/send loop
   src/store.rs            AppUI reducer and follow-up command builder
   src/app.rs              ratatui panes, markdown, tasks, diffs, approvals
@@ -53,10 +53,10 @@ ra runtime
   |
   | UiNotification / UiProgressEvent / RPC results
   v
-octoscode Store -> AppState -> ratatui render
+ra-tui Store -> AppState -> ratatui render
 ```
 
-`octoscode` and `octos-app` should both depend on the AppUI contract, not on
+`ra-tui` and `ra-app` should both depend on the AppUI contract, not on
 M9 or future M10 implementation details. As long as the AppUI API remains
 compatible, client behavior should survive server-internal milestone changes.
 
@@ -86,7 +86,7 @@ The older endpoint:
 ```
 
 is the legacy web chat/gateway WebSocket. It is not the AppUI contract used by
-`octoscode`.
+`ra-tui`.
 
 ## Shared API Types
 
@@ -483,14 +483,12 @@ added without a row here.
 | File | Lines | Responsibility |
 |---|---:|---|
 | `src/cli.rs` | 1053 | `--config` JSON launch defaults plus CLI overrides. Must not own provider/model settings; those stay in ra server config. |
-| `src/cmd/config.rs` | 152 | `octoscode config`: read-only inspection of the client's startup config |
-| `src/cmd/doctor.rs` | 2460 | `octoscode doctor` — flutter-doctor-style diagnostics (design §B). |
-| `src/cmd/github.rs` | 155 | Minimal GitHub Releases client for `update --check` and `doctor`. |
-| `src/cmd/install_method.rs` | 746 | Install-method detection for `octoscode update`/`doctor` (design §A.3). |
-| `src/cmd/mod.rs` | 273 | `octoscode` subcommands: `update` and `doctor` (design doc). |
-| `src/cmd/update.rs` | 606 | `octoscode update` — install-method-aware updater (design §A). |
-| `src/cmd/olp_mcp.rs` | 20 | `octoscode olp-mcp-serve` entry — OUTER_LOOP_REVIEW #31 OLP-MCP server subcommand. |
-| `src/cmd/outer_duty.rs` | 98 | `octoscode outer-duty` entry — OUTER_LOOP_REVIEW #38 per-project duty lock (hold/check). |
+| `src/cmd/config.rs` | 152 | `ra-tui config`: read-only inspection of the client's startup config |
+| `src/cmd/doctor.rs` | 2460 | `ra-tui doctor` — flutter-doctor-style diagnostics (design §B). |
+| `src/cmd/mod.rs` | 273 | `ra-tui` subcommands: `update` and `doctor` (design doc). |
+| `src/cmd/update.rs` | 606 | `ra-tui update` — install-method-aware updater (design §A). |
+| `src/cmd/olp_mcp.rs` | 20 | `ra-tui olp-mcp-serve` entry — OUTER_LOOP_REVIEW #31 OLP-MCP server subcommand. |
+| `src/cmd/outer_duty.rs` | 98 | `ra-tui outer-duty` entry — OUTER_LOOP_REVIEW #38 per-project duty lock (hold/check). |
 | `src/lib.rs` | 317 | Crate root — module declarations and the shared public surface. |
 | `src/main.rs` | 53 | Binary entry point: subcommand dispatch, then `event_loop::run`. |
 
@@ -509,7 +507,7 @@ added without a row here.
 
 | File | Lines | Responsibility |
 |---|---:|---|
-| `src/backend_ensure.rs` | 1140 | Auto-provision the `octos` server backend so a fresh octoscode install |
+| `src/backend_ensure.rs` | 1140 | Auto-provision the `ra` server backend so a fresh ra-tui install |
 | `src/profiles.rs` | 544 | Phase 3 startup profile discovery. |
 | `src/transport.rs` | 10721 | `AppUiBackend`, the mock and protocol backends, WebSocket/stdio framing, auth, reconnect status and in-memory cursors. |
 
@@ -527,7 +525,7 @@ added without a row here.
 | `src/insert_history.rs` | 1603 | Insert finalized history lines into the terminal's **normal scrollback**, |
 | `src/sanitize.rs` | 160 | Terminal control-sequence sanitisation for server-supplied text. |
 | `src/splash.rs` | 292 | Startup splash: a ttfx-rendered OCTOS logo animation played on the main screen before the event loop claims the terminal. |
-| `src/terminal_probe.rs` | 243 | Terminal detection and color adaptation for octoscode. |
+| `src/terminal_probe.rs` | 243 | Terminal detection and color adaptation for ra-tui. |
 | `src/theme.rs` | 204 | Terminal-aware palettes and theme-specific colors. |
 | `src/tui_terminal.rs` | 1171 | Inline-viewport terminal — ported and trimmed from codex-rs `tui/src/custom_terminal.rs`. |
 | `src/viewport.rs` | 576 | Inline-viewport driver: owns the scrollback-flush bookkeeping that turns |
@@ -553,6 +551,7 @@ added without a row here.
 |---|---:|---|
 | `src/autonomy.rs` | 1097 | M15-E autonomy command parsing for `/agents`, `/goal`, and `/loop`. |
 | `src/clipboard.rs` | 378 | Clipboard copy support for the TUI. |
+| `src/env.rs` | 120 | ra/legacy env-var + home-path compatibility (`RA_TUI_*`→`OCTOSCODE_*`, `~/.ra`→`~/.ra`). |
 | `src/file_picker.rs` | 254 | `@` composer file picker (#363, v1: path insert only). |
 | `src/history.rs` | 743 | Composer command-history navigation (codex / claude-code style). |
 | `src/keymap.rs` | 1 | The status-bar key-hint string. |
@@ -566,7 +565,7 @@ one-off slash handlers. The milestone plan lives in
 The intended boundary is:
 
 - generic command registry, slash popup, selection views, and menu stack live in
-  `octoscode`
+  `ra-tui`
 - local menus such as `/theme`, `/statusline`, `/title`, and `/keymap` remain
   local TUI concerns
 - server-backed menus such as `/model`, `/status`, `/permissions`, and `/mcp`
@@ -576,7 +575,7 @@ The intended boundary is:
 
 ## Protocol Startup Flow
 
-1. `octoscode` parses CLI launch preferences.
+1. `ra-tui` parses CLI launch preferences.
 2. `build_backend()` creates either `MockAppUiBackend` or
    `ProtocolAppUiBackend`.
 3. In protocol mode, `bootstrap()` connects to `/api/ui-protocol/ws`.
@@ -699,7 +698,7 @@ The important product difference is where the runtime lives:
 
 | Area | Codex-style local CLI | ra AppUI architecture |
 |---|---|---|
-| UI | Local CLI/TUI process. | `octoscode` or `octos-app`. |
+| UI | Local CLI/TUI process. | `ra-tui` or `ra-app`. |
 | Runtime owner | Mostly the local CLI process, with model service calls. | `ra serve`. |
 | Tool execution | Local CLI sandbox/tool runner. | Server-side ra runtime/tool system. |
 | Approval policy | Local CLI approval flow. | Server-owned approval requests plus client rendering/response. |
@@ -712,9 +711,9 @@ same AppUI API to the ra server.
 
 ## Architectural Invariants
 
-- `octoscode` must not call Octos runtime internals directly.
-- `octoscode` must not rely on M9-specific server internals outside AppUI.
-- `octoscode` must treat the server as authoritative for tasks, approvals,
+- `ra-tui` must not call ra runtime internals directly.
+- `ra-tui` must not rely on M9-specific server internals outside AppUI.
+- `ra-tui` must treat the server as authoritative for tasks, approvals,
   diffs, tool results, cwd policy, sandbox policy, and replay.
 - The server must not require TUI-specific behavior for protocol correctness.
 - New client-visible runtime features should land in `ra-core` AppUI/UI

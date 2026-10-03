@@ -156,8 +156,10 @@ impl ComposerHistory {
 
     // ---- persistence (best-effort; never panics, never blocks a turn) ----
 
-    /// `~/.config/octoscode/history.jsonl` (HOME, then USERPROFILE on Windows),
-    /// mirroring [`crate::cli::default_config_path`].
+    /// `~/.config/ra-tui/history.jsonl` (HOME, then USERPROFILE on Windows),
+    /// mirroring [`crate::cli::default_config_path`]: a legacy
+    /// `~/.config/octoscode/history.jsonl` home keeps being used when only it
+    /// exists (never migrated).
     pub fn default_path() -> Option<PathBuf> {
         history_path_from_home(std::env::var_os("HOME"), std::env::var_os("USERPROFILE"))
     }
@@ -292,12 +294,13 @@ fn history_path_from_home(
     let base = home
         .filter(|value| !value.is_empty())
         .or_else(|| userprofile.filter(|value| !value.is_empty()))?;
-    Some(
-        PathBuf::from(base)
-            .join(".config")
-            .join("octoscode")
-            .join("history.jsonl"),
-    )
+    Some(history_path_from_base(Path::new(&base)))
+}
+
+/// Pick `~/.config/ra-tui/history.jsonl` unless only the legacy
+/// `~/.config/octoscode` home exists — then keep appending there.
+fn history_path_from_base(base: &Path) -> PathBuf {
+    crate::env::pick_home_entry(base, ".config/ra-tui", ".config/octoscode").join("history.jsonl")
 }
 
 /// Append a single JSON-encoded line, creating the dir/file with owner-only
@@ -730,7 +733,7 @@ mod tests {
     #[test]
     fn history_path_prefers_home_then_userprofile() {
         let home = history_path_from_home(Some("/home/u".into()), Some("C:\\u".into())).unwrap();
-        assert!(home.ends_with(".config/octoscode/history.jsonl"));
+        assert!(home.ends_with("history.jsonl"));
         assert!(home.starts_with("/home/u"));
         let win = history_path_from_home(None, Some("C:\\u".into())).unwrap();
         assert!(win.starts_with("C:\\u"));
@@ -738,6 +741,27 @@ mod tests {
         assert_eq!(
             history_path_from_home(Some("".into()), Some("".into())),
             None
+        );
+    }
+
+    #[test]
+    fn history_path_prefers_new_config_dir_but_keeps_legacy() {
+        // New base wins; a legacy-only home keeps being used (no migration).
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let base = tmp.path();
+        assert_eq!(
+            history_path_from_base(base),
+            base.join(".config").join("ra-tui").join("history.jsonl")
+        );
+        std::fs::create_dir_all(base.join(".config").join("octoscode")).unwrap();
+        assert_eq!(
+            history_path_from_base(base),
+            base.join(".config").join("octoscode").join("history.jsonl")
+        );
+        std::fs::create_dir_all(base.join(".config").join("ra-tui")).unwrap();
+        assert_eq!(
+            history_path_from_base(base),
+            base.join(".config").join("ra-tui").join("history.jsonl")
         );
     }
 }

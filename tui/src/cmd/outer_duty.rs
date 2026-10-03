@@ -1,6 +1,6 @@
 #![cfg(target_os = "linux")]
 
-//! `octoscode outer-duty` (OUTER_LOOP_REVIEW #38/#38-r1): hold/check
+//! `ra-tui outer-duty` (OUTER_LOOP_REVIEW #38/#38-r1): hold/check
 //! entrypoints over [`crate::outer_duty`]. Linux-only (#38-r1 adjudication; macOS builds strip the kernel-adjudication module).
 
 use super::OuterDutyArgs;

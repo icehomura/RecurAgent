@@ -78,7 +78,7 @@ struct UiExpectation {
 fn websocket_and_stdio_records_normalize_to_same_semantics() {
     let fixture = load_fixture();
 
-    assert_eq!(fixture.schema, "octoscode.appui-ux-fixture.v1");
+    assert_eq!(fixture.schema, "ra-tui.appui-ux-fixture.v1");
     assert_eq!(fixture.mode, "ci-short");
     assert_eq!(fixture.thresholds.collapsed_preview_lines, 1);
 

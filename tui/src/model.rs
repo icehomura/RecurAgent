@@ -721,7 +721,7 @@ pub struct SessionAutonomyState {
     pub terminal_seen: Vec<(String, std::time::Instant)>,
     /// Agent Dock unread badges (#323): agents that reached a TERMINAL status
     /// via a live `agent/updated` while the user was NOT viewing them
-    /// (ra-one's `has_updates` semantics, one level down). Cleared when the
+    /// (ra's `has_updates` semantics, one level down). Cleared when the
     /// user peeks/switches to the agent ([`AppState::set_chat_view`]), when
     /// the agent resurrects non-terminal, or when its chip is pruned. Unseen
     /// chips are exempt from the timed linger sweep so a result can't vanish
@@ -937,7 +937,7 @@ pub enum AppUiCommand {
     ResumeLoop(LoopIdParams),
     FireLoopNow(LoopIdParams),
     /// `!`-bang client-local shell exec (Claude Code's `!` model). Runs a
-    /// native shell command on the machine octoscode runs on — NOT the
+    /// native shell command on the machine ra-tui runs on — NOT the
     /// agent's sandboxed server `shell` tool — so it intentionally bypasses
     /// every server-side guard. Carries NO JSON-RPC method: the event loop
     /// intercepts it directly and surfaces the result as a
@@ -4956,7 +4956,8 @@ pub struct AppState {
     /// the `file-picker` menu build; rebuilt on every `@` (never stale-served).
     pub file_picker: Option<crate::file_picker::FilePickerState>,
     /// Cross-session command history for Up/Down recall (codex/claude-code
-    /// style); persisted to `~/.config/octoscode/history.jsonl`. See
+    /// style); persisted to `~/.config/ra-tui/history.jsonl` (or the legacy
+    /// `~/.config/octoscode/history.jsonl` when only that exists). See
     /// [`crate::history::ComposerHistory`].
     pub composer_history: crate::history::ComposerHistory,
     /// Prompts staged while the ACTIVE session's turn was running, submitted
@@ -11741,7 +11742,7 @@ mod tests {
         }
     }
 
-    /// The client's LOCAL launch/resolve types (octoscode pins an older
+    /// The client's LOCAL launch/resolve types (ra-tui pins an older
     /// ra-core, so `LaunchResolveResult`/`LaunchDecisionKind` are hand
     /// mirrored) must decode the EXACT bytes a live `ra serve` emits —
     /// including the omitted `resolved_profile`/`existing_profiles` on the
@@ -13007,7 +13008,7 @@ mod tests {
     }
 
     #[test]
-    fn should_suggest_octos_when_family_is_empty() {
+    fn should_suggest_ra_when_family_is_empty() {
         assert_eq!(suggest_profile_id_for_family(""), "ra");
         assert_eq!(suggest_profile_id_for_family("   "), "ra");
     }

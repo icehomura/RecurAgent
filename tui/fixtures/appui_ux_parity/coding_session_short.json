@@ -1,5 +1,5 @@
 {
-  "schema": "octoscode.appui-ux-fixture.v1",
+  "schema": "ra-tui.appui-ux-fixture.v1",
   "name": "issue-7-coding-session-short",
   "description": "Deterministic CI-safe AppUI UX parity fixture for WebSocket and future stdio transports.",
   "mode": "ci-short",

@@ -13,7 +13,7 @@ path = "src/main.rs"
 # The shared protocol crate lives in this repo now: the ra kernel is the sibling
 # workspace at `../`, so the TUI builds against the working tree instead of a
 # pinned git rev. Upstream octoscode pinned
-# `ra-core = { git = "https://github.com/octos-org/octos", rev = "f4a31d9a…" }`;
+# `ra-core = { git = "https://github.com/octos-org/octos", rev = "f4a31d9a0ef2228e919c3d516b78a9d82ad6f470" }`;
 # that pin is the protocol revision this client was validated against.
 [dependencies]
 ra-core = { path = "../crates/ra-core" }

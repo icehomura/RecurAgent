@@ -97,7 +97,7 @@ impl Lang {
         }
     }
 
-    /// Best-effort parse of a `LANG`/`OCTOS_LANG`-style value (e.g.
+    /// Best-effort parse of a `LANG`/`RA_LANG`-style value (e.g.
     /// `zh_CN.UTF-8`, `zh`, `en_US`) into a supported UI language; `None` if
     /// unrecognized so the caller can fall through to the default.
     pub fn from_env_value(value: &str) -> Option<Self> {
@@ -133,7 +133,8 @@ pub struct Cli {
     pub profile_id: Option<String>,
     /// Workspace cwd to request for this AppUi session. Defaults to the launch directory.
     pub cwd: Option<PathBuf>,
-    /// Bearer token for UI Protocol authentication. Falls back to OCTOS_AUTH_TOKEN.
+    /// Bearer token for UI Protocol authentication. Falls back to RA_AUTH_TOKEN
+    /// (legacy OCTOS_AUTH_TOKEN).
     pub auth_token: Option<String>,
     /// Disable turn/start sends and use the client as a read-only viewer.
     pub readonly: bool,
@@ -149,7 +150,7 @@ pub struct Cli {
     /// (opt-in; default off — prompts queue and run in order).
     pub steer_mid_turn: bool,
     /// Skip the ttfx startup animation (also skipped for non-TTY/CI, or via
-    /// OCTOSCODE_NO_SPLASH).
+    /// RA_TUI_NO_SPLASH).
     pub no_splash: bool,
     /// Startup prompt text (`--prompt`): auto-submitted as ONE turn/start
     /// once the session bootstrap + hydrate completes. See CliArgs::prompt.
@@ -163,13 +164,22 @@ pub struct Cli {
 /// outside a git checkout, in which case only the bare version is shown).
 fn version_string() -> &'static str {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
-    const GIT_HASH: &str = match option_env!("OCTOSCODE_GIT_HASH") {
+    // Build metadata set by `build.rs` under the new names; the pre-rename
+    // `OCTOSCODE_*` spellings still resolve for a build.rs that predates the
+    // rename (belt-and-braces — both files ship together).
+    const GIT_HASH: &str = match option_env!("RA_TUI_GIT_HASH") {
         Some(v) => v,
-        None => "",
+        None => match option_env!("OCTOSCODE_GIT_HASH") {
+            Some(v) => v,
+            None => "",
+        },
     };
-    const BUILD_DATE: &str = match option_env!("OCTOSCODE_BUILD_DATE") {
+    const BUILD_DATE: &str = match option_env!("RA_TUI_BUILD_DATE") {
         Some(v) => v,
-        None => "",
+        None => match option_env!("OCTOSCODE_BUILD_DATE") {
+            Some(v) => v,
+            None => "",
+        },
     };
     #[allow(clippy::const_is_empty)]
     if GIT_HASH.is_empty() {
@@ -181,15 +191,15 @@ fn version_string() -> &'static str {
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "octoscode",
+    name = "ra-tui",
     version = version_string(),
-    about = "Mock-backed Octoscode prototype on the ra UI Protocol boundary",
+    about = "ra terminal client on the ra UI Protocol boundary",
     // These leading positionals are handled before clap (see `cmd::dispatch`),
     // so they don't appear as clap subcommands above. (Profiles are created in
     // the TUI — first-launch onboarding, or `/profiles` → "Create a new profile".)
     after_help = "Subcommands:\n  \
-        doctor   Diagnose octoscode's environment, install, and connectivity\n  \
-        update   Update octoscode in place (or print the upgrade command)\n  \
+        doctor   Diagnose ra-tui's environment, install, and connectivity\n  \
+        update   Show how to update ra-tui (rebuild from the ra source tree)\n  \
         config   Show or locate the TUI config file"
 )]
 struct CliArgs {
@@ -232,7 +242,8 @@ struct CliArgs {
     #[arg(long = "cwd", value_name = "DIR")]
     pub cwd: Option<PathBuf>,
 
-    /// Bearer token for UI Protocol authentication. Falls back to OCTOS_AUTH_TOKEN.
+    /// Bearer token for UI Protocol authentication. Falls back to RA_AUTH_TOKEN
+    /// (legacy OCTOS_AUTH_TOKEN).
     #[arg(long = "auth-token", value_name = "TOKEN")]
     pub auth_token: Option<String>,
 
@@ -260,7 +271,7 @@ struct CliArgs {
     #[arg(long, value_enum)]
     pub theme: Option<ThemeName>,
 
-    /// UI display language (e.g. `en`, `zh`). Falls back to OCTOS_LANG/LANG.
+    /// UI display language (e.g. `en`, `zh`). Falls back to RA_LANG/LANG.
     #[arg(long, value_enum)]
     pub lang: Option<Lang>,
 
@@ -400,7 +411,7 @@ impl Cli {
 
         // Mode resolution: an explicit mode (CLI flag, then config) always
         // wins. With NO explicit mode, default to the real backend
-        // (`Protocol`) — a bare `octoscode` launch spawns/auto-provisions
+        // (`Protocol`) — a bare `ra-tui` launch spawns a local
         // `ra serve --stdio` (see `backend_ensure`) rather than the mock
         // demo. The mock is now reachable only via an explicit `--mode mock`
         // or `"mode": "mock"` in config.
@@ -433,8 +444,7 @@ impl Cli {
                 .lang
                 .or(file_config.lang)
                 .or_else(|| {
-                    std::env::var("OCTOS_LANG")
-                        .ok()
+                    crate::env::env_compat("RA_LANG", "OCTOS_LANG")
                         .and_then(|v| Lang::from_env_value(&v))
                 })
                 .or_else(|| {
@@ -452,7 +462,7 @@ impl Cli {
             // the default when the flag is absent.
             vim_mode: args.vim_mode || file_config.vim_mode.unwrap_or(false),
             steer_mid_turn: args.steer_mid_turn || file_config.steer_mid_turn.unwrap_or(false),
-            // Flag + OCTOSCODE_NO_SPLASH env only — no config-file key
+            // Flag + RA_TUI_NO_SPLASH env only — no config-file key
             // (CliFileConfig is deny_unknown_fields; spec gates via these two).
             no_splash: args.no_splash,
         })
@@ -513,10 +523,12 @@ fn load_config_file_if_present(path: &Path) -> (Option<CliFileConfig>, Option<St
 }
 
 /// Default config path used by `/saveconfig` when the session was launched
-/// without an explicit `--config`. Follows the XDG/CLI convention the backend
-/// adopted (`~/.config/octoscode/config.json`). Falls back to `USERPROFILE` on
-/// Windows, where `HOME` is usually unset, so `/saveconfig` still has a default
-/// home to write to there.
+/// without an explicit `--config`. ra writes and reads
+/// `~/.config/ra-tui/config.json`; a legacy `~/.config/octoscode/config.json`
+/// keeps being used when only that file's directory exists, so saved settings
+/// survive the rename (legacy state is never migrated or deleted). Falls back
+/// to `USERPROFILE` on Windows, where `HOME` is usually unset, so `/saveconfig`
+/// still has a default home to write to there.
 pub fn default_config_path() -> Option<PathBuf> {
     config_path_from_home(std::env::var_os("HOME"), std::env::var_os("USERPROFILE"))
 }
@@ -532,12 +544,14 @@ fn config_path_from_home(
     let base = home
         .filter(|value| !value.is_empty())
         .or_else(|| userprofile.filter(|value| !value.is_empty()))?;
-    Some(
-        PathBuf::from(base)
-            .join(".config")
-            .join("octoscode")
-            .join("config.json"),
-    )
+    Some(config_path_from_base(Path::new(&base)))
+}
+
+/// Pick `~/.config/ra-tui/config.json` unless only the legacy
+/// `~/.config/octoscode/config.json` home exists — then keep using that file
+/// (see [`crate::env::pick_home_entry`] for the preference rule).
+fn config_path_from_base(base: &Path) -> PathBuf {
+    crate::env::pick_home_entry(base, ".config/ra-tui", ".config/octoscode").join("config.json")
 }
 
 /// Persist the runtime UI settings (theme / lang / scroll-mode / vim-mode /
@@ -570,7 +584,7 @@ pub fn save_ui_settings(
 /// (transport, UI, unknown) survive. A missing or empty file starts from an
 /// empty object. For each kebab key written, the legacy snake_case alias is
 /// dropped so the canonical key is authoritative. This is the one write path
-/// behind both `/saveconfig` (UI keys) and `octoscode config` (all keys).
+/// behind both `/saveconfig` (UI keys) and `ra-tui config` (all keys).
 pub fn merge_into_config(
     path: &Path,
     entries: &serde_json::Map<String, serde_json::Value>,
@@ -628,7 +642,7 @@ pub fn merge_into_config(
         .wrap_err_with(|| format!("failed to write TUI config {}", path.display()))
 }
 
-/// The clap `Command` for the top-level TUI args — exposed so `octoscode config`
+/// The clap `Command` for the top-level TUI args — exposed so `ra-tui config`
 /// can introspect every option (help text, defaults, enum choices) and stay in
 /// sync as flags are added, rather than hand-mirroring the list.
 pub fn cli_command() -> clap::Command {
@@ -679,7 +693,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("clock is valid")
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("octoscode-{name}-{nonce}.json"));
+        let path = std::env::temp_dir().join(format!("ra-tui-{name}-{nonce}.json"));
         fs::write(&path, contents).expect("config writes");
         path
     }
@@ -701,9 +715,11 @@ mod tests {
         use super::config_path_from_home;
         use std::ffi::OsString;
 
-        let suffix: PathBuf = [".config", "octoscode", "config.json"].iter().collect();
+        let suffix: PathBuf = ["config.json"].iter().collect();
 
-        // HOME wins when set.
+        // HOME wins when set. (The `.config/ra-tui` vs legacy `.config/octoscode`
+        // preference depends on which dir exists on the host — covered
+        // deterministically by `config_path_prefers_new_dir_but_keeps_legacy`.)
         let from_home = config_path_from_home(Some(OsString::from("/home/u")), None)
             .expect("HOME resolves a path");
         assert!(from_home.starts_with("/home/u") && from_home.ends_with(&suffix));
@@ -726,10 +742,38 @@ mod tests {
     }
 
     #[test]
+    fn config_path_prefers_new_dir_but_keeps_legacy() {
+        use super::config_path_from_base;
+
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let base = tmp.path();
+
+        // Neither dir exists → the new ra path is the read/write default.
+        assert_eq!(
+            config_path_from_base(base),
+            base.join(".config").join("ra-tui").join("config.json")
+        );
+
+        // Only the legacy dir exists → keep using it (no migration).
+        fs::create_dir_all(base.join(".config").join("octoscode")).expect("legacy dir");
+        assert_eq!(
+            config_path_from_base(base),
+            base.join(".config").join("octoscode").join("config.json")
+        );
+
+        // New dir appears → it wins.
+        fs::create_dir_all(base.join(".config").join("ra-tui")).expect("new dir");
+        assert_eq!(
+            config_path_from_base(base),
+            base.join(".config").join("ra-tui").join("config.json")
+        );
+    }
+
+    #[test]
     fn lang_flag_parses_and_defaults_to_en() {
-        let cli = Cli::try_parse_from(["octoscode", "--lang", "zh"]).expect("parse --lang zh");
+        let cli = Cli::try_parse_from(["ra-tui", "--lang", "zh"]).expect("parse --lang zh");
         assert_eq!(cli.lang, super::Lang::Zh);
-        let cli = Cli::try_parse_from(["octoscode"]).expect("parse default");
+        let cli = Cli::try_parse_from(["ra-tui"]).expect("parse default");
         // No flag/config/env override in this minimal invocation → English.
         assert!(matches!(cli.lang, super::Lang::En | super::Lang::Zh));
     }
@@ -803,7 +847,7 @@ mod tests {
     #[test]
     fn parses_snapshot_launch_flags() {
         let cli = Cli::try_parse_from([
-            "octoscode",
+            "ra-tui",
             "--mode",
             "protocol",
             "--endpoint",
@@ -840,7 +884,7 @@ mod tests {
     fn should_default_bare_launch_to_stdio_protocol() {
         // A bare launch (no mode, no transport, no config) now connects to the
         // real backend over stdio (auto-provisioned) instead of the mock demo.
-        let cli = Cli::try_parse_from(["octoscode"]).expect("cli parses");
+        let cli = Cli::try_parse_from(["ra-tui"]).expect("cli parses");
 
         assert_eq!(cli.mode, Mode::Protocol);
         assert!(cli.base_url.is_none());
@@ -854,7 +898,7 @@ mod tests {
     #[test]
     fn should_select_mock_only_via_explicit_mode() {
         // The mock demo is still reachable, but only explicitly.
-        let cli = Cli::try_parse_from(["octoscode", "--mode", "mock"]).expect("cli parses");
+        let cli = Cli::try_parse_from(["ra-tui", "--mode", "mock"]).expect("cli parses");
         assert_eq!(cli.mode, Mode::Mock);
         assert!(cli.stdio_command.is_none());
         assert!(cli.base_url.is_none());
@@ -866,7 +910,7 @@ mod tests {
     // infers Protocol.
     #[test]
     fn should_infer_protocol_mode_when_stdio_command_set_without_mode() {
-        let cli = Cli::try_parse_from(["octoscode", "--stdio-command", "octos serve --stdio"])
+        let cli = Cli::try_parse_from(["ra-tui", "--stdio-command", "ra serve --stdio"])
             .expect("cli parses");
 
         assert_eq!(cli.mode, Mode::Protocol);
@@ -875,7 +919,7 @@ mod tests {
 
     #[test]
     fn should_infer_protocol_mode_when_endpoint_set_without_mode() {
-        let cli = Cli::try_parse_from(["octoscode", "--endpoint", "ws://127.0.0.1:1/ui"])
+        let cli = Cli::try_parse_from(["ra-tui", "--endpoint", "ws://127.0.0.1:1/ui"])
             .expect("cli parses");
 
         assert_eq!(cli.mode, Mode::Protocol);
@@ -889,7 +933,7 @@ mod tests {
             r#"{ "stdio_command": "ra serve --stdio" }"#,
         );
 
-        let cli = Cli::try_parse_from(["octoscode", "--config", path.to_str().unwrap()])
+        let cli = Cli::try_parse_from(["ra-tui", "--config", path.to_str().unwrap()])
             .expect("cli parses");
 
         assert_eq!(cli.mode, Mode::Protocol);
@@ -898,7 +942,7 @@ mod tests {
     #[test]
     fn explicit_mock_mode_wins_over_transport_inference() {
         let cli = Cli::try_parse_from([
-            "octoscode",
+            "ra-tui",
             "--mode",
             "mock",
             "--stdio-command",
@@ -913,14 +957,14 @@ mod tests {
             "explicit-mock",
             r#"{ "mode": "mock", "stdio_command": "ra serve --stdio" }"#,
         );
-        let cli = Cli::try_parse_from(["octoscode", "--config", path.to_str().unwrap()])
+        let cli = Cli::try_parse_from(["ra-tui", "--config", path.to_str().unwrap()])
             .expect("cli parses");
         assert_eq!(cli.mode, Mode::Mock);
     }
 
     #[test]
     fn prints_package_version() {
-        let err = super::CliArgs::try_parse_from(["octoscode", "--version"])
+        let err = super::CliArgs::try_parse_from(["ra-tui", "--version"])
             .expect_err("version flag exits early");
 
         assert_eq!(err.kind(), ErrorKind::DisplayVersion);
@@ -930,7 +974,7 @@ mod tests {
     #[test]
     fn parses_stdio_command() {
         let cli = Cli::try_parse_from([
-            "octoscode",
+            "ra-tui",
             "--mode",
             "protocol",
             "--stdio-command",
@@ -945,7 +989,7 @@ mod tests {
 
     #[test]
     fn rejects_empty_stdio_command() {
-        let err = Cli::try_parse_from(["octoscode", "--stdio-command", "   "])
+        let err = Cli::try_parse_from(["ra-tui", "--stdio-command", "   "])
             .expect_err("empty stdio command should be rejected");
 
         assert!(err.to_string().contains("stdio command must not be empty"));
@@ -954,7 +998,7 @@ mod tests {
     #[test]
     fn rejects_endpoint_and_stdio_command_together() {
         let err = Cli::try_parse_from([
-            "octoscode",
+            "ra-tui",
             "--endpoint",
             "wss://example.test/ui-protocol",
             "--stdio-command",
@@ -968,22 +1012,22 @@ mod tests {
     /// specs/task-startup-splash.spec: --no-splash disables the startup animation.
     #[test]
     fn cli_parses_no_splash_flag() {
-        let cli = Cli::try_parse_from(["octoscode", "--no-splash"]).expect("cli parses");
+        let cli = Cli::try_parse_from(["ra-tui", "--no-splash"]).expect("cli parses");
         assert!(cli.no_splash);
-        let cli = Cli::try_parse_from(["octoscode"]).expect("cli parses");
+        let cli = Cli::try_parse_from(["ra-tui"]).expect("cli parses");
         assert!(!cli.no_splash);
     }
 
     #[test]
     fn parses_theme_choice() {
-        let cli = Cli::try_parse_from(["octoscode", "--theme", "claude"]).expect("cli parses");
+        let cli = Cli::try_parse_from(["ra-tui", "--theme", "claude"]).expect("cli parses");
 
         assert_eq!(cli.theme, ThemeName::Claude);
     }
 
     #[test]
     fn parses_terminal_theme_choice() {
-        let cli = Cli::try_parse_from(["octoscode", "--theme", "terminal"]).expect("cli parses");
+        let cli = Cli::try_parse_from(["ra-tui", "--theme", "terminal"]).expect("cli parses");
 
         assert_eq!(cli.theme, ThemeName::Terminal);
     }
@@ -991,7 +1035,7 @@ mod tests {
     #[test]
     fn rejects_non_websocket_protocol_endpoint() {
         let err = Cli::try_parse_from([
-            "octoscode",
+            "ra-tui",
             "--mode",
             "protocol",
             "--endpoint",
@@ -1019,7 +1063,7 @@ mod tests {
         );
 
         let cli =
-            Cli::try_parse_from(["octoscode", "--config", path.to_str().unwrap()]).expect("parses");
+            Cli::try_parse_from(["ra-tui", "--config", path.to_str().unwrap()]).expect("parses");
 
         assert_eq!(cli.config.as_deref(), Some(path.as_path()));
         assert_eq!(cli.mode, Mode::Protocol);
@@ -1050,7 +1094,7 @@ mod tests {
         );
 
         let cli = Cli::try_parse_from([
-            "octoscode",
+            "ra-tui",
             "--config",
             path.to_str().unwrap(),
             "--mode",
@@ -1089,7 +1133,7 @@ mod tests {
             }"#,
         );
 
-        let err = Cli::try_parse_from(["octoscode", "--config", path.to_str().unwrap()])
+        let err = Cli::try_parse_from(["ra-tui", "--config", path.to_str().unwrap()])
             .expect_err("conflicting config should fail");
 
         assert!(err.to_string().contains("choose one ra UI transport"));
@@ -1107,7 +1151,7 @@ mod tests {
             }"#,
         );
 
-        let err = Cli::try_parse_from(["octoscode", "--config", path.to_str().unwrap()])
+        let err = Cli::try_parse_from(["ra-tui", "--config", path.to_str().unwrap()])
             .expect_err("model/provider should not be accepted by TUI config");
         let error = format!("{err:?}");
 
@@ -1122,7 +1166,7 @@ mod startup_prompt_tests {
 
     #[test]
     fn prompt_flag_parses_into_cli() {
-        let cli = Cli::try_parse_from(["octoscode", "--prompt", "fix the flaky test"])
+        let cli = Cli::try_parse_from(["ra-tui", "--prompt", "fix the flaky test"])
             .expect("--prompt parses");
         assert_eq!(cli.prompt.as_deref(), Some("fix the flaky test"));
         assert!(!cli.readonly);
@@ -1130,7 +1174,7 @@ mod startup_prompt_tests {
 
     #[test]
     fn prompt_conflicts_with_readonly_flag() {
-        let err = Cli::try_parse_from(["octoscode", "--prompt", "hi", "--readonly"])
+        let err = Cli::try_parse_from(["ra-tui", "--prompt", "hi", "--readonly"])
             .expect_err("clap conflict");
         let text = format!("{err}");
         assert!(
@@ -1142,14 +1186,14 @@ mod startup_prompt_tests {
     #[test]
     fn prompt_conflicts_with_config_readonly() {
         let path = {
-            let dir = std::env::temp_dir().join(format!("octoscode-test-{}", std::process::id()));
+            let dir = std::env::temp_dir().join(format!("ra-tui-test-{}", std::process::id()));
             std::fs::create_dir_all(&dir).unwrap();
             let path = dir.join("readonly-prompt.json");
             std::fs::write(&path, r#"{"readonly": true}"#).unwrap();
             path
         };
         let err = Cli::try_parse_from([
-            "octoscode",
+            "ra-tui",
             "--config",
             path.to_str().unwrap(),
             "--prompt",
@@ -1165,12 +1209,12 @@ mod startup_prompt_tests {
 
     #[test]
     fn prompt_with_no_readonly_flag_overrides_config() {
-        let dir = std::env::temp_dir().join(format!("octoscode-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("ra-tui-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("readonly-off.json");
         std::fs::write(&path, r#"{"readonly": true}"#).unwrap();
         let cli = Cli::try_parse_from([
-            "octoscode",
+            "ra-tui",
             "--config",
             path.to_str().unwrap(),
             "--no-readonly",

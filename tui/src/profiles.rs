@@ -1,11 +1,13 @@
 //! Phase 3 startup profile discovery.
 //!
-//! octoscode has no UI-protocol `profile/list` method for account/local
+//! ra-tui has no UI-protocol `profile/list` method for account/local
 //! profiles, so for the solo-local use case it discovers existing profiles
 //! straight from the server's on-disk layout: `<data_dir>/profiles/<id>.json`.
 //! The data dir is resolved from the launch command — an explicit
-//! `--data-dir <path>` flag or an `OCTOS_HOME=<path>` env prefix — falling back
-//! to the conventional `~/.ra`.
+//! `--data-dir <path>` flag or a leading `RA_HOME=<path>` env assignment
+//! (legacy `OCTOS_HOME=<path>` still works) — falling back to `~/.ra`, or to a
+//! legacy `~/.ra` when only that home exists (legacy state is kept, never
+//! migrated or deleted).
 //!
 //! Every step is best-effort: any failure (no home dir, unreadable dir, a
 //! `$PWD`-style dynamic path we can't resolve) yields an empty list. The
@@ -25,7 +27,8 @@ pub fn discover_local_profile_ids(stdio_command: Option<&str>) -> Vec<String> {
 /// How a launch command resolves the server data dir.
 #[derive(Debug, PartialEq, Eq)]
 enum DataDirResolution {
-    /// No `--data-dir` / `OCTOS_HOME=` override — the default `~/.ra` applies.
+    /// No `--data-dir` / `RA_HOME=` override — the default `~/.ra` (or a
+    /// pre-existing legacy `~/.ra`) applies.
     None,
     /// An override we resolved to a concrete path.
     Resolved(PathBuf),
@@ -36,18 +39,18 @@ enum DataDirResolution {
 }
 
 /// Resolve `<data_dir>/profiles` from the launch command. An explicit
-/// `--data-dir` wins over an `OCTOS_HOME=` prefix, which wins over the
-/// conventional `~/.ra`. Returns `None` (no profiles dir) when there is no
-/// launch command, or when the command names an override we cannot resolve —
-/// the latter degrades the picker to onboarding rather than offering profiles
-/// from the wrong server.
+/// `--data-dir` wins over a `RA_HOME=` prefix (legacy `OCTOS_HOME=`), which
+/// wins over the conventional `~/.ra` / legacy `~/.ra`. Returns `None` (no
+/// profiles dir) when there is no launch command, or when the command names an
+/// override we cannot resolve — the latter degrades the picker to onboarding
+/// rather than offering profiles from the wrong server.
 pub fn solo_profiles_dir(stdio_command: Option<&str>) -> Option<PathBuf> {
     let data_dir = match stdio_command.map(data_dir_from_command) {
         // Explicit-but-unresolvable override: do NOT fall back to the default.
         Some(DataDirResolution::Unresolvable) => return None,
         Some(DataDirResolution::Resolved(dir)) => dir,
         // No override in the command → the conventional default.
-        Some(DataDirResolution::None) => default_octos_home()?,
+        Some(DataDirResolution::None) => default_data_home()?,
         // No launch command at all (remote/WebSocket launch).
         None => return None,
     };
@@ -55,10 +58,12 @@ pub fn solo_profiles_dir(stdio_command: Option<&str>) -> Option<PathBuf> {
 }
 
 /// Parse the server data dir out of a launch command's tokens: `--data-dir
-/// <path>` / `--data-dir=<path>`, else a leading `OCTOS_HOME=<path>` env
-/// assignment. Distinguishes "no override present" ([`DataDirResolution::None`])
-/// from "override present but unresolvable" ([`DataDirResolution::Unresolvable`])
-/// so the caller can default only in the former case.
+/// <path>` / `--data-dir=<path>`, else a leading `RA_HOME=<path>` env
+/// assignment (legacy `OCTOS_HOME=<path>` still honoured; ra wins when both
+/// are present). Distinguishes "no override present"
+/// ([`DataDirResolution::None`]) from "override present but unresolvable"
+/// ([`DataDirResolution::Unresolvable`]) so the caller can default only in the
+/// former case.
 fn data_dir_from_command(command: &str) -> DataDirResolution {
     let tokens = command_tokens(command);
 
@@ -78,16 +83,26 @@ fn data_dir_from_command(command: &str) -> DataDirResolution {
         }
     }
 
-    // Leading `OCTOS_HOME=<path>` env assignment (before the program token).
+    // Leading `RA_HOME=<path>` (new) / `OCTOS_HOME=<path>` (legacy) env
+    // assignments, before the program token. The ra spelling wins when both are
+    // set, regardless of order.
+    let mut legacy_home: Option<DataDirResolution> = None;
     for token in &tokens {
-        if let Some(rest) = token.strip_prefix("OCTOS_HOME=") {
+        if let Some(rest) = token.strip_prefix("RA_HOME=") {
             return resolve_path_token(rest);
+        }
+        if let Some(rest) = token.strip_prefix("OCTOS_HOME=") {
+            legacy_home = Some(resolve_path_token(rest));
+            continue;
         }
         // Env assignments only precede the program; stop at the first plain
         // (non `KEY=VALUE`) token so we do not mistake a later `--flag=value`.
         if !token.contains('=') {
             break;
         }
+    }
+    if let Some(resolved) = legacy_home {
+        return resolved;
     }
 
     DataDirResolution::None
@@ -159,12 +174,12 @@ fn resolve_path_token(raw: &str) -> DataDirResolution {
 
 fn expand_tilde(path: &str) -> PathBuf {
     if path == "~" {
-        if let Some(home) = home_dir() {
+        if let Some(home) = crate::env::home_dir() {
             return home;
         }
     }
     if let Some(rest) = path.strip_prefix("~/") {
-        if let Some(home) = home_dir() {
+        if let Some(home) = crate::env::home_dir() {
             return home.join(rest);
         }
     }
@@ -278,27 +293,29 @@ pub fn delete_profile(data_dir: &Path, id: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Per-instance runtime data dir for a stdio serve, so multiple octoscode
+/// Per-instance runtime data dir for a stdio serve, so multiple ra-tui
 /// windows can run concurrently while sharing ONE profile registry. Passed to
-/// the spawned serve as `RA_INSTANCE_DATA_DIR`; the server keeps the profile
+/// the spawned serve as `RA_INSTANCE_DATA_DIR` (the kernel-side contract is
+/// byte-identical until the kernel rename lands); the server keeps the profile
 /// registry + catalog at the shared `state_home` and puts all exclusively-locked
 /// runtime (redb stores, sessions, goals, the serve flock) under this dir.
 ///
 /// Returns `Some(<base>/instances/<cwd-hash>)` ONLY when the launch command
-/// carries NO explicit data-dir override (the default `~/.ra` case) — an
-/// explicit `--data-dir`/`OCTOS_HOME=` means the operator controls placement, so
-/// we never second-guess it. `None` for remote/WebSocket launches (no command),
-/// an unresolvable override, or when `OCTOSCODE_SHARED_INSTANCE` opts out (legacy
-/// single shared instance). The hash keys on the launch cwd: stable across
-/// relaunch (sessions/goals persist per project) and distinct across folders
-/// (windows in different projects run concurrently).
+/// carries NO explicit data-dir override (the default `~/.ra` / legacy
+/// `~/.ra` case) — an explicit `--data-dir`/`RA_HOME=` means the operator
+/// controls placement, so we never second-guess it. `None` for remote/WebSocket
+/// launches (no command), an unresolvable override, or when
+/// `RA_TUI_SHARED_INSTANCE` (legacy `OCTOSCODE_SHARED_INSTANCE`) opts out
+/// (legacy single shared instance). The hash keys on the launch cwd: stable
+/// across relaunch (sessions/goals persist per project) and distinct across
+/// folders (windows in different projects run concurrently).
 pub fn instance_data_dir_for_launch(stdio_command: Option<&str>, cwd: &Path) -> Option<PathBuf> {
-    if std::env::var_os("OCTOSCODE_SHARED_INSTANCE").is_some_and(|v| !v.is_empty()) {
+    if crate::env::env_compat("RA_TUI_SHARED_INSTANCE", "OCTOSCODE_SHARED_INSTANCE").is_some() {
         return None;
     }
     match stdio_command.map(data_dir_from_command) {
         Some(DataDirResolution::None) => {
-            Some(default_octos_home()?.join("instances").join(cwd_hash(cwd)))
+            Some(default_data_home()?.join("instances").join(cwd_hash(cwd)))
         }
         // Explicit/unresolvable override, or remote launch (no command): the
         // operator (or the remote server) owns the data layout — do not isolate.
@@ -318,19 +335,11 @@ fn cwd_hash(cwd: &Path) -> String {
     format!("{:016x}", hasher.finish())
 }
 
-fn default_octos_home() -> Option<PathBuf> {
-    home_dir().map(|home| home.join(".ra"))
-}
-
-fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .filter(|home| !home.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("USERPROFILE")
-                .filter(|home| !home.is_empty())
-                .map(PathBuf::from)
-        })
+/// The default server data home: `~/.ra` when it exists, else a legacy
+/// `~/.ra` that holds state, else `~/.ra` (fresh installs). `None` when no
+/// home dir resolves.
+fn default_data_home() -> Option<PathBuf> {
+    crate::env::ra_or_legacy_home_entry(".ra", ".ra")
 }
 
 #[cfg(test)]
@@ -345,7 +354,7 @@ mod tests {
         fn new(tag: &str) -> Self {
             let mut dir = std::env::temp_dir();
             let unique = format!(
-                "octoscode-profiles-{tag}-{}-{:?}",
+                "ra-tui-profiles-{tag}-{}-{:?}",
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -385,7 +394,20 @@ mod tests {
     }
 
     #[test]
-    fn should_read_data_dir_from_octos_home_env_prefix() {
+    fn should_read_data_dir_from_ra_home_env_prefix() {
+        assert_eq!(
+            data_dir_from_command("RA_HOME=/srv/home ra serve --stdio"),
+            DataDirResolution::Resolved(PathBuf::from("/srv/home"))
+        );
+        // The ra spelling wins when both are present, in either order.
+        assert_eq!(
+            data_dir_from_command("OCTOS_HOME=/legacy RA_HOME=/new ra serve --stdio"),
+            DataDirResolution::Resolved(PathBuf::from("/new"))
+        );
+    }
+
+    #[test]
+    fn should_read_data_dir_from_legacy_octos_home_env_prefix() {
         assert_eq!(
             data_dir_from_command("OCTOS_HOME=/srv/home ra serve --stdio"),
             DataDirResolution::Resolved(PathBuf::from("/srv/home"))
@@ -394,7 +416,7 @@ mod tests {
 
     #[test]
     fn should_report_none_when_no_override_present() {
-        // No `--data-dir` / `OCTOS_HOME=` → default `~/.ra` is correct.
+        // No `--data-dir` / `RA_HOME=` / `OCTOS_HOME=` → the default home applies.
         assert_eq!(
             data_dir_from_command("ra serve --stdio --solo"),
             DataDirResolution::None
@@ -405,6 +427,10 @@ mod tests {
     fn should_report_unresolvable_for_shell_expression_override() {
         // An explicit-but-dynamic override must be flagged unresolvable, NOT
         // silently defaulted (that would scan a DIFFERENT server's profiles).
+        assert_eq!(
+            data_dir_from_command("RA_HOME=\"$PWD/.ra\" ra serve"),
+            DataDirResolution::Unresolvable
+        );
         assert_eq!(
             data_dir_from_command("OCTOS_HOME=\"$PWD/.ra\" ra serve"),
             DataDirResolution::Unresolvable
@@ -421,7 +447,7 @@ mod tests {
         // instance dir under `<base>/instances/<cwd-hash>` that is STABLE for a
         // given cwd (session persistence across relaunch) and DISTINCT across
         // cwds (windows in different projects run concurrently).
-        if default_octos_home().is_none() {
+        if default_data_home().is_none() {
             return; // no resolvable HOME in this env; structure test is moot
         }
         let a = TempDir::new("inst-a");
@@ -437,25 +463,44 @@ mod tests {
             "same cwd must map to the same instance dir (stable)"
         );
         assert_ne!(a1, b1, "different cwds must diverge (concurrent windows)");
-        assert!(
-            a1.parent().is_some_and(|p| p.ends_with(".ra/instances")),
+        let instances = a1
+            .parent()
+            .expect("instance dir has a parent")
+            .to_path_buf();
+        assert_eq!(
+            instances.file_name().and_then(|n| n.to_str()),
+            Some("instances"),
             "instance dir must sit under <base>/instances, got {}",
             a1.display()
+        );
+        let base = instances
+            .parent()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str());
+        assert!(
+            matches!(base, Some(".ra") | Some(".ra")),
+            "data home must be the ra entry or a kept legacy .ra, got {:?}",
+            base
         );
     }
 
     #[test]
     fn instance_dir_is_none_for_explicit_override_or_remote() {
-        // Operator-controlled placement (explicit --data-dir / OCTOS_HOME=) and
-        // remote/WebSocket launches (no command) must NOT be isolated.
+        // Operator-controlled placement (explicit --data-dir / RA_HOME= /
+        // legacy OCTOS_HOME=) and remote/WebSocket launches (no command) must
+        // NOT be isolated.
         let cwd = std::env::temp_dir();
         assert!(
             instance_data_dir_for_launch(Some("ra serve --data-dir /srv/x"), &cwd).is_none(),
             "explicit --data-dir must opt out of isolation"
         );
         assert!(
+            instance_data_dir_for_launch(Some("RA_HOME=/srv/h ra serve"), &cwd).is_none(),
+            "explicit RA_HOME= must opt out of isolation"
+        );
+        assert!(
             instance_data_dir_for_launch(Some("OCTOS_HOME=/srv/h ra serve"), &cwd).is_none(),
-            "explicit OCTOS_HOME= must opt out of isolation"
+            "explicit legacy OCTOS_HOME= must opt out of isolation"
         );
         assert!(
             instance_data_dir_for_launch(Some("ra serve --data-dir $HOME/x"), &cwd).is_none(),
@@ -472,6 +517,7 @@ mod tests {
         // The whole point of the P2 fix: an unresolvable override degrades to
         // "no profiles" (→ onboarding) instead of falling back to the default
         // dir and offering foreign profiles.
+        assert!(solo_profiles_dir(Some("RA_HOME=$PWD/.ra ra serve --stdio")).is_none());
         assert!(solo_profiles_dir(Some("OCTOS_HOME=$PWD/.ra ra serve --stdio")).is_none());
         // No command at all (remote launch) also yields no local profiles dir.
         assert!(solo_profiles_dir(None).is_none());
@@ -479,12 +525,21 @@ mod tests {
 
     #[test]
     fn solo_profiles_dir_defaults_only_when_no_override() {
-        // No override → default `~/.ra/profiles` (ends with the expected tail).
+        // No override → default `~/.ra/profiles` (or legacy `~/.ra/profiles`
+        // when only that home exists). Only assert structure when a home dir is
+        // resolvable in the test env.
         let dir = solo_profiles_dir(Some("ra serve --stdio --solo"));
-        // Only assert structure when a home dir is resolvable in the test env.
         if let Some(dir) = dir {
             assert!(dir.ends_with("profiles"));
-            assert!(dir.to_string_lossy().contains(".ra"));
+            let home = dir
+                .parent()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str());
+            assert!(
+                matches!(home, Some(".ra") | Some(".ra")),
+                "profiles dir must be under the ra (or kept legacy) home, got {}",
+                dir.display()
+            );
         }
     }
 

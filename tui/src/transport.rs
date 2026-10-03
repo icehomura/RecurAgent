@@ -316,8 +316,7 @@ fn auth_token_from_cli(cli: &Cli) -> Option<String> {
         .clone()
         .and_then(clean_auth_token)
         .or_else(|| {
-            std::env::var("OCTOS_AUTH_TOKEN")
-                .ok()
+            crate::env::env_compat("RA_AUTH_TOKEN", "OCTOS_AUTH_TOKEN")
                 .and_then(clean_auth_token)
         })
 }
@@ -332,7 +331,8 @@ fn clean_auth_token(token: String) -> Option<String> {
 /// single-writer-single-process). We spawn `ra serve --stdio` as a child; on
 /// its exit we grep the captured stderr for this token to recognize the conflict
 /// and STOP relaunching — instead of respawning it in a silent crash-loop. MUST
-/// match the server verbatim (ra `commands/serve.rs` DATA_DIR_LOCKED_MARKER).
+/// match the server verbatim (kernel `commands/serve.rs` DATA_DIR_LOCKED_MARKER;
+/// kept byte-identical until the kernel rename lands).
 const DATA_DIR_LOCKED_MARKER: &str = "RA_DATA_DIR_LOCKED";
 
 /// User-facing explanation shown (once, as an error) when [`DATA_DIR_LOCKED_MARKER`]
@@ -350,7 +350,7 @@ pub struct ProtocolAppUiBackend {
     /// Latched when the spawned backend refuses to start because another serve
     /// owns the data dir ([`DATA_DIR_LOCKED_MARKER`]). While set, reconnect is
     /// suppressed so we don't respawn a backend that will only crash again —
-    /// the fix for the "two octoscode competing for the DB" silent crash-loop.
+    /// the fix for the "two ra-tui competing for the DB" silent crash-loop.
     fatal_error: Option<String>,
     /// The session to re-open after a reconnect: the MOST RECENTLY opened
     /// session, which tracks the user's current selection (set by `/resume`, a
@@ -707,7 +707,7 @@ impl ProtocolExchange {
             serde_json::json!({
                 "transport": "stdio",
                 "supported_features": supported_features,
-                "client": { "name": "octoscode" },
+                "client": { "name": "ra-tui" },
             }),
         )
     }
@@ -743,7 +743,7 @@ impl ProtocolExchange {
                 }
                 // Capture the server-confirmed workspace root so a respawn
                 // reopen scopes to the session's real workspace (#476), not
-                // `launch.cwd` (the shell's dir for a bare `octoscode`).
+                // `launch.cwd` (the shell's dir for a bare `ra-tui`).
                 if let Some(root) = &opened.workspace_root {
                     self.session_workspace_roots
                         .insert(opened.session_id.clone(), root.clone());
@@ -1099,10 +1099,10 @@ impl StdioTransportDriver {
                 let mut command = shell_command(&self.command);
                 // Multi-instance stdio: isolate this window's runtime (redb
                 // stores, sessions, goals, the serve flock) under a per-cwd
-                // instance dir so several octoscode windows can run at once
+                // instance dir so several ra-tui windows can run at once
                 // while sharing one profile registry. No-op for explicit
                 // --data-dir launches, remote launches, or when opted out via
-                // OCTOSCODE_SHARED_INSTANCE. Re-spawns (reconnects) resolve to
+                // RA_TUI_SHARED_INSTANCE. Re-spawns (reconnects) resolve to
                 // the same dir, so a reconnect re-attaches, not forks.
                 let process_cwd = std::env::current_dir().unwrap_or_default();
                 if let Some(instance_dir) =
@@ -1669,9 +1669,10 @@ fn shell_command(command: &str) -> Command {
     if cfg!(windows) {
         let mut process = Command::new("cmd");
         process.arg("/C").arg(command);
-        // Prepend the auto-installer's dir (`~\.ra\bin`) to the CHILD's PATH
-        // so a bare `ra` in `command` resolves to the exe `backend_ensure`
-        // dropped there — WITHOUT embedding a path in the command string, which
+        // Prepend the resolved backend dir (`~\.ra\bin`, or a sibling of this
+        // binary, or a legacy `~\.ra\bin`) to the CHILD's PATH so a bare
+        // `ra` in `command` resolves to the exe `backend_ensure` resolved —
+        // WITHOUT embedding a path in the command string, which
         // `cmd /C` + Rust arg-quoting mangle (that was the exit-1 launch bug).
         // Setting the child's env is not `unsafe` and never touches our own PATH.
         if let Some(bin) = crate::backend_ensure::install_bin_dir() {
@@ -1909,7 +1910,7 @@ impl ProtocolAppUiBackend {
 
         // The backend refused to start because another ra serve already owns
         // this data directory (redb single-writer). Respawning it would only
-        // crash again — the silent ~5s loop the user hit with two octoscode
+        // crash again — the silent ~5s loop the user hit with two ra-tui
         // windows. Latch a fatal state (suppresses reconnect in
         // `ensure_connected`) and surface one clear, terminal error INSTEAD OF
         // the raw stderr status (suppressed below). Latch once so a
@@ -1917,9 +1918,9 @@ impl ProtocolAppUiBackend {
         let is_fatal_conflict = message.contains(DATA_DIR_LOCKED_MARKER);
         if is_fatal_conflict && self.fatal_error.is_none() {
             let explanation =
-                "Another octoscode is already running and using this data directory, so this \
+                "Another ra-tui is already running and using this data directory, so this \
                  window can't start its own backend (the database allows only one at a time). \
-                 Close the other octoscode window (or any `octos serve`), then restart this one. \
+                 Close the other ra-tui window (or any `ra serve`), then restart this one. \
                  To run two at once, start this one in a workspace with its own data directory."
                     .to_string();
             self.fatal_error = Some(explanation.clone());
@@ -2119,7 +2120,7 @@ impl ProtocolAppUiBackend {
     /// `--session` when nothing has been opened yet.
     fn reopen_session_open_command(&self) -> Option<AppUiCommand> {
         // Prefer the session's server-confirmed workspace root for the reopen
-        // cwd: a bare `octoscode` (no --cwd) falls back to the shell's
+        // cwd: a bare `ra-tui` (no --cwd) falls back to the shell's
         // current_dir for `launch.cwd`, which may differ from the session's
         // workspace. Reopening with the shell's cwd rescopes the session to
         // the wrong `~cwd-<hash>` and presents an empty session (#476). The
@@ -3129,7 +3130,7 @@ pub(crate) fn install_local_shell_parent_signal_shield() -> std::io::Result<()> 
 }
 
 /// Run a terminal-attached `!` command synchronously with all three standard
-/// streams inherited from octoscode. The event loop disables raw mode and
+/// streams inherited from ra-tui. The event loop disables raw mode and
 /// clears/reserves its inline viewport around this call, so prompts,
 /// device-login selectors, editors, and password input see a real controlling
 /// terminal while child output remains in normal-screen scrollback.
@@ -3239,7 +3240,8 @@ fn websocket_request(
 /// Build the `X-Ra-Ui-Features` negotiation value.
 ///
 /// Normally the TUI advertises the full modern feature set. When
-/// `OCTOSCODE_OLD_SERVER_FEATURES=1` is set it advertises only the
+/// `RA_TUI_OLD_SERVER_FEATURES=1` (legacy `OCTOSCODE_OLD_SERVER_FEATURES`) is
+/// set it advertises only the
 /// pre-autonomy baseline, dropping the coding autonomy / agent-control /
 /// goal / loop / harness-task-control features. This lets the onboarding
 /// soak exercise the genuine old-server fallback path (header-negotiated):
@@ -3251,7 +3253,8 @@ fn appui_feature_header_value() -> String {
 }
 
 fn old_server_features_requested() -> bool {
-    std::env::var("OCTOSCODE_OLD_SERVER_FEATURES").as_deref() == Ok("1")
+    crate::env::env_compat("RA_TUI_OLD_SERVER_FEATURES", "OCTOSCODE_OLD_SERVER_FEATURES").as_deref()
+        == Some("1")
 }
 
 fn appui_feature_header_for(old_server: bool) -> String {
@@ -5222,7 +5225,7 @@ fn notification_to_app_event(method: &str, params: Value) -> AppUiEvent {
 }
 
 /// Decode a notification through the pinned protocol crate, while retaining
-/// additive semantic-cache fields that this OctosCode revision does not yet
+/// additive semantic-cache fields that this ra-tui revision does not yet
 /// know about. Lifecycle notifications always use the wrapper, including for
 /// an old server with no fields, so a new lifecycle generation can atomically
 /// clear diagnostics from the prior generation.
@@ -6213,7 +6216,8 @@ impl AppUiBackend for MockAppUiBackend {
 }
 
 fn mock_approval_kind() -> String {
-    std::env::var("OCTOSCODE_MOCK_APPROVAL_KIND").unwrap_or_else(|_| approval_kinds::COMMAND.into())
+    crate::env::env_compat("RA_TUI_MOCK_APPROVAL_KIND", "OCTOSCODE_MOCK_APPROVAL_KIND")
+        .unwrap_or_else(|| approval_kinds::COMMAND.into())
 }
 
 fn mock_model_status(selected: bool) -> ModelStatus {
@@ -6775,7 +6779,7 @@ mod tests {
 
     #[test]
     fn stdio_target_label_redacts_inline_secret_env_assignments() {
-        let cmd = "env DEEPSEEK_API_KEY=sk-abc123secret OCTOS_FOO=1 ra serve --stdio --solo --data-dir /d";
+        let cmd = "env DEEPSEEK_API_KEY=sk-abc123secret RA_FOO=1 ra serve --stdio --solo --data-dir /d";
         let label = protocol_target_label(cmd);
         assert!(
             label.starts_with("stdio:"),
@@ -6791,7 +6795,7 @@ mod tests {
         );
         // Non-secret structure stays intact for debuggability.
         assert!(
-            label.contains("OCTOS_FOO=1"),
+            label.contains("RA_FOO=1"),
             "non-secret env preserved: {label}"
         );
         assert!(
@@ -10188,7 +10192,7 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .expect("clock is valid")
             .as_nanos();
-        let marker = std::env::temp_dir().join(format!("octoscode-backoff-{nonce}.log"));
+        let marker = std::env::temp_dir().join(format!("ra-tui-backoff-{nonce}.log"));
         let command = format!("echo spawned >> {}; exit 7", marker.display());
 
         let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
@@ -11032,7 +11036,7 @@ mod tests {
         assert!(error.message.contains("transport closed for test"));
     }
 
-    /// Two octoscode competing for the DB: the spawned backend refuses to start
+    /// Two ra-tui competing for the DB: the spawned backend refuses to start
     /// (its stderr tail carries `DATA_DIR_LOCKED_MARKER`). The client must latch
     /// a fatal state — surface ONE clean terminal error (not the raw stderr
     /// status) and suppress reconnect so it stops the silent respawn crash-loop.
@@ -11063,7 +11067,7 @@ mod tests {
         };
         assert_eq!(error.code, DATA_DIR_LOCKED_CODE);
         assert!(
-            error.message.contains("Close the other octoscode"),
+            error.message.contains("Close the other ra-tui"),
             "message must be the actionable explanation; got: {}",
             error.message
         );
@@ -14426,7 +14430,7 @@ done
 
     #[test]
     fn reopen_prefers_server_confirmed_workspace_root_over_launch_cwd() {
-        // Regression (#476): a bare `octoscode` (no --cwd) falls back to the
+        // Regression (#476): a bare `ra-tui` (no --cwd) falls back to the
         // shell's current_dir for `launch.cwd`, which may differ from the
         // session's real workspace. A respawn reopen must scope to the
         // server-confirmed `workspace_root` from `session/opened`, not

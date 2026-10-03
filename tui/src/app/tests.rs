@@ -3666,10 +3666,10 @@ mod tests {
             text.contains("╯"),
             "banner must draw a bottom-right rounded corner"
         );
-        assert!(text.contains("ra"), "banner box title");
+        assert!(text.contains("─ ra ─"), "banner box title");
         assert!(
-            text.contains("██████╗"),
-            "banner must show the OCTOS figlet"
+            text.contains("██████╗  █████╗"),
+            "banner must show the ra figlet"
         );
         assert!(
             text.contains("Welcome back — dspfac"),
@@ -4593,12 +4593,12 @@ mod tests {
         assert!(!text.contains("Ask ra to change code"));
     }
 
-    /// M22 (#58): the first-run onboarding surface renders the ASCII OCTOS
+    /// M22 (#58): the first-run onboarding surface renders the ASCII ra
     /// wordmark in the MAIN window (not a right-side preview pane). This pins
     /// the splash so a future refactor cannot quietly drop the distinctive
     /// identity.
     #[test]
-    fn render_first_launch_onboarding_includes_ascii_octos_splash() {
+    fn render_first_launch_onboarding_includes_ascii_ra_splash() {
         let mut store = Store {
             state: AppState::new(
                 vec![],
@@ -4621,8 +4621,8 @@ mod tests {
         // ASCII figlet wordmark (a characteristic block-letter row) plus the
         // human-readable tagline render in the MAIN window.
         assert!(
-            text.contains("██████╗"),
-            "expected OCTOS figlet art in the main window, got:\n{text}"
+            text.contains("██████╗  █████╗"),
+            "expected ra figlet art in the main window, got:\n{text}"
         );
         assert!(text.contains("Welcome to ra — Your Coding Buddy"));
     }
@@ -4679,8 +4679,9 @@ mod tests {
         assert_eq!(onboarding_header_height(16, 120, 14), 0);
         // No surplus → no header at all (the menu takes everything).
         assert_eq!(onboarding_header_height(14, 120, 14), 0);
-        // Narrow terminal → never the wide figlet; compact box at most.
-        assert_eq!(onboarding_header_height(40, 40, 5), 3);
+        // Narrow terminal (below the 16-col ra wordmark + padding) → never the
+        // wide figlet; compact box at most.
+        assert_eq!(onboarding_header_height(40, 18, 5), 3);
     }
 
     /// UX2 A: the three-region onboarding layout renders end-to-end on a wide

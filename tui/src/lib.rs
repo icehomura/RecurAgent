@@ -1,6 +1,6 @@
 // i18n: load `locales/*.yml` (relative to the crate root) and generate the
 // `t!` macro + `rust_i18n::set_locale` / `available_locales!`. English is the
-// source/fallback locale; `--lang zh` (or OCTOS_LANG=zh) switches the UI.
+// source/fallback locale; `--lang zh` (or RA_LANG=zh) switches the UI.
 // New strings: add a key under `locales/en.yml` and its `zh` translation.
 #[macro_use]
 extern crate rust_i18n;
@@ -538,7 +538,7 @@ mod i18n_tests {
     ///
     /// This string shipped for a long time as
     /// "Start the TUI with `ra tui --target <stdio:...|ws://...>`", which is
-    /// wrong twice over: `ra` has no `tui` subcommand, and there is no
+    /// wrong twice over: the server has no `tui` subcommand, and there is no
     /// `--target` flag. It is the advice shown when the TUI cannot find a
     /// transport — i.e. to a user who is already stuck — so following it landed
     /// them on "unrecognized subcommand".
@@ -595,9 +595,9 @@ mod i18n_tests {
             // `ra` is the SERVER binary and has no `tui` subcommand; the TUI
             // is its own binary. Pin the specific wrong invocation that shipped.
             assert!(
-                !advice.contains("ra tui"),
-                "{locale} recovery advice tells the user to run `ra tui`, \
-                 which is not a subcommand. Advice: {advice}"
+                !advice.contains("ra tui") && !advice.contains("ra tui"),
+                "{locale} recovery advice tells the user to run a bogus `tui` \
+                 subcommand. Advice: {advice}"
             );
         }
     }

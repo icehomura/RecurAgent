@@ -725,28 +725,27 @@ mod tests {
     #[test]
     fn octos_release_pin_matches_cargo_core_rev() {
         let manifest = include_str!("../Cargo.toml");
-        let line = manifest
+        // The kernel now lives in this repo, so `ra-core` is a path dependency;
+        // the protocol rev it corresponds to is recorded in the comment beside
+        // it (the upstream pin). Read that rev back so the pair stays checkable.
+        let rev = manifest
             .lines()
-            .find(|l| l.trim_start().starts_with("ra-core"))
-            .expect("Cargo.toml declares an ra-core dependency");
-
-        let rev = line
-            .split("rev")
-            .nth(1)
-            .and_then(|rest| rest.split('"').nth(1))
-            .expect("the ra-core dependency pins an explicit rev");
+            .find_map(|l| {
+                let idx = l.find("rev = \"")?;
+                l[idx + "rev = \"".len()..].split('"').next()
+            })
+            .expect("Cargo.toml records the ra-core protocol rev");
 
         assert_eq!(
             rev, REQUIRED_OCTOS_CORE_REV,
-            "Cargo.toml pins ra-core at {rev}, but backend_ensure records \
+            "Cargo.toml records ra-core rev {rev}, but backend_ensure records \
              {REQUIRED_OCTOS_CORE_REV} as the rev behind \
              REQUIRED_OCTOS_RELEASE ({REQUIRED_OCTOS_RELEASE}).\n\
              \n\
              If you bumped the rev, also bump REQUIRED_OCTOS_RELEASE to the \
-             ra release tag containing it, and update \
-             REQUIRED_OCTOS_CORE_REV to match. Otherwise a fresh install \
-             auto-provisions a server whose protocol disagrees with this \
-             client."
+             release tag containing it, and update \
+             REQUIRED_OCTOS_CORE_REV to match. Otherwise the recorded protocol \
+             revision disagrees with this client."
         );
     }
 

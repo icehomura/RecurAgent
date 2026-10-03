@@ -1,11 +1,12 @@
-//! `octoscode config`: read-only inspection of the client's startup config
-//! (`~/.config/octoscode/config.json`).
+//! `ra-tui config`: read-only inspection of the client's startup config
+//! (`~/.config/ra-tui/config.json`, or a legacy `~/.config/octoscode/config.json`
+//! when only that exists).
 //!
 //! There is no interactive wizard. Configuration is covered by the top-level
 //! CLI flags, the in-TUI onboarding, and the runtime toggles (`/theme`,
 //! `/lang`, `/vimmode`, `/saveconfig`) — so this command only *inspects*:
 //! `show` prints the saved config (and points at the file to edit by hand), and
-//! `path` prints the resolved config file path. Bare `octoscode config` defaults
+//! `path` prints the resolved config file path. Bare `ra-tui config` defaults
 //! to `show`.
 
 use std::path::{Path, PathBuf};
@@ -15,7 +16,7 @@ use eyre::{Result, WrapErr, eyre};
 
 use crate::cli;
 
-/// Parsed `octoscode config …` invocation (the `config` token already stripped
+/// Parsed `ra-tui config …` invocation (the `config` token already stripped
 /// by the dispatcher).
 #[derive(Debug)]
 pub struct ConfigArgs {
@@ -29,18 +30,18 @@ pub enum ConfigAction {
     Path,
 }
 
-/// `octoscode config` flags. Read-only: it inspects the saved config but never
+/// `ra-tui config` flags. Read-only: it inspects the saved config but never
 /// writes it (edit the JSON directly, or use the runtime `/…` toggles / CLI
 /// flags to change settings).
 #[derive(Debug, Parser)]
 #[command(
-    name = "octoscode config",
-    about = "Inspect octoscode's saved config (edit the file directly to change it)"
+    name = "ra-tui config",
+    about = "Inspect ra-tui's saved config (edit the file directly to change it)"
 )]
 pub struct ConfigCli {
     #[command(subcommand)]
     action: Option<ConfigActionCli>,
-    /// Config file to read (default: ~/.config/octoscode/config.json).
+    /// Config file to read (default: ~/.config/ra-tui/config.json).
     #[arg(long = "config", value_name = "FILE", global = true)]
     config: Option<PathBuf>,
 }
@@ -66,7 +67,7 @@ impl ConfigCli {
     }
 }
 
-/// Run `octoscode config`. Returns the process exit code.
+/// Run `ra-tui config`. Returns the process exit code.
 pub fn run(args: ConfigArgs) -> Result<i32> {
     let path = match args.config {
         Some(path) => path,
@@ -110,7 +111,7 @@ fn show(path: &Path) -> Result<i32> {
 fn print_edit_hint(path: &Path) {
     println!(
         "\nEdit {} directly to change settings, or use the runtime commands \
-         /theme, /lang, /vimmode, /steer, and /saveconfig (and the octoscode CLI flags).",
+         /theme, /lang, /vimmode, /steer, and /saveconfig (and the ra-tui CLI flags).",
         path.display()
     );
 }
@@ -121,21 +122,21 @@ mod tests {
 
     #[test]
     fn should_default_to_show_when_no_subcommand() {
-        let args = ConfigCli::parse_from(["octoscode config"]).into_args();
+        let args = ConfigCli::parse_from(["ra-tui config"]).into_args();
         assert!(matches!(args.action, ConfigAction::Show));
     }
 
     #[test]
     fn should_parse_show_and_path_subcommands() {
-        let show = ConfigCli::parse_from(["octoscode config", "show"]).into_args();
+        let show = ConfigCli::parse_from(["ra-tui config", "show"]).into_args();
         assert!(matches!(show.action, ConfigAction::Show));
-        let path = ConfigCli::parse_from(["octoscode config", "path"]).into_args();
+        let path = ConfigCli::parse_from(["ra-tui config", "path"]).into_args();
         assert!(matches!(path.action, ConfigAction::Path));
     }
 
     #[test]
     fn should_carry_the_config_flag_through() {
-        let args = ConfigCli::parse_from(["octoscode config", "show", "--config", "/tmp/c.json"])
+        let args = ConfigCli::parse_from(["ra-tui config", "show", "--config", "/tmp/c.json"])
             .into_args();
         assert_eq!(
             args.config.as_deref(),
@@ -147,6 +148,6 @@ mod tests {
     fn should_reject_the_removed_wizard_subcommand() {
         // The interactive wizard is gone; only show/path remain. A stray
         // `wizard` token must not parse as a valid subcommand.
-        assert!(ConfigCli::try_parse_from(["octoscode config", "wizard"]).is_err());
+        assert!(ConfigCli::try_parse_from(["ra-tui config", "wizard"]).is_err());
     }
 }

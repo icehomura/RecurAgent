@@ -56,7 +56,7 @@ fn should_play_false_in_ci() {
 #[test]
 fn should_play_false_when_terminal_narrower_than_logo() {
     let gate = SplashGate {
-        term_cols: 30,
+        term_cols: 10,
         ..open_gate()
     };
     assert!(!should_play(&gate));
@@ -99,7 +99,7 @@ fn splash_text_carries_logo_and_version() {
     assert!(text.lines().count() >= 6, "logo should be multi-line");
     assert_eq!(
         text.lines().last(),
-        Some(format!("octoscode v{}", env!("CARGO_PKG_VERSION")).as_str()),
+        Some(format!("ra-tui v{}", env!("CARGO_PKG_VERSION")).as_str()),
         "the shared block-centering path owns footer alignment"
     );
 }

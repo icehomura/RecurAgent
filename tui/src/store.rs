@@ -436,7 +436,7 @@ impl Store {
     /// a later explicit `/onboard workspace <path>` authoritative.
     ///
     /// UX2 (#1377 follow-up): when no `--cwd` is supplied the candidate now
-    /// falls back to the process working directory (the `octoscode --cwd`
+    /// falls back to the process working directory (the `ra-tui --cwd`
     /// default the help text already documents), so the documented launch
     /// `ra serve --stdio --solo` — which carries NO `--cwd` and whose
     /// transport label resolves to `"stdio"`/empty — still validates a genuine
@@ -5361,7 +5361,14 @@ impl Store {
             return;
         }
         let writable = !metadata.permissions().readonly();
-        let has_workspace_toml = path.join(".ra-workspace.toml").is_file();
+        // Prefer the ra workspace marker; a legacy `.ra-workspace.toml` is
+        // still recognised when only it exists (never migrated).
+        let has_workspace_toml = crate::env::pick_home_entry(
+            &path,
+            ".ra-workspace.toml",
+            ".ra-workspace.toml",
+        )
+        .is_file();
         self.state.onboarding.workspace_validation =
             crate::model::OnboardingWorkspaceValidation::Valid {
                 canonical: canonical.clone(),
@@ -6623,7 +6630,7 @@ impl Store {
     /// the event loop runs locally while the TUI lends its terminal to the
     /// child. An empty `!` is a usage warning with no exec.
     ///
-    /// The command runs on the machine octoscode runs on, NOT the agent's
+    /// The command runs on the machine ra-tui runs on, NOT the agent's
     /// sandboxed server `shell` tool. Its output stays in local terminal
     /// scrollback and is never injected into the next turn's context.
     fn dispatch_bang_command(&mut self, cmd: &str) -> Option<AppUiCommand> {
@@ -11851,7 +11858,7 @@ impl Store {
 
     fn apply_notification(&mut self, notification: UiNotification) -> Option<AppUiCommand> {
         match notification {
-            // #1477 voice rich-output visual lifecycle. octoscode does not yet
+            // #1477 voice rich-output visual lifecycle. ra-tui does not yet
             // render generated visuals (a separate feature); ignore gracefully
             // so newer servers that emit these don't wedge the client.
             UiNotification::VisualGenerating(_)

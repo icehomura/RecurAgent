@@ -3318,7 +3318,7 @@ fn onboarding_local_profile_menu(
     } else {
         // Legacy fallback for older servers that do not advertise the nameable
         // feature: keep the full name/username/email create so the TUI still
-        // works end-to-end against an older ra.
+        // works end-to-end against an older ra server.
         items.extend([
             onboarding_edit_item(
                 "onboard.local.name",
@@ -3397,7 +3397,7 @@ fn onboarding_local_profile_menu(
         searchable: false,
         search_placeholder: None,
         footer_hint: Some(progress.footer_hint(next_action.as_ref())),
-        // The first-run OCTOS splash renders in the MAIN window (see
+        // The first-run ra splash renders in the MAIN window (see
         // `render_onboarding_first_launch_layout` in app.rs); the right pane now
         // carries the per-step TEACHING panel (explanatory prose + progress) so
         // the user always sees where they are, what's left, and what to do.
@@ -7655,7 +7655,7 @@ fn status_line_items(app: MenuAppSnapshot<'_>) -> [(&'static str, String, bool);
 
 fn title_items(app: MenuAppSnapshot<'_>) -> [(&'static str, String, bool); 7] {
     [
-        ("app", "octoscode".into(), true),
+        ("app", "ra-tui".into(), true),
         (
             "session",
             app.selected_session_title.unwrap_or("no session").into(),

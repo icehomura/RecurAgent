@@ -1,4 +1,4 @@
-//! `octoscode olp-mcp-serve` (OUTER_LOOP_REVIEW #31): run the OLP-MCP
+//! `ra-tui olp-mcp-serve` (OUTER_LOOP_REVIEW #31): run the OLP-MCP
 //! outer-loop server over stdio. Pure Rust port of the Python prototype;
 //! see `crate::olp_mcp` for the protocol contract.
 

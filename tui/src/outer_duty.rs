@@ -1,4 +1,4 @@
-//! `octoscode outer-duty` (OUTER_LOOP_REVIEW #38 / #38-r1): the kernel lock
+//! `ra-tui outer-duty` (OUTER_LOOP_REVIEW #38 / #38-r1): the kernel lock
 //! behind multi-outer primary-reviewer authority — a per-project,
 //! session-lifetime OS-exclusive lock. Linux-only by adjudication
 //! (#38-r3/r4): single-machine `flock` + PR_SET_PDEATHSIG + /proc
@@ -51,7 +51,9 @@ impl DutyState {
 }
 
 /// Lock-name domain prefix — separation of namespace from any other
-/// consumer of the same directory.
+/// consumer of the same directory. STABLE protocol: never change it while a
+/// lock holder from an older build may still be alive (the digest would move
+/// to a different file and mutual exclusion would silently split).
 const LOCK_DOMAIN: &str = "octoscode/outer-duty/v1";
 
 /// How long acquire() retries past a contention that may be a transient
@@ -59,7 +61,8 @@ const LOCK_DOMAIN: &str = "octoscode/outer-duty/v1";
 const PROBE_COLLISION_RETRY_MS: u64 = 2_000;
 
 /// Canonicalize `--project` and derive the stable lock path:
-/// `~/.ra/outer/duty/<sha256(domain + "\0" + canonical)>.lock`.
+/// `~/.ra/outer/duty/<sha256(domain + "\0" + canonical)>.lock` (or a legacy
+/// `~/.ra/outer/duty` that already exists).
 pub fn lock_path(project: &Path) -> Result<PathBuf> {
     let home = std::env::var("HOME").map_err(|_| {
         eyre!("outer-duty: HOME is not set — fail-closed (refusing to guess a lock root)")
@@ -70,8 +73,7 @@ pub fn lock_path(project: &Path) -> Result<PathBuf> {
     let canonical = std::fs::canonicalize(project)
         .wrap_err_with(|| format!("cannot canonicalize project path: {}", project.display()))?;
     let digest = lock_digest(canonical.to_string_lossy().as_bytes());
-    Ok(Path::new(&home)
-        .join(".ra")
+    Ok(crate::env::pick_home_entry(Path::new(&home), ".ra", ".ra")
         .join("outer")
         .join("duty")
         .join(format!("{digest}.lock")))
