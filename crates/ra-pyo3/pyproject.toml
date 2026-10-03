@@ -19,6 +19,7 @@ classifiers = [
 
 [tool.maturin]
 # The import name: `import ra`. Matches `[lib] name` and `#[pymodule] fn ra`.
+# Kept across the ra rename: it is the published Python API (`import ra`).
 module-name = "ra"
 # Turn ON pyo3's `extension-module` ONLY for the wheel build. With it on, the
 # compiled extension does NOT link libpython (symbols resolve from the host

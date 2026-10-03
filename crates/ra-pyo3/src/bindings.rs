@@ -348,7 +348,9 @@ const _: fn() = || {
 };
 
 /// The `ra` Python module. The `#[pymodule]` name and the `[lib] name` are
-/// both `ra`, so `import ra` loads this extension.
+/// both `ra`, so `import ra` loads this extension. The module name is
+/// the published Python API and is kept across the ra rename so existing
+/// `import ra` hosts keep working.
 #[pymodule]
 fn ra(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Config>()?;
@@ -568,14 +570,15 @@ mod tests {
     }
 
     /// Real end-to-end run. Ignored: needs a live provider + network. Configure
-    /// via env `OCTOS_PYO3_TEST_KEY_ENV` (default `OPENAI_API_KEY`). Run with:
+    /// via env `RA_PYO3_TEST_KEY_ENV` (legacy `OCTOS_PYO3_TEST_KEY_ENV` still
+    /// honoured; default `OPENAI_API_KEY`). Run with:
     ///   cargo test -p ra-pyo3 --features python -- --ignored real_run_task
     #[test]
     #[ignore = "needs a real API key + network"]
     fn real_run_task_returns_output() {
         init_py();
-        let key_env = std::env::var("OCTOS_PYO3_TEST_KEY_ENV")
-            .unwrap_or_else(|_| "OPENAI_API_KEY".to_string());
+        let key_env = ra_core::brand::env_compat_str("PYO3_TEST_KEY_ENV")
+            .unwrap_or_else(|| "OPENAI_API_KEY".to_string());
         let cfg = Config::new(
             "openai".to_string(),
             "gpt-4o-mini".to_string(),

@@ -39,6 +39,11 @@ pyo3 = { version = "0.23", features = ["abi3-py39"], optional = true }
 # `python` feature-gate prevents. build.rs instead replicates pyo3's own
 # interpreter resolution order at runtime, guarded by CARGO_FEATURE_PYTHON.
 
+[dev-dependencies]
+# Dual-read the ignored end-to-end test's env knobs (`RA_*` first, legacy
+# `OCTOS_*` honoured).
+ra-core = { workspace = true }
+
 [features]
 default = []
 # Compile the pyo3 surface (pulls libpython). Everything Python-facing is gated
