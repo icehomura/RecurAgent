@@ -193,6 +193,10 @@ Accessor defaults:
 - `retry.base_delay_ms`: `2000`
 - `retry.max_delay_ms`: `60000`
 
+Backoff is exponential with full jitter: the cap doubles per attempt (starting
+at `base_delay_ms`, capped at `max_delay_ms`) and each actual wait is drawn
+uniformly from `[0, cap]`.
+
 ```json
 {
   "retry": {

@@ -487,7 +487,7 @@ default and only runs once you configure one.
     // stock behaviour except for the chain, which has no default.
     "enabled": true,           // false disables retry AND failover
     "maxRetries": 10,          // same-model retries before the chain is consulted
-    "baseDelayMs": 2000,       // exponential backoff starts here
+    "baseDelayMs": 2000,       // exponential backoff cap starts here
     "maxDelayMs": 60000,
 
     // Cross-model failover. Keys are a role name ("default", "smol", "slow",
@@ -508,6 +508,12 @@ A retry RESUMES the turn rather than replaying it: only the failed request's
 incomplete output is stripped, so completed tool calls are neither re-run nor
 re-billed. A failover swaps the model, records the swap in the transcript, and
 restores your original model once `failoverCooldownSecs` has elapsed.
+
+The wait between retries is exponential — the cap doubles per attempt
+(`baseDelayMs`, then 2×, 4×, … up to `maxDelayMs`) — with **full jitter**: each
+actual wait is drawn uniformly from `[0, cap]` rather than always being the cap.
+That spreads many sessions hitting the same rate limit instead of having them
+all re-enter the provider in lockstep.
 
 Auth errors never fail over, and neither do aborts — falling back into an
 authentication failure is strictly worse than the quota error that started it.
