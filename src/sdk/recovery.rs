@@ -716,6 +716,9 @@ impl AgentSessionHandle {
         abort_signal: &AbortSignal,
         turn: &LogicalTurn,
     ) -> Result<()> {
+        // `delay_ms` arrives as the exponential cap from `decide`; the wait and
+        // the announced event both report the full-jittered value actually slept.
+        let delay_ms = crate::failover::jittered_delay_ms(delay_ms);
         turn.emit(AgentEvent::AutoRetryStart {
             attempt,
             max_attempts: policy.max_retries,
