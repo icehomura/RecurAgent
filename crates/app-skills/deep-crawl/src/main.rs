@@ -67,7 +67,7 @@ const MAX_PAGE_HTML_BYTES: usize = 2 * 1024 * 1024;
 const MAX_CRAWL_DELAY_SECS: u64 = 10;
 
 /// Product token appended to the browser's own User-Agent so sites can tell
-/// this is an automated ra reader (policy: no disguised automation; see
+/// this is an automated ra-research reader (policy: no disguised automation; see
 /// SKILL.md "Automation policy").
 const UA_SUFFIX: &str = "ra-research/1.0 (+https://github.com/octos-org/octos)";
 
@@ -955,7 +955,7 @@ async fn set_identifiable_user_agent(ws: &mut WsStream, session_id: &str) {
     .await;
 }
 
-/// Whether robots.txt is applied: operator setting `OCTOS_RESPECT_ROBOTS`,
+/// Whether robots.txt is applied: operator setting `RA_RESPECT_ROBOTS`,
 /// default off (env lookup injected for tests).
 fn robots_enabled(lookup: impl Fn(&str) -> Option<String>) -> bool {
     ra_research::respect_robots(lookup)
@@ -1306,7 +1306,8 @@ async fn run() -> Output {
         );
 
         // robots.txt (only when the operator enabled it with
-        // OCTOS_RESPECT_ROBOTS=1; default off, never fetched): a disallowed
+        // RA_RESPECT_ROBOTS=1, legacy OCTOS_RESPECT_ROBOTS honoured;
+        // default off, never fetched): a disallowed
         // (or unreachable-robots) URL is recorded, never navigated, and
         // Crawl-delay is honoured between pages. Otherwise pages are spaced
         // by the settle time alone (sequential, one tab).

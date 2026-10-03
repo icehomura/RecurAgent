@@ -38,7 +38,7 @@
           },
           "output_path": {
             "type": "string",
-            "description": "Path to save the audio file. Default: auto-generated in OCTOS_WORK_DIR"
+            "description": "Path to save the audio file. Default: auto-generated in RA_WORK_DIR (legacy OCTOS_WORK_DIR honoured)"
           },
           "language": {
             "type": "string",

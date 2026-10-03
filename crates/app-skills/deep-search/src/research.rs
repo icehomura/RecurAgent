@@ -2,12 +2,14 @@
 //!
 //! Provider order (see `ra_research::plan`): the ra metasearch first
 //! (key-less OctoScript engines over official APIs and feeds: GDELT, Hacker
-//! News, Wikipedia, arXiv, ...; disable with `OCTOS_METASEARCH=0` to call
+//! News, Wikipedia, arXiv, ...; disable with `RA_METASEARCH=0` — legacy
+//! `OCTOS_METASEARCH=0` still honoured — to call
 //! GDELT + Google News RSS directly for news), then a
 //! self-hosted SearXNG (`SEARXNG_URL`), then search APIs with keys, then
 //! results-page search (DuckDuckGo HTML, Bing in headless Chrome) for general
-//! web results, on unless `OCTOS_ALLOW_SERP_SCRAPE=0` (alias
-//! `OCTOS_ALLOW_BROWSER_SERP`). If nothing returns anything, the result is
+//! web results, on unless `RA_ALLOW_SERP_SCRAPE=0` (alias
+//! `RA_ALLOW_BROWSER_SERP`; the legacy `OCTOS_` spellings are still
+//! honoured). If nothing returns anything, the result is
 //! empty and says how to add SearXNG or a key.
 //!
 //! Pages that will be cited are read with an identifiable User-Agent,
@@ -213,7 +215,7 @@ fn keyed_available() -> Vec<Provider> {
 }
 
 /// Whether results-page search (DuckDuckGo HTML, Bing in headless Chrome)
-/// is on: yes unless `OCTOS_ALLOW_SERP_SCRAPE=0`.
+/// is on: yes unless `RA_ALLOW_SERP_SCRAPE=0`.
 pub(crate) fn serp_scrape_allowed() -> bool {
     ra_research::serp_scrape_allowed(|k| std::env::var(k).ok())
 }
@@ -1107,7 +1109,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_not_consult_robots_txt_by_default() {
-        if std::env::var(ra_research::RESPECT_ROBOTS_ENV).is_ok() {
+        if ra_core::brand::env_compat("RESPECT_ROBOTS").is_some() {
             return; // operator setting present in this environment
         }
         let r = Reader::new(false);
@@ -1135,7 +1137,7 @@ mod tests {
             );
         }
         // The metasearch is the first free provider for every category
-        // (GDELT runs inside it), unless OCTOS_METASEARCH=0.
+        // (GDELT runs inside it), unless RA_METASEARCH=0.
         if ra_research::metasearch::enabled(|k| std::env::var(k).ok()) {
             assert_eq!(auto_plan(true, false)[0], Provider::Metasearch);
             assert_eq!(auto_plan(false, false)[0], Provider::Metasearch);

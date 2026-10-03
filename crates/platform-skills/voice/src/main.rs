@@ -626,7 +626,8 @@ fn handle_synthesize(input_json: &str) {
         fail("'text' must not be empty");
     }
 
-    // Always save to OCTOS_WORK_DIR (inside profile data_dir) so send_file
+    // Always save to RA_WORK_DIR (inside profile data_dir; the legacy
+    // OCTOS_WORK_DIR is still honoured) so send_file
     // can access the file. Ignore LLM's output_path to avoid sandbox violations.
     let filename = input
         .output_path
@@ -634,7 +635,7 @@ fn handle_synthesize(input_json: &str) {
         .and_then(|p| Path::new(p).file_name())
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| format!("tts_{}.wav", timestamp()));
-    let output_path = if let Ok(work_dir) = std::env::var("OCTOS_WORK_DIR") {
+    let output_path = if let Some(work_dir) = ra_core::brand::env_compat_str("WORK_DIR") {
         let dir = Path::new(&work_dir);
         let _ = std::fs::create_dir_all(dir);
         dir.join(&filename).to_string_lossy().to_string()

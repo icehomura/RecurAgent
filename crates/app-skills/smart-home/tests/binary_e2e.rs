@@ -100,9 +100,11 @@ fn run_skill(tool: &str, input: &str, env: &[(&str, String)]) -> (serde_json::Va
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         // Start from a clean smart-home config surface so ambient
-        // OCTOS_*/SMART_HOME_* vars on the test machine can't leak in.
+        // RA_*/OCTOS_*/SMART_HOME_* vars on the test machine can't leak in.
         .env_remove("SMART_HOME_BRIDGE_URL")
         .env_remove("SMART_HOME_BRIDGE_TOKEN")
+        .env_remove("RA_HOME")
+        .env_remove("RA_PROFILE_ID")
         .env_remove("OCTOS_HOME")
         .env_remove("OCTOS_PROFILE_ID");
     for (key, value) in env {
@@ -230,8 +232,8 @@ fn should_fall_back_to_profile_json_when_env_config_absent() {
     let addr = listener.local_addr().expect("addr");
     let server = std::thread::spawn(move || serve_one(listener, "HTTP/1.1 200 OK", devices_body()));
 
-    let octos_home = tempfile::tempdir().expect("tempdir");
-    let profiles_dir = octos_home.path().join("profiles");
+    let state_home = tempfile::tempdir().expect("tempdir");
+    let profiles_dir = state_home.path().join("profiles");
     std::fs::create_dir_all(&profiles_dir).expect("mkdir profiles");
     std::fs::write(
         profiles_dir.join("e2e-user.json"),
@@ -255,10 +257,10 @@ fn should_fall_back_to_profile_json_when_env_config_absent() {
         "{}",
         &[
             (
-                "OCTOS_HOME",
-                octos_home.path().to_string_lossy().to_string(),
+                "RA_HOME",
+                state_home.path().to_string_lossy().to_string(),
             ),
-            ("OCTOS_PROFILE_ID", "e2e-user".to_string()),
+            ("RA_PROFILE_ID", "e2e-user".to_string()),
         ],
     );
     let request = server.join().expect("bridge thread");
@@ -279,8 +281,8 @@ fn should_prefer_env_config_over_profile_json_when_both_present() {
     let addr = listener.local_addr().expect("addr");
     let server = std::thread::spawn(move || serve_one(listener, "HTTP/1.1 200 OK", devices_body()));
 
-    let octos_home = tempfile::tempdir().expect("tempdir");
-    let profiles_dir = octos_home.path().join("profiles");
+    let state_home = tempfile::tempdir().expect("tempdir");
+    let profiles_dir = state_home.path().join("profiles");
     std::fs::create_dir_all(&profiles_dir).expect("mkdir profiles");
     std::fs::write(
         profiles_dir.join("e2e-user.json"),
@@ -299,10 +301,10 @@ fn should_prefer_env_config_over_profile_json_when_both_present() {
         &[
             ("SMART_HOME_BRIDGE_URL", format!("http://{addr}")),
             (
-                "OCTOS_HOME",
-                octos_home.path().to_string_lossy().to_string(),
+                "RA_HOME",
+                state_home.path().to_string_lossy().to_string(),
             ),
-            ("OCTOS_PROFILE_ID", "e2e-user".to_string()),
+            ("RA_PROFILE_ID", "e2e-user".to_string()),
         ],
     );
     server.join().expect("bridge thread");
@@ -312,8 +314,8 @@ fn should_prefer_env_config_over_profile_json_when_both_present() {
 
 #[test]
 fn should_report_clear_error_when_no_bridge_configured_anywhere() {
-    let octos_home = tempfile::tempdir().expect("tempdir");
-    let profiles_dir = octos_home.path().join("profiles");
+    let state_home = tempfile::tempdir().expect("tempdir");
+    let profiles_dir = state_home.path().join("profiles");
     std::fs::create_dir_all(&profiles_dir).expect("mkdir profiles");
     std::fs::write(
         profiles_dir.join("e2e-user.json"),
@@ -325,9 +327,11 @@ fn should_report_clear_error_when_no_bridge_configured_anywhere() {
         "smart_home_list_devices",
         "{}",
         &[
+            // The legacy `OCTOS_` spellings are still honoured (this test
+            // keeps them on purpose; the others use `RA_*`).
             (
                 "OCTOS_HOME",
-                octos_home.path().to_string_lossy().to_string(),
+                state_home.path().to_string_lossy().to_string(),
             ),
             ("OCTOS_PROFILE_ID", "e2e-user".to_string()),
         ],

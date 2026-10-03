@@ -581,21 +581,21 @@ fn resolve_llm_config() -> Option<(String, String, String)> {
 
 /// Resolve all skill directories (bundled + per-profile).
 fn resolve_skills_dirs() -> Vec<PathBuf> {
-    let home = match std::env::var("HOME") {
-        Ok(h) => PathBuf::from(h),
-        Err(_) => return vec![],
+    // `RA_HOME`/`OCTOS_HOME`, an existing `~/.ra`, or the legacy `~/.ra`
+    // the install already uses (see `ra_core::brand::state_home`).
+    let Some(state_home) = ra_core::brand::state_home() else {
+        return vec![];
     };
-    let octos_home = home.join(".ra");
     let mut dirs = Vec::new();
 
     // Layer 2: bundled app-skills
-    let bundled = octos_home.join("bundled-app-skills");
+    let bundled = state_home.join("bundled-app-skills");
     if bundled.is_dir() {
         dirs.push(bundled);
     }
 
     // Layer 3: per-profile skills (scan all profiles)
-    let profiles_dir = octos_home.join("profiles");
+    let profiles_dir = state_home.join("profiles");
     if let Ok(entries) = fs::read_dir(&profiles_dir) {
         for entry in entries.flatten() {
             let skills = entry.path().join("skills");
@@ -606,7 +606,7 @@ fn resolve_skills_dirs() -> Vec<PathBuf> {
     }
 
     // Legacy: direct skills dir
-    let legacy = octos_home.join("skills");
+    let legacy = state_home.join("skills");
     if legacy.is_dir() {
         dirs.push(legacy);
     }

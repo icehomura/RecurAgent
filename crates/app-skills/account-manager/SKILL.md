@@ -106,4 +106,4 @@ Supported fields: `telegram_token`, `telegram_senders`, `whatsapp` (bool), `feis
 
 ## Environment Variables
 
-This tool reads `OCTOS_HOME` and `OCTOS_PROFILE_ID` from the environment (set automatically by the gateway). No manual configuration is needed.
+This tool reads `RA_HOME` and `RA_PROFILE_ID` from the environment (set automatically by the gateway; the legacy `OCTOS_HOME`/`OCTOS_PROFILE_ID` spellings are still honoured). No manual configuration is needed.

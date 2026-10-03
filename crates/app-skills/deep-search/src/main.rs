@@ -1242,7 +1242,7 @@ fn build_client() -> reqwest::Client {
 // ---------------------------------------------------------------------------
 
 /// DuckDuckGo's no-JavaScript HTML results page, for general web results
-/// (on unless `OCTOS_ALLOW_SERP_SCRAPE=0`). Requested with the identifiable
+/// (on unless `RA_ALLOW_SERP_SCRAPE=0`). Requested with the identifiable
 /// research User-Agent; if DuckDuckGo declines, that is a clean miss.
 async fn ddg_search(query: &str, count: u8) -> Result<Vec<SearchHit>, String> {
     let url = format!("https://html.duckduckgo.com/html/?q={}", urlencoded(query));
@@ -1489,8 +1489,8 @@ async fn run_deep_crawl(
 
 /// Bing results page rendered in headless Chrome, then scraped.
 ///
-/// On unless `OCTOS_ALLOW_SERP_SCRAPE=0` (ADR 0002 §6). Honest: the
-/// browser's own User-Agent plus the ra token, no stealth; a challenge
+/// On unless `RA_ALLOW_SERP_SCRAPE=0` (ADR 0002 §6). Honest: the
+/// browser's own User-Agent plus the ra-research token, no stealth; a challenge
 /// page is a miss, never solved.
 async fn bing_cdp_search(query: &str, count: u8) -> Result<Vec<SearchHit>, String> {
     if !research::serp_scrape_allowed() {
@@ -2057,9 +2057,9 @@ fn detect_bing_locale(query: &str) -> &'static str {
 }
 
 fn research_dir(slug: &str) -> PathBuf {
-    let base = std::env::var("OCTOS_WORK_DIR")
+    let base = ra_core::brand::env_compat("WORK_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("."));
+        .unwrap_or_else(|| PathBuf::from("."));
     base.join("research").join(slug)
 }
 
@@ -2965,17 +2965,15 @@ fn emit_progress_event(phase: ProgressPhase, message: &str, progress_fraction: O
 }
 
 fn harness_context_from_env() -> Option<HarnessContext> {
-    let raw_sink = std::env::var_os("OCTOS_EVENT_SINK")?;
+    let raw_sink = ra_core::brand::env_compat("EVENT_SINK")?;
     if raw_sink.is_empty() {
         return None;
     }
-    let session_id = std::env::var("OCTOS_HARNESS_SESSION_ID")
-        .or_else(|_| std::env::var("OCTOS_SESSION_ID"))
-        .ok()
+    let session_id = ra_core::brand::env_compat_str("HARNESS_SESSION_ID")
+        .or_else(|| ra_core::brand::env_compat_str("SESSION_ID"))
         .filter(|value| !value.trim().is_empty())?;
-    let task_id = std::env::var("OCTOS_HARNESS_TASK_ID")
-        .or_else(|_| std::env::var("OCTOS_TASK_ID"))
-        .ok()
+    let task_id = ra_core::brand::env_compat_str("HARNESS_TASK_ID")
+        .or_else(|| ra_core::brand::env_compat_str("TASK_ID"))
         .filter(|value| !value.trim().is_empty())?;
 
     Some(HarnessContext {
@@ -3316,7 +3314,7 @@ mod tests {
         .unwrap();
         let log = SearchLog {
             queries: vec!["q".into()],
-            errors: vec!["duckduckgo: disabled (scraping search-results pages needs OCTOS_ALLOW_SERP_SCRAPE=1)".into()],
+            errors: vec!["duckduckgo: disabled (scraping search-results pages needs RA_ALLOW_SERP_SCRAPE=1)".into()],
             ..Default::default()
         };
         let out = no_results_output("q", &log, &opts);
@@ -3325,7 +3323,7 @@ mod tests {
         assert!(doc["items"].as_array().unwrap().is_empty());
         let note = doc["note"].as_str().unwrap();
         assert!(note.contains("Providers tried: none"), "{note}");
-        assert!(note.contains("SEARXNG_URL") && note.contains("OCTOS_ALLOW_SERP_SCRAPE"));
+        assert!(note.contains("SEARXNG_URL") && note.contains("RA_ALLOW_SERP_SCRAPE"));
 
         opts.items_mode = false;
         let text = no_results_output("q", &log, &opts).output;

@@ -10,6 +10,9 @@ name = "account_manager"
 path = "src/main.rs"
 
 [dependencies]
+# Product identity: `RA_HOME`/`RA_PROFILE_ID` win over the legacy `OCTOS_*`
+# spellings, and the state home resolves with the legacy fallback.
+ra-core = { path = "../../ra-core" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = { version = "0.4", features = ["serde"] }

@@ -1,11 +1,12 @@
 //! Standalone account-manager skill binary.
 //!
 //! Manages sub-accounts under a parent profile by reading/writing profile JSON
-//! files in `$OCTOS_HOME/profiles/`. Communicates via stdin/stdout JSON protocol.
+//! files in `$RA_HOME/profiles/` (the legacy `$OCTOS_HOME` is still honoured).
+//! Communicates via stdin/stdout JSON protocol.
 
 use std::collections::HashMap;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -126,29 +127,26 @@ fn main() {
         }
     };
 
-    let octos_home = match std::env::var("OCTOS_HOME") {
-        Ok(v) if !v.is_empty() => PathBuf::from(v),
-        _ => {
-            // Fallback: ~/.ra
-            match home_dir() {
-                Some(h) => h.join(".ra"),
-                None => {
-                    output_error("OCTOS_HOME is not set and cannot determine home directory");
-                    return;
-                }
-            }
-        }
-    };
-
-    let profile_id = match std::env::var("OCTOS_PROFILE_ID") {
-        Ok(v) if !v.is_empty() => v,
-        _ => {
-            output_error("OCTOS_PROFILE_ID is not set — this tool must be run from a gateway");
+    let state_home = match ra_core::brand::state_home() {
+        Some(h) => h,
+        None => {
+            output_error("cannot determine the ra home directory (set RA_HOME or HOME)");
             return;
         }
     };
 
-    let profiles_dir = octos_home.join("profiles");
+    let profile_id = match ra_core::brand::env_compat_str("PROFILE_ID").filter(|v| !v.is_empty()) {
+        Some(v) => v,
+        None => {
+            output_error(
+                "RA_PROFILE_ID (legacy OCTOS_PROFILE_ID) is not set — this tool must be run \
+                 from a gateway",
+            );
+            return;
+        }
+    };
+
+    let profiles_dir = state_home.join("profiles");
     if !profiles_dir.exists() {
         output_error(&format!(
             "Profiles directory not found: {}",
@@ -900,11 +898,4 @@ fn output_error(message: &str) {
     let out = json!({ "output": message, "success": false });
     println!("{out}");
     std::process::exit(1);
-}
-
-fn home_dir() -> Option<PathBuf> {
-    std::env::var("HOME")
-        .ok()
-        .map(PathBuf::from)
-        .or_else(|| std::env::var("USERPROFILE").ok().map(PathBuf::from))
 }

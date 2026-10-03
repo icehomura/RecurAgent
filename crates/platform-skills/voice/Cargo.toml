@@ -10,6 +10,8 @@ name = "voice"
 path = "src/main.rs"
 
 [dependencies]
+# Product identity: `RA_WORK_DIR` wins over the legacy `OCTOS_WORK_DIR`.
+ra-core = { path = "../../ra-core" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", features = ["blocking", "rustls-tls", "json", "multipart"], default-features = false }
