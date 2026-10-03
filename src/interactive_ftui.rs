@@ -10202,23 +10202,28 @@ pub fn run(
     settings: FtuiSettings,
     autocomplete: AutocompleteLaunch,
 ) -> std::io::Result<()> {
-    // DIAGNOSTIC BUMP (16 -> 64 MiB), not the settled value.
-    //
     // The FTUI driver poll is not delegated: `RuntimeBuilder::new()` is the
-    // multi-thread preset (`multi_thread()` is documented as equivalent), so
+    // multi-thread preset (`multi_thread()` is documented as equivalent), but
     // `block_on` drives the root future on *this* thread via
-    // `run_future_with_budget` rather than through a worker. That makes this
-    // budget the one that actually governs the agent turn's poll depth — and
-    // 16 MiB no longer holds: single-task runs abort with
-    // `STATUS_STACK_OVERFLOW` (the parallel path amplifies the same chain).
+    // `run_future_with_budget`, so this budget governs the agent turn's poll
+    // depth.
     //
-    // 64 MiB is a probe to separate the two causes 16 MiB cannot:
-    //   * still aborts -> unbounded recursion somewhere in the turn;
-    //   * survives     -> merely a deeply nested poll stack, and the real fix
-    //                     is to break the chain, not to keep buying MiB.
-    // The reservation is virtual and committed lazily, so idle sessions pay
-    // nothing; revisit this number once the offender is identified.
-    const DRIVER_STACK_BYTES: usize = 64 * 1024 * 1024;
+    // The overflows that motivated the temporary 64 MiB bump were not a
+    // legitimately deep chain: they were `RunCodeTool::effects()` recursing
+    // through its own registry snapshot, fixed in edaa57f0d.
+    //
+    // Every deep-stack reserve in the tree is 16 MiB on the same measured
+    // basis (`agent::tests::probe_full_turn_stack_scaling`, 905433d68): a
+    // complete offline turn — session → agent loop → provider stream → tool
+    // call → result → follow-up — including a `dag` whose node is `run_code`
+    // (so `dag_tool` + `ptc_bridge` + the QuickJS realm all ran) holds at
+    // 724992 B (708 KiB) and aborts at 720896 B (704 KiB); flat to DAG N=256,
+    // and the full-turn vs DAG-only delta is 0 bytes. The probe uses a mock
+    // provider, so real transport (TLS/HTTP) and session persistence
+    // (sqlite/JSONL) are unexercised; `-Zprint-type-sizes` puts those frames
+    // at ≤~30 KiB each, which is what leaves ~23x headroom. Bead bd-qtffv
+    // tracks verifying the transport-heavy chains and going lower.
+    const DRIVER_STACK_BYTES: usize = 16 * 1024 * 1024;
     let FtuiSettings {
         markdown_spacing,
         status_chrome,
