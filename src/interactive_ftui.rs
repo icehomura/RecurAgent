@@ -38,6 +38,7 @@
 
 use std::cell::Cell;
 use std::fmt::Write as _;
+use std::rc::Rc;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -1352,8 +1353,9 @@ struct TranscriptEntry {
     detail: Option<String>,
     /// Pre-rendered styled detail lines (the `dag` tree view): when present it
     /// replaces the plain `detail` in the frame, so each box can carry its
-    /// node-state color instead of the uniform dim card styling.
-    styled_detail: Option<Vec<ftui::text::Line<'static>>>,
+    /// node-state color instead of the uniform dim card styling. Shared (`Rc`)
+    /// because the live path hands the same cached lines to every frame.
+    styled_detail: Option<Rc<Vec<ftui::text::Line<'static>>>>,
     /// Detail lines are diff content (edit/hashline_edit): style added and
     /// removed markers.
     diff_styled: bool,
@@ -1392,6 +1394,95 @@ const DAG_NODE_OUTPUT_MAX_CHARS: usize = 400;
 struct DagProgress {
     /// Nodes in topology order (`nodes` of `ra.dag.topology.v1`).
     nodes: Vec<DagNodeView>,
+    /// Compact card layout, keyed by the node set and the pane width it was
+    /// folded to; see [`DagProgress::card_styled`].
+    card: std::cell::RefCell<Option<DagCardLayout>>,
+}
+
+/// One cached compact card layout: the diagram plus the styled lines made from
+/// it.
+///
+/// The layout depends on the node set and the pane width, not on the spinner
+/// frame — every marker is three display cells wide (`[ ]`, `[✓]`, `[⠋]`), so
+/// animating a running node rewrites one glyph in place instead of re-laying
+/// out the canvas.
+#[derive(Debug)]
+struct DagCardLayout {
+    /// Hash of every node field the layout reads; see
+    /// [`DagProgress::layout_fingerprint`].
+    fingerprint: u64,
+    /// Pane width the rows were folded to (`0` = unknown width).
+    width: usize,
+    /// Spinner frame the rows currently carry.
+    frame: usize,
+    rows: Vec<Vec<dag_view::DagViewCell>>,
+    styled: Rc<Vec<ftui::text::Line<'static>>>,
+}
+
+impl DagProgress {
+    /// Hash of every node field the compact layout reads. Node states are in:
+    /// a state flip repaints a marker's color and the colors live in the
+    /// cached styled lines. The spinner frame is deliberately absent — it
+    /// cannot move a cell, so a cached layout stays valid across frames.
+    fn layout_fingerprint(&self) -> u64 {
+        use std::hash::{Hash as _, Hasher as _};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        self.nodes.len().hash(&mut hasher);
+        for node in &self.nodes {
+            node.id.hash(&mut hasher);
+            node.name.hash(&mut hasher);
+            node.tool_name.hash(&mut hasher);
+            node.depends_on.hash(&mut hasher);
+            (node.state as u8).hash(&mut hasher);
+        }
+        hasher.finish()
+    }
+
+    /// Styled compact card for spinner `frame` at `max_width` columns, laid
+    /// out at most once per (node set, width). A live DAG otherwise rebuilds
+    /// and re-wraps its whole canvas every frame, which is what made a running
+    /// 256-node graph unusable.
+    fn card_styled(
+        &self,
+        frame: usize,
+        max_width: usize,
+        palette: &FtuiPalette,
+    ) -> Rc<Vec<ftui::text::Line<'static>>> {
+        let fingerprint = self.layout_fingerprint();
+        let mut slot = self.card.borrow_mut();
+        let stale = slot.as_ref().is_none_or(|layout| {
+            layout.fingerprint != fingerprint || layout.width != max_width
+        });
+        if stale {
+            let rows = dag_view::render_compact(&dag_view_input(self), frame, max_width);
+            let styled = dag_view_styled(&rows, palette);
+            *slot = Some(DagCardLayout {
+                fingerprint,
+                width: max_width,
+                frame,
+                rows,
+                styled: Rc::new(styled),
+            });
+        }
+        let layout = slot.as_mut().expect("layout stored above");
+        if layout.frame != frame {
+            let touched = dag_view::retarget_spinner(&mut layout.rows, frame);
+            let styled = Rc::make_mut(&mut layout.styled);
+            for y in touched {
+                styled[y] = dag_view_styled_line(&layout.rows[y], palette);
+            }
+            layout.frame = frame;
+        }
+        Rc::clone(&layout.styled)
+    }
+
+    /// Plain-text card (the copyable `detail`), from the same cached layout.
+    fn card_plain(&self, frame: usize, max_width: usize, palette: &FtuiPalette) -> String {
+        drop(self.card_styled(frame, max_width, palette));
+        let slot = self.card.borrow();
+        slot.as_ref()
+            .map_or_else(String::new, |layout| dag_view_text(&layout.rows))
+    }
 }
 
 /// One node of the DAG tree view.
@@ -1501,35 +1592,41 @@ fn dag_view_text(rows: &[Vec<dag_view::DagViewCell>]) -> String {
 
 /// Styled tree rendering: every box carries its node-state color (gray =
 /// pending, yellow = running, red = failed, green = done), tree connectors
-/// stay neutral. Built from the laid-out rows, so colors
-/// update live without re-laying-out the tree.
+/// stay neutral.
 fn dag_view_styled(
     rows: &[Vec<dag_view::DagViewCell>],
     palette: &FtuiPalette,
 ) -> Vec<ftui::text::Line<'static>> {
     rows.iter()
-        .map(|row| {
-            let spans: Vec<ftui::text::Span<'static>> = row
-                .iter()
-                .map(|cell| {
-                    let style = match cell.state {
-                        dag_view::DagViewCellState::Neutral => {
-                            ftui::Style::new().dim().fg(palette.muted)
-                        }
-                        dag_view::DagViewCellState::Root => {
-                            ftui::Style::new().bold().fg(palette.success)
-                        }
-                        dag_view::DagViewCellState::Node(state) => {
-                            let (r, g, b) = state.rgb();
-                            ftui::Style::new().fg(ftui::PackedRgba::rgb(r, g, b))
-                        }
-                    };
-                    ftui::text::Span::styled(cell.text.clone(), style)
-                })
-                .collect();
-            ftui::text::Line::from_spans(spans)
-        })
+        .map(|row| dag_view_styled_line(row, palette))
         .collect()
+}
+
+/// One laid-out row as a styled line. Split out so a cached card can restyle
+/// just the rows whose spinner marker it re-animated.
+fn dag_view_styled_line(
+    row: &[dag_view::DagViewCell],
+    palette: &FtuiPalette,
+) -> ftui::text::Line<'static> {
+    let spans: Vec<ftui::text::Span<'static>> = row
+        .iter()
+        .map(|cell| {
+            let style = match cell.state {
+                dag_view::DagViewCellState::Neutral => {
+                    ftui::Style::new().dim().fg(palette.muted)
+                }
+                dag_view::DagViewCellState::Root => {
+                    ftui::Style::new().bold().fg(palette.success)
+                }
+                dag_view::DagViewCellState::Node(state) => {
+                    let (r, g, b) = state.rgb();
+                    ftui::Style::new().fg(ftui::PackedRgba::rgb(r, g, b))
+                }
+            };
+            ftui::text::Span::styled(cell.text.clone(), style)
+        })
+        .collect();
+    ftui::text::Line::from_spans(spans)
 }
 
 /// Bound a node's stored streaming output to a trailing window (lines, then
@@ -3088,7 +3185,7 @@ impl RaFtuiModel {
             .map(|e| {
                 let detail_lines = e.styled_detail.as_ref().map_or_else(
                     || e.detail.as_ref().map_or(0, |d| d.lines().count()),
-                    Vec::len,
+                    |styled| styled.len(),
                 );
                 e.text.lines().count().max(1) + detail_lines
             })
@@ -3519,12 +3616,12 @@ impl RaFtuiModel {
             // collapses to a couple of visible cells — so an over-wide diagram
             // is shredded, not truncated. `render_compact` therefore takes the
             // body width as a budget, shortens names, and folds what still
-            // does not fit.
-            let rows = dag_view::render_compact(&dag_view_input(progress), frame, width);
+            // does not fit; its layout is cached per (node set, width) so a
+            // frame only re-animates the running nodes' spinner.
             (
                 sanitize(&dag_card_head(progress)).into_owned(),
-                sanitize(&dag_view_text(&rows)).into_owned(),
-                dag_view_styled(&rows, &palette),
+                sanitize(&progress.card_plain(frame, width, &palette)).into_owned(),
+                progress.card_styled(frame, width, &palette),
             )
         };
         let revision = self.next_revision();
@@ -3560,24 +3657,27 @@ impl RaFtuiModel {
         let width = self.card_width();
         let frame = self.spinner.current_frame;
         let palette = self.palette;
-        let (tree_text, mut styled) = {
+        let (tree_text, card) = {
             let Some(progress) = self.dag_progress.get(key) else {
                 return;
             };
-            let rows = dag_view::render_compact(&dag_view_input(progress), frame, width);
-            (dag_view_text(&rows), dag_view_styled(&rows, &palette))
+            (
+                progress.card_plain(frame, width, &palette),
+                progress.card_styled(frame, width, &palette),
+            )
         };
-        let detail = match report {
+        let (detail, styled) = match report {
             Some(text) if !text.is_empty() => {
+                let mut styled: Vec<ftui::text::Line<'static>> = (*card).clone();
                 styled.push(ftui::text::Line::from_spans(Vec::new()));
                 for line in text.split('\n') {
                     styled.push(ftui::text::Line::from_spans(vec![
                         ftui::text::Span::styled(line.to_string(), ftui::Style::new()),
                     ]));
                 }
-                format!("{tree_text}\n\n{text}")
+                (format!("{tree_text}\n\n{text}"), Rc::new(styled))
             }
-            _ => tree_text,
+            _ => (tree_text, card),
         };
         let revision = self.next_revision();
         if let Some(entry) = self
@@ -6139,25 +6239,29 @@ impl RaFtuiModel {
                 rendered_blocks += 1;
                 let mut block_lines: Vec<ftui::text::Line<'static>> = Vec::new();
                 // A live `dag` card re-renders every frame so the running
-                // node's braille spinner animates.
+                // node's braille spinner animates. The layout is cached per
+                // (node set, pane width) and the frame only re-animates the
+                // marker glyph, so this is not a per-frame canvas rebuild.
                 let live_styled = entry
                     .pair_key
                     .as_deref()
                     .and_then(|key| self.dag_progress.get(key))
                     .map(|progress| {
-                        let rows = dag_view::render_compact(
-                            &dag_view_input(progress),
+                        progress.card_styled(
                             self.spinner.current_frame,
                             usize::from(width),
-                        );
-                        dag_view_styled(&rows, &palette)
+                            &palette,
+                        )
                     });
                 push_card_block(
                     &mut block_lines,
                     CardState::Pending,
                     &entry.text,
                     entry.detail.as_ref(),
-                    live_styled.as_deref().or(entry.styled_detail.as_deref()),
+                    live_styled
+                        .as_deref()
+                        .map(Vec::as_slice)
+                        .or(entry.styled_detail.as_deref().map(Vec::as_slice)),
                     entry.diff_styled,
                     entry.group_count,
                     &palette,
@@ -6185,7 +6289,7 @@ impl RaFtuiModel {
                     state,
                     &entry.text,
                     entry.detail.as_ref(),
-                    entry.styled_detail.as_deref(),
+                    entry.styled_detail.as_deref().map(Vec::as_slice),
                     entry.diff_styled,
                     entry.group_count,
                     &palette,

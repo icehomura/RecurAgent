@@ -771,6 +771,41 @@ fn min_card_width(src: &[DagViewNode], cap: usize) -> usize {
     cols.iter().sum::<usize>() + cols.len() - 1
 }
 
+/// Rewrite the braille spinner glyph in every running node's marker cell,
+/// leaving the rest of a laid-out grid untouched; returns the indices of the
+/// rows it changed, so a caller re-styling per frame touches only those.
+///
+/// Every marker is three display cells wide (`[ ]`, `[✓]`, `[⠋]`), so the
+/// spinner frame cannot move a cell: a layout can be cached and re-animated by
+/// patching this one glyph.
+#[must_use]
+pub fn retarget_spinner(rows: &mut [Vec<DagViewCell>], frame: usize) -> Vec<usize> {
+    let glyph = SPINNER_FRAMES[frame % SPINNER_FRAMES.len()];
+    let mut touched = Vec::new();
+    for (y, row) in rows.iter_mut().enumerate() {
+        let mut changed = false;
+        for cell in row.iter_mut() {
+            if cell.state != DagViewCellState::Node(DagViewState::Running) {
+                continue;
+            }
+            let Some(pos) = cell
+                .text
+                .char_indices()
+                .find(|(_, ch)| SPINNER_FRAMES.iter().any(|f| f.starts_with(*ch)))
+                .map(|(i, _)| i)
+            else {
+                continue;
+            };
+            cell.text.replace_range(pos..pos + glyph.len(), glyph);
+            changed = true;
+        }
+        if changed {
+            touched.push(y);
+        }
+    }
+    touched
+}
+
 /// The compact diagram for `src` within `max_width`, trimmed, plus how many
 /// nodes it shows.
 ///
@@ -1861,6 +1896,49 @@ mod tests {
         assert_eq!(col_of(bottom, '└'), col_of(mid, '┤'), "fan-out shaft");
         assert_eq!(col_of(top, '┐'), col_of(mid, '├'), "fan-in shaft");
         assert_eq!(col_of(bottom, '┘'), col_of(mid, '├'), "fan-in shaft");
+    }
+
+    /// The card cache re-animates a laid-out diagram by patching the running
+    /// nodes' marker glyph in place. That is only sound while the patch
+    /// touches nothing else — every marker is the same three cells wide, so a
+    /// frame swap must leave every row's length and ink identical.
+    #[test]
+    fn spinner_retarget_patches_only_the_running_marker() {
+        let nodes = vec![
+            n(1, "read", &[], DagViewState::Succeeded),
+            n(2, "build", &[1], DagViewState::Running),
+        ];
+        let mut rows = render_compact(&nodes, 0, 0);
+        let before = rows_to_string(&rows);
+        assert!(before.iter().any(|l| l.contains("[⠋]")), "{before:?}");
+
+        let touched = retarget_spinner(&mut rows, 3);
+        let after = rows_to_string(&rows);
+        assert_eq!(touched.len(), 1, "exactly the running node's row: {after:?}");
+        assert!(
+            after.iter().any(|l| l.contains("[⠸]")),
+            "frame 3 glyph missing: {after:?}"
+        );
+        for (old, new) in before.iter().zip(&after) {
+            assert_eq!(
+                display_width(old),
+                display_width(new),
+                "row width moved: {old:?} -> {new:?}"
+            );
+            let strip = |line: &String| {
+                line.chars()
+                    .filter(|c| !SPINNER_FRAMES.iter().any(|f| f.starts_with(*c)))
+                    .collect::<String>()
+            };
+            assert_eq!(
+                strip(old),
+                strip(new),
+                "non-spinner ink changed: {old:?} -> {new:?}"
+            );
+        }
+        // Re-targeting to the frame it already carries is a no-op.
+        assert_eq!(retarget_spinner(&mut rows, 3), touched);
+        assert_eq!(rows_to_string(&rows), after);
     }
 
     /// The card's own chrome: a lone connector lane (`│ ├ ─ …`) or an elision
