@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Message bus, channels, and session management for ra gateway"
+description = "Message bus, channels, and session management for the ra gateway"
 
 [features]
 default = []

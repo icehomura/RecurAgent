@@ -9,13 +9,14 @@ use tracing::debug;
 
 /// Default cap on a single inbound media download (50 MiB). A malicious or
 /// misbehaving homeserver could otherwise stream an unbounded body and
-/// exhaust memory/disk. Overridable via `OCTOS_MAX_MEDIA_BYTES`.
+/// exhaust memory/disk. Overridable via `RA_MAX_MEDIA_BYTES` (legacy
+/// `OCTOS_MAX_MEDIA_BYTES` still honoured).
 pub const DEFAULT_MAX_MEDIA_BYTES: u64 = 50 * 1024 * 1024;
 
-/// Resolve the inbound-media download cap, honoring `OCTOS_MAX_MEDIA_BYTES`.
+/// Resolve the inbound-media download cap, honoring `RA_MAX_MEDIA_BYTES`
+/// (legacy `OCTOS_MAX_MEDIA_BYTES` still honoured).
 pub fn max_media_bytes() -> u64 {
-    std::env::var("OCTOS_MAX_MEDIA_BYTES")
-        .ok()
+    ra_core::brand::env_compat_str("MAX_MEDIA_BYTES")
         .and_then(|raw| raw.parse::<u64>().ok())
         .filter(|&v| v > 0)
         .unwrap_or(DEFAULT_MAX_MEDIA_BYTES)

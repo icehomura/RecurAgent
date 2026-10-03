@@ -2,7 +2,7 @@
 
 This directory holds session JSONL fixtures replayed by the
 `jsonl_replay_thread_binding` integration test in
-`crates/octos-bus/tests/jsonl_replay_thread_binding.rs`.
+`crates/ra-bus/tests/jsonl_replay_thread_binding.rs`.
 
 The harness asserts the thread_id binding invariant on every record:
 

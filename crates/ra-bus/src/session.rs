@@ -1480,8 +1480,9 @@ pub struct Thread {
 const DEFAULT_MAX_SESSIONS: usize = 1000;
 
 /// Size at which the ACTIVE session file is sealed and a fresh one started
-/// (see [`segments_dir`]). Overridable with `OCTOS_SESSION_SEGMENT_BYTES`
-/// (minimum 64 KiB, so tests can roll on tiny files).
+/// (see [`segments_dir`]). Overridable with `RA_SESSION_SEGMENT_BYTES`
+/// (legacy `OCTOS_SESSION_SEGMENT_BYTES` still honoured; minimum 64 KiB, so
+/// tests can roll on tiny files).
 ///
 /// This replaces the old 10 MB `MAX_SESSION_FILE_SIZE` cliff, at which a
 /// session simultaneously refused every append, loaded as empty and vanished
@@ -1493,8 +1494,9 @@ const SESSION_SEGMENT_BYTES_DEFAULT: u64 = 8 * 1024 * 1024;
 /// How many bytes of history a plain load reads into memory: the active file
 /// plus as many sealed segments, newest first, as fit. Sealed segments beyond
 /// the budget stay on disk; `Session::base_seq` says how many visible messages
-/// they hold, so committed seqs stay global. `OCTOS_SESSION_LOAD_BUDGET_BYTES`
-/// overrides it; `0` means unlimited. Full-history callers use
+/// they hold, so committed seqs stay global. `RA_SESSION_LOAD_BUDGET_BYTES`
+/// overrides it (legacy `OCTOS_SESSION_LOAD_BUDGET_BYTES` still honoured);
+/// `0` means unlimited. Full-history callers use
 /// [`SessionManager::load_full`] / [`SessionHandle::open_full`].
 ///
 /// Capacity planning: this bounds the file bytes one resident session can
@@ -1504,21 +1506,20 @@ const SESSION_SEGMENT_BYTES_DEFAULT: u64 = 8 * 1024 * 1024;
 /// that while letting a session load whole up to four segments deep.
 const SESSION_LOAD_BUDGET_DEFAULT: u64 = 32 * 1024 * 1024;
 
-fn env_bytes(name: &str) -> Option<u64> {
-    std::env::var(name)
-        .ok()
+fn env_bytes(suffix: &str) -> Option<u64> {
+    ra_core::brand::env_compat_str(suffix)
         .and_then(|raw| raw.trim().parse::<u64>().ok())
 }
 
 fn session_segment_bytes() -> u64 {
-    env_bytes("OCTOS_SESSION_SEGMENT_BYTES")
+    env_bytes("SESSION_SEGMENT_BYTES")
         .map(|v| v.max(64 * 1024))
         .unwrap_or(SESSION_SEGMENT_BYTES_DEFAULT)
 }
 
 /// `u64::MAX` when unlimited.
 fn session_load_budget_bytes() -> u64 {
-    match env_bytes("OCTOS_SESSION_LOAD_BUDGET_BYTES") {
+    match env_bytes("SESSION_LOAD_BUDGET_BYTES") {
         Some(0) => u64::MAX,
         Some(v) => v,
         None => SESSION_LOAD_BUDGET_DEFAULT,

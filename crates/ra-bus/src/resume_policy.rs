@@ -54,7 +54,7 @@ use tracing::warn;
 /// Name of the marker file written inside a sub-agent worktree on resume to
 /// bump the directory's mtime. The contents are a human-readable RFC3339
 /// timestamp so operators can see when the session last resumed.
-pub const RESUME_MTIME_MARKER: &str = ".octos_resume_mtime";
+pub const RESUME_MTIME_MARKER: &str = ".ra_resume_mtime";
 
 /// Reference to a file path recovered from a tool result during resume.
 ///

@@ -2623,18 +2623,16 @@ async fn handle_admin_shell(
         .clone()
         .filter(|t| !t.is_empty())
         .or_else(|| {
-            std::env::var("OCTOS_AUTH_TOKEN")
-                .ok()
-                .filter(|t| !t.is_empty())
+            ra_core::brand::env_compat_str("AUTH_TOKEN").filter(|t| !t.is_empty())
         })
         .or_else(|| {
-            // Try OCTOS_DATA_DIR, then ~/.ra, then cwd/.ra
-            let home = std::env::var("HOME").unwrap_or_default();
+            // Try RA_DATA_DIR (legacy OCTOS_DATA_DIR), then the state home
+            // (~/.ra, or ~/.ra when that is where the install lives).
             let candidates = [
-                std::env::var("OCTOS_DATA_DIR").unwrap_or_default(),
-                format!("{home}/.ra"),
+                ra_core::brand::env_compat_str("DATA_DIR"),
+                ra_core::brand::state_home().map(|dir| dir.display().to_string()),
             ];
-            for dir in &candidates {
+            for dir in candidates.iter().flatten() {
                 if dir.is_empty() {
                     continue;
                 }
@@ -2669,7 +2667,7 @@ async fn handle_admin_shell(
             "token_len={} expected_len={} data_dir={} home={}",
             token.len(),
             expected_token.as_ref().map(|t| t.len()).unwrap_or(0),
-            std::env::var("OCTOS_DATA_DIR").unwrap_or_else(|_| "unset".into()),
+            ra_core::brand::env_compat_str("DATA_DIR").unwrap_or_else(|| "unset".into()),
             std::env::var("HOME").unwrap_or_else(|_| "unset".into()),
         );
         return (StatusCode::UNAUTHORIZED, debug).into_response();

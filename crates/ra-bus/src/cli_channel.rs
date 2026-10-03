@@ -109,7 +109,7 @@ impl Channel for CliChannel {
         let mut stdout = tokio::io::stdout();
         stdout.write_all(b"\n").await?;
         stdout.write_all(msg.content.as_bytes()).await?;
-        stdout.write_all(b"\n\noctos gateway> ").await?;
+        stdout.write_all(b"\n\nra gateway> ").await?;
         stdout.flush().await?;
         Ok(())
     }

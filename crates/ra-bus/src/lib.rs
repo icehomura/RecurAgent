@@ -1,4 +1,4 @@
-//! Message bus, channels, and session management for ra gateway.
+//! Message bus, channels, and session management for the ra gateway.
 
 pub mod bus;
 pub mod channel;
