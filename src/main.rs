@@ -9489,6 +9489,10 @@ where
                     unreachable!("guarded by the arm pattern")
                 };
                 retry_count = attempt;
+                // `delay_ms` is the exponential cap; the real wait is drawn
+                // below it (full jitter) so concurrent sessions do not re-enter
+                // the provider in lockstep. The event reports the actual wait.
+                let delay_ms = ra::failover::jittered_delay_ms(delay_ms);
                 if is_json {
                     emit_json_event(&AgentEvent::AutoRetryStart {
                         attempt: retry_count,
@@ -9621,6 +9625,8 @@ where
                 });
                 if let ra::failover::TurnDecision::Retry { attempt, delay_ms } = decision {
                     retry_count = attempt;
+                    // Cap -> real wait, same as the completed-message arm above.
+                    let delay_ms = ra::failover::jittered_delay_ms(delay_ms);
                     if is_json {
                         emit_json_event(&AgentEvent::AutoRetryStart {
                             attempt: retry_count,
