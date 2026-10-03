@@ -9,6 +9,7 @@ and DSR config survive between runs.
 test/docker/
 ├── Dockerfile               # Ubuntu 24.04 + Rust pin + Go + Bun + Flywheel tools
 ├── docker-compose.yml       # gate / shell / dev / dev-shell services + volumes
+├── gate.sh                  # single entry point: run the gate (builds if needed)
 ├── compose.sh               # compose wrapper: takes GITHUB_TOKEN from the gh CLI
 ├── .dockerignore
 ├── .env.example             # copy to .env to override
@@ -33,9 +34,21 @@ test/docker/
 ## Quick start
 
 ```bash
+test/docker/gate.sh              # build if missing, clone the fork, run every check
+test/docker/gate.sh --worktree   # gate this working tree instead (slower builds)
+test/docker/gate.sh --shell      # interactive shell in the same container
+```
+
+`gate.sh` is the entry point to hand to an agent or a script: it needs no host
+toolchain, builds the image itself when it is missing, and exits with the gate's
+status (do not pipe it through `tee` — that swallows the status).
+
+Finer-grained control, from inside this directory:
+
+```bash
 cd test/docker
 cp .env.example .env                    # optional
-./compose.sh build                      # ~30 min: Rust + full tool chain
+./compose.sh build                      # ~10 min: Rust + full tool chain
 ./compose.sh run --rm gate              # clone fork, run all gates
 ```
 
