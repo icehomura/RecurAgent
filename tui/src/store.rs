@@ -5,6 +5,7 @@ use ra_core::ui_protocol::{
     ApprovalAutoResolvedEvent, ApprovalCancelledEvent, ApprovalDecidedEvent, ApprovalId,
     ApprovalRespondParams, DiffPreviewGetParams, EnvelopeToolEndStatus, EnvelopeV2,
     EnvelopeV2Notification, HydratedMessage, InputItem, MessageDeltaEvent, PayloadV2,
+    TurnOrigin, TurnOriginKind,
     ReplayLossyEvent, SessionHydrateParams, SessionHydrateResult, SessionListParams,
     SessionListResult, SessionOpenParams, SessionRollbackParams, SessionRollbackResult,
     TaskArtifactReadParams, TaskOutputDeltaEvent, TaskOutputReadParams, TaskRuntimeState,
@@ -6940,7 +6941,10 @@ impl Store {
             rewrite_for: None,
             reasoning_effort,
             live_video: false,
-            origin: None,
+            origin: Some(TurnOrigin {
+                kind: TurnOriginKind::Person,
+                label: None,
+            }),
         }))
     }
 
@@ -10880,7 +10884,10 @@ impl Store {
                 rewrite_for: None,
                 reasoning_effort: None,
                 live_video: false,
-                origin: None,
+                origin: Some(TurnOrigin {
+                    kind: TurnOriginKind::Person,
+                    label: None,
+                }),
             });
             drain = drain.or(Some(prompt_command));
         }
