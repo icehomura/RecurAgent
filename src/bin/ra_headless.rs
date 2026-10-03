@@ -18,9 +18,17 @@ use ra::models::{ModelRegistry, default_models_path};
 /// Stack reserve for every worker thread the runtime spawns.
 ///
 /// A stack overflow is a fail-fast abort on Windows (`STATUS_STACK_OVERFLOW`,
-/// `0xC00000FD`): no unwinding, no `Drop`, no session flush. 64 MiB matches the
-/// interactive driver and the `ra` binary's main-thread reservation.
-const HEADLESS_WORKER_STACK_BYTES: usize = 64 * 1024 * 1024;
+/// `0xC00000FD`): no unwinding, no `Drop`, no session flush. Sized from the
+/// same measurement as `ra`'s `MAIN_STACK_BYTES`: a complete offline
+/// agent turn — including a `dag` whose node runs `run_code` (dag_tool +
+/// ptc_bridge + QuickJS) — holds at 724992 B (708 KiB) and aborts at 720896 B
+/// (704 KiB), flat to DAG N=256 (probe
+/// `agent::tests::probe_full_turn_stack_scaling`, commit `905433d68`). That
+/// probe uses a mock provider, so real transport (TLS/HTTP) and session
+/// persistence (sqlite/JSONL) are unexercised (`-Zprint-type-sizes` puts those
+/// frames at <= ~30 KiB each); 16 MiB keeps ~23x headroom over the floor.
+/// Bead `bd-qtffv` tracks verifying the transport-heavy chains and going lower.
+const HEADLESS_WORKER_STACK_BYTES: usize = 16 * 1024 * 1024;
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
@@ -35,8 +43,9 @@ fn main() -> Result<()> {
         // Worker threads poll the same deeply nested agent/provider futures the
         // `ra` binary drives. Size them explicitly: unsized they inherit the PE
         // default, and a deep future then aborts with `STATUS_STACK_OVERFLOW`
-        // (fail-fast, no unwinding, no session flush). 64 MiB matches
-        // `ra`'s `MAIN_STACK_BYTES`/`RUNTIME_WORKER_STACK_BYTES`.
+        // (fail-fast, no unwinding, no session flush). Same 16 MiB as `ra`'s
+        // `MAIN_STACK_BYTES`/`RUNTIME_WORKER_STACK_BYTES`; see
+        // `HEADLESS_WORKER_STACK_BYTES` above and bead `bd-qtffv`.
         .thread_stack_size(HEADLESS_WORKER_STACK_BYTES)
         .with_reactor(reactor)
         .build()
