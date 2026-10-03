@@ -32,13 +32,14 @@ pub const PIPELINE_EXTERNAL_CONTEXT_UNMANAGED_REASON: &str =
 const FALLBACK_PIPELINE_NAME: &str = "deep_research";
 
 /// S1-5 opt-out: whether the typed-IR ([`crate::ir`]) authoring path is exposed
-/// to the LLM by default. ON unless the operator sets `OCTOS_PIPELINE_IR=0`
-/// (or `false`) in the daemon environment (e.g. the launchd plist). The typed-IR
+/// to the LLM by default. ON unless the operator sets `RA_PIPELINE_IR=0`
+/// (or `false`; the legacy `OCTOS_PIPELINE_IR` is still honoured) in the daemon
+/// environment (e.g. the launchd plist). The typed-IR
 /// palette is capability-locked — the LLM names kinds and prompts but cannot
 /// widen tools or select handlers — so it is safe to expose by default.
 /// Explicit [`RunPipelineTool::with_ir_enabled`] overrides this (used by tests).
 fn ir_authoring_default() -> bool {
-    std::env::var("OCTOS_PIPELINE_IR")
+    ra_core::brand::env_compat_str("PIPELINE_IR")
         .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
         .unwrap_or(true)
 }
@@ -331,9 +332,9 @@ impl RunPipelineTool {
     }
 
     /// Register `<root>/bundled-pipelines` as the LOWEST-precedence
-    /// discovery path. Used by the non-ra-home hosts (`ra chat`,
-    /// `ra serve`) that bootstrap the bundle into `<data_dir>/bundled-pipelines`
-    /// but do not otherwise call `with_octos_home`. Keeps bootstrap-dir ==
+    /// discovery path. Used by the hosts that do not call `with_octos_home`
+    /// (`ra chat`, `ra serve`) and bootstrap the bundle into
+    /// `<data_dir>/bundled-pipelines` instead. Keeps bootstrap-dir ==
     /// search-dir while preserving installed-wins (BLOCKER 2 + BLOCKER 3).
     pub fn with_bundled_pipelines_root(mut self, root: PathBuf) -> Self {
         self.discovery.add_bundled_pipelines_dir(&root);
@@ -2848,13 +2849,13 @@ mod tests {
                 .unwrap_or(true)
         };
         assert!(eval(None), "no env var → ON (default)");
-        assert!(eval(Some("1")), "OCTOS_PIPELINE_IR=1 → ON");
-        assert!(eval(Some("true")), "OCTOS_PIPELINE_IR=true → ON");
-        assert!(!eval(Some("0")), "OCTOS_PIPELINE_IR=0 → OFF");
-        assert!(!eval(Some("false")), "OCTOS_PIPELINE_IR=false → OFF");
+        assert!(eval(Some("1")), "RA_PIPELINE_IR=1 → ON");
+        assert!(eval(Some("true")), "RA_PIPELINE_IR=true → ON");
+        assert!(!eval(Some("0")), "RA_PIPELINE_IR=0 → OFF");
+        assert!(!eval(Some("false")), "RA_PIPELINE_IR=false → OFF");
         assert!(
             !eval(Some("FALSE")),
-            "OCTOS_PIPELINE_IR=FALSE → OFF (case-insensitive)"
+            "RA_PIPELINE_IR=FALSE → OFF (case-insensitive)"
         );
         assert!(eval(Some("anything")), "any other value → ON");
     }

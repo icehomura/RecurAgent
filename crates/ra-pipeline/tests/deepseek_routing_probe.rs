@@ -15,7 +15,8 @@
 //! high absolute rate AND a higher rate than OLD, without over-triggering on
 //! single-fact controls.
 //!
-//! Production deepseek runs with `OCTOS_PIPELINE_IR` OFF, so this probes the
+//! Production deepseek runs with `RA_PIPELINE_IR` OFF (the legacy
+//! `OCTOS_PIPELINE_IR` is still honoured), so this probes the
 //! NON-IR (`with_ir_enabled(false)`) description branch — the one prod sees.
 //!
 //! Run:

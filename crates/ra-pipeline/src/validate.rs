@@ -103,11 +103,11 @@ impl RuleId {
             Self::TemplateBinding => "T-Agent",
             Self::DeadEdge => "T-Edge",
             Self::Connectivity | Self::NoCycle | Self::NoSelfLoop => "T-Conn",
-            Self::KnownModel => "OCTOS-Model",
-            Self::KnownToolPolicy => "OCTOS-ToolPolicy",
-            Self::FanoutBound => "OCTOS-Fanout",
-            Self::HumanGateResolver => "OCTOS-HumanGate",
-            Self::ReferenceResolution => "OCTOS-Ref",
+            Self::KnownModel => "ra-Model",
+            Self::KnownToolPolicy => "ra-ToolPolicy",
+            Self::FanoutBound => "ra-Fanout",
+            Self::HumanGateResolver => "ra-HumanGate",
+            Self::ReferenceResolution => "ra-Ref",
             _ => "PipelineLint",
         }
     }

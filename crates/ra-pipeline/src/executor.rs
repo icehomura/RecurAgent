@@ -1583,10 +1583,11 @@ fn resolve_search_result_files(content: &str, working_dir: &std::path::Path) -> 
 pub struct PipelineExecutor {
     config: ExecutorConfig,
     /// Explicit DAG-scheduler override. `Some(true)`/`Some(false)` force the
-    /// scheduler on/off and take PRECEDENCE over the `OCTOS_PIPELINE_DAG` env;
-    /// `None` defers to the env. Default `None` → byte-identical production
+    /// scheduler on/off and take PRECEDENCE over the `RA_PIPELINE_DAG` env
+    /// (legacy `OCTOS_PIPELINE_DAG` still honoured); `None` defers to the env.
+    /// Default `None` → byte-identical production
     /// until an operator opts in. The builder sets it so a test can force the
-    /// legacy path even when an opted-in env (`OCTOS_PIPELINE_DAG=1`) is set.
+    /// legacy path even when an opted-in env (`RA_PIPELINE_DAG=1`) is set.
     dag_override: Option<bool>,
 }
 
@@ -5184,7 +5185,7 @@ struct DagRunCtx<'a> {
 /// `with_dag_scheduler` builder instead (env is process-global / racy).
 fn dag_scheduler_enabled() -> bool {
     matches!(
-        std::env::var("OCTOS_PIPELINE_DAG").ok().as_deref(),
+        ra_core::brand::env_compat_str("PIPELINE_DAG").as_deref(),
         Some("1") | Some("true") | Some("TRUE")
     )
 }
