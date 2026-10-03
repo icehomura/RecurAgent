@@ -162,7 +162,9 @@ pub struct TaskGraph {
 impl TaskGraph {
     /// 构建并校验一张任务图。
     ///
-    /// 校验顺序：ID 唯一 → 依赖存在 → 环检测（Kahn）→ 规模上限 → 递归防护。
+    /// 校验顺序：ID 唯一 → 依赖存在 → 节点数上限 → 环检测（Kahn）→ 深度/层宽 → 递归防护。
+    /// 节点数上限必须先于环检测：`find_cycle_path` 的 DFS 深度是 O(节点数)，
+    /// 未设上限的输入会让它在拒绝之前就把栈走穿。
     pub fn build(nodes: Vec<TaskNode>) -> Result<Self, GraphError> {
         // 1. ID 唯一。
         let mut id_set: HashSet<TaskNodeId> = HashSet::with_capacity(nodes.len());
@@ -184,7 +186,17 @@ impl TaskGraph {
             }
         }
 
-        // 3. Kahn 分层 + 环检测：一轮只摘出入度为 0 的节点作为一层，
+        // 3. 节点数硬上限（先于环检测：`find_cycle_path` 的 DFS 深度是
+        //    O(节点数)，无上限的输入会在拒绝之前把栈走穿）。
+        let count = nodes.len();
+        if count > MAX_DAG_NODES {
+            return Err(GraphError::TooManyNodes {
+                count,
+                max: MAX_DAG_NODES,
+            });
+        }
+
+        // 4. Kahn 分层 + 环检测：一轮只摘出入度为 0 的节点作为一层，
         //    全部摘完则无环且得到拓扑分层。
         let (layers, processed) = kahn_layer(&nodes, &id_set);
         if processed < nodes.len() {
@@ -200,19 +212,12 @@ impl TaskGraph {
             return Err(GraphError::Cycle { path });
         }
 
-        // 4. 规模硬上限（不做静默截断）。
+        // 5. 深度/层宽硬上限（不做静默截断）。
         let depth = layers.len();
         if depth > MAX_DAG_DEPTH {
             return Err(GraphError::TooDeep {
                 depth,
                 max: MAX_DAG_DEPTH,
-            });
-        }
-        let count = nodes.len();
-        if count > MAX_DAG_NODES {
-            return Err(GraphError::TooManyNodes {
-                count,
-                max: MAX_DAG_NODES,
             });
         }
         for (layer, ids) in layers.iter().enumerate() {
@@ -225,7 +230,7 @@ impl TaskGraph {
             }
         }
 
-        // 5. 递归防护：节点不得声明 `dag` 工具。
+        // 6. 递归防护：节点不得声明 `dag` 工具。
         for node in &nodes {
             if FORBIDDEN_NODE_TOOLS.contains(&node.tool_name.as_str()) {
                 return Err(GraphError::RecursiveNode { node: node.id });
@@ -563,6 +568,26 @@ mod tests {
             result,
             Err(GraphError::RecursiveNode { node }) if node == TaskNodeId::new(1)
         ));
+    }
+
+    #[test]
+    fn oversized_cyclic_graph_is_rejected_before_cycle_detection() {
+        // 4096 节点环：远超 MAX_DAG_NODES。节点数门禁若仍排在 Kahn 之后，
+        // `find_cycle_path` 的递归 dfs 会沿整个环走到 4096 层；门禁前移后
+        // 必须在任何 DFS 之前就以 TooManyNodes 拒绝。
+        let n = MAX_DAG_NODES * 16;
+        let nodes: Vec<TaskNode> = (0..n)
+            .map(|id| node(id as u32, &[((id + 1) % n) as u32]))
+            .collect();
+        let result = TaskGraph::build(nodes);
+        assert!(
+            matches!(
+                result,
+                Err(GraphError::TooManyNodes { count, max })
+                    if count == n && max == MAX_DAG_NODES
+            ),
+            "oversized cyclic graph must be refused before cycle DFS: {result:?}"
+        );
     }
 
     #[test]
