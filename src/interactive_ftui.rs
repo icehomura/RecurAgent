@@ -6660,12 +6660,21 @@ impl RaFtuiModel {
         // Record the authoritative frame size; mouse hit-testing reads it via
         // `frame_area` so it cannot drift from what was drawn.
         self.rendered_size.set((frame.width(), frame.height()));
+        // The pane is clamped against the *frame*, not `self.term`: the frame
+        // is authoritative (the first frame renders before any
+        // `Event::Resize` arrives, and the test simulator never sends one), and
+        // a stale terminal height used to reserve the pane's full seven rows
+        // inside an eight-row frame, squeezing the status line and the whole
+        // conversation out of it.
+        let activity_rows = self
+            .activity_rows()
+            .min(area.height.saturating_sub(FIXED_CHROME_ROWS + self.input_rows()));
         let regions = layout_regions(
             area,
             self.input_rows(),
             u16::from(self.error_banner.is_some()),
             self.completion_rows(),
-            self.activity_rows(),
+            activity_rows,
         );
         self.rendered_body.set(regions.body);
 
@@ -13090,7 +13099,9 @@ mod tests {
             is_error: false,
             output: None,
         }));
-        let rendered = buffer_text(sim.capture_frame(40, 8), 40, 8);
+        // The live pane keeps its own rows, so the transcript trace needs a
+        // frame tall enough to hold both it and the seven pane rows.
+        let rendered = buffer_text(sim.capture_frame(40, 20), 40, 20);
         assert!(
             !rendered.contains("running bash"),
             "tool status not cleared"
@@ -17185,7 +17196,9 @@ mod tests {
                 .iter()
                 .any(|e| e.card == Some(CardState::Err))
         );
-        let rendered = buffer_text(sim.capture_frame(60, 16), 60, 16);
+        // Both the bash card's detail lines and the edit card's head must be
+        // on screen, so the frame has to leave the seven-row live pane room.
+        let rendered = buffer_text(sim.capture_frame(60, 20), 60, 20);
         assert!(
             rendered.contains("✓ bash"),
             "ok glyph missing: {rendered:?}"
