@@ -21,6 +21,15 @@ DSR_REPOS_FILE=.dsr/repos.yaml dsr quality --tool recur_agent
 dsr build recur_agent
 ```
 
+If this host has no `dsr`/`rch`/`cargo` — or the Docker host is the only Linux
+box you have — the same seven checks run in a container, with nothing installed
+locally. This is a fork-local result, not a DSR result:
+
+```bash
+test/docker/gate.sh              # clone the fork and run every check
+test/docker/gate.sh --worktree   # gate the working tree instead
+```
+
 The `rch exec -- cargo ...` commands below are the same invocations the recipe
 runs; use them for a tight inner development loop, never as a substitute for
 the DSR result when closing a Bead or making a quality claim.
