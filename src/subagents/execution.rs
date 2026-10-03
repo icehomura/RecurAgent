@@ -51,12 +51,20 @@ const CANCELLED: &str = "Parent cancellation propagated to child process.";
 /// `STATUS_STACK_OVERFLOW` (`0xC00000FD`), which aborts the child with no
 /// unwinding; that is tolerable for a child but must not happen at scale.
 ///
-/// The value matches `interactive_ftui::DRIVER_STACK_BYTES` (64 MiB), the
-/// largest deep-frame reservation in the tree, because the child polls the
-/// same agent/provider/tool future chain the TUI driver does. The reserve is
-/// virtual and committed lazily, so concurrent children cost address space,
-/// not resident memory.
-pub(super) const CHILD_RUST_MIN_STACK: &str = "67108864";
+/// 16 MiB, matching the other deep-stack reserves in the tree
+/// (`interactive_ftui::DRIVER_STACK_BYTES`, `main::MAIN_STACK_BYTES`), because
+/// the child polls the same agent/provider/tool future chain. Sized from the
+/// same measurement: a complete offline agent turn — including a `dag` whose
+/// node runs `run_code` (dag_tool + ptc_bridge + QuickJS) — holds at 724992 B
+/// (708 KiB) and aborts at 720896 B (704 KiB), flat to DAG N=256 (probe
+/// `agent::tests::probe_full_turn_stack_scaling`, commit `905433d68`). That
+/// probe uses a mock provider, so real transport (TLS/HTTP) and session
+/// persistence (sqlite/JSONL) are unexercised (`-Zprint-type-sizes` puts those
+/// frames at <= ~30 KiB each); 16 MiB keeps ~23x headroom over the floor. Bead
+/// `bd-qtffv` tracks verifying the transport-heavy chains and going lower. The
+/// reserve is virtual and committed lazily, so concurrent children cost address
+/// space, not resident memory.
+pub(super) const CHILD_RUST_MIN_STACK: &str = "16777216";
 
 pub(super) struct ChildRunner {
     cwd: PathBuf,
