@@ -81,7 +81,8 @@ pub struct Config {
     /// Whether an `embed-llama` build may download the default embedding
     /// model (EmbeddingGemma-300M, 334 MB, once, into `<data_dir>/models/`)
     /// when `embedding_model_path` is unset and the file is not on disk.
-    /// Default `true` (`OCTOS_NO_MODEL_DOWNLOAD=1` in the environment forces
+    /// Default `true` (`RA_NO_MODEL_DOWNLOAD=1`, legacy
+    /// `OCTOS_NO_MODEL_DOWNLOAD=1`, in the environment forces
     /// `false`). The download blocks [`Runtime::new`]; hosts that want to
     /// control it call [`embedding_model_ensure`] first. With `false` and no
     /// model the runtime is keyword-only (`embed` raises `NoEmbedder`).
@@ -128,7 +129,8 @@ pub fn embedding_model_status(data_dir: String) -> Result<String, OctosError> {
 /// Blocks for the whole transfer, so call it from a plain thread before
 /// [`Runtime::new`] when the host wants to own the timing. Raises
 /// [`OctosError::Embed`] when the file is absent and `download` is false (or
-/// `OCTOS_NO_MODEL_DOWNLOAD` is set), or the download fails to verify.
+/// `RA_NO_MODEL_DOWNLOAD`, legacy `OCTOS_NO_MODEL_DOWNLOAD`, is set), or the
+/// download fails to verify.
 #[uniffi::export]
 pub fn embedding_model_ensure(data_dir: String, download: bool) -> Result<String, OctosError> {
     Ok(ra_ffi::embedding_model_ensure(
@@ -694,13 +696,14 @@ mod tests {
     }
 
     /// Real end-to-end run. Ignored: needs a live provider + network. Configure
-    /// via env `OCTOS_UNIFFI_TEST_KEY_ENV` (default `OPENAI_API_KEY`). Run with:
+    /// via env `RA_UNIFFI_TEST_KEY_ENV` (legacy `OCTOS_UNIFFI_TEST_KEY_ENV`
+    /// still honoured; default `OPENAI_API_KEY`). Run with:
     ///   cargo test -p ra-uniffi -- --ignored real_run_task
     #[test]
     #[ignore = "needs a real API key + network"]
     fn real_run_task_returns_output() {
-        let key_env = std::env::var("OCTOS_UNIFFI_TEST_KEY_ENV")
-            .unwrap_or_else(|_| "OPENAI_API_KEY".to_string());
+        let key_env = ra_core::brand::env_compat_str("UNIFFI_TEST_KEY_ENV")
+            .unwrap_or_else(|| "OPENAI_API_KEY".to_string());
         let cfg = Config {
             provider: "openai".to_string(),
             model: "gpt-4o-mini".to_string(),
