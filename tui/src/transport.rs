@@ -31,6 +31,7 @@ use ra_core::ui_protocol::{
 };
 use ra_core::{Message, SessionKey, TaskId};
 use serde_json::Value;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 use tokio::{
@@ -203,6 +204,11 @@ pub struct AppUiLaunch {
     /// hydrate completes; the exactly-once marker lives in the store state
     /// (separate from the #27 bootstrap replay).
     pub prompt: Option<String>,
+    /// Directory to prepend to the stdio child's PATH, derived by
+    /// `backend_ensure` from the *resolved* backend (`None` when it is on
+    /// `PATH`). Kept out of the command string — `cmd /C` mangles an embedded
+    /// path on Windows.
+    pub backend_prepend: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -291,6 +297,7 @@ fn launch_from_cli(cli: &Cli) -> AppUiLaunch {
         auth_token,
         readonly: cli.readonly,
         prompt: cli.prompt.clone(),
+        backend_prepend: cli.backend_prepend.clone(),
     }
 }
 
@@ -647,6 +654,9 @@ struct WebSocketTransportDriver {
 
 struct StdioTransportDriver {
     command: String,
+    /// Prepended to the child's PATH so the command's bare program token
+    /// resolves to the resolved backend (Windows; `None` for a PATH hit).
+    path_prepend: Option<PathBuf>,
     command_tx: Option<mpsc::Sender<TransportCommand>>,
     event_rx: Option<mpsc::Receiver<TransportEvent>>,
     task: Option<tokio::task::JoinHandle<()>>,
@@ -786,7 +796,7 @@ impl ProtocolExchange {
 }
 
 impl ProtocolTransportDriver {
-    fn from_endpoint(endpoint: &AppUiEndpoint) -> Result<Self> {
+    fn from_endpoint(endpoint: &AppUiEndpoint, path_prepend: Option<PathBuf>) -> Result<Self> {
         match endpoint {
             AppUiEndpoint::WebSocket {
                 url,
@@ -800,9 +810,10 @@ impl ProtocolTransportDriver {
             AppUiEndpoint::WebSocket { .. } => Err(eyre!(
                 "UI protocol endpoint must be a WebSocket URL starting with ws:// or wss://"
             )),
-            AppUiEndpoint::Stdio { command, .. } => {
-                Ok(Self::Stdio(StdioTransportDriver::new(command.clone())?))
-            }
+            AppUiEndpoint::Stdio { command, .. } => Ok(Self::Stdio(StdioTransportDriver::new(
+                command.clone(),
+                path_prepend,
+            )?)),
         }
     }
 
@@ -1064,7 +1075,7 @@ impl WebSocketTransportDriver {
 }
 
 impl StdioTransportDriver {
-    fn new(command: String) -> Result<Self> {
+    fn new(command: String, path_prepend: Option<PathBuf>) -> Result<Self> {
         let command = command.trim().to_string();
         if command.is_empty() {
             return Err(eyre!("UI protocol stdio command must not be empty"));
@@ -1072,6 +1083,7 @@ impl StdioTransportDriver {
 
         Ok(Self {
             command,
+            path_prepend,
             command_tx: None,
             event_rx: None,
             task: None,
@@ -1096,7 +1108,7 @@ impl StdioTransportDriver {
 
         let mut child = runtime
             .block_on(async {
-                let mut command = shell_command(&self.command);
+                let mut command = shell_command(&self.command, self.path_prepend.as_deref());
                 // Multi-instance stdio: isolate this window's runtime (redb
                 // stores, sessions, goals, the serve flock) under a per-cwd
                 // instance dir so several ra-tui windows can run at once
@@ -1662,21 +1674,22 @@ fn bounded_send_error(
     }
 }
 
-fn shell_command(command: &str) -> Command {
+fn shell_command(command: &str, path_prepend: Option<&Path>) -> Command {
     // `cfg!(windows)` (runtime) rather than `#[cfg(windows)]` so BOTH branches
     // type-check on every host — the Windows path can't be cross-compiled from
     // macOS/Linux, so keeping it compiled everywhere is our only static check.
     if cfg!(windows) {
         let mut process = Command::new("cmd");
         process.arg("/C").arg(command);
-        // Prepend the resolved backend dir (`~\.ra\bin`, or a sibling of this
-        // binary, or a legacy `~\.ra\bin`) to the CHILD's PATH so a bare
-        // `ra` in `command` resolves to the exe `backend_ensure` resolved —
-        // WITHOUT embedding a path in the command string, which
-        // `cmd /C` + Rust arg-quoting mangle (that was the exit-1 launch bug).
-        // Setting the child's env is not `unsafe` and never touches our own PATH.
-        if let Some(bin) = crate::backend_ensure::install_bin_dir() {
-            let mut path = bin.into_os_string();
+        // `path_prepend` is the dir the *resolved* backend lives in (derived in
+        // `backend_ensure` from the chosen resolution, so it can never shadow
+        // it). We prepend it to the CHILD's PATH so the command's bare program
+        // token resolves to that exe — WITHOUT embedding a path in the command
+        // string, which `cmd /C` + Rust arg-quoting mangle (that was the exit-1
+        // launch bug). Nothing is prepended for a PATH resolution. Setting the
+        // child's env is not `unsafe` and never touches our own PATH.
+        if let Some(dir) = path_prepend {
+            let mut path = dir.as_os_str().to_os_string();
             if let Some(existing) = std::env::var_os("PATH") {
                 path.push(";"); // Windows PATH separator (this branch is Windows-only at runtime)
                 path.push(existing);
@@ -1739,7 +1752,10 @@ impl ProtocolAppUiBackend {
                 self.launch.endpoint.as_ref().ok_or_else(|| {
                     eyre!("--mode protocol requires --endpoint <ws://...|wss://...> or --stdio-command <CMD>")
                 })?;
-            self.driver = Some(ProtocolTransportDriver::from_endpoint(endpoint)?);
+            self.driver = Some(ProtocolTransportDriver::from_endpoint(
+                endpoint,
+                self.launch.backend_prepend.clone(),
+            )?);
         }
         Ok(())
     }
@@ -10267,7 +10283,7 @@ mod tests {
 
     #[test]
     fn stdio_transport_driver_rejects_empty_command() {
-        let err = match StdioTransportDriver::new("   ".into()) {
+        let err = match StdioTransportDriver::new("   ".into(), None) {
             Ok(_) => panic!("empty command should be rejected"),
             Err(err) => err,
         };
@@ -10281,7 +10297,7 @@ mod tests {
     #[test]
     fn stdio_transport_driver_shape_is_line_oriented_text() {
         let driver =
-            StdioTransportDriver::new("ra serve --stdio".into()).expect("driver builds");
+            StdioTransportDriver::new("ra serve --stdio".into(), None).expect("driver builds");
 
         assert_eq!(driver.label(), "ra serve --stdio");
         assert!(!driver.is_connected());
@@ -10495,7 +10511,7 @@ mod tests {
         command: &str,
     ) -> (Vec<String>, Vec<(String, String, bool)>, String) {
         let runtime = Runtime::new().expect("test runtime");
-        let mut driver = StdioTransportDriver::new(command.into()).expect("driver builds");
+        let mut driver = StdioTransportDriver::new(command.into(), None).expect("driver builds");
         driver.connect(&runtime).expect("stdio child spawns");
 
         let deadline = Instant::now() + Duration::from_secs(10);
@@ -10628,6 +10644,7 @@ mod tests {
             mode: crate::cli::Mode::Protocol,
             base_url: None,
             stdio_command: Some("ra serve --stdio".into()),
+            backend_prepend: None,
             session: None,
             profile_id: None,
             cwd: None,
@@ -12560,6 +12577,7 @@ mod tests {
             mode: crate::cli::Mode::Protocol,
             base_url: Some("wss://example.test/ui-protocol".into()),
             stdio_command: None,
+            backend_prepend: None,
             session: Some("local:test".into()),
             profile_id: Some("coding".into()),
             cwd: None,

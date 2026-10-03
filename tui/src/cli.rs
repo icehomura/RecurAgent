@@ -127,6 +127,11 @@ pub struct Cli {
     pub base_url: Option<String>,
     /// UI Protocol v1 stdio child command.
     pub stdio_command: Option<String>,
+    /// Directory to prepend to the stdio child's PATH — derived by
+    /// `backend_ensure` from the *resolved* backend (`None` when it is on
+    /// `PATH`, or the command is user-managed). Never embedded in the command
+    /// string, which `cmd /C` would mangle.
+    pub backend_prepend: Option<PathBuf>,
     /// Session id to open first.
     pub session: Option<String>,
     /// Profile id to use for the session.
@@ -433,6 +438,7 @@ impl Cli {
             mode,
             base_url,
             stdio_command,
+            backend_prepend: None,
             session: args.session.or(file_config.session),
             profile_id: args.profile_id.or(file_config.profile_id),
             cwd: args.cwd.or(file_config.cwd),

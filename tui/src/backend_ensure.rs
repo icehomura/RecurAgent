@@ -17,9 +17,12 @@
 //! We resolve against `PATH` and the install dirs without mutating our own
 //! process PATH (this crate forbids `unsafe`). When the backend is usable only
 //! off-PATH: on Unix we rewrite the stdio command to the full path; on Windows
-//! we leave the command bare and the stdio transport prepends the resolved dir
-//! to the *child's* PATH (a quoted path in the command string is mangled by
-//! `cmd /C`).
+//! we never embed a path (a quoted path in the command string is mangled by
+//! `cmd /C`) — if the resolved binary's name differs from the command's program
+//! token (e.g. a legacy `ra` while the command says `ra`) we rewrite just
+//! that token, and the transport prepends the resolved dir to the *child's*
+//! PATH. The prepend is a function of the chosen resolution, so a rejected
+//! (e.g. outdated) candidate can never be prepended back into the launch.
 //!
 //! Scope — it acts on a `Mode::Protocol` launch whose `--stdio-command`'s
 //! **leading program** is a bare `ra` (PATH-resolved). Trailing args may carry
@@ -75,45 +78,51 @@ pub fn ensure_octos_backend(cli: &mut Cli) -> Result<()> {
         return Ok(());
     };
 
-    match resolve_backend(&program)? {
+    let resolved = resolve_backend(&program)?;
+    // The child PATH prepend is a function of the chosen resolution: nothing for
+    // a PATH hit, the binary's dir for an explicit one — so an outdated sibling
+    // that lost to a PATH `ra` can never be prepended back into the launch.
+    cli.backend_prepend = child_path_prepend(&resolved);
+
+    match resolved {
         // Already on PATH — the bare `ra serve` command works as-is.
         Resolved::OnPath => Ok(()),
-        // Usable only off-PATH — rewrite the command to launch it directly,
-        // since its dir isn't on this process's PATH.
-        Resolved::AtPath(ra) => {
-            // On Windows, DON'T rewrite the command to an explicit path. The
-            // stdio transport spawns via `cmd /C <command>`, and a path embedded
-            // in that string — quoted or not — gets mangled by Rust's arg quoting
-            // plus cmd's own quirky quote parsing (the child then dies with exit
-            // 1). Instead the transport prepends this dir to the child's
-            // PATH (see `install_bin_dir` / `shell_command`), so the bare `ra`
-            // in the command resolves to the resolved exe (a sibling of this
-            // binary, or the install dir). Nothing to rewrite here — `ra` is
-            // bound only for the non-Windows path below.
+        // Usable only off-PATH — make the launch find it without embedding a
+        // path where that is unsafe.
+        Resolved::AtPath(bin) => {
             if cfg!(windows) {
-                let _ = &ra;
-                return Ok(());
+                // `cmd /C` mangles a path embedded in the command string, so we
+                // never do that. If the resolved binary's name differs from the
+                // command's program token (a legacy `ra` while the command
+                // says `ra`), rewrite just that token; the transport prepends
+                // the binary's dir to the child's PATH (see `child_path_prepend`
+                // / `shell_command`) so the bare token resolves to it.
+                if let Some(rewritten) = windows_command_for(&command, &bin) {
+                    cli.stdio_command = Some(rewritten);
+                }
+                Ok(())
+            } else {
+                let rewritten = rewrite_program(&command, &bin).ok_or_else(|| {
+                    eyre!(
+                        "ra is installed at {} but isn't on PATH, and the launch command uses \
+                         shell syntax we can't safely rewrite to that path. Add {} to PATH and \
+                         relaunch the TUI.",
+                        bin.display(),
+                        bin.parent()
+                            .map(|d| d.display().to_string())
+                            .unwrap_or_else(|| bin.display().to_string()),
+                    )
+                })?;
+                cli.stdio_command = Some(rewritten);
+                Ok(())
             }
-            let rewritten = rewrite_program(&command, &ra).ok_or_else(|| {
-                eyre!(
-                    "ra is installed at {} but isn't on PATH, and the launch command uses \
-                     shell syntax we can't safely rewrite to that path. Add {} to PATH and \
-                     relaunch the TUI.",
-                    ra.display(),
-                    ra
-                        .parent()
-                        .map(|d| d.display().to_string())
-                        .unwrap_or_else(|| ra.display().to_string()),
-                )
-            })?;
-            cli.stdio_command = Some(rewritten);
-            Ok(())
         }
     }
 }
 
 /// A usable backend, either already on `PATH` or at an explicit path we must
 /// launch directly.
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Resolved {
     OnPath,
     AtPath(PathBuf),
@@ -176,56 +185,110 @@ fn opt_out_from(current: Option<std::ffi::OsString>, legacy: Option<std::ffi::Os
     OptOut::No
 }
 
+/// Which candidate slot a backend path came from, in resolution precedence.
+/// Shared with `doctor` so the reported set can't drift from what launches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CandidateKind {
+    /// A `ra`/`ra.exe` beside the running ra-tui binary.
+    Sibling,
+    /// Bare `ra` resolved through `PATH`.
+    Path,
+    /// The install dir (`$RA_PREFIX` or `~/.ra/bin`).
+    InstallDir,
+    /// A legacy upstream `ra` install (`$OCTOS_PREFIX` or `~/.ra/bin`).
+    LegacyOctos,
+}
+
+impl CandidateKind {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Sibling => "sibling of ra-tui",
+            Self::Path => "PATH",
+            Self::InstallDir => "ra install dir",
+            Self::LegacyOctos => "legacy ra install",
+        }
+    }
+}
+
+/// The backend candidates in resolution precedence. Shared by
+/// [`resolve_backend`] and `doctor` so the two can't disagree about the set.
+pub(crate) fn backend_candidates(program: &str) -> Vec<(PathBuf, CandidateKind)> {
+    let mut candidates = Vec::new();
+    if let Some(sibling) = sibling_backend() {
+        candidates.push((sibling, CandidateKind::Sibling));
+    }
+    candidates.push((PathBuf::from(program), CandidateKind::Path));
+    if let Some(exe) = install_dir_backend() {
+        candidates.push((exe, CandidateKind::InstallDir));
+    }
+    if let Some(exe) = legacy_install_dir_octos() {
+        candidates.push((exe, CandidateKind::LegacyOctos));
+    }
+    candidates
+}
+
+/// Outcome of scanning the candidate list — pure, with the probe injected so
+/// the precedence rules are testable without spawning real binaries.
+enum Choice {
+    Resolved(Resolved),
+    Outdated(String),
+    Missing,
+}
+
+fn choose_backend(
+    candidates: &[(PathBuf, CandidateKind)],
+    probe: impl Fn(&Path) -> Probe,
+) -> Choice {
+    let mut outdated: Option<String> = None;
+    for (path, kind) in candidates {
+        match probe(path) {
+            Probe::Ready => {
+                return Choice::Resolved(match kind {
+                    CandidateKind::Path => Resolved::OnPath,
+                    _ => Resolved::AtPath(path.clone()),
+                })
+            }
+            Probe::Outdated(found) => {
+                if outdated.is_none() {
+                    outdated = Some(found.clone());
+                }
+            }
+            Probe::Missing => {}
+        }
+    }
+    match outdated {
+        Some(found) => Choice::Outdated(found),
+        None => Choice::Missing,
+    }
+}
+
 /// Find a usable backend for the bare `ra` stdio command. Candidates are tried
-/// in order — a `ra`/`ra.exe` beside this binary (the repo dev layout), then
-/// `ra` on `PATH`, then the install dir (`~/.ra/bin`), then a legacy upstream
-/// `ra` install (`~/.ra/bin`) — and the first `Ready` wins. If nothing is
+/// in [`backend_candidates`] order and the first `Ready` wins. If nothing is
 /// `Ready` but a candidate exists and is too old, guide an update; otherwise
 /// error with the fix (no upstream install is attempted).
 fn resolve_backend(program: &str) -> Result<Resolved> {
-    let mut outdated: Option<String> = None;
-
-    // (a) Sibling of the running TUI binary — explicit path.
-    if let Some(sibling) = sibling_backend() {
-        match probe(&sibling) {
-            Probe::Ready => return Ok(Resolved::AtPath(sibling)),
-            Probe::Outdated(found) => outdated = Some(found),
-            Probe::Missing => {}
+    match choose_backend(&backend_candidates(program), probe) {
+        Choice::Resolved(resolved) => Ok(resolved),
+        Choice::Outdated(found) => Err(outdated_error(&found)),
+        Choice::Missing => {
+            // Missing everywhere → actionable error; never install upstream.
+            if opted_out() {
+                return Err(backend_missing_error());
+            }
+            run_installer()?;
+            unreachable!("run_installer only ever returns the actionable 'no backend' error")
         }
     }
-    // (b) PATH (bare `ra`).
-    match probe(Path::new(program)) {
-        Probe::Ready => return Ok(Resolved::OnPath),
-        Probe::Outdated(found) => outdated = outdated.or(Some(found)),
-        Probe::Missing => {}
-    }
-    // (c) Install dir.
-    if let Some(exe) = install_dir_backend() {
-        match probe(&exe) {
-            Probe::Ready => return Ok(Resolved::AtPath(exe)),
-            Probe::Outdated(found) => outdated = outdated.or(Some(found)),
-            Probe::Missing => {}
-        }
-    }
-    // (d) Legacy upstream ra install — protocol-compatible, accepted.
-    if let Some(exe) = legacy_install_dir_octos() {
-        match probe(&exe) {
-            Probe::Ready => return Ok(Resolved::AtPath(exe)),
-            Probe::Outdated(found) => outdated = outdated.or(Some(found)),
-            Probe::Missing => {}
-        }
-    }
+}
 
-    if let Some(found) = outdated {
-        return Err(outdated_error(&found));
-    }
-
-    // Missing everywhere → actionable error; never install upstream.
-    if opted_out() {
-        return Err(backend_missing_error());
-    }
-    run_installer()?;
-    unreachable!("run_installer only ever returns the actionable 'no backend' error")
+/// The backend `doctor` should report: the first `Ready` candidate and which
+/// slot it came from, or `None` when nothing is `Ready`. Same order as
+/// [`resolve_backend`], so the report matches what a launch would pick.
+pub(crate) fn resolved_backend_report() -> Option<(PathBuf, &'static str)> {
+    backend_candidates("ra")
+        .into_iter()
+        .find(|(path, _)| matches!(probe(path), Probe::Ready))
+        .map(|(path, kind)| (path, kind.label()))
 }
 
 /// The actionable "no backend" error. No upstream install is attempted: this
@@ -338,19 +401,16 @@ fn sibling_backend() -> Option<PathBuf> {
     Some(exe.parent()?.join(backend_binary_name()))
 }
 
-/// The directory the resolved backend actually lives in: the sibling dir of
-/// the running TUI binary when a `ra`/`ra.exe` sits there, else the install dir
-/// (`$RA_PREFIX` or `~/.ra/bin`). The stdio transport prepends this to the
-/// child's PATH so a bare `ra` in the launch command resolves to the right exe
-/// — without embedding a path in the command string, which `cmd /C` mangles on
-/// Windows. `None` if no sibling and no home dir.
-pub(crate) fn install_bin_dir() -> Option<PathBuf> {
-    if let Some(sibling) = sibling_backend() {
-        if sibling.exists() {
-            return sibling.parent().map(Path::to_path_buf);
-        }
+/// The directory to prepend to the *child's* PATH so the launch command's bare
+/// program token resolves to the *resolved* backend: nothing for a `PATH`
+/// resolution (the child's own PATH already finds it), the binary's directory
+/// for an explicit one. A pure function of the chosen [`Resolved`], so the
+/// prepended dir can never disagree with the binary the resolver picked.
+fn child_path_prepend(resolved: &Resolved) -> Option<PathBuf> {
+    match resolved {
+        Resolved::OnPath => None,
+        Resolved::AtPath(path) => path.parent().map(Path::to_path_buf),
     }
-    install_dir_backend().and_then(|exe| exe.parent().map(Path::to_path_buf))
 }
 
 /// Home directory, treating an empty `HOME` as absent so the Windows
@@ -362,39 +422,58 @@ fn home_dir() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-/// The program a `--stdio-command` runs, IFF it is a **bare** `ra` (no path
-/// separator) resolved through `PATH`. Handles a leading `env` + `VAR=value`
-/// assignments and an optional `stdio:` transport-label prefix. This decides
-/// only whether we may *probe* the backend, so it inspects just the
-/// leading executable — trailing args carrying shell syntax (a `--data-dir
-/// ~/x`, a pipe, or a Windows `C:\...` path) must NOT disqualify provisioning
-/// (codex); round-trip safety is enforced separately, at the rewrite step.
-/// Returns `None` for an explicit path, a `PATH=` override (the child would
-/// resolve `ra` against a different search path than we probe), or a
-/// non-`ra` program (a user-specified legacy `ra` command is left to the
-/// user).
-fn bare_octos_program(command: &str) -> Option<String> {
-    let command = command.trim();
-    let command = command.strip_prefix("stdio:").unwrap_or(command).trim();
-    // Split on whitespace to find the leading executable. We deliberately do
-    // NOT shlex-parse here: we need only the program token, and an unquoted
-    // Windows path arg (`--data-dir C:\Users\x`) would trip POSIX backslash
-    // escaping and drop the token entirely.
-    let mut iter = command.split_whitespace();
-    let mut program = iter.next()?;
-    if program == "env" {
-        program = iter.next()?;
+/// Byte range of the leading program token in `command`, after an optional
+/// `stdio:` prefix, a leading `env`, and `KEY=value` assignments. We walk
+/// whitespace rather than shlex-parsing: we need only the program token, and an
+/// unquoted Windows path arg (`--data-dir C:\Users\x`) would trip POSIX
+/// backslash escaping and drop the token entirely. `None` when there is no
+/// program, or for a `PATH=` override (the child would resolve `ra` against a
+/// different search path than we can probe).
+fn program_token_span(command: &str) -> Option<std::ops::Range<usize>> {
+    let mut idx = command.len() - command.trim_start().len();
+    if command[idx..].starts_with("stdio:") {
+        idx += "stdio:".len();
+        let body = &command[idx..];
+        idx += body.len() - body.trim_start().len();
     }
-    // Skip `KEY=value` assignments before the program. A `PATH=` override means
-    // the child resolves `ra` against a different search path than we can
-    // probe from this process — treat the whole command as user-managed.
-    while is_env_assignment(program) {
-        if program.split_once('=').is_some_and(|(k, _)| k == "PATH") {
-            return None;
+    let mut saw_env = false;
+    while idx < command.len() {
+        let body = &command[idx..];
+        idx += body.len() - body.trim_start().len();
+        if idx >= command.len() {
+            break;
         }
-        program = iter.next()?;
+        let end = idx + command[idx..].find(char::is_whitespace).unwrap_or(command.len() - idx);
+        let token = &command[idx..end];
+        if !saw_env && token == "env" {
+            saw_env = true;
+            idx = end;
+            continue;
+        }
+        if is_env_assignment(token) {
+            if token.split_once('=').is_some_and(|(k, _)| k == "PATH") {
+                return None;
+            }
+            idx = end;
+            continue;
+        }
+        return Some(idx..end);
     }
-    if program.contains('/') || program.contains('\\') {
+    None
+}
+
+/// The program a `--stdio-command` runs, IFF it is a **bare** `ra` (no path
+/// separator) resolved through `PATH`. This decides only whether we may
+/// *probe* the backend, so it inspects just the leading executable — trailing
+/// args carrying shell syntax (a `--data-dir ~/x`, a pipe, or a Windows
+/// `C:\...` path) must NOT disqualify provisioning (codex); round-trip safety
+/// is enforced separately, at the rewrite step. Returns `None` for an explicit
+/// path, a `PATH=` override, or a non-`ra` program (a user-specified legacy
+/// `ra` command is left to the user).
+fn bare_octos_program(command: &str) -> Option<String> {
+    let span = program_token_span(command)?;
+    let token = &command[span];
+    if token.contains('/') || token.contains('\\') {
         return None; // explicit path — user's own setup
     }
     // Only a bare `ra` is our canonical, provisionable form. We deliberately do
@@ -402,7 +481,38 @@ fn bare_octos_program(command: &str) -> Option<String> {
     // Windows `cmd /C` resolves it to whatever `.exe` exists). A user-specified
     // `ra` command is a legacy upstream client the user manages themselves —
     // recognised as-is and never provisioned/rewritten.
-    (program == "ra").then(|| program.to_owned())
+    (token == "ra").then(|| token.to_owned())
+}
+
+/// Replace the leading program token of `command` with `new_program`,
+/// preserving a `stdio:` prefix, `env`, `KEY=value` assignments, and all
+/// trailing args verbatim (no shell re-parsing). Used for the Windows
+/// bare-token rewrite, where embedding a path in a `cmd /C` command is unsafe.
+/// `None` for an explicit path or a `PATH=` override.
+fn rewrite_program_token(command: &str, new_program: &str) -> Option<String> {
+    let span = program_token_span(command)?;
+    let token = &command[span.clone()];
+    if token.contains('/') || token.contains('\\') {
+        return None;
+    }
+    let mut out = String::with_capacity(command.len() + new_program.len());
+    out.push_str(&command[..span.start]);
+    out.push_str(new_program);
+    out.push_str(&command[span.end..]);
+    Some(out)
+}
+
+/// Windows never embeds a path in the stdio command (`cmd /C` mangles it).
+/// When the resolved binary's bare stem differs from the command's program
+/// token — e.g. the command says `ra` but the resolved backend is a legacy
+/// `ra.exe` — rewrite just that token so the child's prepended PATH resolves
+/// it; otherwise leave the command untouched. `None` = no change needed.
+fn windows_command_for(command: &str, bin: &Path) -> Option<String> {
+    let token = bare_octos_program(command)?;
+    let stem = bin.file_stem()?.to_str()?;
+    (token != stem)
+        .then(|| rewrite_program_token(command, stem))
+        .flatten()
 }
 
 /// Shell metacharacters whose presence means split+rejoin (and `sh -c`
@@ -501,9 +611,9 @@ fn run_installer() -> Result<()> {
     Err(backend_missing_error())
 }
 
-/// The ra/ra **server release this client targets** — the tag whose bundle
-/// carries the exact `ra-core` protocol this client pins (see the `ra-core` rev
-/// in Cargo.toml). Surfaced by `doctor` as the server version to run against.
+/// The ra server **release this client targets** — the tag whose server carries
+/// the exact `ra-core` protocol this client pins (see the `ra-core` rev in
+/// Cargo.toml). Surfaced by `doctor` as the server version to run against.
 ///
 /// **BUMP THIS whenever you bump the `ra-core` rev in Cargo.toml**, to the
 /// release tag that contains that rev. [`REQUIRED_OCTOS_CORE_REV`] and the test
@@ -534,21 +644,149 @@ mod tests {
     use super::*;
 
     #[test]
-    fn install_bin_dir_is_the_dir_the_backend_lives_in() {
-        // `install_bin_dir` (used by the transport to augment the child PATH)
-        // must be the sibling dir when a `ra` sits beside this binary, else the
-        // install dir.
-        let dir = install_bin_dir();
-        let sibling = sibling_backend();
-        let install = install_dir_backend();
-        match (dir, sibling, install) {
-            (Some(dir), Some(sib), _) if sib.exists() => {
-                assert_eq!(Some(dir.as_path()), sib.parent())
+    fn resolver_prefers_a_ready_candidate_in_order_and_never_lets_an_outdated_sibling_shadow_it() {
+        use CandidateKind::*;
+        let sibling = PathBuf::from("/tui/dir/ra.exe");
+        let path = PathBuf::from("ra");
+        let install = PathBuf::from("/home/u/.ra/bin/ra.exe");
+        let legacy = PathBuf::from("/home/u/.ra/bin/ra.exe");
+        let candidates = vec![
+            (sibling.clone(), Sibling),
+            (path.clone(), Path),
+            (install.clone(), InstallDir),
+            (legacy.clone(), LegacyOctos),
+        ];
+
+        // MUST-FIX 1: an OUTDATED sibling must not win over a Ready `ra` on
+        // PATH — the chosen Resolved is OnPath, so nothing is prepended and the
+        // stale sibling can't be launched.
+        let choice = choose_backend(&candidates, |p| {
+            if p == sibling.as_path() {
+                Probe::Outdated("1.0.0".into())
+            } else if p == path.as_path() {
+                Probe::Ready
+            } else {
+                Probe::Missing
             }
-            (Some(dir), _, Some(exe)) => assert_eq!(Some(dir.as_path()), exe.parent()),
-            (None, _, None) => {} // no HOME/USERPROFILE — install dir absent
-            other => panic!("unexpected install_bin_dir resolution: {other:?}"),
-        }
+        });
+        assert!(
+            matches!(choice, Choice::Resolved(Resolved::OnPath)),
+            "an outdated sibling must yield OnPath, not AtPath(sibling)"
+        );
+
+        // A Ready sibling wins outright (the repo dev layout).
+        let choice = choose_backend(&candidates, |p| {
+            if p == sibling.as_path() {
+                Probe::Ready
+            } else {
+                Probe::Missing
+            }
+        });
+        assert!(matches!(choice, Choice::Resolved(Resolved::AtPath(p)) if p == sibling));
+
+        // A Ready install dir wins when nothing earlier is Ready.
+        let choice = choose_backend(&candidates, |p| {
+            if p == install.as_path() {
+                Probe::Ready
+            } else {
+                Probe::Missing
+            }
+        });
+        assert!(matches!(choice, Choice::Resolved(Resolved::AtPath(p)) if p == install));
+
+        // Nothing Ready, one Outdated → the update guidance fires (first one
+        // encountered in precedence order).
+        let choice = choose_backend(&candidates, |p| {
+            if p == install.as_path() {
+                Probe::Outdated("1.0.0".into())
+            } else {
+                Probe::Missing
+            }
+        });
+        assert!(matches!(choice, Choice::Outdated(v) if v == "1.0.0"));
+
+        // All Missing → Missing (caller then errors without installing).
+        assert!(matches!(
+            choose_backend(&candidates, |_| Probe::Missing),
+            Choice::Missing
+        ));
+    }
+
+    #[test]
+    fn prepend_is_derived_from_the_resolved_value() {
+        assert_eq!(child_path_prepend(&Resolved::OnPath), None);
+        let exe = PathBuf::from("/home/u/.ra/bin/ra");
+        assert_eq!(
+            child_path_prepend(&Resolved::AtPath(exe)),
+            Some(PathBuf::from("/home/u/.ra/bin"))
+        );
+    }
+
+    #[test]
+    fn windows_token_rewrite_handles_a_legacy_octos_backend() {
+        let legacy = PathBuf::from("C:/Users/u/.ra/bin/ra.exe");
+        // Command says `ra`, resolved file is `ra.exe` → rewrite the token
+        // only (never embed a path in a `cmd /C` command).
+        assert_eq!(
+            windows_command_for("ra serve --stdio --solo", &legacy).as_deref(),
+            Some("ra serve --stdio --solo")
+        );
+        // Same-name sibling/install dir → the command is left untouched.
+        assert_eq!(
+            windows_command_for("ra serve --stdio", Path::new("C:/t/ra.exe")),
+            None
+        );
+        // A user-managed `ra` command is never rewritten.
+        assert_eq!(windows_command_for("ra serve --stdio", &legacy), None);
+    }
+
+    #[test]
+    fn sibling_ready_backend_keeps_the_bare_command_and_prepends_its_dir() {
+        let sibling = PathBuf::from("/tui/ra.exe");
+        assert_eq!(windows_command_for("ra serve --stdio", &sibling), None);
+        assert_eq!(
+            child_path_prepend(&Resolved::AtPath(sibling)),
+            Some(PathBuf::from("/tui"))
+        );
+    }
+
+    #[test]
+    fn legacy_only_backend_is_launchable_on_both_platform_paths() {
+        let legacy = PathBuf::from("/home/u/.ra/bin/ra");
+        let command = "ra serve --stdio --solo";
+        let resolved = Resolved::AtPath(legacy.clone());
+
+        // Windows: never embed a path — the program token becomes the resolved
+        // binary's bare stem, and its dir is prepended to the child PATH.
+        assert_eq!(
+            windows_command_for(command, &legacy).as_deref(),
+            Some("ra serve --stdio --solo")
+        );
+        assert_eq!(
+            child_path_prepend(&resolved),
+            Some(PathBuf::from("/home/u/.ra/bin"))
+        );
+
+        // Unix: the command is rewritten to the explicit path.
+        assert_eq!(
+            rewrite_program(command, &legacy).as_deref(),
+            Some("/home/u/.ra/bin/ra serve --stdio --solo")
+        );
+    }
+
+    #[test]
+    fn rewrite_program_token_preserves_env_prefix_and_trailing_args() {
+        assert_eq!(
+            rewrite_program_token("env A=1 ra serve --stdio", "ra").as_deref(),
+            Some("env A=1 ra serve --stdio")
+        );
+        assert_eq!(
+            rewrite_program_token("stdio:ra serve", "ra").as_deref(),
+            Some("stdio:ra serve")
+        );
+        // A PATH override / explicit path is never rewritten.
+        assert_eq!(rewrite_program_token("PATH=/x ra serve", "ra"), None);
+        assert_eq!(rewrite_program_token("/opt/ra serve", "ra"), None);
     }
 
     #[test]
@@ -714,12 +952,12 @@ mod tests {
         );
     }
 
-    /// The ra-core rev in Cargo.toml and the release tag we auto-provision
-    /// are two halves of ONE decision — which server protocol this client
-    /// speaks — living in two files, joined only by a doc comment saying "bump
-    /// this too". That drifted: the rev reached v2.0.3-rc.1 while
-    /// REQUIRED_OCTOS_RELEASE stayed at v2.0.2, so a fresh install provisioned
-    /// a server older than the protocol the client had been built against.
+    /// The ra-core rev in Cargo.toml and the server release tag this client
+    /// targets are two halves of ONE decision — which server protocol this
+    /// client speaks — living in two files, joined only by a doc comment saying
+    /// "bump this too". That drifted: the rev reached v2.0.3-rc.1 while
+    /// REQUIRED_OCTOS_RELEASE stayed at v2.0.2, so `doctor` pointed at a server
+    /// older than the protocol the client had been built against.
     ///
     /// Reading Cargo.toml at test time turns the comment into a check.
     #[test]
@@ -749,8 +987,8 @@ mod tests {
         );
     }
 
-    /// A release tag, not a bare version — the auto-installer builds download
-    /// URLs from it (`releases/download/<tag>/…`).
+    /// A release tag, not a bare version. Only `doctor` and this test read it
+    /// now — nothing downloads from it.
     #[test]
     fn octos_release_pin_is_a_tag() {
         assert!(
