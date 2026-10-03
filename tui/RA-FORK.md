@@ -20,13 +20,17 @@ server (`ra serve`). The TUI is a **protocol client**: it attaches to a running 
 WebSocket, or spawns `ra serve --stdio` as a child (`src/backend_ensure.rs`). This mirrors upstream
 and is why the TUI can be rebuilt without touching the kernel.
 
-## Follow-ups (not yet done)
+## Follow-ups
 
-1. **Backend identity** — `src/backend_ensure.rs` still looks for the upstream binary: `ra`/`ra.exe`
-   on `PATH` and in `~/.ra/bin`, with auto-provisioning from
-   `github.com/octos-org/octos/releases`, brew `octos-org/tap/octos` and npm `@octos-org/octos`.
-   It must resolve **`ra`** (sibling of the TUI binary, then `PATH`) and stop offering upstream
-   downloads.
+1. ~~**Backend identity**~~ — **done.** `src/backend_ensure.rs` resolves **`ra`**/`ra.exe` in order:
+   (a) a sibling of the running TUI binary, (b) `ra` on `PATH`, (c) the install dir `~/.ra/bin/ra`
+   (`$RA_PREFIX`), (d) a legacy `~/.ra/bin/ra` (protocol-compatible). `DEFAULT_STDIO_COMMAND` is
+   `ra serve --stdio --solo`; the version parser reads the leading `X.Y.Z` from
+   `ra 2.0.3-rc.13 (…)`; and no upstream install is attempted — a missing backend errors with
+   `cargo build --bin ra` / `--stdio-command` guidance (`run_installer()` returns that same error).
+   Residual: the upstream installer/download helpers stay compiled but unreachable (dead-code warnings)
+   until follow-up #2 removes them, and `doctor`/`update` still print the `octos`/`octoscode` brand
+   surfaces (follow-up #2).
 2. **Brand/env sweep** — `OCTOSCODE_*` / `OCTOS_*` env vars → `RA_TUI_*` / `RA_*` with dual-read
    fallback; `~/.ra` and `.ra/` → `~/.ra` and `.ra/` with legacy fallback; user-visible
    strings (`octoscode`, `Octos`) → `ra`/`ra`.

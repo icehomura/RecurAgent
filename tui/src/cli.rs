@@ -112,9 +112,9 @@ impl Lang {
     }
 }
 
-/// The stdio backend command a bare launch defaults to (and that
-/// `backend_ensure` auto-provisions). Mirrors the documented
-/// `ra serve --stdio --solo`.
+/// The stdio backend command a bare launch defaults to. Mirrors the documented
+/// `ra serve --stdio --solo`; `backend_ensure` resolves a `ra`/`ra.exe` beside
+/// this binary, on `PATH`, or in the install dir.
 pub const DEFAULT_STDIO_COMMAND: &str = "ra serve --stdio --solo";
 
 #[derive(Debug, Clone, PartialEq, Eq)]

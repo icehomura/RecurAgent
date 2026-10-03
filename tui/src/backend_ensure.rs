@@ -1,54 +1,40 @@
-//! Auto-provision the `octos` server backend so a fresh octoscode install
-//! "just works" without a separate manual `ra` download.
+//! Resolve the local `ra` server backend for a stdio launch so a bare launch
+//! "just works" against a sibling or installed server.
 //!
-//! octoscode is a *client*: a local launch spawns `octos serve --stdio` as a
+//! This client is a *client*: a local launch spawns `ra serve --stdio` as a
 //! child (`--stdio-command`). Before the TUI takes over the terminal, this
-//! module makes sure `ra` is available and, if it is missing, installs it —
-//! **binary-only** by downloading the prebuilt server bundle for the EXACT ra
-//! release this client is built against ([`REQUIRED_OCTOS_RELEASE`]) into
-//! `~/.ra/bin`, on every platform ra ships a bundle for (Windows `.zip`,
-//! macOS/Linux `.tar.gz`). Pinning the exact release keeps client and server
-//! protocols matched — a package manager (`brew`/`npm`) installs whatever its
-//! `latest` tag is (for ra, a weeks-old STABLE), so it's only a fallback for
-//! a platform with no prebuilt bundle. We deliberately do NOT run ra's
-//! `install.sh` / `install.ps1`: those register a background `ra-serve`
-//! service (a `sudo` daemon on Unix, an `OctosServe` scheduled task on Windows),
-//! which a stdio client neither needs nor should trigger.
+//! module resolves a usable backend — in order: a `ra`/`ra.exe` beside the
+//! running TUI binary (the normal layout in this repo, where `cargo build`
+//! drops both into the same target dir), then `ra` on `PATH`, then the install
+//! dir (`~/.ra/bin`, or `$RA_PREFIX`), then a legacy upstream `ra` install
+//! (`~/.ra/bin`), which speaks a compatible protocol. The first `Ready`
+//! candidate wins; a present-but-too-old one surfaces an "update" error.
 //!
-//! Two-channel note. octoscode itself now ships prereleases on channels separate
-//! from stable — npm's `next` dist-tag (`@octos-org/octoscode@next`) and a
-//! `octoscode-dev` Homebrew formula (stable stays `latest` / `octoscode`; see
-//! `dist-workspace.toml` and `cmd::update`). The ra SERVER installed HERE does
-//! NOT yet have that: its npm/brew publish only to `latest` / the stable formula,
-//! so a package manager can only ever fetch a stable server. That's another
-//! reason we pin the EXACT [`REQUIRED_OCTOS_RELEASE`] binary here rather than
-//! trusting `brew`/`npm` `latest`. Giving the server matching `@next` /
-//! `ra-serve-dev` channels (in the ra repo) is a tracked follow-up.
+//! We do NOT auto-install: this fork's server is built from this repo, so a
+//! fully-missing backend is an actionable error (`cargo build --bin ra`, or an
+//! explicit `--stdio-command`/`--endpoint`) rather than a brew/npm/GitHub fetch.
 //!
-//! We resolve ra against BOTH `PATH` and the installer dir `~/.ra/bin`.
-//! When it's usable only in that dir (not on `PATH`): on Unix we rewrite the
-//! stdio command to the full path; on Windows we leave the command bare and the
-//! stdio transport prepends `~/.ra/bin` to the *child's* PATH (a quoted path
-//! in the command string is mangled by `cmd /C`). Either way we never mutate
-//! our own process PATH (octoscode forbids `unsafe`).
+//! We resolve against `PATH` and the install dirs without mutating our own
+//! process PATH (this crate forbids `unsafe`). When the backend is usable only
+//! off-PATH: on Unix we rewrite the stdio command to the full path; on Windows
+//! we leave the command bare and the stdio transport prepends the resolved dir
+//! to the *child's* PATH (a quoted path in the command string is mangled by
+//! `cmd /C`).
 //!
 //! Scope — it acts on a `Mode::Protocol` launch whose `--stdio-command`'s
-//! **leading program** is a bare `ra` (PATH-resolved). Trailing args may
-//! carry shell syntax (`--data-dir ~/x`, a Windows `C:\...` path, a pipe): we
-//! still probe/install, since only the *rewrite* to an off-PATH path needs
-//! round-trippable syntax — and that rewrite bails to a clear "add ra to
-//! PATH" error when it can't. An explicit ra path, a `PATH=` override, or a
-//! non-ra program is the user's own setup and is left untouched. An ra
-//! older than [`MIN_OCTOS_VERSION`] surfaces a clear "please update" error
-//! rather than guessing which package manager owns it. Opt out of install with
-//! `OCTOSCODE_NO_AUTO_INSTALL=1`.
+//! **leading program** is a bare `ra` (PATH-resolved). Trailing args may carry
+//! shell syntax (`--data-dir ~/x`, a Windows `C:\...` path, a pipe): we still
+//! probe, since only the *rewrite* to an off-PATH path needs round-trippable
+//! syntax — and that rewrite bails to a clear error when it can't. An explicit
+//! path, a `PATH=` override, a non-`ra` program, or a user-specified legacy
+//! `ra` command is the user's own setup and is left untouched. A backend
+//! older than [`MIN_OCTOS_VERSION`] surfaces a clear "please update" error.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Duration;
 
 use crate::cli::{Cli, Mode};
-use eyre::{Result, WrapErr, eyre};
+use eyre::{Result, eyre};
 
 /// The minimum `ra` server version this build is known to speak with.
 /// octoscode pins `ra-core` (the UI-Protocol crate) by git rev; this is the
@@ -71,45 +57,9 @@ const OPT_OUT_ENV: &str = "OCTOSCODE_NO_AUTO_INSTALL";
 /// and drop it a release or two after the rename has settled.
 const OPT_OUT_ENV_LEGACY: &str = "OCTOS_TUI_NO_AUTO_INSTALL";
 
-/// Default Homebrew formula for the ra server, as `<user>/<tap>/<formula>`.
-/// This MUST reference the PUBLIC tap `octos-org/tap` (→ `github.com/octos-org/
-/// homebrew-tap`). The shorthand `octos-org/octos` instead makes brew auto-tap
-/// the PRIVATE `octos-org/homebrew-octos`, whose non-interactive clone dies with
-/// `could not read Username`. Override with [`BREW_FORMULA_ENV`].
-const DEFAULT_BREW_FORMULA: &str = "octos-org/tap/octos";
-/// Env var overriding the Homebrew formula (to install a fork or a local tap).
-const BREW_FORMULA_ENV: &str = "OCTOSCODE_BREW_FORMULA";
-
-/// Default npm package for the ra server. Override with [`NPM_PACKAGE_ENV`].
-const DEFAULT_NPM_PACKAGE: &str = "@octos-org/octos";
-/// Env var overriding the npm package (to install a fork or from a private registry).
-const NPM_PACKAGE_ENV: &str = "OCTOSCODE_NPM_PACKAGE";
-
-/// The Homebrew formula to install, from [`BREW_FORMULA_ENV`] or the default.
-fn brew_formula() -> String {
-    env_or(BREW_FORMULA_ENV, DEFAULT_BREW_FORMULA)
-}
-
-/// The npm package to install, from [`NPM_PACKAGE_ENV`] or the default.
-fn npm_package() -> String {
-    env_or(NPM_PACKAGE_ENV, DEFAULT_NPM_PACKAGE)
-}
-
-/// A trimmed, non-empty value of env var `key`, else `default`. Keeps the
-/// install source out of compiled-in string literals (decoupled) while a
-/// blank/whitespace override can't silently break the command.
-fn env_or(key: &str, default: &'static str) -> String {
-    std::env::var(key)
-        .ok()
-        .map(|v| v.trim().to_owned())
-        .filter(|v| !v.is_empty())
-        .unwrap_or_else(|| default.to_owned())
-}
-
-/// Ensure the `ra` backend is present for a stdio launch, rewriting
-/// `cli.stdio_command` to an explicit path when ra is usable only in its
-/// install dir. Call this BEFORE entering raw mode so installer output prints
-/// cleanly.
+/// Ensure a usable `ra` backend for a stdio launch, rewriting
+/// `cli.stdio_command` to an explicit path when the backend is usable only off
+/// `PATH`. Call this BEFORE entering raw mode.
 pub fn ensure_octos_backend(cli: &mut Cli) -> Result<()> {
     // Only the protocol backend spawns `ra serve`; `--mode mock` uses the
     // in-process mock and never launches a child (codex).
@@ -128,18 +78,18 @@ pub fn ensure_octos_backend(cli: &mut Cli) -> Result<()> {
     match resolve_backend(&program)? {
         // Already on PATH — the bare `ra serve` command works as-is.
         Resolved::OnPath => Ok(()),
-        // Usable only in the install dir — rewrite the command to launch it
-        // directly, since its dir isn't on this process's PATH.
+        // Usable only off-PATH — rewrite the command to launch it directly,
+        // since its dir isn't on this process's PATH.
         Resolved::AtPath(ra) => {
             // On Windows, DON'T rewrite the command to an explicit path. The
             // stdio transport spawns via `cmd /C <command>`, and a path embedded
             // in that string — quoted or not — gets mangled by Rust's arg quoting
             // plus cmd's own quirky quote parsing (the child then dies with exit
-            // 1). Instead the transport prepends this install dir to the child's
+            // 1). Instead the transport prepends this dir to the child's
             // PATH (see `install_bin_dir` / `shell_command`), so the bare `ra`
-            // in the command resolves to the exe the auto-installer dropped into
-            // `~\.ra\bin`. Nothing to rewrite here — `ra` is bound only for
-            // the non-Windows path below.
+            // in the command resolves to the resolved exe (a sibling of this
+            // binary, or the install dir). Nothing to rewrite here — `ra` is
+            // bound only for the non-Windows path below.
             if cfg!(windows) {
                 let _ = &ra;
                 return Ok(());
@@ -148,7 +98,7 @@ pub fn ensure_octos_backend(cli: &mut Cli) -> Result<()> {
                 eyre!(
                     "ra is installed at {} but isn't on PATH, and the launch command uses \
                      shell syntax we can't safely rewrite to that path. Add {} to PATH and \
-                     relaunch octoscode.",
+                     relaunch the TUI.",
                     ra.display(),
                     ra
                         .parent()
@@ -162,7 +112,7 @@ pub fn ensure_octos_backend(cli: &mut Cli) -> Result<()> {
     }
 }
 
-/// A usable ra, either already on `PATH` or at an explicit path we must
+/// A usable backend, either already on `PATH` or at an explicit path we must
 /// launch directly.
 enum Resolved {
     OnPath,
@@ -226,78 +176,79 @@ fn opt_out_from(current: Option<std::ffi::OsString>, legacy: Option<std::ffi::Os
     OptOut::No
 }
 
-/// Find a usable ra. `program` is the bare name the stdio command runs
-/// (always `ra` today) — threaded so the probe targets exactly what the
-/// command names rather than a hardcoded string. Tries `PATH` first and, only
-/// when that isn't `Ready`, the legacy `~/.ra/bin` — so a stale install-dir
-/// binary can't block a working launch. An `Outdated`-only situation asks the
-/// user to update; a fully-`Missing` one installs (unless opted out) and
-/// re-resolves.
+/// Find a usable backend for the bare `ra` stdio command. Candidates are tried
+/// in order — a `ra`/`ra.exe` beside this binary (the repo dev layout), then
+/// `ra` on `PATH`, then the install dir (`~/.ra/bin`), then a legacy upstream
+/// `ra` install (`~/.ra/bin`) — and the first `Ready` wins. If nothing is
+/// `Ready` but a candidate exists and is too old, guide an update; otherwise
+/// error with the fix (no upstream install is attempted).
 fn resolve_backend(program: &str) -> Result<Resolved> {
-    let on_path = probe(Path::new(program));
-    // Fast path: a Ready ra on PATH needs no rewrite — and we must NOT probe
-    // the legacy dir here. Doing so eagerly runs `~/.ra/bin/ra --version`
-    // on every otherwise-working launch, so a stale binary (or one whose
-    // `--version` hangs) would block or execute for nothing (codex).
-    if matches!(on_path, Probe::Ready) {
-        return Ok(Resolved::OnPath);
-    }
+    let mut outdated: Option<String> = None;
 
-    // PATH ra isn't usable — now it's worth probing the legacy install dir.
-    let dir_octos = install_dir_octos();
-    let in_dir = dir_octos.as_ref().map(|p| probe(p));
-    if let (Some(dir), Some(Probe::Ready)) = (&dir_octos, &in_dir) {
-        return Ok(Resolved::AtPath(dir.clone()));
-    }
-
-    // No Ready backend. If either candidate exists but is too old, guide an
-    // update — we won't guess which package manager owns an unknown ra.
-    if let Probe::Outdated(found) = &on_path {
-        return Err(outdated_error(found));
-    }
-    if let Some(Probe::Outdated(found)) = &in_dir {
-        return Err(outdated_error(found));
-    }
-
-    // Missing everywhere → install (binary-only) unless opted out.
-    if opted_out() {
-        return Err(eyre!(
-            "ra backend not found and auto-install is disabled ({OPT_OUT_ENV} is set). \
-             Install the ra server: `brew install {}` or `npm install -g {}`, or point \
-             --endpoint at a running server.",
-            brew_formula(),
-            npm_package()
-        ));
-    }
-    run_installer()?;
-
-    // Re-resolve. A brew/npm install lands on PATH; a pre-existing install.sh
-    // deployment lives in ~/.ra/bin. Require `Ready`, not merely present —
-    // an OLDER ra still first on PATH must not be accepted.
-    if matches!(probe(Path::new(program)), Probe::Ready) {
-        return Ok(Resolved::OnPath);
-    }
-    if let Some(dir) = install_dir_octos() {
-        if matches!(probe(&dir), Probe::Ready) {
-            return Ok(Resolved::AtPath(dir));
+    // (a) Sibling of the running TUI binary — explicit path.
+    if let Some(sibling) = sibling_backend() {
+        match probe(&sibling) {
+            Probe::Ready => return Ok(Resolved::AtPath(sibling)),
+            Probe::Outdated(found) => outdated = Some(found),
+            Probe::Missing => {}
         }
     }
-    Err(eyre!(
-        "installed ra, but no working ra >= {MIN_OCTOS_VERSION} is on PATH or in {}. \
-         Open a new terminal so PATH picks it up, then relaunch octoscode.",
-        install_dir_octos()
+    // (b) PATH (bare `ra`).
+    match probe(Path::new(program)) {
+        Probe::Ready => return Ok(Resolved::OnPath),
+        Probe::Outdated(found) => outdated = outdated.or(Some(found)),
+        Probe::Missing => {}
+    }
+    // (c) Install dir.
+    if let Some(exe) = install_dir_backend() {
+        match probe(&exe) {
+            Probe::Ready => return Ok(Resolved::AtPath(exe)),
+            Probe::Outdated(found) => outdated = outdated.or(Some(found)),
+            Probe::Missing => {}
+        }
+    }
+    // (d) Legacy upstream ra install — protocol-compatible, accepted.
+    if let Some(exe) = legacy_install_dir_octos() {
+        match probe(&exe) {
+            Probe::Ready => return Ok(Resolved::AtPath(exe)),
+            Probe::Outdated(found) => outdated = outdated.or(Some(found)),
+            Probe::Missing => {}
+        }
+    }
+
+    if let Some(found) = outdated {
+        return Err(outdated_error(&found));
+    }
+
+    // Missing everywhere → actionable error; never install upstream.
+    if opted_out() {
+        return Err(backend_missing_error());
+    }
+    run_installer()?;
+    unreachable!("run_installer only ever returns the actionable 'no backend' error")
+}
+
+/// The actionable "no backend" error. No upstream install is attempted: this
+/// fork's server is built from this repo.
+fn backend_missing_error() -> eyre::Report {
+    eyre!(
+        "no ra backend found: looked for a ra/ra.exe beside this binary, on PATH, in {}, \
+         and for a legacy ra in {}. Build this repo's server (`cargo build --bin ra`) \
+         or pass an explicit `--stdio-command` (or `--endpoint` for a running server).",
+        install_dir_backend()
             .and_then(|p| p.parent().map(|d| d.display().to_string()))
-            .unwrap_or_else(|| "~/.ra/bin".to_owned())
-    ))
+            .unwrap_or_else(|| "~/.ra/bin".to_owned()),
+        legacy_install_dir_octos()
+            .and_then(|p| p.parent().map(|d| d.display().to_string()))
+            .unwrap_or_else(|| "~/.ra/bin".to_owned()),
+    )
 }
 
 fn outdated_error(found: &str) -> eyre::Report {
     eyre!(
-        "octos {found} is older than the {MIN_OCTOS_VERSION} this octoscode needs. \
-         Update the ra server (`brew upgrade {}` or `npm install -g {}@latest`), \
-         then relaunch.",
-        brew_formula(),
-        npm_package()
+        "backend {found} is older than the {MIN_OCTOS_VERSION} this client needs. \
+         Build the current server (`cargo build --bin ra`) and relaunch, or point \
+         --endpoint at a newer server."
     )
 }
 
@@ -357,9 +308,20 @@ fn where_first(name: &Path) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-/// The ra binary the legacy `install.sh` writes: `$OCTOS_PREFIX/ra` or
-/// `~/.ra/bin/ra` (`ra.exe` on Windows). `None` if no home dir.
-fn install_dir_octos() -> Option<PathBuf> {
+/// The ra binary this fork installs: `$RA_PREFIX/ra` or `~/.ra/bin/ra`
+/// (`ra.exe` on Windows). `None` if no home dir.
+fn install_dir_backend() -> Option<PathBuf> {
+    let dir = match std::env::var_os("RA_PREFIX") {
+        Some(p) if !p.is_empty() => PathBuf::from(p),
+        _ => home_dir()?.join(".ra").join("bin"),
+    };
+    Some(dir.join(backend_binary_name()))
+}
+
+/// A legacy upstream `ra` server install: `$OCTOS_PREFIX/ra` or
+/// `~/.ra/bin/ra` (`ra.exe` on Windows). It speaks a compatible
+/// protocol, so it is accepted as a fallback backend. `None` if no home dir.
+fn legacy_install_dir_octos() -> Option<PathBuf> {
     let dir = match std::env::var_os("OCTOS_PREFIX") {
         Some(p) if !p.is_empty() => PathBuf::from(p),
         _ => home_dir()?.join(".ra").join("bin"),
@@ -368,13 +330,27 @@ fn install_dir_octos() -> Option<PathBuf> {
     Some(dir.join(name))
 }
 
-/// The directory the auto-installer drops `ra` into (`$OCTOS_PREFIX` or
-/// `~/.ra/bin`). The stdio transport prepends this to the child's PATH so a
-/// bare `ra` in the launch command resolves to the auto-installed exe —
-/// without embedding a path in the command string, which `cmd /C` mangles on
-/// Windows. `None` if no home dir.
+/// A `ra`/`ra.exe` sitting beside the running TUI binary — the normal dev
+/// layout in this repo, where `cargo build` drops both into the same target
+/// dir. `None` if the running exe path can't be resolved.
+fn sibling_backend() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    Some(exe.parent()?.join(backend_binary_name()))
+}
+
+/// The directory the resolved backend actually lives in: the sibling dir of
+/// the running TUI binary when a `ra`/`ra.exe` sits there, else the install dir
+/// (`$RA_PREFIX` or `~/.ra/bin`). The stdio transport prepends this to the
+/// child's PATH so a bare `ra` in the launch command resolves to the right exe
+/// — without embedding a path in the command string, which `cmd /C` mangles on
+/// Windows. `None` if no sibling and no home dir.
 pub(crate) fn install_bin_dir() -> Option<PathBuf> {
-    install_dir_octos().and_then(|exe| exe.parent().map(Path::to_path_buf))
+    if let Some(sibling) = sibling_backend() {
+        if sibling.exists() {
+            return sibling.parent().map(Path::to_path_buf);
+        }
+    }
+    install_dir_backend().and_then(|exe| exe.parent().map(Path::to_path_buf))
 }
 
 /// Home directory, treating an empty `HOME` as absent so the Windows
@@ -389,13 +365,14 @@ fn home_dir() -> Option<PathBuf> {
 /// The program a `--stdio-command` runs, IFF it is a **bare** `ra` (no path
 /// separator) resolved through `PATH`. Handles a leading `env` + `VAR=value`
 /// assignments and an optional `stdio:` transport-label prefix. This decides
-/// only whether we may *probe/install* the backend, so it inspects just the
+/// only whether we may *probe* the backend, so it inspects just the
 /// leading executable — trailing args carrying shell syntax (a `--data-dir
 /// ~/x`, a pipe, or a Windows `C:\...` path) must NOT disqualify provisioning
 /// (codex); round-trip safety is enforced separately, at the rewrite step.
 /// Returns `None` for an explicit path, a `PATH=` override (the child would
 /// resolve `ra` against a different search path than we probe), or a
-/// non-ra program.
+/// non-`ra` program (a user-specified legacy `ra` command is left to the
+/// user).
 fn bare_octos_program(command: &str) -> Option<String> {
     let command = command.trim();
     let command = command.strip_prefix("stdio:").unwrap_or(command).trim();
@@ -420,12 +397,11 @@ fn bare_octos_program(command: &str) -> Option<String> {
     if program.contains('/') || program.contains('\\') {
         return None; // explicit path — user's own setup
     }
-    // Only a bare `ra` is our canonical, provisionable form. We deliberately
-    // do NOT accept `ra.exe`: it's never the canonical command (bare `ra`
-    // is, and Windows `cmd /C` resolves it to whatever `.exe`/`.cmd` exists),
-    // and npm — our Windows installer — ships an `ra.cmd` shim, never an
-    // `ra.exe`, so an `ra.exe` command isn't reliably provisionable
-    // anyway. Such a command is left to the user (codex).
+    // Only a bare `ra` is our canonical, provisionable form. We deliberately do
+    // NOT accept `ra.exe`: it's never the canonical command (bare `ra` is, and
+    // Windows `cmd /C` resolves it to whatever `.exe` exists). A user-specified
+    // `ra` command is a legacy upstream client the user manages themselves —
+    // recognised as-is and never provisioned/rewritten.
     (program == "ra").then(|| program.to_owned())
 }
 
@@ -482,11 +458,14 @@ fn rewrite_program(command: &str, octos_path: &Path) -> Option<String> {
     Some(format!("{prefix}{joined}"))
 }
 
-/// Pull the first `X.Y.Z` token out of `ra --version` output, e.g.
-/// `ra 1.1.0 (79c19f6d4 2026-07-11)` → `1.1.0`.
+/// Pull the first `X.Y.Z` token out of a `--version` line, e.g.
+/// `ra 1.1.0 (79c19f6d4 2026-07-11)` → `1.1.0`. `ra --version` prints
+/// `ra 2.0.3-rc.13 (…)`, so a leading `v` and any `-pre`/`+build` suffix are
+/// stripped before reading the leading `X.Y.Z` core.
 fn parse_octos_version(output: &str) -> Option<String> {
     output.split_whitespace().find_map(|tok| {
         let core = tok.trim_start_matches('v');
+        let core = core.split(['-', '+']).next().unwrap_or(core);
         let mut parts = core.split('.');
         let ok = [parts.next(), parts.next(), parts.next()]
             .iter()
@@ -513,130 +492,23 @@ fn version_lt(a: &str, b: &str) -> bool {
     false
 }
 
-/// A package-manager install command: `program` + `args`, with `how` naming the
-/// manager for user-facing messages.
-struct InstallPlan {
-    program: &'static str,
-    args: Vec<String>,
-    how: &'static str,
-}
-
-/// Choose the install command from package-manager availability and the
-/// (possibly overridden) identifiers. Pure — takes availability + identifiers as
-/// args, reading no env and probing nothing — so tests can assert the exact
-/// command without brew/npm installed. `brew` is preferred; `None` means neither
-/// manager is available.
-fn installer_plan(
-    has_brew: bool,
-    has_npm: bool,
-    brew_formula: &str,
-    npm_package: &str,
-) -> Option<InstallPlan> {
-    if has_brew {
-        Some(InstallPlan {
-            program: "brew",
-            args: vec!["install".to_owned(), brew_formula.to_owned()],
-            how: "brew",
-        })
-    } else if has_npm {
-        Some(InstallPlan {
-            program: "npm",
-            args: vec![
-                "install".to_owned(),
-                "-g".to_owned(),
-                npm_package.to_owned(),
-            ],
-            how: "npm",
-        })
-    } else {
-        None
-    }
-}
-
-/// Install ra **binary-only** via a package manager (never `install.sh`,
-/// which sets up a system service). Prefers `brew` (the [`DEFAULT_BREW_FORMULA`]
-/// tap), then `npm` ([`DEFAULT_NPM_PACKAGE`]) — both env-overridable. Errors with
-/// actionable guidance when neither is available. Inherits stdio so progress
-/// prints (called pre-raw-mode).
+/// No upstream install: this fork's server is built from this repo, so a
+/// missing backend is an actionable error (`cargo build --bin ra`, or an
+/// explicit `--stdio-command`/`--endpoint`) instead of a brew/npm/GitHub fetch.
+/// Kept as a named function so the "no backend" path reads the same here and in
+/// `resolve_backend`.
 fn run_installer() -> Result<()> {
-    // Prefer the pinned, exact-version bundle download on every platform ra
-    // ships a prebuilt bundle for. `brew`/`npm` install whatever their `latest`
-    // tag is — for ra that's a weeks-old STABLE — which leaves the client on a
-    // server too old for its protocol. The bundle is the pinned matching version.
-    // Package managers are only a fallback for a platform with no prebuilt bundle.
-    if bundle_asset_for_target().is_some() {
-        return install_octos_bundle();
-    }
-
-    let (brew, npm) = (brew_formula(), npm_package());
-    let Some(plan) = installer_plan(have("brew"), have("npm"), &brew, &npm) else {
-        return Err(eyre!(
-            "ra server not found: no prebuilt bundle for this platform and no supported \
-             installer (brew or npm) is available. Install ra (binary only, no service) \
-             with one of:\n  brew install {brew}\n  npm install -g {npm}\n\
-             then relaunch octoscode (or set --endpoint to a running server)."
-        ));
-    };
-    eprintln!(
-        "octoscode: octos backend not found; installing the octos server via {} \
-         (set {OPT_OUT_ENV}=1 to skip)...",
-        plan.how
-    );
-    // On Windows `brew`/`npm` are `.cmd` shims, which a direct spawn can't
-    // execute; run them through `cmd /C` like the stdio transport does (codex).
-    let status = if cfg!(windows) {
-        Command::new("cmd")
-            .arg("/C")
-            .arg(plan.program)
-            .args(&plan.args)
-            .status()
-    } else {
-        Command::new(plan.program).args(&plan.args).status()
-    }
-    .map_err(|err| eyre!("failed to launch {}: {err}", plan.program))?;
-    if !status.success() {
-        return Err(eyre!(
-            "{} could not install ra ({status}). Install the ra server manually \
-             (https://github.com/octos-org/octos) and relaunch.",
-            plan.program
-        ));
-    }
-    Ok(())
+    Err(backend_missing_error())
 }
 
-/// Whether `program` is available (a cheap presence check). On Windows, `brew`
-/// and `npm` ship as `PATHEXT` shims (`.cmd`/`.ps1`), so we resolve with `where`
-/// — mirroring the `cmd /C` we install through — since a direct `--version`
-/// spawn finds only `.exe` and would report a present npm as missing (codex).
-fn have(program: &str) -> bool {
-    if cfg!(windows) {
-        Command::new("where")
-            .arg(program)
-            .output()
-            .is_ok_and(|o| o.status.success())
-    } else {
-        Command::new(program)
-            .arg("--version")
-            .output()
-            .is_ok_and(|o| o.status.success())
-    }
-}
-
-/// The octos **server release this octoscode is built against** — the tag whose
-/// bundle carries the exact `ra-core` protocol this client pins (see the
-/// `ra-core` rev in Cargo.toml). Each octoscode dictates its matching octos:
-/// the Windows auto-installer downloads THIS exact release, so client and server
-/// protocols always agree — no stale `releases/latest` (too old) and no "newest"
-/// moving target (which could drift ahead of the pinned protocol).
+/// The ra/ra **server release this client targets** — the tag whose bundle
+/// carries the exact `ra-core` protocol this client pins (see the `ra-core` rev
+/// in Cargo.toml). Surfaced by `doctor` as the server version to run against.
 ///
 /// **BUMP THIS whenever you bump the `ra-core` rev in Cargo.toml**, to the
-/// ra release tag that contains that rev. Override for a fork / pinned test
-/// build with [`OCTOS_RELEASE_ENV`].
-///
-/// That instruction was followed by hand and drifted: the rev moved to
-/// v2.0.3-rc.1 while this stayed on v2.0.2, so a fresh install auto-provisioned
-/// a server whose protocol predated the client's. [`REQUIRED_OCTOS_CORE_REV`]
-/// and the test beside it now make the pair checkable instead of a comment.
+/// release tag that contains that rev. [`REQUIRED_OCTOS_CORE_REV`] and the test
+/// beside it make the pair checkable: the rev moved to v2.0.3-rc.1 while this
+/// stayed on v2.0.2, so the tag and the pinned rev must move together.
 pub(crate) const REQUIRED_OCTOS_RELEASE: &str = "v2.0.3-rc.12";
 
 /// The `ra-core` rev that [`REQUIRED_OCTOS_RELEASE`] resolves to — i.e. the
@@ -646,280 +518,15 @@ pub(crate) const REQUIRED_OCTOS_RELEASE: &str = "v2.0.3-rc.12";
 /// speaks) held in two files, with only a doc comment joining them. Recording
 /// the rev here lets `octos_release_pin_matches_cargo_core_rev` fail when they
 /// disagree, so bumping Cargo.toml without revisiting the release tag is caught
-/// at test time rather than by a user getting a mismatched auto-provision.
+/// at test time rather than by a user running a mismatched server.
 ///
 /// Test-only: its whole job is to be compared against Cargo.toml, so it would
 /// be dead weight in a real build.
 #[cfg(test)]
 pub(crate) const REQUIRED_OCTOS_CORE_REV: &str = "f4a31d9a0ef2228e919c3d516b78a9d82ad6f470";
-/// Env var overriding the ra release tag to install (fork / pinned build).
-const OCTOS_RELEASE_ENV: &str = "OCTOSCODE_OCTOS_RELEASE";
-/// The ra server-bundle asset name for THIS build's target platform, or
-/// `None` if ra ships no prebuilt bundle for it (then we fall back to a
-/// package manager). Windows x64 is a `.zip`; macOS arm64 and Linux x64/arm64
-/// are `.tar.gz`. `std::env::consts` reflects the compile target, so this is
-/// effectively a compile-time constant that still type-checks on every host.
-fn bundle_asset_for_target() -> Option<&'static str> {
-    match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("windows", "x86_64") => Some("ra-bundle-x86_64-pc-windows-msvc.zip"),
-        ("macos", "aarch64") => Some("ra-bundle-aarch64-apple-darwin.tar.gz"),
-        ("linux", "x86_64") => Some("ra-bundle-x86_64-unknown-linux-gnu.tar.gz"),
-        ("linux", "aarch64") => Some("ra-bundle-aarch64-unknown-linux-gnu.tar.gz"),
-        _ => None,
-    }
-}
-
-/// The ra binary filename on this platform.
-fn octos_binary_name() -> &'static str {
+/// The backend binary filename on this platform.
+fn backend_binary_name() -> &'static str {
     if cfg!(windows) { "ra.exe" } else { "ra" }
-}
-
-/// Direct download URLs (bundle + checksum) for `asset` in the pinned release.
-fn bundle_urls(asset: &str) -> (String, String, String) {
-    let tag = env_or(OCTOS_RELEASE_ENV, REQUIRED_OCTOS_RELEASE);
-    let bundle = format!("https://github.com/octos-org/octos/releases/download/{tag}/{asset}");
-    let sha = format!("{bundle}.sha256");
-    (bundle, sha, tag)
-}
-
-/// Download the prebuilt ra server bundle for [`REQUIRED_OCTOS_RELEASE`] and
-/// extract it into the install dir, **binary-only — never a service** (unlike
-/// `install.sh`/`install.ps1`, which register a background daemon / scheduled
-/// task). Downloads the EXACT pinned release so the client and server protocols
-/// match — package managers (`brew`/`npm`) install whatever their `latest` tag
-/// is, which for ra is a weeks-old STABLE that mismatches this client.
-/// Verifies the published SHA-256 before extracting an executable we're about to
-/// run, then places the `ra` binary (+ its sibling bundled skills) under
-/// `~/.ra/bin` (or `OCTOS_PREFIX`). Called pre-raw-mode so progress prints.
-fn install_octos_bundle() -> Result<()> {
-    let ra = install_dir_octos().ok_or_else(|| {
-        eyre!("cannot determine the ra install directory (no HOME/USERPROFILE set)")
-    })?;
-    let install_dir = ra
-        .parent()
-        .ok_or_else(|| eyre!("ra install path {} has no parent", ra.display()))?
-        .to_path_buf();
-
-    let asset = bundle_asset_for_target()
-        .ok_or_else(|| eyre!("no prebuilt ra bundle for this platform"))?;
-    let (bundle_url, sha_url, tag) = bundle_urls(asset);
-
-    eprintln!(
-        "octoscode: octos backend not found; downloading the octos server bundle {tag} \
-         (set {OPT_OUT_ENV}=1 to skip)..."
-    );
-
-    let bytes =
-        http_get_bytes(&bundle_url).wrap_err("failed to download the ra server bundle")?;
-
-    // Integrity-check before extracting an executable we're about to run. A
-    // missing checksum (older releases) warns but doesn't hard-fail; a mismatch
-    // does.
-    match http_get_string(&sha_url) {
-        Ok(published) => verify_sha256(&bytes, &published)?,
-        Err(err) => eprintln!(
-            "octoscode: could not fetch the bundle checksum ({err}); skipping verification"
-        ),
-    }
-
-    extract_octos_bundle(&bytes, asset, &install_dir)
-        .wrap_err("failed to extract the ra server bundle")?;
-
-    eprintln!(
-        "octoscode: installed the octos server to {}",
-        install_dir.display()
-    );
-    Ok(())
-}
-
-/// Blocking GET returning the response body bytes, erroring on non-2xx. Follows
-/// GitHub's release-asset redirect (reqwest follows up to 10 by default).
-fn http_get_bytes(url: &str) -> Result<Vec<u8>> {
-    Ok(http_client()?
-        .get(url)
-        .timeout(HTTP_BUNDLE_DOWNLOAD_TIMEOUT)
-        .send()?
-        .error_for_status()?
-        .bytes()?
-        .to_vec())
-}
-
-/// Blocking GET returning the response body as text, erroring on non-2xx.
-fn http_get_string(url: &str) -> Result<String> {
-    Ok(http_client()?.get(url).send()?.error_for_status()?.text()?)
-}
-
-/// ra release bundles are large enough that an active download can
-/// legitimately exceed reqwest's 30-second default timeout. Keep the transfer
-/// bounded, but allow enough time for the bundle to arrive over a slow link.
-const HTTP_BUNDLE_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(10 * 60);
-const HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
-
-fn http_client() -> Result<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .user_agent(concat!("octoscode/", env!("CARGO_PKG_VERSION")))
-        .connect_timeout(HTTP_CONNECT_TIMEOUT)
-        .build()
-        .map_err(Into::into)
-}
-
-/// Verify `bytes` against a published `.sha256` line (`"<64-hex>  <filename>"`;
-/// the leading hex token is all we need). Case-insensitive.
-fn verify_sha256(bytes: &[u8], published: &str) -> Result<()> {
-    use sha2::{Digest, Sha256};
-    let expected = published
-        .split_whitespace()
-        .next()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if expected.len() != 64 || !expected.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err(eyre!(
-            "unexpected ra bundle checksum format: {published:?}"
-        ));
-    }
-    let actual = hex_lower(&Sha256::digest(bytes));
-    if actual != expected {
-        return Err(eyre!(
-            "ra bundle checksum mismatch (expected {expected}, got {actual}); \
-             refusing to install"
-        ));
-    }
-    Ok(())
-}
-
-/// Lowercase hex encoding (avoids a `hex` crate dep for one call site).
-fn hex_lower(bytes: &[u8]) -> String {
-    use std::fmt::Write;
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
-        let _ = write!(s, "{b:02x}");
-    }
-    s
-}
-
-/// Extract the ra bundle (`asset` = `.zip` on Windows, `.tar.gz` on Unix)
-/// into `install_dir`, binary-only. Stages into a temp dir first (a partial
-/// extract never leaves a broken install), finds the ra binary anywhere in
-/// the tree (mirrors ra's own `deploy.ps1`), then copies that bundle root's
-/// files next to it under `install_dir`. On Unix the binary is marked
-/// executable (belt-and-suspenders; `tar` already preserves the mode).
-fn extract_octos_bundle(bytes: &[u8], asset: &str, install_dir: &Path) -> Result<()> {
-    let staging = tempfile::tempdir()?;
-    if asset.ends_with(".zip") {
-        extract_zip_into(bytes, staging.path())?;
-    } else if asset.ends_with(".tar.gz") || asset.ends_with(".tgz") {
-        extract_tar_gz_into(bytes, staging.path())?;
-    } else {
-        return Err(eyre!("unrecognized ra bundle archive: {asset}"));
-    }
-
-    let bin_name = octos_binary_name();
-    let found = find_file_named(staging.path(), bin_name)
-        .ok_or_else(|| eyre!("{bin_name} not found in the downloaded bundle"))?;
-    let bundle_root = found.parent().unwrap_or_else(|| staging.path());
-    std::fs::create_dir_all(install_dir)?;
-    copy_dir_contents(bundle_root, install_dir)?;
-
-    // Sanity: the file the probe will look for must now exist.
-    let placed = install_dir.join(bin_name);
-    if !placed.exists() {
-        return Err(eyre!(
-            "extracted the bundle but {} is missing",
-            placed.display()
-        ));
-    }
-    #[cfg(unix)]
-    ensure_executable(&placed)?;
-    Ok(())
-}
-
-/// Unzip `zip_bytes` into `dir` (Windows bundle). `enclosed_name` drops
-/// zip-slip (`..`/absolute) entries.
-fn extract_zip_into(zip_bytes: &[u8], dir: &Path) -> Result<()> {
-    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(zip_bytes))?;
-    for i in 0..archive.len() {
-        let mut entry = archive.by_index(i)?;
-        let Some(rel) = entry.enclosed_name() else {
-            continue;
-        };
-        let out = dir.join(&rel);
-        if entry.is_dir() {
-            std::fs::create_dir_all(&out)?;
-        } else {
-            if let Some(parent) = out.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            let mut f = std::fs::File::create(&out)?;
-            std::io::copy(&mut entry, &mut f)?;
-        }
-    }
-    Ok(())
-}
-
-/// Extract a `.tar.gz` (Unix bundle) into `dir` via the system `tar` — always
-/// present on macOS/Linux, and it preserves the executable mode. Avoids pulling
-/// in gzip/tar crates.
-fn extract_tar_gz_into(bytes: &[u8], dir: &Path) -> Result<()> {
-    let tmp = tempfile::Builder::new().suffix(".tar.gz").tempfile()?;
-    std::fs::write(tmp.path(), bytes).wrap_err("failed to stage the downloaded bundle")?;
-    let status = Command::new("tar")
-        .arg("-xzf")
-        .arg(tmp.path())
-        .arg("-C")
-        .arg(dir)
-        .status()
-        .map_err(|err| eyre!("failed to run `tar` to extract the ra bundle: {err}"))?;
-    if !status.success() {
-        return Err(eyre!("`tar` failed to extract the ra bundle ({status})"));
-    }
-    Ok(())
-}
-
-/// Ensure `path` is user-executable (Unix). `tar` normally preserves the bit,
-/// but a bundle re-packed without it would otherwise fail to launch.
-#[cfg(unix)]
-fn ensure_executable(path: &Path) -> Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    let mut perms = std::fs::metadata(path)?.permissions();
-    perms.set_mode(perms.mode() | 0o755);
-    std::fs::set_permissions(path, perms)?;
-    Ok(())
-}
-
-/// First file named `name` (case-insensitive) anywhere under `root`, depth-first.
-fn find_file_named(root: &Path, name: &str) -> Option<PathBuf> {
-    let entries = std::fs::read_dir(root).ok()?;
-    let mut dirs = Vec::new();
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
-        if is_dir {
-            dirs.push(path);
-        } else if path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .is_some_and(|n| n.eq_ignore_ascii_case(name))
-        {
-            return Some(path);
-        }
-    }
-    dirs.into_iter().find_map(|d| find_file_named(&d, name))
-}
-
-/// Recursively copy the files/subdirs directly inside `src` into `dst`.
-fn copy_dir_contents(src: &Path, dst: &Path) -> Result<()> {
-    std::fs::create_dir_all(dst)?;
-    for entry in std::fs::read_dir(src)? {
-        let entry = entry?;
-        let from = entry.path();
-        let to = dst.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
-            copy_dir_contents(&from, &to)?;
-        } else {
-            std::fs::copy(&from, &to)?;
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -927,140 +534,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn bundle_urls_point_at_the_pinned_release() {
-        let asset = "ra-bundle-x86_64-pc-windows-msvc.zip";
-        let (bundle, sha, tag) = bundle_urls(asset);
-        assert_eq!(tag, REQUIRED_OCTOS_RELEASE);
-        assert_eq!(
-            bundle,
-            format!(
-                "https://github.com/octos-org/octos/releases/download/{REQUIRED_OCTOS_RELEASE}/{asset}"
-            )
-        );
-        assert_eq!(sha, format!("{bundle}.sha256"));
-        // Sanity: the pin is a concrete release tag, not a floating alias.
-        assert!(REQUIRED_OCTOS_RELEASE.starts_with('v'));
-        assert!(!REQUIRED_OCTOS_RELEASE.contains("latest"));
-        // This build's target maps to a concrete bundle asset (or none, then
-        // we fall back to brew/npm — never a wrong asset name).
-        if let Some(a) = bundle_asset_for_target() {
-            assert!(a.starts_with("ra-bundle-"));
-            assert!(a.ends_with(".zip") || a.ends_with(".tar.gz"));
-        }
-    }
-
-    #[test]
-    fn bundle_download_timeout_allows_large_archives_but_remains_bounded() {
-        assert!(
-            HTTP_BUNDLE_DOWNLOAD_TIMEOUT > Duration::from_secs(30),
-            "the bundle timeout must exceed reqwest's too-short 30-second default"
-        );
-        assert!(
-            !HTTP_BUNDLE_DOWNLOAD_TIMEOUT.is_zero() && !HTTP_CONNECT_TIMEOUT.is_zero(),
-            "connection establishment and the overall transfer must remain bounded"
-        );
-    }
-
-    #[test]
-    fn install_bin_dir_is_the_parent_of_the_probed_exe() {
+    fn install_bin_dir_is_the_dir_the_backend_lives_in() {
         // `install_bin_dir` (used by the transport to augment the child PATH)
-        // must be exactly the directory the exe is probed/installed in.
-        let exe = install_dir_octos();
+        // must be the sibling dir when a `ra` sits beside this binary, else the
+        // install dir.
         let dir = install_bin_dir();
-        match (exe, dir) {
-            (Some(exe), Some(dir)) => assert_eq!(exe.parent(), Some(dir.as_path())),
-            (None, None) => {} // no HOME/USERPROFILE in this env — both absent
-            other => panic!("exe/dir presence mismatch: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn verify_sha256_matches_and_rejects() {
-        let data = b"ra-bundle-bytes";
-        let good = {
-            use sha2::{Digest, Sha256};
-            hex_lower(&Sha256::digest(data))
-        };
-        // Real `.sha256` files are `"<hex>  <filename>"` — the trailing name must
-        // not matter.
-        verify_sha256(
-            data,
-            &format!("{good}  ra-bundle-x86_64-pc-windows-msvc.zip"),
-        )
-        .expect("matching checksum should pass");
-        assert!(
-            verify_sha256(data, &"0".repeat(64)).is_err(),
-            "mismatch must fail"
-        );
-        assert!(
-            verify_sha256(data, "not-a-checksum").is_err(),
-            "bad format must fail"
-        );
-    }
-
-    /// Build a flat in-memory zip with the platform ra binary + a skill file.
-    fn zip_with(entries: &[(&str, &[u8])]) -> Vec<u8> {
-        use std::io::Write as _;
-        let mut buf = Vec::new();
-        {
-            let mut w = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
-            let opts: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default();
-            for (name, data) in entries {
-                w.start_file(*name, opts).unwrap();
-                w.write_all(data).unwrap();
+        let sibling = sibling_backend();
+        let install = install_dir_backend();
+        match (dir, sibling, install) {
+            (Some(dir), Some(sib), _) if sib.exists() => {
+                assert_eq!(Some(dir.as_path()), sib.parent())
             }
-            w.finish().unwrap();
-        }
-        buf
-    }
-
-    #[test]
-    fn extract_octos_bundle_places_binary_and_siblings() {
-        // Layout like the real bundle: ra binary at the root beside a skill.
-        let bin = octos_binary_name();
-        let buf = zip_with(&[(bin, b"fake ra"), ("skills/weather/main", b"#!skill")]);
-        let dst = tempfile::tempdir().unwrap();
-        extract_octos_bundle(&buf, "ra-bundle.zip", dst.path())
-            .expect("extraction should succeed");
-        assert!(dst.path().join(bin).exists(), "ra binary placed");
-        assert!(
-            dst.path().join("skills/weather/main").exists(),
-            "bundled skill placed beside it"
-        );
-    }
-
-    #[test]
-    fn extract_octos_bundle_finds_binary_under_a_top_level_dir() {
-        // Robust to a future layout that nests everything under a top dir.
-        let bin = octos_binary_name();
-        let buf = zip_with(&[
-            (&format!("ra-bundle/{bin}"), b"x"),
-            ("ra-bundle/skills/x", b"x"),
-        ]);
-        let dst = tempfile::tempdir().unwrap();
-        extract_octos_bundle(&buf, "ra-bundle.zip", dst.path())
-            .expect("extraction should succeed");
-        assert!(dst.path().join(bin).exists());
-        assert!(dst.path().join("skills/x").exists());
-    }
-
-    #[test]
-    fn extract_octos_bundle_errors_without_the_binary() {
-        let buf = zip_with(&[("readme.txt", b"no binary here")]);
-        let dst = tempfile::tempdir().unwrap();
-        assert!(extract_octos_bundle(&buf, "ra-bundle.zip", dst.path()).is_err());
-    }
-
-    #[test]
-    fn every_shipped_platform_has_a_distinct_bundle_asset() {
-        // Guard the target→asset map: each entry is a real ra release asset.
-        for asset in [
-            "ra-bundle-x86_64-pc-windows-msvc.zip",
-            "ra-bundle-aarch64-apple-darwin.tar.gz",
-            "ra-bundle-x86_64-unknown-linux-gnu.tar.gz",
-            "ra-bundle-aarch64-unknown-linux-gnu.tar.gz",
-        ] {
-            assert!(asset.starts_with("ra-bundle-"));
+            (Some(dir), _, Some(exe)) => assert_eq!(Some(dir.as_path()), exe.parent()),
+            (None, _, None) => {} // no HOME/USERPROFILE — install dir absent
+            other => panic!("unexpected install_bin_dir resolution: {other:?}"),
         }
     }
 
@@ -1070,15 +557,15 @@ mod tests {
             "ra serve --stdio --solo",
             "  ra serve --stdio  ",
             "stdio:ra serve --stdio",
-            "env OCTOS_FOO=1 DEEPSEEK_API_KEY=sk ra serve --stdio",
+            "env RA_FOO=1 DEEPSEEK_API_KEY=sk ra serve --stdio",
             "FOO=1 ra serve",
             // Shell syntax in *arguments* must NOT disqualify provisioning — we
-            // only need the leading program to probe/install (codex).
-            "octos serve --stdio --solo --data-dir ~/.octoscode-data",
+            // only need the leading program to probe (codex).
+            "ra serve --stdio --solo --data-dir ~/.ra-data",
             "ra serve --stdio --data-dir C:\\Users\\admin\\data",
             "ra serve --stdio | tee log",
             "ra serve && echo done",
-            "OCTOS_HOME=\"$PWD/.ra\" ra serve",
+            "RA_HOME=\"$PWD/.ra\" ra serve",
         ] {
             assert_eq!(
                 bare_octos_program(cmd).as_deref(),
@@ -1096,9 +583,10 @@ mod tests {
             "./ra serve",                      // explicit path
             "my-custom-backend --stdio",          // not ra
             "env A=1 my-backend serve",           // not ra
-            "ra.exe serve --stdio",            // not canonical; npm can't provision .exe
+            "ra.exe serve --stdio",               // not canonical; bare `ra` is
+            "ra serve --stdio",                // legacy upstream — user-managed
             "env PATH=/custom/bin:$PATH ra serve", // PATH override — can't probe same ra
-            "PATH=/opt/ra/bin ra serve",    // leading PATH override
+            "PATH=/opt/ra/bin ra serve",          // leading PATH override
         ] {
             assert_eq!(
                 bare_octos_program(cmd),
@@ -1173,6 +661,11 @@ mod tests {
         );
         assert_eq!(parse_octos_version("no version here"), None);
         assert_eq!(parse_octos_version("ra 1.2.3.4"), None); // 4-part isn't X.Y.Z
+        // `ra --version` prints a prerelease; the leading X.Y.Z must still read.
+        assert_eq!(
+            parse_octos_version("ra 2.0.3-rc.13 (dde7655 2026-10-03)").as_deref(),
+            Some("2.0.3")
+        );
     }
 
     #[test]
@@ -1183,54 +676,6 @@ mod tests {
         assert!(!version_lt("1.1.0", "1.1.0"));
         assert!(!version_lt("2.0.0", "1.9.9"));
         assert!(!version_lt("1.1.0", "1.1")); // 1.1.0 == 1.1(.0)
-    }
-
-    #[test]
-    fn installer_plan_brew_uses_the_public_tap_not_the_private_repo() {
-        // The default brew formula MUST be the PUBLIC octos-org/tap: the
-        // shorthand octos-org/octos auto-taps the PRIVATE homebrew-octos, whose
-        // non-interactive clone fails with `could not read Username`.
-        let plan = installer_plan(true, false, DEFAULT_BREW_FORMULA, DEFAULT_NPM_PACKAGE)
-            .expect("brew available → a plan");
-        assert_eq!(plan.program, "brew");
-        assert_eq!(plan.args, ["install", "octos-org/tap/octos"]);
-        assert_eq!(plan.how, "brew");
-    }
-
-    #[test]
-    fn installer_plan_prefers_brew_then_npm_then_none() {
-        // npm fallback when brew is absent.
-        let plan = installer_plan(false, true, DEFAULT_BREW_FORMULA, DEFAULT_NPM_PACKAGE)
-            .expect("npm available → a plan");
-        assert_eq!(plan.program, "npm");
-        assert_eq!(plan.args, ["install", "-g", "@octos-org/octos"]);
-        assert_eq!(plan.how, "npm");
-        // brew wins when both are present.
-        let both = installer_plan(true, true, DEFAULT_BREW_FORMULA, DEFAULT_NPM_PACKAGE).unwrap();
-        assert_eq!(both.program, "brew");
-        // Neither manager → no plan (caller prints manual-install guidance).
-        assert!(installer_plan(false, false, DEFAULT_BREW_FORMULA, DEFAULT_NPM_PACKAGE).is_none());
-    }
-
-    #[test]
-    fn installer_plan_threads_overridden_identifiers_into_the_command() {
-        // Decoupled identifiers flow straight into the command, so an operator
-        // can retarget a fork/local tap or registry without a rebuild.
-        let brew = installer_plan(true, false, "acme/tap/ra", "@acme/ra").unwrap();
-        assert_eq!(brew.args, ["install", "acme/tap/ra"]);
-        let npm = installer_plan(false, true, "acme/tap/ra", "@acme/ra").unwrap();
-        assert_eq!(npm.args, ["install", "-g", "@acme/ra"]);
-    }
-
-    #[test]
-    fn env_or_falls_back_to_default_when_unset() {
-        // An env var we never set → the baked-in default. (Read-only: octoscode
-        // forbids `unsafe`, so tests can't set_var to exercise the override; the
-        // override path is covered via installer_plan's identifier params above.)
-        assert_eq!(
-            env_or("OCTOSCODE_UNSET_ENV_XYZZY_12345", "the-default"),
-            "the-default"
-        );
     }
 
     /// The rename must not silently re-enable auto-install for anyone who set
