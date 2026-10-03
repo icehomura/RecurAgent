@@ -16,22 +16,22 @@ compatibility:
 
 | Type                          | Crate / module                        | Current version |
 | ----------------------------- | ------------------------------------- | --------------- |
-| `WorkspacePolicy`             | `octos_agent::workspace_policy`       | 1               |
-| `HookPayload`                 | `octos_agent::hooks`                  | 1               |
-| `ProgressEventEnvelope`       | `octos_agent::progress`               | 1               |
-| `TaskResult`                  | `octos_core::task`                    | 1               |
+| `WorkspacePolicy`             | `ra_agent::workspace_policy`       | 1               |
+| `HookPayload`                 | `ra_agent::hooks`                  | 1               |
+| `ProgressEventEnvelope`       | `ra_agent::progress`               | 1               |
+| `TaskResult`                  | `ra_core::task`                    | 1               |
 
 The current constants are also re-exported at the crate root:
 
 ```rust
-use octos_agent::{
+use ra_agent::{
     HOOK_PAYLOAD_SCHEMA_VERSION,
     PROGRESS_EVENT_SCHEMA_VERSION,
     WORKSPACE_POLICY_SCHEMA_VERSION,
     check_supported,
     UnsupportedSchemaVersionError,
 };
-use octos_core::TASK_RESULT_SCHEMA_VERSION;
+use ra_core::TASK_RESULT_SCHEMA_VERSION;
 ```
 
 Legacy agent progress envelopes are identified by both a string schema name,
@@ -49,7 +49,7 @@ typed task/session-scoped events such as `progress`, `phase`, and
    payloads, task results, and progress envelopes continue to load cleanly.
 2. **Unknown `schema_version` values greater than the compiled maximum are
    rejected with a typed `UnsupportedSchemaVersionError`, never a panic.**
-   The shared helper `octos_agent::check_supported` returns this error; the
+   The shared helper `ra_agent::check_supported` returns this error; the
    rendered message always includes the type name, the observed version, and
    the supported upper bound so operators can act on it.
 3. **Stable fields never change meaning within a major schema version.** The

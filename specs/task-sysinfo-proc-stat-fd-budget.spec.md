@@ -20,7 +20,7 @@ admin dashboard 轮询 `system_metrics` 时才 `refresh_all()` 清理死进程�
 <!-- lint-ack: verification-metadata-suggestion — fd 计数场景读的是本进程 /proc/self/fd，属进程内自检，非外部 I/O -->
 
 - 在构造 `AppState.sysinfo` 之前调用一次 `sysinfo::set_open_files_limit(0)`（封装为
-  `octos_cli::sysinfo_budget::new_metrics_system()`——模块位于 crate 顶层，sysinfo 相关函数
+  `ra_cli::sysinfo_budget::new_metrics_system()`——模块位于 crate 顶层，sysinfo 相关函数
   以 `#[cfg(feature = "api")]` 门控，结构检查测试不门控；`serve.rs` 与 `api/mod.rs`
   两处构造均改用它），
   使 `sysinfo` 每次刷新都是打开→读取→关闭，不保留任何 `/proc` 句柄。

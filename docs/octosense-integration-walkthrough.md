@@ -16,7 +16,7 @@ use that revision when tracing a running integration.
 
 | Term | Meaning here | Rust counterpart |
 | --- | --- | --- |
-| Agent | Model-driven loop that reads context, calls tools and produces an answer | `octos_agent::Agent` and its async processing methods |
+| Agent | Model-driven loop that reads context, calls tools and produces an answer | `ra_agent::Agent` and its async processing methods |
 | System agent | Product role that coordinates the host and its apps | A host-selected session, profile and tool policy |
 | App peer | Host-owned agent identity bound to one app and account scope | Durable peer binding, sessions and registered tools |
 | Session | Addressed conversation, history and execution scope | `SessionKey`, transcript and context stores and runtime registries |
@@ -224,7 +224,7 @@ selects these modes:
 | Desktop, Talk to ra off | Explicit program or `OCTOS_APP_CORE_BIN`; `serve --stdio` with the shell's data directory and configuration. |
 | Android, Talk to ra off | Packaged `liboctos.so` executable; `serve --stdio` with the kernel home. |
 | Desktop or Android, Talk to ra on | The launcher replaces `--stdio` with `--host 127.0.0.1 --host-managed`. Native and permitted external clients share that child's WebSocket server. |
-| OpenHarmony | In-process `octos_cli::embedded::serve_io` over a duplex pipe. |
+| OpenHarmony | In-process `ra_cli::embedded::serve_io` over a duplex pipe. |
 | iOS | Kernel unavailable in this implementation. |
 
 Talk to ra is an explicit, persisted host setting. Its host-managed launch
@@ -256,7 +256,7 @@ let runtime = tokio::runtime::Builder::new_multi_thread()
     .build()?;
 // Move the owned home path and I/O halves into a task on this runtime.
 let serving = runtime.spawn(async move {
-    octos_cli::embedded::serve_io(&home, reader, writer).await
+    ra_cli::embedded::serve_io(&home, reader, writer).await
 });
 ```
 

@@ -249,6 +249,6 @@ No TUI release should be considered UX-complete unless:
 - all P0 requirements have automated coverage or a documented manual harness
   assertion
 - no advertised interaction is unsupported
-- current `octos-core` AppUI protocol changes compile in `octoscode`
+- current `ra-core` AppUI protocol changes compile in `octoscode`
 - live coding parity harness produces retained artifacts and a human-readable
   summary

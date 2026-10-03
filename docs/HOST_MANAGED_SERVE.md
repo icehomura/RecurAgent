@@ -137,7 +137,7 @@ and `cd /proc && cat 1/environ` followed). That check is best-effort defense
 in depth: a shell can always build a path it cannot see. The control for
 external clients is that their turns have no shell or code execution at all.
 `web_fetch` and the search tools go through the shared SSRF check
-(`octos_research::net`): loopback (including this server's own port),
+(`ra_research::net`): loopback (including this server's own port),
 private, link-local and metadata addresses are refused, each redirect hop is
 re-checked, and DNS answers are pinned.
 

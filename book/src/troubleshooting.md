@@ -32,7 +32,7 @@ Enable detailed logs to diagnose issues:
 
 ```bash
 RUST_LOG=debug ra chat
-RUST_LOG=octos_agent=trace ra chat --message "task"
+RUST_LOG=ra_agent=trace ra chat --message "task"
 ```
 
 ---

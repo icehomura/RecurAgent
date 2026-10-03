@@ -220,7 +220,7 @@ Provider layer (`crates/ra-llm`):
   `<provider>/<model>` instead of the former hardcoded
   `openai-responses/…` and `gemini/…` labels.
 
-Durable UI ledger privacy (`octos_core::secret_redaction`):
+Durable UI ledger privacy (`ra_core::secret_redaction`):
 
 - Tool-call arguments are passed through a centralized secret redactor before
   they reach the live `tool_started` notification and the durable UI protocol
@@ -529,7 +529,7 @@ OUP server (`crates/ra-cli/src/api`):
   section. Lock order stays manager → persist: read paths release the writer
   lock before touching a live manager.
 
-Durable UI ledger privacy (`octos_core::secret_redaction`):
+Durable UI ledger privacy (`ra_core::secret_redaction`):
 
 - The scrub was keyed on `tool_started`/`ToolStart` only. `approval/requested`
   repeated the raw shell command in `body` (`Run command: …`) and in the typed
@@ -2948,7 +2948,7 @@ validation limitations.
 
 ### Client replay ownership repair and broader acceptance preparation
 
-The follow-up client fix remains client-local: shared `octos_core::Message` has
+The follow-up client fix remains client-local: shared `ra_core::Message` has
 no canonical background message ID, so a sidecar records the exact typed
 `(session, message_id)` plus its current displayed row index and full row
 signature. This is ownership of a currently retained row, not an ever-seen

@@ -114,7 +114,7 @@ Files from PR `#270` that are **explicitly rejected** from reuse:
 - `typos.toml` allowlist additions for short typo tokens — mask real typos; if needed, use `extend-identifiers`
 - `examples/slam-nav-sim/` entire directory — 7,631 LOC including Python reimplementation of ra internals; move to separate repo
 - `crates/ra-cli/static/admin/*` bundle swaps — no source changes
-- `crates/ra-dora-mcp/src/lib.rs` duplicate `SafetyTier` — use `octos_agent::permissions::SafetyTier`
+- `crates/ra-dora-mcp/src/lib.rs` duplicate `SafetyTier` — use `ra_agent::permissions::SafetyTier`
 
 ## Roles
 
@@ -581,7 +581,7 @@ or be deleted.
 ### Stable surfaces
 
 - `Tool` trait signature
-- `octos_agent::permissions::SafetyTier` (from RP01)
+- `ra_agent::permissions::SafetyTier` (from RP01)
 
 ### Architectural surface
 
@@ -590,7 +590,7 @@ or be deleted.
 - `DoraToolBridge::execute` forwards to a dora-rs dataflow via a configurable transport (default: local zenoh or dora-arrow IPC).
 - Feature-gated: `ra-dora-mcp/real-forwarding` controls whether the crate builds with actual dora deps.
 - Schema-validated ingress/egress. Backpressure: bounded channels, overflow drops with counter.
-- Reuse `octos_agent::permissions::SafetyTier`. Delete the duplicate enum in `ra-dora-mcp`.
+- Reuse `ra_agent::permissions::SafetyTier`. Delete the duplicate enum in `ra-dora-mcp`.
 - Real integration test against a fixture dora node (CI-gated, skipped when dora is not installed).
 
 **Option B — Removal (if Option A is not funded):**
@@ -623,7 +623,7 @@ The contract owner picks A or B before slice opens. No middle path.
 ### Required invariants (Option A)
 
 1. `DoraToolBridge::execute` actually forwards to a dora runtime and returns its real output. Verified by integration test.
-2. No duplicate `SafetyTier` enum — the crate imports `octos_agent::permissions::SafetyTier`.
+2. No duplicate `SafetyTier` enum — the crate imports `ra_agent::permissions::SafetyTier`.
 3. Overflow drops are counted; no unbounded buffering.
 4. The feature gate `real-forwarding` is off by default on the workspace build; CI enables it for the integration test job.
 5. Schema validation rejects malformed messages at ingress.
@@ -631,7 +631,7 @@ The contract owner picks A or B before slice opens. No middle path.
 ### Required invariants (Option B)
 
 1. Workspace still compiles after deletion.
-2. No remaining `use octos_dora_mcp::...` imports.
+2. No remaining `use ra_dora_mcp::...` imports.
 3. A successor issue is opened documenting the deferred work.
 
 ### Explicit non-goals
@@ -660,7 +660,7 @@ Feature gate off = bridge not registered. Safe default.
 ### Review checklist
 
 1. If Option A: does `execute()` actually hit a dora runtime? No placeholder strings.
-2. If Option A: is `SafetyTier` the one from `octos_agent`?
+2. If Option A: is `SafetyTier` the one from `ra_agent`?
 3. If Option B: is the workspace `Cargo.toml` clean?
 
 ---

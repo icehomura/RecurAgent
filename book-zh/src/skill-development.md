@@ -75,7 +75,7 @@
 
 ```rust
 // 在 RunPipelineTool::execute 中，parse_dot 之后：
-octos_pipeline::model_assignment::assign_from_catalog(
+ra_pipeline::model_assignment::assign_from_catalog(
     &mut graph,
     &model_catalog, // 由 ProfileRuntime → RunPipelineTool 传入
 )?;

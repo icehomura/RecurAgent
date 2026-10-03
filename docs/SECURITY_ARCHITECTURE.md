@@ -32,7 +32,7 @@ Not all defensive layers provide equal guarantees. This table classifies each la
 | Layer | Type | Enforcement | Bypass Resistance |
 |-------|------|-------------|-------------------|
 | **Sandbox** (bwrap, sandbox-exec, Docker, Windows AppContainer) | Hard | Kernel namespaces / SBPL / container / AppContainer | Requires kernel exploit |
-| **SSRF filter** (`octos_research::net`) | Hard | DNS resolution + IP validation, fail-closed | Requires DNS rebinding race or redirect bypass (see known gaps) |
+| **SSRF filter** (`ra_research::net`) | Hard | DNS resolution + IP validation, fail-closed | Requires DNS rebinding race or redirect bypass (see known gaps) |
 | **`O_NOFOLLOW` file I/O** | Hard | Kernel (atomic open flag) | No known bypass |
 | **`BLOCKED_ENV_VARS`** | Hard | Process environment (set before exec) | Requires parent process compromise |
 | **Tool Policy** (allow/deny lists) | Hard | Application (deny-wins, checked at dispatch) | Requires code bug in policy enforcement |
@@ -243,7 +243,7 @@ All backends remove these from the child process environment before execution.
 
 ### 3.5 SSRF Protection
 
-`octos_research::net::check_url` is the workspace's one SSRF validation; `ra-agent/src/tools/ssrf.rs` adapts it for `web_fetch`, `browser`, `site_crawl`, and MCP HTTP transports, and adds the fleet host allowlist `web_fetch` enforces per redirect hop.
+`ra_research::net::check_url` is the workspace's one SSRF validation; `ra-agent/src/tools/ssrf.rs` adapts it for `web_fetch`, `browser`, `site_crawl`, and MCP HTTP transports, and adds the fleet host allowlist `web_fetch` enforces per redirect hop.
 
 **Two-phase check** (`check_url`):
 1. **Hostname validation** (`is_private_host`): Blocks `localhost`, `localhost.`, and any IP literal that resolves to a private range; non-http(s) schemes are refused outright.

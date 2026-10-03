@@ -70,11 +70,11 @@ Never index credentials or app secrets. Mail bodies are indexed only on opt-in (
 
 What landed with this record (phase 1 in Octoscript-AppCard, phases 2–3 here):
 
-- **Records and quantised vectors** — `octos_memory::{Record, RecordKind, Trust}`
+- **Records and quantised vectors** — `ra_memory::{Record, RecordKind, Trust}`
   (`record.rs`: title ≤ 120 B, abstract ≤ 300 B, optional body ≤ 16 KiB,
   fingerprint, visits/last_visit, `heat()`); `quant.rs` (`mrl_truncate`,
   `QuantizedVector` int8 with per-vector scale, 6-byte header on disk).
-- **One index, persisted** — `octos_memory::RecallStore` (`recall.rs`):
+- **One index, persisted** — `ra_memory::RecallStore` (`recall.rs`):
   `<data_dir>/recall.redb` (tables `records`, `vectors`, `meta`) plus
   `<data_dir>/recall-index/` with the dumped HNSW graph and a manifest pinned
   to (embedder, dimension, generation). Open reloads the graph when the

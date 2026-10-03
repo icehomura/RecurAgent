@@ -392,7 +392,7 @@ Notes:
 
 Every starter in this guide has a `cargo test` smoke test that asserts:
 
-1. the plugin manifest parses via `octos_plugin::PluginManifest::from_file`.
+1. the plugin manifest parses via `ra_plugin::PluginManifest::from_file`.
 2. the workspace policy parses via `toml::from_str::<WorkspacePolicy>()`.
 3. at least one declared artifact is produced under a fake run.
 4. `lifecycle_state` transitions `Queued → Running → Verifying → Ready` via

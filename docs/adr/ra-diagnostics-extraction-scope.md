@@ -1,4 +1,4 @@
-# Scope: shared `octos-diagnostics` (octoscode#182 "Sharing" phase)
+# Scope: shared `ra-diagnostics` (octoscode#182 "Sharing" phase)
 
 **Goal:** the server (`ra-cli`) gets `ra doctor` / `ra update` by sharing the
 diagnostics + update *logic* that octoscode already implements — without
@@ -19,7 +19,7 @@ unrelated crates. A dedicated crate is cleaner.
   comparator (server caps/schema vs `UI_PROTOCOL_SCHEMA_VERSION` + `FEATURE_*`).
   It is protocol semantics and needs **no new deps**, so it belongs in core. The
   `Check`-producing *adapter* over it lives in `ra-diagnostics`.
-- **Cross-repo:** octoscode already git-deps `octos-core`; it adds a second git-dep
+- **Cross-repo:** octoscode already git-deps `ra-core`; it adds a second git-dep
   on `ra-diagnostics` at the **same pinned rev**. Add CI asserting the two revs
   match and `cargo tree -d` shows no duplicate `ra-core`.
 
@@ -62,7 +62,7 @@ The two updaters are genuinely asymmetric:
 - ra-cli: multi-binary **bundle** tarball + skills, rollback, codesign each.
 
 So the shared layer produces an **`UpdatePlan`**; each binary runs its own driver.
-`axoupdater` sits behind a narrow feature that **only octoscode** enables. octos-cli
+`axoupdater` sits behind a narrow feature that **only octoscode** enables. ra-cli
 keeps its existing `crates/ra-cli/src/updater.rs` initially, adapted to consume
 the shared release/planning code (and to become install-method-aware).
 

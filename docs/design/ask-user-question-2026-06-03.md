@@ -4,7 +4,7 @@ Date: 2026-06-03
 
 Status: design draft (Phase 1: synchronous tool-block).
 
-Owner: octos-agent + octos-cli (AppUI/UI Protocol) + octoscode.
+Owner: ra-agent + ra-cli (AppUI/UI Protocol) + octoscode.
 
 Related contract surfaces:
 

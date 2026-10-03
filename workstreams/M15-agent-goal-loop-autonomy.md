@@ -27,7 +27,7 @@ notification ordering.
 
 The `AgentOrchestrator` is the single server-side control plane for:
 
-- native subagents: in-process `octos_agent::Agent` children created through the
+- native subagents: in-process `ra_agent::Agent` children created through the
   same session/runtime factory as the parent session.
 - CLI agents: subprocess-backed agents with durable lifecycle, stdout/stderr
   capture, interrupt/close semantics, and policy-filtered environment.

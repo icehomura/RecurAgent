@@ -10,7 +10,7 @@ Host-managed turns default to 20 model-loop iterations; a positive
 default, while ordinary ACP retains its unlimited-zero convention.
 
 The parent must launch the worker with
-`octos_sandbox::host_managed_command(absolute_executable_path)`. The command
+`ra_sandbox::host_managed_command(absolute_executable_path)`. The command
 clears the environment, changes to `/`, and enforces OS confinement before the
 executable starts. The worker then calls `confine_host_managed()` before creating
 runtime threads or accepting input. Failure is fatal; there is no unconfined
@@ -31,7 +31,7 @@ Host-managed execution is a distinct, opt-in mode. It does not replace ordinary
 ACP execution or its configured runtime. Upstream moved ordinary ACP turns into
 the ra UI Protocol (OUP) dispatcher in
 [#2265](https://github.com/octos-org/octos/pull/2265). The ordinary adapter stays
-on that dispatcher. Host-managed mode uses the current shared `octos_agent::Agent`
+on that dispatcher. Host-managed mode uses the current shared `ra_agent::Agent`
 loop through a separate ACP adapter with private, memory-only session bookkeeping.
 
 | Operation | Host-managed worker | Ordinary ACP on upstream after #2265 |
@@ -86,7 +86,7 @@ Missing negotiation, unsupported versions, and repeated initialization fail.
 
 ## Broker methods
 
-Shared serde types and validation limits live in `octos_llm::host`. The ACP SDK
+Shared serde types and validation limits live in `ra_llm::host`. The ACP SDK
 is not required to use those types. All three extension methods are worker-to-host
 JSON-RPC requests:
 

@@ -2171,7 +2171,7 @@ Request/response Rust types live in `crates/ra-core/src/ui_protocol.rs`
   is inclusive). `limit` defaults to `MEMORY_SEARCH_DEFAULT_LIMIT` (10)
   and is clamped to `1..=MEMORY_SEARCH_MAX_LIMIT` (50).
 - Result type: `MemorySearchResult` — `{ hits: Hit[] }` where each hit is
-  the JSON of `octos_memory::Hit`: `{ id: string, kind: "episode" |
+  the JSON of `ra_memory::Hit`: `{ id: string, kind: "episode" |
   "document" | "knowledge", source: string, title: string, abstract:
   string, score: number, timestamp: RFC3339, trust: "trusted" |
   "untrusted" }`, best first. App-sourced hits are `untrusted`: clients
@@ -2195,7 +2195,7 @@ Request/response Rust types live in `crates/ra-core/src/ui_protocol.rs`
   for promotion into Knowledge).
 - Params type: `MemoryLoadParams` — `{ id: string }` (non-blank).
 - Result type: `MemoryLoadResult` — `{ record: Record, page?: string,
-  page_truncated: bool }`. `record` is the JSON of `octos_memory::Record`
+  page_truncated: bool }`. `record` is the JSON of `ra_memory::Record`
   (`id`, `kind`, `source`, `parent?`, `timestamp`, `title`, `abstract`,
   `body?`, `trust`, `fingerprint?`, `visits`, `last_visit?`, `promoted`,
   `updated_at`, `schema_version`). For Knowledge records (`id` starting
@@ -2222,7 +2222,7 @@ Request/response Rust types live in `crates/ra-core/src/ui_protocol.rs`
   are refused by the scope guard.
 - Params type: `MemoryIngestParams` — `{ records: Record[], vectors?:
   (number[] | null)[], embed?: bool }`. Each record is an
-  `octos_memory::Record` JSON: required `id`, `kind`, `source`,
+  `ra_memory::Record` JSON: required `id`, `kind`, `source`,
   `timestamp` (RFC 3339), `title`, `abstract`; optional `parent`,
   `body`, `trust`, `fingerprint` (producer-side change detector —
   records whose fingerprint and index text are unchanged are skipped
@@ -2248,7 +2248,7 @@ Request/response Rust types live in `crates/ra-core/src/ui_protocol.rs`
   BM25-only). Without an embedder records are stored BM25-only.
 - Result type: `MemoryIngestResult` — `{ inserted: number, updated:
   number, unchanged: number, vectors_stored: number, embedded: number }`
-  (the `octos_memory::UpsertReport` counts plus how many vectors the
+  (the `ra_memory::UpsertReport` counts plus how many vectors the
   server actually embedded in this call — unchanged records that kept
   their stored vector are not counted). The HNSW graph is persisted
   before the result is sent.

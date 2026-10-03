@@ -12,7 +12,7 @@ Pre-merge inspection of `origin/main` (and of this stacked branch
 
 - No `crates/ra-dora-mcp/` directory.
 - No `examples/dora-bridge-config/` directory.
-- No `octos_dora_mcp` imports or `ra-dora-mcp` Cargo entries anywhere.
+- No `ra_dora_mcp` imports or `ra-dora-mcp` Cargo entries anywhere.
 
 Therefore the RP06 "deletion" contract is vacuously satisfied: there is
 nothing to delete on this branch. This note records the decision and the

@@ -94,7 +94,7 @@ Score it against the matrix:
 
 ```rust
 // In RunPipelineTool::execute, after parse_dot:
-octos_pipeline::model_assignment::assign_from_catalog(
+ra_pipeline::model_assignment::assign_from_catalog(
     &mut graph,
     &model_catalog, // passed via ProfileRuntime → RunPipelineTool
 )?;

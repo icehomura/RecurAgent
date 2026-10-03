@@ -18,7 +18,7 @@ agent 侧所有日志自动携带二者；并在 interrupt 收到/裁决/ack 与
 
 <!-- lint-ack: verification-metadata-suggestion — 日志场景以进程内 tracing 订阅器捕获文本断言，无外部 I/O -->
 
-- 新增不依赖 `api` feature 的模块 `octos_cli::turn_trace`：
+- 新增不依赖 `api` feature 的模块 `ra_cli::turn_trace`：
   `turn_span(session_id, turn_id) -> tracing::Span`（`info_span!("turn", session, turn)`），
   以及 `log_interrupt_received`、`log_interrupt_outcome(outcome)`、
   `log_interrupt_ack(ack)`、`log_steer_accepted(interrupting)`；全部 INFO 级、字段
@@ -55,7 +55,7 @@ Scenario: interrupt 收到/裁决/ack 三条日志都带 session 与 turn（crit
   Test:
     Package: ra-cli
     Filter: interrupt_lifecycle_logs_carry_session_and_turn
-  Given 一个捕获输出的 tracing 订阅器与 `octos_cli::turn_trace` 模块
+  Given 一个捕获输出的 tracing 订阅器与 `ra_cli::turn_trace` 模块
   When 依次调用 `log_interrupt_received`、`log_interrupt_outcome("captured")`、`log_interrupt_ack("interrupted")`
   Then 三行日志都包含 `session=<id>` 与 `turn=<id>`
   And 分别包含 `outcome=captured` 与 `ack=interrupted`

@@ -689,7 +689,7 @@ is never a peer's host:
   (`host_owned_peer_session_denied`), and a turn it drives never counts as
   the host's: it gets no host tools and no app context.
 - Every host-routed tool is registered with the tool origin
-  `ToolOrigin::HostRouted` (`octos_agent::ToolOrigin`, recorded by
+  `ToolOrigin::HostRouted` (`ra_agent::ToolOrigin`, recorded by
   `ToolRegistry` from `Tool::origin`). An external turn keeps only
   `ToolOrigin::Builtin` tools on its allowlist, so a host-routed tool is
   excluded by construction whatever its name.

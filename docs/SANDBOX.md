@@ -360,7 +360,7 @@ which docker          # Any platform
 ra status
 
 # Test with verbose logging
-RUST_LOG=octos_agent=debug ra chat --message "Run: echo hello"
+RUST_LOG=ra_agent=debug ra chat --message "Run: echo hello"
 ```
 
 In debug logs, you'll see either:
