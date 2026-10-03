@@ -4,7 +4,8 @@
 //!
 //! No network here (Stage 1). The terminal checks are ported from octoscode's
 //! `doctor.rs`; the writability checks take their directories as parameters so
-//! callers (ra-cli) resolve the real `~/.config/ra` + `~/.ra`.
+//! callers (ra-cli) resolve the real `~/.config/ra` + `~/.ra` (legacy
+//! `~/.config/ra` + `~/.ra` still resolve through the brand helpers).
 
 use std::path::Path;
 

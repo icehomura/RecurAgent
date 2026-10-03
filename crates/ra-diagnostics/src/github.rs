@@ -321,7 +321,7 @@ mod tests {
         // No env var configured on the spec → never reads anything.
         let mut spec = octos_spec();
         assert!(token(&spec).is_none());
-        spec.github_token_env = Some("OCTOS_DIAG_TEST_TOKEN_UNSET_XYZ".into());
+        spec.github_token_env = Some("RA_DIAG_TEST_TOKEN_UNSET_XYZ".into());
         // Unset → None (we don't fall through to a default var).
         assert!(token(&spec).is_none());
     }
