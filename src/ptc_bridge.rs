@@ -134,8 +134,13 @@ const PTC_MEMORY_LIMIT_BYTES: usize = 256 * 1024 * 1024;
 const PTC_MAX_STACK_BYTES: usize = 2 * 1024 * 1024;
 
 /// Stack reserve for the realm thread. The interpreter's own recursion is
-/// bounded by [`PTC_MAX_STACK_BYTES`]; this covers the Rust frames around it.
-const REALM_THREAD_STACK_BYTES: usize = 32 * 1024 * 1024;
+/// bounded by [`PTC_MAX_STACK_BYTES`] (2 MiB), so 16 MiB still leaves 8x that
+/// ceiling for the Rust frames around it — and the measured whole-turn floor
+/// (708 KiB, `agent::tests::probe_full_turn_stack_scaling`, 905433d68) already
+/// covered the path this thread serves: a `run_code` node inside a `dag`, with
+/// `dag_tool` + `ptc_bridge` + the QuickJS realm all live. Bead bd-qtffv
+/// tracks verifying the transport-heavy chains and going lower.
+const REALM_THREAD_STACK_BYTES: usize = 16 * 1024 * 1024;
 
 /// How often the host polls the realm for bridge calls and its terminal value.
 const HOST_POLL_INTERVAL: Duration = Duration::from_millis(10);
