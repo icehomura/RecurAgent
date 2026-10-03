@@ -43,7 +43,7 @@ use crate::provider::StreamOptions;
 use crate::provider_metadata::provider_ids_match;
 use crate::providers;
 use crate::session::{Session, SessionEntry, SessionMessage, SessionStoreKind};
-use crate::session_index::SessionIndex;
+use crate::session_index::{SessionIndex, SessionMeta};
 use crate::tools::ToolRegistry;
 use asupersync::channel::oneshot;
 use asupersync::runtime::RuntimeHandle;
@@ -677,6 +677,15 @@ async fn run(
             }
 
             "session/list" => {
+                // `cwd` is the spec's only filter. It is applied to the live
+                // sessions here and pushed into the store query below, so both
+                // halves of the answer describe the same project.
+                let requested_cwd = request
+                    .params
+                    .get("cwd")
+                    .and_then(Value::as_str)
+                    .map(String::from);
+
                 let entries: Vec<(String, Arc<Mutex<AcpSessionState>>)> =
                     sessions.lock(&cx).await.map_or_else(
                         |_| Vec::new(),
@@ -688,6 +697,8 @@ async fn run(
                         },
                     );
                 // ACP SessionInfo requires `cwd` alongside `sessionId`.
+                let mut seen: std::collections::HashSet<String> =
+                    std::collections::HashSet::with_capacity(entries.len());
                 let mut session_list: Vec<Value> = Vec::with_capacity(entries.len());
                 for (sid, state) in entries {
                     let cwd = state
@@ -695,7 +706,26 @@ async fn run(
                         .await
                         .map(|guard| guard.cwd.display().to_string())
                         .unwrap_or_default();
+                    if !cwd_matches(requested_cwd.as_deref(), &cwd) {
+                        continue;
+                    }
+                    seen.insert(sid.clone());
                     session_list.push(json!({ "sessionId": sid, "cwd": cwd }));
+                }
+
+                // Then the on-disk store: a session an earlier process created is
+                // still loadable via `session/load`, so it belongs in the listing
+                // even though this process never opened it. A live entry with the
+                // same id wins — it carries the cwd this process is actually in.
+                for info in persisted_session_infos(requested_cwd.as_deref()) {
+                    let duplicate = info
+                        .get("sessionId")
+                        .and_then(Value::as_str)
+                        .is_some_and(|id| !seen.insert(id.to_string()));
+                    if duplicate {
+                        continue;
+                    }
+                    session_list.push(info);
                 }
 
                 let _ = out_tx.send(json_rpc_ok(id, json!({ "sessions": session_list })));
@@ -2227,6 +2257,50 @@ const fn map_stop_reason(reason: crate::model::StopReason) -> &'static str {
     }
 }
 
+/// Whether a session's `cwd` satisfies a `session/list` filter.
+///
+/// Compared as paths, not strings, so a trailing separator (or a `.` segment)
+/// cannot hide a session the client is plainly asking about.
+fn cwd_matches(requested: Option<&str>, cwd: &str) -> bool {
+    match requested {
+        None => true,
+        Some(want) => PathBuf::from(want) == PathBuf::from(cwd),
+    }
+}
+
+/// One persisted session as an ACP `SessionInfo`.
+///
+/// `title` is omitted rather than sent as `null`: the spec marks it optional, and
+/// a null title renders as an empty name in a client's picker instead of letting
+/// the client fall back to the session id. `updatedAt` always has a value — the
+/// file's mtime, or the header's own timestamp when the mtime cannot be read.
+fn session_info_json(meta: &SessionMeta) -> Value {
+    let mut info = json!({ "sessionId": meta.id, "cwd": meta.cwd });
+    if let Some(name) = meta.name.as_deref() {
+        info["title"] = json!(name);
+    }
+    let updated = chrono::DateTime::from_timestamp_millis(meta.last_modified_ms)
+        .map(|dt| dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+        .unwrap_or_else(|| meta.timestamp.clone());
+    info["updatedAt"] = json!(updated);
+    info
+}
+
+/// Persisted sessions from the on-disk store, newest first.
+///
+/// This is the same store `session/load` rehydrates from, so everything listed
+/// here can actually be loaded. An empty answer from a cold index is retried once
+/// after a full reindex — the nudge the session picker already makes, and the
+/// reason a fresh install still sees sessions written before the index existed.
+fn persisted_session_infos(cwd: Option<&str>) -> Vec<Value> {
+    let index = SessionIndex::new();
+    let mut metas = index.list_sessions(cwd).unwrap_or_default();
+    if metas.is_empty() && index.reindex_all().is_ok() {
+        metas = index.list_sessions(cwd).unwrap_or_default();
+    }
+    metas.iter().map(session_info_json).collect()
+}
+
 /// Map an ACP `prompt: ContentBlock[]` onto the agent's own content blocks.
 ///
 /// Per the spec, baseline support is `text` and `resource_link`; `image` is
@@ -3009,14 +3083,16 @@ mod tests {
         assert!(result["agentCapabilities"]["sessionCapabilities"]["list"].is_object());
         // `session/resume` restores context without replaying history.
         assert!(result["agentCapabilities"]["sessionCapabilities"]["resume"].is_object());
-        // promptCapabilities advertise text/resource_link baseline only.
+        // promptCapabilities: the text/resource_link baseline plus images — the
+        // prompt path carries image blocks through to the provider. `audio`
+        // stays false because nothing downstream accepts it.
         assert_eq!(
             result["agentCapabilities"]["promptCapabilities"]["audio"],
             false
         );
         assert_eq!(
             result["agentCapabilities"]["promptCapabilities"]["image"],
-            false
+            true
         );
         // mcpCapabilities advertised explicitly so the client knows transports.
         assert_eq!(
@@ -3145,6 +3221,53 @@ mod tests {
         let thinking = resolve_acp_thinking_level(&config, &model_entry);
 
         assert_eq!(thinking, crate::model::ThinkingLevel::Off);
+    }
+
+    #[test]
+    fn session_info_json_omits_an_absent_title_and_keeps_updated_at() {
+        let meta = SessionMeta {
+            path: "/tmp/s.jsonl".to_string(),
+            id: "sess-1".to_string(),
+            cwd: "/work/codeg".to_string(),
+            timestamp: "2026-10-03T00:00:00Z".to_string(),
+            message_count: 3,
+            last_modified_ms: 1_700_000_000_000,
+            size_bytes: 42,
+            name: None,
+        };
+        let info = session_info_json(&meta);
+        assert_eq!(info["sessionId"], "sess-1");
+        assert_eq!(info["cwd"], "/work/codeg");
+        assert!(
+            info.get("title").is_none(),
+            "an unnamed session must not claim a title: {info}"
+        );
+        assert_eq!(info["updatedAt"], "2023-11-14T22:13:20Z");
+
+        let named = SessionMeta {
+            name: Some("Fix the login flow".to_string()),
+            ..meta.clone()
+        };
+        assert_eq!(session_info_json(&named)["title"], "Fix the login flow");
+
+        // An unreadable mtime falls back to the header's own timestamp rather
+        // than dropping the field a client sorts on.
+        let no_mtime = SessionMeta {
+            last_modified_ms: i64::MAX,
+            ..meta
+        };
+        assert_eq!(session_info_json(&no_mtime)["updatedAt"], "2026-10-03T00:00:00Z");
+    }
+
+    #[test]
+    fn cwd_filter_compares_paths_not_strings() {
+        assert!(cwd_matches(None, "/work/codeg"), "no filter lists everything");
+        assert!(cwd_matches(Some("/work/codeg"), "/work/codeg"));
+        assert!(
+            cwd_matches(Some("/work/codeg/"), "/work/codeg"),
+            "a trailing separator is the same project"
+        );
+        assert!(!cwd_matches(Some("/work/other"), "/work/codeg"));
     }
 
     #[test]
