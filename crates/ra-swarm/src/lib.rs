@@ -87,7 +87,7 @@
 //! 9. Zero new `unsafe` — the workspace-wide `deny(unsafe_code)` lint
 //!    is honoured.
 
-#![doc(html_root_url = "https://docs.rs/octos-swarm/0.1.0")]
+#![doc(html_root_url = "https://docs.rs/ra-swarm/0.1.0")]
 
 mod dispatcher;
 mod gate;
