@@ -561,6 +561,17 @@ impl fmt::Display for MenuRegistryError {
 
 impl std::error::Error for MenuRegistryError {}
 
+/// The client's own slash-command names, as declared to the server on
+/// `session/open` (`SessionOpenParams.client_commands`). Canonical names in the
+/// spelling the composer accepts, so the kernel can list them in the session's
+/// system prompt and point the user at them.
+pub fn client_command_names() -> Vec<String> {
+    core_command_specs()
+        .iter()
+        .map(CommandSpec::slash_name)
+        .collect()
+}
+
 pub fn core_command_specs() -> Vec<CommandSpec> {
     let stop_availability = CommandAvailability::local_mutating();
 

@@ -2259,7 +2259,7 @@ fn launch_prompt_menu(ctx: &MenuContext<'_>) -> MenuBuildResult {
                 cwd: Some(prompt.cwd.clone()),
                 sandbox: None,
                 after: None,
-                client_commands: None,
+                client_commands: Some(crate::menu::registry::client_command_names()),
             },
         ))
     };

@@ -2020,7 +2020,7 @@ impl ProtocolAppUiBackend {
                 cwd,
                 sandbox: None,
                 after: None,
-                client_commands: None,
+                client_commands: Some(crate::menu::registry::client_command_names()),
             })
         })
     }
@@ -2095,7 +2095,7 @@ impl ProtocolAppUiBackend {
                 .or_else(|| self.launch.cwd.clone()),
             sandbox: None,
             after: None,
-            client_commands: None,
+            client_commands: Some(crate::menu::registry::client_command_names()),
         }))
     }
 
@@ -2828,7 +2828,7 @@ impl AppUiBackend for ProtocolAppUiBackend {
                     cwd: self.launch.cwd.clone(),
                     sandbox: None,
                     after: None,
-                    client_commands: None,
+                    client_commands: Some(crate::menu::registry::client_command_names()),
                 },
             ))?;
         }

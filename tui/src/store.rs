@@ -1383,7 +1383,7 @@ impl Store {
                     cwd: Some(entry.cwd.clone()),
                     sandbox: None,
                     after: None,
-                    client_commands: None,
+                    client_commands: Some(crate::menu::registry::client_command_names()),
                 });
                 if first_open.is_none() {
                     first_open = Some(open);
@@ -1430,7 +1430,7 @@ impl Store {
                 cwd: Some(result.cwd),
                 sandbox: None,
                 after: None,
-                client_commands: None,
+                client_commands: Some(crate::menu::registry::client_command_names()),
             },
         ))
     }
@@ -1495,7 +1495,7 @@ impl Store {
                 cwd: Some(event.cwd),
                 sandbox: None,
                 after: None,
-                client_commands: None,
+                client_commands: Some(crate::menu::registry::client_command_names()),
             },
         ))
     }
@@ -3054,7 +3054,7 @@ impl Store {
                 cwd,
                 sandbox: None,
                 after: None,
-                client_commands: None,
+                client_commands: Some(crate::menu::registry::client_command_names()),
             },
         ))
     }
@@ -5245,7 +5245,7 @@ impl Store {
             cwd: onboarding_workspace_cwd(&self.state.workspace.root),
             sandbox: None,
             after: None,
-            client_commands: None,
+            client_commands: Some(crate::menu::registry::client_command_names()),
         }))
     }
 
@@ -10195,7 +10195,7 @@ impl Store {
                 cwd: self.launch_workspace_cwd(),
                 sandbox: None,
                 after: None,
-                client_commands: None,
+                client_commands: Some(crate::menu::registry::client_command_names()),
             },
         ))
     }
@@ -14944,7 +14944,7 @@ impl Store {
                 cwd,
                 sandbox: None,
                 after: None,
-                client_commands: None,
+                client_commands: Some(crate::menu::registry::client_command_names()),
             }));
         self.enqueue_staged_drain_after_switch();
         true
