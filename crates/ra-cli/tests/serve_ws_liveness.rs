@@ -78,7 +78,7 @@ mod serve_ws_liveness {
     fn spawn_serve() -> ServeProcess {
         let port = find_free_port();
         let data_dir = tempfile::TempDir::new().unwrap();
-        let child = Command::new(env!("CARGO_BIN_EXE_octos"))
+        let child = Command::new(env!("CARGO_BIN_EXE_ra"))
             .args([
                 "serve",
                 "--instance-data-dir",

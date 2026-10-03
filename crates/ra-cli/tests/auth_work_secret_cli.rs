@@ -8,7 +8,7 @@ use std::process::Command;
 use ra_agent::bridge::work_secret::WorkSecret;
 
 fn run_octos(args: &[&str], data_dir: &Path) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_octos"))
+    Command::new(env!("CARGO_BIN_EXE_ra"))
         .args(args)
         .arg("--data-dir")
         .arg(data_dir)

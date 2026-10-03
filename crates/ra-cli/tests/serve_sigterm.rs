@@ -47,13 +47,13 @@ mod serve_sigterm {
     /// Path to a real ra binary that includes the `serve` subcommand.
     ///
     /// When this harness itself is compiled WITH the `api` feature, Cargo
-    /// already built `CARGO_BIN_EXE_octos` with `serve` — reuse it directly.
+    /// already built `CARGO_BIN_EXE_ra` with `serve` — reuse it directly.
     /// When compiled WITHOUT `api`, bootstrap one via `cargo build` so the
     /// spawned process is always the REAL ra binary with production code
     /// (same strategy as `serve_broken_pipe::octos_binary`).
     fn octos_binary() -> std::path::PathBuf {
         if cfg!(feature = "api") {
-            return env!("CARGO_BIN_EXE_octos").into();
+            return env!("CARGO_BIN_EXE_ra").into();
         }
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let target_dir = std::path::Path::new(manifest_dir).join("../../target/serve-sigterm");

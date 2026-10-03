@@ -3,7 +3,7 @@
 use std::process::Command;
 
 fn helper() -> &'static str {
-    env!("CARGO_BIN_EXE_octos-sandbox")
+    env!("CARGO_BIN_EXE_ra-sandbox")
 }
 
 fn require_linux_sandbox_supported() {

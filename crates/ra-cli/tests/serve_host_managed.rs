@@ -23,7 +23,7 @@ mod serve_host_managed {
 
     fn octos_binary() -> std::path::PathBuf {
         if cfg!(feature = "api") {
-            return env!("CARGO_BIN_EXE_octos").into();
+            return env!("CARGO_BIN_EXE_ra").into();
         }
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let target_dir = std::path::Path::new(manifest_dir).join("../../target/serve-host-managed");

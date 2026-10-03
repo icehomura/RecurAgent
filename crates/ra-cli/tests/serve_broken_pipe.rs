@@ -52,7 +52,7 @@ mod serve_broken_pipe {
     /// Path to a real ra binary that includes the `serve` subcommand.
     ///
     /// When this harness itself is compiled WITH the `api` feature, Cargo
-    /// already built `CARGO_BIN_EXE_octos` with `serve` — reuse it directly.
+    /// already built `CARGO_BIN_EXE_ra` with `serve` — reuse it directly.
     /// When compiled WITHOUT `api` (e.g. agent-spec lifecycle's plain
     /// `cargo test -p ra-cli --test serve_broken_pipe`), that binary has
     /// no `serve` subcommand, so we bootstrap one: `cargo build` an api
@@ -60,7 +60,7 @@ mod serve_broken_pipe {
     /// the spawned process is the REAL ra binary with production code.
     fn octos_binary() -> std::path::PathBuf {
         if cfg!(feature = "api") {
-            return env!("CARGO_BIN_EXE_octos").into();
+            return env!("CARGO_BIN_EXE_ra").into();
         }
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let target_dir = std::path::Path::new(manifest_dir).join("../../target/serve-bp-probe");

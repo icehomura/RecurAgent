@@ -404,7 +404,7 @@ fn should_emit_only_valid_json_on_stdout_when_running_acp() {
     let data = tmp.path().join("data");
     std::fs::create_dir_all(&home).unwrap();
     std::fs::create_dir_all(&config).unwrap();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_octos"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ra"))
         .args([
             "acp",
             "--provider",

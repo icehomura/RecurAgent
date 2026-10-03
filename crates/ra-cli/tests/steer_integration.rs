@@ -1,10 +1,10 @@
 //! OLP-CTRL steer cross-process integration test (#8b).
 //!
 //! Moved OUT of `commands/steer.rs`'s inline `#[cfg(test)]` module: the
-//! `option_env!("CARGO_BIN_EXE_octos")` + `target/debug/ra` fallback
+//! `option_env!("CARGO_BIN_EXE_ra")` + `target/debug/ra` fallback
 //! both resolve to nothing in the CI lib-test environment (the binary is
 //! not built for lib tests), making the inline test fail spuriously. In
-//! the `tests/` integration directory `env!("CARGO_BIN_EXE_octos")` is
+//! the `tests/` integration directory `env!("CARGO_BIN_EXE_ra")` is
 //! GUARANTEED to exist — Cargo builds the binary before running
 //! integration tests — so no fallback is needed (deleted per #8b).
 //!
@@ -64,7 +64,7 @@ fn olp_ctrl_steer_subprocess_cli_writes_sidecar_and_marker() {
     let instance_data = state_home.join("profiles").join("ra").join("data");
     std::fs::create_dir_all(&instance_data).expect("instance data");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_octos"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ra"))
         .args(["steer", "--session", session, "--text", "读黑板第 7 条"])
         .current_dir(&cwd)
         .env("OCTOS_HOME", &state_home)
@@ -97,7 +97,7 @@ fn olp_ctrl_steer_subprocess_cli_writes_sidecar_and_marker() {
 
     // Negative control: an unknown session is refused with a non-zero exit
     // and writes NOTHING.
-    let ghost = Command::new(env!("CARGO_BIN_EXE_octos"))
+    let ghost = Command::new(env!("CARGO_BIN_EXE_ra"))
         .args(["steer", "--session", "ghost:nonexistent", "--text", "hi"])
         .current_dir(&cwd)
         .env("OCTOS_HOME", &state_home)
