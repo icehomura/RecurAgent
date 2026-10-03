@@ -43394,6 +43394,132 @@ now analyzing the bus module"
     }
 
     #[test]
+    fn session_open_declares_the_client_slash_commands() {
+        // UPCR-2026-037: the client declares its own slash commands on
+        // session/open so the kernel can list them in the session prompt.
+        let expected = crate::menu::registry::client_command_names();
+        assert!(!expected.is_empty(), "the registry advertises commands");
+        assert!(expected.iter().all(|name| name.starts_with('/')));
+
+        let mut store = store_with_empty_session();
+        let command = store
+            .dispatch_switch_to_profile("glm")
+            .expect("switching profile builds a session/open");
+        let AppUiCommand::OpenSession(params) = command else {
+            panic!("expected OpenSession, got {command:?}");
+        };
+        assert_eq!(params.client_commands, Some(expected));
+    }
+
+    #[test]
+    fn user_submitted_turn_carries_person_origin() {
+        // A turn the person starts is stamped `Person`; reconnect re-issues
+        // never reach this path (they are not new user intent).
+        let mut store = store_with_empty_session();
+        let command = store
+            .queue_or_start_prompt_turn("hello".into(), "sent".into())
+            .expect("a fresh session submits");
+        let AppUiCommand::SubmitPrompt(params) = command else {
+            panic!("expected SubmitPrompt, got {command:?}");
+        };
+        assert_eq!(
+            params.origin,
+            Some(TurnOrigin {
+                kind: TurnOriginKind::Person,
+                label: None,
+            })
+        );
+    }
+
+    #[test]
+    fn hydrate_rebuilds_tool_calls_into_the_model_and_activity_chips() {
+        // UPCR-2026-039: rehydrated rows carry the tool call (assistant) and
+        // the call it answers (tool). The model keeps the linkage and the row
+        // renders as the same activity chip the live stream produces, so a
+        // resumed session does not lose its tool-call rows.
+        use crate::client_event::ClientEvent;
+        use ra_core::ui_protocol::HydratedToolCall;
+
+        let now = chrono::Utc::now();
+        let turn_id = TurnId::new();
+        let mut store = store_with_empty_session();
+        let session_id = store.state.sessions[0].id.clone();
+        let result = SessionHydrateResult {
+            replayed_projection_envelopes: None,
+            projection_thread_sequences: None,
+            replayed_tool_envelopes: None,
+            session_id: session_id.clone(),
+            cursor: ra_core::ui_protocol::UiCursor {
+                stream: session_id.0.clone(),
+                seq: 3,
+            },
+            context: None,
+            context_state: None,
+            messages: Some(vec![
+                HydratedMessage {
+                    seq: 1,
+                    role: "assistant".into(),
+                    content: "ran the shell".into(),
+                    turn_id: Some(turn_id.clone()),
+                    thread_id: Some("thread-1".into()),
+                    client_message_id: None,
+                    persisted_at: now,
+                    message_id: Some("msg-1".into()),
+                    source: None,
+                    media: Vec::new(),
+                    reasoning_content: None,
+                    tool_call_id: None,
+                    tool_name: None,
+                    tool_calls: vec![HydratedToolCall {
+                        tool_call_id: "call-1".into(),
+                        tool_name: "shell".into(),
+                    }],
+                },
+                HydratedMessage {
+                    seq: 2,
+                    role: "tool".into(),
+                    content: "exit 0".into(),
+                    turn_id: Some(turn_id.clone()),
+                    thread_id: Some("thread-1".into()),
+                    client_message_id: None,
+                    persisted_at: now,
+                    message_id: Some("msg-2".into()),
+                    source: None,
+                    media: Vec::new(),
+                    reasoning_content: None,
+                    tool_call_id: Some("call-1".into()),
+                    tool_name: Some("shell".into()),
+                    tool_calls: Vec::new(),
+                },
+            ]),
+            threads: None,
+            turns: None,
+            pending_approvals: None,
+            pending_questions: None,
+            replayed_envelopes: None,
+        };
+        store.apply_client_event(ClientEvent::SessionHydrate(result));
+
+        let message = &store.state.sessions[0].messages[0];
+        let calls = message.tool_calls.as_ref().expect("tool_calls mapped");
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].id, "call-1");
+        assert_eq!(calls[0].name, "shell");
+
+        let chip = store
+            .state
+            .activity
+            .iter()
+            .find(|item| item.tool_call_id.as_deref() == Some("call-1"))
+            .expect("hydrated tool chip renders as activity");
+        assert_eq!(chip.kind, ActivityKind::Tool);
+        assert_eq!(chip.title, "shell");
+        assert_eq!(chip.status, "complete");
+        assert_eq!(chip.output_preview.as_deref(), Some("exit 0"));
+        assert_eq!(chip.turn_id.as_ref(), Some(&turn_id));
+    }
+
+    #[test]
     fn hydrate_preserves_an_in_flight_live_reply() {
         use crate::client_event::ClientEvent;
         // codex P1: a hydrate that lands MID-TURN must not drop the streaming
