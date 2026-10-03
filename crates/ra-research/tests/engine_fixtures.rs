@@ -203,9 +203,10 @@ async fn replay(engine: &str, case: &Path) {
             v
         })
         .collect();
-    // OCTOS_FIXTURE_BLESS=1 writes the parsed items into the fixture
+    // RA_FIXTURE_BLESS=1 (legacy OCTOS_FIXTURE_BLESS) writes the parsed items
+    // into the fixture
     // (review the diff before committing it).
-    if std::env::var_os("OCTOS_FIXTURE_BLESS").is_some()
+    if ra_core::brand::env_compat("FIXTURE_BLESS").is_some()
         && Value::Array(got.clone()) != doc["expect"]
     {
         let mut blessed = doc.clone();

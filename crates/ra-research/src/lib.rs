@@ -59,20 +59,59 @@ pub const AGENT_TOKEN: &str = "ra-research";
 /// browser.
 pub const USER_AGENT: &str = "ra-research/1.0 (+https://github.com/octos-org/octos)";
 
+/// The environment lookup the research tools use in production: `RA_<NAME>`
+/// wins over the legacy `OCTOS_<NAME>`, and both spellings are honoured
+/// (see [`ra_core::brand::env_compat_str`]).
+///
+/// Accepts the bare suffix (`RESPECT_ROBOTS`) or either fully-prefixed
+/// spelling, so callers that pass the `*_ENV` constants back in (or their
+/// own compat lookup) cannot end up double-prefixing.
+pub fn env_lookup(name: &str) -> Option<String> {
+    ra_core::brand::env_compat_str(env_suffix(name))
+}
+
+/// `RA_FOO`/`OCTOS_FOO`/`FOO` → `FOO`.
+fn env_suffix(name: &str) -> &str {
+    name.strip_prefix(ra_core::brand::ENV_PREFIX)
+        .or_else(|| name.strip_prefix(ra_core::brand::LEGACY_ENV_PREFIX))
+        .unwrap_or(name)
+}
+
+/// The legacy `OCTOS_` spelling of `name`.
+pub fn legacy_env_name(name: &str) -> String {
+    format!("{}{}", ra_core::brand::LEGACY_ENV_PREFIX, env_suffix(name))
+}
+
+/// Resolve `name` through an injected lookup: the new spelling first, the
+/// legacy `OCTOS_` spelling as the fallback. Production passes
+/// [`env_lookup`]; tests pass a map keyed by the names they care about.
+pub(crate) fn resolve_env(lookup: &impl Fn(&str) -> Option<String>, name: &str) -> Option<String> {
+    lookup(name).or_else(|| lookup(&legacy_env_name(name)))
+}
+
 /// Environment variable for results-page search: the metasearch's engines
 /// that read search engines' own pages (DuckDuckGo, Bing, Bing News, Brave,
 /// Google). **On by default** (OctoSense ADR 0002 §6 as amended: search the
 /// way SearXNG does, no person in the loop); set it to `0`/`false`/`no`/
-/// `off` to turn it off. Most of these engines identify as ra. Google's
+/// `off` to turn it off. Most of these engines identify as ra-research.
+/// Google's
 /// page answers only a browser-like client, so its engine is fetched with
 /// the `legacy_mobile` client (a feature-phone User-Agent over a Chrome TLS
 /// fingerprint, as SearXNG does; see `metasearch::impersonate`). No CAPTCHA
 /// is solved: a challenge suspends that engine. Search engines' terms may
 /// not allow automated queries (Google and Bing: high risk).
-pub const SERP_SCRAPE_ENV: &str = "OCTOS_ALLOW_SERP_SCRAPE";
+pub const SERP_SCRAPE_ENV: &str = "RA_ALLOW_SERP_SCRAPE";
+
+/// The spelling the previous build used for [`SERP_SCRAPE_ENV`]; still
+/// honoured as a fallback.
+pub const LEGACY_SERP_SCRAPE_ENV: &str = "OCTOS_ALLOW_SERP_SCRAPE";
 
 /// Earlier name of [`SERP_SCRAPE_ENV`], still honoured as an alias.
-pub const BROWSER_SERP_ENV: &str = "OCTOS_ALLOW_BROWSER_SERP";
+pub const BROWSER_SERP_ENV: &str = "RA_ALLOW_BROWSER_SERP";
+
+/// The spelling the previous build used for [`BROWSER_SERP_ENV`]; still
+/// honoured as a fallback.
+pub const LEGACY_BROWSER_SERP_ENV: &str = "OCTOS_ALLOW_BROWSER_SERP";
 
 /// Operator setting that turns robots.txt checks **on** for the research
 /// tools (`1`/`true`/`yes`). Default off: OctoSense agents are personal
@@ -80,11 +119,16 @@ pub const BROWSER_SERP_ENV: &str = "OCTOS_ALLOW_BROWSER_SERP";
 /// maintainer). When off, robots.txt is never fetched or consulted; the
 /// honest User-Agent, per-host spacing, 429/503 backoff, timeouts, size
 /// caps and SSRF protections all still apply.
-pub const RESPECT_ROBOTS_ENV: &str = "OCTOS_RESPECT_ROBOTS";
+pub const RESPECT_ROBOTS_ENV: &str = "RA_RESPECT_ROBOTS";
+
+/// The spelling the previous build used for [`RESPECT_ROBOTS_ENV`]; still
+/// honoured as a fallback.
+pub const LEGACY_RESPECT_ROBOTS_ENV: &str = "OCTOS_RESPECT_ROBOTS";
 
 /// Whether robots.txt checks are enabled (env lookup injected for tests).
+/// `RA_RESPECT_ROBOTS` wins over the legacy `OCTOS_RESPECT_ROBOTS`.
 pub fn respect_robots(lookup: impl Fn(&str) -> Option<String>) -> bool {
-    lookup(RESPECT_ROBOTS_ENV)
+    resolve_env(&lookup, RESPECT_ROBOTS_ENV)
         .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
         .unwrap_or(false)
 }
@@ -92,15 +136,20 @@ pub fn respect_robots(lookup: impl Fn(&str) -> Option<String>) -> bool {
 /// Person's-browser mode for engines that render pages in a real browser
 /// (`google_cse`): `off` (default) | `auto` | `window` | `headless`. See
 /// `ra_research::browser` (feature `browser`).
-pub const BROWSER_ENV: &str = "OCTOS_BROWSER";
+pub const BROWSER_ENV: &str = "RA_BROWSER";
+
+/// The spelling the previous build used for [`BROWSER_ENV`]; still honoured
+/// as a fallback.
+pub const LEGACY_BROWSER_ENV: &str = "OCTOS_BROWSER";
 
 /// Shown with results whenever a search used the person's browser (and
 /// logged once when the browser starts): what that means for their account
 /// and how to turn it off.
 pub const BROWSER_SEARCH_NOTICE: &str = "Some results were loaded in the ra browser profile \
-     (~/.ra/browser-profile). If you signed in to Google there, those searches ran as your \
+     (~/.ra/browser-profile; an existing ~/.ra/browser-profile is kept). If you signed in to \
+     Google there, those searches ran as your \
      Google account: results may be personalised and are saved to its search activity. Search \
-     engines' terms may not allow automated queries. Set OCTOS_BROWSER=off to stop using the \
+     engines' terms may not allow automated queries. Set RA_BROWSER=off to stop using the \
      browser.";
 
 /// Operator switch for reading a page that plain HTTP was blocked on (a bot
@@ -112,12 +161,16 @@ pub const BROWSER_SEARCH_NOTICE: &str = "Some results were loaded in the ra brow
 /// any other value turns it off, so a mistyped opt-out fails safe. Before
 /// this switch (octos#2590 to #2637) a challenge over plain HTTP was never
 /// retried in the browser; set it to `0` to keep that behaviour.
-pub const READ_BLOCKED_IN_BROWSER_ENV: &str = "OCTOS_READ_BLOCKED_IN_BROWSER";
+pub const READ_BLOCKED_IN_BROWSER_ENV: &str = "RA_READ_BLOCKED_IN_BROWSER";
+
+/// The spelling the previous build used for
+/// [`READ_BLOCKED_IN_BROWSER_ENV`]; still honoured as a fallback.
+pub const LEGACY_READ_BLOCKED_IN_BROWSER_ENV: &str = "OCTOS_READ_BLOCKED_IN_BROWSER";
 
 /// Whether a page blocked over plain HTTP may be read once in the browser
 /// ([`READ_BLOCKED_IN_BROWSER_ENV`]; env lookup injected for tests).
 pub fn read_blocked_in_browser(lookup: impl Fn(&str) -> Option<String>) -> bool {
-    lookup(READ_BLOCKED_IN_BROWSER_ENV).is_none_or(|v| {
+    resolve_env(&lookup, READ_BLOCKED_IN_BROWSER_ENV).is_none_or(|v| {
         matches!(
             v.trim().to_ascii_lowercase().as_str(),
             "1" | "true" | "yes" | "on"
@@ -134,11 +187,12 @@ pub const SEARXNG_URL_ENV: &str = "SEARXNG_URL";
 /// for `1`/`true`/`yes`/`on`; any other value, including an empty or
 /// unrecognised one, turns it **off**, so a mistyped opt-out fails safe.
 /// If either [`SERP_SCRAPE_ENV`] or its alias [`BROWSER_SERP_ENV`] turns it
-/// off, it is off. The env lookup is injected so tests never touch process
+/// off, it is off; for each, the `RA_` spelling wins over the legacy
+/// `OCTOS_` one. The env lookup is injected so tests never touch process
 /// env.
 pub fn serp_scrape_allowed(lookup: impl Fn(&str) -> Option<String>) -> bool {
     [SERP_SCRAPE_ENV, BROWSER_SERP_ENV].iter().all(|k| {
-        lookup(k).is_none_or(|v| {
+        resolve_env(&lookup, k).is_none_or(|v| {
             matches!(
                 v.trim().to_ascii_lowercase().as_str(),
                 "1" | "true" | "yes" | "on"
@@ -154,14 +208,14 @@ pub fn serp_scrape_allowed(lookup: impl Fn(&str) -> Option<String>) -> bool {
 pub fn serp_scrape_default_notice(lookup: impl Fn(&str) -> Option<String>) -> Option<&'static str> {
     let unset = [SERP_SCRAPE_ENV, BROWSER_SERP_ENV]
         .iter()
-        .all(|k| lookup(k).is_none());
+        .all(|k| resolve_env(&lookup, k).is_none());
     unset.then_some(
         "Results-page search (DuckDuckGo, Bing, Brave and Google results pages) is on by \
          default for general web results, the way SearXNG searches (OctoSense ADR 0002 \
          amendment). Google's page is fetched with a browser-like client (a feature-phone \
          User-Agent over a Chrome TLS fingerprint). Search engines' terms may not allow \
          automated queries (Google and Bing: high risk; DuckDuckGo: its robots.txt allows the \
-         HTML page, its terms promise nothing). Set OCTOS_ALLOW_SERP_SCRAPE=0 to turn it off.",
+         HTML page, its terms promise nothing). Set RA_ALLOW_SERP_SCRAPE=0 to turn it off.",
     )
 }
 
@@ -206,6 +260,25 @@ mod tests {
             assert!(!serp_scrape_allowed(only(SERP_SCRAPE_ENV, off)), "{off:?}");
         }
         assert!(!serp_scrape_allowed(only(BROWSER_SERP_ENV, "0")), "alias");
+        // The legacy `OCTOS_` spellings are still honoured…
+        assert!(!serp_scrape_allowed(only(LEGACY_SERP_SCRAPE_ENV, "0")), "legacy");
+        assert!(
+            !serp_scrape_allowed(only(LEGACY_BROWSER_SERP_ENV, "0")),
+            "legacy alias"
+        );
+        // …and the new spelling wins over the legacy one.
+        let both = |new: &'static str, legacy: &'static str| {
+            move |k: &str| {
+                if k == new {
+                    Some("1".to_string())
+                } else if k == legacy {
+                    Some("0".to_string())
+                } else {
+                    None
+                }
+            }
+        };
+        assert!(serp_scrape_allowed(both(SERP_SCRAPE_ENV, LEGACY_SERP_SCRAPE_ENV)));
         assert!(serp_scrape_allowed(only("OTHER", "0")));
     }
 
@@ -217,6 +290,11 @@ mod tests {
         );
         assert!(
             serp_scrape_default_notice(|k| (k == BROWSER_SERP_ENV).then(|| "0".into())).is_none()
+        );
+        assert!(
+            serp_scrape_default_notice(|k| (k == LEGACY_SERP_SCRAPE_ENV).then(|| "1".into()))
+                .is_none(),
+            "the legacy spelling counts as set"
         );
     }
 
@@ -249,6 +327,11 @@ mod tests {
         for off in ["0", "false", "off", "", "nope"] {
             assert!(!read_blocked_in_browser(set(off)), "{off:?}: fails safe");
         }
+        let legacy = |v: &'static str| {
+            move |k: &str| (k == LEGACY_READ_BLOCKED_IN_BROWSER_ENV).then(|| v.to_string())
+        };
+        assert!(read_blocked_in_browser(legacy("1")), "legacy spelling honoured");
+        assert!(!read_blocked_in_browser(legacy("0")), "legacy opt-out honoured");
     }
 
     #[test]
@@ -258,6 +341,25 @@ mod tests {
         assert!(respect_robots(
             |k| (k == RESPECT_ROBOTS_ENV).then(|| "1".to_string())
         ));
+        assert!(
+            respect_robots(|k| (k == LEGACY_RESPECT_ROBOTS_ENV).then(|| "1".to_string())),
+            "the legacy spelling turns it on too"
+        );
+    }
+
+    #[test]
+    fn env_lookup_accepts_bare_and_prefixed_names_without_inventing_values() {
+        // Pure: neither the `RA_` nor the legacy `OCTOS_` spelling is set, so
+        // the helper must not invent a value (no process env is touched).
+        assert_eq!(env_lookup("NOT_SET_XYZ"), None);
+        assert_eq!(env_lookup("RA_NOT_SET_XYZ"), None);
+        assert_eq!(env_lookup("OCTOS_NOT_SET_XYZ"), None);
+        assert_eq!(legacy_env_name("RA_RESPECT_ROBOTS"), LEGACY_RESPECT_ROBOTS_ENV);
+        assert_eq!(legacy_env_name("RESPECT_ROBOTS"), LEGACY_RESPECT_ROBOTS_ENV);
+        assert_eq!(
+            legacy_env_name(LEGACY_RESPECT_ROBOTS_ENV),
+            LEGACY_RESPECT_ROBOTS_ENV
+        );
     }
 
     #[test]

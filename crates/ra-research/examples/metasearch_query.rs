@@ -5,7 +5,7 @@
 //! ```
 //!
 //! With `--features browser`, results pages that need a browser (Google)
-//! load in the person's browser (see `ra_research::browser`; `OCTOS_BROWSER`
+//! load in the person's browser (see `ra_research::browser`; `RA_BROWSER`
 //! picks the mode).
 //!
 //! Uses the built-in engines with keys and settings from the environment,

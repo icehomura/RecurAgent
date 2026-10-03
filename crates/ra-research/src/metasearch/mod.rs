@@ -5,7 +5,7 @@
 //! Clean-room: every engine is written from its provider's public API
 //! documentation (listed in its manifest's `docs_url`). Engines use official
 //! APIs, open datasets or published feeds; no search-results page is
-//! scraped. Requests carry the identifiable ra User-Agent, respect each
+//! scraped. Requests carry the identifiable ra-research User-Agent, respect each
 //! provider's published rate limit per host, honour `Retry-After`, and
 //! revalidate cached responses with ETag / Last-Modified. robots.txt is
 //! checked only when the operator turns it on ([`crate::RESPECT_ROBOTS_ENV`]):
@@ -64,28 +64,49 @@ use sandbox::SandboxEngine;
 pub const PROVIDER_ID: &str = "metasearch";
 
 /// Environment variable that turns the metasearch off (`0`/`false`/`no`).
-pub const METASEARCH_ENV: &str = "OCTOS_METASEARCH";
+pub const METASEARCH_ENV: &str = "RA_METASEARCH";
+
+/// The spelling the previous build used for [`METASEARCH_ENV`]; still
+/// honoured as a fallback.
+pub const LEGACY_METASEARCH_ENV: &str = "OCTOS_METASEARCH";
 
 /// Contact address for polite pools (OpenAlex `mailto`). Optional.
-pub const CONTACT_ENV: &str = "OCTOS_RESEARCH_CONTACT";
+pub const CONTACT_ENV: &str = "RA_RESEARCH_CONTACT";
+
+/// The spelling the previous build used for [`CONTACT_ENV`]; still honoured
+/// as a fallback.
+pub const LEGACY_CONTACT_ENV: &str = "OCTOS_RESEARCH_CONTACT";
 
 /// Directory with extra engines (see [`Registry::load_dir`]).
-pub const ENGINES_DIR_ENV: &str = "OCTOS_METASEARCH_ENGINES";
+pub const ENGINES_DIR_ENV: &str = "RA_METASEARCH_ENGINES";
+
+/// The spelling the previous build used for [`ENGINES_DIR_ENV`]; still
+/// honoured as a fallback.
+pub const LEGACY_ENGINES_DIR_ENV: &str = "OCTOS_METASEARCH_ENGINES";
 
 /// Pins file for [`ENGINES_DIR_ENV`] engines (`{"id": "sha256:..."}`); must
 /// live outside that directory.
-pub const PINS_ENV: &str = "OCTOS_METASEARCH_PINS";
+pub const PINS_ENV: &str = "RA_METASEARCH_PINS";
+
+/// The spelling the previous build used for [`PINS_ENV`]; still honoured as
+/// a fallback.
+pub const LEGACY_PINS_ENV: &str = "OCTOS_METASEARCH_PINS";
 
 /// Lets a pinned directory engine replace a built-in with the same id
 /// (`1`/`true`/`yes`; off by default).
-pub const ALLOW_OVERRIDE_ENV: &str = "OCTOS_METASEARCH_ALLOW_OVERRIDE";
+pub const ALLOW_OVERRIDE_ENV: &str = "RA_METASEARCH_ALLOW_OVERRIDE";
+
+/// The spelling the previous build used for [`ALLOW_OVERRIDE_ENV`]; still
+/// honoured as a fallback.
+pub const LEGACY_ALLOW_OVERRIDE_ENV: &str = "OCTOS_METASEARCH_ALLOW_OVERRIDE";
 
 /// Default [`SearchRequest::straggler_grace`].
 pub const DEFAULT_STRAGGLER_GRACE: Duration = Duration::from_secs(2);
 
-/// Whether the metasearch is enabled (default on).
+/// Whether the metasearch is enabled (default on). `RA_METASEARCH` wins over
+/// the legacy `OCTOS_METASEARCH`.
 pub fn enabled(lookup: impl Fn(&str) -> Option<String>) -> bool {
-    !lookup(METASEARCH_ENV).is_some_and(|v| {
+    !crate::resolve_env(&lookup, METASEARCH_ENV).is_some_and(|v| {
         matches!(
             v.trim().to_ascii_lowercase().as_str(),
             "0" | "false" | "no" | "off"
@@ -139,9 +160,24 @@ impl Default for Config {
     }
 }
 
+/// The value of an engine's `key_env`. Engine key names are plain
+/// (`BRAVE_API_KEY`); an ra-owned knob such as `RA_GOOGLE_CSE_CX` (legacy
+/// `OCTOS_GOOGLE_CSE_CX`) follows the brand fallback.
+fn engine_key_env(lookup: &impl Fn(&str) -> Option<String>, name: &str) -> Option<String> {
+    let owned = name.starts_with(ra_core::brand::ENV_PREFIX)
+        || name.starts_with(ra_core::brand::LEGACY_ENV_PREFIX);
+    let value = if owned {
+        crate::resolve_env(lookup, name)
+    } else {
+        lookup(name)
+    };
+    value.filter(|v| !v.trim().is_empty())
+}
+
 impl Config {
     /// Keys from each engine's `key_env`, settings from
-    /// `OCTOS_METASEARCH_<ENGINE>_<SETTING>`, contact from
+    /// `RA_METASEARCH_<ENGINE>_<SETTING>` (the legacy
+    /// `OCTOS_METASEARCH_<ENGINE>_<SETTING>` is still honoured), contact from
     /// [`CONTACT_ENV`]. `extra_keys` (engine id → key, e.g. a profile's
     /// provider keys) win over the environment.
     pub fn from_env(
@@ -150,24 +186,24 @@ impl Config {
         extra_keys: &BTreeMap<String, String>,
     ) -> Self {
         let mut c = Self::default();
-        let nonempty = |k: &str| lookup(k).filter(|v| !v.trim().is_empty());
         for e in registry.engines() {
             let m = &e.manifest;
             let key = extra_keys
                 .get(&m.id)
                 .cloned()
                 .filter(|v| !v.trim().is_empty())
-                .or_else(|| m.key_env.as_deref().and_then(nonempty));
+                .or_else(|| m.key_env.as_deref().and_then(|k| engine_key_env(&lookup, k)));
             if let Some(k) = key {
                 c.keys.insert(m.id.clone(), k.trim().to_string());
             }
             for name in m.settings.keys() {
                 let var = format!(
-                    "OCTOS_METASEARCH_{}_{}",
+                    "{}METASEARCH_{}_{}",
+                    ra_core::brand::ENV_PREFIX,
                     m.id.to_ascii_uppercase(),
                     name.to_ascii_uppercase()
                 );
-                if let Some(v) = nonempty(&var) {
+                if let Some(v) = crate::resolve_env(&lookup, &var).filter(|v| !v.trim().is_empty()) {
                     c.settings
                         .entry(m.id.clone())
                         .or_default()
@@ -175,7 +211,7 @@ impl Config {
                 }
             }
         }
-        c.contact = nonempty(CONTACT_ENV).filter(|v| v.contains('@'));
+        c.contact = crate::resolve_env(&lookup, CONTACT_ENV).filter(|v| v.contains('@'));
         c.respect_robots = crate::respect_robots(&lookup);
         c.results_pages = crate::serp_scrape_allowed(&lookup);
         c
@@ -361,9 +397,9 @@ impl SearchResponse {
 }
 
 /// The fetcher a host should give the metasearch: plain HTTP with the
-/// identifiable ra client; with the `impersonate` feature, the client
+/// identifiable ra-research client; with the `impersonate` feature, the client
 /// profiles results-page engines name (Google's page for simple phones);
-/// with the `browser` feature and `OCTOS_BROWSER` set, the person's browser
+/// with the `browser` feature and `RA_BROWSER` set, the person's browser
 /// for engines that render.
 #[cfg(feature = "http")]
 pub fn default_fetch() -> Arc<dyn Fetch> {
@@ -462,9 +498,11 @@ impl Metasearch {
     pub fn from_env(fetch: Arc<dyn Fetch>, extra_keys: &BTreeMap<String, String>) -> Self {
         let lookup = |k: &str| std::env::var(k).ok();
         let mut registry = Registry::builtin();
-        if let Some(dir) = lookup(ENGINES_DIR_ENV).filter(|d| !d.trim().is_empty()) {
+        if let Some(dir) =
+            crate::resolve_env(&lookup, ENGINES_DIR_ENV).filter(|d| !d.trim().is_empty())
+        {
             let dir = std::path::Path::new(dir.trim());
-            let pins = match lookup(PINS_ENV).filter(|p| !p.trim().is_empty()) {
+            let pins = match crate::resolve_env(&lookup, PINS_ENV).filter(|p| !p.trim().is_empty()) {
                 Some(p) => {
                     registry::read_pins(std::path::Path::new(p.trim()), dir).unwrap_or_else(|e| {
                         tracing::warn!(error = %e, "metasearch pins not loaded");
@@ -473,7 +511,7 @@ impl Metasearch {
                 }
                 None => BTreeMap::new(),
             };
-            let allow_override = lookup(ALLOW_OVERRIDE_ENV).is_some_and(|v| {
+            let allow_override = crate::resolve_env(&lookup, ALLOW_OVERRIDE_ENV).is_some_and(|v| {
                 matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes")
             });
             registry.load_dir(dir, &pins, allow_override);
@@ -656,7 +694,7 @@ impl Metasearch {
         let note = (req.category == "general" && self.general_is_thin(req)).then(|| {
             "With results-page search off and no search key, the metasearch's general \
              engines are Wikipedia and Wikidata. For web results, turn results-page search \
-             back on (unset OCTOS_ALLOW_SERP_SCRAPE), add a Brave Search key \
+             back on (unset RA_ALLOW_SERP_SCRAPE), add a Brave Search key \
              (BRAVE_API_KEY) or set a self-hosted SearXNG (SEARXNG_URL)."
                 .to_string()
         });

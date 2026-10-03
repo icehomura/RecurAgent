@@ -528,7 +528,7 @@ async fn should_note_that_keyless_general_search_is_thin() {
     };
     let ms = Metasearch::new(Registry::builtin(), Arc::new(fetch.clone()), off.clone());
     let note = ms.search(&req).await.note.unwrap();
-    assert!(note.contains("BRAVE_API_KEY") && note.contains("OCTOS_ALLOW_SERP_SCRAPE"));
+    assert!(note.contains("BRAVE_API_KEY") && note.contains("RA_ALLOW_SERP_SCRAPE"));
     // Off for this request only: the same.
     let ms = Metasearch::new(
         Registry::builtin(),
@@ -551,8 +551,12 @@ fn should_read_keys_settings_and_contact_from_the_environment() {
     let env: BTreeMap<&str, &str> = BTreeMap::from([
         ("BRAVE_API_KEY", " bk "),
         ("GITHUB_TOKEN", ""),
-        ("OCTOS_METASEARCH_MASTODON_INSTANCE", "fosstodon.org"),
+        ("RA_METASEARCH_MASTODON_INSTANCE", "fosstodon.org"),
+        // The legacy `OCTOS_` spellings are still honoured…
         ("OCTOS_RESEARCH_CONTACT", "ops@example.org"),
+        // …and the new spelling wins over the legacy one.
+        ("RA_RESEARCH_CONTACT", "new@example.org"),
+        ("OCTOS_METASEARCH_STACKEXCHANGE_SITE", "serverfault"),
     ]);
     let lookup = |k: &str| env.get(k).map(|v| v.to_string());
     let extra = BTreeMap::from([("stackexchange".to_string(), "sekey".to_string())]);
@@ -564,9 +568,15 @@ fn should_read_keys_settings_and_contact_from_the_environment() {
         Some("sekey")
     );
     assert_eq!(c.settings["mastodon"]["instance"], "fosstodon.org");
-    assert_eq!(c.contact.as_deref(), Some("ops@example.org"));
+    assert_eq!(
+        c.settings["stackexchange"]["site"],
+        "serverfault",
+        "the legacy settings spelling is honoured"
+    );
+    assert_eq!(c.contact.as_deref(), Some("new@example.org"));
     assert!(enabled(|_| None));
     assert!(!enabled(|_| Some("0".into())));
+    assert!(!enabled(|k| (k == LEGACY_METASEARCH_ENV).then(|| "0".into())));
 }
 
 #[tokio::test(start_paused = true)]

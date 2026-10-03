@@ -187,7 +187,7 @@ fn pinned_builder(
 
 /// A client for one request to `url`: the URL passes [`check_url`] and the
 /// client is pinned to the validated addresses (no DNS rebinding between the
-/// check and the connection), follows no redirects and sends the ra
+/// check and the connection), follows no redirects and sends the ra-research
 /// User-Agent. Build errors are returned, never replaced by a default client.
 pub async fn pinned_client(url: &str, timeout: Duration) -> Result<reqwest::Client, String> {
     let (host, addrs) = check_url(url).await?;

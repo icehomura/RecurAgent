@@ -245,7 +245,7 @@ impl ResponseCache {
 
 /// A [`Fetch`] over reqwest, through the crate's one SSRF implementation:
 /// every request goes through [`crate::net::pinned_client`] (http(s) only,
-/// public host, DNS resolved fail-closed and pinned, no redirects, ra
+/// public host, DNS resolved fail-closed and pinned, no redirects, ra-research
 /// User-Agent). There is no fallback client.
 #[cfg(feature = "http")]
 #[derive(Clone)]

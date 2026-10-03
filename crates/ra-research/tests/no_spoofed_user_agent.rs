@@ -1,5 +1,5 @@
 //! Policy check (OctoSense ADR 0002 §6, review of octos#2568): the research
-//! fetch paths identify as ra. No hard-coded desktop-browser User-Agent
+//! fetch paths identify as ra-research. No hard-coded desktop-browser User-Agent
 //! (`Mozilla/5.0 (...) ... Chrome/...`, `AppleWebKit`, `Safari/`) may appear
 //! in the research crates or the built-in search tools, nor in the
 //! metasearch engine scripts and manifests. The one exception is by design

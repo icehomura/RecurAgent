@@ -1,4 +1,4 @@
-//! Load a page in the person's browser (the ra Chrome profile).
+//! Load a page in the person's browser (the ra browser profile).
 //!
 //! ```text
 //! cargo run -p ra-research --features browser --example browser_page -- <url>          # print the rendered HTML
@@ -24,7 +24,7 @@ async fn main() {
         }
     };
     let Some(browser) = PersonBrowser::from_env() else {
-        eprintln!("the person's browser is off (OCTOS_BROWSER) or has no profile location");
+        eprintln!("the person's browser is off (RA_BROWSER) or has no profile location");
         std::process::exit(1);
     };
     if open {

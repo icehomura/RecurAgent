@@ -9,8 +9,9 @@
 //!   the person (headless Chrome says it is headless). `chromiumoxide`'s
 //!   test-harness defaults (`--enable-automation` and friends) are left out
 //!   because this is not a test browser.
-//! - One persistent profile (`~/.ra/browser-profile`, or
-//!   [`BROWSER_PROFILE_ENV`]). Cookies, consent choices and a sign-in persist.
+//! - One persistent profile (`~/.ra/browser-profile`, or an existing
+//!   `~/.ra/browser-profile`; [`BROWSER_PROFILE_ENV`]). Cookies, consent
+//!   choices and a sign-in persist.
 //!   Google refuses sign-in in a browser under remote control, so the person
 //!   signs in by opening a plain Chrome on the same profile once. A second
 //!   ra process connects to the running browser instead of launching
@@ -22,12 +23,12 @@
 //!   as their Google account (personalised results, saved to its search
 //!   activity). Every search that used the browser says so, with the terms
 //!   caveat and the opt-out ([`crate::BROWSER_SEARCH_NOTICE`]), and it is
-//!   logged once when the browser starts. `OCTOS_BROWSER=off` stops it.
+//!   logged once when the browser starts. `RA_BROWSER=off` stops it.
 //! - Never a browser's own profile: the DevTools port ra attaches to is
 //!   unauthenticated (loopback only) and gives full control of every
 //!   signed-in session in that profile. [`check_profile`] refuses browsers'
 //!   user-data directories, and a custom location must be new, empty or
-//!   already an ra profile ([`PROFILE_MARKER`]).
+//!   already an ra browser profile ([`PROFILE_MARKER`]).
 //! - A browser ra launched closes after [`IDLE_CLOSE`] without use, and
 //!   short-lived hosts close it on exit ([`close_shared`]).
 //!
@@ -56,8 +57,13 @@ use crate::metasearch::http::{Fetch, FetchFuture, HandOverFuture, HttpRequest, H
 /// `off` (default) | `auto` | `window` | `headless`.
 pub use crate::BROWSER_ENV;
 
-/// Profile directory override (default `~/.ra/browser-profile`).
-pub const BROWSER_PROFILE_ENV: &str = "OCTOS_BROWSER_PROFILE";
+/// Profile directory override (default `~/.ra/browser-profile`, or an
+/// existing `~/.ra/browser-profile`).
+pub const BROWSER_PROFILE_ENV: &str = "RA_BROWSER_PROFILE";
+
+/// The spelling the previous build used for [`BROWSER_PROFILE_ENV`]; still
+/// honoured as a fallback.
+pub const LEGACY_BROWSER_PROFILE_ENV: &str = "OCTOS_BROWSER_PROFILE";
 
 /// Chrome/Chromium executable override (same variable the `browser` tool
 /// honours).
@@ -103,7 +109,7 @@ impl Mode {
     /// typo never opens windows.
     pub fn resolve(lookup: impl Fn(&str) -> Option<String>, has_display: bool) -> Mode {
         let windowed = |m: Mode| if has_display { m } else { Mode::Headless };
-        match lookup(BROWSER_ENV) {
+        match crate::resolve_env(&lookup, BROWSER_ENV) {
             // Off unless asked for: searching needs no browser and no person
             // (Google comes from its page for simple phones, see
             // `metasearch::impersonate`).
@@ -141,6 +147,10 @@ pub fn has_display(lookup: impl Fn(&str) -> Option<String>) -> bool {
 
 /// Marker ra writes into a profile it launched a browser on. A custom
 /// profile ([`BROWSER_PROFILE_ENV`]) must carry it, or be empty/new.
+///
+/// The name predates the ra rename and is kept: it is the on-disk marker of
+/// profiles the previous build already created, and a profile carries the
+/// person's sign-in state, so it must not be orphaned.
 pub const PROFILE_MARKER: &str = ".ra-browser-profile";
 
 /// Browsers' own user-data directories (relative to home). ra never uses
@@ -171,7 +181,7 @@ const REAL_PROFILE_DIRS: &[&str] = &[
 ];
 
 /// Whether ra may use `profile`: never a browser's own profile; a custom
-/// location only if it is new, empty, or already an ra profile.
+/// location only if it is new, empty, or already an ra browser profile.
 /// `default` is the ra-owned default location.
 pub fn check_profile(profile: &Path, default: bool, home: Option<&Path>) -> Result<(), String> {
     let resolve = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
@@ -209,13 +219,28 @@ pub fn check_profile(profile: &Path, default: bool, home: Option<&Path>) -> Resu
     ))
 }
 
-/// Default profile directory: `$HOME/.ra/browser-profile`.
+/// Default profile directory: `~/.ra/browser-profile`; an existing
+/// `~/.ra/browser-profile` (a profile created before the rename, with the
+/// person's cookies and sign-in) keeps being used, else a fresh install gets
+/// `~/.ra/browser-profile`. The same "prefer the existing directory" rule as
+/// [`ra_core::brand::state_home`].
 pub fn default_profile(lookup: impl Fn(&str) -> Option<String>) -> Option<PathBuf> {
-    if let Some(p) = lookup(BROWSER_PROFILE_ENV).filter(|p| !p.trim().is_empty()) {
+    if let Some(p) = crate::resolve_env(&lookup, BROWSER_PROFILE_ENV).filter(|p| !p.trim().is_empty())
+    {
         return Some(PathBuf::from(p));
     }
     let home = lookup("HOME").or_else(|| lookup("USERPROFILE"))?;
-    Some(Path::new(&home).join(".ra").join("browser-profile"))
+    let home = Path::new(&home);
+    let new_dir = home.join(ra_core::brand::STATE_DIR);
+    let legacy_dir = home.join(ra_core::brand::LEGACY_STATE_DIR);
+    Some(ra_core::brand::choose(
+        None,
+        None,
+        new_dir.join("browser-profile"),
+        legacy_dir.join("browser-profile"),
+        new_dir.is_dir(),
+        legacy_dir.is_dir(),
+    ))
 }
 
 /// Chrome's `DevToolsActivePort` file (first line port, second line the
@@ -301,13 +326,14 @@ impl PersonBrowser {
     /// From the environment; `None` when the mode is `off` or there is no
     /// profile location.
     pub fn from_env() -> Option<Self> {
+        let compat = crate::env_lookup;
         let env = |k: &str| std::env::var(k).ok();
-        let mode = Mode::resolve(env, has_display(env));
+        let mode = Mode::resolve(compat, has_display(env));
         if mode == Mode::Off {
             return None;
         }
         let profile = default_profile(env)?;
-        let custom = env(BROWSER_PROFILE_ENV).is_some_and(|p| !p.trim().is_empty());
+        let custom = compat(BROWSER_PROFILE_ENV).is_some_and(|p| !p.trim().is_empty());
         let home = env("HOME")
             .or_else(|| env("USERPROFILE"))
             .map(PathBuf::from);
@@ -737,16 +763,48 @@ mod tests {
     }
 
     #[test]
-    fn should_keep_the_profile_under_octos_home() {
+    fn should_keep_the_profile_under_the_state_home() {
+        // A fake home with neither directory: fresh install → `~/.ra`.
         assert_eq!(
             default_profile(env(&[("HOME", "/home/p")])),
             Some(PathBuf::from("/home/p/.ra/browser-profile"))
         );
+        // The override wins, under both spellings.
         assert_eq!(
             default_profile(env(&[("HOME", "/home/p"), (BROWSER_PROFILE_ENV, "/x")])),
             Some(PathBuf::from("/x"))
         );
+        assert_eq!(
+            default_profile(env(&[
+                ("HOME", "/home/p"),
+                (LEGACY_BROWSER_PROFILE_ENV, "/y")
+            ])),
+            Some(PathBuf::from("/y"))
+        );
         assert_eq!(default_profile(env(&[])), None);
+    }
+
+    #[test]
+    fn should_keep_using_an_existing_legacy_state_home() {
+        let home = std::env::temp_dir().join(format!("ra-browser-home-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(home.join(".ra")).unwrap();
+        let lookup = {
+            let home = home.to_string_lossy().into_owned();
+            move |k: &str| (k == "HOME").then(|| home.clone())
+        };
+        assert_eq!(
+            default_profile(lookup.clone()),
+            Some(home.join(".ra/browser-profile")),
+            "an existing ~/.ra keeps its profile"
+        );
+        std::fs::create_dir_all(home.join(".ra")).unwrap();
+        assert_eq!(
+            default_profile(lookup),
+            Some(home.join(".ra/browser-profile")),
+            "~/.ra wins once it exists"
+        );
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
@@ -773,17 +831,12 @@ mod tests {
             assert!(err.contains("browser's own profile"), "{real}: {err}");
         }
         assert!(
-            check_profile(
-                Path::new("/home/p/.ra/browser-profile"),
-                true,
-                Some(home)
-            )
-            .is_ok()
+            check_profile(Path::new("/home/p/.ra/browser-profile"), true, Some(home)).is_ok()
         );
     }
 
     #[test]
-    fn should_use_a_custom_profile_only_if_new_empty_or_octos() {
+    fn should_use_a_custom_profile_only_if_new_empty_or_ra() {
         let dir = std::env::temp_dir().join(format!("ra-profile-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         assert!(check_profile(&dir, false, None).is_ok(), "new");

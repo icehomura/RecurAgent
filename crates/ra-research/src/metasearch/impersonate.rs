@@ -12,7 +12,7 @@
 //! Google's "unusual traffic" page for the same request.
 //!
 //! Only engines whose manifest names the profile (`client`) are fetched
-//! with it; everything else keeps the identifiable ra client. The
+//! with it; everything else keeps the identifiable ra-research client. The
 //! private-address protection is the same as `ReqwestFetch`'s: the URL is
 //! checked and DNS resolved (fail closed) before the request, and the
 //! connection is pinned to the checked addresses. Proxies too: like the

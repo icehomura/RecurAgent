@@ -7,6 +7,9 @@ license.workspace = true
 description = "Research building blocks for ra search tools: free news/search providers, structured items, lang/since/domain filters, robots.txt, main-text extraction, and a clean-room metasearch with sandboxed OctoScript engines"
 
 [dependencies]
+# Product identity: `RA_` env vars win over the legacy `OCTOS_` spellings, and
+# the state home (`~/.ra`, keeping an existing `~/.ra`) resolves here.
+ra-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
