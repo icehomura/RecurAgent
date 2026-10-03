@@ -153,6 +153,11 @@ const ACTIVITY_LABEL_MAX_CHARS: usize = 160;
 /// carrying the header, one bottom border.
 const ACTIVITY_BORDER_ROWS: u16 = 2;
 
+/// Pane width a DAG card is fitted to while the real one is unknown: the width
+/// this stack starts from (`RaFtuiModel::new`'s `term`) before the first frame
+/// reports the terminal's own.
+const CARD_MIN_WIDTH: u16 = 80;
+
 /// Spinner animation cadence while the agent works.
 const SPINNER_INTERVAL: Duration = Duration::from_millis(120);
 
@@ -6175,13 +6180,26 @@ impl RaFtuiModel {
         if usable < 20 { 20 } else { usable }
     }
 
+    /// Width budget for the DAG card at pane width `width`, floored so that a
+    /// width the model does not know yet (0 before the first frame, or a
+    /// degenerate resize) can never reach [`dag_view::render_compact`] as
+    /// "unknown → natural form" — that is the 2301-cell, 6.6 MB card this
+    /// budget exists to prevent.
+    fn card_budget(width: u16) -> usize {
+        usize::from(if width < CARD_MIN_WIDTH {
+            CARD_MIN_WIDTH
+        } else {
+            width
+        })
+    }
+
     /// Width budget for the DAG card: the conversation body width of the last
     /// rendered frame — the frame is authoritative, see
     /// [`RaFtuiModel::conversation_text`] — falling back to the terminal width
     /// we know about before the first frame lands.
     fn card_width(&self) -> usize {
         let recorded = self.render_cache_width.get();
-        usize::from(if recorded == 0 { self.term.0 } else { recorded })
+        Self::card_budget(if recorded == 0 { self.term.0 } else { recorded })
     }
 
     /// Build the styled conversation, wrapped to `width` cells. Assistant
@@ -6249,7 +6267,7 @@ impl RaFtuiModel {
                     .map(|progress| {
                         progress.card_styled(
                             self.spinner.current_frame,
-                            usize::from(width),
+                            Self::card_budget(width),
                             &palette,
                         )
                     });
