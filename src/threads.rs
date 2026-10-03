@@ -20,10 +20,18 @@
 
 /// Stack reserve given to every thread spawned through this module.
 ///
-/// 64 MiB is the largest deep-frame reservation in the tree
-/// (`interactive_ftui::DRIVER_STACK_BYTES`, `main::MAIN_STACK_BYTES`) because
-/// threads here can poll the same agent/provider/tool future chain.
-pub const AGENT_STACK_BYTES: usize = 64 * 1024 * 1024;
+/// Threads here can poll the same agent/provider/tool future chain as
+/// `main::MAIN_STACK_BYTES` and `interactive_ftui::DRIVER_STACK_BYTES`, so it
+/// takes the same 16 MiB, on the same measured basis: a complete offline agent
+/// turn — including a `dag` whose node runs `run_code` (dag_tool + ptc_bridge +
+/// QuickJS) — holds at 724992 B (708 KiB) and aborts at 720896 B (704 KiB),
+/// flat to DAG N=256 (probe `agent::tests::probe_full_turn_stack_scaling`,
+/// commit `905433d68`). That probe uses a mock provider, so real transport
+/// (TLS/HTTP) and session persistence (sqlite/JSONL) are unexercised
+/// (`-Zprint-type-sizes` puts those frames at <= ~30 KiB each); 16 MiB keeps
+/// ~23x headroom over the floor. Bead `bd-qtffv` tracks verifying the
+/// transport-heavy chains and going lower.
+pub const AGENT_STACK_BYTES: usize = 16 * 1024 * 1024;
 
 /// [`std::thread::spawn`] with [`AGENT_STACK_BYTES`].
 ///
