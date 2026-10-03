@@ -1285,4 +1285,79 @@ mod tests {
         assert_eq!(updates[0]["name"], "改过的节点");
         assert_eq!(updates[0]["dependsOn"], json!([1]));
     }
+
+    // ---- stack safety ----
+
+    /// A dag node naming `run_code` must resolve its effects without recursing.
+    ///
+    /// `SharedToolRegistry` binds every tool to the live registry, `run_code`
+    /// included, and `run_code::effects()` unions the registry's effects. With
+    /// no self-skip that re-entered `effects()` until the thread stack
+    /// overflowed, so a dag containing a `run_code` node aborted before any
+    /// node ran. Step 3 of `run_dag` resolves `tool.effects()` for every node,
+    /// which is the path pinned here.
+    #[test]
+    fn dag_run_code_node_effects_resolve_without_recursing() {
+        let shared = registry(&["run_code"]);
+        let tool = tool_over(&shared);
+        let input = json!({
+            "nodes": [{
+                "id": 1,
+                "toolName": "run_code",
+                "args": {"code": "return 1;", "timeoutMs": 30_000},
+                "dependsOn": [],
+            }]
+        });
+        let runtime = rt();
+        let output = runtime
+            .block_on(tool.execute("call-dag-run-code", input, None))
+            .expect("a dag with a run_code node must complete, not overflow");
+        assert!(!output.is_error, "{output:?}");
+        let text = match &output.content[0] {
+            ContentBlock::Text(t) => t.text.clone(),
+            other => panic!("unexpected content {other:?}"),
+        };
+        assert!(text.contains("1 succeeded"), "summary: {text}");
+    }
+
+    /// TEMP measurement probe (removed after the sweep): drives the real dag
+    /// tool at N nodes on a caller thread with an explicit stack, mirroring the
+    /// FTUI driver's `RuntimeBuilder::new().thread_stack_size(..)` + `block_on`.
+    #[test]
+    #[ignore = "measurement probe: DAG_PROBE_STACK_BYTES + DAG_PROBE_N"]
+    fn probe_dag_stack_scaling() {
+        let stack: usize = std::env::var("DAG_PROBE_STACK_BYTES")
+            .expect("DAG_PROBE_STACK_BYTES")
+            .parse()
+            .expect("stack bytes");
+        let n: usize = std::env::var("DAG_PROBE_N")
+            .expect("DAG_PROBE_N")
+            .parse()
+            .expect("node count");
+        let handle = std::thread::Builder::new()
+            .name("dag-probe".into())
+            .stack_size(stack)
+            .spawn(move || {
+                let runtime = asupersync::runtime::RuntimeBuilder::new()
+                    .thread_stack_size(stack)
+                    .build()
+                    .expect("runtime");
+                let shared = registry(&["current_time"]);
+                let tool = tool_over(&shared);
+                let nodes: Vec<Value> = (1..=n)
+                    .map(|id| {
+                        // 64-wide layers, depth = ceil(n / 64): stays inside the
+                        // build gates (width 64, depth 100) at every N probed.
+                        let deps: Vec<u32> = if id > 64 { vec![(id - 64) as u32] } else { vec![] };
+                        node_json(id as u32, "current_time", &deps)
+                    })
+                    .collect();
+                let out = runtime
+                    .block_on(tool.execute("probe-dag", json!({"nodes": nodes}), None))
+                    .expect("probe dag completes");
+                assert!(!out.is_error, "probe dag failed: {out:?}");
+            })
+            .expect("spawn probe");
+        handle.join().expect("probe thread must not abort");
+    }
 }
