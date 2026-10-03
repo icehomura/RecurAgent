@@ -6,7 +6,7 @@
 //! cargo test -p ra-embed-llama --features embed-llama,metal --test embed -- --ignored --nocapture
 //! ```
 //! The model auto-resolves from the HuggingFace cache, or set
-//! `OCTOS_EMBED_GGUF` to a file path.
+//! `RA_EMBED_GGUF` (legacy `OCTOS_EMBED_GGUF`) to a file path.
 #![cfg(feature = "embed-llama")]
 
 use std::path::PathBuf;
@@ -22,14 +22,14 @@ fn serial() -> MutexGuard<'static, ()> {
 }
 
 fn gguf() -> PathBuf {
-    if let Ok(p) = std::env::var("OCTOS_EMBED_GGUF") {
+    if let Some(p) = ra_core::brand::env_compat("EMBED_GGUF") {
         return PathBuf::from(p);
     }
     let home = std::env::var("HOME").expect("HOME");
     let base = PathBuf::from(home)
         .join(".cache/huggingface/hub/models--ggml-org--embeddinggemma-300M-GGUF/snapshots");
     std::fs::read_dir(&base)
-        .unwrap_or_else(|e| panic!("GGUF not cached at {base:?}: {e}; set OCTOS_EMBED_GGUF"))
+        .unwrap_or_else(|e| panic!("GGUF not cached at {base:?}: {e}; set RA_EMBED_GGUF"))
         .filter_map(|e| e.ok())
         .map(|e| e.path())
         .find_map(|p| {

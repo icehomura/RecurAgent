@@ -35,14 +35,14 @@ use ra_embed_llama::LlamaEmbedder;
 const GOLDEN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/golden_mlx.json");
 
 fn gguf() -> PathBuf {
-    if let Ok(p) = std::env::var("OCTOS_EMBED_GGUF") {
+    if let Some(p) = ra_core::brand::env_compat("EMBED_GGUF") {
         return PathBuf::from(p);
     }
     let home = std::env::var("HOME").expect("HOME");
     let base = PathBuf::from(home)
         .join(".cache/huggingface/hub/models--ggml-org--embeddinggemma-300M-GGUF/snapshots");
     std::fs::read_dir(&base)
-        .unwrap_or_else(|e| panic!("GGUF not cached at {base:?}: {e}; set OCTOS_EMBED_GGUF"))
+        .unwrap_or_else(|e| panic!("GGUF not cached at {base:?}: {e}; set RA_EMBED_GGUF"))
         .filter_map(|e| e.ok())
         .map(|e| e.path())
         .find_map(|p| {
