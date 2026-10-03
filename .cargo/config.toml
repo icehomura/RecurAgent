@@ -71,11 +71,25 @@ linker = "rust-lld"
 #
 # `/STACK:` also becomes the default reserve for `CreateThread(0)`, i.e. every
 # `std::thread::spawn` that does not call `.stack_size()`. The repository has
-# 120+ such bare spawns (only 5 sites set a size: main.rs, interactive_ftui.rs,
-# ptc_bridge.rs, session_sqlite.rs, tests/common), and a shipped `ra` binary
+# many such bare spawns (over 100 in `src/` alone), and a shipped `ra` binary
 # gets no `RUST_MIN_STACK` from this file, so this linker value is what covers
-# them. 32 MiB is raised from 8 MiB after repeated `STATUS_STACK_OVERFLOW`
-# (`0xC00000FD`) crashes in subagent children: the deep asupersync poll chain
-# needs far more than the old PE default. The reserve is virtual and committed
-# lazily, so the higher value costs address space, not resident memory.
-rustflags = ["-C", "link-arg=/STACK:33554432"]
+# them.
+#
+# 16 MiB matches the Rust-side reserves — `main::MAIN_STACK_BYTES`,
+# `main::RUNTIME_WORKER_STACK_BYTES`, `threads::AGENT_STACK_BYTES`,
+# `bin::ra_headless::HEADLESS_WORKER_STACK_BYTES`,
+# `interactive_ftui::DRIVER_STACK_BYTES`,
+# `ptc_bridge::REALM_THREAD_STACK_BYTES`, `sdk::EVENT_RUNTIME_STACK_BYTES`,
+# `agent::COMPACTION_STACK_BYTES`,
+# `subagents::execution::CHILD_RUST_MIN_STACK` and
+# `session_sqlite::SQLITE_THREAD_STACK_BYTES` — all 16 MiB, on the same
+# measured basis: a complete offline agent turn, including a `dag` whose node
+# runs `run_code` (so dag_tool + ptc_bridge + QuickJS all ran), holds at
+# 724992 B (708 KiB) and aborts at 720896 B (704 KiB), flat to DAG N=256
+# (probe `agent::tests::probe_full_turn_stack_scaling`, commit `905433d68`).
+# That probe uses a mock provider, so real transport (TLS/HTTP) and session
+# persistence (sqlite/JSONL) are unexercised, which is what leaves ~23x
+# headroom over the floor. Bead `bd-qtffv` tracks verifying the
+# transport-heavy chains. The reserve is virtual and committed lazily, so the
+# value costs address space, not resident memory.
+rustflags = ["-C", "link-arg=/STACK:16777216"]
