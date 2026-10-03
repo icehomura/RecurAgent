@@ -1,0 +1,15 @@
+/target
+*.log
+
+# Local dev override for ra-core (see .cargo/config.toml.example).
+/.cargo/config.toml
+
+# agent-spec lifecycle run logs.
+.agent-spec/runs/
+
+# Generated tmux/UX soak artifacts.
+e2e/test-results*/
+.ra-workspace.toml
+ra-data/
+.ra
+__pycache__/

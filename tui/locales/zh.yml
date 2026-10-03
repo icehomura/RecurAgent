@@ -1,0 +1,1939 @@
+# octoscode UI strings — 简体中文 (Simplified Chinese).
+# Mirror the key structure of en.yml. Native-speaker review welcome.
+composer:
+  placeholder: "让 ra 帮你改代码……"
+
+app:
+  banner:
+    title: "欢迎使用 ra — 你的编程伙伴"
+    greeting_named: "欢迎回来 — %{profile}"
+    greeting_default: "欢迎使用 ra"
+    hint: "向 ra 提问，即可开始。"
+    onboarding_setup: "正在配置……"
+  pane:
+    sessions: "会话"
+    tasks: "任务"
+    tasks_subagents: "子代理"
+    tasks_other: "其他任务"
+    artifacts: "制品"
+    plan: "计划"
+    workspace: "工作区"
+    git: "Git"
+    composer: "输入框"
+    transcript: "对话记录"
+    task_output: "任务输出"
+    artifact_modal: "制品"
+    threads: "线程"
+    turn: "回合"
+  empty:
+    no_session: "未选择会话"
+    no_tasks: "暂无任务"
+    no_artifacts: "快照中无制品"
+    no_plan: "暂无活动计划"
+    no_plan_hint: "计划文本从助手/实时回复中推断。"
+    no_task_output: "此任务暂无输出"
+    no_diff: "未加载差异预览"
+    no_file_changes: "无文件更改"
+  approval:
+    title: "请求审批"
+    risk_chip: "风险: %{risk}"
+    action_once: "y = 本次批准此命令"
+    action_session: "s = 本会话内批准此命令/范围"
+    action_deny: "n = 拒绝"
+    action_diff: "d = 查看差异"
+    inline: "内联"
+  question:
+    header_multi: "问题 %{n}/%{total}"
+    header_single: "问题"
+    card_title: "智能体提出了问题"
+    no_options: "未提供可回答的选项。"
+    type_answer: "（输入你的回答）"
+    free_text_row: "其他（自由填写）"
+    other_prefix: "其他"
+    action_toggle: "上/下 移动 | 空格 选中 | 输入填写其他"
+    action_submit: "Enter = 提交答案 | Esc = 隐藏"
+    action_next: "Enter = 下一问题 | Esc = 隐藏"
+    action_dismiss: "Esc = 关闭（无可提交答案）"
+  activity:
+    title: "活动"
+    no_matches: "没有匹配的活动记录"
+    orchestrating: "编排中……"
+    re_entering: "重新进入（继续中）……"
+    finished_errors: "智能体任务完成（有错误）"
+    completed: "智能体任务已完成"
+    running: "运行中"
+    preview_ready: "预览就绪"
+    older_actions: "◈ 还有 %{count} 条 · Ctrl+O 展开"
+    repeat_suffix: " ×%{count}"
+    more_completed_active: "... +%{hidden} 条更多，%{completed} 已完成，%{active} 活动中"
+    action_count: "%{count} 个操作"
+    active_count: "%{count} 活动中"
+    completed_count: "%{count} 已完成"
+    failed_count: "%{count} 失败"
+    subagents_running: "%{count} 个子智能体运行中"
+    turn_label: "回合 %{id}"
+    more_lines_hidden: "... 还有 %{count} 行已隐藏（%{action}）"
+    expanded_hint: "已展开（Ctrl+O 折叠）"
+  activity_navigator:
+    navigator_suffix: "导航"
+    search_active: "搜索*："
+    query_label: "查询："
+    empty_query: "（空）"
+    counts: "全部 %{all} | 变更 %{changes} | 运行中 %{running} | 已阻塞 %{blocked} | 失败 %{failed} | 完成 %{done}"
+    filter_label: "  筛选：%{filter}"
+    filter_label_compact: "筛选：%{filter}"
+    query_filter: "查询：%{query}  筛选：%{filter}"
+    results: "结果"
+    detail: "详情"
+    no_selected: "未选择活动"
+    orchestration_active: "编排进行中"
+    running_agents: "运行中的智能体：%{count}"
+    pending_continuations: "待继续任务：%{count}"
+    session_running: "会话运行中"
+    session_blocked: "会话已阻塞"
+    session_done: "会话已完成"
+    session_error: "会话出错"
+    no_active_session: "无活动会话"
+    approval_required: "需要审批"
+    question_pending: "问题待回答"
+    questions: "问题数：%{count}"
+    empty_message: "%{role}：空消息"
+    message_title: "%{role}：%{preview}"
+    message_subtitle: "%{session} · 第 %{number} 条消息"
+    content_heading: "内容："
+    reasoning_heading: "推理："
+    output_tail_heading: "输出末尾："
+    output_preview_heading: "输出预览："
+    diff_preview_ready: "差异预览已就绪"
+    diff_preview_pending: "差异预览待生成"
+    field: "%{label}：%{value}"
+    kind:
+      session: "会话"
+      message: "消息"
+      orchestration: "编排"
+      task: "任务"
+      change: "变更"
+      activity: "活动"
+      approval: "审批"
+    status:
+      running: "运行中"
+      blocked: "已阻塞"
+      failed: "失败"
+      done: "完成"
+    filter:
+      all: "全部"
+      running: "运行中"
+      blocked: "已阻塞"
+      failed: "失败"
+      done: "完成"
+    run_state:
+      idle: "空闲"
+      running: "运行中"
+      blocked: "已阻塞"
+      done: "完成"
+      error: "错误"
+    value:
+      active: "活动"
+      pending: "等待中"
+      running: "运行中"
+      done: "完成"
+      failed: "失败"
+      cancelled: "已取消"
+      interrupted: "已中断"
+      unknown: "未知"
+      user: "用户"
+      assistant: "助手"
+      system: "系统"
+      tool: "工具"
+      progress: "进度"
+      report: "报告"
+      approval: "审批"
+      warning: "警告"
+      error: "错误"
+      added: "新增"
+      modified: "修改"
+      deleted: "删除"
+      renamed: "重命名"
+    label:
+      session: "会话"
+      phase: "阶段"
+      state: "状态"
+      status: "状态说明"
+      detail: "详情"
+      tool: "工具"
+      kind: "类型"
+      body: "内容"
+      question_id: "问题 ID"
+      message: "消息"
+      role: "角色"
+      tool_call: "工具调用"
+      task: "任务"
+      turn: "轮次"
+      file: "文件"
+      type: "类型"
+      operation: "操作"
+      preview: "预览"
+  diff:
+    title: "差异预览"
+    inline_patch: "内联补丁"
+    loading: "正在加载差异预览……"
+    select_stage_hint: "Alt+H/Ctrl+N 下一个代码块 | Alt+C/Ctrl+X 暂存所选差异上下文"
+    toggle_side_by_side_hint: "Alt+V/Ctrl+V 并排视图"
+    toggle_unified_hint: "Alt+V/Ctrl+V 统一视图"
+    side_by_side_too_narrow: "并排视图需要至少 %{min} 列"
+    more_files_hidden: "还有 %{count} 个文件已隐藏"
+    line_unavailable: "此更改无可用的行级差异"
+    more_lines_hidden: "还有 %{count} 行差异已隐藏（Ctrl+O 展开）"
+    more_rows_hidden: "还有 %{count} 行并排差异已隐藏（Ctrl+O 展开）"
+    more_hunks_hidden: "还有 %{count} 个代码块已隐藏（Ctrl+O 展开）"
+  autonomy:
+    goal_prefix: "目标："
+    loops_overflow: "+%{count} 个"
+    loop_iteration: "第 %{count} 轮"
+    loop_next_run: "下次 %{remaining}"
+    loop_next_run_pending: "本轮结束后"
+    loop_expires_in: "剩 %{remaining}"
+    loops_running: "循环：%{count} 个活动中"
+    loops_paused_suffix: " · %{count} 个已暂停"
+    goal_meta: " (%{status} · %{used}/%{budget} Token)"
+    goal_fold_hint: " · Ctrl+P 展开"
+    status_active: "进行中"
+    status_paused: "已暂停"
+    status_budget_limited: "预算已用尽"
+    # octoscode#532：预算用尽只会停止目标的自驱动轮询；舰队汇总、peer 等待输入、
+    # 子任务完成这些外部唤醒仍会触发，所以不能读作"已终止"。
+    status_budget_limited_fleet: "预算已用尽 · peer 仍在运行"
+    status_blocked: "已阻塞"
+    status_complete: "已完成"
+  statusbar:
+    agents: "%{count} 个智能体"
+    actions: "%{count} 个动作"
+    re_entering: "重新进入中"
+    retrying_attempt_max: "重试中（第 %{attempt}/%{max} 次）"
+    retrying_attempt: "重试中（第 %{attempt} 次）"
+    retrying: "重试中"
+    loops_active_countdown: "↻ %{count} 个循环 · 下次 %{remaining}"
+    loops_active: "⟳ %{count} 个活动循环 — /loop pause 可停止"
+    loops_paused: "%{count} 个已暂停循环 — /loop resume 可恢复"
+    background_tasks: "%{count} 个后台任务"
+    ps_to_view: "/ps 查看"
+    esc_interrupt: "Esc 中断"
+    stop_to_close: "/stop 关闭"
+    # octoscode#532：主 agent 等待舰队时会长时间沉默，仅在其自身轮次已结束时显示。
+    awaiting_fleet: "等待 %{total} 个 peer 中的 %{outstanding} 个：%{peers}"
+    pending_decision_help: "等待你的确认 — Ctrl+R/Alt+A 应答 · Ctrl+C 中断"
+    parked_decision_banner: "⚠ 已等待你 %{elapsed} — Ctrl+R/Alt+A 应答 · Ctrl+C 中断"
+    cursor_degraded: "⚠ 流已降级 — 重放可能丢失事件；请重新连接"
+    tool_output_expanded: "工具输出已展开"
+  btw:
+    answering: "回答中…"
+    failed: "旁路提问失败:%{error}"
+    pane_title: "旁白 — /btw"
+    close_hint: "回车 关闭"
+    closed: "旁白已关闭"
+  turn_summary:
+    ran_for: "耗时 %{duration}"
+    tasks_still_running: "%{count} 个后台任务仍在运行"
+  status:
+    state_label: "状态"
+    idle: "空闲"
+    working: "运行中"
+    thinking: "思考中"
+    waiting: "等待中"
+    blocked: "已阻塞"
+    done: "已完成"
+    error: "错误"
+    quota: "额度用尽"
+    interactive: "交互式"
+    read_only: "只读"
+    approval_gated: "审批管控"
+    sends_disabled: "发送已禁用"
+  harness:
+    orchestrating: "编排中"
+    re_entering: "重新进入"
+    working: "运行中"
+  composer_hint:
+    queued_messages: "已排队 %{count} 条消息（当前任务结束后发送）| Esc 中断/发送 | Ctrl+U 清空"
+    large_paste: "大段粘贴已折叠 | Enter 发送全文 | Ctrl+U 清空"
+    multiline_tail_lines: "多行输入 | 显示末尾，已隐藏 %{count} 行 | Enter 发送全文 | Ctrl+U 清空"
+    multiline_tail_line: "多行输入 | 显示超长行末尾 | Enter 发送全文 | Ctrl+U 清空"
+    peer_readonly: "↳ 只读 peer · 在主智能体处操控 · Ctrl+S 切换 · Ctrl+C 中断"
+  hint:
+    list_nav: "j/k 或 Up/Down"
+    composer_send: "Enter 发送 | Shift+Enter / Ctrl+J 换行 | Tab 智能体"
+    statusbar_keys: "Tab 智能体 | Ctrl+O 展开"
+    statusbar_keys_peers: "Tab 智能体 | Ctrl+L peers | Ctrl+S 会话 | Ctrl+O 展开"
+    agent_peek_keys: " Tab 下一个 · Shift+Tab 上一个 · ↑/↓ 滚动 · x 取消 · Esc 返回聊天 "
+    agent_task_prefix: "任务：%{task}"
+    agent_deliverables: "交付物"
+    agent_strip_main: "主对话"
+    agent_strip_title: " 智能体 "
+    agent_strip_more: "还有 %{count} 个（Tab 切换）"
+    agent_dock_pill: "🐙 %{count} 个智能体 · %{running} 运行中"
+    agent_dock_pill_unread: " · %{count}● 未读"
+    agent_dock_toggle_hint: "Ctrl+G/Alt+G"
+    # Peer Dock (#407)：会话条溢出时显示的折叠汇总，以及展开的 peer 面板（Alt+P / Ctrl+L）每行标签。
+    peer_dock_pill: "👥 %{count} 个 peer · %{live} 个进行中"
+    peer_dock_pill_blocked: " · %{count}⚠ 等待你"
+    peer_dock_pill_unread: " · %{count}● 未读"
+    peer_dock_toggle_hint: "Alt+P/Ctrl+L 预览"
+    peer_dock_title: " peers "
+    # octoscode#532：舰队落地进度——"5 个中已落地 3 个"此前无处可见。
+    peer_dock_landed: "已落地 %{landed}/%{total}"
+    peer_dock_row_blocked: "等你确认：%{reason}"
+    peer_dock_row_idle: "空闲"
+    peer_dock_row_opening: "打开中…"
+    agent_no_output: "（暂无输出 —— 该智能体工作时会在此处流式输出结果）"
+    menu: "菜单 | j/k 移动 | Enter 确认 | Esc 关闭"
+    onboarding: "引导 | Enter 继续 | 输入可编辑字段"
+    approval: "审批 | y 本次 | s 本会话 | n 拒绝 | d 差异"
+    user_question: "问题 | 上/下 移动 | 空格 选择 | Enter 提交 | Esc 隐藏"
+    pager_keys: "会话回看 | PgUp/PgDn 滚动 | Esc 或 Ctrl+T 退出"
+    pager_reviewing: "回看中 ↑ | End 回到底部 | Esc 退出"
+    activity_navigator: "j/k 移动 | / 搜索 | f 过滤 | Enter 选择会话 | Esc 关闭"
+    ctrl_o_collapse: "Ctrl+O 折叠"
+    ctrl_o_expand: "Ctrl+O 展开"
+    task_output_modal: "o 查看更多 | PgUp/PgDn | Esc 关闭"
+    scroll_modal: "PgUp/PgDn | Esc 关闭"
+    diff_preview_modal: "j/k 滚动 | PgUp/PgDn | [/] 代码块 | v 视图 | c 暂存 | Esc 收起"
+  plan:
+    live: "实时"
+  workspace:
+    root: "根目录"
+    contract: "约定"
+    tree: "目录树"
+  git:
+    branch: "分支"
+    head: "HEAD"
+    status: "状态"
+    clean: "干净"
+    history: "历史"
+    none: "无"
+    status_history: "状态/历史"
+  tool:
+    command_label: "命令"
+    added: "已添加"
+    deleted: "已删除"
+    wrote: "已写入"
+    changed: "已修改"
+    reading: "读取中"
+    read: "已读取"
+    writing: "写入中"
+    editing: "编辑中"
+    edited: "已编辑"
+    listing: "列出中"
+    listed: "已列出"
+    searching: "搜索中"
+    searched: "已搜索"
+    fetching: "抓取中"
+    fetched: "已抓取"
+    browsing: "浏览中"
+    browsed: "已浏览"
+    spawning: "派生中"
+    spawned: "已派生"
+    sending: "发送中"
+    sent: "已发送"
+    managing: "管理中"
+    managed: "已管理"
+    using: "使用中"
+    used: "已使用"
+    waiting: "等待中"
+    waited: "已等待"
+    testing: "测试中"
+    tested: "已测试"
+    building: "构建中"
+    built: "已构建"
+    installing: "安装中"
+    installed: "已安装"
+    running: "运行中"
+    ran: "已运行"
+  transcript:
+    queued_label: "已排队"
+    queued_after_turn: "%{count} 条消息（当前任务结束后发送）"
+    more_queued: "+%{count} 条更多已排队"
+  composer:
+    preview_label: "预览"
+    vim_normal: "NORMAL"
+    vim_insert: "INSERT"
+  artifact:
+    from: "来自 %{source}"
+  field:
+    tool: "工具"
+    risk: "风险"
+    kind: "类型"
+    command: "命令"
+    tool_call: "工具调用"
+    sandbox: "沙箱"
+    filesystem: "文件系统"
+    network: "网络"
+    writable: "可写"
+    preview: "预览"
+    operation: "操作"
+    summary: "摘要"
+    files_count: "%{count} 个文件"
+    stats: "统计"
+    outside_workspace: "工作区外"
+    path: "路径"
+    hosts: "主机"
+    ports: "端口"
+    from: "从"
+    to: "到"
+    permissions: "权限"
+    justification: "理由"
+
+onboarding:
+  validation:
+    profile_name_required: "请先命名此档案。使用 /onboard profile-name <id>。"
+    display_name_required: "显示名称为必填项。使用 /onboard name <显示名称>。"
+    display_name_too_long: "显示名称不得超过 128 个字符。"
+    username_required: "用户名为必填项。使用 /onboard username <用户名>。"
+    username_too_long: "用户名不得超过 64 个字符。"
+    username_invalid_chars: "用户名必须为 ASCII，且不能包含空白或控制字符。"
+    email_required: "后端要求填写邮箱。使用 /onboard email <地址>。"
+    email_invalid: "邮箱必须包含非空的本地部分和域名（例如 ada@example.com）。"
+    profile_collision: "本地档案“%{username}”发生冲突：%{reason}。请使用 /onboard name|username|email 编辑字段后重试。"
+    local_profile_unsupported: "服务器对 profile/local/create 返回了 profile_local_unsupported。后端配置有误——请启用本地单人引导后重启服务器，或连接到完整支持该功能的后端。"
+    server_rejected_name: "服务器拒绝了显示名称：%{reason}。请使用 /onboard name <显示名称> 修改。"
+    server_rejected_username: "服务器拒绝了用户名：%{reason}。请使用 /onboard username <用户名> 修改。"
+    server_rejected_email: "服务器拒绝了邮箱：%{reason}。请使用 /onboard email <地址> 修改。"
+    server_rejected_fields: "服务器判定档案字段无效：%{reason}。请使用 /onboard name|username|email 修改。"
+    local_profile_create_failed: "profile/local/create 失败：%{reason}"
+  welcome_title: "欢迎使用 ra"
+  value_saved: "%{value}（已保存）"
+  value_suggested: "%{value}（建议）"
+  api_key_saved: "已保存于档案"
+  api_key_not_needed: "无需密钥（keyless）"
+  value_not_set: "未设置"
+  action_edit: "回车编辑"
+  make_default:
+    label: "设为默认大脑"
+    desc: "在未访问过的新文件夹中，直接启动时打开的大脑。"
+    enabled: "开"
+    disabled: "关"
+  field:
+    full_name: "姓名"
+    username: "用户名"
+    email: "邮箱"
+    profile_name: "为此档案命名"
+    profile_name_desc: "回车编辑 —— 例如 glm 或 deepseek 这样的简短 ID（用于保存此配置）。"
+    existing_profile: "使用已有档案（输入 ID）"
+  local:
+    title: "创建你的本地 ra 档案"
+    description: "仅保存在本机；不会发送邮箱验证码。"
+    subtitle: "设置本地单人档案以继续。"
+    continue: "继续"
+    create_action: "创建档案"
+    family_desc: "回车选择模型系列 —— 会据此建议档案名称（例如 glm）。"
+    footer: "上/下 选择 | 回车 编辑或继续 | 输入后回车保存"
+  language:
+    title: "选择语言"
+    label: "语言"
+    description: "选择引导流程和当前会话使用的界面语言。"
+    footer: "回车 选择语言 | Esc 返回"
+  auth:
+    verified: "认证：已验证"
+    code_sent: "认证：验证码已发送至 %{email}"
+    email: "认证：邮箱 %{email}"
+    email_not_set: "认证：邮箱未设置"
+  profile:
+    created: "本地档案：%{profile}"
+    ready: "本地档案：%{username} 已就绪"
+    required: "本地档案：需要姓名、用户名和邮箱"
+  permissions:
+    default_hint: "权限：（默认 — 使用 /onboard permissions <mode>）"
+    mode_unchanged: "（模式未更改）"
+    unchanged: "（未更改）"
+    network_allowed: "网络已允许"
+    network_blocked: "网络已阻止"
+    network_unchanged: "（网络未更改）"
+    staged: "权限：已暂存 %{mode} · %{approval} · %{network}"
+    staged_clamped: "权限：已暂存 %{mode} · %{approval} · %{network} — 服务器已收紧：%{mismatch}"
+  workspace:
+    active: "%{path}（当前）"
+    unset: "（使用 /onboard workspace <路径>）"
+    writable: "可写"
+    read_only: "只读"
+    toml_present: " · .ra-workspace.toml"
+    status_unvalidated: "状态：未验证"
+    status_validating: "状态：验证中……"
+    status_ok: "状态：正常（%{writable}%{toml}）"
+    status_invalid: "状态：无效 — %{reason}"
+  provider:
+    add_model_label: "添加模型"
+    add_model_desc: "为此档案配置 AI 模型：模型系列、模型、供应商线路和 API 密钥。"
+    add_another_model_label: "添加其他模型"
+    add_another_model_desc: "添加备用或其他模型：模型系列、模型、供应商线路和 API 密钥。"
+    test: "测试连接"
+    test_testing: "正在测试连接……"
+    test_unavailable_saving: "保存期间无法测试"
+    tested: "连接已测试"
+    test_failed: "测试失败 — %{reason}"
+    save: "保存供应商"
+    saving: "正在保存供应商……"
+    save_unavailable_testing: "测试期间无法保存"
+    saved: "供应商已保存"
+    add_fallback: "添加为备用"
+    fallback_unavailable_testing: "测试期间无法添加备用"
+    saved_status_target: "已保存供应商：%{target} %{label}"
+    saved_status_primary: "已保存供应商：主供应商 %{label}"
+    saved_status_none: "已保存供应商：无"
+    primary: "主供应商"
+    fallback: "备用"
+    research_lane: "研究通道"
+    save_research_lane: "保存为研究通道"
+  disabled:
+    name_empty: "姓名为空"
+    username_empty: "用户名为空"
+    email_empty: "邮箱为空"
+    otp_empty: "OTP 验证码为空"
+    profile_unresolved: "档案未解析；请使用 /onboard profile <profile_id>"
+    provider_incomplete: "供应商选择不完整"
+    api_key_empty: "API 密钥为空"
+    choose_family_first: "请先选择模型系列"
+    choose_family_model_first: "请先选择模型系列和模型"
+    choose_provider_first: "请先选择供应商"
+    save_provider_first: "请先保存供应商"
+    validate_workspace_first: "请先验证工作区"
+    workspace_validating: "工作区验证进行中"
+    workspace_invalid: "工作区无效：%{reason}"
+  preview:
+    provider:
+      configured_title: "已配置（此处只读）："
+      profile: "档案"
+      selected: "已选择供应商"
+    workspace:
+      staged_title: "已暂存（通过命令设置，此处不可选择）："
+      workspace: "工作区"
+      workspace_hint: "/onboard workspace <路径>   （可用 `.` 表示当前文件夹）"
+      permissions_hint: "/onboard permissions <default|read-only|workspace-write|full-access>"
+  wizard:
+    setup_title: "ra 设置向导"
+    progress_title: "设置进度"
+    header: "第 %{number}/%{total} 步 — %{title}"
+    subtitle: "%{header} · %{purpose}"
+    footer: "下一步：%{next} | 上/下 移动 | 回车 选择 | Esc 关闭"
+    step:
+      language: "语言"
+      profile: "档案"
+      provider: "供应商"
+      connect: "连接"
+      save: "保存"
+      workspace: "工作区"
+      activate: "激活"
+    purpose:
+      language: "选择界面语言。默认使用 English。"
+      profile: "为 ra 创建本地身份。仅保存在本机，不会发送邮件。"
+      provider: "选择 ra 调用的 AI 模型（模型系列、模型和供应商线路）。"
+      connect: "粘贴供应商 API 密钥并进行实时测试，确认模型能正常响应。"
+      save: "将验证通过的供应商保存到档案中以便持久化。"
+      workspace: "选择并验证 ra 在编码时可读写的文件夹。"
+      activate: "激活工作区：打开编码会话并开始工作。"
+    explain_title: "关于本步骤"
+    explain_progress: "设置进度 — 第 %{number}/%{total} 步"
+    explain_now: "当前：%{title}"
+    explain:
+      language: "选择完成设置时 ra 使用的语言。\n默认已选择 English。如果想让后续引导流程和应用立即切换为中文，请选择 中文。\n之后也可以使用 `/lang` 更改。"
+      profile: "ra 需要一个本地档案，用于关联你的设置、供应商和历史记录。\n为它取一个简短的名称（例如 work 或 research）后继续。名称只是一个标签——与你使用哪个模型无关；模型在下一步选择，也可随时通过 /add-model 添加或更改。（较旧的服务器会改为要求填写姓名、用户名和邮箱。）\n该档案仅保存在本机，不会发送任何信息。"
+      provider: "选择驱动 ra 的 AI 模型。\n先选模型系列（如 GPT、Claude），再选具体模型，最后选择提供该模型的供应商线路（官方或替代线路）。\n这决定了 ra 与谁通信以及编码辅助的质量——之后可随时更改。"
+      connect: "在依赖该模型之前，先确认它确实能够响应。\n粘贴你的供应商 API 密钥，然后运行实时测试。ra 会发送一个小请求并报告成功或具体错误。\n这样能在此刻发现密钥错误或线路不对，而不是任务进行中才发现。"
+      save: "将验证通过的供应商持久化到档案 JSON 中，以便重启后仍然可用。\n可将其保存为主供应商（或添加为备用）。保存前，该线路仅存在于当前会话中。\n保存后，工作区步骤即可解锁。"
+      workspace: "选择 ra 在编码时可读写的项目文件夹。\n默认使用你启动时所在的文件夹；可用 `/onboard workspace <路径>` 覆盖（用 `.` 表示当前文件夹）。然后进行验证——ra 会检查路径是否存在、是否为目录以及是否可写。\n激活前必须有一个有效的工作区。"
+      activate: "打开编码会话并进入工作界面。\n上面的步骤都已完成：档案已创建、供应商已保存并测试通过、工作区已验证。在“激活”上按回车即可开始。\n这是最后一步——完成后你就可以开始用 ra 编码了。"
+    workspace_title: "ra 设置 — 工作区"
+    workspace_open_label: "继续到工作区 →"
+    workspace_open_description: "选择并验证 ra 将要编码的项目文件夹，然后激活。"
+    workspace_locked_reason: "请先保存一个供应商"
+    finish_label: "完成 —— 大脑就绪 →"
+    finish_description: "大脑已配置好。在此重新启动 ra 即可开始会话。"
+    activate_ready_label: "▶ 激活工作区 — 打开编码会话（回车）"
+    activate_blocked_label: "激活工作区 — 打开编码会话"
+    activate_ready_description: "已就绪。在此按回车打开会话并开始编码。"
+    activate_blocked_description: "请先完成上面的步骤（%{reason}）。"
+    next:
+      load_catalog: "加载供应商目录"
+      choose_family: "选择模型系列"
+      choose_model: "选择模型"
+      choose_route: "选择供应商线路"
+      paste_key: "粘贴你的 API 密钥"
+      test_provider: "测试供应商"
+      save_provider: "保存供应商"
+      validate_workspace: "验证工作区"
+      activate: "在“激活”上按回车开始编码"
+      finish_remaining: "完成剩余步骤"
+      local_continue: "继续创建档案"
+      local_fill_fields: "填写姓名、用户名和邮箱"
+
+# --- runtime feedback + menu chrome + command descriptions (full i18n pass) ---
+command:
+  activity:
+    desc: 搜索并过滤会话、任务和活动
+  add_model:
+    desc: 为档案添加或更改 AI 模型（模型系列、模型和供应商路由）。
+  agents:
+    desc: 查看或中断后端智能体
+  aliases_label: 别名：
+  btw:
+    desc: 在当前回合继续运行时快速旁路提问。
+  context:
+    desc: 上下文窗口控制——立即压缩，并选择 LLM 或启发式摘要。
+  copy:
+    desc: 将最近一条助手回复复制到剪贴板（支持 SSH 环境）。
+  cost:
+    desc: 显示服务器报告的 token 和费用用量
+  dock:
+    desc: 子智能体停靠栏——切换视图、查看未读结果、折叠或展开。
+  exit:
+    desc: 退出 TUI
+  profiles:
+    desc: 管理本地档案——列出、设为默认、删除或新建。
+  goal:
+    desc: "设置：/goal <目标> [--budget 2m|500k]。管理：pause、resume、stop、clear。单独 /goal 查看当前目标。"
+  help:
+    desc: 显示可用命令
+  keymap:
+    desc: 查看并编辑 TUI 按键绑定
+  lang:
+    desc: 切换 UI 显示语言，例如 /lang zh（en、zh）
+  login:
+    desc: 使用邮件 OTP 登录或查看当前认证状态
+  loop:
+    desc: 创建、列出、暂停/恢复、立即触发或删除后端定时任务循环
+  mcp:
+    desc: 列出或配置服务器支持的 MCP 条目
+  model:
+    desc: 选择服务器返回的档案 LLM 模型
+  sessions:
+    desc: 在打开的会话间切换（Ctrl+S/Alt+S）—— 实时回合与未读标记。
+  undo:
+    desc: 将工作区文件回滚到修改前的快照（#1768）。
+  peer:
+    desc: "派生一个带持久任务简报的同伴智能体会话：/peer [--go] [--worktree] [--cwd <path>] [--n <2-8>] <brief>。"
+  gather:
+    desc: "把黑板上的同伴结果汇总进当前会话：/gather [all | <slug> …]。"
+  research:
+    desc: 管理研究模型通道（deep_research 的 cheap/strong 模型）。
+  resume:
+    desc: 切换到先前的会话并重新加载其对话记录。
+  rewind:
+    desc: 回到本会话中较早的一条消息，以便编辑并重新发送。
+  onboard:
+    desc: 打开设置向导以配置或重新配置您的档案、供应商、模型和工作区
+  permissions:
+    desc: 查看或更改审批、文件系统和网络权限
+  provider:
+    desc: 配置档案专属的 LLM 供应商和路由
+  ps:
+    desc: 显示后台任务和进程状态
+  review:
+    desc: 启动后端代码审查工作流
+  skills:
+    desc: 列出、搜索、安装或删除档案技能
+  status:
+    desc: 显示基于快照的会话、运行时和连接状态
+  statusline:
+    desc: 配置底部状态栏项目
+  stop:
+    desc: 中断当前轮次或停止受支持的后台工作
+  task:
+    desc: 读取后端任务产物
+  theme:
+    desc: 选择本地 TUI 主题
+  saveconfig:
+    desc: "把当前主题/语言/滚动模式/Vim 模式/转向模式保存到配置文件。"
+  scrollmode:
+    desc: "切换滚轮滚动模式：/scrollmode [native|pinned]（不带参数为切换）。"
+  vimmode:
+    desc: "切换输入框的 Vim 模态编辑（Normal/Insert）。"
+  steer:
+    desc: "切换运行中按 Enter 的含义：/steer [on|off] —— on 注入当前轮次，off（默认）按顺序排队。"
+  thinking:
+    desc: 设置思考模型的思考强度：/thinking low|medium|high|max|default
+  threads:
+    desc: 查看后端线程图
+  title:
+    desc: 配置终端标题项目
+  tools:
+    desc: 列出或配置服务器支持的工具设置
+  turn:
+    desc: 查看后端轮次生命周期状态
+lang:
+  switched: 已切换到中文。
+  unknown: 未知语言 '%{value}'。可选：en、zh。
+  usage: 当前语言：%{current}。用法：/lang <en|zh>。
+menu:
+  common:
+    no_status_supplied: "未提供状态"
+    local_offline: "本地/离线"
+    edit_as: "编辑为：%{command}"
+    test_named: "测试 %{name}"
+    delete_named: "删除 %{name}"
+  protocol:
+    uses_method: "使用 %{method}。"
+    requires_method: "需要 %{method}。"
+    method_not_advertised: "服务器未公布 ra UI 方法 `%{method}`"
+    returned_no_items: "%{method} 未返回%{items}"
+    no_cached_result: "%{method} 已公布，但尚无缓存结果"
+  loop_actions:
+    gone: "循环 %{id} 已不存在——被删除或已过期。"
+    no_target: 未选中任何循环。
+    title: 循环操作
+    title_for: "循环 %{id}"
+    verb:
+      delete: "✕ delete — 删除该循环(不可恢复)"
+      fire-now: "⚡ fire-now — 立即触发一轮"
+      pause: "⏸ pause — 暂停调度,直到恢复"
+      resume: "▶ resume — 恢复调度"
+  loops:
+    row_hint: "回车查看操作 · → 暂停/恢复"
+    subtitle: "%{count} 个循环 · %{active} 活跃 · %{paused} 暂停"
+    title: 循环
+    unavailable_empty: 本会话还没有循环——用 /loop <提示词> 创建,或 /loop <提示词> every <间隔>。
+    unavailable_title: 循环
+  file_picker:
+    title: "插入文件路径"
+    search: "输入以筛选工作区文件"
+    footer: "Enter 在光标处插入相对路径 | Esc 关闭且不插入"
+    item:
+      empty:
+        label: "此工作区中未找到文件"
+        desc: "在工作区根目录下未扫描到可列出的文件（已跳过 .git、target 与 node_modules）。"
+      truncated:
+        label: "仅显示前 %{count} 个文件 —— 输入以缩小范围"
+  sessions:
+    title: 会话
+    subtitle: "⌂ 主会话 · ↳ 同伴 · ✻ 回合进行中 · (n) 自上次查看后完成的回合数。"
+    footer: Enter 切换 | Esc 关闭
+    item:
+      blocked_reason: "⚠ 等待你的确认：%{reason}"
+      current: 当前聚焦的会话。
+      switch_desc: 切换到此会话。
+      empty: 没有打开的会话
+      empty_desc: 请先打开一个会话。
+  undo:
+    title: 工作区快照
+    subtitle: "在代理修改文件前自动记录的还原点。选择一个将工作区回滚。"
+    footer: Enter 恢复快照（会先确认） | Esc 关闭
+    age:
+      just_now: 刚刚
+    item:
+      refresh:
+        label: 刷新快照
+        desc: 对当前会话调用 snapshot/list。
+      stale:
+        label: 尚未加载此会话的快照
+        desc: 选择"刷新"以加载当前会话的快照。
+      unavailable:
+        label: 快照不可用
+        desc: 此会话没有工作区，或未安装 git。
+      disabled:
+        label: "快照采集已关闭（snapshots.enabled）"
+        desc: 下方已有快照仍可恢复；新的修改不会被记录。
+      empty:
+        label: 暂无快照
+        desc: "代理修改文件前会自动记录快照（需开启 snapshots.enabled）。"
+      snap:
+        desc: 选择以恢复 —— 会先确认。
+  undo_confirm:
+    title: "恢复快照"
+    subtitle: "将工作区文件回滚。恢复前会先自动记录当前状态，因此本操作也可撤销。"
+    confirm_title: "恢复 %{snapshot}？"
+    "yes": "是，恢复 %{snapshot}"
+    yes_desc: "使用 snapshot/restore；会话有正在运行的回合时会被拒绝。"
+    "no": "否，保留当前文件"
+    item:
+      empty:
+        label: "没有待恢复的快照"
+  research:
+    title: 研究模型通道
+    subtitle: "deep_research 流水线的命名模型通道（cheap/strong）。需重启生效。"
+    footer: Enter 移除通道（会先确认） | Esc 关闭
+    item:
+      refresh:
+        label: 刷新通道
+        desc: 使用 profile/sub_providers/list。
+      empty:
+        label: 尚未配置研究通道
+        desc: "使用 /research add <key> <provider> <model> 添加。"
+      stale:
+        label: 尚未加载此配置的通道
+        desc: 选择"刷新"以加载此配置的研究通道。
+      lane:
+        desc: 选择以移除此通道 —— 会先确认。
+      add:
+        label: 添加通道…
+        desc: "打开模型选择器，然后选择 fast 或 strong 通道。"
+  research_remove:
+    title: "移除研究通道"
+    item:
+      empty:
+        label: "没有待移除的通道"
+    confirm:
+      title: "移除通道 %{lane}？"
+      subtitle: "从档案的 sub_providers 中删除该通道。需重启生效。"
+      yes: "是，移除 %{lane}"
+      yes_desc: "使用 profile/sub_providers/remove；完成后通道列表会刷新。"
+      no: "否，保留"
+  research_lane_key:
+    title: "保存为哪个研究通道…"
+    subtitle: "深度研究按通道键路由 —— %{provider} 将成为你选择的通道。需重启生效。"
+    occupied: "当前为 %{current}（保存将替换它）"
+    vacant: "尚未配置"
+    item:
+      cheap:
+        desc: "快速/廉价通道 —— deep_research 用于扫描与摘要阶段。"
+      strong:
+        desc: "强推理通道 —— deep_research 用于深度推理与综合阶段。"
+  agents:
+    item:
+      dock_collapse:
+        label: 折叠为摘要条
+      dock_expand:
+        label: 展开为逐个智能体行
+      dock_toggle:
+        desc: 等同于 Ctrl+G/Alt+G。
+      main:
+        desc: 在主窗格显示会话记录。
+        label: 主会话
+      viewing_marker: （正在查看）
+    subtitle: "%{count} 个智能体 · %{running} 运行中 · %{unread} 未读"
+    title: 子智能体
+    unavailable_empty: 本会话还没有子智能体——当模型派生工作智能体时会出现在这里。
+    unavailable_title: 子智能体停靠栏
+  availability:
+    approval_has_focus: 审批弹窗正占用键盘焦点
+    blocked_read_only: 只读模式下已阻止
+    feature_flag_disabled: "功能开关 `%{flag}` 已禁用"
+    feature_unavailable: "ra UI 能力 `%{feature}` 不可用"
+    method_unavailable: "ra UI 方法 `%{method}` 不可用"
+    method_unsupported: "不支持 ra UI 方法 `%{method}`：%{reason}"
+    requires_active_turn: 需要活动的回合或后台任务
+    requires_approval_modal: 需要可见的审批弹窗
+    requires_disconnected: 需要断开连接模式
+    requires_idle_turn: 需要当前回合处于空闲状态
+    requires_mock_mode: 需要 mock 模式
+    requires_one_of: "需要以下方法之一：%{methods}"
+    requires_open_session: 需要打开的会话
+    requires_protocol_mode: 需要 protocol 模式
+    requires_ui_server: 需要已连接的 ra UI 服务器
+    ui_unavailable: ra UI 能力不可用
+  component:
+    footer: 空格 切换 | 回车 保存 | Esc 关闭
+    preview_title: 预览
+    search: 筛选组件
+  compact:
+    item:
+      cancel:
+        label: 否，保留上下文
+      confirm:
+        desc: 立即执行 session/compact。
+        label: 是，立即压缩
+    subtitle: 总结较早的消息以释放上下文窗口。
+    title: 立即压缩上下文？
+    unavailable_no_session: 压缩需要已打开的 ra UI 会话。
+    unavailable_title: 压缩不可用
+  context:
+    diagnostics:
+      cache_epoch: 缓存代次
+      last_invalidation: 最近失效原因
+      semantic_head: 语义头部
+      title: OUP 上下文缓存
+    item:
+      compact:
+        desc: 立即总结较早的消息以释放上下文窗口。
+        label: 立即压缩
+      heuristic:
+        desc: 剥离工具参数并保留首行——快速，无需模型调用。
+        label: 使用启发式摘要
+      llm:
+        desc: 使用模型生成更高质量的检查点摘要。
+        label: 使用 LLM 摘要
+    subtitle: 管理此会话的上下文窗口。
+    subtitle_usage: "%{used} / %{max} — 已用上下文窗口 %{pct}%"
+    title: 上下文
+    unavailable_no_session: 上下文控制需要已打开的 ra UI 会话。
+    unavailable_title: 上下文不可用
+  cost:
+    footer: 回车 刷新 | Esc 关闭
+    item:
+      cached:
+        label: 服务器用量统计
+      cached_input:
+        label: 缓存输入
+      cached_output:
+        label: 缓存输出
+      empty:
+        label: 无用量统计
+      estimated:
+        label: 预估费用
+      input_tokens:
+        label: 输入 Token
+      output_tokens:
+        label: 输出 Token
+      refresh:
+        label: 刷新用量
+    subtitle: 服务器报告的 Token 和费用用量。
+    title: 费用
+    unavailable_no_session: 用量统计需要一个打开的 ra UI 会话。
+    unavailable_title: 费用不可用
+    usage_totals: 任何用量汇总
+  empty: 没有可用选项
+  filter:
+    placeholder: 筛选选项
+  footer:
+    enter_apply_esc_close: 回车 应用 | Esc 关闭
+    enter_run_esc_close: 回车 执行 | Esc 关闭
+    esc_back: Esc 返回
+    esc_close: Esc 关闭
+    preview_scroll_esc_close: "PgUp/PgDn 或 < > 滚动预览 | Esc 关闭"
+    multi: "上/下 移动 | Enter 确认 | Esc 取消"
+    select: "Enter 确认 | Esc 取消 | 上/下 移动"
+  help:
+    footer: 回车 打开/运行 | Esc 关闭
+    search: 筛选命令
+    subtitle: 命令由共享注册表解析。
+    title: 斜杠命令
+  item:
+    default_suffix: " 默认"
+  keymap:
+    item:
+      composer_delete_word:
+        desc: 删除光标前一个单词。
+      composer_kill_line:
+        desc: 删除光标到行尾的文本。
+      composer_move_char:
+        desc: 向左/右移动光标一个字符。
+      composer_move_line:
+        desc: 移动光标到行首/行尾。
+      composer_move_word:
+        desc: 按词移动光标。
+      composer_submit:
+        desc: 提交输入框或精确斜杠命令。
+      global_interrupt:
+        desc: 中断当前活动轮次。
+      global_quit:
+        desc: 退出 TUI。
+      menu_accept:
+        desc: 确认高亮菜单行。
+      menu_cancel:
+        desc: 关闭当前菜单。
+      menu_next:
+        desc: 移动到下一行。
+      menu_previous:
+        desc: 移动到上一行。
+      diff_open_toggle:
+        desc: 打开 diff 预览；打开后切换 统一/并排 视图。
+      diff_stage_hunk:
+        desc: 将选中的 diff hunk 暂存为 composer 提示词。
+      diff_next_hunk:
+        desc: 循环到下一个 diff hunk（到末尾后回到开头）。
+    preview_body: 此视图展示菜单层面的按键。持久化按键编辑将在后续版本提供。
+    preview_title: 编辑
+    search: 筛选按键绑定
+    subtitle: 当前 TUI 按键绑定。
+    tab:
+      approval: 审批
+      composer: 输入框
+      global: 全局
+      menu: 菜单
+      task: 任务
+    title: 按键映射
+  lang:
+    item:
+      en:
+        desc: 使用 English 界面。
+        label: English（英语）
+      zh:
+        desc: 使用简体中文界面。
+        label: 中文
+    subtitle: 界面显示语言。
+    title: 语言
+  login:
+    item:
+      auth_status:
+        label: 认证状态
+      current_account:
+        label: 当前账号
+      email:
+        desc: 使用 /login email <地址>。
+      logout:
+        label: 退出登录
+      otp_code:
+        desc: 使用 /login code <验证码>。
+      otp_code_set:
+        label: OTP 验证码：已设置
+      otp_code_unset:
+        label: OTP 验证码：未设置
+      otp_send:
+        label: 邮箱 OTP：发送验证码
+      otp_verify:
+        label: 邮箱 OTP：验证验证码
+    preview_title: 登录状态
+    subtitle: 服务器端认证方式。
+    title: 登录
+    unavailable_title: 登录不可用
+  mcp:
+    configured_servers: 任何已配置服务器
+    session_servers: 当前会话的任何服务器
+    refresh_first: 请先刷新 MCP 配置
+    item:
+      cached:
+        label: 服务器 MCP 配置
+      config_refresh:
+        label: 刷新 MCP 配置
+      empty:
+        label: 无 MCP 服务器
+      status_refresh:
+        label: 刷新 MCP 状态
+      upsert:
+        label: 添加/更新 MCP 配置
+    search: 筛选 MCP 条目
+    subtitle: 服务器端 MCP 配置和状态。
+    title: MCP
+    unavailable_title: MCP 不可用
+  model:
+    profile_models: 此档案的任何模型
+    server_unavailable: 服务器报告此模型不可用
+    footer: 回车 选择或刷新 | Esc 关闭
+    item:
+      add:
+        label: "添加模型…"
+        desc: "选择模型系列、模型和供应商路由，再粘贴 API 密钥 —— 与引导流程相同的分步配置。"
+      remove:
+        label: "移除模型…"
+        desc: "删除该档案已配置的某个模型（密钥失效或模型下线时）—— 若这是唯一模型，请先添加替代模型。"
+      cached:
+        label: 服务器模型列表
+      empty:
+        label: 无服务器模型
+      refresh:
+        label: 刷新模型
+    search: 筛选模型
+    subtitle: 服务器返回的档案 LLM 模型。
+    title: 模型
+  model_remove:
+    title: "移除模型"
+    subtitle: "选择要从该档案移除的已配置模型。"
+    item:
+      empty:
+        label: "没有已配置的模型"
+        desc: "请先在 /model 中刷新模型 —— 只能移除已配置的模型。"
+    confirm:
+      title: "移除 %{model}？"
+      subtitle: "从档案的 LLM 配置中删除该条目。此操作无法撤销。"
+      yes: "是，移除 %{model}"
+      yes_desc: "使用 profile/llm/delete；完成后模型列表会刷新。"
+      no: "否，保留"
+  model_config:
+    title: "添加模型"
+    subtitle: "为该档案暂存一个模型：系列、模型、路由、API 密钥 —— 然后测试并保存。"
+    search: 筛选步骤
+    unavailable_title: "模型配置不可用"
+    item:
+      fallback:
+        desc: "将暂存的供应商追加或替换到 config.llm.fallbacks。"
+    preview:
+      title: "已保存模型"
+      profile: "档案"
+      primary: "主模型"
+      fallbacks: "备用"
+      fallback_n: "备用 %{n}"
+      none: "无"
+      not_loaded: "未加载 —— 请在 /model 中刷新模型"
+  onboard_done:
+    title: "一切就绪"
+    subtitle: "大脑 \"%{profile}\" 已就绪。"
+    subtitle_generic: "你的大脑已就绪。"
+    footer: "回车选择 | Esc 关闭"
+    item:
+      ready:
+        label: "下一步：开始使用“%{profile}”的会话"
+        desc: "在此运行 `octoscode`（此文件夹已为“%{profile}”激活），或在其他文件夹运行 `octoscode --profile-id %{profile}`。"
+        label_generic: "下一步：开始一个会话"
+        desc_generic: "在此运行 `octoscode` —— 此文件夹现已为你的大脑激活。"
+      open:
+        label: "立即在此打开会话"
+        desc: "立即在此文件夹使用“%{profile}”开始工作——无需重启。"
+      exit:
+        label: "关闭"
+        desc: "退出引导。"
+  launch_prompt:
+    unavailable: "没有待处理的启动决策。"
+    footer: "Enter 选择 | 上/下 移动 | Esc 取消"
+    item:
+      cancel:
+        label: "暂不"
+        desc: "返回而不打开会话。"
+    activate:
+      title: "激活此文件夹？"
+      subtitle: "%{cwd}"
+      item:
+        activate:
+          label: "使用 %{profile} 激活"
+          desc: "在此文件夹中为 %{profile} 开始会话。"
+    cross:
+      title: "此文件夹属于另一个大脑"
+      subtitle: "%{cwd}"
+      item:
+        start:
+          label: "在此启动 %{profile}"
+          desc: "在此文件夹中为 %{profile} 开始新会话。"
+        switch:
+          label: "切换到 %{profile}"
+          desc: "恢复此文件夹的 %{profile} 会话。"
+  profile_picker:
+    title: "选择要附加的档案"
+    subtitle: "选择本次会话使用哪个本地档案。"
+    search: "筛选档案"
+    footer: "回车 附加 | 上/下 移动 | Esc 关闭"
+    item:
+      attach:
+        desc: "为本次会话附加此档案。"
+      create:
+        label: "创建新档案"
+        desc: "改为开始引导以创建全新的本地档案。"
+  profiles:
+    title: "档案"
+    subtitle: "管理你的本地档案——设为默认、删除或新建。"
+    footer: "回车 管理 | 上/下 移动 | Esc 关闭"
+    default_marker: "*默认"
+    preview_title: "档案"
+    preview_hint: "选择一个档案以查看其模型，并将其设为默认或删除。使用“创建新档案”来添加。"
+    item:
+      manage:
+        desc: "打开此档案——使用、设为默认或删除。"
+    actions:
+      title: "档案"
+      title_named: "档案：%{profile}"
+      subtitle: "使用此档案、设为默认或删除。"
+      none: "未选择档案。"
+      use: "在此打开会话"
+      use_desc: "切换到此档案——在当前文件夹打开（或恢复）其会话。"
+      set_default: "设为默认"
+      set_default_desc: "将其设为直接启动时打开的档案。"
+      already_default: "已是默认"
+      delete: "删除"
+      delete_desc: "删除此档案的配置和数据（会要求确认）。"
+      back: "返回"
+    info:
+      title: "关于此档案"
+      name: "档案：%{profile}"
+      model: "模型：%{model}"
+      no_model: "模型：尚未配置"
+      is_default: "默认：是——直接启动会打开它"
+      not_default: "默认：否"
+    delete:
+      title: "删除档案？"
+      title_named: "删除“%{profile}”？"
+      subtitle: "将删除此档案的配置及其所有数据，此操作无法撤销。"
+      yes: "是，删除 %{profile}"
+      yes_desc: "永久删除此档案及其数据。"
+      no: "否，保留"
+  onboard:
+    family:
+      footer: 回车 选择系列 | Esc 返回
+      search: 筛选系列
+      subtitle: 仪表盘模型系列。
+      title: 选择模型系列
+    footer: /onboard <字段> <值> 文本输入 | 回车 执行 | Esc 关闭
+    item:
+      api_key:
+        desc: 使用 /onboard key <密钥>。密钥在状态、日志和快照中均被遮蔽。
+        label: API 密钥
+      auth_me:
+        label: 刷新账号
+      auth_refresh:
+        label: 刷新认证状态
+      auth_send:
+        desc: 使用向导中的邮箱调用 auth/send_code。
+        label: 发送邮箱验证码
+      auth_status:
+        desc: 使用 /onboard email、/onboard send-code、/onboard code、/onboard verify 完成验证。
+      auth_verify:
+        desc: 使用 auth/verify。令牌保存在内存中，不会显示。
+        label: 验证 OTP
+      catalog_load:
+        desc: 加载仪表盘模型系列和供应商线路
+        label: 加载供应商目录
+      catalog_refresh:
+        desc: 使用 profile/llm/catalog。目录结构由 ra/dashboard 管理。
+        label: 刷新仪表盘供应商目录
+      catalog_reload:
+        label: 重新加载供应商目录
+      fallback_provider:
+        desc: 追加或替换 config.llm.fallbacks 中的此线路
+      family:
+        desc: 选择系列
+        label: 模型系列
+      fetch_models:
+        desc: 使用 profile/llm/fetch_models 获取自定义 OpenAI 兼容线路的模型。
+        label: 获取线路模型
+      finish:
+        desc: 使用 session/open 打开已解析的档案。
+        label: 完成并打开编码会话
+      local_create:
+        desc: 使用 profile/local/create；不发送验证码。
+        label: 创建本地档案
+      exit:
+        desc: "不创建档案直接退出。提示：启动时加 --profile-id <id> 可跳过此界面。"
+        label: "退出 octoscode"
+      local_email:
+        desc: 使用 /onboard email <地址>。邮箱仅为本地元数据。
+      local_name:
+        desc: 使用 /onboard name <显示名称>。
+      local_status:
+        desc: 使用 /onboard name、/onboard username 和 /onboard email。
+      local_username:
+        desc: 使用 /onboard username <本地用户名>。
+      model:
+        desc: 选择模型
+        label: 模型
+      permissions_staged:
+        desc: 使用 /onboard permissions <模式> 暂存权限配置。
+      persist_provider:
+        desc: 将供应商持久化到档案 JSON
+      profile:
+        desc: 本地档案已就绪
+        label: 档案
+      provider_current:
+        desc: 使用 /onboard family、/onboard model 等命令配置自定义供应商。
+        label: 供应商
+      providers_refresh:
+        label: 刷新已配置的供应商
+      reset:
+        label: 重置向导状态
+      route:
+        desc: 选择官方或备用供应商
+        label: 供应商线路
+      save_provider:
+        desc: 使用 profile/llm/upsert 持久化到与仪表盘相同的档案 JSON。
+        label: 保存供应商到档案
+      save_research_lane:
+        desc: "将已配置的供应商保存为深度研究通道（profile/sub_providers/upsert）—— 下一步选择通道：cheap 或 strong。"
+      saved_provider:
+        desc: 上次成功保存的主要或备用供应商
+      selected_provider:
+        desc: 请在上方选择一条供应商线路
+        label: 已选供应商
+      test_provider:
+        desc: 使用 profile/llm/test 测试所选仪表盘架构线路。
+        label: 测试供应商
+      verify_provider:
+        desc: 验证所选供应商线路
+      workspace:
+        desc: 使用 /onboard workspace <路径> 暂存；默认为当前工作区根目录。
+        label: 工作区
+      workspace_status:
+        desc: 本地探测器的验证状态（后续可替换为后端 workspace/probe）。
+      workspace_validate:
+        desc: 探测暂存路径；/onboard finish 之前必须执行。
+        label: 验证工作区
+    model:
+      footer: 回车 选择模型 | Esc 返回
+      search: 筛选模型
+      title: 选择模型
+    preview_title: 向导状态
+    route:
+      footer: 回车 选择线路 | Esc 返回
+      search: 筛选供应商线路
+      title: 选择供应商线路
+    search: 筛选引导操作
+    subtitle: 登录，选择仪表盘目录中的模型线路，保存到档案 JSON，然后打开会话。
+    title: 引导设置
+    unavailable_catalog_msg: 请先加载供应商目录。
+    unavailable_family_msg: 请先选择模型系列。
+    unavailable_model_msg: 请先选择系列和模型。
+    unavailable_title: 引导不可用
+  permissions:
+    footer: 回车 应用或刷新 | Esc 关闭
+    item:
+      default:
+        desc: 工作区编辑；网络/外部操作需请求审批。
+        label: 默认
+      full_access:
+        desc: 无沙箱或网络审批。
+        label: 完全访问
+      network_allow:
+        desc: 启用互联网访问。
+        label: 允许网络
+      network_block:
+        desc: 禁用互联网访问。
+        label: 阻断网络
+      profile_refresh:
+        label: 刷新权限档案
+      read_only:
+        desc: 无审批不允许写入。
+        label: 只读
+      scopes_clear:
+        label: 清除持久化审批范围
+      scopes_refresh:
+        label: 刷新持久化审批范围
+      workspace_write:
+        desc: 工作区内可读写。
+        label: 工作区写入
+      workspace_write_never:
+        desc: 工作区内可读写；审批门控命令直接拒绝而不询问。
+        label: 工作区写入，不询问
+    preview_title: 能力状态
+    search: 筛选权限
+    subtitle: 会话权限预设；变更受能力门控。
+    title: 更新模型权限
+    unavailable_no_session: 权限功能需要一个打开的 ra UI 会话。
+    unavailable_title: 权限不可用
+  resume:
+    title: "恢复会话"
+    subtitle: "切换到先前的会话并重新加载其对话记录。"
+    empty: "没有可恢复的先前会话"
+    loading: "正在加载会话……"
+    no_preview: "（无预览）"
+    message_count: "%{count} 条消息"
+    search: "搜索会话……"
+    footer: "Enter 恢复 · /resume <id> · Esc"
+  rewind:
+    title: "回退对话"
+    subtitle: "回到较早的一条消息，以便编辑并重新发送。"
+    empty: "本会话没有可回退的消息"
+    drop_count: "丢弃 %{count} 个回合"
+    search: "搜索消息……"
+    footer: "Enter 回退 · /rewind <n> · Esc"
+  runtime_preview_title: 运行时
+  search:
+    label: "搜索 "
+  skills:
+    installed_skills: 任何已安装技能
+    refresh_first: 请先刷新已安装技能
+    item:
+      cache_empty:
+        label: 已安装技能未加载
+      install:
+        desc: 支持 GitHub 简写、完整 Git URL 或本地技能路径。
+        label: 安装包或仓库
+        prefix: 安装
+      none:
+        label: 无已安装技能
+      refresh:
+        label: 刷新已安装技能
+      remove:
+        prefix: 移除
+      search:
+        desc: 输入注册表查询内容，然后按回车。
+        label: 搜索注册表
+    preview_title: 档案
+    search: 筛选技能
+    subtitle: 通过 ra UI 管理的档案级自定义技能。
+    title: 技能
+    unavailable_title: 技能不可用
+  status:
+    requires_open_session: 服务器状态需要已打开的 ra UI 会话
+    item:
+      capabilities:
+        label: 能力
+      connection:
+        label: 连接
+      cursor:
+        label: 流
+      refresh:
+        label: 刷新服务器状态
+      server:
+        label: 服务器运行时状态
+      snapshot:
+        label: 快照状态
+    preview_title: 快照
+    subtitle: 基于快照的状态；服务器字段受能力门控。
+    title: 状态
+  statusline:
+    item:
+      approval_label: 审批状态
+      approval_policy: 审批策略
+      background_label: 后台任务：%{value}
+      cwd_label: 工作目录：%{value}
+      dangerous_access: 危险访问
+      filesystem_scope: 文件系统范围
+      health: 健康
+      mcp: MCP
+      memory: 记忆
+      model: 模型
+      model_label: 模型：%{value}
+      model_toolset: 模型工具集
+      network: 网络
+      permissions: 权限
+      profile: 档案
+      profile_label: 档案：%{value}
+      provider: 供应商
+      qoe: QoE
+      queue: 队列
+      runtime_mode: 运行模式
+      sandbox_mode: 沙箱模式
+      session_label: 会话：%{value}
+      state_label: 状态：%{value}
+      target_label: 目标：%{value}
+      task_label: 任务：%{value}
+      tool_contract: 工具契约
+      tool_discovery: 工具发现
+      tool_policy: 工具策略
+      usage: 用量
+    subtitle: 选择底部状态栏组件。
+    title: 状态栏
+  theme:
+    item:
+      claude:
+        desc: 暖色暗色配色。
+      codex:
+        desc: 中性暗色配色，蓝色点缀。
+      slate:
+        desc: 冷色暗色配色。
+      solarized:
+        desc: Solarized 暗色配色。
+      terminal:
+        desc: 使用终端默认配色。
+    preview_title: 当前
+    search: 筛选主题
+    subtitle: 本地 TUI 配色，不依赖 ra UI。
+    title: 主题
+  thinking:
+    item:
+      default:
+        desc: 使用服务器默认值（不覆盖本次会话）。
+        label: 默认
+      high:
+        desc: 深度推理。
+        label: 高
+      low:
+        desc: 最低推理强度——最快、最省钱。
+        label: 低
+      max:
+        desc: 最强推理（DeepSeek V4；其他模型上限为高）。
+        label: 最大
+      medium:
+        desc: 均衡推理。
+        label: 中
+      display:
+        desc: 在本会话的对话记录中显示模型的推理内容（Ctrl+O 展开）。
+        label: 推理显示
+    divider:
+      display: "── 推理显示 ──"
+    subtitle: 思考模型的推理强度（本次会话）。
+    title: 思考强度
+  title:
+    subtitle: 选择终端标题组件。
+    title: 终端标题
+  tools:
+    configured_tools: 任何已配置工具
+    session_tools: 当前会话的任何工具
+    refresh_first: 请先刷新工具配置
+    item:
+      cached:
+        label: 服务器工具配置
+      config_refresh:
+        label: 刷新工具配置
+      contract:
+        label: 编码工具契约
+      contract_missing:
+        prefix: 缺少 P0 工具
+      empty:
+        label: 无工具设置
+      status_empty:
+        label: 无工具
+      status_refresh:
+        label: 刷新工具状态
+      upsert:
+        label: 添加/更新工具配置
+    search: 筛选工具
+    subtitle: 服务器端搜索、网页、浏览器和 MCP 工具设置。
+    title: 工具设置
+    unavailable_title: 工具设置不可用
+  unavailable: 菜单不可用
+status:
+  peer_session_read_only: "同伴会话为只读——请从主会话使用 peer_send_input 引导同伴。"
+  statusline_save_not_wired: "状态栏布局保存功能尚未接通"
+  terminal_title_save_not_wired: "终端标题布局保存功能尚未接通"
+  resume_ambiguous: '“%{query}”匹配 %{count} 个会话（%{ids}）；请再多输入一些 id 以选定会话。'
+  resume_no_match: '没有先前会话匹配“%{query}”；请不带参数运行 /resume 进行浏览。'
+  resuming_session: "正在恢复 %{session}……"
+  resume_loaded: "已为 /resume 加载 %{count} 个先前会话。"
+  resume_parse_failed: "无法解析会话列表：%{error}"
+  rewind_active_turn: "请先完成或停止当前回合，再回退对话。"
+  rewind_no_active_session: "没有可回退的活动会话。"
+  rewind_wrong_session: "所选回退项属于另一会话——请重新打开 /rewind。"
+  rewind_transcript_changed: "对话记录已变化——请重新打开 /rewind。"
+  rewinding: "正在回退 %{count} 个回合……"
+  rewind_invalid_checkpoint: '/rewind 需要检查点编号，例如 /rewind 2（收到“%{value}”）。'
+  rewind_checkpoint_min: "/rewind 的检查点编号必须不小于 1。"
+  rewind_checkpoint_out_of_range: "/rewind %{checkpoint} 超出范围——本会话共有 %{count} 个检查点。"
+  rewind_complete: "已回退 %{count} 个回合——请编辑后重新发送"
+  turn_started_in: "已在 %{session} 中开始回合"
+  tool_failed: "工具失败：%{tool}"
+  tool_completed: "工具已完成：%{tool}"
+  warning_code_message: "警告 [%{code}]：%{message}"
+  router_status: "路由器 %{mode} 正在使用 %{provider}（%{session}）"
+  router_failover: "路由已故障转移到 %{provider}"
+  queue_empty: "队列为空"
+  queue_pending: "队列待处理：%{count}"
+  plan_updated: "计划已更新：%{count} 项中已完成 %{done} 项"
+  tool_lifecycle: "工具 %{state}：%{id}"
+  file_attached: "已附加文件：%{path}"
+  turn_interrupted_reason: "回合已中断：%{message}"
+  background_completion_persisted: "后台完成结果已持久化：%{id}"
+  session_event: "会话事件：%{kind}"
+  approval_auto_resolved: "审批已由范围策略自动处理（%{decision}）"
+  approval_decided: "审批已决定：%{decision}（%{detail}）"
+  approval_cancelled: "审批已取消：%{reason}"
+  task_output_cursor: "任务输出 @%{offset}"
+  paste_ignored_dialog_open: "对话框打开时已忽略粘贴内容"
+  undo_no_session: "没有可撤销的活动会话。"
+  peer_usage: "用法：/peer [--go] [--worktree] [--cwd <path>] [--n <2-8>] <brief>"
+  peer_preparing: "正在准备同伴会话…"
+  session_blocked_hint: "%{session} 正在等待你的确认：%{reason} —— 按 Ctrl+S/Alt+S 处理。"
+  peer_prepare_in_flight: "已有同伴会话正在准备中 —— 请等它打开（或约 30 秒后）再发起新的。"
+  peer_opening: "正在打开同伴 %{slug}…"
+  peer_started: "同伴 %{slug} 已在后台开始工作 —— 请留意会话栏中它的标记（Ctrl+S/Alt+S）。"
+  peer_switched: "同伴 %{slug} 已启动 —— 您现在位于它的会话中。"
+  peer_fleet_opening: "正在打开 %{n} 个同伴组成的编队（第一个：%{slug}）…"
+  peer_staged_by_agent: "智能体派生了同伴 %{slug} —— 正在后台工作（Ctrl+S/Alt+S）。"
+  peer_staged_known: "同伴 %{slug} 已经暂存 —— 重复通知已忽略。"
+  gather_requesting: "正在从黑板收集同伴结果…"
+  gather_no_peers: "黑板上还没有同伴 —— 先用 /peer 派生几个吧。"
+  gather_submitted: "已把 %{n} 个同伴的结果从黑板汇总进当前会话。"
+  peer_clear_none: "没有已完成的同伴可清理 —— 运行中和等待中的同伴会保留。"
+  peer_clear_removed: "已从面板清理 %{n} 个已完成的同伴。"
+  research_usage: "用法：/research | /research add <key> <provider> <model> [base_url] [api_key_env] | /research rm <key>"
+  research_add_usage: "用法：/research add <key> <provider> <model> [base_url] [api_key_env]"
+  research_rm_usage: "用法：/research rm <key>"
+  research_profile_unresolved: "当前档案尚未就绪 —— 请在会话准备好后重试。"
+  research_lane_saved: "研究通道 %{key} 已保存：%{label} —— 需重启生效。"
+  sub_provider_restart_required: "%{message} —— 需重启生效。"
+  opening_diff_preview: "正在打开差异预览：%{operation} %{path}"
+  opening_inline_diff_preview: "正在打开内联差异预览：%{title}"
+  approval_requested: "请求审批：%{title}"
+  tool_started: "工具已启动：%{name}（%{id}）"
+  question_asked: "提出问题：%{title}"
+  turn_completed: "轮次已完成于 %{title}，序号 %{seq}"
+  backend_relaunched_turn_lost: "后端进程已重启 — 进行中的回合已丢失；排队的消息将发送到新的后端。"
+  hydration_queue_full: "后续请求队列已满，已丢弃 %{method}。"
+  turn_completed_stale: "已忽略 %{title} 中的过期完成轮次"
+  edit_field_prompt: 编辑字段后按 Enter 确认
+  keymap_save_not_wired: 快捷键保存尚未实现
+  activity_navigator_opened: Activity navigator 已打开
+  activity_navigator_selected_session: 已选择会话：%{title}
+  local_action_not_wired: 本地菜单操作 `%{name}` 尚未实现
+  no_active_turn: 无活动回合可中断
+  # task-stuck-run-state-watchdog / task-esc-reconciles-phantom-turn
+  phantom_turn_reconciled: "服务端没有活跃回合——已清除残留的 Working 状态，排队消息正在发送。"
+  phantom_turn_probing: "显示 Working 但没有活跃回合——正在向服务端核对…"
+  phantom_turn_hint: "显示 Working 但没有活跃回合，也没有服务端证据——按 Esc 进行核对/复位。"
+  phantom_turn_reset_by_user: "已按你的指令清除残留的 Working 状态，排队消息正在发送。"
+  readonly_turn_disabled: 只读模式：回合/启动已禁用
+  statusline_layout_selected: 已选择状态栏布局：%{items}
+  terminal_title_layout_selected: 已选择终端标题布局：%{items}
+  theme_set: 主题：%{theme}
+  theme_unknown: 未知主题：%{theme}
+  # --- 运行时状态/活动消息 (store.rs) ---
+  list_more: "，+%{count} 项更多"
+  no_session_send_prompt: "没有打开的编码会话。发送提示前请运行 /onboard open-session。"
+  message_staged: "消息已暂存；将在当前回合结束后提交。按 Esc 可中断/发送。"
+  steered_into_turn: "已插入正在运行的回合。"
+  steer_restaged_after_turn_end: "回合在你插入的消息被采纳前就结束了——已重新入队，作为新回合发送。"
+  steer_returned_by_server: "服务端返还了 %{count} 条未被采纳的插入消息（%{reason}）——已重新入队。"
+  steer_returned_unmatched: "服务端报告 %{count} 条被丢弃的插入消息但本地无记录——已忽略。"
+  btw_usage: "用法:/btw <问题> — 在当前回合继续运行时快速旁路提问"
+  btw_answering: "btw:回答中…"
+  btw_answered: "btw:已回答"
+  btw_busy: "btw:上一个旁路提问仍在回答中"
+  btw_failed: "btw:旁路提问失败"
+  staged_submit_requeued: "提交在传输层失败；暂存消息已重新入队，稍后自动重试。"
+  queued_turn_start: "已排队 回合/启动"
+  command_unavailable: "命令不可用"
+  no_session_runtime: "没有打开的编码会话。运行命令前请运行 /onboard open-session。"
+  reading_thread_graph: "正在读取线程图"
+  invalid_turn_id: "无效的回合 id `%{id}`"
+  no_active_turn_inspect: "没有可检查的活动回合"
+  reading_turn_state: "正在读取回合状态 %{id}"
+  refreshing_agent_list: "正在刷新智能体列表"
+  spawning_agents: "正在派遣 %{count} 个智能体：%{prompt}"
+  spawn_agents_turn: "派遣 %{count} 个智能体并行完成：%{prompt}"
+  reading_agent_status: "正在读取 %{id} 的状态"
+  reading_agent_output: "正在读取 %{id} 的输出"
+  listing_agent_artifacts: "正在列出 %{id} 的制品"
+  reading_agent_artifact: "正在读取 %{id} 的制品 %{label}"
+  interrupt_requested_for: "已请求中断 %{id}"
+  close_requested_for: "已请求关闭 %{id}"
+  refreshing_goal: "正在刷新目标"
+  goal_objective_empty: "目标内容不能为空"
+  setting_goal: "正在设置目标：%{objective}"
+  clearing_goal: "正在清除目标"
+  images_attached: "已附加 %{count} 张图片到本轮"
+  listing_loops: "正在列出循环"
+  loop_interval_min: "循环间隔至少为 1 秒"
+  creating_loop: "正在创建循环"
+  deleting_loop: "正在删除循环 %{id}"
+  pausing_loop: "正在暂停循环 %{id}"
+  resuming_loop: "正在恢复循环 %{id}"
+  firing_loop: "正在触发循环 %{id}"
+  cannot_verb_no_goal_cached: "无法 %{verb}：未缓存目标。请先运行 /goal 刷新。"
+  cannot_verb_goal_state: "无法在 `%{state}` 状态下 %{verb} 目标（由模型管控）。"
+  cannot_verb_no_goal_get: "无法 %{verb}：后端未公布 session/goal/get 以供刷新。"
+  refreshing_goal_before: "%{verb} 前正在刷新目标"
+  appui_not_wired: "ra UI 命令 `%{method}` 已公布但尚未接入"
+  queued_prompt_template: "已排队提示模板"
+  nothing_sent_to_backend: "未向后端发送任何内容。"
+  usage_skills: "用法：/skills [list|search <query>|install <repo> [--branch <branch>] [--force]|remove <name>]"
+  usage_mcp: "用法：/mcp [list|status|enable <server>|disable <server>|test <server>|upsert <server> {json}|delete <server>]"
+  usage_tools: "用法：/tools [list|status|enable <tool>|disable <tool>|test <tool>|upsert <tool> {json}|delete <tool>]"
+  usage_skills_install: "用法：/skills install <repo> [--branch <branch>] [--force]"
+  usage_skills_remove: "用法：/skills remove <name>"
+  usage_mcp_enable: "用法：/mcp enable <server>"
+  usage_mcp_test: "用法：/mcp test <server>"
+  usage_mcp_delete: "用法：/mcp delete <server>"
+  usage_tools_enable: "用法：/tools enable <tool>"
+  usage_tools_test: "用法：/tools test <tool>"
+  usage_tools_delete: "用法：/tools delete <tool>"
+  unknown_skills_install_flag: "未知的 /skills install 选项：%{flag}"
+  refreshing_profile_skills: "正在刷新档案技能"
+  searching_skill_registry: "正在搜索技能注册表 `%{query}`"
+  readonly_skills_install: "只读模式：profile/skills/install 已禁用"
+  installing_profile_skill: "正在从 `%{repo}` 安装档案技能"
+  readonly_skills_remove: "只读模式：profile/skills/remove 已禁用"
+  removing_profile_skill: "正在移除档案技能 `%{name}`"
+  refreshing_mcp_config: "正在刷新 MCP 配置"
+  mcp_status_requires_session: "MCP 状态需要打开的会话"
+  refreshing_mcp_status: "正在刷新 MCP 状态"
+  enabling_mcp_config: "正在启用 MCP 配置 `%{server}`"
+  disabling_mcp_config: "正在禁用 MCP 配置 `%{server}`"
+  testing_mcp_config: "正在测试 MCP 配置 `%{server}`"
+  deleting_mcp_config: "正在删除 MCP 配置 `%{server}`"
+  upserting_mcp_config: "正在更新 MCP 配置 `%{server}`"
+  refreshing_tool_config: "正在刷新工具配置"
+  tool_status_requires_session: "工具状态需要打开的会话"
+  refreshing_tool_status: "正在刷新工具状态"
+  enabling_tool_config: "正在启用工具配置 `%{tool}`"
+  disabling_tool_config: "正在禁用工具配置 `%{tool}`"
+  testing_tool_config: "正在测试工具配置 `%{tool}`"
+  deleting_tool_config: "正在删除工具配置 `%{tool}`"
+  name_updated: "姓名已更新"
+  onboarding_name_updated: "已更新引导姓名"
+  username_updated: "用户名已更新"
+  onboarding_username_updated: "已更新引导用户名"
+  email_updated: "邮箱已更新"
+  onboarding_email_updated: "已更新引导邮箱"
+  otp_code_updated: "OTP 验证码已更新"
+  onboarding_otp_code_updated: "已更新引导 OTP 验证码"
+  profile_updated: "档案已更新"
+  onboarding_profile_updated: "已更新引导档案"
+  profile_name_updated: "档案名称已更新"
+  onboarding_profile_name_updated: "已更新引导档案名称"
+  make_default_updated: "默认大脑偏好已更新"
+  attached_profile: "已附加档案 %{profile}"
+  new_profile_launch: "正在创建新档案——先命名，再设置其 AI 模型"
+  profiles_no_data_dir: "无法在此管理档案——本次启动未知本地数据目录。"
+  profile_default_set: "默认档案现为 %{profile}"
+  profile_default_failed: "无法设置默认档案：%{error}"
+  profile_deleted: "已删除档案 %{profile}"
+  profile_delete_failed: "无法删除档案：%{error}"
+  profile_delete_active_blocked: "无法删除 %{profile}——这是当前会话正在使用的档案。请先切换到其他档案。"
+  switching_profile: "正在切换到档案 %{profile}……"
+  provider_route_selected: "已选择供应商线路；请输入 API 密钥"
+  provider_request_failed: "供应商请求失败：%{message}"
+  provider_request_timeout: "供应商请求超时，未收到响应 —— 请重试"
+  provider_family_updated: "供应商模型系列已更新"
+  provider_model_updated: "供应商模型已更新"
+  provider_route_updated: "供应商线路已更新"
+  provider_route_label_updated: "供应商线路标签已更新"
+  provider_base_url_updated: "供应商 base URL 已更新"
+  provider_api_key_env_updated: "供应商 API 密钥环境变量已更新"
+  provider_api_type_updated: "供应商 API 类型已更新"
+  api_key_updated: "API 密钥已更新"
+  onboarding_api_key_updated: "已更新引导 API 密钥"
+  api_key_cleared: "API 密钥已清除"
+  onboarding_api_key_cleared: "已清除引导 API 密钥"
+  workspace_candidate_cleared: "工作区候选已清除"
+  workspace_candidate_staged: "工作区候选已暂存；请使用 /onboard workspace-validate"
+  workspace_selection_reset: "工作区选择已重置"
+  unchanged_mode: "（模式不变）"
+  unchanged_approval: "（审批不变）"
+  unchanged_network: "（网络不变）"
+  permission_profile_staged: "权限档案已暂存：%{mode} · %{approval} · %{network}（会话打开时由服务器确认）"
+  permission_profile_staging_cleared: "权限档案暂存已清除"
+  onboarding_wizard_reset: "引导向导已重置"
+  unknown_onboarding_command: "未知的引导命令"
+  unknown_login_command: "未知的登录命令"
+  unknown_provider_command: "未知的供应商命令"
+  usage_onboard_select: "用法：/onboard select <family_id> <model_id> <route_id> [base_url] [api_key_env]"
+  local_onboarding_otp_send_hidden: "本地单人引导使用 profile/local/create；OTP 发送已隐藏"
+  onboarding_email_empty: "引导邮箱为空；请使用 /onboard email <address>"
+  sending_otp_code: "正在发送 OTP 验证码"
+  local_onboarding_otp_verify_hidden: "本地单人引导使用 profile/local/create；OTP 验证已隐藏"
+  onboarding_email_or_otp_empty: "引导邮箱或 OTP 为空；请使用 /onboard email 和 /onboard code"
+  verifying_otp_code: "正在验证 OTP 验证码"
+  local_profile_create_in_progress: "本地档案创建已在进行中；请等待服务器响应"
+  creating_local_profile: "正在创建本地单人档案"
+  onboarding_provider_route_incomplete: "引导供应商线路不完整"
+  onboarding_provider_selection_incomplete: "引导供应商选择不完整"
+  onboarding_profile_unresolved: "尚未选定档案——请先在「档案」步骤创建，或用 --profile-id <id> 重新启动，然后再保存供应商"
+  onboarding_api_key_empty_onboard: "引导 API 密钥为空；请使用 /onboard key <secret>"
+  onboarding_api_key_empty_provider: "引导 API 密钥为空；请使用 /provider key <secret>"
+  onboarding_loading_catalog: "正在加载提供商目录以检查密钥要求——加载完成后请重试"
+  saving_provider: "正在保存供应商"
+  saving_provider_config: "正在保存供应商配置"
+  onboarding_fallback_selection_incomplete: "引导备用供应商选择不完整"
+  saving_fallback_provider: "正在保存备用供应商"
+  saving_fallback_provider_config: "正在保存备用供应商配置"
+  testing_provider: "正在测试供应商"
+  testing_provider_connection: "正在测试供应商连接"
+  cannot_open_profile_unresolved: "无法打开会话：档案未解析。请使用 /onboard profile <profile_id>。"
+  profile_model_setup_required: "档案 %{profile} 需要配置 AI 模型。请选择一个模型以继续。"
+  cannot_open_workspace_invalid: "无法打开会话：工作区无效 — %{reason}。"
+  workspace_validation_in_progress: "工作区验证进行中；请稍后再次 /onboard finish。"
+  cannot_open_workspace_not_validated: "无法打开会话：工作区未验证。请使用 /onboard workspace <path> 然后 /onboard workspace-validate。"
+  opening_coding_session: "正在为档案 %{profile} 打开编码会话"
+  no_usable_workspace_cwd: "无法从 `%{target}` 解析出可用的工作区 cwd。请使用 /onboard workspace <path>。"
+  workspace_cwd_invalid: "工作区 cwd 无效；请使用 /onboard workspace <path> 暂存路径"
+  workspace_staged_remote: "工作区已暂存于 %{target} — 远程传输，服务器将在 session/open 时验证"
+  path_not_accessible: "路径 '%{target}' 不可访问：%{err}"
+  workspace_not_accessible: "工作区 '%{target}' 不可访问"
+  path_not_directory: "路径 '%{target}' 不是目录"
+  workspace_not_directory: "工作区 '%{target}' 不是目录"
+  workspace_cannot_be_root: "工作区不能是文件系统根目录"
+  workspace_cannot_be_root_status: "工作区不能是文件系统根目录；请暂存一个项目目录"
+  workspace_writable: "可写"
+  workspace_read_only: "只读"
+  workspace_has_toml: "（含 .ra-workspace.toml）"
+  workspace_ok: "工作区就绪：%{canonical} — %{writable}%{toml}"
+  cannot_open_save_primary_first: "无法打开会话：请先保存主 LLM 供应商。"
+  invalid_task_id: "无效的任务 id `%{id}`"
+  reading_task_artifact: "正在读取 %{id} 的任务制品 %{label}"
+  upserting_tool_config: "正在更新工具配置 `%{tool}`"
+  appui_method_not_advertised: "ra UI 方法 `%{method}` 未公布"
+  appui_feature_not_advertised: "ra UI 特性 `%{feature}` 未公布"
+  readonly_method_disabled: "只读模式：%{method} 已禁用"
+  menu_label: "菜单：%{id}"
+  queued_menu_prompt: "已排队菜单提示"
+  doctor_profile_id: "档案 id：%{label}"
+  doctor_no_local_profile: "尚无本地档案"
+  doctor_no_local_profile_recovery: "请使用 /onboard name / username / email，然后 /onboard finish。"
+  doctor_local_create_unadvertised: "服务器未公布 profile/local/create"
+  doctor_server_primary: "服务器已发布主供应商：%{family} / %{model}"
+  doctor_saved_primary: "已保存主供应商：%{label}"
+  doctor_provider_unsaved: "已选择带 API 密钥的供应商，但未保存为主供应商"
+  doctor_provider_unsaved_recovery: "请使用 /onboard save 持久化；先用 /onboard test 验证。"
+  doctor_provider_no_key: "已选择供应商但缺少 API 密钥"
+  doctor_provider_no_key_recovery: "请使用 /onboard key <secret>。"
+  doctor_no_provider: "未选择供应商"
+  doctor_no_provider_recovery: "请使用 /onboard family / model / route、/onboard key、/onboard save。"
+  doctor_workspace_resolvable: "可从 `%{root}` 解析出工作区 cwd"
+  doctor_workspace_unusable: "工作区 cwd 为 `%{root}`（不是可用路径）"
+  doctor_workspace_unusable_recovery: "使用 `--cwd <path>` 重启 ra，或通过传输启动设置 workspace.root。"
+  doctor_methods_advertised: "已公布 %{advertised}/%{total} 个引导方法"
+  doctor_caps_not_received: "尚未收到 ra UI 能力"
+  doctor_caps_not_received_recovery: "请等待 `config/capabilities/list` 或重新连接传输。"
+  doctor_appui_target: "ra UI 目标：%{target}"
+  doctor_no_transport: "未配置 ra UI 传输"
+  doctor_no_transport_recovery: "请使用 octoscode --stdio-command \"octos serve --stdio\" 或 octoscode --endpoint ws://<host>:<port>/api/ui-protocol/ws 重新启动。"
+  onboarding_doctor_summary: "引导诊断 — %{summary}"
+  doctor_outcome:
+    pass: "通过"
+    warn: "警告"
+    fail: "失败"
+    skip: "跳过"
+  ps_active_turn: "活动回合 %{id}"
+  ps_idle: "空闲"
+  ps_selected_task: "已选任务：%{title} [%{state}]"
+  ps_selected_task_none: "已选任务：无"
+  ps_summary: "本地 /ps：%{turn}；任务共 %{total} 个（%{running} 运行中，%{pending} 待处理，%{done} 已完成，%{failed} 失败）；%{staged} 已暂存"
+  ps_detail: "运行状态：%{state} | %{selected_task} | %{activity} 条活动项"
+  unknown_slash_command: "未知斜杠命令：%{command}。请尝试 %{hint}。"
+  ignored_input: "已忽略输入：%{draft}"
+  command_unavailable_reason: "%{command} 不可用：%{reason}"
+  command_gate_failed: "命令已由注册表解析，但未通过可用性校验。"
+  starting_code_review: "正在启动后端代码审查"
+  review_requested: "已请求"
+  no_staged_message: "没有可发送的暂存消息"
+  interrupt_staged_submit: "已请求中断；当前回合停止后将提交暂存消息"
+  no_active_turn_interrupt: "没有可中断的活动回合"
+  ctrl_c_quit_hint: "没有可中断的任务 — 再按一次 Ctrl+C 退出（Ctrl+Q 随时退出）"
+  interrupt_requested_active_turn: "已请求中断当前回合"
+  no_active_approval: "没有活动的审批请求"
+  approval_action: "审批 %{action}：%{title}"
+  cleared_staged_messages: "已清除 %{count} 条暂存消息"
+  cleared_composer_draft: "已清除输入框草稿"
+  nothing_to_clear: "没有可清除的输入框草稿或暂存消息"
+  no_pending_approval: "没有可显示的待处理审批"
+  approval_shown: "已显示审批：%{title}"
+  question_progress: "问题 %{active}/%{total}"
+  question_no_options: "此问题没有可回答的选项；按 Esc 关闭"
+  question_needs_answer: "请先选择一个选项（↑/↓ 后回车）或输入答案再继续"
+  no_active_question: "没有可回答的活动问题"
+  answered_question: "已回答问题：%{title}"
+  no_pending_question: "没有可显示的待处理问题"
+  question_shown: "已显示问题：%{title}"
+  no_task_output_to_read: "没有可读取的所选任务输出"
+  requested_task_output: "已请求任务输出：%{title}"
+  no_task_to_cancel: "没有可取消的所选任务"
+  task_already_terminal: "任务 \"%{title}\" 已经 %{state}；无需取消"
+  task_control_unavailable: "此服务器不支持任务控制；取消已禁用"
+  requested_cancel: "已请求取消：%{title}"
+  no_session_for_diff: "没有用于差异预览的活动会话"
+  no_diff_preview_id: "所选任务没有可用的差异预览 id"
+  requested_diff_preview: "已请求差异预览"
+  approval_pane_hidden: "审批面板已隐藏；在再次显示审批前禁用自动打开"
+  question_pane_hidden: "问题面板已隐藏；在再次显示问题前禁用自动打开"
+  closed_task_output: "已关闭任务输出"
+  closed_artifact_detail: "已关闭制品详情"
+  closed_thread_graph: "已关闭线程图"
+  closed_turn_state: "已关闭回合状态"
+  closed_inline_diff: "已关闭内联差异预览"
+  diff_preview_unavailable: "差异预览不可用：协议尚未向 TUI 暴露预览 id/内容"
+  selected_diff_hunk: "已选择差异代码块：%{path} %{header}"
+  no_diff_hunk: "没有可选择的差异代码块"
+  no_diff_hunk_context: "没有可暂存的所选差异代码块上下文"
+  diff_view_side_by_side: "并排差异视图"
+  diff_view_unified: "统一差异视图"
+  diff_view_too_narrow: "终端宽度不足，无法并排显示差异（需要至少 %{min} 列）"
+  diff_overlay_expanded: "差异预览已全屏展开（Esc 收起）"
+  diff_overlay_collapsed: "差异预览已收起为内联显示"
+  staged_diff_context: "已为下一回合暂存所选差异代码块上下文：%{path}"
+  added_diff_context: "已将所选差异代码块上下文添加到输入框：%{path}"
+  accepted: "已接受"
+  rejected: "已拒绝"
+  agent_list_refreshed: "智能体列表已刷新：%{count} 个活动智能体"
+  agent_status_updated: "智能体 %{id} 状态已更新"
+  agent_output_bytes: "智能体 %{id} 输出：%{bytes} 字节"
+  agent_artifacts_count: "智能体 %{id} 制品：%{count} 项"
+  agent_artifact_loaded: "已加载智能体 %{id} 制品：%{title}"
+  task_artifact_loaded: "已加载任务 %{id} 制品：%{title}"
+  thread_graph_loaded: "线程图已加载：%{count} 个线程"
+  turn_state: "回合 %{id} 状态：%{state}"
+  agent_interrupt: "智能体 %{id} 中断 %{outcome}"
+  agent_close: "智能体 %{id} 关闭 %{outcome}"
+  goal_summary: "目标 %{status}：%{objective}"
+  no_active_goal: "无活动目标"
+  goal_accepted_no_record: "目标已接受（未返回记录）"
+  goal_set_rejected: "目标设置被拒绝"
+  goal_cleared: "目标已清除"
+  goal_clear_rejected: "目标清除被拒绝"
+  loop_created: "循环 %{id} 已创建（%{mode}）"
+  loop_list_title: "↻ 循环列表"
+  loop_list_empty_hint: "当前会话没有循环。用 /loop <提示词> 创建自主循环,或 /loop every 10m <提示词> 创建定时循环。"
+  loop_list_refreshed: "循环列表已刷新：%{count} 个循环"
+  loop_mutation: "循环 %{id} %{verb} %{outcome}"
+  cannot_transition_no_goal: "无法转换：服务器报告无目标。"
+  cannot_transition_goal_state: "无法在 `%{state}` 状态下转换目标（由模型管控）。"
+  goal_verb_pausing: "正在暂停"
+  goal_verb_resuming: "正在恢复"
+  goal_verb_stopping: "正在停止"
+  goal_verb_updating: "正在更新"
+  goal_resume_over_budget: "目标已恢复但仍超出预算 —— 提高预算后才会继续：/goal %{objective} --budget <N>"
+  goal_now_active: "目标进行中 —— 自主推进已恢复"
+  goal_now_paused: "目标已暂停 —— 使用 /goal resume 恢复自主推进"
+  goal_now_blocked: "目标因连续失败已阻塞 —— /goal resume 重试，/goal stop 结束"
+  goal_now_budget_limited: "目标预算已用尽 —— 正在收尾；用 /goal %{objective} --budget <N> 提高预算"
+  goal_now_complete: "目标已完成"
+  goal_now_status: "目标状态：%{status}"
+  verb_goal: "%{verb}目标"
+  local_create_cancelled_transport: "本地档案创建因传输错误而取消 [%{code}]：%{message}"
+  local_create_cancelled: "本地档案创建已取消 [%{code}]：%{message}"
+  message_too_large: "消息过大 — %{message}。请缩短内容或作为文件附加。"
+  error_code_message: "错误 [%{code}]：%{message}"
+  local_profile_setup_blocked: "本地档案设置被阻止：%{message}"
+  file_diff_count: "%{count} 个文件差异"
+  diff_preview_result: "差异预览 %{status}：%{title}（%{file_count} 个文件）"
+  message_count: "%{count} 条消息"
+  thread_count: "%{count} 个线程"
+  turn_count: "%{count} 个回合"
+  pending_approval_count: "%{count} 个待处理审批"
+  session_state: "会话状态"
+  session_hydrated: "会话已水合：%{summary}"
+  review_started: "审查已启动：%{count} 个专家，通过 %{backend}"
+  review_not_accepted: "审查请求未被接受"
+  activity_code_review: "代码审查"
+  activity_local_profile: "本地档案"
+  activity_mcp_config: "MCP 配置"
+  activity_pending_approvals: "待处理审批"
+  activity_pending_question: "待处理问题"
+  activity_provider_catalog: "供应商目录"
+  activity_skill_registry: "技能注册表"
+  activity_permission_profile_mismatch: "权限档案不匹配"
+  activity_runtime_status: "运行时状态"
+  activity_cursor_unhealthy: "游标异常"
+  cursor_unhealthy: "流游标异常：重放可能丢失事件；请重新连接以重新水合"
+  activity_tool_config: "工具配置"
+  activity_recovery_suggestion: "恢复建议"
+  activity_agent_output: "智能体输出"
+  activity_agent_artifacts: "智能体制品"
+  activity_session_goal: "会话目标"
+  compacting_context: "正在压缩对话上下文…"
+  activity_context_compacted: "上下文已压缩"
+  local_stop: "本地 /stop"
+  local_ps: "本地 /ps"
+  local_slash_command: "本地斜杠命令"
+  bang_running: "运行中"
+  bang_complete: "完成"
+  bang_failed: "失败"
+  bang_usage: "用法：!<命令>"
+  bang_no_output: "（无输出）"
+  bang_terminal_complete: "输出已显示在交互式终端中"
+  bang_terminal_signalled: "交互式本地 shell 命令被信号终止"
+  bang_terminal_spawn_failed: "无法启动交互式本地 shell 命令：%{error}"
+  bang_terminal_prepare_failed: "无法准备交互式本地 shell 命令：%{error}"
+  bang_terminal_handoff_missed: "本地 shell 命令未完成终端接管"
+  bang_mode_hint: "本地 shell —— Enter 在本机 %{cwd} 中运行 · Esc 取消"
+  bang_mode_cancelled: "已取消本地 shell"
+  bang_cwd: "工作目录：%{cwd}"
+  inserted_at_cursor: "已插入 %{text}"
+  file_picker_closed: "文件选择器已关闭（未插入内容）"
+  cannot_start_review_active_turn: "轮次进行中，无法启动审查。"
+  cannot_spawn_active_turn: "轮次进行中，无法派遣智能体。"
+  server_clamped_onboarding_choice: "服务器收紧或拒绝了暂存的引导设置选择。"
+  goal_clear_requested: "已请求清除目标"
+  submitted_staged_message: "已提交暂存的消息"
+  hint_registered_command: "已注册的命令"
+  provider_test_in_progress: "供应商测试已在进行中"
+  provider_save_in_progress: "供应商保存已在进行中"
+  copied_last_reply: "已复制上一条回复到剪贴板（%{chars} 个字符）"
+  nothing_to_copy: "暂无可复制内容（没有助手回复）"
+  usage_onboard: "用法：/onboard [name|username|email|create-profile|profile|select|family|model|route|base-url|api-key-env|key|send-code|verify|catalog|save|test|finish|reset]"
+  usage_login: "用法：/login [email <address>|send-code [email]|code <otp>|verify [otp]|status|me|logout]"
+  usage_provider: "用法：/provider [catalog|list|select <family_id> <model_id> <route_id> [base_url] [api_key_env]|family|model|route|base-url|api-key-env|api-type|key|test|save|add-fallback]"
+  unknown_permission_profile_mode: "未知的权限档案模式 '%{mode}'。可选：default、read-only、workspace-write、workspace-write-never、full-access 或 clear。"
+  recovery_npm_dns: "npm 注册表 DNS 解析失败；请改用其他注册表、修复 DNS/网络，或使用本地脚手架"
+  recovery_command_timeout: "命令超时；请缩小命令范围、添加超时设置，或补充缺失的上下文"
+  recovery_permission_blocked: "权限受阻；请申请确切的权限/提权，或选择一个可写路径"
+  recovery_network_failed: "网络访问失败；请申请网络/代理/注册表权限，或使用离线回退方案"
+  recovery_search_restricted: "搜索/抓取受限；请申请供应商配置，或在明确的离线告知下继续"
+  diff_hunk_prompt: "将选中的差异代码块用作下一个编码轮次的上下文。\nfile: %{path}\nstatus: %{status}\nhunk: %{hunk}\n```diff\n"
+  summary_title: "会话摘要"
+  turn_missing_answer: "未收到最终助手回答。请重新打开会话查看持久化记录，或重试。"
+  turn_waiting_on_fleet: "%{total} 个 peer 中已落地 %{landed} 个 · 等待 %{peers}；舰队落地后主 agent 会自动继续。"
+  summary_error_label: "错误"
+  quota_card: "⏳ 额度已用完 — %{provider}\n  该提供商本计费周期的用量已达上限,本回合未能完成。\n  现在可以:\n   ▸ 购买加量或升级套餐%{link}\n   ▸ /model — 切换到其他已配置模型继续当前会话\n   ▸ 等额度刷新后重发这条消息(草稿会保留)"
+  quota_card_provider_unknown: "当前提供商"
+  summary_failed: "会话摘要\n- 结果：轮次在产生最终回答前失败。\n- 错误：%{code}：%{message}\n- 活动：已记录 %{count} 个操作。\n- 失败：%{failed}。\n- 风险 / 后续：请修复上方错误，或用更具体的指令继续该轮次。"
+  summary_none_recorded: "未记录"
+  # 用户主动中断（Esc/Ctrl+C）自己的轮次时的状态行与简短转录提示。刻意从简：
+  # 用户主动停止不是失败，因此不显示真正错误才有的详细“会话摘要”卡片。
+  turn_interrupted: "轮次已中断"
+  # 见 en.yml：中断没有生效、轮次在服务端正常跑完时，附加到已提交回答后面的提示。
+  turn_interrupted_truncated: "⚠ 已中断 —— 此处之后的输出被丢弃，本回答不完整。该轮次在服务端已跑完，可重新提问查看剩余内容。"
+saveconfig:
+  saved: "设置已保存到 %{path}。"
+  failed: "保存配置失败：%{error}"
+  no_path: "没有可用的配置路径可保存。"
+scrollmode:
+  current: "（当前：%{mode}）"
+  set_pinned: "滚动模式：pinned —— 滚轮滚动会话内容，输入框钉在底部（选择文本用 Shift+拖选）。"
+  set_native: "滚动模式：native —— 滚轮归还终端（Ctrl+T 进入回看）。"
+  unknown: "未知滚动模式 '%{value}'。可用：native、pinned。"
+vimmode:
+  enabled: "Vim 模式：开 —— Esc 进 Normal，i 进 Insert（当前 Insert）。"
+  disabled: "Vim 模式：关 —— 输入框恢复为普通文本框。"
+steer:
+  enabled: "转向模式：开 —— 运行中输入的提示词会注入到正在进行的轮次。"
+  enabled_unsupported: "转向模式：开 —— 但当前服务器不支持 turn/steer；提示词仍会排队，连接到支持的服务器后生效。"
+  disabled: "转向模式：关 —— 运行中输入的提示词按顺序排队执行。"
+  unknown: "未知取值：%{value}。用法：/steer [on|off]（不带参数则切换）。"
+thinking:
+  cleared: 已清除推理强度，使用服务器默认值。
+  no_session: 没有活动会话——请先打开或选择一个会话。
+  set: 推理强度已设为 %{level}。
+  unknown: 未知强度 '%{value}'。可选：low、medium、high、max、default。
+  usage: 推理强度：%{current}。用法：/thinking <low|medium|high|max|default>。
+  display_on: 本会话已在对话记录中显示推理内容。
+  display_off: 已隐藏推理内容（仅保留动画与检查器）。

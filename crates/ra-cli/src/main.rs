@@ -59,6 +59,23 @@ pub fn install_error_hooks() -> color_eyre::Result<()> {
 }
 
 fn main() -> Result<()> {
+    // Windows gives the process's main thread a 1 MB stack (the PE default) where
+    // unix gives 8 MB, and the serve/agent call chains recurse past 1 MB: `serve
+    // --stdio` died with "thread 'main' has overflowed its stack" before it could
+    // answer its first JSON-RPC frame, which broke the terminal client's default
+    // local launch (it spawns exactly that command). Run the real entry point on a
+    // thread with a generous stack so every platform behaves like unix.
+    const MAIN_STACK_BYTES: usize = 32 * 1024 * 1024;
+    std::thread::Builder::new()
+        .name("ra-main".to_owned())
+        .stack_size(MAIN_STACK_BYTES)
+        .spawn(run_cli)
+        .map_err(|error| eyre::eyre!("failed to start the main worker thread: {error}"))?
+        .join()
+        .unwrap_or_else(|_panic| std::process::exit(101))
+}
+
+fn run_cli() -> Result<()> {
     install_error_hooks()?;
 
     // Hidden chaos-test switch (outer-loop blueprint step ②): when

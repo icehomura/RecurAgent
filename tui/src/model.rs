@@ -1,0 +1,13605 @@
+use std::time::Instant;
+
+use ra_core::app_ui::{APP_UI_API_V1, AppUiLiveReply, AppUiSession, AppUiSnapshot, AppUiTask};
+use ra_core::ui_protocol::{
+    ApprovalDecision, ApprovalId, ApprovalRenderHints, ApprovalRequestedEvent,
+    ApprovalScopesListParams, ApprovalTypedDetails, DiffPreviewGetParams, InputItem, OutputCursor,
+    PermissionProfileListParams, PermissionProfileSelection, PermissionProfileSetParams, PreviewId,
+    QuestionId, SessionHydrateParams, SessionListParams, SessionOrchestrationEvent,
+    SessionRollbackParams, TaskArtifactReadParams, TaskCancelParams, TaskListParams,
+    TaskOutputReadParams, TaskRestartFromNodeParams, TaskRuntimeState, ThreadGraphGetParams,
+    ThreadGraphGetResult, TurnId, TurnInterruptParams, TurnStartParams, TurnStateGetParams,
+    TurnStateGetResult, UiPaneSnapshot, UiProtocolCapabilities, UiRetryBackoff, UserQuestion,
+    UserQuestionAnswer, UserQuestionOption, UserQuestionRequestedEvent, UserQuestionRespondParams,
+    approval_scopes,
+};
+use ra_core::{Message, SessionKey, TaskId};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
+use std::fmt;
+use unicode_width::UnicodeWidthStr;
+
+use crate::menu::{
+    AvailabilityContext, CapabilitySet, ConnectionState, MenuBuildResult, MenuStack, RuntimeMode,
+    TaskActivity,
+};
+
+pub type LiveReply = AppUiLiveReply;
+pub type SessionView = AppUiSession;
+pub type TaskView = AppUiTask;
+
+/// Client-side ownership for a typed canonical background message ID. The
+/// shared core Message has no canonical-ID field; bind it to its current row,
+/// never to equal text elsewhere or to an unrelated event sequence domain.
+#[derive(Debug, Clone)]
+pub(crate) struct BackgroundCompletionRow {
+    pub(crate) index: usize,
+    pub(crate) signature: Value,
+}
+
+impl BackgroundCompletionRow {
+    pub(crate) fn new(index: usize, message: &Message) -> Self {
+        Self {
+            index,
+            signature: serde_json::to_value(message).expect("Message is JSON serializable"),
+        }
+    }
+
+    pub(crate) fn owns(&self, messages: &[Message]) -> bool {
+        messages.get(self.index).is_some_and(|message| {
+            serde_json::to_value(message).is_ok_and(|value| value == self.signature)
+        })
+    }
+}
+
+/// One canonical `projection.envelope.v2` assistant content segment within a
+/// live turn. The transcript still accumulates its bytes in [`LiveReply`] so
+/// the legacy and v2 paths share the same commit/render lifecycle; this record
+/// prevents a later segment's durable row from replacing an earlier segment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct V2AssistantSegment {
+    pub(crate) id: String,
+    pub(crate) start_offset: usize,
+    pub(crate) finalized: bool,
+}
+
+/// Projection lane that first produced assistant content for a live turn.
+/// During mixed-version rollout the server can emit the same turn over both
+/// envelope generations; one lane must own the reply or their differently
+/// timed persisted rows rewrite text already flushed to native scrollback.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AssistantProjectionLane {
+    V1,
+    V2,
+}
+
+pub const APPUI_METHOD_CONFIG_CAPABILITIES_LIST: &str = "config/capabilities/list";
+pub const APPUI_METHOD_SESSION_STATUS_READ: &str = "session/status/read";
+pub const APPUI_METHOD_SESSION_COMPACT: &str = "session/compact";
+pub const APPUI_METHOD_SESSION_COMPACT_MODE_SET: &str = "session/compact/mode/set";
+pub const APPUI_METHOD_MODEL_LIST: &str = "profile/llm/list";
+pub const APPUI_METHOD_MODEL_SELECT: &str = "profile/llm/select";
+pub const APPUI_METHOD_MCP_STATUS_LIST: &str = "mcp/status/list";
+pub const APPUI_METHOD_TOOL_STATUS_LIST: &str = "tool/status/list";
+pub const APPUI_METHOD_MCP_CONFIG_LIST: &str = "mcp/config/list";
+pub const APPUI_METHOD_MCP_CONFIG_UPSERT: &str = "mcp/config/upsert";
+pub const APPUI_METHOD_MCP_CONFIG_DELETE: &str = "mcp/config/delete";
+pub const APPUI_METHOD_MCP_CONFIG_SET_ENABLED: &str = "mcp/config/set_enabled";
+pub const APPUI_METHOD_MCP_CONFIG_TEST: &str = "mcp/config/test";
+pub const APPUI_METHOD_TOOL_CONFIG_LIST: &str = "tool/config/list";
+pub const APPUI_METHOD_TOOL_CONFIG_SET_ENABLED: &str = "tool/config/set_enabled";
+pub const APPUI_METHOD_TOOL_CONFIG_UPSERT: &str = "tool/config/upsert";
+pub const APPUI_METHOD_TOOL_CONFIG_DELETE: &str = "tool/config/delete";
+pub const APPUI_METHOD_TOOL_CONFIG_TEST: &str = "tool/config/test";
+pub const APPUI_METHOD_AUTH_STATUS: &str = "auth/status";
+pub const APPUI_METHOD_AUTH_SEND_CODE: &str = "auth/send_code";
+pub const APPUI_METHOD_AUTH_VERIFY: &str = "auth/verify";
+pub const APPUI_METHOD_AUTH_ME: &str = "auth/me";
+pub const APPUI_METHOD_AUTH_LOGOUT: &str = "auth/logout";
+pub const APPUI_METHOD_PROFILE_LOCAL_CREATE: &str = "profile/local/create";
+pub const APPUI_METHOD_PROFILE_LLM_CATALOG: &str = "profile/llm/catalog";
+pub const APPUI_METHOD_PROFILE_LLM_UPSERT: &str = "profile/llm/upsert";
+pub const APPUI_METHOD_PROFILE_LLM_DELETE: &str = "profile/llm/delete";
+pub const APPUI_METHOD_PROFILE_SUB_PROVIDERS_LIST: &str = "profile/sub_providers/list";
+/// #1768 workspace snapshot undo.
+pub const APPUI_METHOD_SNAPSHOT_LIST: &str = "snapshot/list";
+pub const APPUI_METHOD_SNAPSHOT_RESTORE: &str = "snapshot/restore";
+/// #395 peer agents v1 (octos#1800): prepare a peer session (durable brief
+/// file + slug/topic + optional worktree) for `/peer`. A MUTATING method.
+pub const APPUI_METHOD_PEER_PREPARE: &str = "peer/prepare";
+/// octos#1801 peer v2: read the profile's peer blackboard — every staged
+/// peer's brief + latest result file (written server-side on the peer's turn
+/// terminals). Backs `/gather`. A READ (non-mutating) method, allowed in
+/// read-only mode like [`APPUI_METHOD_SNAPSHOT_LIST`].
+pub const APPUI_METHOD_PEER_GATHER: &str = "peer/gather";
+/// octos#1801 peer v3: durable SERVER→CLIENT notification — a server-side
+/// agent staged a peer via its `peer_spawn` tool; the client auto-opens it in
+/// the background. Not a request method (never appears in
+/// `AppUiCommand::method()`); decoded tui-locally in the transport because
+/// the vendored ra-core rev predates the variant.
+pub const APPUI_METHOD_PEER_STAGED: &str = "peer/staged";
+/// octos#1801 peer v3: durable SERVER→CLIENT notification — a peer session the
+/// server tore down (its turn ended, or it was reaped). The client removes the
+/// matching `peer-<slug>` session from the peer dock and the session switcher.
+/// Not a request method (never appears in `AppUiCommand::method()`); decoded
+/// tui-locally in the transport because the vendored ra-core rev predates
+/// the variant, mirroring [`APPUI_METHOD_PEER_STAGED`].
+pub const APPUI_METHOD_PEER_CLOSED: &str = "peer/closed";
+/// octos#2019: durable SERVER→CLIENT notification — one background event that
+/// woke the model, surfaced to the HUMAN. Monitor event lines and claimed
+/// fleet outbox events already exist and are already durable, but their only
+/// consumer is the model, so a monitor that fires forty times during a loop is
+/// invisible to the user. Not a request method (never appears in
+/// `AppUiCommand::method()`); decoded tui-locally in the transport because the
+/// vendored ra-core rev predates the variant, mirroring
+/// [`APPUI_METHOD_PEER_STAGED`].
+pub const APPUI_METHOD_BACKGROUND_ACTIVITY: &str = "background/activity";
+/// octos#1807: `turn/steer` — mid-turn prompt injection into the ACTIVE
+/// turn. Params `{session_id, expected_turn_id?, input}`; result
+/// `{turn_id, steered}`. `steered:true` = the text joined the live turn
+/// (the id echoes THAT turn; the server persists it at drain time as a
+/// normal v2 `UserMessage` envelope, so it echoes back like any persisted
+/// user row). `steered:false` = no active turn existed and the server
+/// started a NEW real turn with the input (the id names the new turn).
+/// `expected_turn_id` mismatch → `invalid_params`. A MUTATING method
+/// (blocked in read-only mode like `turn/start`).
+pub const APPUI_METHOD_TURN_STEER: &str = "turn/steer";
+pub const APPUI_METHOD_PROFILE_SUB_PROVIDERS_UPSERT: &str = "profile/sub_providers/upsert";
+pub const APPUI_METHOD_PROFILE_SUB_PROVIDERS_REMOVE: &str = "profile/sub_providers/remove";
+pub const APPUI_METHOD_PROFILE_LLM_TEST: &str = "profile/llm/test";
+pub const APPUI_METHOD_PROFILE_LLM_FETCH_MODELS: &str = "profile/llm/fetch_models";
+pub const APPUI_METHOD_PROFILE_SKILLS_LIST: &str = "profile/skills/list";
+pub const APPUI_METHOD_PROFILE_SKILLS_REGISTRY_SEARCH: &str = "profile/skills/registry/search";
+pub const APPUI_METHOD_PROFILE_SKILLS_INSTALL: &str = "profile/skills/install";
+pub const APPUI_METHOD_PROFILE_SKILLS_REMOVE: &str = "profile/skills/remove";
+/// Per-project launch decision (`launch/resolve`). The TUI calls this on first
+/// launch to learn whether to resume the folder's sticky brain, prompt to
+/// activate an empty folder, offer a cross-profile switch, or fall through to
+/// onboarding. Defined locally because the pinned ra-core rev predates the
+/// method; gated on [`APPUI_FEATURE_SESSION_WORKSPACE_CWD_V1`].
+pub const APPUI_METHOD_LAUNCH_RESOLVE: &str = "launch/resolve";
+
+/// M12-E feature flag for per-session workspace cwd requests
+/// (`session.workspace_cwd.v1`, UPCR-2026-003). The TUI must NOT
+/// include `cwd` in `session/open` until the server advertises this
+/// feature — otherwise compatible-but-old servers reject the request
+/// or worse, ignore the cwd silently and run against the wrong root.
+pub const APPUI_FEATURE_SESSION_WORKSPACE_CWD_V1: &str = "session.workspace_cwd.v1";
+
+/// Returns `true` when the negotiated capabilities permit attaching
+/// a `cwd` to `session/open`. Per UPCR-2026-003, the client must NOT
+/// emit `cwd` until the server advertises
+/// [`APPUI_FEATURE_SESSION_WORKSPACE_CWD_V1`]. Callers pass the
+/// `supported_features` slice from
+/// [`ra_core::ui_protocol::UiProtocolCapabilities`] (or the
+/// equivalent slice the TUI's `CapabilitySet` tracks).
+pub fn session_open_may_include_cwd<S: AsRef<str>>(supported_features: &[S]) -> bool {
+    supported_features
+        .iter()
+        .any(|feature| feature.as_ref() == APPUI_FEATURE_SESSION_WORKSPACE_CWD_V1)
+}
+
+/// Returns the displayable workspace root for a session: the
+/// server-confirmed `workspace_root` from `session/status/read`
+/// wins. Only when the server omits it does the TUI fall back to the
+/// `cwd` it requested. The TUI must NOT silently substitute the
+/// requested cwd for the server truth in any other case — it can
+/// only render what the server said. This helper is the canonical
+/// "what cwd should we show" decision the TUI must use.
+pub fn effective_workspace_root_for_display<'a>(
+    server_workspace_root: Option<&'a str>,
+    requested_cwd: Option<&'a str>,
+) -> Option<&'a str> {
+    server_workspace_root.or(requested_cwd)
+}
+
+/// Scrub `cwd` from a [`ra_core::ui_protocol::SessionOpenParams`]
+/// when the negotiated capabilities do not advertise
+/// [`APPUI_FEATURE_SESSION_WORKSPACE_CWD_V1`]. Returns the params
+/// unchanged when the feature is present (or when `cwd` was already
+/// `None`). The TUI uses this immediately before serializing
+/// `session/open` so that compatible-but-old servers do not silently
+/// ignore the requested cwd.
+pub fn scrub_session_open_cwd_for_capabilities<S: AsRef<str>>(
+    mut params: ra_core::ui_protocol::SessionOpenParams,
+    supported_features: &[S],
+) -> ra_core::ui_protocol::SessionOpenParams {
+    if params.cwd.is_some() && !session_open_may_include_cwd(supported_features) {
+        params.cwd = None;
+    }
+    params
+}
+
+/// M13-D backend-owned supervised task inspection methods. The TUI calls the
+/// `task/artifact/*` aliases per UPCR-2026-019 §4 (servers dispatch both
+/// `task/artifact/list` and `agent/artifact/list` into the same handler).
+pub const APPUI_METHOD_TASK_ARTIFACT_LIST: &str = "task/artifact/list";
+pub const APPUI_METHOD_TASK_ARTIFACT_READ: &str = "task/artifact/read";
+/// Optional M13-D review entrypoint (`review.start.v1` capability-gated).
+pub const APPUI_METHOD_REVIEW_START: &str = "review/start";
+pub const APPUI_FEATURE_REVIEW_START_V1: &str = "review.start.v1";
+
+/// M13-D capability flag for backend-owned supervised task list/status
+/// inspection (`harness.task_supervision_inspection.v1`). When absent, the
+/// TUI must hide M13 inspection controls and never invent local supervisor
+/// state.
+pub const APPUI_FEATURE_TASK_SUPERVISION_INSPECTION_V1: &str =
+    "harness.task_supervision_inspection.v1";
+
+/// M13-D capability flag for `task/artifact/list` and `task/artifact/read`
+/// (`harness.task_artifacts.v1`). When absent, the TUI must hide the
+/// artifact browser entry points.
+pub const APPUI_FEATURE_TASK_ARTIFACTS_V1: &str = "harness.task_artifacts.v1";
+
+/// M16-G2 capability flag for backend-owned context generation,
+/// checkpoint, and compaction lifecycle inspection
+/// (`context.lifecycle.v1`). When absent, the TUI must hide the
+/// compact-context status surface and never invent a generation number
+/// from local heuristics.
+pub const APPUI_FEATURE_CONTEXT_LIFECYCLE_V1: &str = "context.lifecycle.v1";
+
+/// Additive OUP semantic-boundary/cache diagnostics. This is negotiated
+/// separately from the generic lifecycle stream so an older server can keep
+/// sending lifecycle counters without the client interpreting unknown cache
+/// policy fields.
+pub const APPUI_FEATURE_CONTEXT_SEMANTIC_CACHE_V1: &str = "context.semantic_cache.v1";
+
+/// M16-G2 notification methods. The TUI listens for these to bump the
+/// compact-context status surface; it must not call them as RPC.
+pub const APPUI_METHOD_CONTEXT_COMPACTION_COMPLETED: &str = "context/compaction_completed";
+pub const APPUI_METHOD_CONTEXT_NORMALIZATION_REPORTED: &str = "context/normalization_reported";
+
+/// UPCR-2026-010 thread graph read surface (`state.thread_graph.v1`).
+pub const APPUI_FEATURE_THREAD_GRAPH_V1: &str = "state.thread_graph.v1";
+pub const APPUI_METHOD_THREAD_GRAPH_GET: &str = "thread/graph/get";
+
+/// UPCR-2026-009 authoritative session-state reload surface.
+pub const APPUI_FEATURE_SESSION_HYDRATE_V1: &str = "state.session_hydrate.v1";
+pub const APPUI_METHOD_SESSION_HYDRATE: &str = "session/hydrate";
+
+/// UPCR-2026-011 turn lifecycle state read surface.
+pub const APPUI_FEATURE_TURN_STATE_GET_V1: &str = "state.turn_state_get.v1";
+pub const APPUI_METHOD_TURN_STATE_GET: &str = "turn/state/get";
+
+/// M15-E required capability flag for backend-owned agent inspection /
+/// goal / loop UX (`coding.autonomy.v1`). When absent, the TUI must
+/// hide M15 controls instead of probing unsupported methods.
+pub const APPUI_FEATURE_CODING_AUTONOMY_V1: &str = "coding.autonomy.v1";
+
+/// M15-E optional capability flags. Each gates one slice of UX:
+/// `agent_control_v1` -> `/agents interrupt`, `/agents close`.
+/// `goal_runtime_v1`  -> `/goal` family.
+/// `loop_runtime_v1`  -> `/loop` family.
+pub const APPUI_FEATURE_CODING_AGENT_CONTROL_V1: &str = "coding.agent_control.v1";
+pub const APPUI_FEATURE_CODING_GOAL_RUNTIME_V1: &str = "coding.goal_runtime.v1";
+pub const APPUI_FEATURE_CODING_LOOP_RUNTIME_V1: &str = "coding.loop_runtime.v1";
+
+/// octos#2019 human sink over background events that today only wake the
+/// model. When negotiated the server pushes `background/activity`; when it is
+/// NOT negotiated the server never sends the frame, so an older TUI can never
+/// receive a notification it cannot render. Tui-local mirror: the vendored
+/// ra-core rev predates the constant.
+pub const APPUI_FEATURE_BACKGROUND_ACTIVITY_V1: &str = "event.background_activity.v1";
+/// task-consume-turn-steer-dropped: server guarantees that accepted-but-
+/// undrained `turn/steer` inputs are returned as `turn/steer_dropped` BEFORE
+/// the turn's terminal frame. When advertised, a terminal without a preceding
+/// `turn/steer_dropped` naming a retained steer means the server CONSUMED it —
+/// the client must not re-stage it (task-steer-retained-until-echo's terminal
+/// fallback is for servers without this feature only).
+pub const APPUI_FEATURE_TURN_STEER_DROPPED_V1: &str = "event.turn_steer_dropped.v1";
+
+/// Additive `profile/local/create` capability: the server honors an optional
+/// `requested_id` (the meaningful profile name the user types, e.g. `glm`) and
+/// treats `name`/`username`/`email` as optional. Advertised by servers that
+/// support nameable solo profiles. When negotiated, the onboarding Profile step
+/// collapses to a single "Name this profile" prompt and sends `requested_id`;
+/// when ABSENT the TUI falls back to the legacy `{name, username, email}` flow
+/// so it keeps working against older servers.
+pub const APPUI_FEATURE_PROFILE_LOCAL_CREATE_REQUESTED_ID_V1: &str =
+    "profile.local_create.requested_id.v1";
+
+/// The server honors the optional `make_default` field on
+/// `profile/local/create`, recording the created profile as the machine's
+/// global default. When ABSENT the onboarding "Make this your default brain?"
+/// toggle is hidden and `make_default` is never sent, so older servers get the
+/// unchanged create shape.
+pub const APPUI_FEATURE_PROFILE_LOCAL_CREATE_DEFAULT_V1: &str = "profile.local_create.default.v1";
+
+/// M15-E backend-owned agent inspection methods (UPCR-2026-021).
+pub const APPUI_METHOD_AGENT_LIST: &str = "agent/list";
+pub const APPUI_METHOD_AGENT_STATUS_READ: &str = "agent/status/read";
+pub const APPUI_METHOD_AGENT_OUTPUT_READ: &str = "agent/output/read";
+pub const APPUI_METHOD_AGENT_ARTIFACT_LIST: &str = "agent/artifact/list";
+pub const APPUI_METHOD_AGENT_ARTIFACT_READ: &str = "agent/artifact/read";
+
+/// M15-E backend-owned agent control methods (UPCR-2026-021 §"Agent
+/// Lifecycle Surface"). These are gated on
+/// `coding.agent_control.v1`.
+pub const APPUI_METHOD_AGENT_INTERRUPT: &str = "agent/interrupt";
+pub const APPUI_METHOD_AGENT_CLOSE: &str = "agent/close";
+
+/// M15-E backend-owned goal runtime methods (UPCR-2026-021 §"Goal
+/// Runtime Surface"). These are gated on `coding.goal_runtime.v1`.
+pub const APPUI_METHOD_SESSION_GOAL_GET: &str = "session/goal/get";
+pub const APPUI_METHOD_SESSION_GOAL_SET: &str = "session/goal/set";
+pub const APPUI_METHOD_SESSION_GOAL_CLEAR: &str = "session/goal/clear";
+
+/// M15-E backend-owned loop runtime methods (UPCR-2026-021 §"Loop
+/// Runtime Surface"). These are gated on `coding.loop_runtime.v1`.
+pub const APPUI_METHOD_LOOP_CREATE: &str = "loop/create";
+pub const APPUI_METHOD_LOOP_LIST: &str = "loop/list";
+pub const APPUI_METHOD_LOOP_DELETE: &str = "loop/delete";
+pub const APPUI_METHOD_LOOP_PAUSE: &str = "loop/pause";
+pub const APPUI_METHOD_LOOP_RESUME: &str = "loop/resume";
+pub const APPUI_METHOD_LOOP_FIRE_NOW: &str = "loop/fire_now";
+
+/// Pseudo-method for the `!`-bang client-local shell exec. This command is
+/// never sent over the UI protocol wire — the event loop intercepts it and
+/// runs the command locally — so this string is purely for diagnostics /
+/// `AppUiCommand::method()` exhaustiveness, prefixed `local/` to make the
+/// non-RPC nature obvious.
+pub const APPUI_METHOD_LOCAL_SHELL_EXEC: &str = "local/shell_exec";
+
+/// M15-E notification methods the TUI listens for to update agent /
+/// goal / loop state. It must not call these as RPC.
+pub const APPUI_METHOD_AGENT_UPDATED: &str = "agent/updated";
+pub const APPUI_METHOD_AGENT_OUTPUT_DELTA: &str = "agent/output/delta";
+pub const APPUI_METHOD_AGENT_ARTIFACT_UPDATED: &str = "agent/artifact/updated";
+pub const APPUI_METHOD_SESSION_GOAL_UPDATED: &str = "session/goal/updated";
+pub const APPUI_METHOD_SESSION_GOAL_CLEARED: &str = "session/goal/cleared";
+pub const APPUI_METHOD_LOOP_UPDATED: &str = "loop/updated";
+pub const APPUI_METHOD_LOOP_FIRED: &str = "loop/fired";
+pub const APPUI_METHOD_LOOP_COMPLETED: &str = "loop/completed";
+
+// ---------- M15-E ra UI param + result types ----------
+//
+// These params types model the request side of the autonomy surface
+// (`/agents`, `/goal`, `/loop`). Upstream `ra-core` already owns
+// the wire shape for notifications (`UiAgentRecord`, `UiGoalRecord`,
+// `UiLoopRecord`, etc.) — we re-use those for results so the
+// rendered state stays in lockstep with what the backend stamps.
+//
+// All TUI-side mutating dispatch goes through `require_appui_method`
+// in `store.rs`. Servers that do not advertise the methods will see
+// the slash command rendered as `Unsupported` instead of being
+// probed.
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentListParams {
+    pub session_id: SessionKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_agent_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AgentListResult {
+    pub session_id: SessionKey,
+    #[serde(default)]
+    pub agents: Vec<ra_core::ui_protocol::UiAgentRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentStatusReadParams {
+    pub session_id: SessionKey,
+    pub agent_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AgentStatusReadResult {
+    pub session_id: SessionKey,
+    pub agent: ra_core::ui_protocol::UiAgentRecord,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentOutputReadParams {
+    pub session_id: SessionKey,
+    pub agent_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<OutputCursor>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentOutputReadResult {
+    pub session_id: SessionKey,
+    pub agent_id: String,
+    pub cursor: OutputCursor,
+    #[serde(default)]
+    pub text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentArtifactListParams {
+    pub session_id: SessionKey,
+    pub agent_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AgentArtifactListResult {
+    pub session_id: SessionKey,
+    pub agent_id: String,
+    #[serde(default)]
+    pub artifacts: Vec<ra_core::ui_protocol::UiAgentArtifact>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentArtifactReadParams {
+    pub session_id: SessionKey,
+    pub agent_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AgentArtifactReadResult {
+    pub session_id: SessionKey,
+    pub agent_id: String,
+    pub artifact: ra_core::ui_protocol::UiAgentArtifact,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentInterruptParams {
+    pub session_id: SessionKey,
+    pub agent_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AgentInterruptResult {
+    pub session_id: SessionKey,
+    pub agent_id: String,
+    #[serde(default)]
+    pub ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<ra_core::ui_protocol::UiAgentRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentCloseParams {
+    pub session_id: SessionKey,
+    pub agent_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AgentCloseResult {
+    pub session_id: SessionKey,
+    pub agent_id: String,
+    #[serde(default)]
+    pub ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<ra_core::ui_protocol::UiAgentRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionGoalGetParams {
+    pub session_id: SessionKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionGoalGetResult {
+    pub session_id: SessionKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub goal: Option<ra_core::ui_protocol::UiGoalRecord>,
+}
+
+/// Logical action a `/goal` subcommand performed. This is a TUI-side
+/// classifier; the wire shape itself is the `(objective, status)`
+/// pair the backend expects. We keep `SessionGoalSetAction` around for
+/// the dispatch tests so they can assert the intended verb without
+/// re-parsing the serialized params.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionGoalSetAction {
+    /// `/goal <objective>` — establish a new active goal.
+    #[default]
+    Set,
+    /// `/goal pause` — pause an active goal.
+    Pause,
+    /// `/goal resume` — resume a paused goal.
+    Resume,
+    /// `/goal stop` — mark the goal complete (user-owned terminal
+    /// transition; autonomous continuations end).
+    Stop,
+}
+
+/// `session/goal/set` wire shape (UPCR-2026-021 §"Goal Runtime Surface").
+/// Matches the backend `RawGoalSetParams` exactly: `objective` is
+/// REQUIRED, and `status` ("active"/"paused") is what drives
+/// pause/resume transitions. `transition_actor` is always `"user"`
+/// from the TUI — the backend marks model-completed goals with
+/// `"model"` itself.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionGoalSetParams {
+    pub session_id: SessionKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub objective: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_budget: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transition_actor: Option<String>,
+    /// Non-wire classifier used by the dispatch tests. `#[serde(skip)]`
+    /// keeps it out of the JSON-RPC payload while still letting tests
+    /// assert which subcommand produced this params instance.
+    #[serde(skip)]
+    pub action: SessionGoalSetAction,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionGoalSetResult {
+    pub session_id: SessionKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default)]
+    pub ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub goal: Option<ra_core::ui_protocol::UiGoalRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transition_actor: Option<String>,
+}
+
+/// Two-step goal pause/resume state. Pause/resume must NOT carry a
+/// possibly-stale cached objective to the backend (the cached mirror
+/// can drift between `session/goal/get` refreshes). Instead, the
+/// dispatch issues a `session/goal/get` first and stages the desired
+/// transition here; when the `GoalGet` response arrives, the store
+/// emits the follow-up `session/goal/set` with the freshly-fetched
+/// objective and the staged status.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingGoalTransition {
+    pub session_id: SessionKey,
+    pub profile_id: Option<String>,
+    /// `"paused"` for `/goal pause`, `"active"` for `/goal resume`.
+    pub status: &'static str,
+    /// TUI-side classifier echoed into the emitted
+    /// [`SessionGoalSetParams::action`].
+    pub action: SessionGoalSetAction,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionGoalClearParams {
+    pub session_id: SessionKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionGoalClearResult {
+    pub session_id: SessionKey,
+    #[serde(default)]
+    pub cleared: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transition_actor: Option<String>,
+}
+
+/// Loop cadence parsed from `/loop`. `interval_seconds` is `None` for
+/// self-paced loops and for maintenance loops. The backend decides
+/// the cadence for those two modes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LoopMode {
+    FixedInterval,
+    SelfPaced,
+    Maintenance,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LoopCreateParams {
+    pub session_id: SessionKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub prompt: String,
+    pub mode: LoopMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interval_seconds: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LoopCreateResult {
+    pub session_id: SessionKey,
+    #[serde(rename = "loop")]
+    pub loop_state: ra_core::ui_protocol::UiLoopRecord,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LoopListParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<SessionKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LoopListResult {
+    /// Echoed back from the request. A GLOBAL query sends no `session_id`, and
+    /// the server echoes that as `null` — a non-Option field here made the
+    /// whole response undecodable, so the list came back permanently empty
+    /// (spec task-loop-list-global-decode).
+    #[serde(default)]
+    pub session_id: Option<SessionKey>,
+    /// The profile the server RESOLVED for this query. A global query is
+    /// authoritative exactly within this profile — it is what lets the client
+    /// clear stale mirrors without touching other profiles.
+    #[serde(default)]
+    pub profile_id: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_loop_records")]
+    pub loops: Vec<ra_core::ui_protocol::UiLoopRecord>,
+}
+
+/// Decode `loops` one record at a time, dropping the ones that do not fit
+/// `UiLoopRecord` instead of failing the whole response.
+///
+/// A plain `Vec<UiLoopRecord>` is all-or-nothing: one record missing `loop_id`,
+/// or carrying a negative `interval_seconds` where the field is `u64`, makes
+/// serde reject the WHOLE result. The client then reports a decode error and
+/// the loops surface stays empty — the user loses every well-formed loop
+/// alongside the bad one, and `/loop pause|resume|delete` become unusable
+/// because there are no ids to name. Same failure the `session_id` field hit
+/// (spec task-loop-list-global-decode); same fix, applied per record.
+///
+/// Dropped records are not surfaced individually: the store already reports the
+/// RETAINED count ("Loop list refreshed: N loop(s)"), so a record the client
+/// cannot model is simply not one of the N. Losing one unusable row beats
+/// losing the list.
+fn deserialize_loop_records<'de, D>(
+    deserializer: D,
+) -> Result<Vec<ra_core::ui_protocol::UiLoopRecord>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw = Vec::<Value>::deserialize(deserializer)?;
+    Ok(raw
+        .into_iter()
+        .filter_map(|record| serde_json::from_value(record).ok())
+        .collect())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LoopIdParams {
+    pub session_id: SessionKey,
+    pub loop_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LoopMutationResult {
+    pub session_id: SessionKey,
+    pub loop_id: String,
+    #[serde(default)]
+    pub ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, rename = "loop", skip_serializing_if = "Option::is_none")]
+    pub loop_state: Option<ra_core::ui_protocol::UiLoopRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fire: Option<ra_core::ui_protocol::UiLoopFire>,
+}
+
+/// Per-session autonomy mirror state. Populated by `agent/list`,
+/// `session/goal/get`, `loop/list` responses and by the matching
+/// notifications. The TUI re-fetches this on session open and on
+/// reconnect — local config is never used to fill it in.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SessionAutonomyState {
+    pub session_id: SessionKey,
+    pub agents: Vec<ra_core::ui_protocol::UiAgentRecord>,
+    pub agent_outputs: Vec<AutonomyAgentOutputCache>,
+    pub agent_artifacts: Vec<AutonomyAgentArtifactCache>,
+    pub goal: Option<ra_core::ui_protocol::UiGoalRecord>,
+    pub goal_transition_actor: Option<String>,
+    /// #1959 — highest goal-event `generation` applied for this session. The
+    /// backend stamps every `SessionGoalUpdated`/`SessionGoalCleared` with a
+    /// monotonic generation; we DROP any goal event whose generation is not
+    /// greater than this, so a stale update that races behind a clear (server
+    /// send order is not atomic under a multi-thread runtime) can never
+    /// resurrect the cleared chip. `0` (legacy / unstamped backend) always
+    /// applies and never advances the watermark.
+    pub last_goal_event_generation: u64,
+    pub loops: Vec<ra_core::ui_protocol::UiLoopRecord>,
+    /// Latest model-authored plan/todo checklist (`plan/updated`). `None` until
+    /// the agent calls `update_plan` this session.
+    pub plan: Option<ra_core::ui_protocol::UiPlanRecord>,
+    /// Turn that authored the current `plan`, when known. The plan is per-turn
+    /// working state, so it is cleared when this turn completes.
+    pub plan_turn_id: Option<TurnId>,
+    /// When each TERMINAL agent was first observed terminal, by agent id —
+    /// LOCAL `Instant`s stamped lazily by the strip's linger sweep (never the
+    /// server's `updated_at_ms`; a remote server's clock can skew). Drives the
+    /// "finished/failed chips leave the strip after a linger" policy. A stamp
+    /// is dropped if its agent resurrects (non-terminal again) or vanishes.
+    pub terminal_seen: Vec<(String, std::time::Instant)>,
+    /// Agent Dock unread badges (#323): agents that reached a TERMINAL status
+    /// via a live `agent/updated` while the user was NOT viewing them
+    /// (ra-one's `has_updates` semantics, one level down). Cleared when the
+    /// user peeks/switches to the agent ([`AppState::set_chat_view`]), when
+    /// the agent resurrects non-terminal, or when its chip is pruned. Unseen
+    /// chips are exempt from the timed linger sweep so a result can't vanish
+    /// before it was ever looked at (the next submit still clears them — the
+    /// user is demonstrably at the keyboard).
+    pub unseen: Vec<String>,
+}
+
+impl SessionAutonomyState {
+    pub fn new(session_id: SessionKey) -> Self {
+        Self {
+            session_id,
+            agents: Vec::new(),
+            agent_outputs: Vec::new(),
+            agent_artifacts: Vec::new(),
+            goal: None,
+            goal_transition_actor: None,
+            last_goal_event_generation: 0,
+            loops: Vec::new(),
+            plan: None,
+            plan_turn_id: None,
+            terminal_seen: Vec::new(),
+            unseen: Vec::new(),
+        }
+    }
+}
+
+/// True when an agent status string is terminal — the agent can never emit
+/// again. Superset of the strip's glyph terminal set (`agent_status_glyph`)
+/// plus `closed` (set by `agent/close`); case-insensitive like the glyph map.
+pub fn agent_status_is_terminal(status: &str) -> bool {
+    matches!(
+        status.to_ascii_lowercase().as_str(),
+        "completed"
+            | "complete"
+            | "done"
+            | "ready"
+            | "failed"
+            | "error"
+            | "cancelled"
+            | "canceled"
+            | "interrupted"
+            | "closed"
+    )
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AutonomyAgentOutputCache {
+    pub agent_id: String,
+    pub text: String,
+    pub cursor: OutputCursor,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AutonomyAgentArtifactCache {
+    pub agent_id: String,
+    pub artifacts: Vec<ra_core::ui_protocol::UiAgentArtifact>,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SecretString(String);
+
+impl SecretString {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn expose_for_transport(&self) -> &str {
+        &self.0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn masked(&self) -> &'static str {
+        if self.0.is_empty() { "" } else { "********" }
+    }
+}
+
+impl fmt::Debug for SecretString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("\"********\"")
+    }
+}
+
+fn string_or_default<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Option::<String>::deserialize(deserializer)?.unwrap_or_default())
+}
+
+fn is_empty_string(value: &str) -> bool {
+    value.trim().is_empty()
+}
+
+fn route_or_default<'de, D>(deserializer: D) -> Result<LlmRouteConfig, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Option::<LlmRouteConfig>::deserialize(deserializer)?.unwrap_or_default())
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum AppUiCommand {
+    OpenSession(ra_core::ui_protocol::SessionOpenParams),
+    SubmitPrompt(TurnStartParams),
+    InterruptTurn(TurnInterruptParams),
+    RespondApproval(ra_core::ui_protocol::ApprovalRespondParams),
+    RespondUserQuestion(UserQuestionRespondParams),
+    ListApprovalScopes(ApprovalScopesListParams),
+    GetDiffPreview(DiffPreviewGetParams),
+    ListTasks(TaskListParams),
+    CancelTask(TaskCancelParams),
+    RestartTaskFromNode(TaskRestartFromNodeParams),
+    ReadTaskOutput(TaskOutputReadParams),
+    ReadTaskArtifact(TaskArtifactReadParams),
+    HydrateSession(SessionHydrateParams),
+    /// `session/list` — fetch the user's prior sessions to populate the
+    /// `/resume` picker. A READ (non-mutating) method (see
+    /// [`ProtocolAppUiBackend::readonly_allows_command`]).
+    ListSessions(SessionListParams),
+    /// `launch/resolve` — per-project launch decision (Model A). Sent on first
+    /// launch to resolve requested→sticky→default and learn whether to resume
+    /// the folder's brain, prompt to activate an empty folder, offer a
+    /// cross-profile switch, or open onboarding. A READ (non-mutating) method;
+    /// gated on `session.workspace_cwd.v1`.
+    LaunchResolve(LaunchResolveParams),
+    /// `session/rollback` — conversation-only rewind for `/rewind`. Drops the
+    /// last `num_turns` user turns from the active session and returns the
+    /// trimmed transcript. A MUTATING method: intentionally NOT listed in
+    /// [`ProtocolAppUiBackend::readonly_allows_command`], so it is blocked in
+    /// read-only mode (like `SubmitPrompt`/`InterruptTurn`/`StartReview`).
+    SessionRollback(SessionRollbackParams),
+    GetThreadGraph(ThreadGraphGetParams),
+    GetTurnState(TurnStateGetParams),
+    StartReview(ReviewStartParams),
+    ListConfigCapabilities(ConfigCapabilitiesListParams),
+    ReadSessionStatus(SessionStatusReadParams),
+    SessionBtw(ra_core::ui_protocol::SessionBtwParams),
+    CompactContext(SessionCompactParams),
+    SetCompactionMode(SessionCompactModeParams),
+    ListModels(ModelListParams),
+    SelectModel(ModelSelectParams),
+    ListPermissionProfiles(PermissionProfileListParams),
+    SetPermissionProfile(PermissionProfileSetParams),
+    ListMcpStatus(McpStatusListParams),
+    ListToolStatus(ToolStatusListParams),
+    ListMcpConfig(McpConfigListParams),
+    UpsertMcpConfig(McpConfigUpsertParams),
+    DeleteMcpConfig(McpConfigDeleteParams),
+    SetMcpConfigEnabled(McpConfigSetEnabledParams),
+    TestMcpConfig(McpConfigTestParams),
+    ListToolConfig(ToolConfigListParams),
+    SetToolConfigEnabled(ToolConfigSetEnabledParams),
+    UpsertToolConfig(ToolConfigUpsertParams),
+    DeleteToolConfig(ToolConfigDeleteParams),
+    TestToolConfig(ToolConfigTestParams),
+    AuthStatus(AuthStatusParams),
+    AuthSendCode(AuthSendCodeParams),
+    AuthVerify(AuthVerifyParams),
+    AuthMe(AuthMeParams),
+    AuthLogout(AuthLogoutParams),
+    ProfileLocalCreate(ProfileLocalCreateParams),
+    ProfileLlmCatalog(ProfileLlmCatalogParams),
+    ProfileLlmList(ProfileLlmListParams),
+    ProfileLlmUpsert(ProfileLlmUpsertParams),
+    ProfileLlmDelete(ProfileLlmDeleteParams),
+    ProfileLlmSelect(ProfileLlmSelectParams),
+    ProfileLlmTest(ProfileLlmTestParams),
+    ProfileLlmFetchModels(ProfileLlmFetchModelsParams),
+    ProfileSubProvidersList(SubProvidersListParams),
+    /// #1768: list the session workspace's snapshot undo points.
+    SnapshotList(SnapshotListParams),
+    /// #1768: restore the session workspace to a snapshot.
+    SnapshotRestore(SnapshotRestoreParams),
+    /// #395: prepare a peer session for `/peer` (durable brief + slug/topic).
+    /// A MUTATING method — intentionally NOT listed in
+    /// [`ProtocolAppUiBackend::readonly_allows_command`], so it is blocked in
+    /// read-only mode (like `SnapshotRestore` and the config upserts).
+    PeerPrepare(PeerPrepareParams),
+    /// octos#1807: steer typed input into the ACTIVE turn instead of staging
+    /// it until turn-end. A MUTATING method — NOT listed in
+    /// [`ProtocolAppUiBackend::readonly_allows_command`] (it injects input
+    /// into a running turn, the same class as `turn/start`).
+    TurnSteer(TurnSteerParams),
+    /// octos#1801 v2: read the peer blackboard for `/gather`. A READ
+    /// (non-mutating) method — listed in
+    /// [`ProtocolAppUiBackend::readonly_allows_command`] like `SnapshotList`.
+    PeerGather(PeerGatherParams),
+    ProfileSubProvidersUpsert(SubProvidersUpsertParams),
+    ProfileSubProvidersRemove(SubProvidersRemoveParams),
+    ProfileSkillsList(ProfileSkillsListParams),
+    ProfileSkillsRegistrySearch(ProfileSkillsRegistrySearchParams),
+    ProfileSkillsInstall(ProfileSkillsInstallParams),
+    ProfileSkillsRemove(ProfileSkillsRemoveParams),
+    // M15-E backend-owned autonomy surface (UPCR-2026-021).
+    ListAgents(AgentListParams),
+    ReadAgentStatus(AgentStatusReadParams),
+    ReadAgentOutput(AgentOutputReadParams),
+    ListAgentArtifacts(AgentArtifactListParams),
+    ReadAgentArtifact(AgentArtifactReadParams),
+    InterruptAgent(AgentInterruptParams),
+    CloseAgent(AgentCloseParams),
+    GetSessionGoal(SessionGoalGetParams),
+    SetSessionGoal(SessionGoalSetParams),
+    ClearSessionGoal(SessionGoalClearParams),
+    CreateLoop(LoopCreateParams),
+    ListLoops(LoopListParams),
+    DeleteLoop(LoopIdParams),
+    PauseLoop(LoopIdParams),
+    ResumeLoop(LoopIdParams),
+    FireLoopNow(LoopIdParams),
+    /// `!`-bang client-local shell exec (Claude Code's `!` model). Runs a
+    /// native shell command on the machine octoscode runs on — NOT the
+    /// agent's sandboxed server `shell` tool — so it intentionally bypasses
+    /// every server-side guard. Carries NO JSON-RPC method: the event loop
+    /// intercepts it directly and surfaces the result as a
+    /// [`crate::client_event::ClientEvent::LocalShellResult`] keyed by
+    /// `local_id`. The event loop intercepts this command so it can suspend the
+    /// TUI and lend the real terminal to the child. The mock backend stubs it
+    /// as a no-op.
+    LocalShellExec {
+        cmd: String,
+        local_id: String,
+    },
+}
+
+impl AppUiCommand {
+    pub fn method(&self) -> &'static str {
+        match self {
+            Self::OpenSession(_) => ra_core::ui_protocol::methods::SESSION_OPEN,
+            Self::SubmitPrompt(_) => ra_core::ui_protocol::methods::TURN_START,
+            Self::InterruptTurn(_) => ra_core::ui_protocol::methods::TURN_INTERRUPT,
+            Self::RespondApproval(_) => ra_core::ui_protocol::methods::APPROVAL_RESPOND,
+            Self::RespondUserQuestion(_) => ra_core::ui_protocol::methods::USER_QUESTION_RESPOND,
+            Self::ListApprovalScopes(_) => ra_core::ui_protocol::methods::APPROVAL_SCOPES_LIST,
+            Self::GetDiffPreview(_) => ra_core::ui_protocol::methods::DIFF_PREVIEW_GET,
+            Self::ListTasks(_) => ra_core::ui_protocol::methods::TASK_LIST,
+            Self::CancelTask(_) => ra_core::ui_protocol::methods::TASK_CANCEL,
+            Self::RestartTaskFromNode(_) => {
+                ra_core::ui_protocol::methods::TASK_RESTART_FROM_NODE
+            }
+            Self::ReadTaskOutput(_) => ra_core::ui_protocol::methods::TASK_OUTPUT_READ,
+            Self::ReadTaskArtifact(_) => APPUI_METHOD_TASK_ARTIFACT_READ,
+            Self::HydrateSession(_) => APPUI_METHOD_SESSION_HYDRATE,
+            Self::ListSessions(_) => ra_core::ui_protocol::methods::SESSION_LIST,
+            Self::LaunchResolve(_) => APPUI_METHOD_LAUNCH_RESOLVE,
+            Self::SessionRollback(_) => ra_core::ui_protocol::methods::SESSION_ROLLBACK,
+            Self::GetThreadGraph(_) => APPUI_METHOD_THREAD_GRAPH_GET,
+            Self::GetTurnState(_) => APPUI_METHOD_TURN_STATE_GET,
+            Self::StartReview(_) => APPUI_METHOD_REVIEW_START,
+            Self::ListConfigCapabilities(_) => APPUI_METHOD_CONFIG_CAPABILITIES_LIST,
+            Self::ReadSessionStatus(_) => APPUI_METHOD_SESSION_STATUS_READ,
+            Self::SessionBtw(_) => ra_core::ui_protocol::methods::SESSION_BTW,
+            Self::CompactContext(_) => APPUI_METHOD_SESSION_COMPACT,
+            Self::SetCompactionMode(_) => APPUI_METHOD_SESSION_COMPACT_MODE_SET,
+            Self::ListModels(_) | Self::ProfileLlmList(_) => APPUI_METHOD_MODEL_LIST,
+            Self::SelectModel(_) | Self::ProfileLlmSelect(_) => APPUI_METHOD_MODEL_SELECT,
+            Self::ListPermissionProfiles(_) => {
+                ra_core::ui_protocol::methods::PERMISSION_PROFILE_LIST
+            }
+            Self::SetPermissionProfile(_) => {
+                ra_core::ui_protocol::methods::PERMISSION_PROFILE_SET
+            }
+            Self::ListMcpStatus(_) => APPUI_METHOD_MCP_STATUS_LIST,
+            Self::ListToolStatus(_) => APPUI_METHOD_TOOL_STATUS_LIST,
+            Self::ListMcpConfig(_) => APPUI_METHOD_MCP_CONFIG_LIST,
+            Self::UpsertMcpConfig(_) => APPUI_METHOD_MCP_CONFIG_UPSERT,
+            Self::DeleteMcpConfig(_) => APPUI_METHOD_MCP_CONFIG_DELETE,
+            Self::SetMcpConfigEnabled(_) => APPUI_METHOD_MCP_CONFIG_SET_ENABLED,
+            Self::TestMcpConfig(_) => APPUI_METHOD_MCP_CONFIG_TEST,
+            Self::ListToolConfig(_) => APPUI_METHOD_TOOL_CONFIG_LIST,
+            Self::SetToolConfigEnabled(_) => APPUI_METHOD_TOOL_CONFIG_SET_ENABLED,
+            Self::UpsertToolConfig(_) => APPUI_METHOD_TOOL_CONFIG_UPSERT,
+            Self::DeleteToolConfig(_) => APPUI_METHOD_TOOL_CONFIG_DELETE,
+            Self::TestToolConfig(_) => APPUI_METHOD_TOOL_CONFIG_TEST,
+            Self::AuthStatus(_) => APPUI_METHOD_AUTH_STATUS,
+            Self::AuthSendCode(_) => APPUI_METHOD_AUTH_SEND_CODE,
+            Self::AuthVerify(_) => APPUI_METHOD_AUTH_VERIFY,
+            Self::AuthMe(_) => APPUI_METHOD_AUTH_ME,
+            Self::AuthLogout(_) => APPUI_METHOD_AUTH_LOGOUT,
+            Self::ProfileLocalCreate(_) => APPUI_METHOD_PROFILE_LOCAL_CREATE,
+            Self::ProfileLlmCatalog(_) => APPUI_METHOD_PROFILE_LLM_CATALOG,
+            Self::ProfileLlmUpsert(_) => APPUI_METHOD_PROFILE_LLM_UPSERT,
+            Self::ProfileLlmDelete(_) => APPUI_METHOD_PROFILE_LLM_DELETE,
+            Self::ProfileLlmTest(_) => APPUI_METHOD_PROFILE_LLM_TEST,
+            Self::ProfileLlmFetchModels(_) => APPUI_METHOD_PROFILE_LLM_FETCH_MODELS,
+            Self::ProfileSubProvidersList(_) => APPUI_METHOD_PROFILE_SUB_PROVIDERS_LIST,
+            Self::SnapshotList(_) => APPUI_METHOD_SNAPSHOT_LIST,
+            Self::SnapshotRestore(_) => APPUI_METHOD_SNAPSHOT_RESTORE,
+            Self::PeerPrepare(_) => APPUI_METHOD_PEER_PREPARE,
+            Self::TurnSteer(_) => APPUI_METHOD_TURN_STEER,
+            Self::PeerGather(_) => APPUI_METHOD_PEER_GATHER,
+            Self::ProfileSubProvidersUpsert(_) => APPUI_METHOD_PROFILE_SUB_PROVIDERS_UPSERT,
+            Self::ProfileSubProvidersRemove(_) => APPUI_METHOD_PROFILE_SUB_PROVIDERS_REMOVE,
+            Self::ProfileSkillsList(_) => APPUI_METHOD_PROFILE_SKILLS_LIST,
+            Self::ProfileSkillsRegistrySearch(_) => APPUI_METHOD_PROFILE_SKILLS_REGISTRY_SEARCH,
+            Self::ProfileSkillsInstall(_) => APPUI_METHOD_PROFILE_SKILLS_INSTALL,
+            Self::ProfileSkillsRemove(_) => APPUI_METHOD_PROFILE_SKILLS_REMOVE,
+            Self::ListAgents(_) => APPUI_METHOD_AGENT_LIST,
+            Self::ReadAgentStatus(_) => APPUI_METHOD_AGENT_STATUS_READ,
+            Self::ReadAgentOutput(_) => APPUI_METHOD_AGENT_OUTPUT_READ,
+            Self::ListAgentArtifacts(_) => APPUI_METHOD_AGENT_ARTIFACT_LIST,
+            Self::ReadAgentArtifact(_) => APPUI_METHOD_AGENT_ARTIFACT_READ,
+            Self::InterruptAgent(_) => APPUI_METHOD_AGENT_INTERRUPT,
+            Self::CloseAgent(_) => APPUI_METHOD_AGENT_CLOSE,
+            Self::GetSessionGoal(_) => APPUI_METHOD_SESSION_GOAL_GET,
+            Self::SetSessionGoal(_) => APPUI_METHOD_SESSION_GOAL_SET,
+            Self::ClearSessionGoal(_) => APPUI_METHOD_SESSION_GOAL_CLEAR,
+            Self::CreateLoop(_) => APPUI_METHOD_LOOP_CREATE,
+            Self::ListLoops(_) => APPUI_METHOD_LOOP_LIST,
+            Self::DeleteLoop(_) => APPUI_METHOD_LOOP_DELETE,
+            Self::PauseLoop(_) => APPUI_METHOD_LOOP_PAUSE,
+            Self::ResumeLoop(_) => APPUI_METHOD_LOOP_RESUME,
+            Self::FireLoopNow(_) => APPUI_METHOD_LOOP_FIRE_NOW,
+            // `!`-bang local exec never crosses the wire; the event loop
+            // intercepts it before backend dispatch. This pseudo
+            // method only exists so diagnostics can name the command.
+            Self::LocalShellExec { .. } => APPUI_METHOD_LOCAL_SHELL_EXEC,
+        }
+    }
+}
+
+/// One row in the `/resume` session picker, projected from a `session/list`
+/// entry (the `SessionInfo` shape the server emits: `{id, message_count,
+/// title?}`). `updated_at` is accepted for forward-compat ordering but is
+/// absent from today's `SessionInfo`, so it is `None` in practice. All
+/// non-`id` fields default so a malformed/short entry still parses (the
+/// picker tolerates missing fields rather than dropping the whole list).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ResumeSessionRow {
+    pub id: String,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub message_count: usize,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+    /// First line of the session's most recent user prompt, used as the row's
+    /// codex-style preview. The server may or may not emit it (older builds
+    /// don't), so it defaults to `None` and the picker falls back to `title`.
+    #[serde(default)]
+    pub last_prompt: Option<String>,
+}
+
+/// One row in the `/rewind` turn picker, projected from the ACTIVE session's
+/// user messages (newest-first). Unlike [`ResumeSessionRow`] this is purely
+/// local client state built when the picker opens — it never crosses the wire,
+/// so it is not (de)serialized. `preview` is the first line of the user message
+/// truncated for the row label; `prefill` is the full message text, put back in
+/// the composer after the rewind so the user can edit and resend it; `num_turns`
+/// is how many trailing user turns `session/rollback` drops to reach this one
+/// (newest row → `1`, row `j` → `j + 1`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct RewindTurnRow {
+    pub preview: String,
+    pub num_turns: u32,
+    pub prefill: String,
+    /// Codex-style checkpoint ordinal shown in the row (`#1` = newest). Equals
+    /// `num_turns` by construction; carried explicitly so the render layer and
+    /// `/rewind <n>` inline both speak in "checkpoint N" without re-deriving it.
+    pub checkpoint: u32,
+    /// RFC3339 timestamp of the user message this row rewinds to, for the row's
+    /// relative-time description. `Some` in practice (ra-core `Message`
+    /// always carries a `timestamp`); `None` only if a source ever omits it.
+    pub timestamp: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConfigCapabilitiesListParams {}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConfigCapabilitiesListResult {
+    pub capabilities: UiProtocolCapabilities,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionStatusReadParams {
+    pub session_id: SessionKey,
+}
+
+/// Params for `session/compact` — force a context-compaction pass now.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionCompactParams {
+    pub session_id: SessionKey,
+}
+
+/// Params for `session/compact/mode/set` — pick LLM vs heuristic compaction.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionCompactModeParams {
+    pub session_id: SessionKey,
+    /// `"llm"` or `"heuristic"`.
+    pub mode: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelListParams {
+    pub session_id: SessionKey,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelSelectParams {
+    pub session_id: SessionKey,
+    pub model: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReviewStartParams {
+    pub session_id: SessionKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<TurnId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delivery: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReviewStartResult {
+    #[serde(default)]
+    pub accepted: bool,
+    pub session_id: SessionKey,
+    pub turn_id: TurnId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workflow: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_count: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelStatus {
+    pub model: String,
+    pub provider: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub family: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route: Option<String>,
+    #[serde(default)]
+    pub selected: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub available: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queue_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub qoe_policy: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelListResult {
+    pub session_id: SessionKey,
+    #[serde(default)]
+    pub models: Vec<ModelStatus>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelSelectResult {
+    pub session_id: SessionKey,
+    pub selected: ModelStatus,
+    #[serde(default)]
+    pub applied: bool,
+    /// The selection was persisted, but the currently running profile is
+    /// startup-pinned and cannot use it until the backend restarts.
+    #[serde(default)]
+    pub restart_required: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_policy_stamp: Option<RuntimePolicyStamp>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionStatusReadResult {
+    pub session_id: SessionKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_root: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_turn_id: Option<TurnId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_policy_stamp: Option<RuntimePolicyStamp>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_status_model",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub model: Option<ModelStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permission_profile: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_policy: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filesystem_scope: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_policy_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp_servers: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory_scope: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub health: Option<RuntimeHealthStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_summary: Option<McpStatusSummary>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_summary: Option<ToolStatusSummary>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<SessionUsageStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<SessionCursorStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<UiProtocolCapabilities>,
+}
+
+/// Skew-tolerant decoder for [`SessionStatusReadResult::model`].
+///
+/// ra servers up to protocol 1.1.0 answer `session/status/read` with
+/// `"model": {"model": null, "provider": null, "selected": true}` when the
+/// runtime policy has no resolved model (fresh data dir, onboarding before a
+/// provider is saved). [`ModelStatus::model`]/[`ModelStatus::provider`] are
+/// deliberately non-optional — the model list/select paths genuinely require
+/// them — so decoding that shape directly fails with "invalid type: null"
+/// and takes the ENTIRE status result down with it: the transport surfaces
+/// an `invalid_result` app error and the composer footer degrades to the
+/// `<server authenticated profile>` placeholder.
+///
+/// Semantics: `null`, a missing key, or an otherwise well-formed object
+/// whose `model` or `provider` member is null/absent all MEAN "no model
+/// resolved" and decode to `None` (the footer renders its regular no-model
+/// state). Everything else decodes as a normal [`ModelStatus`]; any
+/// wrongly-typed member is a real protocol error and still fails — the
+/// object is first validated through [`ModelStatusShapeProbe`], so a null
+/// `model`/`provider` never becomes a bypass that masks a malformed
+/// sibling. Unknown extra members keep being ignored, exactly like a plain
+/// [`ModelStatus`] decode.
+fn deserialize_status_model<'de, D>(deserializer: D) -> Result<Option<ModelStatus>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let Some(value) = Option::<serde_json::Value>::deserialize(deserializer)? else {
+        return Ok(None);
+    };
+    if value.is_object() {
+        let probe = ModelStatusShapeProbe::deserialize(&value).map_err(serde::de::Error::custom)?;
+        if probe.model.is_none() || probe.provider.is_none() {
+            return Ok(None);
+        }
+    }
+    ModelStatus::deserialize(value)
+        .map(Some)
+        .map_err(serde::de::Error::custom)
+}
+
+/// [`ModelStatus`] with `model`/`provider` relaxed to `Option` — used ONLY
+/// by [`deserialize_status_model`] to validate a candidate object before the
+/// no-model mapping. Every member a [`ModelStatus`] would type-check is
+/// type-checked here too (null/absent `model`/`provider` being the one
+/// permitted extra), so the skew tolerance cannot swallow a wrongly-typed
+/// sibling like `{"model": null, "provider": 42}`. The `Some` path then
+/// decodes the original value as a plain [`ModelStatus`], so any future
+/// `ModelStatus` field is picked up there without touching this probe.
+#[derive(Deserialize)]
+struct ModelStatusShapeProbe {
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    provider: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    title: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    family: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    route: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    selected: bool,
+    #[serde(default)]
+    #[allow(dead_code)]
+    available: Option<bool>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    queue_mode: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    qoe_policy: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimePolicyStamp {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_policy: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permission_profile: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filesystem_scope: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_policy_id: Option<String>,
+    #[serde(default)]
+    pub mcp_servers: Vec<RuntimePolicyMcpServer>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory_scope: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub qoe_policy: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queue_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_contract_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_contract_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_toolset: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dynamic_tool_discovery: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RuntimePolicyMcpServer {
+    Name(String),
+    Detail {
+        id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        display_name: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        status: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tool_count: Option<u32>,
+    },
+}
+
+impl RuntimePolicyMcpServer {
+    pub fn name(name: impl Into<String>) -> Self {
+        Self::Name(name.into())
+    }
+
+    pub fn label(&self) -> String {
+        match self {
+            Self::Name(name) => name.clone(),
+            Self::Detail {
+                id,
+                display_name,
+                status,
+                tool_count,
+            } => {
+                let name = display_name.as_deref().unwrap_or(id);
+                match (status.as_deref(), tool_count) {
+                    (Some(status), Some(tool_count)) => {
+                        format!("{name} ({status}, {tool_count} tools)")
+                    }
+                    (Some(status), None) => format!("{name} ({status})"),
+                    (None, Some(tool_count)) => format!("{name} ({tool_count} tools)"),
+                    (None, None) => name.to_owned(),
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeHealthStatus {
+    pub status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpStatusSummary {
+    pub connected: u32,
+    pub connecting: u32,
+    pub failed: u32,
+    pub disabled: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolStatusSummary {
+    pub visible: u32,
+    pub enabled: u32,
+    pub denied: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionUsageStatus {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_tokens: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_tokens: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cached_input_tokens: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cached_output_tokens: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub estimated_cost_micros_usd: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionCursorStatus {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<ra_core::ui_protocol::UiCursor>,
+    #[serde(default)]
+    pub healthy: bool,
+    #[serde(default)]
+    pub replay_supported: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpStatusListParams {
+    pub session_id: SessionKey,
+    #[serde(default)]
+    pub include_disabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpStatusListResult {
+    pub session_id: SessionKey,
+    #[serde(default)]
+    pub servers: Vec<McpStatus>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpStatus {
+    pub server: String,
+    pub status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transport: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_count: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolStatusListParams {
+    pub session_id: SessionKey,
+    #[serde(default)]
+    pub include_denied: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolStatusListResult {
+    pub session_id: SessionKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coding_tool_contract: Option<CodingToolContract>,
+    #[serde(default)]
+    pub tools: Vec<ToolStatus>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CodingToolContract {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub version: String,
+    #[serde(default)]
+    pub feature: String,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub required_tool_names: Vec<String>,
+    #[serde(default)]
+    pub required_tools: Vec<CodingToolContractTool>,
+    #[serde(default)]
+    pub missing_required_tools: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy: Option<CodingToolContractPolicy>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CodingToolContractPolicy {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_policy_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_policy: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CodingToolContractTool {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub aliases: Vec<String>,
+    #[serde(default)]
+    pub capability: String,
+    #[serde(default)]
+    pub policy: String,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend_tool: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+/// M13-D supervised task list entry shape. This mirrors the server-emitted
+/// `TaskListResult.tasks[*]` envelope so the TUI can deserialize the new
+/// `source` / `role` / `summary` / `artifact_count` / `runtime_policy_stamp`
+/// fields backend sibling shipped on `task/list` and `task/updated` payloads
+/// without taking a hard dependency on the protocol type. The struct is
+/// permissive (`#[serde(default)]` on optionals, unknown fields tolerated)
+/// so the TUI never crashes when the server adds more inspection metadata.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SupervisedTaskEntry {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<TaskId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifecycle_state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_state: Option<String>,
+    /// `"model"` (LLM-scheduled child), `"supervisor"` (backend-scheduled,
+    /// e.g. review/start), or `"user"` (explicit user-driven). Used to
+    /// indent / badge children under the parent request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Role label assigned at spawn time (e.g. `"reviewer"`,
+    /// `"implementer"`). Pairs with M14-C role templates so the TUI can
+    /// render "Reviewer running" instead of `task-xxx running`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    /// Bounded summary capsule for the task (mirrors
+    /// `ChildResultSummary.summary` for terminal children). Short text
+    /// that clients render inline without fetching the full artifact list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// Number of artifacts the child has emitted. Lets the UX badge tasks
+    /// without resolving `task/artifact/list`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact_count: Option<u32>,
+    /// Runtime policy stamp captured at spawn time. Reconnect hydration
+    /// surfaces the same effective state the original `task/updated`
+    /// notifications announced.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_policy_stamp: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_session_key: Option<SessionKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub child_session_key: Option<SessionKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub child_terminal_state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub child_join_state: Option<String>,
+}
+
+impl SupervisedTaskEntry {
+    /// Returns `true` when this entry was scheduled by the LLM (model) or by
+    /// a backend supervisor (review/start). User-scheduled tasks are not
+    /// supervised children in the M13 sense.
+    pub fn is_backend_supervised(&self) -> bool {
+        matches!(self.source.as_deref(), Some("model") | Some("supervisor"))
+    }
+
+    /// Display label preferring role over tool name. Falls back to the
+    /// tool name, then `"task"`. Never invents text that is not on the
+    /// wire.
+    pub fn display_label(&self) -> String {
+        if let Some(role) = self.role.as_deref().filter(|r| !r.trim().is_empty()) {
+            return role.to_string();
+        }
+        if let Some(tool) = self.tool_name.as_deref().filter(|t| !t.trim().is_empty()) {
+            return tool.to_string();
+        }
+        "task".to_string()
+    }
+}
+
+/// M13-D artifact summary returned by `task/artifact/list`. Permissive
+/// (`Value` for `extra`-style fields) so the TUI keeps deserializing as the
+/// backend adds richer metadata in later M13 milestones.
+/// M16-G2 active context state snapshot. Carries hashes and counts
+/// only — never raw transcript content, per spec §16. The TUI keeps
+/// this in a bounded status surface; it is NOT appended to chat
+/// history.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextLifecycleState {
+    pub session_id: SessionKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thread_id: Option<String>,
+    pub generation: u64,
+    #[serde(default)]
+    pub transcript_hash: String,
+    #[serde(default)]
+    pub item_count: usize,
+    #[serde(default)]
+    pub token_estimate: usize,
+    /// `"healthy"`, `"recovering"`, `"degraded"` etc. — the backend is
+    /// authoritative; the TUI just labels it.
+    #[serde(default)]
+    pub recovery_state: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_checkpoint_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_compaction_id: Option<String>,
+}
+
+/// In-flight context compaction (UPCR-2026-026).
+#[derive(Debug, Clone)]
+pub struct LiveCompaction {
+    pub started_at: std::time::Instant,
+    /// Set when the matching `ContextCompactionCompleted` lands. The server
+    /// pass is synchronous, so started/completed arrive in one drain batch
+    /// and draws only follow the batch — without a settled dwell the block
+    /// would paint zero frames. The renderer keeps showing a settled state
+    /// for a short window after this timestamp.
+    pub completed_at: Option<std::time::Instant>,
+    /// Post-compaction estimate from the completed event (for the settled
+    /// `before → after` line).
+    pub token_estimate_after: Option<u64>,
+    pub token_estimate_before: u64,
+    pub threshold_tokens: u64,
+    pub trigger: String,
+    /// The turn that was live when compaction started — terminal-driven
+    /// cleanup only clears a block owned by THAT turn (a stale/duplicate
+    /// terminal must not clear a newer turn's block).
+    pub turn_id: Option<TurnId>,
+}
+
+/// M16-G2 last-compaction record summary (truncated). The full record
+/// carries hashes and counts the TUI never renders to chat — only the
+/// bounded labels reach the status surface.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextCompactionSummary {
+    #[serde(default)]
+    pub compaction_id: String,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub trigger: String,
+    #[serde(default)]
+    pub input_generation: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_generation: Option<u64>,
+    #[serde(default)]
+    pub retained_count: usize,
+    #[serde(default)]
+    pub dropped_count: usize,
+    #[serde(default)]
+    pub token_estimate_before: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_estimate_after: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// M16-G2 normalization report summary. Same containment policy as
+/// compaction: counts only, never raw items.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextNormalizationSummary {
+    #[serde(default)]
+    pub generation: u64,
+    #[serde(default)]
+    pub model_capability_id: String,
+    #[serde(default)]
+    pub prompt_message_count: usize,
+    #[serde(default)]
+    pub token_estimate: usize,
+    #[serde(default)]
+    pub repaired_count: usize,
+    #[serde(default)]
+    pub dropped_count: usize,
+    #[serde(default)]
+    pub synthetic_count: usize,
+    #[serde(default)]
+    pub truncated_count: usize,
+}
+
+/// Additive OUP cache/semantic-boundary diagnostics carried inside
+/// `context_state`. The pinned `ra-core` predates these optional fields, so
+/// the transport extracts them from the raw JSON frame before the vendored
+/// decoder discards unknown fields. They are display-only: ra remains the
+/// sole owner of cache epochs, invalidation, and boundary policy.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextCacheDiagnostics {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_epoch_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_cache_invalidation_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semantic_head_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semantic_head_kind: Option<String>,
+}
+
+impl ContextCacheDiagnostics {
+    pub fn is_empty(&self) -> bool {
+        self.cache_epoch_id.is_none()
+            && self.last_cache_invalidation_reason.is_none()
+            && self.semantic_head_id.is_none()
+            && self.semantic_head_kind.is_none()
+    }
+}
+
+/// M16-G2 per-session lifecycle ledger. Holds the latest context
+/// state plus the most recent compaction/normalization summaries. The
+/// TUI renders these in a bounded status surface (NOT chat history).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SessionContextLifecycle {
+    pub state: Option<ContextLifecycleState>,
+    pub last_compaction: Option<ContextCompactionSummary>,
+    pub last_normalization: Option<ContextNormalizationSummary>,
+    /// Optional display-only diagnostics from newer OUP servers. `None` keeps
+    /// old-server behavior byte-for-byte and hides the `/context` cache pane.
+    pub cache_diagnostics: Option<ContextCacheDiagnostics>,
+}
+
+impl SessionContextLifecycle {
+    /// Apply a `context/compaction_completed` notification.
+    pub fn apply_compaction(
+        &mut self,
+        state: ContextLifecycleState,
+        compaction: ContextCompactionSummary,
+    ) {
+        self.state = Some(state);
+        self.last_compaction = Some(compaction);
+    }
+
+    /// Apply a `context/normalization_reported` notification.
+    pub fn apply_normalization(
+        &mut self,
+        state: ContextLifecycleState,
+        normalization: ContextNormalizationSummary,
+    ) {
+        self.state = Some(state);
+        self.last_normalization = Some(normalization);
+    }
+
+    /// Bounded one-line summary suitable for the status surface. Empty
+    /// when the server has not advertised lifecycle state yet (the TUI
+    /// must hide the surface in that case rather than render zeros).
+    pub fn summary_line(&self) -> Option<String> {
+        let state = self.state.as_ref()?;
+        let mut line = format!(
+            "context gen={} items={} ~{} tok",
+            state.generation, state.item_count, state.token_estimate
+        );
+        if !state.recovery_state.is_empty() && state.recovery_state != "healthy" {
+            line.push_str(&format!(" ({})", state.recovery_state));
+        }
+        if let Some(compaction) = &self.last_compaction {
+            line.push_str(&format!(
+                " | compacted {}->{} retained={} dropped={}",
+                compaction.input_generation,
+                compaction
+                    .output_generation
+                    .map(|g| g.to_string())
+                    .unwrap_or_else(|| "?".into()),
+                compaction.retained_count,
+                compaction.dropped_count,
+            ));
+        }
+        Some(line)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SupervisedTaskArtifact {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolStatus {
+    pub tool: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub visible: bool,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub risk: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub denial: Option<ToolPolicyDenial>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolPolicyDenial {
+    pub code: String,
+    pub tool: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy: Option<String>,
+    pub reason: String,
+    #[serde(default)]
+    pub recoverable: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpConfigListParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<SessionKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default)]
+    pub include_disabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpConfigUpsertParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub server: String,
+    #[serde(default)]
+    pub config: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpConfigDeleteParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub server: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpConfigSetEnabledParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub server: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpConfigTestParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<SessionKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub server: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpConfigListResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<SessionKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default, alias = "mcp_servers", alias = "configs")]
+    pub servers: Vec<McpConfigEntry>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpConfigEntry {
+    #[serde(default, alias = "server", alias = "id")]
+    pub name: String,
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transport: Option<String>,
+    #[serde(default, alias = "url", skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env_keys: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_count: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpConfigMutationResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<SessionKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default)]
+    pub ok: bool,
+    #[serde(default)]
+    pub applied: bool,
+    #[serde(
+        default,
+        alias = "id",
+        alias = "deleted",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub server: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry: Option<McpConfigEntry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolConfigListParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<SessionKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default)]
+    pub include_disabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolConfigSetEnabledParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub tool: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolConfigUpsertParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub tool: String,
+    #[serde(default)]
+    pub config: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolConfigDeleteParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub tool: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolConfigTestParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<SessionKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub tool: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolConfigListResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<SessionKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_id: Option<String>,
+    #[serde(default, alias = "configs")]
+    pub tools: Vec<ToolConfigEntry>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolConfigEntry {
+    #[serde(default, alias = "name", alias = "id")]
+    pub tool: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub visible: bool,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub risk: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolConfigMutationResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<SessionKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default)]
+    pub ok: bool,
+    #[serde(default)]
+    pub applied: bool,
+    #[serde(
+        default,
+        alias = "name",
+        alias = "deleted",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub tool: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry: Option<ToolConfigEntry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthStatusParams {}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthSendCodeParams {
+    pub email: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthVerifyParams {
+    pub email: String,
+    pub code: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthMeParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token: Option<AppUiAuthToken>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthLogoutParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token: Option<AppUiAuthToken>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthStatusResult {
+    #[serde(default)]
+    pub bootstrap_mode: bool,
+    #[serde(default)]
+    pub email_login_enabled: bool,
+    #[serde(default)]
+    pub admin_token_login_enabled: bool,
+    #[serde(default)]
+    pub allow_self_registration: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scoped_profile: Option<AuthScopedProfile>,
+    #[serde(default)]
+    pub authenticated: bool,
+    #[serde(default)]
+    pub email_otp: bool,
+    #[serde(default)]
+    pub token_login: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthScopedProfile {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub email_login_enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthSendCodeResult {
+    pub ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AppUiAuthToken(String);
+
+impl AppUiAuthToken {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn expose_for_transport(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for AppUiAuthToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("\"********\"")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AuthVerifyResult {
+    pub ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token: Option<AppUiAuthToken>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AuthMeResult {
+    Dashboard {
+        user: Value,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        profile: Option<Value>,
+        portal: Value,
+    },
+    Legacy {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        email: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        profile_id: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthLogoutResult {
+    pub ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileLocalCreateParams {
+    /// Meaningful profile id the user typed during onboarding (nameable-profiles
+    /// flow, e.g. `glm`). Omitted from the wire when `None` so an older server
+    /// receives exactly the legacy `{name, username, email}` shape and derives
+    /// the id from `username` as before. Only sent when the server advertises
+    /// [`APPUI_FEATURE_PROFILE_LOCAL_CREATE_REQUESTED_ID_V1`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requested_id: Option<String>,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub username: String,
+    #[serde(default)]
+    pub email: String,
+    /// When `Some(true)`, ask the server to record the created profile as the
+    /// machine's global default (the brain a bare launch resolves to in a folder
+    /// with no sticky profile). Omitted from the wire when `None` so older
+    /// servers get the unchanged shape. Only sent when the server advertises
+    /// [`APPUI_FEATURE_PROFILE_LOCAL_CREATE_DEFAULT_V1`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub make_default: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileLocalCreateResult {
+    pub profile_id: String,
+    pub user_id: String,
+    pub name: String,
+    pub username: String,
+    pub email: String,
+    #[serde(default)]
+    pub created: bool,
+    pub runtime_mode: String,
+}
+
+/// Parameters for `launch/resolve` — the per-project launch decision. `cwd` is
+/// the folder the user launched in; `profile_id` is the explicitly requested
+/// brain (`--profile`), omitted for a bare launch so the server falls back to
+/// the folder's sticky profile then the default.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LaunchResolveParams {
+    pub cwd: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+}
+
+/// The server's per-project launch decision. Mirrors the server-side
+/// `LaunchDecisionKind`; snake_case on the wire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LaunchDecisionKind {
+    /// The resolved profile already has an activated store in this folder —
+    /// resume its conversation.
+    Resume,
+    /// The resolved profile exists but this folder has no store yet — prompt to
+    /// activate the space before opening.
+    Activate,
+    /// The launching profile differs from the profile(s) already used in this
+    /// folder — offer to switch or start fresh.
+    CrossProfile,
+    /// No profile could be resolved (none requested, no sticky, no default) —
+    /// fall through to onboarding.
+    NoProfile,
+}
+
+/// Result of `launch/resolve`. `resolved_profile` is the brain the decision
+/// points at (set for Resume/Activate/CrossProfile); `existing_profiles` lists
+/// the other profiles already used in this folder (populated for CrossProfile).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LaunchResolveResult {
+    pub decision: LaunchDecisionKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_profile: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub existing_profiles: Vec<String>,
+}
+
+/// Transient state for an open launch prompt (Activate / CrossProfile). Stashed
+/// on the onboarding wizard state so the `launch_prompt` menu provider can
+/// render the decision. Only raised for decisions that carry a resolved profile
+/// — Resume opens straight through and NoProfile routes to onboarding, so
+/// neither ever populates this.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LaunchPromptState {
+    pub decision: LaunchDecisionKind,
+    /// The brain the launch resolved to (the launching profile for
+    /// CrossProfile, the sticky/default for Activate).
+    pub resolved_profile: String,
+    /// Other profiles already used in this folder (CrossProfile only).
+    pub existing_profiles: Vec<String>,
+    /// The folder the prompt is deciding for; attached to `session/open` so the
+    /// session lands in this folder's per-project store.
+    pub cwd: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum OnboardingAction {
+    Open,
+    OpenLogin,
+    OpenProvider,
+    SetName(String),
+    SetUsername(String),
+    SetEmail(String),
+    SetOtpCode(String),
+    /// Nameable-profiles flow: set the single "Name this profile" value.
+    SetRequestedId(String),
+    /// Nameable-profiles flow: toggle whether the created profile becomes the
+    /// machine's global default (sends `make_default` on create).
+    SetMakeDefault(bool),
+    SetProfileId(String),
+    SetProviderSelection(Box<LlmSelectionConfig>),
+    SetFamilyId(String),
+    SetModelId(String),
+    SetRouteId(String),
+    SetRouteLabel(String),
+    SetBaseUrl(String),
+    SetApiKeyEnv(String),
+    SetApiType(String),
+    SetApiKey(SecretString),
+    ClearApiKey,
+    SendCode,
+    VerifyCode,
+    CreateLocalProfile,
+    RefreshCatalog,
+    RefreshProviders,
+    FetchModels,
+    SaveProvider,
+    SaveProviderFallback,
+    TestProvider,
+    /// M22-C: stage a candidate workspace path.
+    SetWorkspace(String),
+    /// M22-C: probe the staged candidate (or the active
+    /// `state.workspace.root` if no candidate) and update
+    /// `workspace_validation`.
+    ValidateWorkspace,
+    /// M22-C: clear staged candidate and reset validation status.
+    ResetWorkspace,
+    /// M22-D: stage a permission-profile update to apply after the
+    /// first session opens. `None` clears the staged choice.
+    StagePermissionProfile(Option<ra_core::ui_protocol::PermissionProfileUpdate>),
+    /// M22-F: render the doctor report (pass/warn/fail/skip per
+    /// onboarding category) in the status line and as an
+    /// activity entry.
+    Doctor,
+    Finish,
+    Reset,
+}
+
+/// M22-F: outcome of a single doctor check.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OnboardingDoctorOutcome {
+    /// Check passed; `detail` carries a short summary.
+    Pass { detail: String },
+    /// Check is recoverable; `recovery` names the user action.
+    Warn { reason: String, recovery: String },
+    /// Check failed; `recovery` names the user action.
+    Fail { reason: String, recovery: String },
+    /// Check could not run (capability missing); `detail` names
+    /// the unsupported method.
+    Skipped { detail: String },
+}
+
+impl OnboardingDoctorOutcome {
+    pub fn is_pass(&self) -> bool {
+        matches!(self, Self::Pass { .. })
+    }
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Pass { .. } => "PASS",
+            Self::Warn { .. } => "WARN",
+            Self::Fail { .. } => "FAIL",
+            Self::Skipped { .. } => "SKIP",
+        }
+    }
+}
+
+/// M22-F: a single doctor check row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OnboardingDoctorCheck {
+    pub id: &'static str,
+    pub title: &'static str,
+    pub outcome: OnboardingDoctorOutcome,
+}
+
+/// M22-F: aggregated doctor report. The wizard owns the
+/// aggregation so the doctor surface is just a typed projection
+/// of existing state — there is no new mutable repair step,
+/// only typed recovery copy that points at the existing
+/// `/onboard <step>` actions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OnboardingDoctorReport {
+    pub checks: Vec<OnboardingDoctorCheck>,
+}
+
+impl OnboardingDoctorReport {
+    pub fn any_failures(&self) -> bool {
+        self.checks
+            .iter()
+            .any(|check| matches!(check.outcome, OnboardingDoctorOutcome::Fail { .. }))
+    }
+    pub fn any_warnings(&self) -> bool {
+        self.checks
+            .iter()
+            .any(|check| matches!(check.outcome, OnboardingDoctorOutcome::Warn { .. }))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OnboardingProviderPending {
+    Test,
+    Save,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OnboardingProviderSaveTarget {
+    Primary,
+    Fallback,
+    /// Save the staged provider as a research sub-provider lane (the `/research`
+    /// add flow reuses the model wizard, but the result lands in
+    /// `profile/sub_providers/upsert` as a named lane, not the profile's
+    /// primary/fallback provider).
+    ResearchLane,
+}
+
+/// M22-E: product-grade lifecycle status for the provider setup
+/// step. Computed from existing fields (`selection_ready`,
+/// `has_api_key`, `provider_pending`, `provider_tested`,
+/// `provider_saved`, `last_saved_provider_target`) so we do NOT
+/// introduce a separate state machine. The variants map directly
+/// to the menu rows and status-bar copy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OnboardingProviderStatus {
+    /// No family/model/route selected yet.
+    NotSelected,
+    /// Family/model/route chosen but no API key staged.
+    KeyMissing,
+    /// `profile/llm/test` in flight.
+    Testing,
+    /// Last test failed; reason is the server message.
+    TestFailed { reason: String },
+    /// `profile/llm/upsert` in flight (primary or fallback).
+    Saving(OnboardingProviderSaveTarget),
+    /// Saved primary provider — finish is unlocked.
+    SavedPrimary,
+    /// Saved as a fallback only — primary save is still needed
+    /// before finish.
+    SavedFallback,
+    /// Selection + key staged, ready to test/save.
+    Ready,
+}
+
+/// M22-C: workspace validation status for the onboarding step.
+/// Backend-owned workspace/probe methods are not yet wired (see
+/// the contract slice-0 note), so the TUI does its own client-side
+/// probe and flags the result so `session/open` is only invoked
+/// once we have a `Valid` status. When the backend adds a workspace-
+/// probe RPC this enum stays the same — only the producer of the
+/// status changes from client-side to RPC.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OnboardingWorkspaceValidation {
+    /// No candidate has been staged or validated yet.
+    Unvalidated,
+    /// Probe is in flight (reserved for the future RPC path).
+    Validating,
+    /// Path exists, is a directory, and meets the policy preview.
+    Valid {
+        canonical: String,
+        writable: bool,
+        has_workspace_toml: bool,
+    },
+    /// Probe failed. The user must address `reason` before finish.
+    Invalid { reason: String },
+}
+
+impl OnboardingWorkspaceValidation {
+    pub fn is_valid(&self) -> bool {
+        matches!(self, Self::Valid { .. })
+    }
+
+    pub fn is_unvalidated(&self) -> bool {
+        matches!(self, Self::Unvalidated)
+    }
+}
+
+/// M22-B local-profile recovery state. Set when `profile/local/create`
+/// fails or pre-flight validation rejects the staged owner. The wizard
+/// renders this as the focused field plus a typed recovery message so
+/// the user is not shoved out of the profile step on a generic error
+/// status line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OnboardingLocalProfileRecovery {
+    pub kind: OnboardingLocalProfileErrorKind,
+    pub focus_field: OnboardingLocalProfileField,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OnboardingLocalProfileErrorKind {
+    /// Backend rejected the username with `profile_local_collision`.
+    Collision,
+    /// Backend does not advertise `profile/local/create`
+    /// (`profile_local_unsupported`).
+    Unsupported,
+    /// Server-side `invalid_params` rejected a staged field.
+    InvalidParams,
+    /// Pre-flight client-side validation rejected a field before any
+    /// RPC was issued.
+    InvalidField,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OnboardingLocalProfileField {
+    Name,
+    Username,
+    Email,
+    /// Nameable-profiles flow: the single "Name this profile" prompt
+    /// (the requested profile id). Focused when that flow's validation
+    /// rejects an (effectively) empty id.
+    RequestedId,
+}
+
+impl OnboardingLocalProfileField {
+    pub fn slug(self) -> &'static str {
+        match self {
+            Self::Name => "name",
+            Self::Username => "username",
+            Self::Email => "email",
+            Self::RequestedId => "profile-name",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OnboardingWizardState {
+    pub name: String,
+    pub username: String,
+    pub email: String,
+    pub otp_code: String,
+    /// Nameable-profiles flow (Phase 2): the single profile id the user types at
+    /// the "Name this profile" prompt (e.g. `glm`). Sent as `requested_id` when
+    /// the server advertises
+    /// [`APPUI_FEATURE_PROFILE_LOCAL_CREATE_REQUESTED_ID_V1`]. Empty until the
+    /// user edits it, in which case a provider-derived suggestion is used.
+    pub requested_id: String,
+    /// Nameable-profiles flow: when true, the create sends `make_default` so the
+    /// server records this profile as the machine's global default (the brain a
+    /// bare launch resolves to in a fresh folder). Toggled by the onboarding
+    /// "Make this your default brain?" row; only surfaced/sent when the server
+    /// advertises [`APPUI_FEATURE_PROFILE_LOCAL_CREATE_DEFAULT_V1`].
+    pub make_default: bool,
+    /// Phase 3 startup picker: the `--profile-id` the process launched with, if
+    /// any. Seeded once at launch. Drives [`StartupProfileDecision`]; a pinned
+    /// id is honored unchanged and never triggers the picker.
+    pub launch_profile_id: Option<String>,
+    /// Phase 3 startup picker: existing local profile ids discovered at launch
+    /// (solo servers store them on disk). Empty on legacy/remote servers or a
+    /// first-ever run. Drives the 0/1/N [`StartupProfileDecision`] and populates
+    /// the picker menu.
+    pub available_profiles: Vec<String>,
+    /// In-TUI profiles surface: the machine default profile id (from the
+    /// `default-profile` pointer on disk), so the picker can mark it `*` and the
+    /// per-profile action menu can grey out "set default" for the current one.
+    /// Refreshed whenever the surface opens or a set-default/delete lands.
+    pub default_profile: Option<String>,
+    /// In-TUI profiles surface: the server data dir (parent of `profiles/`),
+    /// resolved once at launch from the stdio command. `None` for a remote
+    /// launch — set-default/delete are on-disk local-solo operations, so the
+    /// surface offers them only when this is known.
+    pub profiles_data_dir: Option<String>,
+    /// In-TUI profiles surface: the profile id the per-profile action menu (and
+    /// its delete confirm) is scoped to — set when the user picks a row in the
+    /// profiles list. `None` outside that drill-in.
+    pub selected_profile: Option<String>,
+    /// "Create a new profile" was chosen from the profiles surface: force the
+    /// onboarding wizard to the "Name this profile" create step even when a
+    /// session is active (whose profile would otherwise route the wizard to
+    /// provider-setup). Cleared once the new profile is created or the profiles
+    /// surface reopens.
+    pub creating_new_profile: bool,
+    /// Per-project launch flow: the pending Activate / CrossProfile prompt for
+    /// the `launch_prompt` menu, stashed when a `launch/resolve` decision needs
+    /// the user to choose. `None` outside that prompt. See [`LaunchPromptState`].
+    pub launch_prompt: Option<LaunchPromptState>,
+    pub profile_id: Option<String>,
+    pub local_profile_created: bool,
+    pub open_session_after_profile_create: bool,
+    /// M22-C: workspace candidate the user has staged via
+    /// `/onboard workspace <path>`. `None` means the active
+    /// `state.workspace.root` is used. Held separately from
+    /// `state.workspace` so the candidate can be probed and either
+    /// accepted (replacing `workspace.root`) or rejected without
+    /// mutating the active workspace pane.
+    pub workspace_candidate: Option<String>,
+    /// M22-C: result of the most recent workspace probe. Defaults
+    /// to `Unvalidated`. `onboarding_finish_command` refuses to
+    /// emit `session/open` unless this is `Valid`.
+    pub workspace_validation: OnboardingWorkspaceValidation,
+    /// M22-D: permission profile the user has staged for the first
+    /// session. Held in the wizard so the choice renders before the
+    /// session opens, without claiming the policy is yet effective.
+    /// After `session/open` succeeds and `permission/profile/set`
+    /// is supported, the store sends the staged update; the
+    /// server's runtime policy stamp is the final authority.
+    pub staged_permission_profile: Option<ra_core::ui_protocol::PermissionProfileUpdate>,
+    /// M22-D: human-readable mismatch reason when the runtime
+    /// policy stamp diverges from the staged permission profile
+    /// (server clamped or rejected the user's choice). `None`
+    /// while no mismatch has been observed.
+    pub permission_profile_mismatch: Option<String>,
+    /// M22-B: true while a `profile/local/create` RPC is in flight.
+    /// Lets `AppUiEvent::Error` attribute typed onboarding errors back
+    /// to the profile step without inspecting error message strings.
+    pub local_profile_create_pending: bool,
+    /// M22-B: username captured at the moment `profile/local/create`
+    /// was submitted. The collision recovery message uses THIS value
+    /// so a late server error never claims the freshly-edited staged
+    /// username was the one rejected. `None` when no create RPC has
+    /// been submitted (or after a success/failure has cleared it).
+    pub local_profile_create_pending_username: Option<String>,
+    /// M22-B: typed recovery for the local-profile step. `None` when
+    /// the step is clean; populated by server `profile_local_*` errors
+    /// or client-side validation.
+    pub local_profile_recovery: Option<OnboardingLocalProfileRecovery>,
+    pub auth_email_enabled: Option<bool>,
+    pub auth_code_sent: bool,
+    pub auth_verified: bool,
+    pub auth_token: Option<AppUiAuthToken>,
+    pub provider: LlmSelectionConfig,
+    pub api_key: Option<SecretString>,
+    pub provider_saved: bool,
+    pub provider_tested: bool,
+    pub provider_pending: Option<OnboardingProviderPending>,
+    /// When the in-flight Test/Save/Fetch was first OBSERVED pending — a LOCAL
+    /// `Instant` stamped lazily by `Store::sweep_provider_pending` (nothing
+    /// else writes it). Backs the no-response timeout: a lost RPC response
+    /// used to leave `provider_pending` set forever, freezing the staged
+    /// surface on "Testing connection…" with every edit blocked.
+    pub provider_pending_since: Option<std::time::Instant>,
+    /// The model staged for removal by `/model` → "Remove a model…" — read by
+    /// the confirm menu (`MENU_MODEL_REMOVE_CONFIRM`), whose Yes row sends
+    /// `profile/llm/delete` with these coordinates.
+    pub pending_model_removal: Option<ModelRemovalRequest>,
+    /// A research lane staged for removal by the `/research` menu — read by the
+    /// confirm menu (`MENU_RESEARCH_REMOVE_CONFIRM`), whose Yes row sends
+    /// `profile/sub_providers/remove` with the captured `profile_id` + `key`.
+    pub pending_research_lane_removal: Option<ResearchLaneRemoval>,
+    /// #1768: snapshot staged for restore by `/undo` — read by
+    /// `MENU_UNDO_CONFIRM`, whose Yes row sends `snapshot/restore`.
+    pub pending_snapshot_restore: Option<SnapshotRestoreRequest>,
+    pub provider_save_target: Option<OnboardingProviderSaveTarget>,
+    /// Persistent "this wizard session is creating a RESEARCH lane" intent, set
+    /// by bare `/research add` and kept for the WHOLE flow. Unlike
+    /// `provider_save_target` (a pending-op field cleared on every staged-input
+    /// edit), this is NOT cleared by `mark_onboarding_provider_dirty` /
+    /// `apply_selection` / key updates, so the Save routing stays lane-targeted
+    /// across normal wizard interaction (codex PR384 review).
+    pub research_lane_intent: bool,
+    /// The lane key ("cheap"/"strong") chosen in `MENU_RESEARCH_LANE_KEY` for
+    /// the lane save currently in flight. Stashed at dispatch so the applied
+    /// event can name the key in the confirmation; taken on consume, dropped
+    /// on error/timeout alongside `provider_pending`.
+    pub pending_research_lane_key: Option<String>,
+    pub last_saved_provider_label: Option<String>,
+    pub last_saved_provider_target: Option<OnboardingProviderSaveTarget>,
+    pub saved_primary_provider_label: Option<String>,
+    /// M22-E: typed failure reason for the most recent
+    /// `profile/llm/test`. Populated when the test resolves with
+    /// `ok = false`; cleared on a successful test, re-selection,
+    /// or save. Used by `provider_status` to render the
+    /// `TestFailed` variant with the server reason and by the menu
+    /// to surface a recovery message.
+    pub provider_test_failure_reason: Option<String>,
+    pub last_message: Option<String>,
+}
+
+impl Default for OnboardingWizardState {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            username: String::new(),
+            email: String::new(),
+            otp_code: String::new(),
+            requested_id: String::new(),
+            make_default: false,
+            launch_profile_id: None,
+            available_profiles: Vec::new(),
+            default_profile: None,
+            profiles_data_dir: None,
+            selected_profile: None,
+            creating_new_profile: false,
+            launch_prompt: None,
+            profile_id: None,
+            local_profile_created: false,
+            open_session_after_profile_create: false,
+            workspace_candidate: None,
+            workspace_validation: OnboardingWorkspaceValidation::Unvalidated,
+            staged_permission_profile: None,
+            permission_profile_mismatch: None,
+            local_profile_create_pending: false,
+            local_profile_create_pending_username: None,
+            local_profile_recovery: None,
+            auth_email_enabled: None,
+            auth_code_sent: false,
+            auth_verified: false,
+            auth_token: None,
+            provider: empty_llm_selection_config(),
+            api_key: None,
+            provider_saved: false,
+            provider_tested: false,
+            provider_pending: None,
+            provider_pending_since: None,
+            pending_model_removal: None,
+            pending_research_lane_removal: None,
+            pending_snapshot_restore: None,
+            provider_save_target: None,
+            research_lane_intent: false,
+            pending_research_lane_key: None,
+            last_saved_provider_label: None,
+            last_saved_provider_target: None,
+            saved_primary_provider_label: None,
+            provider_test_failure_reason: None,
+            last_message: None,
+        }
+    }
+}
+
+fn empty_llm_selection_config() -> LlmSelectionConfig {
+    LlmSelectionConfig {
+        family_id: String::new(),
+        model_id: String::new(),
+        route: LlmRouteConfig {
+            route_id: String::new(),
+            label: None,
+            base_url: None,
+            api_key_env: None,
+            api_type: Some("openai".into()),
+        },
+        ..LlmSelectionConfig::default()
+    }
+}
+
+impl OnboardingWizardState {
+    pub fn effective_profile_id(&self, current_profile: Option<&str>) -> Option<String> {
+        self.profile_id
+            .as_deref()
+            .filter(|profile| !profile.trim().is_empty())
+            .map(str::to_owned)
+            .or_else(|| current_profile.map(str::to_owned))
+    }
+
+    pub fn has_email(&self) -> bool {
+        !self.email.trim().is_empty()
+    }
+
+    pub fn has_name(&self) -> bool {
+        !self.name.trim().is_empty()
+    }
+
+    pub fn has_username(&self) -> bool {
+        !self.username.trim().is_empty()
+    }
+
+    pub fn local_profile_ready(&self) -> bool {
+        // The contract calls email "optional metadata" for solo
+        // mode, but the current backend implementation of
+        // `profile/local/create` still validates `email` as
+        // non-empty and rejects `""` with
+        // `profile_local_invalid_email`. Until the backend relaxes
+        // that, the TUI must keep email required so the menu does
+        // not invite the user into a guaranteed-failure submission.
+        self.has_name() && self.has_username() && self.has_email()
+    }
+
+    /// Nameable-profiles flow: `true` when the user has typed a profile id.
+    pub fn has_requested_id(&self) -> bool {
+        !self.requested_id.trim().is_empty()
+    }
+
+    /// The profile id suggested by default at the "Name this profile" prompt,
+    /// derived from the chosen provider/model family (e.g. the zai/glm family
+    /// suggests `glm`). Falls back to a neutral id when no family is picked yet.
+    pub fn suggested_profile_id(&self) -> String {
+        suggest_profile_id_for_family(&self.provider.family_id)
+    }
+
+    /// The id the nameable-profiles create actually sends: the user's typed
+    /// value when present, otherwise the provider-derived suggestion. Always
+    /// non-empty, so the "Continue" action never dead-ends on a blank field —
+    /// the user can accept the suggestion with a single keypress. The server
+    /// normalizes and collision-suffixes it, returning the final id.
+    pub fn effective_requested_id(&self) -> String {
+        let typed = self.requested_id.trim();
+        if typed.is_empty() {
+            self.suggested_profile_id()
+        } else {
+            typed.to_owned()
+        }
+    }
+
+    /// Nameable-profiles pre-flight: the effective id is always non-empty, so
+    /// this normally succeeds. It still guards defensively (an all-whitespace
+    /// suggestion should never happen) so the create path has one validation
+    /// entry point mirroring [`Self::validate_local_profile`].
+    pub fn validate_local_profile_requested_id(
+        &self,
+    ) -> Result<(), OnboardingLocalProfileRecovery> {
+        if self.effective_requested_id().trim().is_empty() {
+            return Err(OnboardingLocalProfileRecovery {
+                kind: OnboardingLocalProfileErrorKind::InvalidField,
+                focus_field: OnboardingLocalProfileField::RequestedId,
+                message: t!("onboarding.validation.profile_name_required").into_owned(),
+            });
+        }
+        Ok(())
+    }
+
+    /// M22-C: the path the user wants to use for the session. Falls
+    /// back to the active workspace root when no candidate has been
+    /// staged so the wizard can re-validate a previously-accepted
+    /// workspace.
+    pub fn workspace_target<'a>(&'a self, active_workspace: &'a str) -> &'a str {
+        self.workspace_candidate
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| active_workspace.trim())
+    }
+
+    /// M22-C: only valid workspaces unlock `session/open`. Pre-
+    /// flight validation produces this status; the contract slice
+    /// 7 requires it.
+    pub fn workspace_ready_for_finish(&self) -> bool {
+        self.workspace_validation.is_valid()
+    }
+
+    pub fn has_otp_code(&self) -> bool {
+        !self.otp_code.trim().is_empty()
+    }
+
+    pub fn has_api_key(&self) -> bool {
+        self.api_key.as_ref().is_some_and(|key| !key.is_empty())
+    }
+
+    /// A staged key with the empty string filtered out — the ONLY form that
+    /// may leave the client. `/onboard key` with no argument stages
+    /// `Some("")`; pre-keyless the empty-key gate kept it off the wire, but
+    /// keyless dispatches pass that gate, and serializing `"api_key": ""`
+    /// trips the server's key-without-env rejection (review round, #562).
+    fn staged_api_key(&self) -> Option<SecretString> {
+        self.api_key.clone().filter(|key| !key.is_empty())
+    }
+
+    /// Whether the STAGED selection needs no API key: the catalog marks the
+    /// family keyless AND the staged route does not itself demand a key env.
+    /// The route override matters because key requirements are per-ENDPOINT —
+    /// a keyless family can expose a keyed hosted route (the AutoDL pattern),
+    /// which must keep requiring its key. Fails closed when the catalog is
+    /// absent (callers handle that case by fetching it first).
+    pub fn selection_is_keyless(&self, catalog: Option<&ProfileLlmCatalogResult>) -> bool {
+        let route_keyed = self
+            .provider
+            .route
+            .api_key_env
+            .as_deref()
+            .is_some_and(|env| !env.trim().is_empty());
+        !route_keyed
+            && catalog.is_some_and(|catalog| catalog.family_is_keyless(&self.provider.family_id))
+    }
+
+    pub fn selection_ready(&self) -> bool {
+        !self.provider.family_id.trim().is_empty()
+            && !self.provider.model_id.trim().is_empty()
+            && (!self.provider.route.route_id.trim().is_empty()
+                || self
+                    .provider
+                    .route
+                    .base_url
+                    .as_deref()
+                    .is_some_and(|url| !url.trim().is_empty()))
+    }
+
+    /// True while the provider draft has no user input staged — no
+    /// family/model picked, no route field edited, and no API key pasted.
+    /// While this holds, the provider rows display server-saved values (the
+    /// "(saved)" fallback), so guidance must judge the saved provider rather
+    /// than the empty draft.
+    ///
+    /// "Untouched" is defined as equality with [`empty_llm_selection_config`],
+    /// the exact seed a fresh draft starts from — note that seed is NOT
+    /// all-default: it carries `route.api_type = "openai"`. Every onboarding
+    /// provider edit routes through `mark_onboarding_provider_dirty` and
+    /// mutates one of these fields (family/model/route_id/label/base_url/
+    /// api_key_env/api_type, via `/onboard family|model|route|label|base-url|
+    /// env|api-type`), so any of them moves the draft away from the seed.
+    /// Comparing against the seed covers every field — including the ones a
+    /// hand-rolled check missed (`label`, `api_key_env`) — and stays correct
+    /// if the draft schema grows. The API key lives on the wizard state, not
+    /// the selection, so it is checked separately.
+    pub fn provider_draft_empty(&self) -> bool {
+        self.provider == empty_llm_selection_config() && !self.has_api_key()
+    }
+
+    pub fn profile_label(&self, current_profile: Option<&str>) -> String {
+        self.effective_profile_id(current_profile)
+            .unwrap_or_else(|| "<server authenticated profile>".into())
+    }
+
+    pub fn provider_label(&self) -> String {
+        if self.selection_ready() {
+            format!(
+                "{} / {} via {}",
+                self.provider.family_id, self.provider.model_id, self.provider.route.route_id
+            )
+        } else {
+            "not selected".into()
+        }
+    }
+
+    pub fn api_key_label(&self) -> &'static str {
+        self.api_key
+            .as_ref()
+            .map(SecretString::masked)
+            .unwrap_or("")
+    }
+
+    /// M22-E: compute the product-grade provider lifecycle status
+    /// from the existing wizard fields. Order of checks is
+    /// deliberate:
+    ///
+    /// 1. Pending operations win (Testing/Saving).
+    /// 2. Test failures win over post-save states — the user must
+    ///    react before continuing.
+    /// 3. Post-save states win over pre-save selection checks
+    ///    because a successful fallback save resets the staged
+    ///    selection. Without this order a fallback save would
+    ///    report `NotSelected` and the menu could not
+    ///    distinguish fallback-only state from "nothing chosen".
+    /// 4. Pre-save selection/key checks for the unsaved path.
+    pub fn provider_status(&self) -> OnboardingProviderStatus {
+        if let Some(pending) = self.provider_pending {
+            return match pending {
+                OnboardingProviderPending::Test => OnboardingProviderStatus::Testing,
+                OnboardingProviderPending::Save => OnboardingProviderStatus::Saving(
+                    self.provider_save_target
+                        .unwrap_or(OnboardingProviderSaveTarget::Primary),
+                ),
+            };
+        }
+        if let Some(reason) = self.provider_test_failure_reason.as_deref() {
+            return OnboardingProviderStatus::TestFailed {
+                reason: reason.to_owned(),
+            };
+        }
+        // Saved-state check must run BEFORE selection/key checks
+        // because a successful fallback save resets staged input
+        // (see `apply_profile_llm_mutation_event` in store.rs).
+        if self.provider_saved
+            || matches!(
+                self.last_saved_provider_target,
+                Some(OnboardingProviderSaveTarget::Fallback)
+            )
+        {
+            return match self.last_saved_provider_target {
+                Some(OnboardingProviderSaveTarget::Fallback) => {
+                    OnboardingProviderStatus::SavedFallback
+                }
+                Some(OnboardingProviderSaveTarget::Primary)
+                | Some(OnboardingProviderSaveTarget::ResearchLane)
+                | None => OnboardingProviderStatus::SavedPrimary,
+            };
+        }
+        if !self.selection_ready() {
+            return OnboardingProviderStatus::NotSelected;
+        }
+        // NOTE: this method has no catalog access, so `KeyMissing` is a false
+        // positive for keyless families (local/ollama/vllm). Callers that can
+        // see the catalog should prefer `selection_is_keyless`; today no
+        // renderer surfaces KeyMissing, so the inaccuracy is latent.
+        if !self.has_api_key() {
+            return OnboardingProviderStatus::KeyMissing;
+        }
+        OnboardingProviderStatus::Ready
+    }
+
+    pub fn apply_selection(&mut self, selection: LlmSelectionConfig) {
+        // A staged key belongs to the family it was pasted for: switching
+        // families must not let it ride along to a different endpoint
+        // (keyless local servers made this silent — security pass, #562).
+        if !self
+            .provider
+            .family_id
+            .eq_ignore_ascii_case(&selection.family_id)
+        {
+            self.api_key = None;
+        }
+        self.provider = selection;
+        self.provider_tested = false;
+        self.provider_pending = None;
+        self.provider_save_target = None;
+        // M22-E: a fresh selection invalidates the last test
+        // failure — the user is implicitly retrying.
+        self.provider_test_failure_reason = None;
+        self.last_message = Some("Provider selection updated from ra UI catalog".into());
+    }
+
+    pub fn reset_staged_provider(&mut self) {
+        self.provider = empty_llm_selection_config();
+        self.api_key = None;
+        self.provider_tested = false;
+        self.provider_pending = None;
+        self.provider_save_target = None;
+    }
+
+    pub fn build_upsert_params(
+        &self,
+        current_profile: Option<&str>,
+    ) -> Option<ProfileLlmUpsertParams> {
+        self.build_upsert_params_with_primary(current_profile, true)
+    }
+
+    pub fn build_fallback_upsert_params(
+        &self,
+        current_profile: Option<&str>,
+    ) -> Option<ProfileLlmUpsertParams> {
+        self.build_upsert_params_with_primary(current_profile, false)
+    }
+
+    fn build_upsert_params_with_primary(
+        &self,
+        current_profile: Option<&str>,
+        set_primary: bool,
+    ) -> Option<ProfileLlmUpsertParams> {
+        self.selection_ready().then(|| ProfileLlmUpsertParams {
+            profile_id: self.effective_profile_id(current_profile),
+            selection: self.provider.clone(),
+            api_key: self.staged_api_key(),
+            set_primary,
+        })
+    }
+
+    pub fn build_test_params(&self, current_profile: Option<&str>) -> Option<ProfileLlmTestParams> {
+        self.selection_ready().then(|| ProfileLlmTestParams {
+            profile_id: self.effective_profile_id(current_profile),
+            selection: self.provider.clone(),
+            api_key: self.staged_api_key(),
+        })
+    }
+
+    pub fn build_fetch_models_params(
+        &self,
+        current_profile: Option<&str>,
+    ) -> Option<ProfileLlmFetchModelsParams> {
+        self.selection_ready().then(|| ProfileLlmFetchModelsParams {
+            profile_id: self.effective_profile_id(current_profile),
+            selection: self.provider.clone(),
+            api_key: self.staged_api_key(),
+        })
+    }
+
+    /// Build the `/research` sub-provider lane upsert from the wizard's staged
+    /// provider selection. Maps the wizard's `LlmSelectionConfig` onto a
+    /// `SubProviderView` (family→provider, model→model, route→base_url /
+    /// api_key_env / api_type) so the rich model-setting flow lands as a named
+    /// research lane instead of the profile's primary/fallback provider. The
+    /// lane `key` is the caller's explicit choice from `MENU_RESEARCH_LANE_KEY`
+    /// ("cheap"/"strong") — the deep_research palette requests lanes by those
+    /// LITERAL keys (`contract_for`), so a family-id key would produce a lane
+    /// the router never selects (PR384 review P1-b).
+    pub fn build_research_lane_params(
+        &self,
+        current_profile: Option<&str>,
+        key: &str,
+    ) -> Option<SubProvidersUpsertParams> {
+        if !self.selection_ready() {
+            return None;
+        }
+        let key = key.trim();
+        if key.is_empty() {
+            return None;
+        }
+        let route = &self.provider.route;
+        let key = key.to_string();
+        Some(SubProvidersUpsertParams {
+            // Use the caller-resolved ACTIVE profile directly (codex PR384 F3):
+            // do NOT fall back to `effective_profile_id`, which prefers a stale
+            // `onboarding.profile_id` and could retarget the lane to the wrong
+            // profile or the server default.
+            profile_id: current_profile.map(str::to_owned),
+            sub_provider: SubProviderView {
+                key,
+                provider: non_empty(self.provider.family_id.trim().to_string()),
+                model: non_empty(self.provider.model_id.trim().to_string()),
+                api_key_env: route.api_key_env.clone(),
+                base_url: route.base_url.clone(),
+                api_type: route.api_type.clone(),
+                ..Default::default()
+            },
+            api_key: self.staged_api_key(),
+        })
+    }
+
+    pub fn apply_auth_status(&mut self, result: &AuthStatusResult) {
+        self.auth_email_enabled = Some(result.email_login_enabled || result.email_otp);
+        self.auth_verified = result.authenticated || result.scoped_profile.is_some();
+        if let Some(profile) = result.scoped_profile.as_ref() {
+            self.profile_id = Some(profile.id.clone());
+        } else if let Some(profile_id) = result.profile_id.as_ref() {
+            self.profile_id = Some(profile_id.clone());
+        }
+    }
+
+    pub fn apply_auth_verify(&mut self, result: &AuthVerifyResult) {
+        self.auth_verified = result.ok;
+        if let Some(token) = result.token.clone() {
+            self.auth_token = Some(token);
+        }
+    }
+
+    pub fn apply_auth_me(&mut self, result: &AuthMeResult) {
+        if let Some(profile_id) = auth_me_profile_id(result) {
+            self.profile_id = Some(profile_id.to_owned());
+            self.auth_verified = true;
+        }
+    }
+
+    pub fn apply_profile_local_create(&mut self, result: &ProfileLocalCreateResult) {
+        self.profile_id = Some(result.profile_id.clone());
+        self.name = result.name.clone();
+        self.username = result.username.clone();
+        self.email = result.email.clone();
+        self.local_profile_created = true;
+        self.auth_verified = true;
+        self.local_profile_create_pending = false;
+        self.local_profile_create_pending_username = None;
+        self.local_profile_recovery = None;
+    }
+
+    /// M22-B: pre-flight validation for the local profile step.
+    /// Returns the first failing field with a typed recovery so the
+    /// TUI never spends a `profile/local/create` round-trip on an
+    /// obviously bad shape (empty fields, malformed email).
+    ///
+    /// Validation rules:
+    /// - Name: non-empty, max 128 chars after trim.
+    /// - Username: non-empty, max 64 chars, ASCII printable without
+    ///   spaces (so it is shell- and path-safe).
+    /// - Email: non-empty when supplied; must contain `@` with a non-
+    ///   empty local and domain part. Empty email is allowed because
+    ///   email is local metadata for the solo-mode profile (the
+    ///   contract calls it optional).
+    pub fn validate_local_profile(&self) -> Result<(), OnboardingLocalProfileRecovery> {
+        let name = self.name.trim();
+        if name.is_empty() {
+            return Err(OnboardingLocalProfileRecovery {
+                kind: OnboardingLocalProfileErrorKind::InvalidField,
+                focus_field: OnboardingLocalProfileField::Name,
+                message: t!("onboarding.validation.display_name_required").into_owned(),
+            });
+        }
+        if name.chars().count() > 128 {
+            return Err(OnboardingLocalProfileRecovery {
+                kind: OnboardingLocalProfileErrorKind::InvalidField,
+                focus_field: OnboardingLocalProfileField::Name,
+                message: t!("onboarding.validation.display_name_too_long").into_owned(),
+            });
+        }
+
+        let username = self.username.trim();
+        if username.is_empty() {
+            return Err(OnboardingLocalProfileRecovery {
+                kind: OnboardingLocalProfileErrorKind::InvalidField,
+                focus_field: OnboardingLocalProfileField::Username,
+                message: t!("onboarding.validation.username_required").into_owned(),
+            });
+        }
+        if username.len() > 64 {
+            return Err(OnboardingLocalProfileRecovery {
+                kind: OnboardingLocalProfileErrorKind::InvalidField,
+                focus_field: OnboardingLocalProfileField::Username,
+                message: t!("onboarding.validation.username_too_long").into_owned(),
+            });
+        }
+        if username
+            .chars()
+            .any(|c| !c.is_ascii() || c.is_ascii_whitespace() || c.is_ascii_control())
+        {
+            return Err(OnboardingLocalProfileRecovery {
+                kind: OnboardingLocalProfileErrorKind::InvalidField,
+                focus_field: OnboardingLocalProfileField::Username,
+                message: t!("onboarding.validation.username_invalid_chars").into_owned(),
+            });
+        }
+
+        let email = self.email.trim();
+        if email.is_empty() {
+            return Err(OnboardingLocalProfileRecovery {
+                kind: OnboardingLocalProfileErrorKind::InvalidField,
+                focus_field: OnboardingLocalProfileField::Email,
+                message: t!("onboarding.validation.email_required").into_owned(),
+            });
+        }
+        if !looks_like_email(email) {
+            return Err(OnboardingLocalProfileRecovery {
+                kind: OnboardingLocalProfileErrorKind::InvalidField,
+                focus_field: OnboardingLocalProfileField::Email,
+                message: t!("onboarding.validation.email_invalid").into_owned(),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// M22-B: apply a typed error returned from a pending
+    /// `profile/local/create` request. The caller (the store error
+    /// handler) is responsible for recognizing the structured code;
+    /// this routine decides which field to focus and what recovery
+    /// text to display so the user stays on the profile step.
+    pub fn apply_local_profile_error(&mut self, code: &str, message: &str) {
+        // Prefer the pending-username snapshot captured at submit
+        // time so a late error never claims the freshly-edited staged
+        // username was the one rejected.
+        let collided_username = self
+            .local_profile_create_pending_username
+            .clone()
+            .unwrap_or_else(|| self.username.clone());
+        // The backend prepends the failing method as a prefix on
+        // method-attributed responses
+        // (`profile/local/create request tui-N failed: <reason>`).
+        // Strip it so the user does not see the wire protocol leaking
+        // into the recovery copy.
+        let server_reason = strip_method_prefix(message, "profile/local/create");
+        let recovery = match code {
+            "profile_local_collision" => OnboardingLocalProfileRecovery {
+                kind: OnboardingLocalProfileErrorKind::Collision,
+                focus_field: OnboardingLocalProfileField::Username,
+                // The backend uses `profile_local_collision` for any
+                // existing-owner collision (username, email metadata,
+                // or owner id), with the reason in the message. Keep
+                // that reason rather than hard-coding "username taken".
+                message: t!(
+                    "onboarding.validation.profile_collision",
+                    username = collided_username,
+                    reason = server_reason
+                )
+                .into_owned(),
+            },
+            "profile_local_unsupported" => OnboardingLocalProfileRecovery {
+                kind: OnboardingLocalProfileErrorKind::Unsupported,
+                focus_field: OnboardingLocalProfileField::Username,
+                // We do NOT suggest `/login` here because the registry
+                // hides OTP slash commands while `profile/local/create`
+                // is advertised by the capability set. A backend
+                // returning `profile_local_unsupported` despite
+                // advertising the method is misconfigured, not a
+                // signal that the user can fall back to OTP locally.
+                message: t!("onboarding.validation.local_profile_unsupported").into_owned(),
+            },
+            "profile_local_invalid_name" => OnboardingLocalProfileRecovery {
+                kind: OnboardingLocalProfileErrorKind::InvalidParams,
+                focus_field: OnboardingLocalProfileField::Name,
+                message: t!(
+                    "onboarding.validation.server_rejected_name",
+                    reason = server_reason
+                )
+                .into_owned(),
+            },
+            "profile_local_invalid_username" => OnboardingLocalProfileRecovery {
+                kind: OnboardingLocalProfileErrorKind::InvalidParams,
+                focus_field: OnboardingLocalProfileField::Username,
+                message: t!(
+                    "onboarding.validation.server_rejected_username",
+                    reason = server_reason
+                )
+                .into_owned(),
+            },
+            "profile_local_invalid_email" => OnboardingLocalProfileRecovery {
+                kind: OnboardingLocalProfileErrorKind::InvalidParams,
+                focus_field: OnboardingLocalProfileField::Email,
+                message: t!(
+                    "onboarding.validation.server_rejected_email",
+                    reason = server_reason
+                )
+                .into_owned(),
+            },
+            "invalid_params" => OnboardingLocalProfileRecovery {
+                kind: OnboardingLocalProfileErrorKind::InvalidParams,
+                // Without more granular server data we cannot know
+                // which field is at fault; default to username because
+                // collision is the highest-prior real-world cause.
+                focus_field: OnboardingLocalProfileField::Username,
+                message: t!(
+                    "onboarding.validation.server_rejected_fields",
+                    reason = server_reason
+                )
+                .into_owned(),
+            },
+            _ => OnboardingLocalProfileRecovery {
+                kind: OnboardingLocalProfileErrorKind::InvalidParams,
+                focus_field: OnboardingLocalProfileField::Username,
+                message: t!(
+                    "onboarding.validation.local_profile_create_failed",
+                    reason = server_reason
+                )
+                .into_owned(),
+            },
+        };
+        self.local_profile_create_pending = false;
+        self.local_profile_create_pending_username = None;
+        self.local_profile_created = false;
+        self.local_profile_recovery = Some(recovery);
+    }
+
+    /// M22-B: clear local-profile recovery state after the user edits
+    /// the offending field. Called from the field setter so the typed
+    /// recovery does not linger after the user acts on it.
+    ///
+    /// The pending-create snapshot (`local_profile_create_pending_username`)
+    /// is intentionally NOT cleared here: a late server response for
+    /// the in-flight create must continue to render the recovery
+    /// against the username that was actually submitted, not the
+    /// freshly-edited value. The snapshot is only cleared by the
+    /// next create dispatch (replaced with the new value) or by the
+    /// success/error response handlers in `apply_profile_local_create`
+    /// and `apply_local_profile_error`.
+    pub fn clear_local_profile_recovery(&mut self) {
+        self.local_profile_recovery = None;
+    }
+}
+
+/// M22-B: strip the wire-level method prefix that
+/// `error_response_to_app_event` prepends to method-attributed
+/// failures (`"<method> request <id> failed: <reason>"`). The
+/// recovery copy then renders just the server reason, not the raw
+/// JSON-RPC wire format.
+fn strip_method_prefix(message: &str, method: &str) -> String {
+    let prefix = format!("{method} request");
+    if let Some(rest) = message.strip_prefix(&prefix) {
+        if let Some((_, reason)) = rest.split_once(": ") {
+            return reason.trim().to_owned();
+        }
+    }
+    message.to_owned()
+}
+
+/// Cheap shape-only check: requires `local@domain` with non-empty
+/// parts. Single-label domains (`ada@localhost`, `dev@corp`) are
+/// allowed because the backend's `profile/local/create` accepts
+/// them — the TUI must not be stricter than the server. The backend
+/// remains the source of truth for full RFC validation.
+fn looks_like_email(value: &str) -> bool {
+    let Some((local, domain)) = value.split_once('@') else {
+        return false;
+    };
+    !local.trim().is_empty()
+        && !domain.trim().is_empty()
+        && !domain.starts_with('.')
+        && !domain.ends_with('.')
+}
+
+/// Normalize a free-form string into a profile-id-safe slug: lowercase ASCII,
+/// `[a-z0-9]` kept, every other run collapsed to a single `-`, edges trimmed.
+/// Mirrors the server's normalization closely enough that the suggested id we
+/// show usually equals the id the server assigns (before any collision suffix).
+pub fn slugify_profile_id(value: &str) -> String {
+    let mut slug = String::with_capacity(value.len());
+    let mut pending_dash = false;
+    for ch in value.trim().chars() {
+        let lower = ch.to_ascii_lowercase();
+        if lower.is_ascii_alphanumeric() {
+            if pending_dash && !slug.is_empty() {
+                slug.push('-');
+            }
+            pending_dash = false;
+            slug.push(lower);
+        } else {
+            pending_dash = true;
+        }
+    }
+    slug
+}
+
+/// Decode a peer slug only when presenting it to the operator.
+///
+/// Peer session topics are URI-safe identifiers, so a Chinese slug can arrive
+/// as `%E5%88%86...`. The encoded form remains the identity used for session
+/// lookup and routing; this helper is deliberately for human-facing text only.
+/// A malformed percent escape or non-UTF-8 byte sequence is retained verbatim.
+pub fn peer_slug_for_display(slug: &str) -> String {
+    percent_encoding::percent_decode_str(slug)
+        .decode_utf8()
+        .map(|decoded| decoded.into_owned())
+        .unwrap_or_else(|_| slug.to_owned())
+}
+
+/// Suggest a default profile id from the chosen model/provider family. Known
+/// families map to a short, friendly handle (the zai/glm family suggests `glm`,
+/// deepseek suggests `deepseek`, …); an unrecognized-but-present family is
+/// slugified; an empty family falls back to a neutral `ra`. Pure and
+/// deterministic so onboarding UX can test the mapping directly.
+pub fn suggest_profile_id_for_family(family_id: &str) -> String {
+    let normalized = family_id.trim().to_ascii_lowercase();
+    if normalized.is_empty() {
+        return "ra".to_owned();
+    }
+    // Substring match: catalog family ids vary (`glm`, `glm-4`, `zai/glm`,
+    // `openai/gpt-4o`), so match on the recognizable brand token.
+    const KNOWN: &[(&str, &str)] = &[
+        ("glm", "glm"),
+        ("zai", "glm"),
+        ("deepseek", "deepseek"),
+        ("claude", "claude"),
+        ("anthropic", "claude"),
+        ("gpt", "openai"),
+        ("openai", "openai"),
+        ("o1", "openai"),
+        ("gemini", "gemini"),
+        ("google", "gemini"),
+        ("qwen", "qwen"),
+        ("llama", "llama"),
+        ("mistral", "mistral"),
+        ("grok", "grok"),
+        ("xai", "grok"),
+        ("kimi", "kimi"),
+        ("moonshot", "kimi"),
+    ];
+    for (needle, suggestion) in KNOWN {
+        if normalized.contains(needle) {
+            return (*suggestion).to_owned();
+        }
+    }
+    let slug = slugify_profile_id(&normalized);
+    if slug.is_empty() {
+        "ra".to_owned()
+    } else {
+        slug
+    }
+}
+
+/// The launch-time decision for which local profile to attach (Phase 3).
+/// Computed from the `--profile-id` flag and the set of existing profiles so
+/// the wiring stays a pure, testable function of its two inputs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StartupProfileDecision {
+    /// `--profile-id` was passed: honor it unchanged, never prompt.
+    Pinned(String),
+    /// Exactly one profile exists and none was pinned: attach it silently.
+    Attach(String),
+    /// More than one profile exists and none was pinned: show the picker.
+    Pick(Vec<String>),
+    /// No profiles exist (and none pinned): run first-launch onboarding.
+    Onboard,
+}
+
+impl StartupProfileDecision {
+    /// Decide from the pinned `--profile-id` (if any) and the discovered
+    /// profile ids. A pinned id always wins (`Pinned`); otherwise the count of
+    /// distinct, non-empty profiles chooses `Onboard` (0), `Attach` (1), or
+    /// `Pick` (N>1). Blank entries are ignored and duplicates collapsed so the
+    /// count reflects real, attachable profiles.
+    pub fn decide(cli_profile_id: Option<&str>, available: &[String]) -> Self {
+        if let Some(pinned) = cli_profile_id
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            return Self::Pinned(pinned.to_owned());
+        }
+        let mut profiles: Vec<String> = available
+            .iter()
+            .map(|profile| profile.trim())
+            .filter(|profile| !profile.is_empty())
+            .map(str::to_owned)
+            .collect();
+        profiles.sort();
+        profiles.dedup();
+        match profiles.len() {
+            0 => Self::Onboard,
+            1 => Self::Attach(profiles.remove(0)),
+            _ => Self::Pick(profiles),
+        }
+    }
+}
+
+pub fn auth_me_email(result: &AuthMeResult) -> Option<&str> {
+    match result {
+        AuthMeResult::Dashboard { user, .. } => user.get("email").and_then(Value::as_str),
+        AuthMeResult::Legacy { email, .. } => email.as_deref(),
+    }
+}
+
+pub fn auth_me_profile_id(result: &AuthMeResult) -> Option<&str> {
+    match result {
+        AuthMeResult::Dashboard { profile, user, .. } => profile
+            .as_ref()
+            .and_then(|profile| {
+                profile
+                    .get("profile")
+                    .and_then(|profile| profile.get("id"))
+                    .and_then(Value::as_str)
+                    .or_else(|| profile.get("id").and_then(Value::as_str))
+            })
+            .or_else(|| user.get("profile_id").and_then(Value::as_str)),
+        AuthMeResult::Legacy { profile_id, .. } => profile_id.as_deref(),
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileLlmCatalogParams {}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileLlmListParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct LlmRouteConfig {
+    #[serde(
+        default,
+        deserialize_with = "string_or_default",
+        skip_serializing_if = "is_empty_string"
+    )]
+    pub route_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key_env: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_type: Option<String>,
+}
+
+impl LlmRouteConfig {
+    pub fn is_empty(&self) -> bool {
+        self.route_id.trim().is_empty()
+            && self.label.as_deref().is_none_or(str::is_empty)
+            && self.base_url.as_deref().is_none_or(str::is_empty)
+            && self.api_key_env.as_deref().is_none_or(str::is_empty)
+            && self.api_type.as_deref().is_none_or(str::is_empty)
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct LlmSelectionConfig {
+    #[serde(
+        default,
+        deserialize_with = "string_or_default",
+        skip_serializing_if = "is_empty_string"
+    )]
+    pub family_id: String,
+    #[serde(
+        default,
+        deserialize_with = "string_or_default",
+        skip_serializing_if = "is_empty_string"
+    )]
+    pub model_id: String,
+    #[serde(
+        default,
+        deserialize_with = "route_or_default",
+        skip_serializing_if = "LlmRouteConfig::is_empty"
+    )]
+    pub route: LlmRouteConfig,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_hints: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost_per_m: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strong: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProfileLlmUpsertParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub selection: LlmSelectionConfig,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<SecretString>,
+    #[serde(default)]
+    pub set_primary: bool,
+}
+
+/// A configured model staged for removal from the profile (the `/model` →
+/// "Remove a model…" flow). Coordinates mirror `ProfileLlmDeleteParams`;
+/// `label` is the human line shown in the confirm menu.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ModelRemovalRequest {
+    pub family_id: String,
+    pub model_id: String,
+    pub route_id: String,
+    pub label: String,
+}
+
+/// #324: one session-strip / Ctrl+S/Alt+S-popup chip, computed per frame from the
+/// live store state (focused flag, live-turn signal, unread count).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SessionChipView {
+    pub session_id: SessionKey,
+    pub title: String,
+    pub focused: bool,
+    pub live: bool,
+    pub unread: usize,
+    /// tui#398: the session is waiting on an approval/question in the
+    /// background — strip renders `⚠`, the Ctrl+S/Alt+S row names the reason.
+    pub blocked: bool,
+    /// True when this session is a peer (present in `peer_session_meta`). The
+    /// switcher marks peers `↳` and non-peers (main/parent windows) `⌂` so a
+    /// user inside a peer can tell which row is the parent to return to.
+    pub is_peer: bool,
+    /// One-line activity summary for the Ctrl+S/Alt+S row: blocked reason, else the
+    /// live stream tail, else the last transcript line.
+    pub activity: Option<String>,
+}
+
+/// A snapshot restore staged from the `/undo` picker (#1768). `session_id`
+/// and `snapshot_id` are captured at menu-BUILD time and carried through the
+/// Yes/No confirm, so a session switch mid-confirm can never retarget the
+/// restore (same contract as [`ResearchLaneRemoval`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SnapshotRestoreRequest {
+    pub session_id: SessionKey,
+    pub snapshot_id: String,
+    pub label: String,
+}
+
+/// A research provider lane staged for removal (`/research` menu → lane row).
+/// The `profile_id` is captured at menu-BUILD time (the profile whose lanes are
+/// on screen) and carried through the Yes/No confirm, so a profile switch
+/// between selecting the row and confirming can never retarget the delete to a
+/// different profile — the exact cross-profile hazard a bare composer draft has.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResearchLaneRemoval {
+    pub profile_id: Option<String>,
+    pub key: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProfileLlmDeleteParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub family_id: String,
+    pub model_id: String,
+    pub route_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProfileLlmSelectParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    /// The ACTIVE session, so the server's result echoes a session id the
+    /// client actually tracks — without it the server synthesizes a
+    /// `profile:local:tui#coding` key and the select result updates nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<ra_core::SessionKey>,
+    pub family_id: String,
+    pub model_id: String,
+    pub route_id: String,
+}
+
+/// One named provider lane (`sub_providers`) as seen by the `/research` menu —
+/// mirrors the server `SubProviderConfig`. `key` addresses the lane; the rest
+/// are the editable fields.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SubProviderView {
+    pub key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key_env: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_context_window: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_type: Option<String>,
+}
+
+/// `peer/prepare` request (#395, octos#1800 peer agents v1). `brief` is the
+/// raw peer brief text (required, non-empty, ≤64 KiB server-side); `worktree`
+/// asks the server to spin the peer up on its own git worktree; `cwd` pins an
+/// explicit workspace. `session_id` carries the ACTIVE session so the server
+/// can default the workspace root and scope the profile; `profile_id` stays
+/// `None` in v1 (the server derives it from the session).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PeerPrepareParams {
+    pub brief: String,
+    /// octos#1801 v2 fleet staging: ask the server for N peers from this ONE
+    /// brief (suffixed slugs, per-peer worktrees when `worktree`). `None`
+    /// keeps the v1 single-peer wire shape (omitted entirely, so old servers
+    /// never see an unknown field with `deny_unknown_fields`-style parsing).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub n: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub worktree: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<SessionKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+}
+
+/// `peer/prepare` result: the server-minted `slug`, its `topic`
+/// (`peer-<slug>`), the durable brief file path, the resolved workspace
+/// `cwd`, the worktree branch (when one was created), and the profile the
+/// peer session must open under. octos#1801 v2 adds `peers` — the whole
+/// staged fleet (the scalar fields mirror its FIRST entry); serde-defaulted
+/// to empty so v1 servers' scalar-only responses still decode.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PeerPrepareResult {
+    pub slug: String,
+    pub topic: String,
+    pub brief_path: String,
+    pub cwd: String,
+    #[serde(default)]
+    pub worktree_branch: Option<String>,
+    pub profile_id: String,
+    #[serde(default)]
+    pub peers: Vec<PeerFleetEntry>,
+}
+
+/// One staged peer of a `peer/prepare` fleet (octos#1801 v2) — the same
+/// fields as the scalar [`PeerPrepareResult`] head, per peer.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PeerFleetEntry {
+    pub slug: String,
+    pub topic: String,
+    pub brief_path: String,
+    pub cwd: String,
+    #[serde(default)]
+    pub worktree_branch: Option<String>,
+    pub profile_id: String,
+}
+
+/// Params of the durable [`APPUI_METHOD_PEER_STAGED`] notification
+/// (octos#1801 v3): a server-side agent staged a peer and the client
+/// auto-opens it in the background. `session_id` is the ORIGINATING session
+/// (the one whose agent ran `peer_spawn`), NOT the peer's — the peer key is
+/// minted client-side from `profile_id` + `topic` exactly like the `/peer`
+/// flow. Tui-local wire mirror: the vendored ra-core rev predates the
+/// `UiNotification` variant, so the transport decodes the method string into
+/// this struct directly. Durable ⇒ replayed on reconnect; the store handler
+/// is idempotent.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PeerStagedParams {
+    pub session_id: SessionKey,
+    pub topic: String,
+    pub slug: String,
+    pub brief: String,
+    pub brief_path: String,
+    pub cwd: String,
+    #[serde(default)]
+    pub worktree_branch: Option<String>,
+    pub profile_id: String,
+}
+
+/// Params of the durable [`APPUI_METHOD_PEER_CLOSED`] notification: a peer
+/// session the server tore down. The client removes the matching `peer-<slug>`
+/// session from the peer dock and the session switcher. Tui-local wire mirror
+/// (the vendored ra-core rev predates the `UiNotification` variant), decoded
+/// in the transport exactly like [`PeerStagedParams`]. Durable ⇒ replayed on
+/// reconnect; the store handler is idempotent (an already-removed peer is a
+/// no-op).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PeerClosedParams {
+    pub session_id: SessionKey,
+    pub topic: String,
+    pub slug: String,
+    pub profile_id: String,
+}
+
+/// Params of the durable [`APPUI_METHOD_BACKGROUND_ACTIVITY`] notification
+/// (octos#2019): one background event that woke the model, surfaced to the
+/// HUMAN.
+///
+/// `session_id` is REQUIRED and is the routing key — the session that OWNS the
+/// emitter, never "whichever session is focused" (the octos-tui#461 / #466 /
+/// #483 bug class). `origin_kind` + `origin_id` (+ `origin_label`) attribute
+/// the line: an unattributed monitor line reads as the master speaking.
+/// `dropped_count` / `suppressed` carry the server-side per-origin cap's
+/// VISIBLE drop marker — silent truncation reads as "nothing more happened".
+///
+/// Tui-local wire mirror (the vendored ra-core rev predates the
+/// `UiNotification` variant), decoded in the transport exactly like
+/// [`PeerStagedParams`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BackgroundActivityParams {
+    pub session_id: SessionKey,
+    #[serde(default)]
+    pub profile_id: Option<String>,
+    pub origin_kind: String,
+    pub origin_id: String,
+    #[serde(default)]
+    pub origin_label: Option<String>,
+    pub text: String,
+    #[serde(default)]
+    pub emitted_at_ms: i64,
+    #[serde(default)]
+    pub dropped_count: Option<u64>,
+    #[serde(default)]
+    pub suppressed: bool,
+}
+
+impl BackgroundActivityParams {
+    /// Stable grouping key: one foldable group per emitting origin, so a
+    /// 50-round monitor loop is ONE group rather than 50 loose lines.
+    pub fn origin_key(&self) -> (String, String) {
+        (self.origin_kind.clone(), self.origin_id.clone())
+    }
+
+    /// Human label for the group header. Falls back to the origin id so a row
+    /// is never unattributed.
+    pub fn display_origin(&self) -> &str {
+        self.origin_label
+            .as_deref()
+            .map(str::trim)
+            .filter(|label| !label.is_empty())
+            .unwrap_or(self.origin_id.as_str())
+    }
+}
+
+/// Per-session cap on retained background-activity rows. The SERVER already
+/// caps per origin with a visible drop marker; this is the client-side
+/// backstop so a long-lived session cannot grow the transcript without bound.
+pub const MAX_BACKGROUND_ACTIVITY_ROWS: usize = 200;
+
+/// `peer/gather` request (octos#1801 v2): read the peer blackboard.
+/// `slugs: None` = every staged peer; `session_id` carries the ACTIVE
+/// session so the server scopes the profile (mirrors
+/// [`PeerPrepareParams`]); `profile_id` stays `None` in the TUI flow.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PeerGatherParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub slugs: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<SessionKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+}
+
+/// `peer/gather` result: the resolved profile + per staged peer its brief
+/// and latest `result.md` (present only once a turn of that peer session has
+/// terminated). Truncation flags mark server-side caps.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PeerGatherResult {
+    pub profile_id: String,
+    #[serde(default)]
+    pub peers: Vec<PeerGatherEntry>,
+}
+
+/// One blackboard row of a `peer/gather` result (octos#1801 v2).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PeerGatherEntry {
+    pub slug: String,
+    #[serde(default)]
+    pub topic: String,
+    pub brief: String,
+    #[serde(default)]
+    pub brief_truncated: bool,
+    #[serde(default)]
+    pub result: Option<String>,
+    #[serde(default)]
+    pub result_truncated: bool,
+    #[serde(default)]
+    pub result_updated_unix: Option<u64>,
+    #[serde(default)]
+    pub has_worktree: bool,
+}
+
+/// `turn/steer` request (octos#1807): mid-turn prompt injection into the
+/// ACTIVE turn. `expected_turn_id` pins the turn the client believes is live
+/// — a mismatch is rejected server-side (`invalid_params`) and the client
+/// falls back to staging; an ABSENT id steers whatever turn is live. `input`
+/// mirrors `turn/start`'s items (text only in the TUI flow).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TurnSteerParams {
+    pub session_id: SessionKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_turn_id: Option<TurnId>,
+    pub input: Vec<InputItem>,
+}
+
+/// `turn/steer` result (octos#1807). `steered:true` = appended into the
+/// ACTIVE turn (`turn_id` echoes that turn; the text is persisted
+/// server-side AT DRAIN TIME as a normal v2 `UserMessage` envelope, so it
+/// echoes back like any persisted user row). `steered:false` = no active
+/// turn existed; the server started a NEW real turn with the input
+/// (`turn_id` names the new turn).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TurnSteerResult {
+    pub turn_id: TurnId,
+    #[serde(default)]
+    pub steered: bool,
+}
+
+/// An in-flight `turn/steer` (octos#1807): the client-local copy of the
+/// steered text so a steer that positively DIES (server rejection /
+/// cancel-all / send-layer failure) can fall back to STAGING the prompt
+/// without losing what the user typed. FIFO — the `TurnSteered` result and
+/// the method-attributed error frames each consume exactly one entry from
+/// the front (every dead steer produces exactly one attributed error event,
+/// see the transport's send/cancel paths).
+/// task-steer-retained-until-echo: a steer the server ACCEPTED
+/// (`steered:true`) but has not yet CONFIRMED — confirmation is the drain-time
+/// persisted `UserMessage` echo landing (see [`AppState::apply_user_row_echo`]).
+/// Acceptance only means "in the pending-input buffer"; the loop can still
+/// abort before draining it (Esc mid-tool), and the server then drops the
+/// input with only a warning. Retained entries that are still here when the
+/// turn reaches its terminal are withdrawn from the transcript and re-staged
+/// at the FRONT of the queue (they were typed before anything staged after).
+/// Content is the only join key: steers carry no client_message_id and share
+/// their turn id with the live turn's original prompt.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RetainedSteer {
+    pub session_id: SessionKey,
+    pub turn_id: TurnId,
+    pub prompt: String,
+    /// User rows with this exact content that existed BEFORE the steer's
+    /// optimistic insert (the optimistic entry's baseline). After a
+    /// snapshot/hydrate rebuild, canonical history with MORE matching rows
+    /// than this proves the server persisted the steer — reap it, or the
+    /// terminal would resubmit text the server already ran.
+    pub prior_matching_user_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PendingTurnSteer {
+    pub session_id: SessionKey,
+    /// The EXPECTED (live) turn id the steer named — also the id the
+    /// optimistic transcript row was recorded under, so the error fallback
+    /// can withdraw precisely that row and the `steered:false` apply can
+    /// re-key it onto the real new turn.
+    pub turn_id: TurnId,
+    pub prompt: String,
+}
+
+/// An in-flight `/peer` dispatch (#395): the client-local halves of the flow
+/// (`brief` for the kickoff text, `go` for the focus decision) that
+/// `peer/prepare`'s result does NOT echo back. Stashed at dispatch, consumed
+/// when the [`crate::client_event::ClientEvent::PeerPrepared`] result lands.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PendingPeerPrepare {
+    pub brief: String,
+    pub go: bool,
+    pub created: std::time::Instant,
+}
+
+/// A prepared peer session waiting for its `session/opened` to land
+/// (#395). Keyed by the minted peer [`SessionKey`] in
+/// [`AppState::pending_peer_kickoffs`]; popped when the session appears in
+/// `state.sessions`, at which point the kickoff turn is submitted TO THAT
+/// SESSION. Entries older than [`PEER_KICKOFF_TTL`] are pruned (dead open —
+/// matches the `pre_token_turns` TTL self-heal).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PeerKickoff {
+    /// Human-facing peer name from the server. The session topic may instead
+    /// contain an opaque, URI-safe slug, so it must not be reconstructed from
+    /// the session key for display.
+    pub slug: String,
+    pub brief: String,
+    pub brief_path: String,
+    pub go: bool,
+    /// #407 review P2: origin of this peer — `true` when the model staged it
+    /// via `peer/staged` (agent-initiated), `false` for a user `/peer`. Read
+    /// by `take_pending_peer_kickoff` into `PeerMeta.agent_staged` so the dock
+    /// labels the origin correctly instead of hardcoding it.
+    pub agent_staged: bool,
+    pub created: std::time::Instant,
+}
+
+/// #407 (review F1): durable peer roster entry. `PeerKickoff` is popped the
+/// moment `session/opened` lands, so keying "is this a peer" off
+/// `pending_peer_kickoffs` makes peers disappear from the dock the instant
+/// they start running. `PeerMeta` is recorded at the same chokepoint
+/// (`take_pending_peer_kickoff`) and lives for the session's whole lifetime —
+/// it carries the slug/brief-path the peek overlay needs, which `SessionView`
+/// does not. The dock reads union(this, pending_peer_kickoffs); pending-only
+/// peers (still opening) count toward `total` only.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PeerMeta {
+    pub slug: String,
+    pub brief_path: String,
+    /// True if the peer was staged by the agent via `peer_handoff` (vs
+    /// `/peer --prepare` by the user). Reserved for future differentiated
+    /// rendering; not yet surfaced.
+    pub agent_staged: bool,
+    pub created: std::time::Instant,
+    /// When this peer's most recent turn TERMINATED (done/error/interrupted),
+    /// stamped by `mark_peer_finished`. Drives the dock's `✓ done` state (vs a
+    /// never-run `○ idle`) and freezes its elapsed at the run duration instead
+    /// of letting it tick up forever. `None` until the first turn ends; a
+    /// currently-live turn (`session_turn_live`) still renders `✻` regardless.
+    pub finished_at: Option<std::time::Instant>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SnapshotListParams {
+    pub session_id: SessionKey,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SnapshotRestoreParams {
+    pub session_id: SessionKey,
+    pub snapshot_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SnapshotInfoView {
+    pub id: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub timestamp_unix: i64,
+}
+
+/// `snapshot/list` result — also the shape `snapshot/restore` echoes back
+/// (refreshed rows) so the picker updates in place.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SnapshotListResult {
+    #[serde(default)]
+    pub session_id: Option<SessionKey>,
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub available: bool,
+    #[serde(default)]
+    pub snapshots: Vec<SnapshotInfoView>,
+    #[serde(default)]
+    pub restored: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubProvidersListParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SubProvidersUpsertParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub sub_provider: SubProviderView,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<SecretString>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SubProvidersRemoveParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub key: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SubProvidersListResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default)]
+    pub sub_providers: Vec<SubProviderView>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_policy_stamp: Option<RuntimePolicyStamp>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SubProvidersMutationResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default)]
+    pub sub_providers: Vec<SubProviderView>,
+    #[serde(default)]
+    pub applied: bool,
+    /// The server PERSISTED the lane but the live runtime was NOT rebuilt: the
+    /// isolated research router is built once at `ProfileRuntime` bootstrap, so
+    /// the change only takes effect on the next restart.
+    ///
+    /// The server has always sent this ("so the client never presents a
+    /// persisted change as already-live"); the client simply did not
+    /// deserialise it, so an inline `/research add` reported a bare success and
+    /// deep_research kept running on the coding provider.
+    #[serde(default)]
+    pub restart_required: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_policy_stamp: Option<RuntimePolicyStamp>,
+}
+
+impl SubProvidersMutationResult {
+    pub fn to_list_result(&self) -> SubProvidersListResult {
+        SubProvidersListResult {
+            profile_id: self.profile_id.clone(),
+            sub_providers: self.sub_providers.clone(),
+            runtime_policy_stamp: self.runtime_policy_stamp.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProfileLlmTestParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub selection: LlmSelectionConfig,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<SecretString>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProfileLlmFetchModelsParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub selection: LlmSelectionConfig,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<SecretString>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ProfileLlmCatalogResult {
+    #[serde(default)]
+    pub families: serde_json::Map<String, Value>,
+}
+
+impl ProfileLlmCatalogResult {
+    /// The catalog entry for `family_id`. Lookup is case-INsensitive: catalog
+    /// keys are canonical, but typed selections (`/onboard select LOCAL …`)
+    /// arrive verbatim, and the codebase's existing convention for family ids
+    /// is tolerance (`eq_ignore_ascii_case`, see the aliasing note in
+    /// store.rs). Exact match is tried first.
+    pub fn family_entry(&self, family_id: &str) -> Option<&Value> {
+        let family_id = family_id.trim();
+        if family_id.is_empty() {
+            return None;
+        }
+        self.families.get(family_id).or_else(|| {
+            self.families
+                .iter()
+                .find(|(key, _)| key.eq_ignore_ascii_case(family_id))
+                .map(|(_, value)| value)
+        })
+    }
+
+    /// The trimmed, non-empty key-env the catalog declares for `family_id`.
+    /// Single home for the `"env"` field of the server contract.
+    pub fn family_key_env(&self, family_id: &str) -> Option<&str> {
+        self.family_entry(family_id)?
+            .get("env")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|env| !env.is_empty())
+    }
+
+    /// Whether the catalog reports `family_id` as keyless — the server's
+    /// marker for local server families (local/ollama/vllm). The wire
+    /// contract types key-env fields as `string | null` optional, so for a
+    /// PRESENT family an empty string, JSON null, or absent `env` all mean
+    /// "no key required"; an unknown family stays keyed (fail closed).
+    /// Keyless families save and test without an API key; requiring one
+    /// dead-ended their onboarding (octos#2096 review round).
+    pub fn family_is_keyless(&self, family_id: &str) -> bool {
+        self.family_entry(family_id).is_some() && self.family_key_env(family_id).is_none()
+    }
+}
+
+impl<'de> Deserialize<'de> for ProfileLlmCatalogResult {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+        let families = match value {
+            Value::Object(mut object) => object
+                .remove("families")
+                .and_then(|families| match families {
+                    Value::Object(families) => Some(families),
+                    _ => None,
+                })
+                .unwrap_or(object),
+            _ => serde_json::Map::new(),
+        };
+        Ok(Self { families })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LlmConfiguredProvider {
+    #[serde(default, skip_serializing)]
+    pub provider: String,
+    #[serde(default, skip_serializing)]
+    pub model: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub family_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route: Option<LlmRouteConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key_env: Option<String>,
+    #[serde(default)]
+    pub has_api_key: bool,
+    #[serde(default)]
+    pub selected: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub available: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_hints: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost_per_m: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strong: Option<bool>,
+}
+
+impl LlmConfiguredProvider {
+    /// Whether this saved provider's key requirement is satisfied: it has a
+    /// stored key, OR its own record declares no key-env (keyless local
+    /// families publish `has_api_key: false` with an empty/absent
+    /// `api_key_env`). Gating session-open on `has_api_key` alone dead-ended
+    /// a rehydrated keyless primary after every TUI restart (red-team pass,
+    /// #562). Deliberately catalog-independent — at restart the catalog may
+    /// not be fetched yet.
+    pub fn key_satisfied(&self) -> bool {
+        self.has_api_key
+            || self
+                .api_key_env
+                .as_deref()
+                .is_none_or(|env| env.trim().is_empty())
+    }
+
+    pub fn to_model_status(&self) -> ModelStatus {
+        let provider = non_empty(self.provider.clone())
+            .or_else(|| self.family_id.clone())
+            .unwrap_or_else(|| "unknown".into());
+        let model = non_empty(self.model.clone())
+            .or_else(|| self.model_id.clone())
+            .unwrap_or_else(|| "unknown".into());
+        let route = self.route_id.clone().or_else(|| {
+            self.route
+                .as_ref()
+                .and_then(|route| non_empty(route.route_id.clone()))
+        });
+        ModelStatus {
+            model: self.model_id.clone().unwrap_or_else(|| model.clone()),
+            provider: provider.clone(),
+            title: Some(format!("{provider} / {model}")),
+            family: self.family_id.clone(),
+            route,
+            selected: self.selected,
+            available: self.available,
+            queue_mode: None,
+            qoe_policy: None,
+        }
+    }
+}
+
+fn non_empty(value: String) -> Option<String> {
+    (!value.trim().is_empty()).then_some(value)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProfileLlmListResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub primary: Option<LlmConfiguredProvider>,
+    #[serde(default)]
+    pub fallbacks: Vec<LlmConfiguredProvider>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub llm: Option<LlmProfileState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_policy_stamp: Option<RuntimePolicyStamp>,
+}
+
+impl ProfileLlmListResult {
+    pub fn primary_provider(&self) -> Option<&LlmConfiguredProvider> {
+        self.primary
+            .as_ref()
+            .or_else(|| self.llm.as_ref().and_then(|llm| llm.primary.as_ref()))
+    }
+
+    pub fn fallback_providers(&self) -> &[LlmConfiguredProvider] {
+        if self.fallbacks.is_empty() {
+            self.llm
+                .as_ref()
+                .map(|llm| llm.fallbacks.as_slice())
+                .unwrap_or_default()
+        } else {
+            self.fallbacks.as_slice()
+        }
+    }
+
+    pub fn models(&self) -> Vec<ModelStatus> {
+        self.primary_provider()
+            .into_iter()
+            .chain(self.fallback_providers().iter())
+            .map(LlmConfiguredProvider::to_model_status)
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LlmProfileState {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub primary: Option<LlmConfiguredProvider>,
+    #[serde(default)]
+    pub fallbacks: Vec<LlmConfiguredProvider>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProfileLlmMutationResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub primary: Option<LlmConfiguredProvider>,
+    #[serde(default)]
+    pub fallbacks: Vec<LlmConfiguredProvider>,
+    #[serde(default)]
+    pub applied: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub llm: Option<LlmProfileState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_policy_stamp: Option<RuntimePolicyStamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl ProfileLlmMutationResult {
+    pub fn to_list_result(&self) -> ProfileLlmListResult {
+        ProfileLlmListResult {
+            profile_id: self.profile_id.clone(),
+            primary: self.primary.clone(),
+            fallbacks: self.fallbacks.clone(),
+            llm: self.llm.clone(),
+            runtime_policy_stamp: self.runtime_policy_stamp.clone(),
+        }
+    }
+
+    pub fn models(&self) -> Vec<ModelStatus> {
+        self.to_list_result().models()
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileSkillsListParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileSkillsRegistrySearchParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub q: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileSkillsInstallParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub repo: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    #[serde(default)]
+    pub force: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileSkillsRemoveParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileSkillEntry {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub tool_count: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_repo: Option<String>,
+    #[serde(default)]
+    pub installed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileSkillsListResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default)]
+    pub count: usize,
+    #[serde(default)]
+    pub skills: Vec<ProfileSkillEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileSkillRegistryPackage {
+    pub name: String,
+    pub description: String,
+    pub repo: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
+    #[serde(default)]
+    pub skills: Vec<String>,
+    #[serde(default)]
+    pub requires: Vec<String>,
+    #[serde(default)]
+    pub provides_tools: bool,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub installed: bool,
+    #[serde(default)]
+    pub installed_skills: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileSkillsRegistrySearchResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default)]
+    pub packages: Vec<ProfileSkillRegistryPackage>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileSkillsMutationResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default)]
+    pub ok: bool,
+    #[serde(default)]
+    pub installed: Vec<String>,
+    #[serde(default)]
+    pub skipped: Vec<String>,
+    #[serde(default)]
+    pub deps_installed: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub removed: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FocusPane {
+    Sessions,
+    Tasks,
+    Artifacts,
+    Transcript,
+    Workspace,
+    Git,
+    Composer,
+}
+
+/// Composer editing mode under Vim (see `AppState.vim_mode`). `Insert` behaves
+/// like a plain text field; `Normal` interprets keys as Vim motions/operators.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ComposerMode {
+    #[default]
+    Insert,
+    Normal,
+}
+
+/// Which conversation the main pane is showing: the active session's own chat
+/// (`Main`), or a selected sub-agent's live output (`Agent`, keyed by the
+/// stable `UiAgentRecord::agent_id`). The agent-strip selector cycles through
+/// `[Main, …session sub-agents]`; selecting a sub-agent redirects the main pane
+/// to that agent's streamed output and back.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum ChatViewTarget {
+    #[default]
+    Main,
+    Agent(String),
+}
+
+impl FocusPane {
+    pub fn next(self) -> Self {
+        match self {
+            Self::Sessions => Self::Tasks,
+            Self::Tasks => Self::Artifacts,
+            Self::Artifacts => Self::Transcript,
+            Self::Transcript => Self::Workspace,
+            Self::Workspace => Self::Git,
+            Self::Git => Self::Composer,
+            Self::Composer => Self::Sessions,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ActivityNavigatorFilter {
+    #[default]
+    All,
+    Running,
+    Blocked,
+    Failed,
+    Done,
+}
+
+impl ActivityNavigatorFilter {
+    pub fn next(self) -> Self {
+        match self {
+            Self::All => Self::Running,
+            Self::Running => Self::Blocked,
+            Self::Blocked => Self::Failed,
+            Self::Failed => Self::Done,
+            Self::Done => Self::All,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::All => "all",
+            Self::Running => "running",
+            Self::Blocked => "blocked",
+            Self::Failed => "failed",
+            Self::Done => "done",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ActivityNavigatorState {
+    pub active: bool,
+    pub query: String,
+    pub filter: ActivityNavigatorFilter,
+    pub selected: usize,
+    pub search_active: bool,
+}
+
+impl ActivityNavigatorState {
+    pub fn open(&mut self) {
+        self.active = true;
+        self.search_active = false;
+        self.query.clear();
+        self.filter = ActivityNavigatorFilter::All;
+        self.selected = 0;
+    }
+
+    pub fn close(&mut self) {
+        self.active = false;
+        self.search_active = false;
+    }
+
+    pub fn clear_query(&mut self) {
+        self.query.clear();
+        self.selected = 0;
+    }
+
+    pub fn push_query_char(&mut self, ch: char) {
+        self.query.push(ch);
+        self.selected = 0;
+    }
+
+    pub fn start_search_with_char(&mut self, ch: char) {
+        self.search_active = true;
+        self.query.clear();
+        self.query.push(ch);
+        self.selected = 0;
+    }
+
+    pub fn pop_query_char(&mut self) {
+        self.query.pop();
+        self.selected = 0;
+    }
+
+    pub fn cycle_filter(&mut self) {
+        self.filter = self.filter.next();
+        self.selected = 0;
+    }
+
+    pub fn select_next(&mut self, len: usize) {
+        if len == 0 {
+            self.selected = 0;
+        } else {
+            self.selected = (self.selected + 1).min(len - 1);
+        }
+    }
+
+    pub fn select_prev(&mut self) {
+        self.selected = self.selected.saturating_sub(1);
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum SessionRunState {
+    #[default]
+    Idle,
+    InProgress,
+    Blocked {
+        message: String,
+    },
+    Success,
+    Error {
+        message: String,
+    },
+}
+
+impl SessionRunState {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::InProgress => "running",
+            Self::Blocked { .. } => "blocked",
+            Self::Success => "done",
+            Self::Error { .. } => "error",
+        }
+    }
+
+    pub fn detail(&self) -> Option<&str> {
+        match self {
+            Self::Blocked { message } | Self::Error { message } => Some(message.as_str()),
+            Self::Idle | Self::InProgress | Self::Success => None,
+        }
+    }
+
+    pub fn is_active(&self) -> bool {
+        matches!(self, Self::InProgress | Self::Blocked { .. })
+    }
+}
+
+type SessionUsage = (Option<u64>, Option<u64>, Option<f64>);
+
+/// Fold preference for the ◆ Goal banner's objective, toggled by Ctrl+P.
+///
+/// `Auto` is the default: the fold is derived EACH FRAME from the objective's
+/// wrapped length at the real render width — a short goal (≤ a few wrapped rows)
+/// shows in full, a long one (a huge pasted objective) is compact by default so
+/// it can't dominate the screen. Once the user presses Ctrl+P the choice becomes
+/// explicit (`Folded`/`Unfolded`) and is honored on every subsequent frame
+/// regardless of length. A global UI preference, not per-session state — the
+/// same discipline as [`AppState::agent_dock_collapsed`]; `Auto` adapts to
+/// whichever session's goal is on screen, so only an explicit toggle is sticky.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GoalObjectiveFold {
+    #[default]
+    Auto,
+    Folded,
+    Unfolded,
+}
+
+/// Hit rectangle (screen cells) of the pager's floating "jump to latest"
+/// button. Kept as plain `u16` fields instead of ratatui's `Rect` so the
+/// model layer stays free of UI-crate imports; the renderer converts on the
+/// way in, the mouse handler only needs `contains`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScrollToBottomHit {
+    pub x: u16,
+    pub y: u16,
+    pub width: u16,
+    pub height: u16,
+}
+
+impl ScrollToBottomHit {
+    pub fn contains(&self, column: u16, row: u16) -> bool {
+        column >= self.x
+            && column < self.x.saturating_add(self.width)
+            && row >= self.y
+            && row < self.y.saturating_add(self.height)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AppState {
+    /// Active TUI palette, chosen at launch (`--theme`/config) and switchable
+    /// at runtime via `/theme`. The event loop derives the per-frame `Palette`
+    /// from this field, so a `/theme` change repaints on the next frame; it
+    /// also drives the `*` current marker in the `/theme` menu.
+    pub theme: crate::cli::ThemeName,
+    pub sessions: Vec<SessionView>,
+    /// Latest whole-job orchestration status per session (`session/orchestration`).
+    /// Drives the composer top-border job indicator; absent/`active:false` hides it.
+    pub orchestration: std::collections::HashMap<SessionKey, SessionOrchestrationEvent>,
+    /// Latest usage per session — (input tokens, output tokens, session cost
+    /// USD) — merged from `token_cost` progress updates. `session_cost` is
+    /// cumulative; in/out reflect the most recent update. Rendered on the job
+    /// indicator.
+    pub session_usage: std::collections::HashMap<SessionKey, SessionUsage>,
+    /// Real per-model context window (tokens) per session, carried on the wire
+    /// via `metadata.token_cost.context_window`. Used as the denominator for an
+    /// honest context-fill gauge; falls back to a fixed default until the first
+    /// cost update arrives.
+    pub session_context_window: std::collections::HashMap<SessionKey, u64>,
+    /// Turn ids that reached a terminal state (completed/errored), per session.
+    /// A late `MessageDelta` for one of these — e.g. background spawn_only tokens
+    /// re-streamed under the dead foreground turn id — must be dropped, not
+    /// lazy-bound into `live_reply`: binding a completed turn latches
+    /// `active_turn()` forever (no second terminal arrives to clear it), wedging
+    /// the composer into queuing all input. Bounded per session via the paired
+    /// FIFO queue (capped at [`Self::COMPLETED_TURNS_CAP`], the same pattern as
+    /// [`AppState::finalized_by_switch`]) so a long-running session cannot grow
+    /// it without bound — only recent turns can realistically receive a late
+    /// delta or a replayed terminal.
+    pub completed_turns: std::collections::HashMap<
+        SessionKey,
+        (
+            std::collections::HashSet<TurnId>,
+            std::collections::VecDeque<TurnId>,
+        ),
+    >,
+    /// Connection epoch: bumped by `ClientEvent::BackendConnectionEpoch` each
+    /// time the stdio transport connects a REPLACEMENT child. `live_reply`
+    /// latches are stamped with the epoch current at bind time
+    /// (`live_reply_epochs`), so the relaunch reconcile can fail the dead
+    /// child's turns while sparing a turn the new child itself started before
+    /// its scoped `session/open` landed (a resumed durable continuation).
+    pub connection_epoch: u64,
+    /// Per-session connection-epoch stamp of the currently latched
+    /// `live_reply`. A session with no stamp counts as OLDER than any bumped
+    /// epoch, so a reply restored without one is reconciled like a dead-child
+    /// latch. One entry per session ever latched; stale entries for a session
+    /// whose reply was consumed are harmless (the reconcile only reads the
+    /// stamp of a session that currently holds a `live_reply`).
+    pub live_reply_epochs: std::collections::HashMap<SessionKey, u64>,
+    /// Turn ids whose terminal was an ERROR (not a user interrupt), per
+    /// session. A live-reply coverage archived for such a turn must never
+    /// dedup a LATER turn's committed reply on direct-prefix evidence alone:
+    /// the errored turn's committed row is its failure card (which does not
+    /// start with the flushed prefix, so the coverage survives), and a later
+    /// reply that happens to share that prefix would otherwise be silently
+    /// skipped as "already flushed". Bounded per session exactly like
+    /// [`AppState::completed_turns`].
+    pub errored_turns: std::collections::HashMap<
+        SessionKey,
+        (
+            std::collections::HashSet<TurnId>,
+            std::collections::VecDeque<TurnId>,
+        ),
+    >,
+    /// Latest retry/backoff status per session — the `UiRetryBackoff` carried
+    /// on `metadata.retry` progress updates that the TUI previously ignored.
+    /// Drives the "retrying (attempt N)" surface in the harness status row.
+    /// Cleared on the session's next non-retry progress event so a settled
+    /// turn doesn't linger as "retrying".
+    pub session_retry: std::collections::HashMap<SessionKey, UiRetryBackoff>,
+    /// Latest whimsical persona status word per session, keyed with the
+    /// TURN it belongs to (from the server's `progress/updated{kind:
+    /// "status_word"}` rotator, e.g. "Conjuring" / "正在炼丹"). Rendered in the
+    /// harness gradient line above the composer only while it matches the
+    /// active turn — so a stale word from a prior turn (or a server-started
+    /// continuation) is ignored rather than lingering. The `Instant` is when
+    /// THIS word instance landed, keying the decrypt-style entrance animation
+    /// (fresh words decode from ciphertext before the wave gradient resumes).
+    pub session_status_word:
+        std::collections::HashMap<SessionKey, (TurnId, String, std::time::Instant)>,
+    /// Per-session reasoning/thinking effort chosen via the `/thinking` command,
+    /// keyed by `SessionKey` so each session keeps its own level. Attached to
+    /// every `turn/start` for that session; absent = use the server
+    /// (gateway/profile) default. Only affects thinking-capable models.
+    /// Preserved across `Snapshot` replays (see `apply_event`).
+    pub session_reasoning_effort:
+        std::collections::HashMap<SessionKey, ra_core::ui_protocol::ReasoningEffortLevel>,
+    /// Per-session opt-in to render the committed `reasoning_content` as a
+    /// capped "· reasoning" block in the transcript. Absent/false = the
+    /// codex-style quiet default (spinner + inspector only). Toggled from the
+    /// `/thinking` menu; parallels `session_reasoning_effort` in lifetime and
+    /// Snapshot preservation.
+    pub session_reasoning_display: std::collections::HashSet<SessionKey>,
+    /// Per-session set of turn ids that were already finalized (committed OR
+    /// dropped) by `commit_pending_live_reply_for_turn_switch` at a turn-switch
+    /// boundary. A prior turn's OWN late `TurnCompleted`/`TurnError` may still
+    /// arrive after the switch already closed it; the terminal handlers consume
+    /// this marker and no-op so they neither emit a false fallback card (for a
+    /// committed turn whose successor already completed and left `live_reply ==
+    /// None`) nor mishandle a dropped-empty turn. Bounded per session via the
+    /// paired FIFO queue (capped at [`Self::FINALIZED_BY_SWITCH_CAP`]) so an
+    /// adversarial/long-running session cannot grow it without bound.
+    pub finalized_by_switch: std::collections::HashMap<
+        SessionKey,
+        (
+            std::collections::HashSet<TurnId>,
+            std::collections::VecDeque<TurnId>,
+        ),
+    >,
+    pub selected_session: usize,
+    pub selected_task: usize,
+    /// Which conversation the main pane renders: the session chat, or a
+    /// selected sub-agent's live output. Resets to `Main` on session switch.
+    pub chat_view: ChatViewTarget,
+    pub transcript_scroll: usize,
+    /// The largest meaningful `transcript_scroll` (wrapped-rows − visible-rows),
+    /// recorded by the transcript renderer each frame — it is the only place
+    /// that knows the wrapped-row count. `scroll_transcript_up/down` clamp
+    /// against it so over-scroll (or scroll keys pressed when the content fits
+    /// the screen, `max_scroll == 0`) can't push the offset past the top and
+    /// leave PageDown/wheel-down "stuck" unwinding a phantom offset — and so
+    /// `transcript_scroll > 0` always means "really reviewing history" (the
+    /// `HintBarMode::PagerReviewing` gate). `usize::MAX` means "not measured
+    /// yet" (unbounded) — the pager always draws before a scroll key is read,
+    /// so production sees a real bound first; the sentinel only relaxes the
+    /// clamp in render-less unit tests. A `Cell` because rendering borrows
+    /// `&AppState`; stale by at most one frame. Same discipline as
+    /// [`Self::agent_view_scroll_max`].
+    pub transcript_scroll_max: std::cell::Cell<usize>,
+    /// Scroll offset (rows from the bottom) for the sub-agent peek overlay. Kept
+    /// separate from `transcript_scroll` so the main view's scroll is preserved
+    /// across a peek, and — critically — so incoming activity rows that bump the
+    /// main transcript scroll don't drift the peek (which renders only the
+    /// agent's output). Reset to the bottom whenever the peek target changes.
+    pub agent_view_scroll: usize,
+    /// The largest meaningful `agent_view_scroll` (wrapped-rows − visible-rows),
+    /// recorded by the overlay renderer each frame — it is the only place that
+    /// knows the wrapped-row count. `scroll_agent_view_up` clamps against it so a
+    /// jump-to-top (`usize::MAX`) or repeated over-scroll can't push the offset
+    /// past the top and leave Down/wheel-down "stuck" unwinding a huge sentinel.
+    /// `usize::MAX` means "not measured yet" (unbounded) — the peek always draws
+    /// before a scroll key is read, so production sees a real bound first; the
+    /// sentinel only relaxes the clamp in render-less unit tests. A `Cell`
+    /// because rendering borrows `&AppState`; stale by at most one frame.
+    pub agent_view_scroll_max: std::cell::Cell<usize>,
+    /// Full-screen transcript pager (alt-screen). While active the complete
+    /// committed transcript scrolls in the upper pane and the composer stays
+    /// pinned to the bottom row — the inline chat flow cannot offer that
+    /// because committed history lives in the terminal's own scrollback.
+    pub transcript_pager_active: bool,
+    /// Screen rect of the pager's floating "jump to latest" arrow button (▼),
+    /// recorded by the renderer each frame — only the renderer knows the
+    /// laid-out transcript area. `None` while the button is hidden (view at
+    /// the bottom, or no pager). A `Cell` because rendering borrows
+    /// `&AppState`; stale by at most one frame (the same discipline as
+    /// [`AppState::agent_view_scroll_max`]).
+    pub scroll_to_bottom_button: std::cell::Cell<Option<ScrollToBottomHit>>,
+    /// Agent Dock (#323): collapse the sub-agent strip to a one-line summary
+    /// pill (`🐙 N agents · R running · U● unread`) instead of the per-agent
+    /// rows. Toggled by Alt+D or the `/agents` menu; a UI preference, not
+    /// per-session state.
+    pub agent_dock_collapsed: bool,
+    /// #407: Peer Dock collapsed state. Mirrors [`Self::agent_dock_collapsed`]:
+    /// when true, the peer strip renders as a single-line summary pill
+    /// (`Peers: N · M live · K⚠`) instead of per-peer chips. Toggled by
+    /// Alt+P (or the Ctrl+L alias for terminals without Option-as-Meta).
+    /// Distinct from the agent dock's collapse so the two surfaces stay
+    /// independently controllable.
+    pub peer_dock_collapsed: bool,
+    /// ◆ Goal banner fold preference (Ctrl+P). See [`GoalObjectiveFold`]: a huge
+    /// pasted objective folds to one compact row by default, a short one shows
+    /// in full, and an explicit Ctrl+P choice sticks. A global UI preference,
+    /// not per-session state (like `agent_dock_collapsed`).
+    pub goal_objective_fold: GoalObjectiveFold,
+    /// Last EFFECTIVE goal-objective fold the banner rendered — `Auto` resolved
+    /// from the objective's wrapped length at the REAL render width. A `Cell`
+    /// because the render/height paths borrow `&AppState`; Ctrl+P reads it to
+    /// flip whatever is currently on screen (the banner always draws before a
+    /// key is read, so it is stale by at most one frame — the same discipline as
+    /// [`AppState::agent_view_scroll_max`]).
+    pub goal_objective_folded_effective: std::cell::Cell<bool>,
+    /// `--scroll-mode pinned`: capture the mouse in the chat flow so wheel-up
+    /// auto-enters the pager (composer stays pinned) and wheel-down at the
+    /// pager bottom drops back to the inline tail. False = `native` (default):
+    /// the wheel belongs to the terminal and native selection/copy stay intact.
+    pub pinned_scroll: bool,
+    /// Vim modal editing for the composer (opt-in via `--vim-mode`/config
+    /// `vim-mode`/`/vimmode`). When false the composer behaves exactly as a
+    /// plain text field (equivalent to always-Insert); `composer_mode` is only
+    /// consulted when this is true.
+    pub vim_mode: bool,
+    /// octos#1807 steering as an OPT-IN: when true, a prompt typed while a
+    /// turn is running is injected into the LIVE turn via `turn/steer`. The
+    /// default is false — mid-turn prompts stage FIFO in `pending_messages`
+    /// and each drains as its OWN turn at turn-end, so every prompt is
+    /// processed to completion in the order it was typed. Steering makes the
+    /// model treat the newest instruction as superseding the work in
+    /// progress (the steer lands as a bare `role: user` message mid-loop),
+    /// which reads as "interrupt and pivot" — the right tool for a course
+    /// correction, the wrong default for "also do this next".
+    pub steer_mid_turn: bool,
+    /// Current composer editing mode under Vim. Defaults to `Insert` so typing
+    /// works immediately when Vim is enabled; `Esc` switches to `Normal`.
+    pub composer_mode: ComposerMode,
+    /// Pending Vim multi-key prefix in Normal mode (`g`/`d`/`c`), resolved or
+    /// cleared by the next key. `None` when no sequence is in progress.
+    pub composer_vim_pending: Option<char>,
+    /// Armed by an idle Ctrl+C (nothing to interrupt); the next consecutive
+    /// Ctrl+C quits the TUI. Any other key press disarms. Escape hatch for
+    /// surfaces that eat plain keys (onboarding wizard, menus), where `q` and
+    /// `/exit` type into a filter instead of quitting.
+    pub ctrl_c_quit_armed: bool,
+    /// Armed when an approval or AskUserQuestion ARRIVES (live server event);
+    /// the event loop drains it by writing BEL to the terminal exactly once.
+    /// Store stays I/O-free — same pattern as the pending-clipboard flush.
+    pub pending_decision_bell: bool,
+    /// Client-side first-seen clock per task id, for the sub-agent chip's
+    /// elapsed display (server events carry no wall-clock the TUI can trust
+    /// across hosts — same rationale as `PeerMeta.created`). Populated when a
+    /// task first shows up pending/running.
+    pub task_first_seen: std::collections::HashMap<TaskId, std::time::Instant>,
+    /// The last turn terminal was quota exhaustion (spec
+    /// task-quota-exhausted-card): the status bar shows an amber Quota state
+    /// instead of the generic red Error. Cleared when the next turn starts.
+    pub quota_exhausted: bool,
+    /// Client-side per-loop fire counter (spec task-loop-liveness-indicator):
+    /// how many times each loop has fired in this session. The server carries
+    /// no such counter, so this is a session-local approximation that resets
+    /// on restart — enough to answer "is it still going, and how far in".
+    pub loop_fire_counts: std::collections::HashMap<(SessionKey, String), u32>,
+    /// Turns known to have been started by a loop firing, so their activity
+    /// group can carry the `↻` attribution prefix.
+    pub loop_attributed_turns: std::collections::HashSet<(SessionKey, TurnId)>,
+    /// Session whose NEXT turn should be attributed to a loop: set when
+    /// `loop/fired` arrives, consumed when that session's next turn starts.
+    pub pending_loop_attribution: std::collections::HashSet<SessionKey>,
+    /// True while a USER-dispatched `/loop list` awaits its result. The
+    /// session-open hydration fires the same RPC silently; only an explicit
+    /// user query may pop the loops menu when the result lands.
+    pub pending_loop_list_menu: bool,
+    /// Loop id the `MENU_LOOP_ACTIONS` submenu is acting on (set when a
+    /// loops-list row is activated).
+    pub loop_actions_target: Option<String>,
+    /// Path of the `--config` file this session launched from, retained so
+    /// `/saveconfig` can persist runtime UI settings back. `None` when launched
+    /// without `--config` (saving then falls back to the default path).
+    pub config_path: Option<std::path::PathBuf>,
+    pub activity_navigator: ActivityNavigatorState,
+    pub focus: FocusPane,
+    pub artifacts: ArtifactPaneState,
+    pub workspace: WorkspacePaneState,
+    pub git: GitPaneState,
+    pub composer: String,
+    pub composer_cursor: Option<usize>,
+    /// True when the composer currently holds a large UNEDITED paste, so it
+    /// renders as a compact `[paste]` block. Set only by the paste path (real
+    /// paste events), cleared on any manual edit (type/delete/clear/submit) —
+    /// so TYPED multi-line input is never collapsed, only pastes are.
+    pub composer_pasted: bool,
+    /// Byte range of the collapsed paste inside `composer` (#382): lets the
+    /// atomic block delete drain ONLY the pasted bytes so typed text around
+    /// the chip survives. `None` (e.g. state predating the span) falls back
+    /// to clearing the whole draft. Maintained by `insert_pasted_text`
+    /// (unioned across consecutive pastes) and invalidated wherever
+    /// `composer_pasted` is cleared.
+    pub composer_paste_span: Option<std::ops::Range<usize>>,
+    pub composer_drafts: Vec<ComposerDraft>,
+    /// Snapshot backing the `@` composer file picker (#363): the workspace
+    /// file list scanned when the picker was last opened. `Some` only feeds
+    /// the `file-picker` menu build; rebuilt on every `@` (never stale-served).
+    pub file_picker: Option<crate::file_picker::FilePickerState>,
+    /// Cross-session command history for Up/Down recall (codex/claude-code
+    /// style); persisted to `~/.config/octoscode/history.jsonl`. See
+    /// [`crate::history::ComposerHistory`].
+    pub composer_history: crate::history::ComposerHistory,
+    /// Prompts staged while the ACTIVE session's turn was running, submitted
+    /// FIFO when it next goes idle. This holds the ACTIVE session's queue
+    /// only: `switch_selected_session` stashes it into
+    /// [`Self::pending_messages_by_session`] on the way out and loads the
+    /// incoming session's queue on the way in (exactly like
+    /// `composer_drafts`), so a terminal firing in one session can never
+    /// drain another session's staged prompts into it.
+    pub pending_messages: Vec<String>,
+    /// Staged-prompt queues for NON-active sessions, keyed by session.
+    /// Stashed/loaded by [`Self::switch_selected_session`]. Local-only client
+    /// state the server never echoes — preserved across snapshot replays.
+    pub pending_messages_by_session: std::collections::HashMap<SessionKey, Vec<String>>,
+    /// Sessions with a staged-queue submit ENQUEUED whose turn has not yet
+    /// been observed (no `turn/started` or terminal), stamped with WHEN the
+    /// submit was enqueued. Gates `submit_next_pending_if_idle`: inside the
+    /// enqueue→turn/started window the session still LOOKS idle (no
+    /// `live_reply`), so rapid session switches would drain a SECOND staged
+    /// prompt concurrently — queued prompts must flow FIFO, one per settled
+    /// turn (codex P2 on the drain-after-switch fix).
+    ///
+    /// The timestamp is a STRUCTURAL backstop: transport-level deaths of the
+    /// in-flight `turn/start` are only partially attributable from error
+    /// events (no request/session ids on the wire errors), so instead of an
+    /// ever-growing error-code taxonomy, a gate older than
+    /// [`crate::store::STAGED_SUBMIT_GATE_TTL`] is treated as stale and
+    /// ignored — any missed death self-heals in seconds (and, since the gate
+    /// carries the prompt, the stale-gate path RE-STAGES it rather than
+    /// dropping it). Snapshot-PRESERVED (codex fold): the gate may hold the
+    /// only copy of a drained prompt, so a reconnect replay carries the map
+    /// over like the staged queues; a gate whose turn died with the old
+    /// connection self-heals via the TTL re-stage.
+    ///
+    /// The gate also carries the in-flight PROMPT (P2 tri-repo #246): a
+    /// staged submit that dies at the transport layer is re-staged from the
+    /// gate instead of vanishing — the drain had already pulled it off the
+    /// queue, so the gate is the only place its text survives.
+    pub staged_submit_in_flight: std::collections::HashMap<SessionKey, StagedSubmitGate>,
+    pub optimistic_user_messages: Vec<OptimisticUserMessage>,
+    pub turn_prompt_anchors: Vec<TurnPromptAnchor>,
+    /// Byte offsets in `live_reply.text` where one persisted assistant content
+    /// segment ended and the next streamed segment should render as fresh
+    /// markdown. Kept out-of-band so coverage/dedup can keep comparing the
+    /// unmodified live text against committed content.
+    pub live_reply_segment_boundaries: std::collections::HashMap<(SessionKey, TurnId), Vec<usize>>,
+    /// Canonical v2 assistant segments currently projected into a live reply,
+    /// keyed by session and resolved local turn id. Segment identity is kept
+    /// separately from the text so a later `assistant_segment_id` can open a
+    /// fresh segment without overwriting a prior persisted one.
+    pub(crate) v2_live_assistant_segments:
+        std::collections::HashMap<(SessionKey, TurnId), Vec<V2AssistantSegment>>,
+    /// First assistant-content projection observed per live turn. A parallel
+    /// v1/v2 projection is duplicate delivery, not a second answer segment.
+    pub(crate) assistant_projection_lanes:
+        std::collections::HashMap<(SessionKey, TurnId), AssistantProjectionLane>,
+    /// Maps the string turn id carried by v2 envelopes to the typed local
+    /// [`TurnId`] used by the established live-reply lifecycle. V2 permits
+    /// non-UUID wire ids during compatibility projection, so the map lets the
+    /// reducer retain stable identity without weakening the existing model.
+    pub(crate) v2_turn_ids: std::collections::HashMap<(SessionKey, String), TurnId>,
+    /// One automatic retry per contradicted terminal/session/connection epoch.
+    /// Repeated stale hydrate replies must not create a self-sustaining RPC loop.
+    pub(crate) stale_hydrate_refreshes: std::collections::HashSet<(SessionKey, TurnId, u64)>,
+    /// Accumulated streamed reasoning fragments per active turn (legacy
+    /// `ReasoningDelta` path). `commit_live_reply` moves them onto the committed
+    /// message's `reasoning_content`, which the transcript renders as a separate
+    /// `· reasoning` block above the answer.
+    pub live_reasoning: std::collections::HashMap<(SessionKey, TurnId), String>,
+    /// In-flight context compaction per session (UPCR-2026-026): set on
+    /// `context/compaction_started`, cleared on completed / turn end.
+    /// Renders the "Compacting conversation…" block with an honest
+    /// fullness bar.
+    pub live_compaction: std::collections::HashMap<SessionKey, LiveCompaction>,
+    /// octos#2019 human sink: background events that woke the model, keyed by
+    /// the session that OWNS the emitter.
+    ///
+    /// Deliberately a per-session map rather than one global `Vec` like
+    /// [`AppState::activity`]: the render path reads ONLY the rendered
+    /// session's bucket, so a row can never leak into whichever session
+    /// happens to be focused (octos-tui#461 / #466 / #483 — `flow_activity_items`
+    /// filters on `turn_id` alone and has exactly that failure mode). Routing
+    /// is structural here, not a filter that can be forgotten.
+    pub background_activity: std::collections::HashMap<SessionKey, Vec<BackgroundActivityParams>>,
+    pub status: String,
+    pub target: Option<String>,
+    pub readonly: bool,
+    pub protocol_version: &'static str,
+    pub run_state: SessionRunState,
+    pub run_state_started_at: Option<Instant>,
+    /// Sessions with a SUBMITTED turn that has not yet streamed its first
+    /// delta (`live_reply` absent). `initial_run_state` derives run-state from
+    /// `live_reply` presence alone, so without this marker a rapid
+    /// switch-away-and-back inside the pre-first-token window read the session
+    /// as Idle and let a submit start a SECOND concurrent turn (#379 review
+    /// F3). Armed at submit, cleared on turn/started + both terminals; entries
+    /// older than [`PRE_TOKEN_TURN_TTL`] are ignored (dead submit — matches
+    /// the staged-gate TTL self-heal).
+    pub pre_token_turns: std::collections::HashMap<SessionKey, Instant>,
+
+    /// Turns the user has locally interrupted (Esc/Ctrl+C) whose server
+    /// terminal has not yet landed. The mirror image of `pre_token_turns`:
+    /// where that FORCES the run-state in-progress, this FORCES it idle and
+    /// freezes the live reply, so a turn stops on screen the instant Esc is
+    /// pressed instead of after a full client→server→terminal round trip (the
+    /// server interrupt is cooperative and can lag seconds). Keyed by session;
+    /// the value is the interrupted turn id, so a LATER turn on the same
+    /// session is never gated. Cleared on the turn's terminal.
+    pub interrupted_turns: std::collections::HashMap<SessionKey, TurnId>,
+    /// Sessions whose last `session/status/read` reported `cursor.healthy:
+    /// false`. A latch, not a log: `session/status/read` is polled, so the
+    /// warning fires when a session ENTERS the state and again only after it
+    /// recovers — otherwise a persistently degraded stream would bury the
+    /// activity feed under identical rows.
+    ///
+    /// It is also the live truth the status bar's degraded-stream chip reads,
+    /// which is why membership must track the CURRENT report rather than
+    /// "already warned": the one-shot row renders inside a collapsed activity
+    /// group and the status slot it writes is overwritten by the next command,
+    /// so the chip is the only surface that survives to the moment the operator
+    /// wonders why a turn is silent.
+    pub unhealthy_cursors: std::collections::HashSet<SessionKey>,
+
+    /// Turns whose output the freeze above ACTUALLY suppressed: a delta or a
+    /// canonical persisted frame arrived after the Esc and was dropped.
+    ///
+    /// Only these turns can have lost content, so only these earn the
+    /// "incomplete" marker when the turn goes on to complete normally. Esc at
+    /// 99% — where nothing further arrived — commits clean, with no false
+    /// warning. Cleared with the turn's terminal (and on backend relaunch,
+    /// like `interrupted_turns`).
+    pub interrupt_dropped_output: std::collections::HashSet<(SessionKey, TurnId)>,
+    /// task-stuck-run-state-watchdog: per session, the turn named by the most
+    /// recent server `TurnStarted`. Paired with `completed_turns` this gives
+    /// TURN-SCOPED terminal evidence: "the last turn the server told us about
+    /// has reached its terminal, and nothing started since". A session-level
+    /// `session_orchestration active=false` is deliberately NOT used as
+    /// evidence — it carries no turn identity, so a late frame from an old
+    /// turn A arriving after `TurnStarted(B)` would misfire on B.
+    pub last_started_turn: std::collections::HashMap<SessionKey, TurnId>,
+    /// task-stuck-run-state-watchdog: sessions for which the watchdog already
+    /// sent its one `session/hydrate` probe during the CURRENT phantom
+    /// episode. Cleared when the session leaves the phantom shape so the next
+    /// episode gets its own probe.
+    pub phantom_probe_sent: std::collections::HashSet<SessionKey>,
+    /// OUTER_LOOP_REVIEW #12: sessions with a `session/hydrate` request already
+    /// dispatched (or queued for dispatch) and not yet answered. Both hydrate
+    /// producers (`hydrate_session_state_command` on `session/opened` /
+    /// phantom probe, and `resume_session_command` on `/resume`) record here
+    /// and refuse to emit a SECOND hydrate while one is in flight — the two
+    /// startup producers used to fire identical hydrates 1ms apart, doubling
+    /// serve busy time and writing the history into native scrollback twice.
+    /// Cleared when the hydrate result lands, when an attributed
+    /// `session/hydrate` error frame arrives, and on backend relaunch (the old
+    /// child's in-flight requests die with it). The first dispatch wins with no
+    /// merge, which is only sound because both producers send the SAME include
+    /// set — pinned by `both_hydrate_producers_request_the_same_sections`.
+    /// Adding a section to one producer alone loses it whenever the other wins
+    /// the race.
+    pub hydrate_in_flight: std::collections::HashSet<SessionKey>,
+    /// OUTER_LOOP_REVIEW #30: startup prompt (`--prompt`) exactly-once
+    /// state machine. `Some(text)` = armed, awaiting the session bootstrap +
+    /// hydrate to complete; the arm is NOT part of the #27 bootstrap replay
+    /// sequence — the transport replays launch/resolve/session-open on a
+    /// reconnect, which drives a fresh hydrate, and this arm simply survives
+    /// until dispatch. Cleared to `None` the moment the turn/start command
+    /// is emitted for dispatch (at-least-once until dispatched): a
+    /// connection death BEFORE dispatch re-arms nothing (the arm was never
+    /// cleared), and after dispatch `startup_prompt_dispatched` latches so a
+    /// post-dispatch reconnect + re-hydrate never re-sends
+    /// (exactly-once after dispatch).
+    pub startup_prompt_pending: Option<String>,
+    /// #30: latched when the startup-prompt turn/start has been dispatched
+    /// (transport accepted). Guards the exactly-once-after-dispatch half.
+    pub startup_prompt_dispatched: bool,
+    /// #324 Phase C: per-session unread counters — turns that reached a
+    /// terminal while the session was NOT focused. Incremented by the store's
+    /// terminal appliers, cleared when the session gains focus.
+    pub unread_turns: std::collections::HashMap<SessionKey, usize>,
+    /// octos#1807: in-flight `turn/steer` dispatches, FIFO. Each steer's
+    /// prompt lives ONLY here between dispatch and its result/error — a steer
+    /// that positively dies (attributed error frame) is re-staged from this
+    /// stash so the typed text is never lost, and a `steered:false` result
+    /// re-keys its optimistic row onto the server's real new turn. Consumed
+    /// front-first by [`crate::client_event::ClientEvent::TurnSteered`] and
+    /// the attributed error fallback (exactly one of which arrives per
+    /// steer). Bounded by the transport's pending-request cap.
+    pub pending_turn_steers: std::collections::VecDeque<PendingTurnSteer>,
+    /// task-steer-retained-until-echo: accepted-but-unconfirmed steers, in
+    /// dispatch order. See [`RetainedSteer`].
+    pub retained_steers: Vec<RetainedSteer>,
+    /// #395: the in-flight `/peer` dispatch. `peer/prepare`'s result does not
+    /// echo the brief (and `go` never crosses the wire), so the dispatcher
+    /// stashes them here; the `PeerPrepared` apply consumes the stash to build
+    /// the kickoff. A second `/peer` before the first result replaces it.
+    pub pending_peer_prepare: Option<PendingPeerPrepare>,
+    /// #395: prepared peer sessions waiting for their `session/opened`, keyed
+    /// by the minted peer session key. Popped when the session lands in
+    /// `sessions` (the kickoff turn is then submitted to the PEER key);
+    /// entries older than [`PEER_KICKOFF_TTL`] are pruned like
+    /// `pre_token_turns`.
+    pub pending_peer_kickoffs: std::collections::HashMap<SessionKey, PeerKickoff>,
+    /// #407 (review F1): durable peer roster — survives the
+    /// `session/opened` pop that empties `pending_peer_kickoffs`. Recorded
+    /// at [`Self::take_pending_peer_kickoff`] (the single chokepoint both
+    /// the background and `--go` paths flow through). The Peer Dock and
+    /// its pill read the UNION of this map and `pending_peer_kickoffs` so
+    /// a running fleet stays visible. Note: `app.sessions` entries are
+    /// never removed in-process today (no session-close path), so no
+    /// removal hook is wired here — if close ever lands, prune the
+    /// matching `PeerMeta` at the same site.
+    pub peer_session_meta: std::collections::HashMap<SessionKey, PeerMeta>,
+    /// Durable set of session keys EVER registered as a peer (via the
+    /// `take_pending_peer_kickoff` open chokepoint). Unlike `peer_session_meta`
+    /// — the mutable DOCK roster that `/peer clear` prunes — a `/peer clear` (dock
+    /// prune) NEVER removes from this set, so a cleared done-peer STAYS a
+    /// read-only peer; only a full `peer/closed` teardown (which also removes the
+    /// `sessions` row) drops the key. And unlike a `topic().starts_with("peer-")`
+    /// string check it cannot false-positive on an ordinary session whose
+    /// API-supplied topic merely starts with `peer-`. This is the identity
+    /// `focused_session_is_peer` reads.
+    pub opened_peer_sessions: std::collections::HashSet<SessionKey>,
+    /// Peer keys retired by a recent `peer/closed`, each stamped at close time.
+    /// A `session/opened` that races BEHIND its `peer/closed` (the kickoff
+    /// already dropped) would otherwise fall through to the generic open path and
+    /// resurrect the peer as a focused generic row; a hit here within
+    /// `RECENTLY_CLOSED_PEER_TTL` swallows that stale open. Time-bounded (pruned
+    /// on access) so it stays small AND so a later peer that legitimately REUSES
+    /// the slug — restaged past the TTL, or explicitly un-stamped on restage — is
+    /// never suppressed.
+    pub recently_closed_peers: std::collections::HashMap<SessionKey, Instant>,
+    pub approval_auto_open: bool,
+    pub approval: Option<ApprovalModalState>,
+    /// Pending AskUserQuestion picker (UPCR-2026-023), mirroring `approval`.
+    pub user_question: Option<UserQuestionPickerState>,
+    pub user_question_auto_open: bool,
+    /// tui#398: approvals that arrived for a NON-focused session. The global
+    /// `approval` slot belongs to the focused session — a background session's
+    /// approval must not hijack the foreground modal/run-state; it waits here
+    /// (latest per session, mirroring the hydrate replay's `last()`), marks
+    /// the session's strip chip `⚠`, and is PROMOTED to the global slot when
+    /// the session is focused. NOT snapshot-carried: `session/hydrate` replays
+    /// pending approvals per session, so a reconnect repopulates these.
+    pub pending_session_approvals: std::collections::HashMap<SessionKey, ApprovalModalState>,
+    /// tui#398: AskUserQuestions for non-focused sessions, mirroring
+    /// [`Self::pending_session_approvals`].
+    pub pending_session_questions: std::collections::HashMap<SessionKey, UserQuestionPickerState>,
+    pub task_output: TaskOutputDetailState,
+    pub artifact_detail: ArtifactDetailState,
+    pub thread_graph_detail: ThreadGraphDetailState,
+    pub turn_state_detail: TurnStateDetailState,
+    pub task_output_cursors: Vec<TaskOutputCursor>,
+    pub diff_preview: DiffPreviewPaneState,
+    /// Terminal width of the last drawn frame (0 = not drawn yet, e.g. in
+    /// tests). Lets key handlers apply width gates — the side-by-side diff
+    /// toggle is a no-op when the transcript is too narrow to split.
+    pub last_terminal_width: u16,
+    /// Terminal HEIGHT of the last drawn frame (0 = not drawn yet). Lets key
+    /// handlers apply height gates — the Peer Dock approve/deny keys must only
+    /// fire when the dock (and the acted-on peer's row) was actually DRAWN this
+    /// frame, which `peer_strip_height` / `peer_strip_lines` decide from height.
+    pub last_terminal_height: u16,
+    pub activity: Vec<ActivityItem>,
+    pub turn_activity_logs: Vec<TurnActivityLog>,
+    /// Hydrate-replayed v2 tool envelopes already applied, keyed by
+    /// `(session, thread_id, seq)` — `seq` is the envelope's identity within
+    /// its thread. Hydrate re-runs on every reconnect; without this
+    /// ledger each re-run would duplicate the per-action rows.
+    pub applied_hydrate_tool_envelopes: std::collections::HashSet<(String, String, u64)>,
+    /// Retained background rows only, not an ever-seen receipt cache. Hydrate
+    /// rebuilds one session; snapshots retain exact unchanged row ownership;
+    /// optimistic inserts/removals shift positions structurally.
+    pub(crate) background_completion_rows:
+        std::collections::HashMap<(SessionKey, String), BackgroundCompletionRow>,
+    pub turn_activity_summaries: Vec<TurnActivitySummary>,
+    /// Wall-clock starts of in-flight turns, keyed by (session, turn). The
+    /// committed per-turn status report reads its duration here — the global
+    /// `run_state_started_at` clock resets whenever the selection changes, so
+    /// it cannot time a turn the user switched away from and back.
+    pub turn_started_at: std::collections::HashMap<(SessionKey, TurnId), std::time::Instant>,
+    /// Latest `/btw` aside per session (see [`BtwAside`]).
+    pub btw_asides: std::collections::HashMap<SessionKey, BtwAside>,
+    /// One-shot request to re-flush the transcript into terminal scrollback
+    /// on the next draw. Set when a tall live-region pane (the `/btw` aside)
+    /// is dismissed: the viewport shrink strands a blank band between the
+    /// transcript tail and the composer that nothing refills once the turn
+    /// is settled. Consumed by the event loop, which marks the scrollback
+    /// tracker stale so the same frame re-inserts the transcript over the
+    /// vacated rows (the same machinery a width-resize uses). The scope is
+    /// captured AT DISMISSAL TIME — a `TurnCompleted` draining before the
+    /// next draw must not demote a mid-stream dismissal to the committed-
+    /// only path, whose live-dedup would re-insert only the post-prefix
+    /// suffix and leave the band (codex P2 round 3).
+    pub transcript_reflush_requested: Option<TranscriptReflushScope>,
+    pub expanded_tool_outputs: bool,
+    pub menu_stack: MenuStack,
+    pub active_menu: Option<MenuBuildResult>,
+    pub capabilities: Option<CapabilitySet>,
+    pub onboarding: OnboardingWizardState,
+    pub permission_profiles: Vec<SessionPermissionProfile>,
+    pub session_runtime_statuses: Vec<SessionRuntimeStatus>,
+    pub profile_llm_catalog: Option<ProfileLlmCatalogResult>,
+    pub profile_llm_state: Option<ProfileLlmListResult>,
+    /// Named provider lanes (`sub_providers`) shown by the `/research` menu,
+    /// populated from `profile/sub_providers/list`.
+    pub sub_providers_state: Option<SubProvidersListResult>,
+    /// #1768: last `snapshot/list` (or restore-echo) for the /undo picker.
+    /// Session-stamped by the server; the menu displays it only for the
+    /// session it belongs to.
+    pub snapshots_state: Option<SnapshotListResult>,
+    pub profile_skills: Option<ProfileSkillsListResult>,
+    pub profile_skill_registry: Option<ProfileSkillsRegistrySearchResult>,
+    pub session_model_catalogs: Vec<SessionModelCatalog>,
+    pub session_mcp_catalogs: Vec<SessionMcpCatalog>,
+    pub session_tool_catalogs: Vec<SessionToolCatalog>,
+    pub mcp_config_catalog: Option<McpConfigListResult>,
+    pub tool_config_catalog: Option<ToolConfigListResult>,
+    /// M16-G2 per-session compact-context lifecycle ledger. Keyed by
+    /// session id. Empty when the server has not advertised
+    /// [`APPUI_FEATURE_CONTEXT_LIFECYCLE_V1`] or sent any
+    /// `context/compaction_completed` / `context/normalization_reported`
+    /// notification yet — the TUI hides the status surface in that case
+    /// instead of rendering zeroes.
+    pub context_lifecycle: Vec<SessionContextLifecycleEntry>,
+    /// M15-E per-session autonomy mirror. Populated by `agent/list`,
+    /// `session/goal/get`, `loop/list` results and by the matching
+    /// notifications. Hydration on reconnect re-requests these and
+    /// REPLACES the local mirror — local config never fills this in.
+    pub session_autonomy: Vec<SessionAutonomyState>,
+    /// Reconnect hydration queue. The store enqueues follow-up ra UI
+    /// commands (e.g. `session/hydrate`, `agent/list`,
+    /// `session/goal/get`, `loop/list`) when a session opens or after
+    /// reconnect, and the event loop drains them one per tick. The
+    /// queue is bounded so a misbehaving server cannot cause it to grow
+    /// without bound.
+    pub pending_autonomy_hydration: std::collections::VecDeque<AppUiCommand>,
+    /// M15-E follow-up: pause/resume issues a `session/goal/get` first
+    /// to refresh server truth, then emits a `session/goal/set` with
+    /// the freshly-fetched objective + this staged status. `None` when
+    /// no pause/resume is in flight. Cleared when the next `GoalGet`
+    /// response is consumed (success path) or when the user explicitly
+    /// clears the goal.
+    pub pending_goal_transition: Option<PendingGoalTransition>,
+    pub exit_requested: bool,
+    /// One-shot clipboard write request produced by the `/copy` command or the
+    /// `Ctrl+Y` keybinding. The store records the text to copy here; the event
+    /// loop (which owns the terminal/stdout) drains it on the next tick and
+    /// emits the OSC 52 escape sequence, then clears it. OSC 52 is the only
+    /// SSH-safe clipboard path — a copy on a remote fleet mini lands in the
+    /// operator's *local* clipboard — and the store has no terminal handle, so
+    /// the work is split across this field.
+    pub pending_clipboard: Option<String>,
+    /// Prior sessions fetched via `session/list` to populate the `/resume`
+    /// picker. Local-only client state the server never echoes in a snapshot —
+    /// preserved across snapshot replays (see `apply_event(Snapshot)`), and
+    /// mirrored into `MenuAppSnapshot` so the resume menu can render it. Empty
+    /// until `/resume` triggers the first fetch.
+    pub resume_sessions: Vec<ResumeSessionRow>,
+    /// Whether a `session/list` result has landed yet, distinguishing "the fetch
+    /// is still in flight" from "the fetch returned zero prior sessions". Without
+    /// it an empty [`Self::resume_sessions`] is ambiguous and the `/resume`
+    /// picker would render `Loading` forever when the server has no sessions.
+    /// Set true when the first (and every subsequent) `session/list` result is
+    /// applied. Local-only client state — preserved across snapshot replays.
+    pub resume_list_loaded: bool,
+    /// Active-session user turns for the `/rewind` picker, newest-first.
+    /// Populated locally (from the active session's transcript) when
+    /// `OpenRewindPicker` is dispatched, and mirrored into `MenuAppSnapshot` so
+    /// `rewind_menu` can render one row per turn. Local-only client state the
+    /// server never echoes — preserved across snapshot replays.
+    pub rewind_turns: Vec<RewindTurnRow>,
+    /// The full text of the user message chosen in the `/rewind` picker, keyed
+    /// by the session the rewind was issued in, stashed while
+    /// `session/rollback` is in flight. When the `SessionRollback` result for
+    /// THAT session lands it is placed back into the composer (so the user can
+    /// edit and resend that turn) — unless the user switched sessions
+    /// meanwhile, in which case it becomes that session's composer draft
+    /// instead of clobbering the live composer. Local-only, preserved across
+    /// snapshot replays.
+    pub pending_rewind_prefill: Option<(SessionKey, String)>,
+    /// Prompts of turns the user interrupted (Esc/Ctrl+C), stashed until each
+    /// turn actually SETTLES (its `turn/completed`/`turn/error` terminal, or
+    /// the hydrate finalize after a backend restart). Restoring at
+    /// interrupt-REQUEST time filled the composer while the turn was still
+    /// streaming, and a non-empty composer silently blocks the `/` slash
+    /// popup (it only opens on an empty composer) — the reported "slash menu
+    /// is not usable while the LLM is outputting". At most ONE entry per
+    /// session (flat `Vec`, consistent with `permission_profiles` /
+    /// `session_runtime_statuses` neighbours; codex round-2 P2: a single
+    /// global slot let session B's interrupt overwrite session A's). Applied
+    /// by the settle handlers into the live composer (active session,
+    /// still-empty composer, no open menu), or into the session's saved draft
+    /// when the user switched away (the `pending_rewind_prefill` convention);
+    /// an entry is dropped when staged messages own its session's next turn
+    /// slot or a newer turn/submit supersedes it. Local-only, preserved
+    /// across snapshot replays.
+    pub pending_interrupt_restores: Vec<PendingInterruptRestore>,
+}
+
+/// See [`AppState::pending_interrupt_restores`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingInterruptRestore {
+    pub session_id: SessionKey,
+    pub turn_id: TurnId,
+    pub prompt: String,
+    /// The turn's terminal already arrived but a menu was open at that
+    /// moment, so the composer fill was deferred once more (codex round-3
+    /// P2: consuming it there lost the prompt permanently). A settled entry
+    /// applies when the menu stack empties.
+    pub settled: bool,
+}
+
+/// M16-G2 per-session lifecycle ledger entry. The TUI keeps these in
+/// a flat `Vec` (consistent with `permission_profiles` /
+/// `session_runtime_statuses` neighbours) so the renderer can iterate
+/// without HashMap lookups in hot paths.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionContextLifecycleEntry {
+    pub session_id: SessionKey,
+    pub ledger: SessionContextLifecycle,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ComposerPresentation {
+    Empty,
+    Inline(String),
+    Collapsed(ComposerCollapse),
+}
+
+impl ComposerPresentation {
+    pub fn cursor_width(&self) -> usize {
+        match self {
+            Self::Empty => 0,
+            Self::Inline(text) => text.rsplit('\n').next().unwrap_or("").width(),
+            Self::Collapsed(collapse) => collapse.display.rsplit('\n').next().unwrap_or("").width(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComposerCollapse {
+    pub summary: String,
+    pub preview: String,
+    /// What the composer actually draws: the draft with the collapsed block
+    /// swapped for its `[paste N lines · M chars]` chip. Text typed around the
+    /// paste stays put, so the chip renders exactly where the paste landed
+    /// rather than at the head of the row with the typed command hidden inside
+    /// it. With no live paste span the chip stands for the whole draft and this
+    /// is just the chip.
+    pub display: String,
+    /// Byte range of the chip glyph inside [`Self::display`]. The renderer
+    /// styles this run as the chip and everything around it as ordinary text.
+    pub chip: std::ops::Range<usize>,
+    /// `composer_cursor_index` mapped into [`Self::display`]. A caret inside
+    /// the collapsed block pins to the chip's end — the block is atomic, there
+    /// is no position "within" it.
+    pub cursor: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComposerDraft {
+    pub session_id: SessionKey,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OptimisticUserMessage {
+    pub session_id: SessionKey,
+    pub turn_id: TurnId,
+    pub content: String,
+    pub anchor_index: usize,
+    pub prior_matching_user_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TurnPromptAnchor {
+    pub session_id: SessionKey,
+    pub turn_id: TurnId,
+    pub content: String,
+    pub anchor_index: usize,
+    pub prior_matching_user_count: usize,
+}
+
+/// FIFO gate for a staged-drain submit that is between enqueue and its
+/// `turn/started` (see [`AppState::staged_submit_in_flight`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StagedSubmitGate {
+    /// When the submit was enqueued — drives the
+    /// [`crate::store::STAGED_SUBMIT_GATE_TTL`] staleness backstop.
+    pub submitted_at: Instant,
+    /// The prompt (and its optimistic turn) still in flight. `Some` until the
+    /// submit settles; consumed to RE-STAGE the prompt when the submit dies at
+    /// the transport layer. `None` marks a backoff-only gate left behind by
+    /// such a re-stage: it keeps the drain closed for the TTL so a dead
+    /// transport is retried on the TTL cadence instead of every UI tick, and
+    /// a repeat wire error cannot re-stage the same prompt twice.
+    pub in_flight: Option<StagedSubmitInFlight>,
+}
+
+impl StagedSubmitGate {
+    /// A live gate for a just-enqueued staged submit.
+    pub fn in_flight(turn_id: TurnId, prompt: String) -> Self {
+        Self {
+            submitted_at: Instant::now(),
+            in_flight: Some(StagedSubmitInFlight { turn_id, prompt }),
+        }
+    }
+
+    /// A backoff-only gate left behind after a transport-death re-stage.
+    pub fn backoff() -> Self {
+        Self {
+            submitted_at: Instant::now(),
+            in_flight: None,
+        }
+    }
+}
+
+/// The prompt a [`StagedSubmitGate`] is protecting, with the optimistic turn
+/// id its transcript row / prompt anchor were recorded under.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StagedSubmitInFlight {
+    pub turn_id: TurnId,
+    pub prompt: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TurnActivityLog {
+    pub session_id: SessionKey,
+    pub turn_id: TurnId,
+    pub request: Option<String>,
+    pub anchor_index: Option<usize>,
+    pub items: Vec<ActivityItem>,
+}
+
+/// A committed per-turn status report (`✻ Ran for 5m 19s · 2 background tasks
+/// still running`) rendered at the tail of a finalized turn in the transcript.
+/// Captured at `TurnCompleted` (a snapshot — the running-task count reflects the
+/// moment the turn ended). Stored parallel to [`TurnActivityLog`] and looked up
+/// by `turn_id` so tool-less turns (no activity log items) still get a summary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TurnActivitySummary {
+    pub session_id: SessionKey,
+    pub turn_id: TurnId,
+    pub elapsed_secs: u64,
+    pub background_tasks: usize,
+}
+
+/// A `/btw` aside: a quick question asked WHILE the session's live turn keeps
+/// running, answered out-of-band by the server with no tools. Ephemeral — it
+/// never joins the transcript; the card renders in the live pane and the next
+/// prompt submit dismisses a settled one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BtwAside {
+    pub session_id: SessionKey,
+    pub question: String,
+    pub state: BtwAsideState,
+    /// Physical-row scroll offset for the overlay when the answer is taller than
+    /// the pane (which is capped at half the viewport). The render path clamps
+    /// this against the true max each frame, mirroring `transcript_scroll`.
+    pub scroll: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BtwAsideState {
+    Answering,
+    Answered(String),
+    Failed(String),
+}
+
+/// Scope of a pending one-shot transcript re-flush (see
+/// `AppState::transcript_reflush_requested`): whether the dismissal happened
+/// while the session's main turn was still streaming.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TranscriptReflushScope {
+    /// Turn settled at dismissal — committed-only re-flush (live dedup
+    /// watermarks preserved).
+    CommittedOnly,
+    /// Main turn still streaming at dismissal — re-emit the coherent
+    /// committed+live block.
+    WithLive,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionPermissionProfile {
+    pub session_id: SessionKey,
+    pub current: PermissionProfileSelection,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionRuntimeStatus {
+    pub session_id: SessionKey,
+    pub runtime_mode: Option<String>,
+    pub profile_id: Option<String>,
+    pub cwd: Option<String>,
+    pub workspace_root: Option<String>,
+    pub active_turn_id: Option<TurnId>,
+    pub runtime_policy_stamp: Option<RuntimePolicyStamp>,
+    pub model: Option<ModelStatus>,
+    pub permission_profile: Option<String>,
+    pub approval_policy: Option<String>,
+    pub sandbox_mode: Option<String>,
+    pub sandbox: Option<String>,
+    pub filesystem_scope: Option<String>,
+    pub network: Option<String>,
+    pub tool_policy_id: Option<String>,
+    pub mcp_servers: Vec<String>,
+    pub memory_scope: Option<String>,
+    pub health: Option<RuntimeHealthStatus>,
+    pub mcp_summary: Option<McpStatusSummary>,
+    pub tool_summary: Option<ToolStatusSummary>,
+    pub usage: Option<SessionUsageStatus>,
+    pub cursor: Option<SessionCursorStatus>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionModelCatalog {
+    pub session_id: SessionKey,
+    pub models: Vec<ModelStatus>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionMcpCatalog {
+    pub session_id: SessionKey,
+    pub servers: Vec<McpStatus>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionToolCatalog {
+    pub session_id: SessionKey,
+    pub policy_id: Option<String>,
+    pub coding_tool_contract: Option<CodingToolContract>,
+    pub tools: Vec<ToolStatus>,
+}
+
+impl From<SessionStatusReadResult> for SessionRuntimeStatus {
+    fn from(value: SessionStatusReadResult) -> Self {
+        Self {
+            session_id: value.session_id,
+            runtime_mode: value.runtime_mode,
+            profile_id: value.profile_id,
+            cwd: value.cwd,
+            workspace_root: value.workspace_root,
+            active_turn_id: value.active_turn_id,
+            runtime_policy_stamp: value.runtime_policy_stamp,
+            model: value.model,
+            permission_profile: value.permission_profile,
+            approval_policy: value.approval_policy,
+            sandbox_mode: value.sandbox_mode,
+            sandbox: value.sandbox,
+            filesystem_scope: value.filesystem_scope,
+            network: value.network,
+            tool_policy_id: value.tool_policy_id,
+            mcp_servers: value.mcp_servers,
+            memory_scope: value.memory_scope,
+            health: value.health,
+            mcp_summary: value.mcp_summary,
+            tool_summary: value.tool_summary,
+            usage: value.usage,
+            cursor: value.cursor,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActivityKind {
+    Tool,
+    Progress,
+    /// A client-local, fully rendered transcript report. Unlike runtime
+    /// activity, reports never enter the agent-task grouping/collapse path.
+    Report,
+    Approval,
+    Warning,
+    Error,
+}
+
+impl ActivityKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Tool => "tool",
+            Self::Progress => "progress",
+            Self::Report => "report",
+            Self::Approval => "approval",
+            Self::Warning => "warning",
+            Self::Error => "error",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActivityItem {
+    pub kind: ActivityKind,
+    /// Optional identity supplied by a typed durable event, never inferred
+    /// from title/body. Background completion uses its canonical message ID.
+    pub canonical_activity_id: Option<String>,
+    pub title: String,
+    pub status: String,
+    pub detail: Option<String>,
+    pub arguments: Option<Value>,
+    pub output_preview: Option<String>,
+    pub success: Option<bool>,
+    pub duration_ms: Option<u64>,
+    pub turn_id: Option<TurnId>,
+    pub tool_call_id: Option<String>,
+    /// Owning session for items created by session-scoped protocol arms
+    /// (`ToolStarted`, progress events, and v2 projection payloads), where
+    /// [`AppState::push_activity`] / [`AppState::update_tool_activity`] use it
+    /// to keep a background session's activity from drifting the ACTIVE
+    /// transcript's scroll (P2 tri-repo #246). `None` = unattributed (treated
+    /// as active-view content).
+    pub session_id: Option<SessionKey>,
+    /// Sticky rows are infrequent, notable notices (context compaction) that
+    /// (a) survive the activity cap's oldest-first eviction so a busy turn's
+    /// tool flood cannot silently drop them before they are archived, and
+    /// (b) when turnless, are adopted by the session's next `TurnStarted` so
+    /// they render in the turn flow and archive with the turn.
+    pub sticky: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanStep {
+    pub text: String,
+    pub completed: bool,
+}
+
+impl ActivityItem {
+    pub fn new(kind: ActivityKind, title: impl Into<String>, status: impl Into<String>) -> Self {
+        Self {
+            kind,
+            canonical_activity_id: None,
+            title: title.into(),
+            status: status.into(),
+            detail: None,
+            arguments: None,
+            output_preview: None,
+            success: None,
+            duration_ms: None,
+            turn_id: None,
+            tool_call_id: None,
+            session_id: None,
+            sticky: false,
+        }
+    }
+
+    pub fn with_sticky(mut self) -> Self {
+        self.sticky = true;
+        self
+    }
+
+    pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
+        self.detail = Some(detail.into());
+        self
+    }
+
+    pub fn with_turn(mut self, turn_id: TurnId) -> Self {
+        self.turn_id = Some(turn_id);
+        self
+    }
+
+    pub fn with_tool_call(mut self, tool_call_id: impl Into<String>) -> Self {
+        self.tool_call_id = Some(tool_call_id.into());
+        self
+    }
+
+    pub fn with_canonical_activity_id(mut self, id: impl Into<String>) -> Self {
+        let id = id.into();
+        self.canonical_activity_id = (!id.is_empty()).then_some(id);
+        self
+    }
+
+    pub(crate) fn stable_activity_identity(&self) -> Option<String> {
+        if let Some(id) = self.canonical_activity_id.as_ref() {
+            return Some(format!("{}:canonical:{id}", self.kind.label()));
+        }
+        (self.kind == ActivityKind::Tool)
+            .then(|| self.tool_call_id.as_ref().map(|id| format!("tool:{id}")))
+            .flatten()
+    }
+
+    /// Stamp the owning session. Used only on the projection-envelope
+    /// `ToolStart` path so the envelope `TurnCompleted` self-heal can scope its
+    /// thread-marker sweep to one session (see [`ActivityItem::session_id`]).
+    pub fn with_session(mut self, session_id: SessionKey) -> Self {
+        self.session_id = Some(session_id);
+        self
+    }
+
+    pub fn with_arguments(mut self, arguments: Value) -> Self {
+        self.arguments = Some(arguments);
+        self
+    }
+
+    pub fn with_output_preview(mut self, output_preview: impl Into<String>) -> Self {
+        self.output_preview = Some(output_preview.into());
+        self
+    }
+
+    pub fn with_success(mut self, success: bool) -> Self {
+        self.success = Some(success);
+        self
+    }
+
+    pub fn with_duration_ms(mut self, duration_ms: u64) -> Self {
+        self.duration_ms = Some(duration_ms);
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApprovalModalState {
+    pub session_id: SessionKey,
+    pub approval_id: ApprovalId,
+    pub turn_id: TurnId,
+    pub tool_name: String,
+    pub title: String,
+    pub body: String,
+    pub approval_kind: Option<String>,
+    pub risk: Option<String>,
+    pub typed_details: Option<ApprovalTypedDetails>,
+    pub render_hints: Option<ApprovalRenderHints>,
+    pub visible: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApprovalModalAction {
+    ApproveRequest,
+    ApproveSession,
+    DenyRequest,
+}
+
+impl ApprovalModalAction {
+    pub fn decision(self) -> ApprovalDecision {
+        match self {
+            Self::ApproveRequest | Self::ApproveSession => ApprovalDecision::Approve,
+            Self::DenyRequest => ApprovalDecision::Deny,
+        }
+    }
+
+    pub fn approval_scope(self) -> &'static str {
+        match self {
+            Self::ApproveRequest | Self::DenyRequest => approval_scopes::REQUEST,
+            Self::ApproveSession => approval_scopes::SESSION,
+        }
+    }
+
+    pub fn status_label(self) -> &'static str {
+        match self {
+            Self::ApproveRequest => "approved for this request",
+            Self::ApproveSession => "approved for this session",
+            Self::DenyRequest => "denied",
+        }
+    }
+}
+
+impl ApprovalModalState {
+    pub fn from_event(event: ApprovalRequestedEvent) -> Self {
+        Self {
+            session_id: event.session_id,
+            approval_id: event.approval_id,
+            turn_id: event.turn_id,
+            tool_name: event.tool_name,
+            title: event.title,
+            body: event.body,
+            approval_kind: event.approval_kind,
+            risk: event.risk,
+            typed_details: event.typed_details,
+            render_hints: event.render_hints,
+            visible: true,
+        }
+    }
+
+    pub fn diff_preview_id(&self) -> Option<PreviewId> {
+        self.typed_details
+            .as_ref()
+            .and_then(|details| details.diff.as_ref())
+            .map(|diff| diff.preview_id.clone())
+    }
+}
+
+/// One structured question being presented inside the AskUserQuestion picker
+/// (UPCR-2026-023). Mirrors the per-question fields of [`UserQuestion`] plus the
+/// transient selection state the picker tracks. The free-text "Other" escape
+/// hatch is always present (the server forces `allow_free_text`), so the picker
+/// always exposes a free-text row at index `options.len()`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserQuestionEntry {
+    pub header: String,
+    pub question: String,
+    pub options: Vec<UserQuestionOption>,
+    pub multi_select: bool,
+    /// Per-option checked state, indexed parallel to `options`.
+    pub option_selected: Vec<bool>,
+    /// Free-text answer captured via the "Other" row.
+    pub free_text: String,
+    /// Highlighted row: `0..options.len()` is an option, `options.len()` is the
+    /// "Other" free-text row.
+    pub cursor: usize,
+    /// Whether the "Other" free-text row is currently capturing keystrokes.
+    pub editing_free_text: bool,
+}
+
+impl UserQuestionEntry {
+    fn from_question(question: UserQuestion) -> Self {
+        let option_selected = vec![false; question.options.len()];
+        Self {
+            header: question.header,
+            question: question.question,
+            options: question.options,
+            multi_select: question.multi_select,
+            option_selected,
+            free_text: String::new(),
+            cursor: 0,
+            editing_free_text: false,
+        }
+    }
+
+    /// Row index of the free-text "Other" entry (always the last row).
+    pub fn free_text_row(&self) -> usize {
+        self.options.len()
+    }
+
+    pub fn row_count(&self) -> usize {
+        self.options.len() + 1
+    }
+
+    fn is_free_text_row(&self, row: usize) -> bool {
+        row == self.free_text_row()
+    }
+
+    /// Toggle the currently highlighted row. For an option row this flips its
+    /// checkbox; single-select clears the other options first. For the
+    /// "Other" row this enters free-text editing mode.
+    pub fn toggle_cursor(&mut self) {
+        let row = self.cursor.min(self.free_text_row());
+        if self.is_free_text_row(row) {
+            self.editing_free_text = true;
+            return;
+        }
+        if self.multi_select {
+            if let Some(slot) = self.option_selected.get_mut(row) {
+                *slot = !*slot;
+            }
+        } else {
+            let already = self.option_selected.get(row).copied().unwrap_or(false);
+            self.option_selected.fill(false);
+            if let Some(slot) = self.option_selected.get_mut(row) {
+                *slot = !already;
+            }
+        }
+    }
+
+    pub fn move_cursor_down(&mut self) {
+        let last = self.free_text_row();
+        self.cursor = (self.cursor + 1).min(last);
+    }
+
+    pub fn move_cursor_up(&mut self) {
+        self.cursor = self.cursor.saturating_sub(1);
+    }
+
+    /// Selected option labels in option order.
+    pub fn selected_labels(&self) -> Vec<String> {
+        self.options
+            .iter()
+            .zip(self.option_selected.iter())
+            .filter(|(_, checked)| **checked)
+            .map(|(option, _)| option.label.clone())
+            .collect()
+    }
+
+    fn answer(&self) -> UserQuestionAnswer {
+        let trimmed = self.free_text.trim();
+        UserQuestionAnswer {
+            selected_labels: self.selected_labels(),
+            free_text: (!trimmed.is_empty()).then(|| trimmed.to_string()),
+        }
+    }
+
+    /// A question is answerable once it has at least one selected option or some
+    /// free text. Used to gate submission so an empty answer is not sent.
+    pub fn has_answer(&self) -> bool {
+        self.option_selected.iter().any(|checked| *checked) || !self.free_text.trim().is_empty()
+    }
+}
+
+/// Pending AskUserQuestion picker state (UPCR-2026-023). Mirrors
+/// [`ApprovalModalState`]: correlated by `question_id`, scoped to `session_id`,
+/// rendered while the turn is paused at the blocking-tool boundary, and cleared
+/// on answer/cancel. The mandatory `title`/`body` keep the picker actionable
+/// even when `questions` is empty or unparsed (graceful fallback).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserQuestionPickerState {
+    pub session_id: SessionKey,
+    pub question_id: QuestionId,
+    pub turn_id: TurnId,
+    pub title: String,
+    pub body: String,
+    pub questions: Vec<UserQuestionEntry>,
+    /// Which question is currently focused (for stepping through 1–4 questions).
+    pub active: usize,
+    pub visible: bool,
+}
+
+impl UserQuestionPickerState {
+    pub fn from_event(event: UserQuestionRequestedEvent) -> Self {
+        let questions = event
+            .questions
+            .into_iter()
+            .map(UserQuestionEntry::from_question)
+            .collect();
+        Self {
+            session_id: event.session_id,
+            question_id: event.question_id,
+            turn_id: event.turn_id,
+            title: event.title,
+            body: event.body,
+            questions,
+            active: 0,
+            visible: true,
+        }
+    }
+
+    pub fn active_question(&self) -> Option<&UserQuestionEntry> {
+        self.questions.get(self.active)
+    }
+
+    pub fn active_question_mut(&mut self) -> Option<&mut UserQuestionEntry> {
+        let active = self.active;
+        self.questions.get_mut(active)
+    }
+
+    pub fn focus_next_question(&mut self) {
+        if !self.questions.is_empty() {
+            self.active = (self.active + 1).min(self.questions.len() - 1);
+        }
+    }
+
+    pub fn focus_prev_question(&mut self) {
+        self.active = self.active.saturating_sub(1);
+    }
+
+    pub fn is_last_question(&self) -> bool {
+        self.questions.is_empty() || self.active + 1 >= self.questions.len()
+    }
+
+    /// Build the `user_question/respond` params: EXACTLY one
+    /// [`UserQuestionAnswer`] per structured question, in question order. A
+    /// picker with no structured questions (the garbled/protocol-violation
+    /// fallback path) yields an EMPTY `answers` vec — never a manufactured empty
+    /// answer — so the count always equals `questions.len()` and the backend
+    /// validator (`answers.len() == questions.len()`) can never reject it
+    /// (DO-NOT-SHIP #2). The 0-question case is not submittable via the picker
+    /// (see [`Store::respond_user_question_command`]); this method only
+    /// guarantees the wire shape is valid if a respond is ever formed.
+    pub fn to_respond_params(&self) -> UserQuestionRespondParams {
+        let answers = self
+            .questions
+            .iter()
+            .map(UserQuestionEntry::answer)
+            .collect();
+        UserQuestionRespondParams::new(self.session_id.clone(), self.question_id.clone(), answers)
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TaskOutputDetailState {
+    pub active: bool,
+    pub session_id: Option<SessionKey>,
+    pub task_id: Option<TaskId>,
+    pub title: String,
+    pub output: String,
+    pub cursor: Option<OutputCursor>,
+    pub scroll: usize,
+}
+
+impl TaskOutputDetailState {
+    pub fn open(
+        &mut self,
+        session_id: SessionKey,
+        task_id: TaskId,
+        title: String,
+        output: String,
+        cursor: Option<OutputCursor>,
+    ) {
+        self.active = true;
+        self.session_id = Some(session_id);
+        self.task_id = Some(task_id);
+        self.title = title;
+        self.output = output;
+        self.cursor = cursor;
+        self.scroll = 0;
+    }
+
+    pub fn close(&mut self) {
+        *self = Self::default();
+    }
+
+    pub fn is_for(&self, session_id: &SessionKey, task_id: &TaskId) -> bool {
+        self.active
+            && self.session_id.as_ref() == Some(session_id)
+            && self.task_id.as_ref() == Some(task_id)
+    }
+
+    pub fn append_output(&mut self, text: &str, cursor: OutputCursor) {
+        self.output.push_str(text);
+        self.cursor = Some(cursor);
+        self.scroll = 0;
+    }
+
+    // `scroll` counts lines FROM THE BOTTOM (the renderer computes
+    // `scroll_top = max_scroll - scroll`, same as the transcript), so
+    // scrolling up must INCREASE it and scrolling down must DECREASE it —
+    // mirroring `AppState::scroll_transcript_up/down`.
+    pub fn scroll_up(&mut self, lines: usize) {
+        self.scroll = self.scroll.saturating_add(lines);
+    }
+
+    pub fn scroll_down(&mut self, lines: usize) {
+        self.scroll = self.scroll.saturating_sub(lines);
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ArtifactDetailState {
+    pub active: bool,
+    pub title: String,
+    pub subtitle: String,
+    pub content: String,
+    pub scroll: usize,
+}
+
+impl ArtifactDetailState {
+    pub fn open_agent_artifact(
+        &mut self,
+        agent_id: &str,
+        artifact: &ra_core::ui_protocol::UiAgentArtifact,
+        content: Option<String>,
+    ) {
+        self.active = true;
+        self.title = artifact.title.clone();
+        self.subtitle = format!("agent {agent_id} | {} | {}", artifact.kind, artifact.status);
+        self.content = content
+            .or_else(|| artifact.content.clone())
+            .unwrap_or_else(|| "No content returned for this artifact".into());
+        self.scroll = 0;
+    }
+
+    pub fn open_task_artifact(
+        &mut self,
+        task_id: &TaskId,
+        artifact: &ra_core::ui_protocol::TaskArtifactRecord,
+        content: Option<String>,
+    ) {
+        self.active = true;
+        self.title = artifact.title.clone();
+        self.subtitle = format!("task {task_id} | {} | {}", artifact.kind, artifact.status);
+        self.content = content
+            .or_else(|| artifact.content.clone())
+            .unwrap_or_else(|| "No content returned for this artifact".into());
+        self.scroll = 0;
+    }
+
+    pub fn close(&mut self) {
+        *self = Self::default();
+    }
+
+    // From-bottom scroll semantics — see `TaskOutputDetailState::scroll_up`.
+    pub fn scroll_up(&mut self, lines: usize) {
+        self.scroll = self.scroll.saturating_add(lines);
+    }
+
+    pub fn scroll_down(&mut self, lines: usize) {
+        self.scroll = self.scroll.saturating_sub(lines);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskOutputCursor {
+    pub session_id: SessionKey,
+    pub task_id: TaskId,
+    pub cursor: OutputCursor,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ThreadGraphDetailState {
+    pub active: bool,
+    pub title: String,
+    pub subtitle: String,
+    pub content: String,
+    pub scroll: usize,
+}
+
+impl ThreadGraphDetailState {
+    pub fn open(&mut self, result: &ThreadGraphGetResult) {
+        self.active = true;
+        self.title = "Thread Graph".into();
+        self.subtitle = format!(
+            "{} thread(s) @ {}:{}",
+            result.threads.len(),
+            result.cursor.stream,
+            result.cursor.seq
+        );
+        self.content = thread_graph_content(result);
+        self.scroll = 0;
+    }
+
+    pub fn close(&mut self) {
+        *self = Self::default();
+    }
+
+    // From-bottom scroll semantics — see `TaskOutputDetailState::scroll_up`.
+    pub fn scroll_up(&mut self, lines: usize) {
+        self.scroll = self.scroll.saturating_add(lines);
+    }
+
+    pub fn scroll_down(&mut self, lines: usize) {
+        self.scroll = self.scroll.saturating_sub(lines);
+    }
+}
+
+fn thread_graph_content(result: &ThreadGraphGetResult) -> String {
+    let mut lines = Vec::new();
+    if result.threads.is_empty() {
+        lines.push("No threads returned for this session".to_string());
+    } else {
+        for thread in &result.threads {
+            let turn = thread
+                .turn_id
+                .as_ref()
+                .map(|turn_id| format!(" | turn {}", turn_id.0))
+                .unwrap_or_default();
+            lines.push(format!(
+                "{} | {} | root seq {} | {} message(s){}",
+                thread.thread_id,
+                thread.status,
+                thread.root_seq,
+                thread.message_seqs.len(),
+                turn
+            ));
+            if !thread.message_seqs.is_empty() {
+                let seqs = thread
+                    .message_seqs
+                    .iter()
+                    .map(u64::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                lines.push(format!("  messages: {seqs}"));
+            }
+        }
+    }
+    if !result.orphans.is_empty() {
+        let orphans = result
+            .orphans
+            .iter()
+            .map(u64::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+        lines.push(format!("Orphans: {orphans}"));
+    }
+    lines.join("\n")
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TurnStateDetailState {
+    pub active: bool,
+    pub title: String,
+    pub subtitle: String,
+    pub content: String,
+    pub scroll: usize,
+}
+
+impl TurnStateDetailState {
+    pub fn open(&mut self, result: &TurnStateGetResult) {
+        self.active = true;
+        self.title = "Turn State".into();
+        self.subtitle = format!("turn {}", result.turn_id.0);
+        self.content = turn_state_content(result);
+        self.scroll = 0;
+    }
+
+    pub fn close(&mut self) {
+        *self = Self::default();
+    }
+
+    // From-bottom scroll semantics — see `TaskOutputDetailState::scroll_up`.
+    pub fn scroll_up(&mut self, lines: usize) {
+        self.scroll = self.scroll.saturating_add(lines);
+    }
+
+    pub fn scroll_down(&mut self, lines: usize) {
+        self.scroll = self.scroll.saturating_sub(lines);
+    }
+}
+
+fn turn_state_content(result: &TurnStateGetResult) -> String {
+    let mut lines = vec![format!("state: {}", result.state.as_str())];
+    if let Some(thread_id) = result.thread_id.as_deref() {
+        lines.push(format!("thread: {thread_id}"));
+    }
+    if let Some(started_at) = result.started_at.as_ref() {
+        lines.push(format!("started: {started_at}"));
+    }
+    if let Some(completed_at) = result.completed_at.as_ref() {
+        lines.push(format!("completed: {completed_at}"));
+    }
+    if !result.committed_seqs.is_empty() {
+        let seqs = result
+            .committed_seqs
+            .iter()
+            .map(u64::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+        lines.push(format!("committed seqs: {seqs}"));
+    }
+    if let Some(context_state) = &result.context_state {
+        lines.push(format!(
+            "context: generation {} | {} items | {} tokens | {}",
+            context_state.generation,
+            context_state.item_count,
+            context_state.token_estimate,
+            context_state.recovery_state
+        ));
+    }
+    if let Some(context) = &result.context {
+        lines.push(format!("context payload: {context}"));
+    }
+    lines.join("\n")
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ArtifactPaneState {
+    pub items: Vec<ArtifactItem>,
+    pub selected: usize,
+}
+
+impl ArtifactPaneState {
+    pub fn select_next(&mut self) {
+        if self.items.is_empty() {
+            return;
+        }
+        self.selected = (self.selected + 1) % self.items.len();
+    }
+
+    pub fn select_prev(&mut self) {
+        if self.items.is_empty() {
+            return;
+        }
+        if self.selected == 0 {
+            self.selected = self.items.len() - 1;
+        } else {
+            self.selected -= 1;
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactItem {
+    pub title: String,
+    pub kind: String,
+    pub source: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WorkspacePaneState {
+    pub root: String,
+    pub contract: Vec<String>,
+    pub entries: Vec<WorkspaceEntry>,
+    pub selected: usize,
+    pub scroll: usize,
+}
+
+impl WorkspacePaneState {
+    pub fn select_next(&mut self) {
+        if self.entries.is_empty() {
+            return;
+        }
+        self.selected = (self.selected + 1) % self.entries.len();
+        self.scroll = self.selected.saturating_sub(4);
+    }
+
+    pub fn select_prev(&mut self) {
+        if self.entries.is_empty() {
+            return;
+        }
+        if self.selected == 0 {
+            self.selected = self.entries.len() - 1;
+        } else {
+            self.selected -= 1;
+        }
+        self.scroll = self.selected.saturating_sub(4);
+    }
+
+    pub fn scroll_up(&mut self, lines: usize) {
+        self.scroll = self.scroll.saturating_sub(lines);
+    }
+
+    pub fn scroll_down(&mut self, lines: usize) {
+        self.scroll = self.scroll.saturating_add(lines);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceEntry {
+    pub depth: usize,
+    pub label: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GitPaneState {
+    pub branch: String,
+    pub head: Option<String>,
+    pub status: Vec<GitStatusItem>,
+    pub history: Vec<GitHistoryItem>,
+    pub selected: usize,
+    pub scroll: usize,
+}
+
+impl GitPaneState {
+    pub fn selectable_len(&self) -> usize {
+        self.status.len() + self.history.len()
+    }
+
+    pub fn select_next(&mut self) {
+        let len = self.selectable_len();
+        if len == 0 {
+            return;
+        }
+        self.selected = (self.selected + 1) % len;
+        self.scroll = self.selected.saturating_sub(4);
+    }
+
+    pub fn select_prev(&mut self) {
+        let len = self.selectable_len();
+        if len == 0 {
+            return;
+        }
+        if self.selected == 0 {
+            self.selected = len - 1;
+        } else {
+            self.selected -= 1;
+        }
+        self.scroll = self.selected.saturating_sub(4);
+    }
+
+    pub fn scroll_up(&mut self, lines: usize) {
+        self.scroll = self.scroll.saturating_sub(lines);
+    }
+
+    pub fn scroll_down(&mut self, lines: usize) {
+        self.scroll = self.scroll.saturating_add(lines);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitStatusItem {
+    pub code: String,
+    pub path: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitHistoryItem {
+    pub commit: String,
+    pub summary: String,
+}
+
+/// Minimum transcript wrap width (columns) for the side-by-side diff view.
+/// Below this the two columns are too cramped to read, so rendering
+/// auto-falls back to unified and the toggle is disabled.
+pub const DIFF_SIDE_BY_SIDE_MIN_WIDTH: usize = 100;
+
+/// The transcript wrap width for a terminal of `width` columns — single
+/// source for the render path (`app::transcript_wrap_width`) and the
+/// side-by-side toggle gate, so they can never disagree about the threshold.
+pub fn transcript_wrap_width_for(width: u16) -> usize {
+    usize::from(width.saturating_sub(2)).max(1)
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DiffPreviewPaneState {
+    pub active: bool,
+    pub loading: bool,
+    pub turn_id: Option<TurnId>,
+    pub requested_preview_id: Option<PreviewId>,
+    pub status: Option<String>,
+    pub source: Option<String>,
+    pub preview: Option<DiffPreview>,
+    pub error: Option<String>,
+    pub scroll: usize,
+    pub selected_file: usize,
+    pub selected_hunk: usize,
+    /// `v` toggles unified <-> side-by-side while the preview is open. A view
+    /// preference, not per-preview data: it survives `apply_result` and a
+    /// reload (`open_loading_for_turn`); only `close()` resets it.
+    pub side_by_side: bool,
+    /// Ctrl+O while the preview is open: the diff takes over the screen as a
+    /// full-screen scrollable overlay. Deliberately its OWN bit, not the global
+    /// `expanded_tool_outputs` flag: previews auto-open on turn events, and a
+    /// user whose transcript-wide expansion preference is on must not be thrown
+    /// into (or collapsed out of) a modal they never asked for. Reset by
+    /// `open_loading_for_turn` (a NEW preview never opens pre-expanded) and by
+    /// `close()`; survives `apply_result` so a refresh doesn't collapse the
+    /// view mid-read.
+    pub expanded: bool,
+}
+
+impl DiffPreviewPaneState {
+    pub fn open_loading(&mut self, preview_id: PreviewId) {
+        self.open_loading_for_turn(preview_id, None);
+    }
+
+    pub fn open_loading_for_turn(&mut self, preview_id: PreviewId, turn_id: Option<TurnId>) {
+        *self = Self {
+            active: true,
+            loading: true,
+            turn_id,
+            requested_preview_id: Some(preview_id),
+            status: Some("loading".into()),
+            source: None,
+            preview: None,
+            error: None,
+            scroll: 0,
+            selected_file: 0,
+            selected_hunk: 0,
+            side_by_side: self.side_by_side,
+            expanded: false,
+        };
+    }
+
+    /// Flip unified <-> side-by-side. Touches ONLY the mode bit — scroll and
+    /// hunk selection are the user's place in the diff and must survive the
+    /// round trip.
+    pub fn toggle_view_mode(&mut self) {
+        self.side_by_side = !self.side_by_side;
+    }
+
+    pub fn apply_result(&mut self, result: DiffPreviewGetResult) {
+        let turn_id = self
+            .requested_preview_id
+            .as_ref()
+            .filter(|preview_id| **preview_id == result.preview.preview_id)
+            .and_then(|_| self.turn_id.clone());
+        self.active = true;
+        self.loading = false;
+        self.turn_id = turn_id;
+        self.requested_preview_id = Some(result.preview.preview_id.clone());
+        self.status = Some(result.status);
+        self.source = Some(result.source);
+        self.preview = Some(result.preview);
+        self.error = None;
+        self.scroll = 0;
+        self.clamp_selection();
+    }
+
+    /// Whether the inline diff box has anything worth rendering. A preview whose
+    /// files carry no hunks ("line diff unavailable for this mutation") is not a
+    /// usable diff — the box should be hidden rather than shown empty with a dead
+    /// "[/] select hunk | c stage" UI (mini5 soak C6). Loading and error states
+    /// stay visible: loading is a transient "fetching…", error is actionable.
+    pub fn has_renderable_diff(&self) -> bool {
+        if self.loading || self.error.is_some() {
+            return true;
+        }
+        self.preview
+            .as_ref()
+            .is_some_and(|preview| preview.files.iter().any(|file| !file.hunks.is_empty()))
+    }
+
+    /// Whether the full-screen diff overlay owns the screen right now. The ONE
+    /// gate shared by render, key routing, wheel routing and
+    /// `modal_owns_keyboard` — any drift between those four is a modal that
+    /// renders without keys or takes keys while invisible. Includes the same
+    /// renderability check as the inline box (C6): an expanded-but-empty
+    /// preview falls back to inline handling instead of a near-blank modal
+    /// that swallows every plain key.
+    pub fn overlay_active(&self) -> bool {
+        self.active && self.expanded && self.has_renderable_diff()
+    }
+
+    pub fn close(&mut self) {
+        *self = Self::default();
+    }
+
+    // From-bottom scroll semantics (up = add, down = sub), shared with the
+    // transcript and the detail modals. Read by the full-screen diff overlay;
+    // the event loop clamps after every scroll-up so the offset can't build a
+    // dead zone past the top (`clamp_diff_overlay_scroll`).
+    pub fn scroll_up(&mut self, lines: usize) {
+        self.scroll = self.scroll.saturating_add(lines);
+    }
+
+    pub fn scroll_down(&mut self, lines: usize) {
+        self.scroll = self.scroll.saturating_sub(lines);
+    }
+
+    pub fn select_next_hunk(&mut self) {
+        let hunks = self.hunk_locations();
+        if hunks.is_empty() {
+            return;
+        }
+        let current = self.selected_location_index(&hunks).unwrap_or(0);
+        let (file_idx, hunk_idx) = hunks[(current + 1) % hunks.len()];
+        self.selected_file = file_idx;
+        self.selected_hunk = hunk_idx;
+    }
+
+    pub fn select_prev_hunk(&mut self) {
+        let hunks = self.hunk_locations();
+        if hunks.is_empty() {
+            return;
+        }
+        let current = self.selected_location_index(&hunks).unwrap_or(0);
+        let next = if current == 0 {
+            hunks.len() - 1
+        } else {
+            current - 1
+        };
+        let (file_idx, hunk_idx) = hunks[next];
+        self.selected_file = file_idx;
+        self.selected_hunk = hunk_idx;
+    }
+
+    pub fn selected_hunk_context(&self) -> Option<DiffHunkContext> {
+        let preview = self.preview.as_ref()?;
+        let file = preview.files.get(self.selected_file)?;
+        let hunk = file.hunks.get(self.selected_hunk)?;
+        Some(DiffHunkContext {
+            path: file.path.clone(),
+            old_path: file.old_path.clone(),
+            file_status: file.status.clone(),
+            hunk_header: hunk.header.clone(),
+            lines: hunk.lines.clone(),
+        })
+    }
+
+    fn clamp_selection(&mut self) {
+        let hunks = self.hunk_locations();
+        if let Some((file_idx, hunk_idx)) = self
+            .first_changed_hunk_location()
+            .or_else(|| hunks.first().copied())
+        {
+            self.selected_file = file_idx;
+            self.selected_hunk = hunk_idx;
+        } else {
+            self.selected_file = 0;
+            self.selected_hunk = 0;
+        }
+    }
+
+    fn first_changed_hunk_location(&self) -> Option<(usize, usize)> {
+        self.preview.as_ref().and_then(|preview| {
+            preview
+                .files
+                .iter()
+                .enumerate()
+                .find_map(|(file_idx, file)| {
+                    file.hunks
+                        .iter()
+                        .enumerate()
+                        .find(|(_, hunk)| hunk.lines.iter().any(diff_preview_line_is_change))
+                        .map(|(hunk_idx, _)| (file_idx, hunk_idx))
+                })
+        })
+    }
+
+    fn hunk_locations(&self) -> Vec<(usize, usize)> {
+        self.preview
+            .as_ref()
+            .map(|preview| {
+                preview
+                    .files
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(file_idx, file)| {
+                        file.hunks
+                            .iter()
+                            .enumerate()
+                            .map(move |(hunk_idx, _)| (file_idx, hunk_idx))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn selected_location_index(&self, hunks: &[(usize, usize)]) -> Option<usize> {
+        hunks.iter().position(|(file_idx, hunk_idx)| {
+            *file_idx == self.selected_file && *hunk_idx == self.selected_hunk
+        })
+    }
+}
+
+fn diff_preview_line_is_change(line: &DiffPreviewLine) -> bool {
+    matches!(
+        line.kind.as_str(),
+        "added" | "removed" | "insert" | "delete" | "inserted" | "deleted"
+    )
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiffHunkContext {
+    pub path: String,
+    pub old_path: Option<String>,
+    pub file_status: String,
+    pub hunk_header: String,
+    pub lines: Vec<DiffPreviewLine>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiffPreviewGetResult {
+    pub status: String,
+    pub source: String,
+    pub preview: DiffPreview,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiffPreview {
+    pub session_id: SessionKey,
+    pub preview_id: PreviewId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<DiffPreviewFile>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiffPreviewFile {
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub old_path: Option<String>,
+    #[serde(default = "unknown_label")]
+    pub status: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hunks: Vec<DiffPreviewHunk>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiffPreviewHunk {
+    pub header: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub lines: Vec<DiffPreviewLine>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiffPreviewLine {
+    #[serde(default = "context_label")]
+    pub kind: String,
+    pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub old_line: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_line: Option<u32>,
+}
+
+fn unknown_label() -> String {
+    "unknown".into()
+}
+
+fn context_label() -> String {
+    "context".into()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SnapshotPaneSeed {
+    artifacts: ArtifactPaneState,
+    workspace: WorkspacePaneState,
+    git: GitPaneState,
+}
+
+impl SnapshotPaneSeed {
+    fn from_snapshot(snapshot: &AppUiSnapshot) -> Self {
+        Self::from_parts(
+            &snapshot.sessions,
+            &snapshot.status,
+            snapshot.target.as_deref(),
+            snapshot.readonly,
+        )
+    }
+
+    fn from_parts(
+        sessions: &[SessionView],
+        status: &str,
+        target: Option<&str>,
+        readonly: bool,
+    ) -> Self {
+        let source = SnapshotSource::classify(status, target);
+        Self {
+            artifacts: seed_artifacts(sessions, status, target, readonly, source),
+            workspace: seed_workspace(sessions, target, readonly, source),
+            git: seed_git(source),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SnapshotSource {
+    Mock,
+    Protocol,
+    Unknown,
+}
+
+impl SnapshotSource {
+    fn classify(status: &str, target: Option<&str>) -> Self {
+        let status = status.to_ascii_lowercase();
+        let target = target.unwrap_or_default().to_ascii_lowercase();
+
+        if status.contains("mock") || target.contains("mock") {
+            Self::Mock
+        } else if status.contains("protocol")
+            || target.starts_with("ws://")
+            || target.starts_with("wss://")
+        {
+            Self::Protocol
+        } else {
+            Self::Unknown
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Mock => "mock snapshot",
+            Self::Protocol => "protocol snapshot",
+            Self::Unknown => "app-ui snapshot",
+        }
+    }
+}
+
+fn seed_artifacts(
+    sessions: &[SessionView],
+    status: &str,
+    target: Option<&str>,
+    readonly: bool,
+    source: SnapshotSource,
+) -> ArtifactPaneState {
+    let mut items = vec![ArtifactItem {
+        title: "ra UI bootstrap snapshot".into(),
+        kind: "snapshot".into(),
+        source: target.unwrap_or_else(|| source.label()).to_string(),
+        status: if readonly {
+            "read-only".into()
+        } else {
+            status.to_string()
+        },
+    }];
+
+    for session in sessions {
+        for task in &session.tasks {
+            if let Some(line) = first_non_empty_line(&task.output_tail) {
+                items.push(ArtifactItem {
+                    title: format!("{} output tail", task.title),
+                    kind: "task-output".into(),
+                    source: session.title.clone(),
+                    status: line.to_string(),
+                });
+            }
+
+            let preview_id = task
+                .runtime_detail
+                .as_deref()
+                .and_then(preview_id_from_text)
+                .or_else(|| preview_id_from_text(&task.output_tail));
+            if let Some(preview_id) = preview_id {
+                items.push(ArtifactItem {
+                    title: format!("{} diff preview", task.title),
+                    kind: "diff-preview".into(),
+                    source: session.title.clone(),
+                    status: preview_id.0.to_string(),
+                });
+            }
+        }
+    }
+
+    match source {
+        SnapshotSource::Mock => items.push(ArtifactItem {
+            title: "M9.7 mock artifact manifest".into(),
+            kind: "mock".into(),
+            source: "mock backend".into(),
+            status: "seeded".into(),
+        }),
+        SnapshotSource::Protocol => items.push(ArtifactItem {
+            title: "Protocol artifact stream".into(),
+            kind: "contract".into(),
+            source: "app-ui protocol".into(),
+            status: "waiting for artifact payloads".into(),
+        }),
+        SnapshotSource::Unknown => {}
+    }
+
+    ArtifactPaneState { items, selected: 0 }
+}
+
+fn seed_workspace(
+    sessions: &[SessionView],
+    target: Option<&str>,
+    readonly: bool,
+    source: SnapshotSource,
+) -> WorkspacePaneState {
+    let mut contract = vec![
+        format!("api {APP_UI_API_V1}"),
+        "snapshot.sessions -> Sessions, Tasks, Transcript".into(),
+        "snapshot task tails -> Artifacts hints".into(),
+        "snapshot target/status -> Workspace/Git fallback".into(),
+    ];
+
+    match source {
+        SnapshotSource::Mock => {
+            contract.push("mock backend seeds local M9.7 panes".into());
+        }
+        SnapshotSource::Protocol => {
+            contract.push("pane.snapshots.v1 hydrates panes when negotiated".into());
+            contract.push("fallback panes render until server snapshot arrives".into());
+        }
+        SnapshotSource::Unknown => {}
+    }
+    if readonly {
+        contract.push("readonly launch: commands disabled".into());
+    }
+
+    let mut entries = vec![WorkspaceEntry {
+        depth: 0,
+        label: "sessions".into(),
+        detail: format!("{} hydrated", sessions.len()),
+    }];
+    for session in sessions {
+        entries.push(WorkspaceEntry {
+            depth: 1,
+            label: session.title.clone(),
+            detail: session.id.0.clone(),
+        });
+        entries.push(WorkspaceEntry {
+            depth: 2,
+            label: "messages".into(),
+            detail: session.messages.len().to_string(),
+        });
+        if session.tasks.is_empty() {
+            entries.push(WorkspaceEntry {
+                depth: 2,
+                label: "tasks".into(),
+                detail: "none".into(),
+            });
+        } else {
+            for task in &session.tasks {
+                entries.push(WorkspaceEntry {
+                    depth: 2,
+                    label: task.title.clone(),
+                    detail: task_state_label(task.state).into(),
+                });
+            }
+        }
+    }
+
+    WorkspacePaneState {
+        root: target.unwrap_or_else(|| source.label()).to_string(),
+        contract,
+        entries,
+        selected: 0,
+        scroll: 0,
+    }
+}
+
+fn seed_git(source: SnapshotSource) -> GitPaneState {
+    match source {
+        SnapshotSource::Mock => GitPaneState {
+            branch: "m9.7/mock-snapshot".into(),
+            head: Some("mock-head".into()),
+            status: vec![
+                GitStatusItem {
+                    code: "M".into(),
+                    path: "src/model.rs".into(),
+                    detail: "pane state contract".into(),
+                },
+                GitStatusItem {
+                    code: "M".into(),
+                    path: "src/app.rs".into(),
+                    detail: "pane rendering surface".into(),
+                },
+            ],
+            history: vec![
+                GitHistoryItem {
+                    commit: "mock-m97".into(),
+                    summary: "seed missing pane snapshots".into(),
+                },
+                GitHistoryItem {
+                    commit: "mock-m9".into(),
+                    summary: "app-ui protocol TUI scaffold".into(),
+                },
+            ],
+            selected: 0,
+            scroll: 0,
+        },
+        SnapshotSource::Protocol => GitPaneState {
+            branch: "not supplied".into(),
+            head: None,
+            status: vec![GitStatusItem {
+                code: "?".into(),
+                path: "git status".into(),
+                detail: "protocol snapshot does not include git state yet".into(),
+            }],
+            history: vec![GitHistoryItem {
+                commit: "pending".into(),
+                summary: "waiting for git history snapshot".into(),
+            }],
+            selected: 0,
+            scroll: 0,
+        },
+        SnapshotSource::Unknown => GitPaneState {
+            branch: "unknown".into(),
+            head: None,
+            status: vec![GitStatusItem {
+                code: "?".into(),
+                path: "git status".into(),
+                detail: "snapshot source did not include git state".into(),
+            }],
+            history: vec![GitHistoryItem {
+                commit: "pending".into(),
+                summary: "no git history in snapshot".into(),
+            }],
+            selected: 0,
+            scroll: 0,
+        },
+    }
+}
+
+fn first_non_empty_line(text: &str) -> Option<&str> {
+    text.lines().map(str::trim).find(|line| !line.is_empty())
+}
+
+impl AppState {
+    /// Per-session cap on the [`AppState::finalized_by_switch`] marker set. A
+    /// long-running session that switches turns many times must not retain an
+    /// unbounded set of finalized turn ids — only the most recent switches can
+    /// realistically be followed by a late terminal, so older ids are evicted
+    /// FIFO.
+    pub const FINALIZED_BY_SWITCH_CAP: usize = 128;
+    const MAX_TURN_PROMPT_ANCHORS: usize = 128;
+    const MAX_LIVE_REPLY_SEGMENT_BOUNDARIES: usize = 256;
+
+    /// Record that `turn_id` in `session_id` was finalized (committed OR
+    /// dropped) by a turn-switch, so the turn's OWN late terminal can be
+    /// recognized and treated as a no-op. Bounded FIFO per session.
+    pub fn mark_turn_finalized_by_switch(&mut self, session_id: &SessionKey, turn_id: &TurnId) {
+        let (set, queue) = self
+            .finalized_by_switch
+            .entry(session_id.clone())
+            .or_default();
+        if set.insert(turn_id.clone()) {
+            queue.push_back(turn_id.clone());
+            while queue.len() > Self::FINALIZED_BY_SWITCH_CAP {
+                if let Some(evicted) = queue.pop_front() {
+                    set.remove(&evicted);
+                }
+            }
+        }
+    }
+
+    /// Consume the finalized-by-switch marker for `turn_id` in `session_id`,
+    /// returning `true` iff it was present (and removing it). A late terminal
+    /// for a turn that was already closed at a switch boundary uses this to
+    /// no-op exactly once.
+    pub fn take_turn_finalized_by_switch(
+        &mut self,
+        session_id: &SessionKey,
+        turn_id: &TurnId,
+    ) -> bool {
+        let Some((set, queue)) = self.finalized_by_switch.get_mut(session_id) else {
+            return false;
+        };
+        if set.remove(turn_id) {
+            queue.retain(|id| id != turn_id);
+            if set.is_empty() {
+                self.finalized_by_switch.remove(session_id);
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn record_live_reply_segment_boundary(
+        &mut self,
+        session_id: &SessionKey,
+        turn_id: &TurnId,
+    ) -> bool {
+        let Some(len) = self
+            .sessions
+            .iter()
+            .find(|session| &session.id == session_id)
+            .and_then(|session| session.live_reply.as_ref())
+            .filter(|live_reply| &live_reply.turn_id == turn_id)
+            .map(|live_reply| live_reply.text.len())
+            .filter(|len| *len > 0)
+        else {
+            return false;
+        };
+
+        self.record_live_reply_segment_boundary_at(session_id, turn_id, len)
+    }
+
+    pub(crate) fn record_live_reply_segment_boundary_at(
+        &mut self,
+        session_id: &SessionKey,
+        turn_id: &TurnId,
+        offset: usize,
+    ) -> bool {
+        if offset == 0 {
+            return false;
+        }
+        let boundaries = self
+            .live_reply_segment_boundaries
+            .entry((session_id.clone(), turn_id.clone()))
+            .or_default();
+        let Err(index) = boundaries.binary_search(&offset) else {
+            return false;
+        };
+        boundaries.insert(index, offset);
+        if boundaries.len() > Self::MAX_LIVE_REPLY_SEGMENT_BOUNDARIES {
+            let excess = boundaries.len() - Self::MAX_LIVE_REPLY_SEGMENT_BOUNDARIES;
+            boundaries.drain(0..excess);
+        }
+        true
+    }
+
+    pub fn clear_live_reply_segment_boundaries(
+        &mut self,
+        session_id: &SessionKey,
+        turn_id: &TurnId,
+    ) {
+        self.live_reply_segment_boundaries
+            .remove(&(session_id.clone(), turn_id.clone()));
+    }
+
+    pub fn from_snapshot(snapshot: AppUiSnapshot) -> Self {
+        let panes = SnapshotPaneSeed::from_snapshot(&snapshot);
+        Self::new_with_panes(
+            snapshot.sessions,
+            snapshot.selected_session,
+            snapshot.status,
+            snapshot.target,
+            snapshot.readonly,
+            panes,
+        )
+    }
+
+    pub fn new(
+        sessions: Vec<SessionView>,
+        selected_session: usize,
+        status: String,
+        target: Option<String>,
+        readonly: bool,
+    ) -> Self {
+        let panes = SnapshotPaneSeed::from_parts(&sessions, &status, target.as_deref(), readonly);
+        Self::new_with_panes(sessions, selected_session, status, target, readonly, panes)
+    }
+
+    fn new_with_panes(
+        sessions: Vec<SessionView>,
+        selected_session: usize,
+        status: String,
+        target: Option<String>,
+        readonly: bool,
+        panes: SnapshotPaneSeed,
+    ) -> Self {
+        let selected_session = if sessions.is_empty() {
+            0
+        } else {
+            selected_session.min(sessions.len() - 1)
+        };
+        let run_state = initial_run_state(&sessions, selected_session);
+
+        let run_state_started_at = run_state.is_active().then(Instant::now);
+
+        Self {
+            theme: crate::cli::ThemeName::default(),
+            sessions,
+            orchestration: std::collections::HashMap::new(),
+            session_usage: std::collections::HashMap::new(),
+            session_context_window: std::collections::HashMap::new(),
+            completed_turns: std::collections::HashMap::new(),
+            connection_epoch: 0,
+            live_reply_epochs: std::collections::HashMap::new(),
+            errored_turns: std::collections::HashMap::new(),
+            session_retry: std::collections::HashMap::new(),
+            session_status_word: std::collections::HashMap::new(),
+            session_reasoning_effort: std::collections::HashMap::new(),
+            session_reasoning_display: std::collections::HashSet::new(),
+            finalized_by_switch: std::collections::HashMap::new(),
+            selected_session,
+            selected_task: 0,
+            chat_view: ChatViewTarget::Main,
+            transcript_scroll: 0,
+            transcript_scroll_max: std::cell::Cell::new(usize::MAX),
+            agent_view_scroll: 0,
+            agent_view_scroll_max: std::cell::Cell::new(usize::MAX),
+            transcript_pager_active: false,
+            scroll_to_bottom_button: std::cell::Cell::new(None),
+            agent_dock_collapsed: false,
+            peer_dock_collapsed: false,
+            goal_objective_fold: GoalObjectiveFold::default(),
+            goal_objective_folded_effective: std::cell::Cell::new(false),
+            pinned_scroll: false,
+            vim_mode: false,
+            steer_mid_turn: false,
+            composer_mode: ComposerMode::Insert,
+            composer_vim_pending: None,
+            ctrl_c_quit_armed: false,
+            pending_decision_bell: false,
+            task_first_seen: std::collections::HashMap::new(),
+            quota_exhausted: false,
+            loop_fire_counts: std::collections::HashMap::new(),
+            loop_attributed_turns: std::collections::HashSet::new(),
+            pending_loop_attribution: std::collections::HashSet::new(),
+            pending_loop_list_menu: false,
+            loop_actions_target: None,
+            config_path: None,
+            activity_navigator: ActivityNavigatorState::default(),
+            focus: FocusPane::Composer,
+            artifacts: panes.artifacts,
+            workspace: panes.workspace,
+            git: panes.git,
+            composer: String::new(),
+            composer_cursor: None,
+            composer_pasted: false,
+            composer_paste_span: None,
+            composer_drafts: Vec::new(),
+            file_picker: None,
+            composer_history: crate::history::ComposerHistory::default(),
+            pending_messages: Vec::new(),
+            pending_messages_by_session: std::collections::HashMap::new(),
+            staged_submit_in_flight: std::collections::HashMap::new(),
+            optimistic_user_messages: Vec::new(),
+            turn_prompt_anchors: Vec::new(),
+            live_reply_segment_boundaries: std::collections::HashMap::new(),
+            v2_live_assistant_segments: std::collections::HashMap::new(),
+            assistant_projection_lanes: std::collections::HashMap::new(),
+            v2_turn_ids: std::collections::HashMap::new(),
+            stale_hydrate_refreshes: std::collections::HashSet::new(),
+            live_reasoning: std::collections::HashMap::new(),
+            live_compaction: std::collections::HashMap::new(),
+            background_activity: std::collections::HashMap::new(),
+            status,
+            target,
+            readonly,
+            protocol_version: APP_UI_API_V1,
+            run_state,
+            run_state_started_at,
+            pre_token_turns: std::collections::HashMap::new(),
+            interrupted_turns: std::collections::HashMap::new(),
+            unhealthy_cursors: std::collections::HashSet::new(),
+            interrupt_dropped_output: std::collections::HashSet::new(),
+            last_started_turn: std::collections::HashMap::new(),
+            phantom_probe_sent: std::collections::HashSet::new(),
+            hydrate_in_flight: std::collections::HashSet::new(),
+            startup_prompt_pending: None,
+            startup_prompt_dispatched: false,
+            unread_turns: std::collections::HashMap::new(),
+            pending_turn_steers: std::collections::VecDeque::new(),
+            retained_steers: Vec::new(),
+            pending_peer_prepare: None,
+            pending_peer_kickoffs: std::collections::HashMap::new(),
+            peer_session_meta: std::collections::HashMap::new(),
+            opened_peer_sessions: std::collections::HashSet::new(),
+            recently_closed_peers: std::collections::HashMap::new(),
+            pending_session_approvals: std::collections::HashMap::new(),
+            pending_session_questions: std::collections::HashMap::new(),
+            approval_auto_open: true,
+            approval: None,
+            user_question: None,
+            user_question_auto_open: true,
+            task_output: TaskOutputDetailState::default(),
+            artifact_detail: ArtifactDetailState::default(),
+            thread_graph_detail: ThreadGraphDetailState::default(),
+            turn_state_detail: TurnStateDetailState::default(),
+            task_output_cursors: Vec::new(),
+            diff_preview: DiffPreviewPaneState::default(),
+            last_terminal_width: 0,
+            last_terminal_height: 0,
+            activity: Vec::new(),
+            turn_activity_logs: Vec::new(),
+            applied_hydrate_tool_envelopes: std::collections::HashSet::new(),
+            background_completion_rows: std::collections::HashMap::new(),
+            turn_activity_summaries: Vec::new(),
+            turn_started_at: std::collections::HashMap::new(),
+            btw_asides: std::collections::HashMap::new(),
+            transcript_reflush_requested: None,
+            expanded_tool_outputs: false,
+            menu_stack: MenuStack::new(),
+            active_menu: None,
+            capabilities: None,
+            onboarding: OnboardingWizardState::default(),
+            permission_profiles: Vec::new(),
+            session_runtime_statuses: Vec::new(),
+            profile_llm_catalog: None,
+            profile_llm_state: None,
+            sub_providers_state: None,
+            snapshots_state: None,
+            profile_skills: None,
+            profile_skill_registry: None,
+            session_model_catalogs: Vec::new(),
+            session_mcp_catalogs: Vec::new(),
+            session_tool_catalogs: Vec::new(),
+            mcp_config_catalog: None,
+            tool_config_catalog: None,
+            context_lifecycle: Vec::new(),
+            session_autonomy: Vec::new(),
+            pending_autonomy_hydration: std::collections::VecDeque::new(),
+            pending_goal_transition: None,
+            exit_requested: false,
+            pending_clipboard: None,
+            resume_sessions: Vec::new(),
+            resume_list_loaded: false,
+            rewind_turns: Vec::new(),
+            pending_rewind_prefill: None,
+            pending_interrupt_restores: Vec::new(),
+        }
+    }
+
+    /// M16-G2 helper: returns the context-lifecycle ledger for a
+    /// session, or `None` if the server has not yet emitted any
+    /// `context/compaction_completed` / `context/normalization_reported`
+    /// notifications.
+    pub fn context_lifecycle_for(
+        &self,
+        session_id: &SessionKey,
+    ) -> Option<&SessionContextLifecycle> {
+        self.context_lifecycle
+            .iter()
+            .find(|entry| entry.session_id == *session_id)
+            .map(|entry| &entry.ledger)
+    }
+
+    /// M16-G2 helper: mutably accesses (creating if necessary) the
+    /// lifecycle ledger for a session.
+    pub fn context_lifecycle_mut(
+        &mut self,
+        session_id: &SessionKey,
+    ) -> &mut SessionContextLifecycle {
+        if let Some(pos) = self
+            .context_lifecycle
+            .iter()
+            .position(|entry| entry.session_id == *session_id)
+        {
+            return &mut self.context_lifecycle[pos].ledger;
+        }
+        self.context_lifecycle.push(SessionContextLifecycleEntry {
+            session_id: session_id.clone(),
+            ledger: SessionContextLifecycle::default(),
+        });
+        &mut self
+            .context_lifecycle
+            .last_mut()
+            .expect("just pushed")
+            .ledger
+    }
+
+    /// M15-E: read-only access to the autonomy mirror for a session,
+    /// or `None` if the backend has not yet emitted any agent / goal
+    /// / loop state for it.
+    pub fn session_autonomy_for(&self, session_id: &SessionKey) -> Option<&SessionAutonomyState> {
+        self.session_autonomy
+            .iter()
+            .find(|entry| &entry.session_id == session_id)
+    }
+
+    /// M15-E: mutable access to the autonomy mirror for a session.
+    /// Creates a fresh entry on first access — the mirror is empty
+    /// until the backend confirms state.
+    pub fn session_autonomy_mut(&mut self, session_id: &SessionKey) -> &mut SessionAutonomyState {
+        if let Some(pos) = self
+            .session_autonomy
+            .iter()
+            .position(|entry| &entry.session_id == session_id)
+        {
+            return &mut self.session_autonomy[pos];
+        }
+        self.session_autonomy
+            .push(SessionAutonomyState::new(session_id.clone()));
+        self.session_autonomy
+            .last_mut()
+            .expect("just pushed autonomy entry")
+    }
+
+    /// Loop counts `(active, paused)` for `session_id`'s autonomy mirror.
+    /// Drives the status-bar loop chip: an ACTIVE loop fires real model
+    /// turns on an interval, which the operator must be able to see at a
+    /// glance (a forgotten loop otherwise burns tokens invisibly).
+    pub fn session_loop_counts(&self, session_id: &SessionKey) -> (usize, usize) {
+        let Some(entry) = self
+            .session_autonomy
+            .iter()
+            .find(|entry| &entry.session_id == session_id)
+        else {
+            return (0, 0);
+        };
+        let active = entry.loops.iter().filter(|l| l.status == "active").count();
+        let paused = entry.loops.iter().filter(|l| l.status == "paused").count();
+        (active, paused)
+    }
+
+    /// Replace the entire agent list for a session. Used by the
+    /// `agent/list` response and after reconnect-hydration.
+    pub fn set_session_agents(
+        &mut self,
+        session_id: &SessionKey,
+        agents: Vec<ra_core::ui_protocol::UiAgentRecord>,
+    ) {
+        let entry = self.session_autonomy_mut(session_id);
+        entry.agents = agents;
+        // A roster refresh can drop the sub-agent the main pane is peeking
+        // (completed and pruned by the backend); fall the view back to `Main`
+        // so the peek never strands on a vanished agent.
+        self.normalize_chat_view();
+    }
+
+    /// Upsert one agent record by `agent_id`. The wire schema may
+    /// arrive via `agent/updated` or as part of an `agent/list`
+    /// response.
+    pub fn upsert_session_agent(
+        &mut self,
+        session_id: &SessionKey,
+        agent: ra_core::ui_protocol::UiAgentRecord,
+    ) {
+        // Agent Dock unread (#323): a LIVE transition into a terminal status
+        // while the user is not viewing this agent marks it unseen — the
+        // "finished while you weren't looking" badge. Only this live upsert
+        // path badges; bulk hydration (`set_session_agents`) replays known
+        // state and must not invent unread work.
+        let viewing = matches!(
+            &self.chat_view,
+            ChatViewTarget::Agent(id) if id == &agent.agent_id
+        );
+        let now_terminal = agent_status_is_terminal(&agent.status);
+        let entry = self.session_autonomy_mut(session_id);
+        let was_terminal = entry
+            .agents
+            .iter()
+            .find(|a| a.agent_id == agent.agent_id)
+            .is_some_and(|a| agent_status_is_terminal(&a.status));
+        if !now_terminal {
+            // Resurrected (or still running): any stale badge is moot.
+            entry.unseen.retain(|id| id != &agent.agent_id);
+        } else if !was_terminal && !viewing && !entry.unseen.contains(&agent.agent_id) {
+            entry.unseen.push(agent.agent_id.clone());
+        }
+        if let Some(pos) = entry
+            .agents
+            .iter()
+            .position(|a| a.agent_id == agent.agent_id)
+        {
+            entry.agents[pos] = agent;
+        } else {
+            entry.agents.push(agent);
+        }
+    }
+
+    /// Remove the given sub-agents from a session's roster along with their
+    /// streamed-output/artifact caches and linger stamps, then normalize the
+    /// chat view (a peeked pruned agent falls back to `Main`). Backs the
+    /// "finished/failed chips leave the strip" policy — callers decide WHICH
+    /// terminal agents to drop (all of them on the next submit; only
+    /// linger-expired ones in the periodic sweep). Returns true when anything
+    /// was removed.
+    pub fn prune_session_agents_by_ids(
+        &mut self,
+        session_id: &SessionKey,
+        agent_ids: &[String],
+    ) -> bool {
+        if agent_ids.is_empty() {
+            return false;
+        }
+        let entry = self.session_autonomy_mut(session_id);
+        let before = entry.agents.len();
+        entry
+            .agents
+            .retain(|agent| !agent_ids.contains(&agent.agent_id));
+        let removed = entry.agents.len() != before;
+        if removed {
+            entry
+                .agent_outputs
+                .retain(|cache| !agent_ids.contains(&cache.agent_id));
+            entry
+                .agent_artifacts
+                .retain(|cache| !agent_ids.contains(&cache.agent_id));
+            entry
+                .terminal_seen
+                .retain(|(agent_id, _)| !agent_ids.contains(agent_id));
+            entry
+                .unseen
+                .retain(|agent_id| !agent_ids.contains(agent_id));
+            self.normalize_chat_view();
+        }
+        removed
+    }
+
+    /// Replace the loop list for a session, dropping tombstones.
+    ///
+    /// Mirrors [`Self::upsert_session_loop`], which strips
+    /// `status == "deleted"` records "so reconnect doesn't surface
+    /// tombstones". This path — the `loop/list` response and
+    /// reconnect rehydration — must apply the SAME filter. Otherwise a
+    /// backend that echoes deleted loops in `loop/list` leaves dimmed
+    /// zombie chips in the sticky autonomy indicator that `/loop delete`
+    /// can no longer clear (the `#1576` delete-can't-clear-the-chip
+    /// lineage): the active/paused counts already exclude them, so the
+    /// row reads "0 running" yet still shows chips.
+    ///
+    /// Returns the number of loops actually retained (after dropping
+    /// tombstones) so callers can report a count that matches what the
+    /// indicator now shows, rather than the raw response length.
+    pub fn set_session_loops(
+        &mut self,
+        session_id: &SessionKey,
+        loops: Vec<ra_core::ui_protocol::UiLoopRecord>,
+    ) -> usize {
+        let entry = self.session_autonomy_mut(session_id);
+        entry.loops = loops
+            .into_iter()
+            .filter(|loop_state| loop_state.status != "deleted")
+            .collect();
+        entry.loops.len()
+    }
+
+    /// Upsert one loop record by `loop_id`. Removes the loop when its
+    /// status becomes `deleted` so reconnect doesn't surface tombstones.
+    pub fn upsert_session_loop(
+        &mut self,
+        session_id: &SessionKey,
+        loop_state: ra_core::ui_protocol::UiLoopRecord,
+    ) {
+        let entry = self.session_autonomy_mut(session_id);
+        if loop_state.status == "deleted" {
+            entry.loops.retain(|l| l.loop_id != loop_state.loop_id);
+            return;
+        }
+        if let Some(pos) = entry
+            .loops
+            .iter()
+            .position(|l| l.loop_id == loop_state.loop_id)
+        {
+            entry.loops[pos] = loop_state;
+        } else {
+            entry.loops.push(loop_state);
+        }
+    }
+
+    /// Remove a loop entry by id (used for explicit `loop/delete`
+    /// responses where the backend doesn't echo a deleted-status loop
+    /// record).
+    pub fn remove_session_loop(&mut self, session_id: &SessionKey, loop_id: &str) {
+        if let Some(entry) = self
+            .session_autonomy
+            .iter_mut()
+            .find(|entry| &entry.session_id == session_id)
+        {
+            entry.loops.retain(|l| l.loop_id != loop_id);
+        }
+    }
+
+    /// Set the current goal for a session. `goal = None` clears it.
+    pub fn set_session_goal(
+        &mut self,
+        session_id: &SessionKey,
+        goal: Option<ra_core::ui_protocol::UiGoalRecord>,
+        transition_actor: Option<String>,
+    ) {
+        let entry = self.session_autonomy_mut(session_id);
+        entry.goal = goal;
+        entry.goal_transition_actor = transition_actor;
+    }
+
+    /// #1959 — decide whether to APPLY an incoming goal chip event, advancing
+    /// the per-session generation watermark. Returns `false` (DROP) when the
+    /// event's `generation` does not strictly exceed the last applied one, so a
+    /// stale `SessionGoalUpdated` that races behind a `SessionGoalCleared`
+    /// cannot resurrect the cleared chip regardless of server send order. A
+    /// legacy/unstamped `generation == 0` always applies and never advances the
+    /// watermark (an old backend never stamps, so gating on it would wedge the
+    /// chip).
+    pub fn goal_event_generation_admits(
+        &mut self,
+        session_id: &SessionKey,
+        generation: u64,
+    ) -> bool {
+        if generation == 0 {
+            return true;
+        }
+        let entry = self.session_autonomy_mut(session_id);
+        if generation <= entry.last_goal_event_generation {
+            return false;
+        }
+        entry.last_goal_event_generation = generation;
+        true
+    }
+
+    /// Ctrl+P: flip the ◆ Goal banner objective between folded and unfolded.
+    ///
+    /// Reads the EFFECTIVE fold the banner last rendered (which resolves `Auto`
+    /// from the objective's wrapped length at the real width) and pins the
+    /// explicit opposite, so the first Ctrl+P always visibly flips whatever is on
+    /// screen and every later frame honors the choice. The caller gates this on
+    /// the active session actually having a goal, so an unfolded short goal is
+    /// still a meaningful (re-fold) toggle rather than a no-op.
+    pub fn toggle_goal_objective_fold(&mut self) {
+        self.goal_objective_fold = if self.goal_objective_folded_effective.get() {
+            GoalObjectiveFold::Unfolded
+        } else {
+            GoalObjectiveFold::Folded
+        };
+    }
+
+    /// Replace the cached plan/todo checklist for a session. The `update_plan`
+    /// tool sends the full ordered list each call, so this is a wholesale swap.
+    /// `turn_id` is the authoring turn (when known) so the panel can be cleared
+    /// on that turn's completion.
+    pub fn set_session_plan(
+        &mut self,
+        session_id: &SessionKey,
+        plan: Option<ra_core::ui_protocol::UiPlanRecord>,
+        turn_id: Option<TurnId>,
+    ) {
+        let entry = self.session_autonomy_mut(session_id);
+        entry.plan = plan;
+        entry.plan_turn_id = turn_id;
+    }
+
+    /// Clear a session's plan panel once the turn that authored it completes.
+    /// A plan with no known authoring turn (`plan_turn_id == None`) is left in
+    /// place — there is no terminal event to key its removal on.
+    pub fn clear_session_plan_for_turn(&mut self, session_id: &SessionKey, turn_id: &TurnId) {
+        if let Some(entry) = self
+            .session_autonomy
+            .iter_mut()
+            .find(|s| &s.session_id == session_id)
+        {
+            if entry.plan_turn_id.as_ref() == Some(turn_id) {
+                entry.plan = None;
+                entry.plan_turn_id = None;
+            }
+        }
+    }
+
+    /// Replace the cached output tail for an agent. The backend is
+    /// authoritative; deltas are appended via [`append_agent_output`].
+    pub fn set_agent_output(
+        &mut self,
+        session_id: &SessionKey,
+        agent_id: &str,
+        text: String,
+        cursor: OutputCursor,
+    ) {
+        let entry = self.session_autonomy_mut(session_id);
+        if let Some(pos) = entry
+            .agent_outputs
+            .iter()
+            .position(|cache| cache.agent_id == agent_id)
+        {
+            entry.agent_outputs[pos] = AutonomyAgentOutputCache {
+                agent_id: agent_id.to_string(),
+                text,
+                cursor,
+            };
+        } else {
+            entry.agent_outputs.push(AutonomyAgentOutputCache {
+                agent_id: agent_id.to_string(),
+                text,
+                cursor,
+            });
+        }
+    }
+
+    /// Append output deltas from `agent/output/delta`. If the cursor
+    /// has rolled past the cached one the entry is overwritten so
+    /// stale text never lingers in the mirror.
+    pub fn append_agent_output(
+        &mut self,
+        session_id: &SessionKey,
+        agent_id: &str,
+        cursor: OutputCursor,
+        text: &str,
+    ) {
+        let entry = self.session_autonomy_mut(session_id);
+        if let Some(pos) = entry
+            .agent_outputs
+            .iter()
+            .position(|cache| cache.agent_id == agent_id)
+        {
+            let cache = &mut entry.agent_outputs[pos];
+            if cursor.offset < cache.cursor.offset {
+                // Backend rewound; replace.
+                cache.text = text.to_string();
+            } else {
+                cache.text.push_str(text);
+            }
+            cache.cursor = cursor;
+        } else {
+            entry.agent_outputs.push(AutonomyAgentOutputCache {
+                agent_id: agent_id.to_string(),
+                text: text.to_string(),
+                cursor,
+            });
+        }
+        // NOTE: the peek's `agent_view_scroll` is a plain from-bottom offset, so
+        // at the bottom (offset 0) it follows newest output with no drift; a
+        // manually scrolled-up peek does drift as new output streams in. A
+        // precise anchor needs the wrapped visual-row count, which only the
+        // renderer knows — deliberately not approximated here (a newline count
+        // over/under-compensates at ordinary chunk boundaries).
+    }
+
+    /// Enqueue a pending reconnect hydration command. Bounded — at the cap the
+    /// oldest NON-`session/open` entry is evicted to keep the queue O(1) (fresh
+    /// hydration on the next reconnect is cheap). A `session/open` is never
+    /// evicted: the local tab switch pushes it to the FRONT so it precedes the
+    /// restored staged `turn/start`, and losing it would let that submit go
+    /// out with no preceding open — an unscoped affinity. When every entry is
+    /// an open, the incoming command is dropped and the drop surfaced in the
+    /// status line instead (the bounded-error pattern of the transport's
+    /// `protocol_barrier_queue_full`).
+    pub fn enqueue_autonomy_hydration(&mut self, command: AppUiCommand) {
+        const MAX_PENDING_HYDRATION: usize = 16;
+        if self.pending_autonomy_hydration.len() >= MAX_PENDING_HYDRATION {
+            let evictable = self
+                .pending_autonomy_hydration
+                .iter()
+                .position(|queued| !matches!(queued, AppUiCommand::OpenSession(_)));
+            match evictable {
+                Some(index) => {
+                    if let Some(AppUiCommand::HydrateSession(params)) =
+                        self.pending_autonomy_hydration.remove(index)
+                    {
+                        self.hydrate_in_flight.remove(&params.session_id);
+                    }
+                }
+                None => {
+                    if let AppUiCommand::HydrateSession(params) = &command {
+                        self.hydrate_in_flight.remove(&params.session_id);
+                    }
+                    self.status =
+                        t!("status.hydration_queue_full", method = command.method()).into_owned();
+                    return;
+                }
+            }
+        }
+        self.pending_autonomy_hydration.push_back(command);
+    }
+
+    /// Queue a locally generated `session/open` at the FRONT of the hydration
+    /// queue so it precedes any follow-up for that session. Only the LATEST
+    /// local switch matters: an earlier queued open (A→B→C inside one input
+    /// batch) is dropped, otherwise the opens leave in reverse order and the
+    /// server's final affinity ends on the wrong session while the UI shows
+    /// the other. The queue stays bounded through the same eviction rule as
+    /// [`Self::enqueue_autonomy_hydration`].
+    pub fn enqueue_local_session_open_front(&mut self, open: AppUiCommand) {
+        const MAX_PENDING_HYDRATION: usize = 16;
+        debug_assert!(matches!(open, AppUiCommand::OpenSession(_)));
+        self.pending_autonomy_hydration
+            .retain(|queued| !matches!(queued, AppUiCommand::OpenSession(_)));
+        while self.pending_autonomy_hydration.len() >= MAX_PENDING_HYDRATION {
+            // Drop the tail follow-up and release its request marker so a
+            // later reconnect can hydrate that session again.
+            if let Some(AppUiCommand::HydrateSession(params)) =
+                self.pending_autonomy_hydration.pop_back()
+            {
+                self.hydrate_in_flight.remove(&params.session_id);
+            }
+        }
+        self.pending_autonomy_hydration.push_front(open);
+    }
+
+    /// Dequeue the next pending hydration command. Returns `None` when
+    /// the queue is empty.
+    pub fn dequeue_autonomy_hydration(&mut self) -> Option<AppUiCommand> {
+        self.pending_autonomy_hydration.pop_front()
+    }
+
+    /// Replace the artifact cache for a single agent.
+    pub fn set_agent_artifacts(
+        &mut self,
+        session_id: &SessionKey,
+        agent_id: &str,
+        artifacts: Vec<ra_core::ui_protocol::UiAgentArtifact>,
+    ) {
+        let entry = self.session_autonomy_mut(session_id);
+        if let Some(pos) = entry
+            .agent_artifacts
+            .iter()
+            .position(|cache| cache.agent_id == agent_id)
+        {
+            entry.agent_artifacts[pos] = AutonomyAgentArtifactCache {
+                agent_id: agent_id.to_string(),
+                artifacts,
+            };
+        } else {
+            entry.agent_artifacts.push(AutonomyAgentArtifactCache {
+                agent_id: agent_id.to_string(),
+                artifacts,
+            });
+        }
+    }
+
+    pub fn permission_profile_for(
+        &self,
+        session_id: &SessionKey,
+    ) -> Option<PermissionProfileSelection> {
+        self.permission_profiles
+            .iter()
+            .find(|profile| &profile.session_id == session_id)
+            .map(|profile| profile.current)
+    }
+
+    pub fn set_permission_profile(
+        &mut self,
+        session_id: SessionKey,
+        current: PermissionProfileSelection,
+    ) {
+        let current = current.normalized();
+        if let Some(profile) = self
+            .permission_profiles
+            .iter_mut()
+            .find(|profile| profile.session_id == session_id)
+        {
+            profile.current = current;
+        } else {
+            self.permission_profiles.push(SessionPermissionProfile {
+                session_id,
+                current,
+            });
+        }
+    }
+
+    pub fn runtime_status_for(&self, session_id: &SessionKey) -> Option<&SessionRuntimeStatus> {
+        self.session_runtime_statuses
+            .iter()
+            .find(|status| &status.session_id == session_id)
+    }
+
+    pub fn set_runtime_status(&mut self, status: SessionRuntimeStatus) {
+        if let Some(existing) = self
+            .session_runtime_statuses
+            .iter_mut()
+            .find(|existing| existing.session_id == status.session_id)
+        {
+            *existing = status;
+        } else {
+            self.session_runtime_statuses.push(status);
+        }
+    }
+
+    pub fn model_catalog_for(&self, session_id: &SessionKey) -> Option<&SessionModelCatalog> {
+        self.session_model_catalogs
+            .iter()
+            .find(|catalog| &catalog.session_id == session_id)
+    }
+
+    pub fn set_model_catalog(&mut self, catalog: SessionModelCatalog) {
+        if let Some(existing) = self
+            .session_model_catalogs
+            .iter_mut()
+            .find(|existing| existing.session_id == catalog.session_id)
+        {
+            *existing = catalog;
+        } else {
+            self.session_model_catalogs.push(catalog);
+        }
+    }
+
+    /// Reconcile a cached `/model` catalog with server-reported runtime truth.
+    /// If the effective model is not in the old catalog, invalidate it so the
+    /// next menu open refetches instead of presenting stale choices.
+    pub fn reconcile_model_catalog_with_effective(
+        &mut self,
+        session_id: &SessionKey,
+        effective: &ModelStatus,
+    ) {
+        let Some(index) = self
+            .session_model_catalogs
+            .iter()
+            .position(|catalog| &catalog.session_id == session_id)
+        else {
+            return;
+        };
+        let contains_effective = self.session_model_catalogs[index]
+            .models
+            .iter()
+            .any(|model| model.model == effective.model && model.provider == effective.provider);
+        if contains_effective {
+            for model in &mut self.session_model_catalogs[index].models {
+                model.selected =
+                    model.model == effective.model && model.provider == effective.provider;
+            }
+        } else {
+            self.session_model_catalogs.remove(index);
+        }
+    }
+
+    pub fn mcp_catalog_for(&self, session_id: &SessionKey) -> Option<&SessionMcpCatalog> {
+        self.session_mcp_catalogs
+            .iter()
+            .find(|catalog| &catalog.session_id == session_id)
+    }
+
+    pub fn set_mcp_catalog(&mut self, catalog: SessionMcpCatalog) {
+        if let Some(existing) = self
+            .session_mcp_catalogs
+            .iter_mut()
+            .find(|existing| existing.session_id == catalog.session_id)
+        {
+            *existing = catalog;
+        } else {
+            self.session_mcp_catalogs.push(catalog);
+        }
+    }
+
+    pub fn tool_catalog_for(&self, session_id: &SessionKey) -> Option<&SessionToolCatalog> {
+        self.session_tool_catalogs
+            .iter()
+            .find(|catalog| &catalog.session_id == session_id)
+    }
+
+    pub fn set_tool_catalog(&mut self, catalog: SessionToolCatalog) {
+        if let Some(existing) = self
+            .session_tool_catalogs
+            .iter_mut()
+            .find(|existing| existing.session_id == catalog.session_id)
+        {
+            *existing = catalog;
+        } else {
+            self.session_tool_catalogs.push(catalog);
+        }
+    }
+
+    pub fn availability_context(&self) -> AvailabilityContext<'_> {
+        AvailabilityContext {
+            task: if self.active_turn().is_some()
+                || self.active_task().is_some_and(|task| {
+                    matches!(
+                        task.state,
+                        TaskRuntimeState::Pending | TaskRuntimeState::Running
+                    )
+                }) {
+                TaskActivity::Running
+            } else {
+                TaskActivity::Idle
+            },
+            approval_modal_visible: self
+                .approval
+                .as_ref()
+                .is_some_and(|approval| approval.visible),
+            readonly: self.readonly,
+            runtime: if self.target.as_deref().is_some_and(is_protocol_target) {
+                RuntimeMode::Protocol
+            } else {
+                RuntimeMode::Mock
+            },
+            connection: if self.target.as_deref().is_some_and(is_protocol_target) {
+                ConnectionState::Connected
+            } else {
+                ConnectionState::Disconnected
+            },
+            capabilities: self.capabilities.as_ref(),
+            feature_flags: &[],
+            session_open: !self.sessions.is_empty(),
+        }
+    }
+
+    pub fn set_capabilities(&mut self, capabilities: UiProtocolCapabilities) {
+        let capabilities = CapabilitySet::from(&capabilities);
+        if !capabilities.supports_feature(APPUI_FEATURE_CONTEXT_SEMANTIC_CACHE_V1) {
+            for entry in &mut self.context_lifecycle {
+                entry.ledger.cache_diagnostics = None;
+            }
+        }
+        self.capabilities = Some(capabilities);
+    }
+
+    pub fn apply_pane_snapshot(&mut self, panes: UiPaneSnapshot) {
+        if let Some(artifacts) = panes.artifacts {
+            self.artifacts.items = artifacts
+                .items
+                .into_iter()
+                .map(|item| ArtifactItem {
+                    title: item.title,
+                    kind: item.kind,
+                    source: item
+                        .source
+                        .or(item.path)
+                        .unwrap_or_else(|| "protocol".into()),
+                    status: item.status,
+                })
+                .collect();
+            self.artifacts.selected = self
+                .artifacts
+                .selected
+                .min(self.artifacts.items.len().saturating_sub(1));
+        }
+
+        if let Some(workspace) = panes.workspace {
+            self.workspace.root = workspace.root;
+            self.workspace.contract = workspace.contract;
+            self.workspace.entries = workspace
+                .entries
+                .into_iter()
+                .map(|entry| WorkspaceEntry {
+                    depth: entry.depth,
+                    label: entry.label,
+                    detail: entry
+                        .detail
+                        .unwrap_or_else(|| format!("{} {}", entry.kind, entry.path)),
+                })
+                .collect();
+            self.workspace.selected = self
+                .workspace
+                .selected
+                .min(self.workspace.entries.len().saturating_sub(1));
+            self.workspace.scroll = self.workspace.scroll.min(self.workspace.selected);
+        }
+
+        if let Some(git) = panes.git {
+            self.git.branch = git.branch.unwrap_or_else(|| "not supplied".into());
+            self.git.head = git.head;
+            self.git.status = git
+                .status
+                .into_iter()
+                .map(|item| GitStatusItem {
+                    code: item.code,
+                    path: item.path,
+                    detail: item.detail,
+                })
+                .collect();
+            self.git.history = git
+                .history
+                .into_iter()
+                .map(|item| GitHistoryItem {
+                    commit: item.commit,
+                    summary: item.summary,
+                })
+                .collect();
+            self.git.selected = self
+                .git
+                .selected
+                .min(self.git.selectable_len().saturating_sub(1));
+            self.git.scroll = self.git.scroll.min(self.git.selected);
+        }
+    }
+
+    /// Whether the given session opted into rendering reasoning blocks.
+    pub fn reasoning_display_enabled(&self, session_id: &SessionKey) -> bool {
+        self.session_reasoning_display.contains(session_id)
+    }
+
+    pub fn active_session(&self) -> Option<&SessionView> {
+        self.sessions.get(self.selected_session)
+    }
+
+    pub fn active_session_mut(&mut self) -> Option<&mut SessionView> {
+        self.sessions.get_mut(self.selected_session)
+    }
+
+    pub fn active_turn(&self) -> Option<(&SessionKey, &TurnId)> {
+        let session = self.active_session()?;
+        let live_reply = session.live_reply.as_ref()?;
+        Some((&session.id, &live_reply.turn_id))
+    }
+
+    /// Whether the FOCUSED (displayed) session is a peer. Keyed off the DURABLE
+    /// `opened_peer_sessions` identity set (populated at the peer-open
+    /// chokepoint) — NOT the mutable `peer_session_meta` dock roster that
+    /// `/peer clear` empties (a cleared-but-focused peer must STAY read-only),
+    /// and NOT a `topic().starts_with("peer-")` string check that would
+    /// false-positive on an ordinary session whose API-supplied topic merely
+    /// starts with `peer-`. Peer views are read-only WATCH surfaces: the
+    /// composer refuses plain prompts (steer peers from the master with
+    /// `peer_send_input`) and a focused peer's output is kept out of the
+    /// master's immutable native scrollback. A non-peer or absent focus reads
+    /// `false`.
+    pub fn focused_session_is_peer(&self) -> bool {
+        self.active_session()
+            .is_some_and(|session| self.opened_peer_sessions.contains(&session.id))
+    }
+
+    /// The topmost peer with a stashed approval that is ACTUALLY VISIBLE in the
+    /// Peer Dock this frame — the target of the dock's approve/deny keys, so the
+    /// operator answers a peer's approval WITHOUT switching to it. Restricted to
+    /// the rows the dock actually draws at `terminal_height` (collapsed pill →
+    /// none; capped exactly as `peer_strip_lines`): a peer whose ⚠ row is
+    /// off-screen (below the row cap) or hidden (collapsed / height-0) must NOT
+    /// be actionable, or the key would act on an affordance the user cannot see.
+    /// Only APPROVALS qualify (a question-blocked peer needs the picker, not a
+    /// yes/no key). `None` when no visible peer has a pending approval.
+    pub(crate) fn first_blocked_peer_with_approval(
+        &self,
+        terminal_height: u16,
+    ) -> Option<SessionKey> {
+        crate::app::visible_peer_dock_keys(self, terminal_height)
+            .into_iter()
+            .find(|session_id| self.pending_session_approvals.contains_key(session_id))
+    }
+
+    /// Per-session cap on the [`AppState::completed_turns`] terminal-turn set —
+    /// the same bounded-FIFO pattern (and cap value) as
+    /// [`Self::FINALIZED_BY_SWITCH_CAP`]: only the most recent terminals can
+    /// realistically be followed by a late delta or a replayed terminal, so
+    /// older ids are evicted FIFO.
+    pub const COMPLETED_TURNS_CAP: usize = 128;
+
+    /// Record that a turn reached a terminal state, so a late delta for it is
+    /// dropped instead of resurrecting it into `live_reply` (see
+    /// [`AppState::completed_turns`]). Bounded FIFO per session.
+    pub fn mark_turn_completed(&mut self, session_id: &SessionKey, turn_id: &TurnId) {
+        let (set, queue) = self.completed_turns.entry(session_id.clone()).or_default();
+        if set.insert(turn_id.clone()) {
+            queue.push_back(turn_id.clone());
+            while queue.len() > Self::COMPLETED_TURNS_CAP {
+                if let Some(evicted) = queue.pop_front() {
+                    set.remove(&evicted);
+                }
+            }
+        }
+    }
+
+    /// True when `turn_id` already reached a terminal state in this session.
+    pub fn is_turn_completed(&self, session_id: &SessionKey, turn_id: &TurnId) -> bool {
+        self.completed_turns
+            .get(session_id)
+            .is_some_and(|(turns, _)| turns.contains(turn_id))
+    }
+
+    /// Record that a turn reached an ERROR terminal (see
+    /// [`AppState::errored_turns`]). Bounded FIFO per session, mirroring
+    /// [`Self::mark_turn_completed`].
+    pub fn mark_turn_errored(&mut self, session_id: &SessionKey, turn_id: &TurnId) {
+        let (set, queue) = self.errored_turns.entry(session_id.clone()).or_default();
+        if set.insert(turn_id.clone()) {
+            queue.push_back(turn_id.clone());
+            while queue.len() > Self::COMPLETED_TURNS_CAP {
+                if let Some(evicted) = queue.pop_front() {
+                    set.remove(&evicted);
+                }
+            }
+        }
+    }
+
+    /// True when `turn_id` reached an error terminal in this session.
+    pub fn is_turn_errored(&self, session_id: &SessionKey, turn_id: &TurnId) -> bool {
+        self.errored_turns
+            .get(session_id)
+            .is_some_and(|(turns, _)| turns.contains(turn_id))
+    }
+
+    /// [`Self::is_turn_errored`] keyed by the string ids a live-reply coverage
+    /// carries (`SessionKey.0` and the turn id's display form).
+    pub fn is_turn_errored_by_wire_ids(&self, session_id: &str, turn_id: &str) -> bool {
+        self.errored_turns
+            .get(&SessionKey(session_id.to_owned()))
+            .is_some_and(|(turns, _)| turns.iter().any(|turn| turn.0.to_string() == turn_id))
+    }
+
+    /// Stamp the session's currently latched `live_reply` with the connection
+    /// epoch in force right now (see [`AppState::connection_epoch`]).
+    pub fn stamp_live_reply_epoch(&mut self, session_id: &SessionKey) {
+        self.live_reply_epochs
+            .insert(session_id.clone(), self.connection_epoch);
+    }
+
+    /// A replacement backend child connected: every latch stamped before now
+    /// belongs to a process that no longer exists.
+    pub fn bump_connection_epoch(&mut self) {
+        self.connection_epoch = self.connection_epoch.wrapping_add(1);
+    }
+
+    /// True when the session's latched `live_reply` was bound under an OLDER
+    /// connection epoch than the current one — by a backend child that has
+    /// since been replaced — or was never stamped at all.
+    pub fn live_reply_latched_under_dead_connection(&self, session_id: &SessionKey) -> bool {
+        self.live_reply_epochs
+            .get(session_id)
+            .is_none_or(|epoch| *epoch < self.connection_epoch)
+    }
+
+    pub fn record_submitted_user_prompt(
+        &mut self,
+        session_id: SessionKey,
+        turn_id: TurnId,
+        content: String,
+    ) {
+        if self
+            .pending_messages
+            .iter()
+            .any(|pending| pending == &content)
+        {
+            self.optimistic_user_messages.retain(|optimistic| {
+                optimistic.session_id != session_id || optimistic.content != content
+            });
+            return;
+        }
+
+        let Some(session) = self
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+        else {
+            return;
+        };
+        let prior_matching_user_count = matching_user_message_count(session, &content);
+        let anchor_index = session.messages.len();
+        let optimistic = OptimisticUserMessage {
+            prior_matching_user_count,
+            anchor_index,
+            session_id: session_id.clone(),
+            turn_id: turn_id.clone(),
+            content: content.clone(),
+        };
+        self.remember_turn_prompt_anchor(TurnPromptAnchor {
+            session_id,
+            turn_id,
+            content,
+            anchor_index,
+            prior_matching_user_count,
+        });
+        self.optimistic_user_messages.push(optimistic);
+        const MAX_OPTIMISTIC_USER_MESSAGES: usize = 64;
+        if self.optimistic_user_messages.len() > MAX_OPTIMISTIC_USER_MESSAGES {
+            let excess = self.optimistic_user_messages.len() - MAX_OPTIMISTIC_USER_MESSAGES;
+            self.optimistic_user_messages.drain(0..excess);
+        }
+        self.restore_optimistic_user_messages_inner(false, None, &[]);
+    }
+
+    pub fn restore_optimistic_user_messages(&mut self) {
+        self.restore_optimistic_user_messages_inner(true, None, &[]);
+    }
+
+    /// A hydrate only replaces one session. Other sessions still contain local
+    /// optimistic rows, not canonical confirmation. Preserve the original full
+    /// message (including attachments) when this session's snapshot predates it.
+    /// Return the actual insertion indices, in order, so canonical projection
+    /// owners can be rebased structurally before their anchors are installed.
+    pub fn restore_hydrated_optimistic_user_messages(
+        &mut self,
+        session_id: &SessionKey,
+        previous_messages: &[Message],
+    ) -> Vec<usize> {
+        self.restore_optimistic_user_messages_inner(true, Some(session_id), previous_messages)
+    }
+
+    /// `drop_confirmed`: when an optimistic row is already present, drop its
+    /// tracking entry (snapshot/hydrate replaced the list with canonical
+    /// rows — the echo already happened) or keep it (a sibling submit merely
+    /// re-ran the restore; the row is still OUR optimistic insert awaiting
+    /// its own echo, which must still be able to promote it).
+    fn restore_optimistic_user_messages_inner(
+        &mut self,
+        drop_confirmed: bool,
+        session_scope: Option<&SessionKey>,
+        previous_messages: &[Message],
+    ) -> Vec<usize> {
+        let mut retained = Vec::new();
+        let mut inserted_indices = Vec::new();
+        for optimistic in self.optimistic_user_messages.clone() {
+            if session_scope.is_some_and(|scope| scope != &optimistic.session_id) {
+                retained.push(optimistic);
+                continue;
+            }
+            let Some(session) = self
+                .sessions
+                .iter_mut()
+                .find(|session| session.id == optimistic.session_id)
+            else {
+                retained.push(optimistic);
+                continue;
+            };
+            if matching_user_message_count(session, &optimistic.content)
+                > optimistic.prior_matching_user_count
+            {
+                if !drop_confirmed {
+                    // task-consume-turn-steer-dropped: with two steers in one
+                    // turn, the second steer's record used to run this restore
+                    // and DROP the first steer's entry — its echo then had no
+                    // entry to promote and appended a duplicate row.
+                    retained.push(optimistic);
+                }
+                continue;
+            }
+
+            let insert_at = optimistic.anchor_index.min(session.messages.len());
+            let message = previous_messages
+                .iter()
+                .filter(|message| {
+                    message.role.as_str() == "user" && message.content == optimistic.content
+                })
+                .nth(optimistic.prior_matching_user_count)
+                .cloned()
+                .unwrap_or_else(|| Message::user(optimistic.content.clone()));
+            session.messages.insert(insert_at, message);
+            inserted_indices.push(insert_at);
+            for ((owner_session, _), owner) in &mut self.background_completion_rows {
+                if owner_session == &session.id && owner.index >= insert_at {
+                    owner.index += 1;
+                }
+            }
+            retained.push(optimistic);
+        }
+        self.optimistic_user_messages = retained;
+        inserted_indices
+    }
+
+    /// The user prompt that started `turn_id` in `session_id`. Used to restore
+    /// the prompt into the composer when a turn is interrupted (Esc/Ctrl+C) so
+    /// it can be edited and resent. Mirrors the turn-activity log's request
+    /// resolution (the same three fallbacks it anchors a report on): the
+    /// optimistic echo first, then the persisted turn-prompt anchor (which
+    /// survives the turn — it is only reaped by an explicit withdraw or the
+    /// per-session cap), then the session's latest user message.
+    pub fn submitted_prompt_for_turn(
+        &self,
+        session_id: &SessionKey,
+        turn_id: &TurnId,
+    ) -> Option<String> {
+        self.optimistic_user_messages
+            .iter()
+            .rev()
+            .find(|message| &message.session_id == session_id && &message.turn_id == turn_id)
+            .map(|message| message.content.clone())
+            .or_else(|| {
+                self.turn_prompt_anchors
+                    .iter()
+                    .rev()
+                    .find(|anchor| &anchor.session_id == session_id && &anchor.turn_id == turn_id)
+                    .map(|anchor| anchor.content.clone())
+            })
+            .or_else(|| {
+                self.sessions
+                    .iter()
+                    .find(|session| &session.id == session_id)
+                    .and_then(|session| {
+                        session
+                            .messages
+                            .iter()
+                            .rev()
+                            .find(|message| message.role == ra_core::MessageRole::User)
+                            .map(|message| message.content.clone())
+                    })
+            })
+    }
+
+    /// Settle staged-submit gates that a freshly-replayed snapshot already
+    /// REFLECTS (codex fold): if the replayed session contains the in-flight
+    /// prompt as a user message beyond the pre-submit baseline, the submit
+    /// reached the server before the replay — no later TurnStarted/terminal
+    /// will arrive on this connection to clear the gate, and letting it
+    /// TTL-expire would re-stage and submit a DUPLICATE turn. Gates with no
+    /// echo stay armed (a genuinely dead submit self-heals via the TTL
+    /// re-stage).
+    ///
+    /// MUST run BEFORE [`Self::restore_optimistic_user_messages`]: the
+    /// restore re-inserts un-echoed optimistic rows, which would inflate the
+    /// match count and settle (lose) a gate whose submit never landed.
+    /// task-steer-retained-until-echo: after canonical history was rebuilt
+    /// (snapshot / hydrate), drop retained steers the history already proves
+    /// landed — more user rows with that content than the steer's baseline.
+    /// Call BEFORE `restore_optimistic_user_messages` so the count reflects
+    /// canonical rows only. Returns how many were reaped.
+    pub fn settle_retained_steers_reflected_by_history(
+        &mut self,
+        session_id: &SessionKey,
+    ) -> usize {
+        let Some(session) = self
+            .sessions
+            .iter()
+            .find(|session| &session.id == session_id)
+        else {
+            return 0;
+        };
+        let before = self.retained_steers.len();
+        let mut counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+        for message in &session.messages {
+            if message.role == ra_core::MessageRole::User {
+                *counts.entry(message.content.as_str()).or_insert(0) += 1;
+            }
+        }
+        // Consume evidence in dispatch order: each proven row settles ONE
+        // retained steer of that content, oldest first.
+        let mut proven: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        for steer in &self.retained_steers {
+            if &steer.session_id != session_id {
+                continue;
+            }
+            let have = counts.get(steer.prompt.as_str()).copied().unwrap_or(0);
+            let used = proven.get(&steer.prompt).copied().unwrap_or(0);
+            if have > steer.prior_matching_user_count + used {
+                *proven.entry(steer.prompt.clone()).or_insert(0) += 1;
+            }
+        }
+        let mut consumed: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+        self.retained_steers.retain(|steer| {
+            if &steer.session_id != session_id {
+                return true;
+            }
+            let allowed = proven.get(&steer.prompt).copied().unwrap_or(0);
+            let used = consumed.get(&steer.prompt).copied().unwrap_or(0);
+            if used < allowed {
+                *consumed.entry(steer.prompt.clone()).or_insert(0) += 1;
+                false
+            } else {
+                true
+            }
+        });
+        before - self.retained_steers.len()
+    }
+
+    pub fn settle_staged_gates_reflected_by_snapshot(&mut self) {
+        let mut settled: Vec<SessionKey> = Vec::new();
+        for (session_id, gate) in &self.staged_submit_in_flight {
+            let Some(in_flight) = gate.in_flight.as_ref() else {
+                continue;
+            };
+            let Some(session) = self
+                .sessions
+                .iter()
+                .find(|session| &session.id == session_id)
+            else {
+                continue;
+            };
+            // Baseline = matching rows that existed BEFORE this submit, from
+            // the surviving optimistic tracking entry or (codex fold 4) the
+            // turn-prompt anchor recorded for the same turn — the two caches
+            // evict independently. With NO baseline at all the gate stays
+            // ARMED: assuming 0 would make any OLDER identical user message
+            // look like a snapshot echo and settle away the only copy of the
+            // prompt (data loss); an armed gate at worst re-stages via the
+            // TTL and duplicates a turn the server already ran — recoverable,
+            // and only reachable when both caches evicted the entry.
+            let baseline = self
+                .optimistic_user_messages
+                .iter()
+                .find(|optimistic| {
+                    &optimistic.session_id == session_id && optimistic.turn_id == in_flight.turn_id
+                })
+                .map(|optimistic| optimistic.prior_matching_user_count)
+                .or_else(|| {
+                    self.turn_prompt_anchors
+                        .iter()
+                        .find(|anchor| {
+                            &anchor.session_id == session_id && anchor.turn_id == in_flight.turn_id
+                        })
+                        .map(|anchor| anchor.prior_matching_user_count)
+                });
+            let Some(baseline) = baseline else {
+                continue;
+            };
+            if matching_user_message_count(session, &in_flight.prompt) > baseline {
+                settled.push(session_id.clone());
+            }
+        }
+        for session_id in settled {
+            self.staged_submit_in_flight.remove(&session_id);
+        }
+    }
+
+    /// Withdraw the optimistic user prompt recorded for `turn_id`: its submit
+    /// died at the transport layer, so the turn will never start and the
+    /// prompt is being RE-STAGED (P2 tri-repo #246). Removes the optimistic
+    /// tracking entry, the turn-prompt anchor, and the transcript row the
+    /// tracking inserted — otherwise the re-submit records the same content a
+    /// second time and the transcript shows a duplicate user row.
+    pub fn withdraw_optimistic_user_prompt(&mut self, session_id: &SessionKey, turn_id: &TurnId) {
+        let Some(position) = self.optimistic_user_messages.iter().position(|optimistic| {
+            &optimistic.session_id == session_id && &optimistic.turn_id == turn_id
+        }) else {
+            return;
+        };
+        let optimistic = self.optimistic_user_messages.remove(position);
+        self.turn_prompt_anchors
+            .retain(|anchor| !(&anchor.session_id == session_id && &anchor.turn_id == turn_id));
+        let Some(session) = self
+            .sessions
+            .iter_mut()
+            .find(|session| &session.id == session_id)
+        else {
+            return;
+        };
+        // Only remove a row that is genuinely OUR optimistic insert (count
+        // above the pre-insert baseline). The send died at the transport, so
+        // no server echo can account for the extra match; take the LAST one —
+        // the optimistic row is the most recent insert of this content.
+        if matching_user_message_count(session, &optimistic.content)
+            > optimistic.prior_matching_user_count
+            && let Some(row) = session.messages.iter().rposition(|message| {
+                message.role.as_str() == "user" && message.content == optimistic.content
+            })
+        {
+            session.messages.remove(row);
+            self.background_completion_row_removed(session_id, row);
+        }
+    }
+
+    pub(crate) fn prune_background_completion_rows(&mut self) {
+        self.background_completion_rows
+            .retain(|(session_id, _), owner| {
+                self.sessions
+                    .iter()
+                    .find(|session| &session.id == session_id)
+                    .is_some_and(|session| owner.owns(&session.messages))
+            });
+    }
+
+    fn background_completion_row_removed(&mut self, session_id: &SessionKey, index: usize) {
+        self.background_completion_rows
+            .retain(|(owner_session, _), owner| {
+                if owner_session != session_id {
+                    return true;
+                }
+                if owner.index == index {
+                    return false;
+                }
+                if owner.index > index {
+                    owner.index -= 1;
+                }
+                true
+            });
+    }
+
+    /// Put a transport-dead staged submit's prompt back at the FRONT of its
+    /// session's staged queue so FIFO order survives the retry (P2 tri-repo
+    /// #246). The active session's queue lives in `pending_messages`; other
+    /// sessions' queues are stashed per-session.
+    pub fn restage_staged_prompt_front(&mut self, session_id: &SessionKey, prompt: String) {
+        let is_active = self
+            .active_session()
+            .is_some_and(|session| &session.id == session_id);
+        if is_active {
+            self.pending_messages.insert(0, prompt);
+        } else {
+            self.pending_messages_by_session
+                .entry(session_id.clone())
+                .or_default()
+                .insert(0, prompt);
+        }
+    }
+
+    /// Stage a prompt at the BACK of its session's queue — the `turn/steer`
+    /// error fallback (octos#1807). Unlike the dead staged-DRAIN re-stage
+    /// (front — the drain had already dequeued it), a failed steer's text was
+    /// typed AFTER anything already staged, so appending preserves the
+    /// chronological order the user produced it in.
+    pub fn stage_prompt_back(&mut self, session_id: &SessionKey, prompt: String) {
+        let is_active = self
+            .active_session()
+            .is_some_and(|session| &session.id == session_id);
+        if is_active {
+            self.pending_messages.push(prompt);
+        } else {
+            self.pending_messages_by_session
+                .entry(session_id.clone())
+                .or_default()
+                .push(prompt);
+        }
+    }
+
+    /// Withdraw the optimistic row a DEAD `turn/steer` recorded (octos#1807):
+    /// like [`Self::withdraw_optimistic_user_prompt`], but content-matched —
+    /// the steer shares its turn id with the LIVE turn, whose ORIGINAL
+    /// prompt's optimistic entry (same session + turn, different content)
+    /// must survive. The turn-prompt anchor is deliberately left alone too:
+    /// the turn it names is still running.
+    pub fn withdraw_steered_user_prompt(
+        &mut self,
+        session_id: &SessionKey,
+        turn_id: &TurnId,
+        content: &str,
+    ) {
+        let Some(position) = self
+            .optimistic_user_messages
+            .iter()
+            .rposition(|optimistic| {
+                &optimistic.session_id == session_id
+                    && &optimistic.turn_id == turn_id
+                    && optimistic.content == content
+            })
+        else {
+            return;
+        };
+        let optimistic = self.optimistic_user_messages.remove(position);
+        let Some(session) = self
+            .sessions
+            .iter_mut()
+            .find(|session| &session.id == session_id)
+        else {
+            return;
+        };
+        // Only remove a row that is genuinely OUR optimistic insert (count
+        // above the pre-insert baseline); take the LAST matching row — the
+        // optimistic row is the most recent insert of this content.
+        if matching_user_message_count(session, &optimistic.content)
+            > optimistic.prior_matching_user_count
+            && let Some(row) = session.messages.iter().rposition(|message| {
+                message.role.as_str() == "user" && message.content == optimistic.content
+            })
+        {
+            session.messages.remove(row);
+            self.background_completion_row_removed(session_id, row);
+        }
+    }
+
+    /// Re-key the optimistic row (and its turn-prompt anchor) a steer
+    /// recorded under the EXPECTED turn onto the REAL turn the server minted
+    /// (octos#1807 `steered:false`): the expected turn had already settled
+    /// server-side, so the text actually started `to_turn` — interrupt
+    /// restore and the turn card must resolve it under that id.
+    pub fn rekey_turn_prompt_records(
+        &mut self,
+        session_id: &SessionKey,
+        from_turn: &TurnId,
+        content: &str,
+        to_turn: &TurnId,
+    ) {
+        if let Some(optimistic) =
+            self.optimistic_user_messages
+                .iter_mut()
+                .rev()
+                .find(|optimistic| {
+                    &optimistic.session_id == session_id
+                        && &optimistic.turn_id == from_turn
+                        && optimistic.content == content
+                })
+        {
+            optimistic.turn_id = to_turn.clone();
+        }
+        if let Some(anchor) = self.turn_prompt_anchors.iter_mut().rev().find(|anchor| {
+            &anchor.session_id == session_id
+                && &anchor.turn_id == from_turn
+                && anchor.content == content
+        }) {
+            anchor.turn_id = to_turn.clone();
+        }
+    }
+
+    /// Apply a persisted v2 `UserMessage` envelope row. Dedup is two-layer:
+    ///
+    /// 1. thread-id identity — a replayed envelope whose row is already
+    ///    present is a no-op (pre-existing replay dedup);
+    /// 2. optimistic reconciliation (the #381-era count-baseline scheme,
+    ///    extended to the LIVE echo lane for `turn/steer`): when the echo's
+    ///    content matches a row this client already rendered optimistically
+    ///    ([`Self::record_submitted_user_prompt`]), PROMOTE that row — stamp
+    ///    the canonical thread id (and media) onto it and drop the optimistic
+    ///    tracking entry — instead of appending a duplicate. This is what
+    ///    keeps a steered row from appearing twice when its drain-time echo
+    ///    arrives mid-turn (and reconciles the normal submit path's own echo
+    ///    identically).
+    ///
+    /// Without an optimistic match the canonical row appends as before.
+    pub fn apply_user_row_echo(
+        &mut self,
+        session_id: &SessionKey,
+        thread_id: String,
+        text: String,
+        media: Vec<String>,
+    ) {
+        let Some(session_index) = self
+            .sessions
+            .iter()
+            .position(|session| &session.id == session_id)
+        else {
+            return;
+        };
+        let already_present = self.sessions[session_index].messages.iter().any(|message| {
+            message.role == ra_core::MessageRole::User
+                && message.thread_id.as_deref() == Some(thread_id.as_str())
+        });
+        if already_present {
+            return;
+        }
+        // task-steer-retained-until-echo: this echo is the server's proof the
+        // text entered the conversation — release the OLDEST retained steer
+        // with this content (steers land in dispatch order).
+        if let Some(confirmed) = self
+            .retained_steers
+            .iter()
+            .position(|steer| &steer.session_id == session_id && steer.prompt == text)
+        {
+            self.retained_steers.remove(confirmed);
+        }
+        if let Some(tracked) = self
+            .optimistic_user_messages
+            .iter()
+            .rposition(|optimistic| {
+                &optimistic.session_id == session_id && optimistic.content == text
+            })
+        {
+            let baseline = self.optimistic_user_messages[tracked].prior_matching_user_count;
+            let session = &mut self.sessions[session_index];
+            // Promote only when our optimistic insert is genuinely present
+            // (count above the pre-insert baseline) and still un-stamped.
+            if matching_user_message_count(session, &text) > baseline
+                && let Some(row) = session.messages.iter().rposition(|message| {
+                    message.role.as_str() == "user"
+                        && message.content == text
+                        && message.thread_id.is_none()
+                })
+            {
+                let message = &mut session.messages[row];
+                message.thread_id = Some(thread_id);
+                if !media.is_empty() {
+                    message.media = media;
+                }
+                self.optimistic_user_messages.remove(tracked);
+                return;
+            }
+            // Tracked but its row is gone (withdrawn/replaced) — drop the
+            // stale tracking entry and fall through to the canonical append.
+            self.optimistic_user_messages.remove(tracked);
+        }
+        let mut message = Message::user(text).with_thread_id(ra_core::ThreadId::new(thread_id));
+        message.media = media;
+        self.sessions[session_index].messages.push(message);
+    }
+
+    pub fn record_turn_prompt_anchor_from_latest_user(
+        &mut self,
+        session_id: &SessionKey,
+        turn_id: &TurnId,
+    ) -> bool {
+        if self
+            .turn_prompt_anchors
+            .iter()
+            .any(|anchor| &anchor.session_id == session_id && &anchor.turn_id == turn_id)
+        {
+            return true;
+        }
+
+        let Some(anchor) = self
+            .sessions
+            .iter()
+            .find(|session| &session.id == session_id)
+            .and_then(|session| {
+                latest_user_anchor(session).map(
+                    |(anchor_index, content, prior_matching_user_count)| TurnPromptAnchor {
+                        session_id: session_id.clone(),
+                        turn_id: turn_id.clone(),
+                        content,
+                        anchor_index,
+                        prior_matching_user_count,
+                    },
+                )
+            })
+        else {
+            return false;
+        };
+
+        self.remember_turn_prompt_anchor(anchor);
+        true
+    }
+
+    /// Install an anchor whose session, turn and projected user index were
+    /// proven by canonical hydrate metadata. Text is bookkeeping, not an
+    /// ownership search. Rebind existing logs too: replay dedup can mean no
+    /// new tool row is available to recapture an earlier unanchored log.
+    pub fn restore_hydrated_turn_prompt_anchor(
+        &mut self,
+        session_id: &SessionKey,
+        turn_id: &TurnId,
+        index: usize,
+    ) {
+        let Some(session) = self
+            .sessions
+            .iter()
+            .find(|session| &session.id == session_id)
+        else {
+            return;
+        };
+        let Some(message) = session
+            .messages
+            .get(index)
+            .filter(|row| row.role == ra_core::MessageRole::User)
+        else {
+            return;
+        };
+        let content = message.content.clone();
+        let prior_matching_user_count = session.messages[..index]
+            .iter()
+            .filter(|row| row.role == ra_core::MessageRole::User && row.content == content)
+            .count();
+        self.remember_turn_prompt_anchor(TurnPromptAnchor {
+            session_id: session_id.clone(),
+            turn_id: turn_id.clone(),
+            content: content.clone(),
+            anchor_index: index,
+            prior_matching_user_count,
+        });
+        for log in self
+            .turn_activity_logs
+            .iter_mut()
+            .filter(|log| &log.session_id == session_id && &log.turn_id == turn_id)
+        {
+            log.anchor_index = Some(index);
+            log.request = Some(content.clone());
+        }
+    }
+
+    fn remember_turn_prompt_anchor(&mut self, anchor: TurnPromptAnchor) {
+        if let Some(existing) = self.turn_prompt_anchors.iter_mut().find(|existing| {
+            existing.session_id == anchor.session_id && existing.turn_id == anchor.turn_id
+        }) {
+            *existing = anchor;
+        } else {
+            self.turn_prompt_anchors.push(anchor);
+        }
+
+        if self.turn_prompt_anchors.len() > Self::MAX_TURN_PROMPT_ANCHORS {
+            let excess = self.turn_prompt_anchors.len() - Self::MAX_TURN_PROMPT_ANCHORS;
+            self.turn_prompt_anchors.drain(0..excess);
+        }
+    }
+
+    /// Orphan activity-chip self-heal: a turn just became terminal, so any of
+    /// its activity items still sitting in a running-type status is a leaked
+    /// started-state (a `ToolStarted` whose `ToolCompleted` never arrived — a
+    /// leaked spawn_only chip / any future uncovered path). Reconcile each to a
+    /// terminal display status ([`ACTIVITY_STATUS_INTERRUPTED`]) so the archived
+    /// log — and the live `self.activity` — can no longer count it as in-flight
+    /// and pin the chip on "Orchestrating…". A genuinely settled item
+    /// ("complete"/"failed"/`success`) is untouched.
+    ///
+    /// Single source of truth shared by [`Self::capture_completed_turn_activity`]
+    /// (live `TurnCompleted`/`TurnError` chokepoint) and the hydrate path
+    /// (`apply_session_hydrate_result`, GAP 1) so a terminal turn reconciles
+    /// identically whether it goes terminal live or is rehydrated terminal. The
+    /// caller MUST only invoke this for a turn that is genuinely terminal — never
+    /// the session's currently-active/live turn.
+    ///
+    /// Explicitly attributed items must belong to this session as well as the
+    /// turn. Legacy items without session attribution retain their turn-only
+    /// behavior; a sibling session's same turn ID is never adopted or settled.
+    /// Returns the number of items flipped (callers may ignore it).
+    pub fn reconcile_terminal_turn_running_activity(
+        &mut self,
+        session_id: &SessionKey,
+        turn_id: &TurnId,
+    ) -> usize {
+        let mut flipped = 0;
+        for item in self.activity.iter_mut().filter(|item| {
+            item.turn_id.as_ref() == Some(turn_id)
+                && item
+                    .session_id
+                    .as_ref()
+                    .is_none_or(|owner| owner == session_id)
+        }) {
+            if activity_status_is_running(&item.status) {
+                item.status = ACTIVITY_STATUS_INTERRUPTED.to_string();
+                flipped += 1;
+            }
+        }
+        flipped
+    }
+
+    pub fn capture_completed_turn_activity(
+        &mut self,
+        session_id: &SessionKey,
+        turn_id: &TurnId,
+    ) -> bool {
+        if !self.activity.iter().any(|item| {
+            item.turn_id.as_ref() == Some(turn_id)
+                && item
+                    .session_id
+                    .as_ref()
+                    .is_none_or(|owner| owner == session_id)
+        }) {
+            return false;
+        }
+
+        // The turn is now terminal — heal any stranded running item in the LIVE
+        // activity before archiving (shared with the hydrate path), so both the
+        // captured log and any residual live row read as not-running.
+        self.reconcile_terminal_turn_running_activity(session_id, turn_id);
+
+        let items = self
+            .activity
+            .iter()
+            .filter(|item| {
+                item.turn_id.as_ref() == Some(turn_id)
+                    && item
+                        .session_id
+                        .as_ref()
+                        .is_none_or(|owner| owner == session_id)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        let optimistic = self
+            .optimistic_user_messages
+            .iter()
+            .rev()
+            .find(|message| &message.session_id == session_id && &message.turn_id == turn_id);
+        let prompt_anchor = self
+            .turn_prompt_anchors
+            .iter()
+            .rev()
+            .find(|anchor| &anchor.session_id == session_id && &anchor.turn_id == turn_id);
+        let request = optimistic
+            .map(|message| message.content.clone())
+            .or_else(|| prompt_anchor.map(|anchor| anchor.content.clone()));
+        let anchor_index = optimistic.map(|message| message.anchor_index).or_else(|| {
+            prompt_anchor.and_then(|anchor| resolve_turn_prompt_anchor(&self.sessions, anchor))
+        });
+        let log = TurnActivityLog {
+            session_id: session_id.clone(),
+            turn_id: turn_id.clone(),
+            request,
+            anchor_index,
+            items,
+        };
+
+        if let Some(existing) = self
+            .turn_activity_logs
+            .iter_mut()
+            .find(|existing| &existing.session_id == session_id && &existing.turn_id == turn_id)
+        {
+            // A background completion can arrive after the foreground turn
+            // was already archived. Retain that invocation and append late
+            // rows; recapturing a residual Progress must not replace Spawn.
+            // Only typed identities coalesce: ordinary repeated progress is
+            // distinct, even with equal text or a shared originating call ID.
+            for item in log.items {
+                let already_owned = item.stable_activity_identity().is_some_and(|id| {
+                    existing
+                        .items
+                        .iter()
+                        .any(|old| old.stable_activity_identity().as_ref() == Some(&id))
+                });
+                if !already_owned {
+                    existing.items.push(item);
+                }
+            }
+            if existing.request.is_none() {
+                existing.request = log.request;
+            }
+            if existing.anchor_index.is_none() {
+                existing.anchor_index = log.anchor_index;
+            }
+        } else {
+            self.turn_activity_logs.push(log);
+        }
+
+        const MAX_TURN_ACTIVITY_LOGS: usize = 32;
+        if self.turn_activity_logs.len() > MAX_TURN_ACTIVITY_LOGS {
+            let excess = self.turn_activity_logs.len() - MAX_TURN_ACTIVITY_LOGS;
+            self.turn_activity_logs.drain(0..excess);
+        }
+
+        self.activity.retain(|item| {
+            item.turn_id.as_ref() != Some(turn_id)
+                || item
+                    .session_id
+                    .as_ref()
+                    .is_some_and(|owner| owner != session_id)
+        });
+        true
+    }
+
+    /// The committed status report for a completed turn, if one was captured.
+    pub fn turn_summary_for(&self, turn_id: &TurnId) -> Option<&TurnActivitySummary> {
+        self.turn_activity_summaries
+            .iter()
+            .find(|summary| &summary.turn_id == turn_id)
+    }
+
+    /// Stamp the wall-clock start of a turn. Idempotent — a replayed
+    /// `TurnStarted` for a turn already being timed keeps the original start.
+    /// Bounded: turns drain their entry at every terminal event, so growth
+    /// only comes from turns that never terminate; evict the oldest past 64.
+    pub fn note_turn_started(&mut self, session_id: &SessionKey, turn_id: &TurnId) {
+        const MAX_TRACKED_TURN_STARTS: usize = 64;
+        if self.turn_started_at.len() >= MAX_TRACKED_TURN_STARTS
+            && !self
+                .turn_started_at
+                .contains_key(&(session_id.clone(), turn_id.clone()))
+            && let Some(oldest) = self
+                .turn_started_at
+                .iter()
+                .min_by_key(|(_, started)| **started)
+                .map(|(key, _)| key.clone())
+        {
+            self.turn_started_at.remove(&oldest);
+        }
+        self.turn_started_at
+            .entry((session_id.clone(), turn_id.clone()))
+            .or_insert_with(std::time::Instant::now);
+    }
+
+    /// Take the elapsed seconds of a turn's per-turn clock, removing the entry
+    /// (terminal events consume it exactly once). `None` when this client never
+    /// saw the turn's `TurnStarted` (e.g. attached mid-turn).
+    pub fn take_turn_elapsed_secs(
+        &mut self,
+        session_id: &SessionKey,
+        turn_id: &TurnId,
+    ) -> Option<u64> {
+        self.turn_started_at
+            .remove(&(session_id.clone(), turn_id.clone()))
+            .map(|started| started.elapsed().as_secs())
+    }
+
+    /// The `/btw` aside for a session, if any (latest per session).
+    pub fn btw_aside_for(&self, session_id: &SessionKey) -> Option<&BtwAside> {
+        self.btw_asides.get(session_id)
+    }
+
+    /// Stage a new `/btw` aside as answering (replaces any prior aside).
+    pub fn set_btw_answering(&mut self, session_id: &SessionKey, question: String) {
+        self.btw_asides.insert(
+            session_id.clone(),
+            BtwAside {
+                session_id: session_id.clone(),
+                question,
+                state: BtwAsideState::Answering,
+                scroll: 0,
+            },
+        );
+    }
+
+    /// Scroll the active session's `/btw` overlay by `delta` physical rows
+    /// (positive = reveal lower content). Saturating; the render path clamps to
+    /// the true content max. Returns `true` when an aside was present to scroll,
+    /// so the key handler knows the event was consumed.
+    pub fn nudge_btw_scroll(&mut self, session_id: &SessionKey, delta: i32) -> bool {
+        match self.btw_asides.get_mut(session_id) {
+            Some(aside) => {
+                aside.scroll = if delta >= 0 {
+                    aside.scroll.saturating_add(delta as u16)
+                } else {
+                    aside.scroll.saturating_sub((-delta) as u16)
+                };
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Resolve the ANSWERING aside for `session_id` with the server's answer.
+    /// A stale result (nothing answering — e.g. the aside was replaced) is
+    /// dropped rather than resurrecting a dismissed card.
+    pub fn resolve_btw_answer(&mut self, session_id: &SessionKey, answer: String) -> bool {
+        match self.btw_asides.get_mut(session_id) {
+            Some(aside) if aside.state == BtwAsideState::Answering => {
+                aside.state = BtwAsideState::Answered(answer);
+                // Fresh answer starts at the top.
+                aside.scroll = 0;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Fail every ANSWERING aside. RPC errors surface generically as
+    /// `"{method} request {id} failed: …"` with no session attribution, so all
+    /// in-flight asides fail together (concurrent asides across sessions are
+    /// rare; the card invites a retry).
+    pub fn fail_btw_answering(&mut self, message: &str) -> usize {
+        let mut failed = 0;
+        for aside in self.btw_asides.values_mut() {
+            if aside.state == BtwAsideState::Answering {
+                aside.state = BtwAsideState::Failed(message.to_owned());
+                failed += 1;
+            }
+        }
+        failed
+    }
+
+    /// Drop a SETTLED (answered/failed) aside — the exchange is ephemeral and
+    /// the next prompt submit dismisses it. An answering aside stays; its
+    /// result may still land.
+    pub fn clear_settled_btw_aside(&mut self, session_id: &SessionKey) {
+        if self
+            .btw_asides
+            .get(session_id)
+            .is_some_and(|aside| !matches!(aside.state, BtwAsideState::Answering))
+        {
+            self.btw_asides.remove(session_id);
+            self.request_transcript_reflush(session_id);
+        }
+    }
+
+    /// Codex-style dialog dismissal: unconditionally close the session's
+    /// `/btw` aside pane (Enter on an empty composer). Unlike
+    /// [`Self::clear_settled_btw_aside`] this also closes a still-answering
+    /// aside — the user chose to leave; a late answer for a dismissed aside
+    /// is dropped by `set_btw_answered`'s state guard.
+    pub fn dismiss_btw_aside(&mut self, session_id: &SessionKey) -> bool {
+        let removed = self.btw_asides.remove(session_id).is_some();
+        if removed {
+            self.request_transcript_reflush(session_id);
+        }
+        removed
+    }
+
+    /// Record the one-shot re-flush request, capturing the dismissal-time
+    /// streaming scope (see the field docs): a live reply in flight for the
+    /// session means the frame must re-emit the coherent committed+live
+    /// block, and that decision must survive the turn settling before the
+    /// next draw.
+    pub(crate) fn request_transcript_reflush(&mut self, session_id: &SessionKey) {
+        let live_streaming = self
+            .sessions
+            .iter()
+            .find(|session| &session.id == session_id)
+            .is_some_and(|session| session.live_reply.is_some());
+        let scope = if live_streaming {
+            TranscriptReflushScope::WithLive
+        } else {
+            TranscriptReflushScope::CommittedOnly
+        };
+        // A WithLive request must not be demoted by a same-frame settled
+        // dismissal of another pane; keep the stronger scope.
+        self.transcript_reflush_requested = match self.transcript_reflush_requested {
+            Some(TranscriptReflushScope::WithLive) => Some(TranscriptReflushScope::WithLive),
+            _ => Some(scope),
+        };
+    }
+
+    /// One-shot take of the pending transcript re-flush request (see the
+    /// field docs) — returns a value at most once per request.
+    pub fn take_transcript_reflush_request(&mut self) -> Option<TranscriptReflushScope> {
+        self.transcript_reflush_requested.take()
+    }
+
+    /// Count of the session's still-running background work (pending/running
+    /// tasks and sub-agents) — the `N still running` half of a turn summary.
+    pub fn running_background_task_count(&self, session_id: &SessionKey) -> usize {
+        self.sessions
+            .iter()
+            .find(|session| &session.id == session_id)
+            .map(|session| {
+                session
+                    .tasks
+                    .iter()
+                    .filter(|task| matches!(task_state_label(task.state), "pending" | "running"))
+                    .count()
+            })
+            .unwrap_or(0)
+    }
+
+    /// Record the committed per-turn status report captured at `TurnCompleted`.
+    /// Upserts by `turn_id`, and ensures a [`TurnActivityLog`] exists to anchor
+    /// the summary line in the transcript — for a tool-less turn (no activity
+    /// items) a summary-only log is synthesized so the report still renders
+    /// after the assistant reply. Bounded to the same window as the logs.
+    pub fn attach_turn_summary(
+        &mut self,
+        session_id: &SessionKey,
+        turn_id: &TurnId,
+        elapsed_secs: u64,
+        background_tasks: usize,
+    ) {
+        let summary = TurnActivitySummary {
+            session_id: session_id.clone(),
+            turn_id: turn_id.clone(),
+            elapsed_secs,
+            background_tasks,
+        };
+        if let Some(existing) = self
+            .turn_activity_summaries
+            .iter_mut()
+            .find(|existing| &existing.turn_id == turn_id)
+        {
+            *existing = summary;
+        } else {
+            self.turn_activity_summaries.push(summary);
+        }
+
+        // A tool-less turn has no activity log to hang the summary on; synthesize
+        // an empty-items log anchored like `capture_completed_turn_activity`
+        // anchors real ones (optimistic user message, then prompt anchor, then
+        // the session's latest user message) so the report still renders after
+        // the assistant reply.
+        if !self
+            .turn_activity_logs
+            .iter()
+            .any(|log| &log.session_id == session_id && &log.turn_id == turn_id)
+        {
+            let optimistic =
+                self.optimistic_user_messages.iter().rev().find(|message| {
+                    &message.session_id == session_id && &message.turn_id == turn_id
+                });
+            let prompt_anchor = self
+                .turn_prompt_anchors
+                .iter()
+                .rev()
+                .find(|anchor| &anchor.session_id == session_id && &anchor.turn_id == turn_id);
+            let request = optimistic
+                .map(|message| message.content.clone())
+                .or_else(|| prompt_anchor.map(|anchor| anchor.content.clone()))
+                .or_else(|| {
+                    self.sessions
+                        .iter()
+                        .find(|session| &session.id == session_id)
+                        .and_then(|session| {
+                            session
+                                .messages
+                                .iter()
+                                .rev()
+                                .find(|message| message.role == ra_core::MessageRole::User)
+                                .map(|message| message.content.clone())
+                        })
+                });
+            let anchor_index = optimistic.map(|message| message.anchor_index).or_else(|| {
+                prompt_anchor.and_then(|anchor| resolve_turn_prompt_anchor(&self.sessions, anchor))
+            });
+            self.turn_activity_logs.push(TurnActivityLog {
+                session_id: session_id.clone(),
+                turn_id: turn_id.clone(),
+                request,
+                anchor_index,
+                items: Vec::new(),
+            });
+            const MAX_TURN_ACTIVITY_LOGS: usize = 32;
+            if self.turn_activity_logs.len() > MAX_TURN_ACTIVITY_LOGS {
+                let excess = self.turn_activity_logs.len() - MAX_TURN_ACTIVITY_LOGS;
+                self.turn_activity_logs.drain(0..excess);
+            }
+        }
+
+        // Keep summaries bounded to the surviving logs so the two lists cannot
+        // drift (a summary whose log was trimmed away can never render).
+        let live_turns: std::collections::HashSet<TurnId> = self
+            .turn_activity_logs
+            .iter()
+            .map(|log| log.turn_id.clone())
+            .collect();
+        self.turn_activity_summaries
+            .retain(|summary| live_turns.contains(&summary.turn_id));
+    }
+
+    pub fn has_pending_messages(&self) -> bool {
+        !self.pending_messages.is_empty()
+    }
+
+    pub fn active_task(&self) -> Option<&TaskView> {
+        self.active_session()?.tasks.get(self.selected_task)
+    }
+
+    pub fn active_task_context(&self) -> Option<SelectedTaskContext> {
+        let session = self.active_session()?;
+        let task = session.tasks.get(self.selected_task)?;
+        Some(SelectedTaskContext {
+            session_id: session.id.clone(),
+            task_id: task.id.clone(),
+            title: task.title.clone(),
+            output_tail: task.output_tail.clone(),
+        })
+    }
+
+    pub fn active_diff_preview_id(&self) -> Option<PreviewId> {
+        let task = self.active_task()?;
+        task.runtime_detail
+            .as_deref()
+            .and_then(preview_id_from_text)
+            .or_else(|| preview_id_from_text(&task.output_tail))
+    }
+
+    /// Whether the side-by-side diff toggle may take effect at the last drawn
+    /// terminal width. Below `DIFF_SIDE_BY_SIDE_MIN_WIDTH` transcript columns
+    /// the renderer falls back to unified anyway, so the toggle is a gated
+    /// no-op there instead of silently arming a mode that cannot show. An
+    /// unknown width (0: no frame drawn yet) does not gate.
+    pub fn diff_side_by_side_toggle_enabled(&self) -> bool {
+        self.last_terminal_width == 0
+            || transcript_wrap_width_for(self.last_terminal_width) >= DIFF_SIDE_BY_SIDE_MIN_WIDTH
+    }
+
+    /// Switch the selected session to `index`, running the FULL housekeeping
+    /// bundle every switch path must share (Up/Down in the sessions pane,
+    /// `/resume`, `session/opened`): persist the outgoing session's composer
+    /// draft and staged-message queue, end any history browse, reset the
+    /// per-session task/scroll selection, load the incoming session's draft
+    /// and staged queue, and refresh the run state from the new selection.
+    /// Assigning `selected_session` directly skips these invariants — a saved
+    /// draft is silently deleted (never restored, then persisted-empty and
+    /// retained out) or attributed to the wrong session, and staged messages
+    /// drain into the wrong session. Out-of-range `index` is a no-op.
+    pub fn switch_selected_session(&mut self, index: usize) {
+        if index >= self.sessions.len() {
+            return;
+        }
+        self.persist_composer_draft_for_selected_session();
+        self.stash_pending_messages_for_selected_session();
+        self.composer_history.reset_navigation(); // end history browse on switch
+        self.selected_session = index;
+        self.selected_task = 0;
+        // The new session has its own (or no) sub-agents; a carried-over agent
+        // selection would point at the wrong session's agent.
+        self.chat_view = ChatViewTarget::Main;
+        self.transcript_scroll = 0;
+        self.load_composer_draft_for_selected_session();
+        self.load_pending_messages_for_selected_session();
+        self.refresh_run_state_from_selection();
+        // #324: focusing a session marks it read.
+        if let Some(session_id) = self.active_session().map(|session| session.id.clone()) {
+            self.unread_turns.remove(&session_id);
+            // tui#398: promote the session's stashed approval/question into
+            // the global slots now that it owns the foreground — hard-visible
+            // (a pending decision is why the user came here; the render-last
+            // discipline keeps the card on screen).
+            if let Some(mut approval) = self.pending_session_approvals.remove(&session_id) {
+                approval.visible = true;
+                // The promoted dialog takes key priority over the expanded
+                // diff overlay but renders beneath it — collapse the overlay.
+                self.diff_preview.expanded = false;
+                let title = approval.title.clone();
+                self.approval = Some(approval);
+                self.focus = FocusPane::Composer;
+                self.set_run_state_blocked(title);
+            }
+            if let Some(mut picker) = self.pending_session_questions.remove(&session_id) {
+                picker.visible = true;
+                self.diff_preview.expanded = false;
+                self.user_question_auto_open = true;
+                let title = picker.title.clone();
+                self.user_question = Some(picker);
+                self.focus = FocusPane::Composer;
+                self.set_run_state_blocked(title);
+            }
+        }
+        // A session that raced the capabilities response missed its open-time
+        // status probe; probe it the moment it becomes active so the composer
+        // footer's model/cwd reflect it (no-op once a status is cached).
+        self.probe_active_session_status_if_missing();
+    }
+
+    /// Enqueue a `session/status/read` for the ACTIVE session when the server
+    /// advertises it and no runtime status is cached yet. One entry at a time —
+    /// bulk-probing every open session could overflow the capped
+    /// autonomy-hydration queue and evict unrelated pending commands. Sessions
+    /// probe on open in the normal flow; this covers the ones that raced the
+    /// capabilities response, lazily, whenever they become (or already are)
+    /// active — the composer footer only ever reads the active session anyway.
+    pub fn probe_active_session_status_if_missing(&mut self) {
+        if self
+            .capabilities
+            .as_ref()
+            .is_some_and(|caps| caps.supports_method(APPUI_METHOD_SESSION_STATUS_READ))
+            && let Some(session_id) = self
+                .active_session()
+                .map(|session| session.id.clone())
+                .filter(|session_id| self.runtime_status_for(session_id).is_none())
+        {
+            self.enqueue_session_status_probe(session_id);
+        }
+    }
+
+    /// Enqueue a `session/status/read`, deduplicating against one already
+    /// queued for the same session: a fresh `session/opened` both switches to
+    /// the session (bundle probe) and probes explicitly, and rapid session
+    /// switches re-probe before the first response lands — without the dedupe
+    /// each duplicate eats a slot of the capped hydration queue and can evict
+    /// unrelated pending commands.
+    pub fn enqueue_session_status_probe(&mut self, session_id: SessionKey) {
+        let already_queued = self.pending_autonomy_hydration.iter().any(|command| {
+            matches!(
+                command,
+                AppUiCommand::ReadSessionStatus(params) if params.session_id == session_id
+            )
+        });
+        if !already_queued {
+            self.enqueue_autonomy_hydration(AppUiCommand::ReadSessionStatus(
+                SessionStatusReadParams { session_id },
+            ));
+        }
+    }
+
+    /// Stash the ACTIVE session's staged-prompt queue under its key on the way
+    /// out of a session switch (mirror of `persist_composer_draft_for_selected_session`).
+    fn stash_pending_messages_for_selected_session(&mut self) {
+        let Some(session_id) = self.active_session().map(|session| session.id.clone()) else {
+            return;
+        };
+        let staged = std::mem::take(&mut self.pending_messages);
+        if staged.is_empty() {
+            self.pending_messages_by_session.remove(&session_id);
+        } else {
+            self.pending_messages_by_session.insert(session_id, staged);
+        }
+    }
+
+    /// Load the incoming ACTIVE session's staged-prompt queue on the way into
+    /// a session switch (mirror of `load_composer_draft_for_selected_session`).
+    fn load_pending_messages_for_selected_session(&mut self) {
+        let Some(session_id) = self.active_session().map(|session| session.id.clone()) else {
+            self.pending_messages.clear();
+            return;
+        };
+        self.pending_messages = self
+            .pending_messages_by_session
+            .remove(&session_id)
+            .unwrap_or_default();
+    }
+
+    pub fn select_next_session(&mut self) {
+        if self.sessions.is_empty() {
+            return;
+        }
+        self.switch_selected_session((self.selected_session + 1) % self.sessions.len());
+    }
+
+    pub fn select_prev_session(&mut self) {
+        if self.sessions.is_empty() {
+            return;
+        }
+        let index = if self.selected_session == 0 {
+            self.sessions.len() - 1
+        } else {
+            self.selected_session - 1
+        };
+        self.switch_selected_session(index);
+    }
+
+    pub fn select_next_task(&mut self) {
+        let Some(session) = self.active_session() else {
+            return;
+        };
+        if session.tasks.is_empty() {
+            return;
+        }
+        self.selected_task = (self.selected_task + 1) % session.tasks.len();
+    }
+
+    pub fn select_prev_task(&mut self) {
+        let Some(session) = self.active_session() else {
+            return;
+        };
+        if session.tasks.is_empty() {
+            return;
+        }
+        if self.selected_task == 0 {
+            self.selected_task = session.tasks.len() - 1;
+        } else {
+            self.selected_task -= 1;
+        }
+    }
+
+    /// Sub-agents of the active session, in display order (stable by
+    /// `agent_id`). Empty when there is no active session or it has none.
+    pub fn active_session_agents(&self) -> &[ra_core::ui_protocol::UiAgentRecord] {
+        let Some(session) = self.active_session() else {
+            return &[];
+        };
+        self.session_autonomy_for(&session.id)
+            .map(|state| state.agents.as_slice())
+            .unwrap_or(&[])
+    }
+
+    /// Active-session loop roster for the `/loop` list menu — mirrors
+    /// `active_session_agents` but for `UiLoopRecord`s.
+    pub fn active_session_loops(&self) -> &[ra_core::ui_protocol::UiLoopRecord] {
+        let Some(session) = self.active_session() else {
+            return &[];
+        };
+        self.session_autonomy_for(&session.id)
+            .map(|state| state.loops.as_slice())
+            .unwrap_or(&[])
+    }
+
+    /// Agent ids with unread terminal outcomes in the active session — the
+    /// Agent Dock badge set (#323). Empty when there is no active session.
+    pub fn active_session_unseen_agents(&self) -> &[String] {
+        let Some(session) = self.active_session() else {
+            return &[];
+        };
+        self.session_autonomy_for(&session.id)
+            .map(|state| state.unseen.as_slice())
+            .unwrap_or(&[])
+    }
+
+    /// True when `agent_id` (in the active session) finished while the user
+    /// wasn't viewing it and has not been peeked since.
+    pub fn is_agent_unseen(&self, agent_id: &str) -> bool {
+        self.active_session_unseen_agents()
+            .iter()
+            .any(|id| id == agent_id)
+    }
+
+    /// #335 (Phase 3): clear the whole unseen set for the active session. Opening
+    /// the `/ps` dock — a list that shows every sub-agent's terminal outcome —
+    /// counts as "seen", the same way peeking one agent clears its badge in
+    /// `set_chat_view`. Without this, a completed chip that finished off-screen
+    /// stays exempt from the 60s terminal sweep (`sweep_terminal_agents`) even
+    /// after the user has plainly seen it in the dock — the "completed task
+    /// lingers until the next Tab" report. Returns true if anything was cleared.
+    pub fn mark_active_session_agents_seen(&mut self) -> bool {
+        let Some(session_id) = self.active_session().map(|session| session.id.clone()) else {
+            return false;
+        };
+        let Some(autonomy) = self
+            .session_autonomy
+            .iter_mut()
+            .find(|autonomy| autonomy.session_id == session_id)
+        else {
+            return false;
+        };
+        if autonomy.unseen.is_empty() {
+            return false;
+        }
+        autonomy.unseen.clear();
+        true
+    }
+
+    /// The cached streamed output for a sub-agent of the active session, if
+    /// any has arrived. This is the flat text the backend exposes for a worker
+    /// (`agent/output/*`) — a running log, not a turn-by-turn transcript, since
+    /// the backend deliberately discards a sub-agent's message history.
+    pub fn active_agent_output(&self, agent_id: &str) -> Option<&str> {
+        let session = self.active_session()?;
+        self.session_autonomy_for(&session.id)?
+            .agent_outputs
+            .iter()
+            .find(|cache| cache.agent_id == agent_id)
+            .map(|cache| cache.text.as_str())
+    }
+
+    /// Output to show in the peek: the live delta cache when it holds anything,
+    /// otherwise the `output_tail` snapshot the `agent/list` projection carries
+    /// on the record. Since peeking no longer auto-fetches, this fallback is what
+    /// makes a reconnected or already-completed agent show its output instead of
+    /// the empty placeholder — no request, no cursor merge. Live deltas, once
+    /// they arrive, always win (they are strictly fresher than the snapshot).
+    pub fn active_agent_output_or_tail(&self, agent_id: &str) -> Option<&str> {
+        if let Some(text) = self.active_agent_output(agent_id)
+            && !text.is_empty()
+        {
+            return Some(text);
+        }
+        let agent = self.active_agent_record(agent_id)?;
+        if let Some(tail) = agent.output_tail.as_deref()
+            && !tail.is_empty()
+        {
+            return Some(tail);
+        }
+        // Fallback for `spawn`/`spawn_only` background children (deep review):
+        // their streaming output rides `task/output/delta` into the PER-TASK
+        // store (`AppUiTask.output_tail`), NOT the per-agent `agent_outputs`
+        // cache the dock reads first, and the per-agent `output_tail` snapshot
+        // only lands on the terminal `agent/updated`. While the child runs,
+        // surface its live per-task tail so the dock shows output instead of
+        // the empty placeholder.
+        let task_id = agent.task_id.as_deref()?.parse::<TaskId>().ok()?;
+        let session = self.active_session()?;
+        let task = session.tasks.iter().find(|task| task.id == task_id)?;
+        if task.output_tail.is_empty() {
+            None
+        } else {
+            Some(task.output_tail.as_str())
+        }
+    }
+
+    /// The record for a sub-agent of the active session, by id.
+    pub fn active_agent_record(
+        &self,
+        agent_id: &str,
+    ) -> Option<&ra_core::ui_protocol::UiAgentRecord> {
+        self.active_session_agents()
+            .iter()
+            .find(|agent| agent.agent_id == agent_id)
+    }
+
+    /// The ordered set of selectable chat targets: `Main` first, then one
+    /// `Agent(id)` per active-session sub-agent.
+    fn chat_view_order(&self) -> Vec<ChatViewTarget> {
+        let mut order = vec![ChatViewTarget::Main];
+        order.extend(
+            self.active_session_agents()
+                .iter()
+                .map(|agent| ChatViewTarget::Agent(agent.agent_id.clone())),
+        );
+        order
+    }
+
+    /// Set the main-pane view. Whenever the target actually changes, the peek
+    /// scroll is reset to the bottom so one agent's (or the placeholder's)
+    /// offset never leaks into the next. The main `transcript_scroll` is left
+    /// untouched, so returning to `Main` restores the chat where it was.
+    pub fn set_chat_view(&mut self, target: ChatViewTarget) {
+        if self.chat_view != target {
+            // Peeking/switching to an agent is the "I've seen it" moment for
+            // its Agent Dock unread badge (#323).
+            if let ChatViewTarget::Agent(agent_id) = &target {
+                let agent_id = agent_id.clone();
+                if let Some(session_id) = self.active_session().map(|s| s.id.clone())
+                    && let Some(autonomy) = self
+                        .session_autonomy
+                        .iter_mut()
+                        .find(|autonomy| autonomy.session_id == session_id)
+                {
+                    autonomy.unseen.retain(|id| id != &agent_id);
+                }
+            }
+            self.chat_view = target;
+            self.agent_view_scroll = 0;
+            // The old target's row count is meaningless for the new one; reset to
+            // "not measured yet" — the next overlay draw re-records the real
+            // bound before any scroll key is read.
+            self.agent_view_scroll_max.set(usize::MAX);
+        }
+    }
+
+    /// Record the peek's maximum scroll offset (wrapped-rows − visible-rows). The
+    /// overlay renderer is the only code that knows the wrapped-row count, so it
+    /// feeds it back here for `scroll_agent_view_up` to clamp against.
+    pub fn record_agent_view_scroll_max(&self, max: usize) {
+        self.agent_view_scroll_max.set(max);
+    }
+
+    /// Scroll the sub-agent peek toward older output (up), clamped to the top so
+    /// a `usize::MAX` jump-to-top (or repeated over-scroll) can't overshoot the
+    /// last-rendered maximum and strand Down/wheel-down unwinding the excess.
+    pub fn scroll_agent_view_up(&mut self, lines: usize) {
+        self.agent_view_scroll = self
+            .agent_view_scroll
+            .saturating_add(lines)
+            .min(self.agent_view_scroll_max.get());
+    }
+
+    /// Scroll the sub-agent peek toward the newest output (down / bottom). Snaps
+    /// any over-shoot down to the last-rendered maximum BEFORE subtracting, so a
+    /// `Home` (`usize::MAX`) processed while the bound was still unmeasured — e.g.
+    /// `Tab` then `Home` batched before the peek's first draw — doesn't leave the
+    /// offset stuck decrementing a huge sentinel once a real bound exists.
+    ///
+    /// Residual (intentionally not handled): if `Home` AND a `Down`/`PageDown`
+    /// are BOTH processed in the same input batch before that first draw, the
+    /// down-move subtracts from the unmeasured sentinel and is absorbed into the
+    /// top position — that one move is lost and recovered by the next down-key.
+    /// Handling it precisely needs a symbolic top-anchor threaded through every
+    /// scroll op; not worth it for a state only reachable by a sub-frame burst of
+    /// three distinct keys (unreachable by human typing / key-repeat).
+    pub fn scroll_agent_view_down(&mut self, lines: usize) {
+        self.agent_view_scroll = self
+            .agent_view_scroll
+            .min(self.agent_view_scroll_max.get())
+            .saturating_sub(lines);
+    }
+
+    /// Advance the main-pane view to the next target in `[Main, …sub-agents]`,
+    /// wrapping. No-op (stays/returns to `Main`) when the session has no
+    /// sub-agents.
+    pub fn select_next_chat_view(&mut self) {
+        let order = self.chat_view_order();
+        if order.len() <= 1 {
+            self.set_chat_view(ChatViewTarget::Main);
+            return;
+        }
+        let current = order.iter().position(|t| *t == self.chat_view).unwrap_or(0);
+        self.set_chat_view(order[(current + 1) % order.len()].clone());
+    }
+
+    /// Move the main-pane view to the previous target in `[Main, …sub-agents]`,
+    /// wrapping.
+    pub fn select_prev_chat_view(&mut self) {
+        let order = self.chat_view_order();
+        if order.len() <= 1 {
+            self.set_chat_view(ChatViewTarget::Main);
+            return;
+        }
+        let current = order.iter().position(|t| *t == self.chat_view).unwrap_or(0);
+        let prev = if current == 0 {
+            order[order.len() - 1].clone()
+        } else {
+            order[current - 1].clone()
+        };
+        self.set_chat_view(prev);
+    }
+
+    /// Fall back to `Main` when the selected sub-agent is no longer present
+    /// (completed and pruned, or the active session changed). Keeps a stale
+    /// selection from stranding the main pane on a vanished agent.
+    pub fn normalize_chat_view(&mut self) {
+        if let ChatViewTarget::Agent(id) = &self.chat_view {
+            let id = id.clone();
+            let still_present = self
+                .active_session_agents()
+                .iter()
+                .any(|agent| agent.agent_id == id);
+            if !still_present {
+                self.set_chat_view(ChatViewTarget::Main);
+            }
+        }
+    }
+
+    pub fn select_next_artifact(&mut self) {
+        self.artifacts.select_next();
+    }
+
+    pub fn select_prev_artifact(&mut self) {
+        self.artifacts.select_prev();
+    }
+
+    pub fn select_next_workspace_entry(&mut self) {
+        self.workspace.select_next();
+    }
+
+    pub fn select_prev_workspace_entry(&mut self) {
+        self.workspace.select_prev();
+    }
+
+    pub fn select_next_git_entry(&mut self) {
+        self.git.select_next();
+    }
+
+    pub fn select_prev_git_entry(&mut self) {
+        self.git.select_prev();
+    }
+
+    /// Open the transcript pager at the bottom (latest content visible).
+    pub fn enter_transcript_pager(&mut self) {
+        self.transcript_pager_active = true;
+        self.transcript_scroll = 0;
+        // The pager's transcript area has its own height/wrap, so any bound
+        // recorded from the inline viewport (or a previous pager frame) is
+        // meaningless; reset to "not measured yet" — the next pager draw
+        // re-records the real bound before a scroll key is read.
+        self.transcript_scroll_max.set(usize::MAX);
+    }
+
+    /// Close the transcript pager. The scroll offset is reset so the inline
+    /// live tail follows the newest output again instead of inheriting the
+    /// pager's read position. The jump-to-latest hit rect is cleared here
+    /// rather than waiting for the next frame: in pinned mode capture stays on
+    /// after the pager closes, and a stale rect would keep eating clicks.
+    pub fn exit_transcript_pager(&mut self) {
+        self.transcript_pager_active = false;
+        self.transcript_scroll = 0;
+        self.scroll_to_bottom_button.set(None);
+    }
+
+    /// Renderer write-back of the pager's "jump to latest" button rect (or
+    /// `None` while hidden) — the same one-frame-stale `Cell` discipline as
+    /// [`Self::record_agent_view_scroll_max`].
+    pub fn record_scroll_to_bottom_button(&self, hit: Option<ScrollToBottomHit>) {
+        self.scroll_to_bottom_button.set(hit);
+    }
+
+    /// Record the transcript's maximum scroll offset (wrapped-rows −
+    /// visible-rows). The renderer is the only code that knows the wrapped-row
+    /// count, so it feeds it back here for `scroll_transcript_up/down` to
+    /// clamp against — same `Cell` discipline as
+    /// [`Self::record_agent_view_scroll_max`].
+    pub fn record_transcript_scroll_max(&self, max: usize) {
+        self.transcript_scroll_max.set(max);
+    }
+
+    /// Scroll the transcript toward older output (up), clamped to the
+    /// last-rendered maximum so a non-overflowing transcript (`max_scroll ==
+    /// 0`) never leaves the bottom — and so `transcript_scroll > 0` always
+    /// means a real review offset (the `HintBarMode::PagerReviewing` gate) —
+    /// and so over-scroll at the top can't accumulate a phantom offset that
+    /// Down/PageDown must first unwind.
+    pub fn scroll_transcript_up(&mut self, lines: usize) {
+        self.transcript_scroll = self
+            .transcript_scroll
+            .saturating_add(lines)
+            .min(self.transcript_scroll_max.get());
+    }
+
+    /// Scroll toward the newest output (down). Snaps any over-shoot down to
+    /// the last-rendered maximum BEFORE subtracting — mirrors
+    /// [`Self::scroll_agent_view_down`].
+    pub fn scroll_transcript_down(&mut self, lines: usize) {
+        self.transcript_scroll = self
+            .transcript_scroll
+            .min(self.transcript_scroll_max.get())
+            .saturating_sub(lines);
+    }
+
+    pub fn scroll_transcript_to_latest(&mut self) {
+        self.transcript_scroll = 0;
+    }
+
+    pub fn set_task_output_cursor(
+        &mut self,
+        session_id: SessionKey,
+        task_id: TaskId,
+        cursor: OutputCursor,
+    ) {
+        if let Some(existing) = self
+            .task_output_cursors
+            .iter_mut()
+            .find(|entry| entry.session_id == session_id && entry.task_id == task_id)
+        {
+            existing.cursor = cursor;
+        } else {
+            self.task_output_cursors.push(TaskOutputCursor {
+                session_id,
+                task_id,
+                cursor,
+            });
+        }
+    }
+
+    pub fn task_output_cursor(
+        &self,
+        session_id: &SessionKey,
+        task_id: &TaskId,
+    ) -> Option<OutputCursor> {
+        self.task_output_cursors
+            .iter()
+            .find(|entry| &entry.session_id == session_id && &entry.task_id == task_id)
+            .map(|entry| entry.cursor)
+    }
+
+    /// Whether an activity row with this attribution can render in the
+    /// CURRENT view — the gate for scroll preservation on activity writes
+    /// (P2 tri-repo #246 fold). Mirrors the session half of the flow's
+    /// filter (`flow_activity_items`):
+    ///
+    /// * unattributed (`session_id == None`) → assume visible (old behavior);
+    /// * the active session's own rows → visible;
+    /// * a row stamped with a DIFFERENT session → the flow drops it no
+    ///   matter what, so invisible here. Turn-less background rows used to
+    ///   slip through: this predicate predates the flow's session filter
+    ///   and gated on the active turn instead, so a stamped turn-less row
+    ///   from a background session moved the scroll of a session it never
+    ///   renders in (#487).
+    ///
+    /// Turn attribution is deliberately NOT consulted: an own-session row
+    /// the flow's turn filter hides (stale turn, `is_subagent_progress`
+    /// fold) may still over-preserve the read position — the safe
+    /// direction, since under-preserving loses it for rows that were on
+    /// screen.
+    fn activity_renders_in_active_view(&self, session_id: Option<&SessionKey>) -> bool {
+        let Some(session_id) = session_id else {
+            return true;
+        };
+        self.active_session()
+            .is_some_and(|session| &session.id == session_id)
+    }
+
+    /// octos#2019 — record one background event on the session that OWNS its
+    /// emitter. Never touches any other session's bucket, so the row cannot
+    /// render under whichever session happens to be focused.
+    ///
+    /// Rows with a blank routing key are DROPPED: an unroutable row is exactly
+    /// the octos-tui#461 / #466 / #483 bug (it would have to fall back to the
+    /// focused session), so refuse it rather than misattribute it.
+    pub fn push_background_activity(&mut self, event: BackgroundActivityParams) {
+        if event.session_id.0.trim().is_empty() {
+            return;
+        }
+        let rows = self
+            .background_activity
+            .entry(event.session_id.clone())
+            .or_default();
+        rows.push(event);
+        if rows.len() > MAX_BACKGROUND_ACTIVITY_ROWS {
+            let excess = rows.len() - MAX_BACKGROUND_ACTIVITY_ROWS;
+            rows.drain(0..excess);
+        }
+    }
+
+    /// octos#2019 — the background events for `session_id`, grouped by
+    /// emitting origin in first-seen order. One group per origin so a 50-round
+    /// monitor loop folds into ONE header rather than 50 loose lines.
+    ///
+    /// Reading is per-session by construction: a caller cannot accidentally
+    /// render another session's rows.
+    pub fn background_activity_groups(
+        &self,
+        session_id: &SessionKey,
+    ) -> Vec<(String, Vec<&BackgroundActivityParams>)> {
+        let Some(rows) = self.background_activity.get(session_id) else {
+            return Vec::new();
+        };
+        let mut order: Vec<(String, String)> = Vec::new();
+        let mut grouped: std::collections::HashMap<
+            (String, String),
+            Vec<&BackgroundActivityParams>,
+        > = std::collections::HashMap::new();
+        for row in rows {
+            let key = row.origin_key();
+            if !grouped.contains_key(&key) {
+                order.push(key.clone());
+            }
+            grouped.entry(key).or_default().push(row);
+        }
+        order
+            .into_iter()
+            .filter_map(|key| {
+                let rows = grouped.remove(&key)?;
+                let label = rows
+                    .first()
+                    .map(|row| row.display_origin().to_owned())
+                    .unwrap_or_else(|| key.1.clone());
+                Some((format!("{} {label}", key.0), rows))
+            })
+            .collect()
+    }
+
+    pub fn push_activity(&mut self, item: ActivityItem) {
+        const MAX_ACTIVITY_ITEMS: usize = 80;
+        // Preserving the scroll for a row that renders nowhere in the current
+        // view would drift the active transcript's read position; skipping it
+        // for a row that IS visible loses the position instead — gate on the
+        // render-accurate predicate (P2 tri-repo #246 fold).
+        let renders_in_active_view = self.activity_renders_in_active_view(item.session_id.as_ref());
+        let estimated_rows = estimated_activity_rows(&item);
+        self.activity.push(item);
+        if renders_in_active_view {
+            self.preserve_transcript_position_after_append(estimated_rows);
+        }
+        if self.activity.len() > MAX_ACTIVITY_ITEMS {
+            let mut excess = self.activity.len() - MAX_ACTIVITY_ITEMS;
+            // Evict oldest NON-sticky rows first: sticky notices (context
+            // compaction) are infrequent and notable, and blind oldest-first
+            // eviction dropped them mid-turn — pushed before the turn's tool
+            // flood, they were always the first to go, vanishing before
+            // `capture_completed_turn_activity` could archive them.
+            let mut idx = 0;
+            while excess > 0 && idx < self.activity.len() {
+                if self.activity[idx].sticky {
+                    idx += 1;
+                } else {
+                    self.activity.remove(idx);
+                    excess -= 1;
+                }
+            }
+            // Degenerate case (everything left is sticky): still bound the
+            // list — the cap is a hard memory/render guarantee.
+            if excess > 0 {
+                self.activity.drain(0..excess);
+            }
+        }
+    }
+
+    /// A session goal is ONE persistent entity, not a stream of events. Its
+    /// status transitions (`active` -> `budget_limited` -> ...) must update a
+    /// SINGLE activity row, not append a fresh "session goal" row per transition
+    /// — otherwise a thrashing goal renders as N stacked rows (mini5: one goal
+    /// showed as 3 rows "active / budget_limited / budget_limited"), and each
+    /// row with a running-ish status inflates the "N active" aggregate.
+    ///
+    /// Dedup on the HIDDEN stable key in `tool_call_id` (`session_goal:{session}:
+    /// {goal_id}`), NOT the localized title — a title match would collide across
+    /// distinct goals in a session, break on a locale change, and snag any other
+    /// Progress row that reused the label (codex review). Replace the row with
+    /// the matching key in place; append only when none exists.
+    pub fn push_or_replace_goal_activity(&mut self, item: ActivityItem) {
+        if let Some(key) = item.tool_call_id.as_deref() {
+            if let Some(existing) = self
+                .activity
+                .iter_mut()
+                .rev()
+                .find(|a| a.tool_call_id.as_deref() == Some(key))
+            {
+                existing.status = item.status;
+                existing.detail = item.detail;
+                existing.success = item.success;
+                existing.title = item.title;
+                return;
+            }
+        }
+        self.push_activity(item);
+    }
+
+    pub fn preserve_transcript_position_after_append(&mut self, estimated_rows: usize) {
+        if self.transcript_scroll > 0 && estimated_rows > 0 {
+            // Normalize any pre-existing stale overshoot against the OLD
+            // rendered ceiling, then add the new rows. Clamping the final sum
+            // to that old ceiling would discard the append delta and make a
+            // scrolled-up viewport drift toward the tail as output arrives.
+            // The next render records the new ceiling; scroll-down also snaps
+            // an estimated overshoot before subtracting.
+            self.transcript_scroll = self
+                .transcript_scroll
+                .min(self.transcript_scroll_max.get())
+                .saturating_add(estimated_rows);
+        }
+    }
+
+    pub fn update_tool_activity(
+        &mut self,
+        scope: (&SessionKey, Option<&TurnId>, &str),
+        status: impl Into<String>,
+        detail: Option<String>,
+        output_preview: Option<String>,
+        success: Option<bool>,
+        duration_ms: Option<u64>,
+    ) {
+        let (session_id, turn_id, tool_call_id) = scope;
+        let status = status.into();
+        // Tool output previews carry raw ANSI/control bytes from dev servers
+        // and CLIs; sanitize at this shared chokepoint (agent tools AND the
+        // `!` local shell both land here) so the transcript never renders
+        // escape sequences.
+        let output_preview = output_preview
+            .map(|preview| crate::sanitize::strip_terminal_controls(&preview).into_owned());
+        let mut updated: Option<Option<SessionKey>> = None;
+        if let Some(item) = self.activity.iter_mut().rev().find(|item| {
+            item.kind == ActivityKind::Tool
+                && item.session_id.as_ref() == Some(session_id)
+                && item.turn_id.as_ref() == turn_id
+                && item.tool_call_id.as_deref() == Some(tool_call_id)
+        }) {
+            item.status = status;
+            if detail.is_some() {
+                item.detail = detail;
+            }
+            if output_preview.is_some() {
+                item.output_preview = output_preview;
+            }
+            if success.is_some() {
+                item.success = success;
+            }
+            if duration_ms.is_some() {
+                item.duration_ms = duration_ms;
+            }
+            updated = Some(item.session_id.clone());
+        }
+        // Mirror `push_activity`: only an update to a row that can render in
+        // the current view may adjust the read position (P2 tri-repo #246
+        // fold).
+        if let Some(item_session) = updated
+            && self.activity_renders_in_active_view(item_session.as_ref())
+        {
+            self.preserve_transcript_position_after_append(1);
+        }
+    }
+
+    pub fn set_run_state_idle(&mut self) {
+        self.run_state = SessionRunState::Idle;
+        self.run_state_started_at = None;
+    }
+
+    pub fn set_run_state_in_progress(&mut self) {
+        // Optimistic-idle guard: once the user interrupts the active session's
+        // live turn, no event may flip the spinner back on until the terminal
+        // reconciles. This is the single chokepoint every in-progress source
+        // funnels through (delta-first bind, tool starts, reasoning, …), so
+        // gating it here covers all of them at once.
+        if self.active_live_turn_interrupted() {
+            return;
+        }
+        if !self.run_state.is_active() {
+            self.run_state_started_at = Some(Instant::now());
+        }
+        // A new turn supersedes the quota terminal (spec
+        // task-quota-exhausted-card).
+        self.quota_exhausted = false;
+        self.run_state = SessionRunState::InProgress;
+    }
+
+    /// True when the user has locally interrupted `turn_id` on `session_id`
+    /// (Esc/Ctrl+C) and the server terminal has not yet reconciled it. Used to
+    /// freeze the live reply and keep the run-state idle.
+    pub fn turn_locally_interrupted(&self, session_id: &SessionKey, turn_id: &TurnId) -> bool {
+        self.interrupted_turns.get(session_id) == Some(turn_id)
+    }
+
+    /// True when the ACTIVE session's live turn is one the user just
+    /// interrupted — the signal that keeps the run-state optimistically idle
+    /// (spinner off) until the terminal lands.
+    pub fn active_live_turn_interrupted(&self) -> bool {
+        let Some(session) = self.active_session() else {
+            return false;
+        };
+        match session.live_reply.as_ref() {
+            Some(live) => self.interrupted_turns.get(&session.id) == Some(&live.turn_id),
+            None => false,
+        }
+    }
+
+    /// Record a user interrupt so the turn stops on screen immediately. Cleared
+    /// on the turn's terminal (`commit_live_reply` / `fail_live_reply`).
+    pub fn mark_turn_interrupted(&mut self, session_id: SessionKey, turn_id: TurnId) {
+        self.interrupted_turns.insert(session_id, turn_id);
+    }
+
+    /// Clear a turn's interrupt marker once its terminal lands — but ONLY when
+    /// the marker still belongs to THIS turn. A stale / duplicate / reconnect-
+    /// replayed terminal for an OLD turn must not clear a NEWER interrupted
+    /// turn's marker on the same session (that would resurrect the killed turn:
+    /// its trailing deltas un-freeze and the spinner re-arms). (review P2)
+    pub fn clear_interrupted_turn(&mut self, session_id: &SessionKey, turn_id: &TurnId) {
+        if self.interrupted_turns.get(session_id) == Some(turn_id) {
+            self.interrupted_turns.remove(session_id);
+        }
+    }
+
+    /// Record that the freeze dropped output for this turn — a delta or a
+    /// canonical frame that arrived after the user's Esc. See
+    /// [`Self::interrupt_dropped_output`].
+    pub fn mark_interrupt_dropped_output(&mut self, session_id: &SessionKey, turn_id: &TurnId) {
+        self.interrupt_dropped_output
+            .insert((session_id.clone(), turn_id.clone()));
+    }
+
+    /// Consume the "freeze dropped output" flag for this turn, if any. Called
+    /// from both terminals so the entry can never outlive its turn.
+    pub fn take_interrupt_dropped_output(
+        &mut self,
+        session_id: &SessionKey,
+        turn_id: &TurnId,
+    ) -> bool {
+        self.interrupt_dropped_output
+            .remove(&(session_id.clone(), turn_id.clone()))
+    }
+
+    pub fn set_run_state_blocked(&mut self, message: impl Into<String>) {
+        // Same optimistic-idle guard as `set_run_state_in_progress`. An
+        // `approval/requested` / `user_question/requested` frame already on the
+        // wire when the user hits Esc must not flip the killed turn's chip from
+        // Idle back to Blocked: a re-Esc could not clear that state either
+        // (`interrupt_command` only downgrades an InProgress turn), so the user
+        // was wedged on a stale `Blocked{…}` until the terminal landed. The
+        // decision's own modal still opens — suppressing that would risk hiding
+        // a real approval when the interrupt does not land — but it is torn down
+        // by the server's `approval/cancelled` moments later.
+        if self.active_live_turn_interrupted() {
+            return;
+        }
+        if !self.run_state.is_active() {
+            self.run_state_started_at = Some(Instant::now());
+        }
+        self.run_state = SessionRunState::Blocked {
+            message: message.into(),
+        };
+    }
+
+    pub fn set_run_state_success(&mut self) {
+        self.run_state = SessionRunState::Success;
+        self.run_state_started_at = None;
+    }
+
+    pub fn set_run_state_error(&mut self, message: impl Into<String>) {
+        self.run_state = SessionRunState::Error {
+            message: message.into(),
+        };
+        self.run_state_started_at = None;
+    }
+
+    /// #395: pop the pending peer kickoff for `session_id`, pruning stale
+    /// entries first so an aged stash (dead `session/open`) can never fire a
+    /// kickoff turn into a session opened much later under the same key.
+    ///
+    /// #407 (review F1): also records into the durable `peer_session_meta`
+    /// roster so the Peer Dock keeps tracking this session AFTER the pop —
+    /// `pending_peer_kickoffs` is the in-flight staging map, the roster is
+    /// the lifetime map. Both consumers (background open + `--go` focus)
+    /// flow through this single chokepoint.
+    pub fn take_pending_peer_kickoff(&mut self, session_id: &SessionKey) -> Option<PeerKickoff> {
+        self.prune_stale_peer_kickoffs();
+        let kickoff = self.pending_peer_kickoffs.remove(session_id)?;
+        // The server can use an opaque slug in the session topic (for example
+        // `peer-6f7d...`) while the staged event carries the operator-facing
+        // Chinese name. Keep that name instead of trying to reconstruct it
+        // from the routing identifier.
+        let slug = peer_slug_for_display(&kickoff.slug);
+        // Durable peer identity — this is the single production chokepoint where
+        // a peer session is registered, so record it here (insert-only; never
+        // pruned, unlike the dock roster below).
+        self.opened_peer_sessions.insert(session_id.clone());
+        self.peer_session_meta.insert(
+            session_id.clone(),
+            PeerMeta {
+                slug: peer_slug_for_display(&slug),
+                brief_path: kickoff.brief_path.clone(),
+                agent_staged: kickoff.agent_staged,
+                created: kickoff.created,
+                finished_at: None,
+            },
+        );
+        Some(kickoff)
+    }
+
+    /// #395: drop peer kickoffs older than [`PEER_KICKOFF_TTL`] (the same
+    /// retain-by-age sweep `pre_token_turns` gets in
+    /// [`Self::refresh_run_state_from_selection`]).
+    pub fn prune_stale_peer_kickoffs(&mut self) {
+        self.pending_peer_kickoffs
+            .retain(|_, kickoff| kickoff.created.elapsed() < PEER_KICKOFF_TTL);
+    }
+
+    /// #324: whether `session_id`'s turn is live RIGHT NOW — streaming
+    /// (`live_reply` bound) or submitted-but-pre-first-token (fresh marker).
+    pub fn session_turn_live(&self, session_id: &SessionKey) -> bool {
+        self.sessions
+            .iter()
+            .find(|session| &session.id == session_id)
+            .is_some_and(|session| session.live_reply.is_some())
+            || self
+                .pre_token_turns
+                .get(session_id)
+                .is_some_and(|armed| armed.elapsed() < PRE_TOKEN_TURN_TTL)
+    }
+
+    /// Stamp a peer's most recent turn terminal (done/error/interrupted) so the
+    /// dock can render `✓ done` (vs a never-run `○ idle`) and freeze its
+    /// elapsed. No-op for non-peer sessions; called from every turn-terminal
+    /// handler. A subsequent live turn still renders `✻` — `peer_is_done`
+    /// checks `session_turn_live` first — and re-terminating refreshes the
+    /// stamp, so the frozen duration tracks the latest run.
+    pub(crate) fn mark_peer_finished(&mut self, session_id: &SessionKey) {
+        if let Some(meta) = self.peer_session_meta.get_mut(session_id) {
+            meta.finished_at = Some(std::time::Instant::now());
+        }
+    }
+
+    /// A peer is "done" when its last turn terminated and it is neither live nor
+    /// blocked — the dock renders `✓` + a frozen elapsed. `created→finished_at`
+    /// is the run duration; a never-run peer (`finished_at == None`) is `○ idle`.
+    pub(crate) fn peer_is_done(&self, session_id: &SessionKey) -> bool {
+        self.peer_session_meta
+            .get(session_id)
+            .is_some_and(|meta| meta.finished_at.is_some())
+            && !self.session_turn_live(session_id)
+            && self.session_blocked_reason(session_id).is_none()
+    }
+
+    /// tui#398: the reason a BACKGROUND session is waiting on the user (a
+    /// stashed approval or question), if any. Drives the strip's `⚠` and the
+    /// Ctrl+S/Alt+S row's blocked line. The focused session never reads as blocked
+    /// here — its pending decision lives in the global modal slots.
+    pub fn session_blocked_reason(&self, session_id: &SessionKey) -> Option<&str> {
+        self.pending_session_approvals
+            .get(session_id)
+            .map(|approval| approval.title.as_str())
+            .or_else(|| {
+                self.pending_session_questions
+                    .get(session_id)
+                    .map(|picker| picker.title.as_str())
+            })
+    }
+
+    /// Row index in the session switcher (= index in `sessions`) of the parent
+    /// window to pre-highlight when the switcher is opened from a peer: the
+    /// first non-peer ("main") session. `None` when the focused session is not
+    /// a peer (nothing to return to) or no main session exists — the switcher
+    /// then keeps its default first-selectable cursor. Lets `Ctrl+S → Enter`
+    /// drop you home from a peer without hunting for the parent row.
+    pub fn parent_session_row_index(&self) -> Option<usize> {
+        let focused = self.sessions.get(self.selected_session)?;
+        if !self.peer_session_meta.contains_key(&focused.id) {
+            return None;
+        }
+        self.sessions
+            .iter()
+            .position(|session| !self.peer_session_meta.contains_key(&session.id))
+    }
+
+    /// One-line "what is this session doing" summary for the Ctrl+S/Alt+S rows
+    /// (tui#398): blocked reason first (it needs the user), then the live
+    /// stream's tail, then the last transcript line. Single-line, capped in
+    /// display columns AND bytes for the menu row.
+    pub fn session_activity_line(&self, session_id: &SessionKey) -> Option<String> {
+        const ACTIVITY_CHARS: usize = 60;
+        /// Byte ceiling independent of the column budget (#489): a grapheme
+        /// padded with combining or zero-width marks is width-1 yet unbounded
+        /// in size, and was returned whole (~2 MB) to be cloned on every view
+        /// build. 2 KiB stays clear of legitimate rows — 60 columns of the
+        /// bulkiest real clusters (41-byte per-member skin-tone family emoji,
+        /// 2 columns each) need 1230 bytes.
+        const ACTIVITY_MAX_BYTES: usize = 2048;
+        fn last_line_tail(text: &str, cap: usize) -> Option<String> {
+            use unicode_segmentation::UnicodeSegmentation;
+            use unicode_width::UnicodeWidthStr;
+            let line = text.lines().rev().find(|line| !line.trim().is_empty())?;
+            let line = line.trim();
+            // `cap` is a COLUMN budget — the peer dock row and the Alt+S
+            // switcher row both size in columns. Counting `char`s let a CJK
+            // summary render at twice its allowance (119 columns for a cap of
+            // 60) and overflow the row. Walk graphemes from the END, keeping
+            // one column for the leading ellipsis.
+            // Bytes first: it is O(1) and skips the O(n) width scan entirely
+            // for a pathological paste.
+            if line.len() <= ACTIVITY_MAX_BYTES && line.width() <= cap {
+                return Some(line.to_owned());
+            }
+            let budget = cap.saturating_sub(1);
+            let byte_budget = ACTIVITY_MAX_BYTES - '…'.len_utf8();
+            // Bound the segmentation WORK, not just the result: only graphemes
+            // inside the last `byte_budget` bytes can be kept, so segment that
+            // window instead of the whole line. A poisoned paste is otherwise
+            // an O(line) segmentation on every view build — the freeze #489
+            // describes.
+            let mut window_start = line.len().saturating_sub(byte_budget);
+            while !line.is_char_boundary(window_start) {
+                window_start += 1;
+            }
+            let window = &line[window_start..];
+            // The window's first grapheme may be a fragment of a cluster that
+            // started before the slice (or ZWJ-merged with what follows); a
+            // fragment can measure NARROWER than it renders. Drop it — the
+            // ellipsis already signals the cut.
+            let window = if window_start > 0 {
+                let mut graphemes = window.graphemes(true);
+                graphemes.next();
+                graphemes.as_str()
+            } else {
+                window
+            };
+            let mut kept = std::collections::VecDeque::new();
+            let mut used = 0usize;
+            let mut used_bytes = 0usize;
+            for grapheme in window.graphemes(true).rev() {
+                let w = grapheme.width();
+                if used + w > budget || used_bytes + grapheme.len() > byte_budget {
+                    break;
+                }
+                used += w;
+                used_bytes += grapheme.len();
+                kept.push_front(grapheme);
+            }
+            if used == 0 {
+                // The window held only zero-width marks (one oversized
+                // grapheme reads as cut at the window edge): it renders as
+                // the ellipsis alone, so don't carry the dead bytes.
+                return Some('…'.to_string());
+            }
+            Some(format!("…{}", kept.into_iter().collect::<String>()))
+        }
+        if let Some(reason) = self.session_blocked_reason(session_id) {
+            return Some(t!("menu.sessions.item.blocked_reason", reason = reason).into_owned());
+        }
+        let session = self
+            .sessions
+            .iter()
+            .find(|session| &session.id == session_id)?;
+        if let Some(live) = session.live_reply.as_ref() {
+            if let Some(tail) = last_line_tail(&live.text, ACTIVITY_CHARS) {
+                return Some(tail);
+            }
+        }
+        session
+            .messages
+            .iter()
+            .rev()
+            .find(|message| !message.content.trim().is_empty())
+            .and_then(|message| last_line_tail(&message.content, ACTIVITY_CHARS))
+    }
+
+    pub fn refresh_run_state_from_selection(&mut self) {
+        self.run_state = initial_run_state(&self.sessions, self.selected_session);
+        // Pre-first-token turns have no live_reply, so the derivation above
+        // reads them as Idle — restore InProgress from the submit marker so a
+        // switch round-trip inside that window cannot start a concurrent turn
+        // (#379 review F3). Stale markers (dead submits) are pruned here.
+        self.pre_token_turns
+            .retain(|_, armed| armed.elapsed() < PRE_TOKEN_TURN_TTL);
+        if !self.run_state.is_active()
+            && let Some(session_id) = self.active_session().map(|session| session.id.clone())
+            && self.pre_token_turns.contains_key(&session_id)
+        {
+            self.run_state = SessionRunState::InProgress;
+        }
+        // An interrupted live turn wins over the in-progress derivation, so it
+        // stays optimistically idle across a session switch too, until the
+        // terminal lands.
+        if self.active_live_turn_interrupted() {
+            self.run_state = SessionRunState::Idle;
+        }
+        self.run_state_started_at = self.run_state.is_active().then(Instant::now);
+    }
+
+    pub fn run_state_elapsed_secs(&self) -> Option<u64> {
+        self.run_state_started_at
+            .filter(|_| self.run_state.is_active())
+            .map(|started| started.elapsed().as_secs())
+    }
+
+    pub fn toggle_tool_output_expansion(&mut self) {
+        self.expanded_tool_outputs = !self.expanded_tool_outputs;
+        self.status = if self.expanded_tool_outputs {
+            "Expanded tool output + diff".into()
+        } else {
+            "Collapsed tool output + diff".into()
+        };
+    }
+
+    /// Ctrl+O with a renderable diff preview open: the preview takes over the
+    /// screen as the full-screen overlay. Distinct status text from the global
+    /// tool-output toggle (which Ctrl+O still drives when no preview is open)
+    /// so the user can tell which surface the key just acted on.
+    pub fn expand_diff_preview_overlay(&mut self) {
+        self.diff_preview.expanded = true;
+        self.status = t!("status.diff_overlay_expanded").into_owned();
+    }
+
+    /// Esc / Ctrl+O inside the overlay: back to the inline preview (the
+    /// preview itself stays open — a second Esc closes it).
+    pub fn collapse_diff_preview_overlay(&mut self) {
+        self.diff_preview.expanded = false;
+        self.status = t!("status.diff_overlay_collapsed").into_owned();
+    }
+
+    pub fn persist_composer_draft_for_selected_session(&mut self) {
+        let Some(session_id) = self.active_session().map(|session| session.id.clone()) else {
+            return;
+        };
+        let text = self.composer.clone();
+        if let Some(draft) = self
+            .composer_drafts
+            .iter_mut()
+            .find(|draft| draft.session_id == session_id)
+        {
+            draft.text = text;
+        } else if !text.is_empty() {
+            self.composer_drafts
+                .push(ComposerDraft { session_id, text });
+        }
+        self.composer_drafts.retain(|draft| !draft.text.is_empty());
+    }
+
+    pub fn load_composer_draft_for_selected_session(&mut self) {
+        // A restored draft is editable text, not a fresh paste — render it inline.
+        self.composer_pasted = false;
+        self.composer_paste_span = None;
+        let Some(session_id) = self.active_session().map(|session| session.id.clone()) else {
+            self.composer.clear();
+            self.composer_cursor = None;
+            return;
+        };
+        self.composer = self
+            .composer_drafts
+            .iter()
+            .find(|draft| draft.session_id == session_id)
+            .map(|draft| draft.text.clone())
+            .unwrap_or_default();
+        self.composer_cursor = None;
+    }
+
+    pub fn clear_current_composer_draft(&mut self) {
+        let session_id = self.active_session().map(|session| session.id.clone());
+        self.composer.clear();
+        self.composer_cursor = None;
+        self.composer_pasted = false;
+        self.composer_paste_span = None;
+        // Clearing the composer (e.g. Ctrl+U) ends any history browse, so the
+        // next Up recalls the newest entry instead of comparing the now-empty
+        // composer against a stale recalled entry (which would scroll and need a
+        // second press).
+        self.composer_history.reset_navigation();
+        if let Some(session_id) = session_id {
+            self.composer_drafts
+                .retain(|draft| draft.session_id != session_id);
+        }
+    }
+
+    pub fn set_composer_text(&mut self, text: impl Into<String>) {
+        self.composer = text.into();
+        self.composer_cursor = None;
+        self.composer_pasted = false;
+        self.composer_paste_span = None;
+    }
+
+    /// Insert PASTED text at the cursor. When the paste is large enough to be
+    /// worth boxing up (see [`paste_should_collapse`]), the composer is marked as
+    /// holding a paste so it renders as a compact `[paste]` block; small pastes
+    /// insert inline like typing. Only this path (real paste events) sets the
+    /// flag — typed input is never collapsed.
+    pub fn insert_pasted_text(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+        let large = paste_should_collapse(text);
+
+        // Small paste events have the same presentation semantics as typing.
+        // This also covers terminals that report a quick typed/IME fragment as
+        // `Event::Paste`: keep a live paste span so the fragment can render
+        // beside a huge chip instead of disappearing inside its count.
+        if !large {
+            self.insert_composer_text(text);
+            return;
+        }
+
+        let cursor = self.composer_cursor_index();
+        self.composer.insert_str(cursor, text);
+        self.composer_cursor = Some(cursor + text.len());
+
+        // Record the pasted byte range; a second paste while collapsed unions
+        // with the existing span (the chip presents them as one block), shifting
+        // it when the insertion landed before/inside it.
+        let inserted = cursor..cursor + text.len();
+        let span = match self
+            .composer_paste_span
+            .take()
+            .filter(|_| self.composer_pasted)
+        {
+            Some(mut existing) => {
+                if cursor <= existing.start {
+                    existing.start += text.len();
+                    existing.end += text.len();
+                } else if cursor < existing.end {
+                    existing.end += text.len();
+                }
+                existing.start.min(inserted.start)..existing.end.max(inserted.end)
+            }
+            None => inserted,
+        };
+        self.composer_paste_span = Some(span);
+        self.composer_pasted = true;
+    }
+
+    pub fn composer_cursor_index(&self) -> usize {
+        self.clamp_composer_cursor(self.composer_cursor.unwrap_or(self.composer.len()))
+    }
+
+    pub fn insert_composer_text(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+
+        let mut cursor = self.composer_cursor_index();
+        let collapsed = composer_should_collapse(&self.composer, self.composer_pasted);
+        let mut paste_span = self.composer_paste_span.take().filter(|span| {
+            span.start < span.end
+                && span.end <= self.composer.len()
+                && self.composer.is_char_boundary(span.start)
+                && self.composer.is_char_boundary(span.end)
+                && paste_should_collapse(&self.composer[span.clone()])
+        });
+
+        // A caret inside an atomic chip is rendered at the chip's end. Insert
+        // there as well, so the new text is visible after the chip rather than
+        // silently becoming part of its hidden byte range. If the paste is
+        // currently inline, an edit inside it intentionally drops the span.
+        if let Some(span) = paste_span.as_ref()
+            && cursor > span.start
+            && cursor < span.end
+        {
+            if collapsed {
+                cursor = span.end;
+            } else {
+                paste_span = None;
+            }
+        }
+
+        self.composer.insert_str(cursor, text);
+        self.composer_cursor = Some(cursor + text.len());
+        self.composer_pasted = false;
+
+        if let Some(span) = paste_span.as_mut()
+            && cursor <= span.start
+        {
+            span.start += text.len();
+            span.end += text.len();
+        }
+        self.composer_paste_span = paste_span;
+    }
+
+    pub fn insert_composer_char(&mut self, ch: char) {
+        let mut encoded = [0; 4];
+        self.insert_composer_text(ch.encode_utf8(&mut encoded));
+    }
+
+    /// Atomic collapsed-paste delete (#380/#382/#383): when the composer is
+    /// presented as a collapsed `[paste]` chip, ANY delete removes the paste
+    /// as ONE unit — never expands it. With a recorded span only the pasted
+    /// bytes are drained, so typed text around the chip survives (#382);
+    /// without a valid span the whole draft clears (the #380 behavior).
+    /// Returns true when the delete was handled here.
+    fn take_collapsed_paste_block(&mut self) -> bool {
+        // A collapsed block (the `[paste N lines · M chars]` chip) is an ATOMIC
+        // unit: one Backspace/Delete removes the whole block, never one char.
+        // Gate on the Collapsed PRESENTATION, not `composer_pasted` — a paste
+        // whose terminal delivered it as keystrokes (no bracketed-paste event,
+        // so the flag was never set / was cleared by the typed chars) still
+        // renders the chip, and Backspace on it must delete the block, not chip
+        // away one char at a time. With a real recorded paste span we drain just
+        // that span (keeping surrounding text); otherwise we clear the draft.
+        if !matches!(
+            self.composer_presentation(),
+            ComposerPresentation::Collapsed(_)
+        ) {
+            return false;
+        }
+        // NOT `.filter(|_| self.composer_pasted)`. The gate above deliberately
+        // keys on the Collapsed PRESENTATION rather than the flag, and adding
+        // the flag back here reintroduced exactly the dependency it was written
+        // to avoid — with a worse failure than the one it guarded against.
+        //
+        // The two desync by design. `insert_pasted_text` clears `composer_pasted`
+        // for a small fragment (so a tiny burst re-opens the composer inline and
+        // echoes) while KEEPING the recorded span. But clearing the flag only
+        // re-opens content under the TYPED thresholds — 32 lines / 4000 chars,
+        // versus 4 lines / 400 for a paste. Above those, the chip stays
+        // Collapsed with a perfectly valid span and a false flag, so this filter
+        // discarded the span and fell through to `_ =>`, which clears the ENTIRE
+        // draft. A 40-line paste with typed text around it lost the lot.
+        //
+        // The span's own bounds check below is what makes dropping it safe: a
+        // stale or malformed span still falls to `_ =>`.
+        match self.composer_paste_span.take() {
+            Some(span)
+                if span.start < span.end
+                    && span.end <= self.composer.len()
+                    && self.composer.is_char_boundary(span.start)
+                    && self.composer.is_char_boundary(span.end) =>
+            {
+                self.composer.drain(span.clone());
+                self.composer_pasted = false;
+                if self.composer.trim().is_empty() {
+                    // Nothing but the paste (± whitespace): behave like #380
+                    // and clear the draft entirely.
+                    self.clear_current_composer_draft();
+                } else {
+                    self.composer_cursor = Some(self.clamp_composer_cursor(span.start));
+                }
+            }
+            _ => self.clear_current_composer_draft(),
+        }
+        true
+    }
+
+    pub fn delete_composer_prev_char(&mut self) {
+        if self.take_collapsed_paste_block() {
+            return;
+        }
+        self.composer_pasted = false;
+        self.composer_paste_span = None;
+        let cursor = self.composer_cursor_index();
+        let Some(prev) = prev_char_boundary(&self.composer, cursor) else {
+            self.composer_cursor = Some(0);
+            return;
+        };
+        self.composer.drain(prev..cursor);
+        self.composer_cursor = Some(prev);
+    }
+
+    pub fn delete_composer_next_char(&mut self) {
+        // Same atomic-block rule as `delete_composer_prev_char`.
+        if self.take_collapsed_paste_block() {
+            return;
+        }
+        self.composer_pasted = false;
+        self.composer_paste_span = None;
+        let cursor = self.composer_cursor_index();
+        let Some(next) = next_char_boundary(&self.composer, cursor) else {
+            self.composer_cursor = Some(self.composer.len());
+            return;
+        };
+        self.composer.drain(cursor..next);
+        self.composer_cursor = Some(cursor);
+    }
+
+    pub fn move_composer_cursor_left(&mut self) {
+        let cursor = self.composer_cursor_index();
+        self.composer_cursor = Some(prev_char_boundary(&self.composer, cursor).unwrap_or(0));
+    }
+
+    pub fn move_composer_cursor_right(&mut self) {
+        let cursor = self.composer_cursor_index();
+        self.composer_cursor =
+            Some(next_char_boundary(&self.composer, cursor).unwrap_or(self.composer.len()));
+    }
+
+    pub fn move_composer_cursor_line_start(&mut self) {
+        let cursor = self.composer_cursor_index();
+        let line_start = self.composer[..cursor]
+            .rfind('\n')
+            .map(|idx| idx + 1)
+            .unwrap_or(0);
+        self.composer_cursor = Some(line_start);
+    }
+
+    pub fn move_composer_cursor_line_end(&mut self) {
+        let cursor = self.composer_cursor_index();
+        let line_end = self.composer[cursor..]
+            .find('\n')
+            .map(|offset| cursor + offset)
+            .unwrap_or(self.composer.len());
+        self.composer_cursor = Some(line_end);
+    }
+
+    /// Move the cursor up one logical line (`\n`-separated), preserving the
+    /// column (char offset within the line). Returns `false` when already on the
+    /// first line so the caller can fall back to scrolling the transcript.
+    pub fn move_composer_cursor_up(&mut self) -> bool {
+        let cursor = self.composer_cursor_index();
+        let line_start = self.composer[..cursor]
+            .rfind('\n')
+            .map(|idx| idx + 1)
+            .unwrap_or(0);
+        if line_start == 0 {
+            return false;
+        }
+        let column = self.composer[line_start..cursor].chars().count();
+        let prev_line_start = self.composer[..line_start - 1]
+            .rfind('\n')
+            .map(|idx| idx + 1)
+            .unwrap_or(0);
+        let prev_line = &self.composer[prev_line_start..line_start - 1];
+        self.composer_cursor = Some(prev_line_start + byte_offset_for_column(prev_line, column));
+        true
+    }
+
+    /// Move the cursor down one logical line, preserving the column. Returns
+    /// `false` when already on the last line so the caller can fall back to
+    /// scrolling the transcript.
+    pub fn move_composer_cursor_down(&mut self) -> bool {
+        let cursor = self.composer_cursor_index();
+        let Some(newline) = self.composer[cursor..]
+            .find('\n')
+            .map(|offset| cursor + offset)
+        else {
+            return false;
+        };
+        let line_start = self.composer[..cursor]
+            .rfind('\n')
+            .map(|idx| idx + 1)
+            .unwrap_or(0);
+        let column = self.composer[line_start..cursor].chars().count();
+        let next_line_start = newline + 1;
+        let next_line_end = self.composer[next_line_start..]
+            .find('\n')
+            .map(|offset| next_line_start + offset)
+            .unwrap_or(self.composer.len());
+        let next_line = &self.composer[next_line_start..next_line_end];
+        self.composer_cursor = Some(next_line_start + byte_offset_for_column(next_line, column));
+        true
+    }
+
+    pub fn move_composer_cursor_prev_word(&mut self) {
+        let cursor = self.composer_cursor_index();
+        self.composer_cursor = Some(prev_word_boundary(&self.composer, cursor));
+    }
+
+    /// Vim `e`: move to the last character of the next word.
+    pub fn move_composer_cursor_word_end(&mut self) {
+        let cursor = self.composer_cursor_index();
+        self.composer_cursor = Some(word_end_boundary(&self.composer, cursor));
+    }
+
+    /// Vim `w`: move to the start of the next word (skipping trailing
+    /// whitespace), unlike the emacs-style `next_word` which stops at word end.
+    pub fn move_composer_cursor_word_forward(&mut self) {
+        let cursor = self.composer_cursor_index();
+        self.composer_cursor = Some(vim_word_forward_boundary(&self.composer, cursor));
+    }
+
+    /// Vim `dw`: delete from the cursor to the start of the next word.
+    pub fn delete_composer_word_forward(&mut self) {
+        // #383: word/line deletes bypassed the collapsed-paste atomicity and
+        // silently edited text HIDDEN under the chip. Same rule as Backspace.
+        if self.take_collapsed_paste_block() {
+            return;
+        }
+        let cursor = self.composer_cursor_index();
+        let end = vim_word_forward_boundary(&self.composer, cursor);
+        self.composer.drain(cursor..end);
+        self.composer_cursor = Some(cursor);
+    }
+
+    /// Vim `gg`: jump to the very start of the buffer.
+    pub fn move_composer_cursor_buffer_start(&mut self) {
+        self.composer_cursor = Some(0);
+    }
+
+    /// Vim `G`: jump to the very end of the buffer.
+    pub fn move_composer_cursor_buffer_end(&mut self) {
+        self.composer_cursor = Some(self.composer.len());
+    }
+
+    /// Vim `dd`: delete the current logical line. Removes its trailing newline
+    /// (or, on the last line, the preceding one) so lines don't pile up empty.
+    pub fn delete_composer_line(&mut self) {
+        // #383: word/line deletes bypassed the collapsed-paste atomicity and
+        // silently edited text HIDDEN under the chip. Same rule as Backspace.
+        if self.take_collapsed_paste_block() {
+            return;
+        }
+        let cursor = self.composer_cursor_index();
+        let line_start = self.composer[..cursor]
+            .rfind('\n')
+            .map(|idx| idx + 1)
+            .unwrap_or(0);
+        let line_end = self.composer[cursor..]
+            .find('\n')
+            .map(|offset| cursor + offset)
+            .unwrap_or(self.composer.len());
+        let (drain_start, drain_end, new_cursor) = if line_end < self.composer.len() {
+            (line_start, line_end + 1, line_start)
+        } else if line_start > 0 {
+            (line_start - 1, line_end, line_start - 1)
+        } else {
+            (line_start, line_end, 0)
+        };
+        self.composer.drain(drain_start..drain_end);
+        self.composer_cursor = Some(self.clamp_composer_cursor(new_cursor));
+    }
+
+    /// Vim `cc` body: clear the current logical line's content, cursor at line
+    /// start (the caller switches to Insert).
+    pub fn clear_composer_line(&mut self) {
+        // #383: word/line deletes bypassed the collapsed-paste atomicity and
+        // silently edited text HIDDEN under the chip. Same rule as Backspace.
+        if self.take_collapsed_paste_block() {
+            return;
+        }
+        let cursor = self.composer_cursor_index();
+        let line_start = self.composer[..cursor]
+            .rfind('\n')
+            .map(|idx| idx + 1)
+            .unwrap_or(0);
+        let line_end = self.composer[cursor..]
+            .find('\n')
+            .map(|offset| cursor + offset)
+            .unwrap_or(self.composer.len());
+        self.composer.drain(line_start..line_end);
+        self.composer_cursor = Some(line_start);
+    }
+
+    /// Vim `o`: open a new line below the current one, cursor on it.
+    pub fn open_composer_line_below(&mut self) {
+        self.move_composer_cursor_line_end();
+        self.insert_composer_text("\n");
+    }
+
+    /// Vim `O`: open a new line above the current one, cursor on it.
+    pub fn open_composer_line_above(&mut self) {
+        self.move_composer_cursor_line_start();
+        let at = self.composer_cursor_index();
+        self.composer.insert(at, '\n');
+        self.composer_cursor = Some(at);
+    }
+
+    pub fn move_composer_cursor_next_word(&mut self) {
+        let cursor = self.composer_cursor_index();
+        self.composer_cursor = Some(next_word_boundary(&self.composer, cursor));
+    }
+
+    pub fn delete_composer_prev_word(&mut self) {
+        // #383: word/line deletes bypassed the collapsed-paste atomicity and
+        // silently edited text HIDDEN under the chip. Same rule as Backspace.
+        if self.take_collapsed_paste_block() {
+            return;
+        }
+        let cursor = self.composer_cursor_index();
+        let start = prev_word_boundary(&self.composer, cursor);
+        self.composer.drain(start..cursor);
+        self.composer_cursor = Some(start);
+    }
+
+    pub fn delete_composer_next_word(&mut self) {
+        // #383: word/line deletes bypassed the collapsed-paste atomicity and
+        // silently edited text HIDDEN under the chip. Same rule as Backspace.
+        if self.take_collapsed_paste_block() {
+            return;
+        }
+        let cursor = self.composer_cursor_index();
+        let end = next_word_boundary(&self.composer, cursor);
+        self.composer.drain(cursor..end);
+        self.composer_cursor = Some(cursor);
+    }
+
+    pub fn kill_composer_to_line_end(&mut self) {
+        // #383: word/line deletes bypassed the collapsed-paste atomicity and
+        // silently edited text HIDDEN under the chip. Same rule as Backspace.
+        if self.take_collapsed_paste_block() {
+            return;
+        }
+        let cursor = self.composer_cursor_index();
+        let end = self.composer[cursor..]
+            .find('\n')
+            .map(|offset| cursor + offset)
+            .unwrap_or(self.composer.len());
+        self.composer.drain(cursor..end);
+        self.composer_cursor = Some(cursor);
+    }
+
+    pub fn composer_presentation(&self) -> ComposerPresentation {
+        composer_presentation_for_text(
+            &self.composer,
+            self.composer_pasted,
+            self.composer_paste_span.clone(),
+            self.composer_cursor_index(),
+        )
+    }
+
+    fn clamp_composer_cursor(&self, cursor: usize) -> usize {
+        let cursor = cursor.min(self.composer.len());
+        if self.composer.is_char_boundary(cursor) {
+            return cursor;
+        }
+        prev_char_boundary(&self.composer, cursor).unwrap_or(0)
+    }
+}
+
+fn is_protocol_target(target: &str) -> bool {
+    let target = target.trim_start();
+    target
+        .get(..5)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("ws://"))
+        || target
+            .get(..6)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("wss://"))
+        || target
+            .get(..6)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("stdio:"))
+}
+
+/// Byte offset within `line` at the given column (char count), clamped to the
+/// end of the line when it is shorter than `column`. `line` must not contain a
+/// `\n` (callers pass a single logical line).
+fn byte_offset_for_column(line: &str, column: usize) -> usize {
+    line.char_indices()
+        .nth(column)
+        .map(|(idx, _)| idx)
+        .unwrap_or(line.len())
+}
+
+fn prev_char_boundary(text: &str, cursor: usize) -> Option<usize> {
+    let mut cursor = cursor.min(text.len());
+    while cursor > 0 && !text.is_char_boundary(cursor) {
+        cursor -= 1;
+    }
+    text[..cursor].char_indices().last().map(|(idx, _)| idx)
+}
+
+fn next_char_boundary(text: &str, cursor: usize) -> Option<usize> {
+    let mut cursor = cursor.min(text.len());
+    while cursor < text.len() && !text.is_char_boundary(cursor) {
+        cursor += 1;
+    }
+    text[cursor..]
+        .char_indices()
+        .nth(1)
+        .map(|(idx, _)| cursor + idx)
+        .or_else(|| (cursor < text.len()).then_some(text.len()))
+}
+
+/// Vim `w`: byte offset of the start of the next word at/after `cursor`. From a
+/// word, skips the rest of it then any whitespace; from whitespace, skips the
+/// whitespace. Returns `text.len()` when none remains.
+fn vim_word_forward_boundary(text: &str, cursor: usize) -> usize {
+    let cis: Vec<(usize, char)> = text.char_indices().collect();
+    let mut i = cis
+        .iter()
+        .position(|(b, _)| *b >= cursor)
+        .unwrap_or(cis.len());
+    if i >= cis.len() {
+        return text.len();
+    }
+    if cis[i].1.is_whitespace() {
+        while i < cis.len() && cis[i].1.is_whitespace() {
+            i += 1;
+        }
+    } else {
+        while i < cis.len() && !cis[i].1.is_whitespace() {
+            i += 1;
+        }
+        while i < cis.len() && cis[i].1.is_whitespace() {
+            i += 1;
+        }
+    }
+    if i >= cis.len() { text.len() } else { cis[i].0 }
+}
+
+/// Vim `e`: byte offset of the last character of the next word at/after
+/// `cursor`. Steps one char forward, skips whitespace, then lands on the final
+/// non-whitespace char of that word. Returns `text.len()` when none remains.
+fn word_end_boundary(text: &str, cursor: usize) -> usize {
+    let cis: Vec<(usize, char)> = text.char_indices().collect();
+    if cis.is_empty() {
+        return 0;
+    }
+    let mut i = cis
+        .iter()
+        .position(|(b, _)| *b >= cursor)
+        .unwrap_or(cis.len());
+    i += 1; // always move at least one char
+    while i < cis.len() && cis[i].1.is_whitespace() {
+        i += 1;
+    }
+    if i >= cis.len() {
+        return text.len();
+    }
+    while i + 1 < cis.len() && !cis[i + 1].1.is_whitespace() {
+        i += 1;
+    }
+    cis[i].0
+}
+
+fn prev_word_boundary(text: &str, cursor: usize) -> usize {
+    let mut idx = cursor.min(text.len());
+    while let Some(prev) = prev_char_boundary(text, idx) {
+        let ch = text[prev..idx].chars().next().unwrap_or_default();
+        if !ch.is_whitespace() {
+            break;
+        }
+        idx = prev;
+    }
+    while let Some(prev) = prev_char_boundary(text, idx) {
+        let ch = text[prev..idx].chars().next().unwrap_or_default();
+        if ch.is_whitespace() {
+            break;
+        }
+        idx = prev;
+    }
+    idx
+}
+
+fn next_word_boundary(text: &str, cursor: usize) -> usize {
+    let mut idx = cursor.min(text.len());
+    while let Some(next) = next_char_boundary(text, idx) {
+        let ch = text[idx..next].chars().next().unwrap_or_default();
+        if !ch.is_whitespace() {
+            break;
+        }
+        idx = next;
+    }
+    while let Some(next) = next_char_boundary(text, idx) {
+        let ch = text[idx..next].chars().next().unwrap_or_default();
+        if ch.is_whitespace() {
+            break;
+        }
+        idx = next;
+    }
+    idx
+}
+
+/// A paste is worth boxing up into a `[paste]` block once it reaches these
+/// (aggressive) sizes — matched against the pasted text so a small paste inserts
+/// inline like typing. Applied ONLY to real pastes (see [`AppState::composer_pasted`]).
+const PASTE_COLLAPSE_LINE_THRESHOLD: usize = 4;
+const PASTE_COLLAPSE_CHAR_THRESHOLD: usize = 400;
+/// Content this large collapses even when NOT flagged as a paste — a safety net
+/// for a huge blob that arrived some other way (nobody types this much). Kept
+/// high so ordinary typed multi-line prose / long single-line prompts stay inline.
+const TYPED_COLLAPSE_LINE_THRESHOLD: usize = 32;
+const TYPED_COLLAPSE_CHAR_THRESHOLD: usize = 4_000;
+
+/// Whether a pasted string is large enough to collapse into a `[paste]` block.
+fn paste_should_collapse(text: &str) -> bool {
+    text.chars().count() >= PASTE_COLLAPSE_CHAR_THRESHOLD
+        || text.lines().count().max(1) >= PASTE_COLLAPSE_LINE_THRESHOLD
+}
+
+fn composer_should_collapse(text: &str, from_paste: bool) -> bool {
+    if from_paste {
+        paste_should_collapse(text)
+    } else {
+        text.lines().count().max(1) >= TYPED_COLLAPSE_LINE_THRESHOLD
+            || text.chars().count() >= TYPED_COLLAPSE_CHAR_THRESHOLD
+    }
+}
+
+fn composer_presentation_for_text(
+    text: &str,
+    from_paste: bool,
+    paste_span: Option<std::ops::Range<usize>>,
+    cursor: usize,
+) -> ComposerPresentation {
+    const PREVIEW_CHARS: usize = 88;
+
+    if text.is_empty() {
+        return ComposerPresentation::Empty;
+    }
+
+    // Pastes collapse aggressively; anything else only when huge (typed input is
+    // never collapsed at the low paste thresholds). Note this decision is made
+    // over the WHOLE draft — narrowing the chip below never changes WHETHER the
+    // composer collapses, only which bytes the chip stands for.
+    if !composer_should_collapse(text, from_paste) {
+        return ComposerPresentation::Inline(text.to_string());
+    }
+
+    // Which bytes the chip covers. A recorded paste span is usable only while it
+    // still addresses live, char-aligned bytes AND is itself worth boxing up —
+    // otherwise the chip falls back to the whole draft (the pre-span behavior,
+    // and what a restored/wholesale-set draft always gets since it carries no
+    // span). Covering just the pasted run is what keeps a typed prefix like
+    // "/mcp upsert server " rendering AHEAD of the chip instead of vanishing
+    // inside it.
+    let block = paste_span
+        .filter(|span| {
+            span.start < span.end
+                && span.end <= text.len()
+                && text.is_char_boundary(span.start)
+                && text.is_char_boundary(span.end)
+                && paste_should_collapse(&text[span.clone()])
+        })
+        .unwrap_or(0..text.len());
+    let block_text = &text[block.clone()];
+    let block_chars = block_text.chars().count();
+    let block_lines = block_text.lines().count().max(1);
+
+    // Rendered INSIDE the chip, e.g. "[paste 18 lines · 1240 chars]" — the
+    // counts belong to the bracket rather than trailing it as loose text, and
+    // they describe the PASTE, not any text typed around it.
+    let summary = if block_lines > 1 {
+        format!("{block_lines} lines · {block_chars} chars")
+    } else {
+        format!("{block_chars} chars")
+    };
+    let preview_source = block_text
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .map(str::trim)
+        .unwrap_or("<blank paste>");
+
+    let glyph = format!("[paste {summary}]");
+    let mut display = String::with_capacity(text.len() - block_text.len() + glyph.len());
+    display.push_str(&text[..block.start]);
+    let chip = display.len()..display.len() + glyph.len();
+    display.push_str(&glyph);
+    display.push_str(&text[block.end..]);
+
+    // The block is atomic: a caret anywhere inside it pins to the chip's end.
+    let cursor = if cursor <= block.start {
+        cursor
+    } else if cursor >= block.end {
+        chip.end + (cursor - block.end)
+    } else {
+        chip.end
+    };
+
+    ComposerPresentation::Collapsed(ComposerCollapse {
+        summary,
+        preview: truncate_chars(preview_source, PREVIEW_CHARS),
+        display,
+        chip,
+        cursor,
+    })
+}
+
+fn truncate_chars(text: &str, max_chars: usize) -> String {
+    let char_count = text.chars().count();
+    if char_count <= max_chars {
+        return text.to_string();
+    }
+
+    let keep = max_chars.saturating_sub(4);
+    let mut preview = text.chars().take(keep).collect::<String>();
+    preview.push_str(" ...");
+    preview
+}
+
+pub fn extract_plan_steps(app: &AppState) -> Vec<PlanStep> {
+    let Some(session) = app.active_session() else {
+        return Vec::new();
+    };
+
+    let mut candidates = Vec::new();
+    if let Some(live_reply) = session.live_reply.as_ref() {
+        candidates.push(live_reply.text.as_str());
+    }
+    candidates.extend(
+        session
+            .messages
+            .iter()
+            .rev()
+            .filter(|message| message.role.as_str() == "assistant")
+            .map(|message| message.content.as_str()),
+    );
+
+    let mut plans = candidates.into_iter().filter_map(plan_steps_from_text);
+    let Some(mut plan) = plans.next() else {
+        return Vec::new();
+    };
+    for older_plan in plans {
+        merge_completed_plan_steps(&mut plan, &older_plan);
+    }
+    plan
+}
+
+pub fn complete_plan_steps_in_text(text: &str) -> String {
+    let mut in_plan = false;
+    let mut changed = false;
+    let mut completed_any = false;
+    let mut output = Vec::new();
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            output.push(line.to_string());
+            if completed_any {
+                in_plan = false;
+            }
+            continue;
+        }
+
+        if is_plan_heading(trimmed) {
+            in_plan = true;
+            output.push(line.to_string());
+            continue;
+        }
+
+        if let Some(step) = plan_step_from_line(trimmed, in_plan) {
+            let indent_len = line.len() - line.trim_start().len();
+            let indent = &line[..indent_len];
+            output.push(format!("{indent}- [x] {}", step.text));
+            changed = true;
+            completed_any = true;
+            in_plan = true;
+            continue;
+        }
+
+        output.push(line.to_string());
+        if completed_any {
+            in_plan = false;
+        }
+    }
+
+    if changed {
+        let mut joined = output.join("\n");
+        if text.ends_with('\n') {
+            joined.push('\n');
+        }
+        joined
+    } else {
+        text.to_string()
+    }
+}
+
+fn plan_steps_from_text(text: &str) -> Option<Vec<PlanStep>> {
+    let mut in_plan = false;
+    let mut steps = Vec::new();
+    let mut in_code_fence = false;
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("```") {
+            in_code_fence = !in_code_fence;
+            continue;
+        }
+        if in_code_fence {
+            continue;
+        }
+
+        if trimmed.is_empty() {
+            if in_plan && !steps.is_empty() {
+                break;
+            }
+            continue;
+        }
+
+        if is_plan_heading(trimmed) {
+            in_plan = true;
+            continue;
+        }
+
+        let has_checkbox_marker = line_has_checkbox_marker(trimmed);
+        if !in_plan && !has_checkbox_marker {
+            continue;
+        }
+
+        if let Some(step) = plan_step_from_line(trimmed, in_plan || has_checkbox_marker) {
+            steps.push(step);
+            in_plan = true;
+            continue;
+        }
+
+        if in_plan && !steps.is_empty() {
+            break;
+        }
+    }
+
+    (!steps.is_empty()).then_some(steps)
+}
+
+fn line_has_checkbox_marker(line: &str) -> bool {
+    let mut rest = line.trim();
+    for _ in 0..6 {
+        rest = rest.trim_start();
+        if strip_checkbox(rest).is_some() {
+            return true;
+        }
+        if let Some(next) = strip_bullet(rest) {
+            rest = next;
+            continue;
+        }
+        if let Some(next) = strip_number(rest) {
+            rest = next;
+            continue;
+        }
+        break;
+    }
+    false
+}
+
+fn merge_completed_plan_steps(plan: &mut [PlanStep], completed_source: &[PlanStep]) {
+    for step in plan.iter_mut().filter(|step| !step.completed) {
+        if completed_source.iter().any(|candidate| {
+            candidate.completed
+                && normalize_plan_text(&candidate.text) == normalize_plan_text(&step.text)
+        }) {
+            step.completed = true;
+        }
+    }
+}
+
+fn normalize_plan_text(text: &str) -> String {
+    text.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_lowercase()
+}
+
+fn plan_step_from_line(line: &str, in_plan: bool) -> Option<PlanStep> {
+    let mut rest = line.trim();
+    let mut completed = None;
+    let mut saw_marker = false;
+    let mut saw_number = false;
+    let mut saw_checkbox = false;
+    let mut saw_plain_bullet = false;
+
+    for _ in 0..6 {
+        rest = rest.trim_start();
+        if let Some((checked, next)) = strip_checkbox(rest) {
+            completed = Some(checked);
+            saw_marker = true;
+            saw_checkbox = true;
+            rest = next;
+            continue;
+        }
+        if let Some(next) = strip_bullet(rest) {
+            saw_marker = true;
+            saw_plain_bullet = true;
+            rest = next;
+            continue;
+        }
+        if let Some(next) = strip_number(rest) {
+            saw_marker = true;
+            saw_number = true;
+            rest = next;
+            continue;
+        }
+        break;
+    }
+
+    if !saw_marker {
+        return None;
+    }
+    if saw_plain_bullet && !saw_checkbox && !saw_number && !in_plan {
+        return None;
+    }
+
+    let text = rest.trim_start_matches(['.', ')', ' ']).trim();
+    if text.is_empty() || text.chars().count() > 160 {
+        return None;
+    }
+
+    Some(PlanStep {
+        text: text.to_string(),
+        completed: completed.unwrap_or(false),
+    })
+}
+
+fn strip_checkbox(line: &str) -> Option<(bool, &str)> {
+    let rest = line.strip_prefix('[')?;
+    let (marker, rest) = rest.split_once(']')?;
+    let completed = match marker.trim() {
+        "x" | "X" => true,
+        "" => false,
+        _ => return None,
+    };
+    Some((completed, rest.trim_start()))
+}
+
+fn strip_bullet(line: &str) -> Option<&str> {
+    line.strip_prefix("- ")
+        .or_else(|| line.strip_prefix("* "))
+        .or_else(|| line.strip_prefix("+ "))
+}
+
+fn strip_number(line: &str) -> Option<&str> {
+    let split = line.find(['.', ')'])?;
+    let (number, rest) = line.split_at(split);
+    if number.is_empty() || number.len() > 3 || !number.chars().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+    let rest = rest[1..].trim_start();
+    (!rest.is_empty()).then_some(rest)
+}
+
+fn is_plan_heading(line: &str) -> bool {
+    let heading = line
+        .trim_start_matches('#')
+        .trim()
+        .trim_end_matches(':')
+        .trim()
+        .to_ascii_lowercase();
+    matches!(
+        heading.as_str(),
+        "plan"
+            | "steps"
+            | "next steps"
+            | "implementation plan"
+            | "task plan"
+            | "todo"
+            | "checklist"
+    )
+}
+
+/// How long a [`AppState::pre_token_turns`] marker stays authoritative. A
+/// submit whose turn/started never arrives within this window is treated as
+/// dead (mirrors the staged-gate TTL in `store.rs`).
+pub(crate) const PRE_TOKEN_TURN_TTL: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// How long a [`AppState::pending_peer_kickoffs`] entry stays live (#395). A
+/// prepared peer whose `session/opened` never arrives within this window is a
+/// dead open — the stash is pruned so a much-later open of the same key can
+/// never fire a stale kickoff turn (mirrors [`PRE_TOKEN_TURN_TTL`]).
+/// Generous (2 min, not the prepare TTL): once pruned, a late `session/opened`
+/// for the peer key falls through to the NORMAL focused-open path — i.e. it
+/// steals focus — so a slow-but-alive open should be hard-pressed to outlive
+/// its kickoff (K3 review of #395).
+pub(crate) const PEER_KICKOFF_TTL: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// How long an in-flight [`AppState::pending_peer_prepare`] stash stays
+/// consumable (#395, K3 review). Bounds two hazards symmetrically: a SECOND
+/// `/peer` is refused while a fresh prepare is in flight (the stash is
+/// single-slot — letting the second dispatch overwrite it would cross-wire
+/// the first result's session with the second brief), and a STALE result
+/// landing past the window opens nothing (a lost-response prepare must not
+/// pop a session open + an unprompted turn minutes later). Short: a prepare
+/// is one RPC round-trip.
+pub(crate) const PEER_PREPARE_TTL: std::time::Duration = std::time::Duration::from_secs(30);
+
+fn initial_run_state(sessions: &[SessionView], selected_session: usize) -> SessionRunState {
+    if sessions
+        .get(selected_session)
+        .and_then(|session| session.live_reply.as_ref())
+        .is_some()
+    {
+        SessionRunState::InProgress
+    } else {
+        SessionRunState::Idle
+    }
+}
+
+pub(crate) fn matching_user_message_count(session: &SessionView, content: &str) -> usize {
+    session
+        .messages
+        .iter()
+        .filter(|message| message.role.as_str() == "user" && message.content == content)
+        .count()
+}
+
+fn latest_user_anchor(session: &SessionView) -> Option<(usize, String, usize)> {
+    let (anchor_index, message) = session
+        .messages
+        .iter()
+        .enumerate()
+        .rev()
+        .find(|(_, message)| message.role.as_str() == "user")?;
+    let prior_matching_user_count = session.messages[..anchor_index]
+        .iter()
+        .filter(|prior| prior.role.as_str() == "user" && prior.content == message.content)
+        .count();
+    Some((
+        anchor_index,
+        message.content.clone(),
+        prior_matching_user_count,
+    ))
+}
+
+fn resolve_turn_prompt_anchor(
+    sessions: &[SessionView],
+    anchor: &TurnPromptAnchor,
+) -> Option<usize> {
+    let session = sessions
+        .iter()
+        .find(|session| session.id == anchor.session_id)?;
+    if session
+        .messages
+        .get(anchor.anchor_index)
+        .is_some_and(|message| message.role.as_str() == "user" && message.content == anchor.content)
+    {
+        return Some(anchor.anchor_index);
+    }
+
+    session
+        .messages
+        .iter()
+        .enumerate()
+        .filter(|(_, message)| message.role.as_str() == "user" && message.content == anchor.content)
+        .nth(anchor.prior_matching_user_count)
+        .map(|(idx, _)| idx)
+}
+
+fn estimated_activity_rows(item: &ActivityItem) -> usize {
+    match item.kind {
+        ActivityKind::Tool => {
+            let preview_rows = item
+                .output_preview
+                .as_deref()
+                .map(|output| output.lines().count().clamp(1, 4))
+                .unwrap_or(1);
+            4 + preview_rows
+        }
+        ActivityKind::Progress => {
+            if item.title == "file_mutation" || item.status.starts_with("File mutation: ") {
+                3
+            } else {
+                2
+            }
+        }
+        ActivityKind::Report => {
+            1 + item
+                .detail
+                .as_deref()
+                .map(|body| body.lines().count().max(1))
+                .unwrap_or(0)
+        }
+        ActivityKind::Approval | ActivityKind::Warning | ActivityKind::Error => 2,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SelectedTaskContext {
+    pub session_id: SessionKey,
+    pub task_id: TaskId,
+    pub title: String,
+    pub output_tail: String,
+}
+
+pub fn task_state_label(state: TaskRuntimeState) -> &'static str {
+    let wire = serde_json::to_value(state)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned));
+    match wire.as_deref() {
+        Some("pending") => "pending",
+        Some("running") => "running",
+        Some("completed") => "done",
+        Some("failed") => "failed",
+        Some("cancelled") => "cancelled",
+        _ => "unknown",
+    }
+}
+
+/// Terminal display status applied to an [`ActivityItem`] whose turn went
+/// terminal while the item was still in a running-type status — a leaked
+/// started-state (orphan activity-chip self-heal). Chosen over "complete"
+/// (no false success ✓) and "failed" (no real failure ✗): it renders as a
+/// settled, neutral row and is read as not-running by [`activity_status_is_running`].
+pub const ACTIVITY_STATUS_INTERRUPTED: &str = "interrupted";
+
+/// True while an [`ActivityItem`] status counts as genuinely in-flight. This is
+/// the single source of truth for the running-type status set, shared by the
+/// renderer's `is_running_activity` (the chip's "active" count) and the orphan
+/// activity-chip self-heal in [`AppState::capture_completed_turn_activity`], so
+/// the reconcile and the render agree on exactly which statuses are "running".
+///
+/// Uses an EXPLICIT set of running states rather than "anything non-terminal":
+/// a row whose status never reaches a terminal value (e.g. a diff-preview row
+/// stuck at `preview ready` / `pending_store`) must NOT pin the chip forever.
+pub fn activity_status_is_running(status: &str) -> bool {
+    let status = status.trim().to_ascii_lowercase();
+    matches!(
+        status.as_str(),
+        "running"
+            | "queued"
+            | "pending"
+            | "active"
+            | "streaming"
+            | "delivering_outputs"
+            | "in_progress"
+    ) || status.ends_with('%')
+}
+
+/// Map a durable `agent/updated` record's `status` string to the terminal
+/// [`TaskRuntimeState`] it represents, or `None` if the status is non-terminal.
+///
+/// The server's `background_task_agent_status` emits `running` / `completed` /
+/// `failed` / `interrupted` (the last is the wire form of a cancelled task).
+/// Used by the stuck-chip reconcile so a task whose terminal `task/updated`
+/// never arrived (per-turn channel torn down) still flips off "Orchestrating…"
+/// once the durable terminal agent record lands.
+pub fn terminal_task_state_from_agent_status(status: &str) -> Option<TaskRuntimeState> {
+    match status {
+        "completed" => Some(TaskRuntimeState::Completed),
+        "failed" => Some(TaskRuntimeState::Failed),
+        "interrupted" | "cancelled" => Some(TaskRuntimeState::Cancelled),
+        _ => None,
+    }
+}
+
+fn preview_id_from_text(text: &str) -> Option<PreviewId> {
+    let lower = text.to_ascii_lowercase();
+    let marker_start = ["preview_id", "preview-id", "preview id"]
+        .into_iter()
+        .filter_map(|marker| lower.find(marker).map(|idx| idx + marker.len()))
+        .min()?;
+    let suffix = &text[marker_start..];
+
+    suffix
+        .split(|ch: char| !(ch.is_ascii_hexdigit() || ch == '-'))
+        .find_map(|token| {
+            if token.len() < 32 {
+                return None;
+            }
+            serde_json::from_value(serde_json::Value::String(token.to_owned())).ok()
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ra_core::Message;
+
+    fn catalog(json: serde_json::Value) -> ProfileLlmCatalogResult {
+        serde_json::from_value(json).expect("catalog fixture deserializes")
+    }
+
+    /// The wire contract types key-env as `string | null` optional: for a
+    /// PRESENT family, empty string, null, and absent env all mean keyless;
+    /// unknown families stay keyed (fail closed). Lookup tolerates case and
+    /// whitespace, matching the codebase's family-id aliasing convention.
+    #[test]
+    fn family_is_keyless_covers_env_contract_variants() {
+        let catalog = catalog(serde_json::json!({
+            "families": {
+                "local": { "env": "" },
+                "nullenv": { "env": null },
+                "noenv": {},
+                "keyed": { "env": "X_KEY" }
+            }
+        }));
+        assert!(catalog.family_is_keyless("local"));
+        assert!(catalog.family_is_keyless("nullenv"));
+        assert!(catalog.family_is_keyless("noenv"));
+        assert!(catalog.family_is_keyless("LOCAL"));
+        assert!(catalog.family_is_keyless(" local "));
+        assert!(!catalog.family_is_keyless("keyed"));
+        assert!(!catalog.family_is_keyless("absent"));
+        assert!(!catalog.family_is_keyless(""));
+        assert!(!catalog.family_is_keyless("   "));
+        assert_eq!(catalog.family_key_env("keyed"), Some("X_KEY"));
+        assert_eq!(catalog.family_key_env("local"), None);
+    }
+
+    /// Key requirements are per-ENDPOINT: a staged route carrying its own
+    /// key-env stays keyed even under a keyless family (AutoDL pattern), and
+    /// a missing catalog fails closed.
+    #[test]
+    fn selection_is_keyless_respects_route_override_and_missing_catalog() {
+        let catalog = catalog(serde_json::json!({
+            "families": { "local": { "env": "" } }
+        }));
+        let mut state = OnboardingWizardState {
+            provider: LlmSelectionConfig {
+                family_id: "local".into(),
+                model_id: "local-default".into(),
+                route: LlmRouteConfig {
+                    route_id: "official".into(),
+                    ..LlmRouteConfig::default()
+                },
+                ..LlmSelectionConfig::default()
+            },
+            ..OnboardingWizardState::default()
+        };
+        assert!(state.selection_is_keyless(Some(&catalog)));
+        assert!(!state.selection_is_keyless(None), "no catalog fails closed");
+        state.provider.route.api_key_env = Some("HOSTED_KEY".into());
+        assert!(
+            !state.selection_is_keyless(Some(&catalog)),
+            "a keyed route overrides a keyless family"
+        );
+    }
+
+    /// A staged key never leaves the client empty (`/onboard key` with no
+    /// argument stages Some("")), and switching families clears it — a key
+    /// belongs to the endpoint it was pasted for.
+    #[test]
+    fn staged_key_is_filtered_empty_and_cleared_on_family_switch() {
+        let mut state = OnboardingWizardState {
+            provider: LlmSelectionConfig {
+                family_id: "openai".into(),
+                model_id: "gpt-4o".into(),
+                route: LlmRouteConfig {
+                    route_id: "official".into(),
+                    ..LlmRouteConfig::default()
+                },
+                ..LlmSelectionConfig::default()
+            },
+            api_key: Some(SecretString::new("")),
+            ..OnboardingWizardState::default()
+        };
+        let params = state.build_test_params(Some("p")).expect("selection ready");
+        assert!(params.api_key.is_none(), "empty key stays off the wire");
+
+        state.api_key = Some(SecretString::new("sk-real"));
+        // Same family: key survives.
+        state.apply_selection(LlmSelectionConfig {
+            family_id: "openai".into(),
+            model_id: "gpt-4o-mini".into(),
+            ..LlmSelectionConfig::default()
+        });
+        assert!(state.has_api_key(), "same-family reselect keeps the key");
+        // Different family: key is cleared.
+        state.apply_selection(LlmSelectionConfig {
+            family_id: "local".into(),
+            model_id: "local-default".into(),
+            ..LlmSelectionConfig::default()
+        });
+        assert!(
+            !state.has_api_key(),
+            "family switch must not carry the old key"
+        );
+    }
+
+    /// Saved-provider key satisfaction is record-based (catalog-independent):
+    /// a stored key satisfies, and so does a record that declares no key-env
+    /// (keyless local families publish has_api_key=false).
+    #[test]
+    fn configured_provider_key_satisfied_variants() {
+        let provider = |has_key: bool, env: Option<&str>| -> LlmConfiguredProvider {
+            serde_json::from_value(serde_json::json!({
+                "provider": "x", "model": "y",
+                "has_api_key": has_key,
+                "api_key_env": env,
+            }))
+            .expect("provider fixture deserializes")
+        };
+        assert!(provider(true, Some("OPENAI_API_KEY")).key_satisfied());
+        assert!(provider(false, None).key_satisfied());
+        assert!(provider(false, Some("")).key_satisfied());
+        assert!(provider(false, Some("  ")).key_satisfied());
+        assert!(!provider(false, Some("OPENAI_API_KEY")).key_satisfied());
+    }
+    use ra_core::ui_protocol::{
+        UiArtifactPaneItem, UiArtifactPaneSnapshot, UiGitHistoryItem, UiGitPaneSnapshot,
+        UiGitStatusItem, UiWorkspacePaneEntry, UiWorkspacePaneSnapshot,
+    };
+
+    /// A `loop/list` carrying one unmodellable record must still yield the
+    /// others. Both payloads come from the mock_octos scenario fuzzer
+    /// (`loops-no-loop-id`, `loops-interval-negative`), which drove the real
+    /// TUI into "failed to decode UI protocol result for loop/list: missing
+    /// field `loop_id`" with an empty loops surface — every well-formed loop
+    /// lost with the bad one, and no ids left to pause or delete by.
+    #[test]
+    fn loop_list_keeps_the_records_it_can_decode() {
+        let good = serde_json::json!({
+            "loop_id": "loop_01",
+            "session_id": "alan:local:tui#coding",
+            "profile_id": "alan",
+            "prompt": "run tests",
+            "mode": "fixed_interval",
+            "interval_seconds": 300,
+            "status": "active",
+            "expires_at_ms": 1784880148509_i64,
+            "created_at_ms": 1784275348509_i64,
+            "updated_at_ms": 1784275348509_i64,
+        });
+
+        for bad in [
+            // loops-no-loop-id: the id serde needs is simply absent.
+            serde_json::json!({
+                "session_id": "alan:local:tui#coding",
+                "prompt": "2 5 seconds",
+                "mode": "self_paced",
+                "status": "paused",
+                "expires_at_ms": 1784880148509_i64,
+                "created_at_ms": 1784275348509_i64,
+                "updated_at_ms": 1784275348509_i64,
+            }),
+            // loops-interval-negative: -60 into `Option<u64>`.
+            serde_json::json!({
+                "loop_id": "loop_02",
+                "session_id": "alan:local:tui#coding",
+                "prompt": "2",
+                "mode": "fixed_interval",
+                "interval_seconds": -60,
+                "status": "paused",
+                "expires_at_ms": 1784880148509_i64,
+                "created_at_ms": 1784275348509_i64,
+                "updated_at_ms": 1784275348509_i64,
+            }),
+        ] {
+            let result: LoopListResult = serde_json::from_value(serde_json::json!({
+                "session_id": "alan:local:tui#coding",
+                "profile_id": "alan",
+                "loops": [good.clone(), bad],
+            }))
+            .expect("one bad record must not take the whole list down");
+            assert_eq!(
+                result.loops.len(),
+                1,
+                "the decodable record survives, the other is dropped"
+            );
+            assert_eq!(result.loops[0].loop_id, "loop_01");
+        }
+    }
+
+    /// The client's LOCAL launch/resolve types (octoscode pins an older
+    /// ra-core, so `LaunchResolveResult`/`LaunchDecisionKind` are hand
+    /// mirrored) must decode the EXACT bytes a live `ra serve` emits —
+    /// including the omitted `resolved_profile`/`existing_profiles` on the
+    /// leaner decisions. Payloads captured verbatim from the launch-flow soak
+    /// against a real server; a drift here silently breaks the launch UX.
+    #[test]
+    fn launch_resolve_result_decodes_real_server_wire() {
+        let no_profile: LaunchResolveResult =
+            serde_json::from_str(r#"{"decision":"no_profile"}"#).unwrap();
+        assert_eq!(no_profile.decision, LaunchDecisionKind::NoProfile);
+        assert_eq!(no_profile.resolved_profile, None);
+        assert!(no_profile.existing_profiles.is_empty());
+
+        let activate: LaunchResolveResult =
+            serde_json::from_str(r#"{"decision":"activate","resolved_profile":"alpha"}"#).unwrap();
+        assert_eq!(activate.decision, LaunchDecisionKind::Activate);
+        assert_eq!(activate.resolved_profile.as_deref(), Some("alpha"));
+        assert!(activate.existing_profiles.is_empty());
+
+        let resume: LaunchResolveResult =
+            serde_json::from_str(r#"{"decision":"resume","resolved_profile":"alpha"}"#).unwrap();
+        assert_eq!(resume.decision, LaunchDecisionKind::Resume);
+        assert_eq!(resume.resolved_profile.as_deref(), Some("alpha"));
+
+        let cross: LaunchResolveResult = serde_json::from_str(
+            r#"{"decision":"cross_profile","resolved_profile":"alpha","existing_profiles":["beta"]}"#,
+        )
+        .unwrap();
+        assert_eq!(cross.decision, LaunchDecisionKind::CrossProfile);
+        assert_eq!(cross.resolved_profile.as_deref(), Some("alpha"));
+        assert_eq!(cross.existing_profiles, vec!["beta".to_string()]);
+    }
+
+    fn state_with_task(task: TaskView) -> AppState {
+        AppState::new(
+            vec![SessionView {
+                id: SessionKey("local:test".into()),
+                title: "test".into(),
+                profile_id: Some("coding".into()),
+                messages: vec![Message::system("ready")],
+                tasks: vec![task],
+                live_reply: None,
+            }],
+            0,
+            "ready".into(),
+            None,
+            false,
+        )
+    }
+
+    #[test]
+    fn snapshot_seeds_artifacts_workspace_and_git_panes_from_mock_data() {
+        let preview_id = PreviewId::new();
+        let snapshot = AppUiSnapshot {
+            sessions: vec![SessionView {
+                id: SessionKey("local:test".into()),
+                title: "M9 protocol draft".into(),
+                profile_id: Some("coding".into()),
+                messages: vec![Message::system("ready")],
+                tasks: vec![TaskView {
+                    id: TaskId::new(),
+                    title: "protocol spike".into(),
+                    state: TaskRuntimeState::Running,
+                    runtime_detail: Some(format!("pending preview_id: {}", preview_id.0)),
+                    output_tail: "bootstrap: seeded mock session\n".into(),
+                    turn_id: None,
+                }],
+                live_reply: None,
+            }],
+            selected_session: 0,
+            status: "Mock backend ready".into(),
+            target: Some("local mock snapshot".into()),
+            readonly: false,
+        };
+
+        let state = AppState::from_snapshot(snapshot);
+
+        assert!(state.artifacts.items.iter().any(|item| {
+            item.title == "ra UI bootstrap snapshot" && item.source == "local mock snapshot"
+        }));
+        assert!(
+            state
+                .artifacts
+                .items
+                .iter()
+                .any(|item| item.title == "protocol spike output tail"
+                    && item.status == "bootstrap: seeded mock session")
+        );
+        assert!(state.artifacts.items.iter().any(|item| {
+            item.title == "protocol spike diff preview" && item.status == preview_id.0.to_string()
+        }));
+        assert!(
+            state
+                .workspace
+                .contract
+                .iter()
+                .any(|line| line.contains(APP_UI_API_V1))
+        );
+        assert!(
+            state
+                .workspace
+                .entries
+                .iter()
+                .any(|entry| entry.label == "protocol spike" && entry.detail == "running")
+        );
+        assert_eq!(state.git.branch, "m9.7/mock-snapshot");
+        assert!(
+            state
+                .git
+                .history
+                .iter()
+                .any(|entry| entry.summary == "seed missing pane snapshots")
+        );
+    }
+
+    #[test]
+    fn protocol_snapshot_seeds_contract_fallbacks_when_pane_payloads_are_absent() {
+        let snapshot = AppUiSnapshot {
+            sessions: vec![],
+            selected_session: 0,
+            status: "Protocol backend connected".into(),
+            target: Some("wss://example.test/ui-protocol".into()),
+            readonly: true,
+        };
+
+        let state = AppState::from_snapshot(snapshot);
+
+        assert!(state.artifacts.items.iter().any(|item| {
+            item.title == "Protocol artifact stream"
+                && item.status == "waiting for artifact payloads"
+        }));
+        assert_eq!(state.workspace.root, "wss://example.test/ui-protocol");
+        assert!(
+            state
+                .workspace
+                .contract
+                .iter()
+                .any(|line| line.contains("pane.snapshots.v1"))
+        );
+        assert!(
+            state
+                .workspace
+                .contract
+                .iter()
+                .any(|line| line == "readonly launch: commands disabled")
+        );
+        assert_eq!(state.git.branch, "not supplied");
+        assert!(
+            state
+                .git
+                .status
+                .iter()
+                .any(|item| item.detail.contains("protocol snapshot"))
+        );
+    }
+
+    #[test]
+    fn stdio_protocol_target_stays_available_after_status_changes() {
+        let mut state = AppState::new(
+            vec![SessionView {
+                id: SessionKey("coding:local:test".into()),
+                title: "stdio".into(),
+                profile_id: Some("coding".into()),
+                messages: vec![Message::system("ready")],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            0,
+            "ra UI capabilities refreshed: 24 methods".into(),
+            Some("stdio:ra serve --stdio".into()),
+            false,
+        );
+        state.set_capabilities(UiProtocolCapabilities::new(
+            &[APPUI_METHOD_PROFILE_LLM_CATALOG],
+            &[],
+        ));
+
+        let ctx = state.availability_context();
+
+        assert_eq!(ctx.runtime, RuntimeMode::Protocol);
+        assert_eq!(ctx.connection, ConnectionState::Connected);
+        assert!(ctx.supports_method(APPUI_METHOD_PROFILE_LLM_CATALOG));
+    }
+
+    #[test]
+    fn pane_snapshot_hydrates_workspace_artifacts_and_git() {
+        let mut state = AppState::new(vec![], 0, "ready".into(), None, false);
+        state.apply_pane_snapshot(UiPaneSnapshot {
+            session_id: SessionKey("local:test".into()),
+            generated_at: None,
+            workspace: Some(UiWorkspacePaneSnapshot {
+                root: "/repo".into(),
+                readable_roots: vec!["/repo".into()],
+                writable_roots: vec!["/repo".into()],
+                contract: vec!["feature pane.snapshots.v1".into()],
+                entries: vec![UiWorkspacePaneEntry {
+                    path: "src/lib.rs".into(),
+                    label: "lib.rs".into(),
+                    depth: 1,
+                    kind: "file".into(),
+                    detail: Some("12 KB".into()),
+                }],
+                limitations: Vec::new(),
+            }),
+            artifacts: Some(UiArtifactPaneSnapshot {
+                items: vec![UiArtifactPaneItem {
+                    title: "lib.rs".into(),
+                    kind: "file".into(),
+                    path: Some("src/lib.rs".into()),
+                    uri: None,
+                    source: Some("workspace".into()),
+                    status: "12 KB".into(),
+                    source_task_id: None,
+                    preview_id: None,
+                    size_bytes: Some(12_288),
+                    updated_at: None,
+                }],
+                limitations: Vec::new(),
+            }),
+            git: Some(UiGitPaneSnapshot {
+                repo_root: Some("/repo".into()),
+                branch: Some("coding-green".into()),
+                head: Some("abc1234".into()),
+                clean: false,
+                status: vec![UiGitStatusItem {
+                    code: "M".into(),
+                    path: "src/lib.rs".into(),
+                    detail: "modified".into(),
+                }],
+                history: vec![UiGitHistoryItem {
+                    commit: "abc1234".into(),
+                    summary: "pane snapshots".into(),
+                }],
+                limitations: Vec::new(),
+            }),
+            limitations: Vec::new(),
+        });
+
+        assert_eq!(state.workspace.root, "/repo");
+        assert_eq!(state.workspace.entries[0].label, "lib.rs");
+        assert_eq!(state.artifacts.items[0].title, "lib.rs");
+        assert_eq!(state.git.branch, "coding-green");
+        assert_eq!(state.git.status[0].path, "src/lib.rs");
+    }
+
+    #[test]
+    fn focus_cycle_includes_m9_panes_and_returns_to_sessions() {
+        let mut focus = FocusPane::Sessions;
+        let mut visited = Vec::new();
+        for _ in 0..7 {
+            visited.push(focus);
+            focus = focus.next();
+        }
+
+        assert_eq!(
+            visited,
+            vec![
+                FocusPane::Sessions,
+                FocusPane::Tasks,
+                FocusPane::Artifacts,
+                FocusPane::Transcript,
+                FocusPane::Workspace,
+                FocusPane::Git,
+                FocusPane::Composer,
+            ]
+        );
+        assert_eq!(focus, FocusPane::Sessions);
+    }
+
+    #[test]
+    fn active_diff_preview_id_extracts_existing_protocol_id_from_task_detail() {
+        let preview_id = PreviewId::new();
+        let state = state_with_task(TaskView {
+            id: TaskId::new(),
+            title: "diff".into(),
+            state: TaskRuntimeState::Running,
+            runtime_detail: Some(format!("pending preview_id: {}", preview_id.0)),
+            output_tail: String::new(),
+            turn_id: None,
+        });
+
+        assert_eq!(state.active_diff_preview_id(), Some(preview_id));
+    }
+
+    #[test]
+    fn git_scroll_uses_top_origin_like_workspace_pane() {
+        let mut git = GitPaneState::default();
+
+        git.scroll_down(8);
+        assert_eq!(git.scroll, 8);
+
+        git.scroll_up(3);
+        assert_eq!(git.scroll, 5);
+
+        git.scroll_up(99);
+        assert_eq!(git.scroll, 0);
+    }
+
+    #[test]
+    fn transcript_append_preserves_scrolled_view_beyond_the_old_ceiling() {
+        let mut state = AppState::new(Vec::new(), 0, "ready".into(), None, false);
+        state.transcript_scroll = 5;
+        state.record_transcript_scroll_max(5);
+
+        state.preserve_transcript_position_after_append(3);
+
+        assert_eq!(
+            state.transcript_scroll, 8,
+            "new rows increase the from-bottom offset instead of being cut off by the old max"
+        );
+
+        // A stale pre-append overshoot is normalized first, then the same
+        // preservation delta is applied.
+        state.transcript_scroll = 99;
+        state.preserve_transcript_position_after_append(3);
+        assert_eq!(state.transcript_scroll, 8);
+    }
+
+    /// P2-19: at the hydration-queue cap, overflow must never evict a
+    /// `session/open` — the local tab switch pushes it to the FRONT so it
+    /// precedes the restored staged `turn/start` (the unscoped-affinity
+    /// ordering the scoped-open barrier exists to prevent). Evicting it lets
+    /// the submit go out with no preceding open. The oldest NON-open entry is
+    /// evicted instead.
+    /// Two local switches inside one input batch (key auto-repeat in the
+    /// sessions pane) used to leave `[Open(C), Open(B)]` at the queue front:
+    /// the transport then opened C, then B, and the server's final affinity
+    /// (and the reconnect target) ended on B while the UI showed C. Only the
+    /// LATEST local open may remain, at the front, and the cap still holds.
+    #[test]
+    fn rapid_local_switches_queue_only_the_latest_session_open_first() {
+        use ra_core::ui_protocol::SessionOpenParams;
+        let open = |id: &str| {
+            AppUiCommand::OpenSession(SessionOpenParams {
+                session_id: SessionKey(id.into()),
+                topic: None,
+                profile_id: None,
+                cwd: None,
+                sandbox: None,
+                after: None,
+            })
+        };
+        let mut state = AppState::new(Vec::new(), 0, "ready".into(), None, false);
+        for _ in 0..16 {
+            state.enqueue_autonomy_hydration(AppUiCommand::ListSessions(SessionListParams {
+                cwd: None,
+            }));
+        }
+        state.enqueue_local_session_open_front(open("local:b"));
+        state.enqueue_local_session_open_front(open("local:c"));
+
+        let opens = state
+            .pending_autonomy_hydration
+            .iter()
+            .filter_map(|command| match command {
+                AppUiCommand::OpenSession(params) => Some(params.session_id.0.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            opens,
+            vec!["local:c".to_string()],
+            "only the latest switch survives"
+        );
+        assert!(
+            matches!(
+                state.pending_autonomy_hydration.front(),
+                Some(AppUiCommand::OpenSession(params)) if params.session_id.0 == "local:c"
+            ),
+            "the latest open leads the queue"
+        );
+        assert!(
+            state.pending_autonomy_hydration.len() <= 16,
+            "the local-open path must respect the queue cap, got {}",
+            state.pending_autonomy_hydration.len()
+        );
+    }
+
+    #[test]
+    fn hydration_queue_overflow_never_evicts_a_session_open() {
+        use ra_core::ui_protocol::SessionOpenParams;
+        let session_id = SessionKey("local:switch".into());
+        let mut state = AppState::new(Vec::new(), 0, "ready".into(), None, false);
+        for _ in 0..15 {
+            state.enqueue_autonomy_hydration(AppUiCommand::ListSessions(SessionListParams {
+                cwd: None,
+            }));
+        }
+        state
+            .pending_autonomy_hydration
+            .push_front(AppUiCommand::OpenSession(SessionOpenParams {
+                session_id: session_id.clone(),
+                topic: None,
+                profile_id: None,
+                cwd: None,
+                sandbox: None,
+                after: None,
+            }));
+        assert_eq!(
+            state.pending_autonomy_hydration.len(),
+            16,
+            "precondition: the queue sits exactly at its cap"
+        );
+
+        state.enqueue_autonomy_hydration(AppUiCommand::SubmitPrompt(TurnStartParams {
+            tool_context: None,
+            session_id: session_id.clone(),
+            turn_id: TurnId::new(),
+            input: vec![InputItem::Text {
+                text: "continue".into(),
+            }],
+            media: Vec::new(),
+            topic: None,
+            rewrite_for: None,
+            reasoning_effort: None,
+            live_video: false,
+        }));
+
+        assert!(
+            matches!(
+                state.pending_autonomy_hydration.front(),
+                Some(AppUiCommand::OpenSession(params)) if params.session_id == session_id
+            ),
+            "the tab-switch open must survive at the front, got {:?}",
+            state.pending_autonomy_hydration.front()
+        );
+        assert!(
+            matches!(
+                state.pending_autonomy_hydration.back(),
+                Some(AppUiCommand::SubmitPrompt(_))
+            ),
+            "the staged submit queues BEHIND the open"
+        );
+        assert_eq!(
+            state.pending_autonomy_hydration.len(),
+            16,
+            "still bounded: the oldest non-open entry was evicted"
+        );
+    }
+
+    /// When every queued entry is a `session/open`, the incoming command is
+    /// dropped — and the drop surfaced in the status line — rather than any
+    /// open being evicted.
+    #[test]
+    fn hydration_queue_full_of_opens_drops_the_incoming_command_and_reports_it() {
+        use ra_core::ui_protocol::SessionOpenParams;
+        let mut state = AppState::new(Vec::new(), 0, "ready".into(), None, false);
+        for index in 0..16 {
+            state.enqueue_autonomy_hydration(AppUiCommand::OpenSession(SessionOpenParams {
+                session_id: SessionKey(format!("local:{index}")),
+                topic: None,
+                profile_id: None,
+                cwd: None,
+                sandbox: None,
+                after: None,
+            }));
+        }
+        let dropped_session = SessionKey("local:dropped".into());
+        state.hydrate_in_flight.insert(dropped_session.clone());
+        let dropped = AppUiCommand::HydrateSession(SessionHydrateParams {
+            session_id: dropped_session.clone(),
+            after: None,
+            include: Vec::new(),
+        });
+        let method = dropped.method().to_string();
+
+        state.enqueue_autonomy_hydration(dropped);
+
+        assert!(!state.hydrate_in_flight.contains(&dropped_session));
+        assert_eq!(state.pending_autonomy_hydration.len(), 16);
+        assert!(
+            state
+                .pending_autonomy_hydration
+                .iter()
+                .all(|command| matches!(command, AppUiCommand::OpenSession(_))),
+            "no session/open may be evicted"
+        );
+        assert_eq!(
+            state.status,
+            t!("status.hydration_queue_full", method = method).into_owned(),
+            "the dropped command is surfaced"
+        );
+    }
+
+    #[test]
+    fn local_session_open_eviction_clears_hydrate_in_flight() {
+        use ra_core::ui_protocol::SessionOpenParams;
+        let mut state = AppState::new(Vec::new(), 0, "ready".into(), None, false);
+        for index in 0..16 {
+            let session_id = SessionKey(format!("local:{index}"));
+            state.hydrate_in_flight.insert(session_id.clone());
+            state.enqueue_autonomy_hydration(AppUiCommand::HydrateSession(SessionHydrateParams {
+                session_id,
+                after: None,
+                include: Vec::new(),
+            }));
+        }
+        state.enqueue_local_session_open_front(AppUiCommand::OpenSession(SessionOpenParams {
+            session_id: SessionKey("local:active".into()),
+            topic: None,
+            profile_id: None,
+            cwd: None,
+            sandbox: None,
+            after: None,
+        }));
+        assert_eq!(state.pending_autonomy_hydration.len(), 16);
+        assert!(
+            !state
+                .hydrate_in_flight
+                .contains(&SessionKey("local:15".into()))
+        );
+        assert_eq!(state.hydrate_in_flight.len(), 15);
+    }
+
+    /// `completed_turns` grows on EVERY terminal for the life of the session;
+    /// without a cap a long-running session retains every turn id ever seen.
+    /// Mirror `finalized_by_switch`'s bounded FIFO: oldest ids evict first and
+    /// only the newest `COMPLETED_TURNS_CAP` remain queryable.
+    #[test]
+    fn mark_turn_completed_is_bounded_per_session_and_keeps_newest() {
+        let session_id = SessionKey("local:test".into());
+        let mut state = AppState::new(Vec::new(), 0, "ready".into(), None, false);
+
+        let turn_ids: Vec<TurnId> = (0..AppState::COMPLETED_TURNS_CAP + 10)
+            .map(|_| TurnId::new())
+            .collect();
+        for turn_id in &turn_ids {
+            state.mark_turn_completed(&session_id, turn_id);
+        }
+
+        let (set, queue) = state
+            .completed_turns
+            .get(&session_id)
+            .expect("session entry exists");
+        assert_eq!(set.len(), AppState::COMPLETED_TURNS_CAP, "set is bounded");
+        assert_eq!(
+            queue.len(),
+            AppState::COMPLETED_TURNS_CAP,
+            "FIFO queue is bounded"
+        );
+        // The 10 oldest ids were evicted; the newest CAP ids are retained.
+        for evicted in &turn_ids[..10] {
+            assert!(
+                !state.is_turn_completed(&session_id, evicted),
+                "oldest ids evict FIFO"
+            );
+        }
+        for retained in &turn_ids[10..] {
+            assert!(
+                state.is_turn_completed(&session_id, retained),
+                "newest ids are retained"
+            );
+        }
+        // Re-marking an already-present id must not grow the queue (no dupes).
+        state.mark_turn_completed(&session_id, turn_ids.last().expect("non-empty"));
+        let (_, queue) = state
+            .completed_turns
+            .get(&session_id)
+            .expect("session entry exists");
+        assert_eq!(queue.len(), AppState::COMPLETED_TURNS_CAP);
+    }
+
+    /// The four detail modals render `scroll` FROM THE BOTTOM
+    /// (`scroll_top = max_scroll - scroll` in app.rs), exactly like the
+    /// transcript: they open pinned to the tail (`scroll == 0`), Up must
+    /// INCREASE `scroll` (reveal earlier lines) and Down must DECREASE it.
+    /// The old top-origin bodies left Up dead at the bottom and made Down
+    /// scroll the wrong way.
+    #[test]
+    fn detail_modal_scroll_up_from_bottom_increases_offset() {
+        let mut task_output = TaskOutputDetailState::default();
+        task_output.scroll_up(3);
+        assert_eq!(task_output.scroll, 3, "Up from the tail reveals history");
+        task_output.scroll_down(1);
+        assert_eq!(task_output.scroll, 2);
+        task_output.scroll_down(99);
+        assert_eq!(task_output.scroll, 0, "Down saturates at the live tail");
+
+        let mut artifact = ArtifactDetailState::default();
+        artifact.scroll_up(2);
+        assert_eq!(artifact.scroll, 2);
+        artifact.scroll_down(2);
+        assert_eq!(artifact.scroll, 0);
+
+        let mut graph = ThreadGraphDetailState::default();
+        graph.scroll_up(5);
+        assert_eq!(graph.scroll, 5);
+        graph.scroll_down(4);
+        assert_eq!(graph.scroll, 1);
+
+        let mut turn = TurnStateDetailState::default();
+        turn.scroll_up(1);
+        assert_eq!(turn.scroll, 1);
+        turn.scroll_down(9);
+        assert_eq!(turn.scroll, 0);
+    }
+
+    #[test]
+    fn diff_preview_result_keeps_future_status_labels_instead_of_rejecting_them() {
+        let preview_id = PreviewId::new();
+        let json = serde_json::json!({
+            "status": "requires_refresh",
+            "source": "future_cache",
+            "preview": {
+                "session_id": "local:test",
+                "preview_id": preview_id,
+                "title": "Future status",
+                "files": [{
+                    "path": "src/lib.rs",
+                    "status": "copied",
+                    "hunks": [{
+                        "header": "@@ -1 +1 @@",
+                        "lines": [{
+                            "kind": "metadata",
+                            "content": "mode change",
+                            "old_line": null,
+                            "new_line": null
+                        }]
+                    }]
+                }]
+            }
+        });
+
+        let result: DiffPreviewGetResult =
+            serde_json::from_value(json).expect("future status labels decode");
+
+        assert_eq!(result.status, "requires_refresh");
+        assert_eq!(result.source, "future_cache");
+        assert_eq!(result.preview.files[0].status, "copied");
+        assert_eq!(result.preview.files[0].hunks[0].lines[0].kind, "metadata");
+    }
+
+    #[test]
+    fn diff_view_mode_toggle_preserves_scroll_and_survives_reopen() {
+        let mut diff = DiffPreviewPaneState::default();
+        let preview_id = PreviewId::new();
+        diff.open_loading(preview_id.clone());
+        diff.scroll = 7;
+        diff.selected_file = 0;
+        diff.selected_hunk = 1;
+
+        assert!(!diff.side_by_side, "unified is the default view mode");
+        diff.toggle_view_mode();
+        assert!(diff.side_by_side);
+        assert_eq!(diff.scroll, 7, "toggle must preserve scroll position");
+        assert_eq!(diff.selected_hunk, 1, "toggle must preserve hunk selection");
+        diff.toggle_view_mode();
+        assert!(!diff.side_by_side, "toggle round-trips back to unified");
+        assert_eq!(diff.scroll, 7);
+        assert_eq!(diff.selected_hunk, 1);
+
+        // Re-requesting the preview (a fresh `d`) must not silently flip the
+        // view mode back to unified.
+        diff.toggle_view_mode();
+        diff.open_loading(preview_id);
+        assert!(diff.side_by_side, "view mode survives a preview reload");
+    }
+
+    #[test]
+    fn runtime_policy_stamp_accepts_coding_contract_extensions() {
+        let json = serde_json::json!({
+            "tool_policy_id": "coding-v3",
+            "tool_contract_id": "codex-compatible-coding-v1",
+            "tool_contract_version": "1",
+            "model_toolset": "coding",
+            "dynamic_tool_discovery": "enabled",
+            "mcp_servers": [{
+                "id": "github",
+                "display_name": "GitHub",
+                "status": "connected",
+                "tool_count": 4
+            }]
+        });
+
+        let stamp: RuntimePolicyStamp =
+            serde_json::from_value(json).expect("runtime policy stamp decodes");
+
+        assert_eq!(stamp.tool_policy_id.as_deref(), Some("coding-v3"));
+        assert_eq!(
+            stamp.tool_contract_id.as_deref(),
+            Some("codex-compatible-coding-v1")
+        );
+        assert_eq!(stamp.model_toolset.as_deref(), Some("coding"));
+        assert_eq!(stamp.dynamic_tool_discovery.as_deref(), Some("enabled"));
+        assert_eq!(stamp.mcp_servers[0].label(), "GitHub (connected, 4 tools)");
+    }
+
+    #[test]
+    fn tool_status_list_result_keeps_coding_tool_contract() {
+        let json = serde_json::json!({
+            "session_id": "local:test",
+            "policy_id": "coding-v3",
+            "coding_tool_contract": {
+                "id": "codex-compatible-coding-v1",
+                "version": "1",
+                "feature": "coding.tool_contract.v1",
+                "status": "incomplete",
+                "required_tool_names": ["apply_patch", "exec_command"],
+                "missing_required_tools": ["exec_command"],
+                "policy": {
+                    "tool_policy_id": "coding-v3",
+                    "sandbox_mode": "workspace-write",
+                    "approval_policy": "on-request"
+                },
+                "required_tools": [{
+                    "name": "exec_command",
+                    "category": "runtime",
+                    "aliases": ["shell"],
+                    "capability": "coding.exec_session.v1",
+                    "policy": "approval_gated",
+                    "status": "missing",
+                    "backend_tool": null,
+                    "detail": "backend has no exec session"
+                }]
+            },
+            "tools": []
+        });
+
+        let result: ToolStatusListResult =
+            serde_json::from_value(json).expect("tool status list decodes");
+        let contract = result
+            .coding_tool_contract
+            .expect("coding tool contract retained");
+
+        assert_eq!(contract.status, "incomplete");
+        assert_eq!(
+            contract.missing_required_tools,
+            vec!["exec_command".to_string()]
+        );
+        assert_eq!(
+            contract.policy.and_then(|policy| policy.tool_policy_id),
+            Some("coding-v3".into())
+        );
+        assert_eq!(contract.required_tools[0].status, "missing");
+        assert_eq!(
+            contract.required_tools[0].detail.as_deref(),
+            Some("backend has no exec session")
+        );
+    }
+
+    #[test]
+    fn extracted_plan_steps_normalize_numbered_markdown_checkboxes() {
+        let state = AppState::new(
+            vec![SessionView {
+                id: SessionKey("local:test".into()),
+                title: "test".into(),
+                profile_id: Some("coding".into()),
+                messages: vec![Message::assistant(
+                    "Plan:\n1. [ ] Fix data model\n2) [x] Run focused tests",
+                )],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            0,
+            "ready".into(),
+            None,
+            false,
+        );
+
+        assert_eq!(
+            extract_plan_steps(&state),
+            vec![
+                PlanStep {
+                    text: "Fix data model".into(),
+                    completed: false,
+                },
+                PlanStep {
+                    text: "Run focused tests".into(),
+                    completed: true,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn plan_extraction_rejects_prose_and_long_bullets() {
+        let long_line = format!(
+            "Plan:\n- {}",
+            "This is explanatory prose ".repeat(12).trim()
+        );
+        let state = AppState::new(
+            vec![SessionView {
+                id: SessionKey("local:test".into()),
+                title: "test".into(),
+                profile_id: Some("coding".into()),
+                messages: vec![
+                    Message::assistant(
+                        "The plan parser should not treat this explanatory paragraph as a task.",
+                    ),
+                    Message::assistant(long_line),
+                ],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            0,
+            "ready".into(),
+            None,
+            false,
+        );
+
+        assert!(extract_plan_steps(&state).is_empty());
+    }
+
+    #[test]
+    fn plan_extraction_rejects_clarifying_question_lists() {
+        let state = AppState::new(
+            vec![SessionView {
+                id: SessionKey("local:test".into()),
+                title: "test".into(),
+                profile_id: Some("coding".into()),
+                messages: vec![Message::assistant(
+                    "Could you clarify?\n\n1. Is this a path within the current project/workspace?\n2. Or is it a system path outside the workspace?\n3. Did you mean a different directory?",
+                )],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            0,
+            "ready".into(),
+            None,
+            false,
+        );
+
+        assert!(extract_plan_steps(&state).is_empty());
+    }
+
+    #[test]
+    fn completing_plan_steps_rewrites_only_real_plan_items() {
+        let text = "Plan:\n1. [ ] Fix model\n2. Run tests\n\nReasoning stays unchecked.";
+
+        assert_eq!(
+            complete_plan_steps_in_text(text),
+            "Plan:\n- [x] Fix model\n- [x] Run tests\n\nReasoning stays unchecked."
+        );
+        assert_eq!(
+            complete_plan_steps_in_text("1. [ ] Fix model\n2. Run tests"),
+            "- [x] Fix model\n- [x] Run tests"
+        );
+    }
+
+    #[test]
+    fn typed_fragment_delivered_as_paste_reopens_collapsed_block() {
+        // Regression: some terminals (bracketed paste over SSH/tmux, fast IME
+        // bursts) deliver quick typed keystrokes as a Paste event. When that
+        // lands while a real paste is collapsed, the tiny fragment must clear
+        // the paste flag so the composer re-opens inline and the text echoes —
+        // otherwise the chip stays collapsed, its char count ticks up, and the
+        // typed text never shows.
+        let mut state = AppState::new(
+            vec![SessionView {
+                id: SessionKey("local:test".into()),
+                title: "t".into(),
+                profile_id: Some("coding".into()),
+                messages: vec![Message::assistant("ready")],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            0,
+            "ready".into(),
+            None,
+            false,
+        );
+        let block = (1..=10)
+            .map(|i| format!("pasted code line {i} with content"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        state.insert_pasted_text(&block);
+        assert!(state.composer_pasted);
+        assert!(matches!(
+            state.composer_presentation(),
+            ComposerPresentation::Collapsed(_)
+        ));
+
+        // A short fragment arrives as a Paste event (misdelivered typed input).
+        state.insert_pasted_text("x");
+        assert!(
+            !state.composer_pasted,
+            "a tiny paste-fragment while collapsed clears the paste flag"
+        );
+        assert!(
+            matches!(
+                state.composer_presentation(),
+                ComposerPresentation::Inline(_)
+            ),
+            "composer re-opens inline so the typed text echoes"
+        );
+        assert!(
+            state.composer.contains('x'),
+            "the typed char is in the text"
+        );
+    }
+
+    #[test]
+    fn composer_presentation_collapses_large_pastes_without_changing_text() {
+        let mut state = AppState::new(
+            vec![SessionView {
+                id: SessionKey("local:test".into()),
+                title: "test".into(),
+                profile_id: Some("coding".into()),
+                messages: vec![Message::assistant("ready")],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            0,
+            "ready".into(),
+            None,
+            false,
+        );
+        let pasted_text = std::iter::once("first pasted line".to_string())
+            .chain((2..=40).map(|idx| format!("pasted line {idx}")))
+            .collect::<Vec<_>>()
+            .join("\n");
+        state.composer = pasted_text.clone();
+
+        let ComposerPresentation::Collapsed(collapse) = state.composer_presentation() else {
+            panic!("large paste should collapse");
+        };
+
+        assert_eq!(state.composer, pasted_text);
+        assert!(collapse.summary.contains("40 lines"));
+        assert_eq!(collapse.preview, "first pasted line");
+    }
+
+    #[test]
+    fn small_paste_collapses_but_the_same_text_typed_stays_inline() {
+        let mut state = AppState::new(
+            vec![SessionView {
+                id: SessionKey("local:test".into()),
+                title: "test".into(),
+                profile_id: Some("coding".into()),
+                messages: vec![Message::assistant("ready")],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            0,
+            "ready".into(),
+            None,
+            false,
+        );
+        // A 6-line block: well under the 32-line "typed" safety threshold, so it
+        // ONLY collapses because it arrived via paste.
+        let block = (1..=6)
+            .map(|i| format!("pasted code line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // Pasted → compact [paste] block.
+        state.insert_pasted_text(&block);
+        assert!(state.composer_pasted, "a large paste sets the paste flag");
+        let ComposerPresentation::Collapsed(collapse) = state.composer_presentation() else {
+            panic!("a 6-line paste should collapse");
+        };
+        assert!(collapse.summary.contains("6 lines"));
+        assert_eq!(state.composer, block, "collapse never mutates the text");
+
+        // The SAME text typed (not pasted) must stay inline — no collapse.
+        state.clear_current_composer_draft();
+        for ch in block.chars() {
+            state.insert_composer_char(ch);
+        }
+        assert!(!state.composer_pasted, "typing never sets the paste flag");
+        assert!(
+            matches!(
+                state.composer_presentation(),
+                ComposerPresentation::Inline(_)
+            ),
+            "typed multi-line input must NOT collapse",
+        );
+
+        // Editing a collapsed paste re-opens it inline (so it stays editable).
+        state.insert_pasted_text(&block);
+        assert!(state.composer_pasted);
+        state.insert_composer_char('!');
+        assert!(!state.composer_pasted, "an edit clears the paste flag");
+        assert!(matches!(
+            state.composer_presentation(),
+            ComposerPresentation::Inline(_)
+        ));
+
+        // A tiny paste stays inline (nothing to box up).
+        state.clear_current_composer_draft();
+        state.insert_pasted_text("hi");
+        assert!(!state.composer_pasted, "a small paste does not collapse");
+    }
+
+    #[test]
+    fn composer_presentation_keeps_short_prompts_inline() {
+        let mut state = AppState::new(
+            vec![SessionView {
+                id: SessionKey("local:test".into()),
+                title: "test".into(),
+                profile_id: Some("coding".into()),
+                messages: vec![Message::assistant("ready")],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            0,
+            "ready".into(),
+            None,
+            false,
+        );
+        state.composer = "fix failing tests".into();
+
+        assert_eq!(
+            state.composer_presentation(),
+            ComposerPresentation::Inline("fix failing tests".into())
+        );
+    }
+
+    #[test]
+    fn composer_inline_cursor_width_uses_last_line() {
+        let presentation = ComposerPresentation::Inline("first\nsecond line".into());
+        assert_eq!(presentation.cursor_width(), "second line".chars().count());
+    }
+
+    #[test]
+    fn composer_inline_cursor_width_uses_display_columns_for_chinese() {
+        let presentation = ComposerPresentation::Inline("first\n你好abc".into());
+        assert_eq!(presentation.cursor_width(), 7);
+    }
+
+    #[test]
+    fn optimistic_user_prompt_restores_missing_duplicate_at_submit_anchor() {
+        let session_id = SessionKey("local:test".into());
+        let mut state = AppState::new(
+            vec![SessionView {
+                id: session_id.clone(),
+                title: "test".into(),
+                profile_id: Some("coding".into()),
+                messages: vec![Message::user("repeat"), Message::assistant("old answer")],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            0,
+            "ready".into(),
+            None,
+            false,
+        );
+        state.record_submitted_user_prompt(session_id.clone(), TurnId::new(), "repeat".into());
+        assert_eq!(state.sessions[0].messages[2].content, "repeat");
+
+        let optimistic_user_messages = state.optimistic_user_messages.clone();
+        let mut replayed = AppState::new(
+            vec![SessionView {
+                id: session_id,
+                title: "test".into(),
+                profile_id: Some("coding".into()),
+                messages: vec![
+                    Message::user("repeat"),
+                    Message::assistant("old answer"),
+                    Message::assistant("server-side output without echoed prompt"),
+                ],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            0,
+            "ready".into(),
+            None,
+            false,
+        );
+        replayed.optimistic_user_messages = optimistic_user_messages;
+
+        replayed.restore_optimistic_user_messages();
+
+        let messages = &replayed.sessions[0].messages;
+        assert_eq!(messages[0].content, "repeat");
+        assert_eq!(messages[1].content, "old answer");
+        assert_eq!(messages[2].role.as_str(), "user");
+        assert_eq!(messages[2].content, "repeat");
+        assert_eq!(
+            messages[3].content,
+            "server-side output without echoed prompt"
+        );
+    }
+
+    #[test]
+    fn optimistic_user_prompt_drops_when_server_echo_confirms_it() {
+        let session_id = SessionKey("local:test".into());
+        let mut state = AppState::new(
+            vec![SessionView {
+                id: session_id.clone(),
+                title: "test".into(),
+                profile_id: Some("coding".into()),
+                messages: vec![Message::assistant("ready")],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            0,
+            "ready".into(),
+            None,
+            false,
+        );
+
+        state.record_submitted_user_prompt(session_id, TurnId::new(), "confirmed prompt".into());
+        assert_eq!(state.optimistic_user_messages.len(), 1);
+        state.sessions[0].messages = vec![
+            Message::assistant("ready"),
+            Message::user("confirmed prompt"),
+            Message::assistant("server echoed the prompt"),
+        ];
+
+        state.restore_optimistic_user_messages();
+
+        assert!(state.optimistic_user_messages.is_empty());
+        assert_eq!(
+            state.sessions[0]
+                .messages
+                .iter()
+                .filter(|message| message.role.as_str() == "user"
+                    && message.content == "confirmed prompt")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn pending_prompt_is_not_restored_as_optimistic_history() {
+        let session_id = SessionKey("local:test".into());
+        let mut state = AppState::new(
+            vec![SessionView {
+                id: session_id.clone(),
+                title: "test".into(),
+                profile_id: Some("coding".into()),
+                messages: vec![
+                    Message::user("active prompt"),
+                    Message::assistant("partial answer"),
+                ],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            0,
+            "ready".into(),
+            None,
+            false,
+        );
+        state.pending_messages.push("queued next".into());
+
+        state.record_submitted_user_prompt(session_id, TurnId::new(), "queued next".into());
+
+        assert!(
+            state.sessions[0]
+                .messages
+                .iter()
+                .all(|message| message.content != "queued next"),
+            "a prompt still in pending_messages must not be inserted into session history"
+        );
+        assert!(
+            state.optimistic_user_messages.is_empty(),
+            "the skipped pending prompt must not leave a stale optimistic entry"
+        );
+    }
+
+    /// M22-B: pre-flight validation surfaces the first failing field
+    /// in declaration order (name → username → email) so the user
+    /// fixes one thing at a time.
+    #[test]
+    fn validate_local_profile_reports_first_missing_field() {
+        let state = OnboardingWizardState::default();
+        let err = state
+            .validate_local_profile()
+            .expect_err("default state has no name");
+        assert_eq!(err.focus_field, OnboardingLocalProfileField::Name);
+        assert_eq!(err.kind, OnboardingLocalProfileErrorKind::InvalidField);
+    }
+
+    #[test]
+    fn validate_local_profile_rejects_whitespace_in_username() {
+        let state = OnboardingWizardState {
+            name: "Ada Lovelace".into(),
+            username: "ada lovelace".into(),
+            email: "ada@example.com".into(),
+            ..OnboardingWizardState::default()
+        };
+        let err = state
+            .validate_local_profile()
+            .expect_err("username must reject whitespace");
+        assert_eq!(err.focus_field, OnboardingLocalProfileField::Username);
+        assert!(
+            err.message.contains("ASCII without whitespace"),
+            "got: {}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn validate_local_profile_accepts_single_label_domain() {
+        // The backend accepts `ada@localhost` and `dev@corp`; the
+        // TUI must NOT be stricter than the server.
+        let state = OnboardingWizardState {
+            name: "Ada".into(),
+            username: "ada".into(),
+            email: "ada@localhost".into(),
+            ..OnboardingWizardState::default()
+        };
+        assert!(state.validate_local_profile().is_ok());
+    }
+
+    #[test]
+    fn validate_local_profile_rejects_malformed_email() {
+        let state = OnboardingWizardState {
+            name: "Ada".into(),
+            username: "ada".into(),
+            email: "not-an-email".into(),
+            ..OnboardingWizardState::default()
+        };
+        let err = state.validate_local_profile().expect_err("bad email");
+        assert_eq!(err.focus_field, OnboardingLocalProfileField::Email);
+    }
+
+    #[test]
+    fn validate_local_profile_requires_email_to_match_backend_contract() {
+        let state = OnboardingWizardState {
+            name: "Ada".into(),
+            username: "ada".into(),
+            ..OnboardingWizardState::default()
+        };
+        // Empty email is rejected: the current backend
+        // implementation of `profile/local/create` returns
+        // `profile_local_invalid_email` for `""`. The contract
+        // calls email optional but the backend implementation has
+        // not relaxed yet.
+        let err = state
+            .validate_local_profile()
+            .expect_err("empty email must be rejected pre-flight");
+        assert_eq!(err.focus_field, OnboardingLocalProfileField::Email);
+    }
+
+    // ---- Phase 2: nameable-profiles (requested_id) flow ----
+
+    fn state_with_family(family: &str) -> OnboardingWizardState {
+        let mut state = OnboardingWizardState::default();
+        state.provider.family_id = family.into();
+        state
+    }
+
+    #[test]
+    fn should_suggest_glm_when_family_is_zai_glm() {
+        assert_eq!(suggest_profile_id_for_family("glm-4.6"), "glm");
+        assert_eq!(suggest_profile_id_for_family("zai/glm"), "glm");
+        assert_eq!(suggest_profile_id_for_family("GLM"), "glm");
+    }
+
+    #[test]
+    fn should_suggest_known_family_handles() {
+        assert_eq!(suggest_profile_id_for_family("deepseek-v4"), "deepseek");
+        assert_eq!(suggest_profile_id_for_family("gpt-4o"), "openai");
+        assert_eq!(suggest_profile_id_for_family("claude-sonnet"), "claude");
+        assert_eq!(suggest_profile_id_for_family("gemini-2.5"), "gemini");
+    }
+
+    #[test]
+    fn should_slugify_unknown_family_when_not_recognized() {
+        assert_eq!(
+            suggest_profile_id_for_family("Acme Model X"),
+            "acme-model-x"
+        );
+    }
+
+    #[test]
+    fn should_suggest_octos_when_family_is_empty() {
+        assert_eq!(suggest_profile_id_for_family(""), "ra");
+        assert_eq!(suggest_profile_id_for_family("   "), "ra");
+    }
+
+    #[test]
+    fn slugify_collapses_separators_and_trims_edges() {
+        assert_eq!(slugify_profile_id("  My Profile!!  "), "my-profile");
+        assert_eq!(slugify_profile_id("a__b--c"), "a-b-c");
+        assert_eq!(slugify_profile_id("---"), "");
+    }
+
+    #[test]
+    fn peer_slug_display_decodes_utf8_percent_encoding_without_changing_invalid_input() {
+        assert_eq!(
+            peer_slug_for_display("%E5%88%86%E6%9E%90octos%E6%9E%B6%E6%9E%84"),
+            "分析octos架构"
+        );
+        assert_eq!(peer_slug_for_display("%FF"), "%FF");
+    }
+
+    #[test]
+    fn effective_requested_id_prefers_typed_over_suggestion() {
+        let mut state = state_with_family("glm-4.6");
+        assert_eq!(
+            state.effective_requested_id(),
+            "glm",
+            "falls back to family"
+        );
+        state.requested_id = "  my-glm ".into();
+        assert_eq!(state.effective_requested_id(), "my-glm", "typed id wins");
+    }
+
+    #[test]
+    fn validate_requested_id_ok_when_suggestion_available() {
+        // Even with no typed id, the family-derived suggestion is non-empty,
+        // so the nameable-flow pre-flight passes (Continue is never blocked).
+        let state = state_with_family("deepseek");
+        assert!(state.validate_local_profile_requested_id().is_ok());
+        assert!(!state.has_requested_id());
+    }
+
+    // ---- Phase 3: startup profile decision (0/1/N) ----
+
+    fn profiles(ids: &[&str]) -> Vec<String> {
+        ids.iter().map(|id| (*id).to_owned()).collect()
+    }
+
+    #[test]
+    fn should_pin_when_profile_id_flag_is_present() {
+        let decision = StartupProfileDecision::decide(Some("coding"), &profiles(&["a", "b"]));
+        assert_eq!(decision, StartupProfileDecision::Pinned("coding".into()));
+    }
+
+    #[test]
+    fn should_pin_and_trim_whitespace_flag() {
+        let decision = StartupProfileDecision::decide(Some("  glm  "), &[]);
+        assert_eq!(decision, StartupProfileDecision::Pinned("glm".into()));
+    }
+
+    #[test]
+    fn should_onboard_when_zero_profiles_and_no_flag() {
+        assert_eq!(
+            StartupProfileDecision::decide(None, &[]),
+            StartupProfileDecision::Onboard
+        );
+        // A blank/whitespace flag is treated as absent.
+        assert_eq!(
+            StartupProfileDecision::decide(Some("   "), &[]),
+            StartupProfileDecision::Onboard
+        );
+    }
+
+    #[test]
+    fn should_attach_when_exactly_one_profile_and_no_flag() {
+        assert_eq!(
+            StartupProfileDecision::decide(None, &profiles(&["glm"])),
+            StartupProfileDecision::Attach("glm".into())
+        );
+    }
+
+    #[test]
+    fn should_pick_when_more_than_one_profile_and_no_flag() {
+        let decision = StartupProfileDecision::decide(None, &profiles(&["glm", "deepseek"]));
+        assert_eq!(
+            decision,
+            StartupProfileDecision::Pick(profiles(&["deepseek", "glm"])),
+            "picker list is sorted and complete"
+        );
+    }
+
+    #[test]
+    fn should_ignore_blank_and_duplicate_profiles_when_counting() {
+        // Blanks dropped, duplicates collapsed → one real profile → Attach.
+        assert_eq!(
+            StartupProfileDecision::decide(None, &profiles(&["glm", "", "glm", "  "])),
+            StartupProfileDecision::Attach("glm".into())
+        );
+    }
+
+    #[test]
+    fn apply_local_profile_error_routes_collision_to_username() {
+        let mut state = OnboardingWizardState {
+            username: "ada".into(),
+            local_profile_create_pending: true,
+            local_profile_create_pending_username: Some("ada".into()),
+            ..OnboardingWizardState::default()
+        };
+        state.apply_local_profile_error("profile_local_collision", "username already taken");
+        let recovery = state.local_profile_recovery.expect("recovery");
+        assert_eq!(recovery.kind, OnboardingLocalProfileErrorKind::Collision);
+        assert_eq!(recovery.focus_field, OnboardingLocalProfileField::Username);
+        assert!(recovery.message.contains("collision for 'ada'"));
+        assert!(recovery.message.contains("username already taken"));
+        assert!(!state.local_profile_create_pending);
+        assert!(!state.local_profile_created);
+    }
+
+    #[test]
+    fn apply_local_profile_error_routes_invalid_email_to_email_field() {
+        let mut state = OnboardingWizardState::default();
+        state.apply_local_profile_error(
+            "profile_local_invalid_email",
+            "profile/local/create request tui-1 failed: email must contain @",
+        );
+        let recovery = state.local_profile_recovery.expect("recovery");
+        assert_eq!(recovery.focus_field, OnboardingLocalProfileField::Email);
+        assert!(recovery.message.contains("email must contain"));
+    }
+
+    #[test]
+    fn apply_local_profile_error_routes_invalid_name_to_name_field() {
+        let mut state = OnboardingWizardState::default();
+        state.apply_local_profile_error(
+            "profile_local_invalid_name",
+            "profile/local/create request tui-1 failed: name must be non-empty",
+        );
+        let recovery = state.local_profile_recovery.expect("recovery");
+        assert_eq!(recovery.focus_field, OnboardingLocalProfileField::Name);
+    }
+
+    #[test]
+    fn apply_local_profile_error_routes_invalid_username_to_username_field() {
+        let mut state = OnboardingWizardState::default();
+        state.apply_local_profile_error(
+            "profile_local_invalid_username",
+            "profile/local/create request tui-1 failed: username has whitespace",
+        );
+        let recovery = state.local_profile_recovery.expect("recovery");
+        assert_eq!(recovery.focus_field, OnboardingLocalProfileField::Username);
+    }
+
+    #[test]
+    fn strip_method_prefix_removes_jsonrpc_envelope() {
+        // Helper visibility (it's a free function in the same module).
+        let stripped = super::strip_method_prefix(
+            "profile/local/create request tui-3 failed: username taken",
+            "profile/local/create",
+        );
+        assert_eq!(stripped, "username taken");
+    }
+
+    #[test]
+    fn apply_profile_local_create_success_clears_pending_and_recovery() {
+        let mut state = OnboardingWizardState {
+            local_profile_create_pending: true,
+            local_profile_recovery: Some(OnboardingLocalProfileRecovery {
+                kind: OnboardingLocalProfileErrorKind::Collision,
+                focus_field: OnboardingLocalProfileField::Username,
+                message: "stale".into(),
+            }),
+            ..OnboardingWizardState::default()
+        };
+        state.apply_profile_local_create(&ProfileLocalCreateResult {
+            profile_id: "ada".into(),
+            user_id: "ada-user".into(),
+            name: "Ada Lovelace".into(),
+            username: "ada".into(),
+            email: "ada@example.com".into(),
+            created: true,
+            runtime_mode: "solo".into(),
+        });
+        assert!(state.local_profile_created);
+        assert!(!state.local_profile_create_pending);
+        assert!(state.local_profile_recovery.is_none());
+    }
+
+    #[test]
+    fn should_serialize_to_empty_object_when_session_list_params_has_no_cwd() {
+        // Wire-compat: a no-cwd `session/list` request must serialize to the
+        // historical empty object `{}`, byte-identical to what old clients
+        // sent, so an OLD server (no per-project session storage) still
+        // deserializes it unchanged (`cwd: None` -> legacy global listing).
+        let params = SessionListParams { cwd: None };
+        let wire = serde_json::to_value(&params).expect("SessionListParams serializes");
+        assert_eq!(wire, serde_json::json!({}));
+    }
+
+    #[test]
+    fn should_serialize_cwd_field_when_session_list_params_has_cwd() {
+        // With a workspace cwd present the request carries `{"cwd": "..."}`,
+        // which a server with `appui.sessions_in_cwd` (and the negotiated
+        // `session.workspace_cwd.v1` feature) honors to scope the listing to
+        // the project rooted at that path.
+        let params = SessionListParams {
+            cwd: Some("/tmp/project".into()),
+        };
+        let wire = serde_json::to_value(&params).expect("SessionListParams serializes");
+        assert_eq!(wire, serde_json::json!({ "cwd": "/tmp/project" }));
+    }
+
+    /// Deleting a collapsed `[paste]` block removes the WHOLE block in one
+    /// action instead of expanding the full pasted text into the composer
+    /// first (which made a single backspace appear to just explode the block).
+    #[test]
+    fn backspace_on_collapsed_paste_deletes_the_whole_block() {
+        let mut state = AppState::new(
+            vec![SessionView {
+                id: SessionKey("local:test".into()),
+                title: "test".into(),
+                profile_id: Some("coding".into()),
+                messages: vec![Message::assistant("ready")],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            0,
+            "ready".into(),
+            None,
+            false,
+        );
+        let block = (1..=20)
+            .map(|i| format!("pasted line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        state.insert_pasted_text(&block);
+        assert!(state.composer_pasted);
+        assert!(matches!(
+            state.composer_presentation(),
+            ComposerPresentation::Collapsed(_)
+        ));
+
+        state.delete_composer_prev_char();
+        assert!(
+            state.composer.is_empty(),
+            "backspace on a collapsed paste deletes the whole block, got: {:?}",
+            state.composer
+        );
+        assert!(matches!(
+            state.composer_presentation(),
+            ComposerPresentation::Empty
+        ));
+
+        // Forward-delete behaves the same.
+        state.insert_pasted_text(&block);
+        assert!(state.composer_pasted);
+        state.delete_composer_next_char();
+        assert!(
+            state.composer.is_empty(),
+            "forward-delete on a collapsed paste deletes the whole block, got: {:?}",
+            state.composer
+        );
+    }
+
+    fn paste_test_state() -> AppState {
+        AppState::new(
+            vec![SessionView {
+                id: SessionKey("local:test".into()),
+                title: "test".into(),
+                profile_id: Some("coding".into()),
+                messages: vec![Message::assistant("ready")],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            0,
+            "ready".into(),
+            None,
+            false,
+        )
+    }
+
+    /// A paste beyond the typed-content safety threshold remains collapsed
+    /// after editing, but newly typed text must render outside the paste chip.
+    #[test]
+    fn typed_text_after_huge_paste_stays_visible_outside_the_chip() {
+        let mut state = paste_test_state();
+        let block = (1..=40)
+            .map(|i| format!("pasted line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        state.insert_pasted_text(&block);
+
+        state.insert_composer_char('x');
+        state.insert_composer_char('y');
+
+        assert_eq!(state.composer, format!("{block}xy"));
+        assert_eq!(state.composer_paste_span, Some(0..block.len()));
+        let ComposerPresentation::Collapsed(collapse) = state.composer_presentation() else {
+            panic!("40 pasted lines should remain collapsed after typing");
+        };
+        assert_eq!(
+            &collapse.display[collapse.chip.end..],
+            "xy",
+            "typed text must echo after the collapsed paste chip"
+        );
+        assert_eq!(
+            collapse.summary,
+            format!("40 lines · {} chars", block.chars().count()),
+            "the chip count must continue to describe only the pasted text"
+        );
+        assert_eq!(collapse.cursor, collapse.display.len());
+    }
+
+    /// A large paste followed by a SMALL paste event must not destroy the draft.
+    ///
+    /// `insert_pasted_text` clears `composer_pasted` for a small fragment (so a
+    /// tiny burst re-opens the composer inline and echoes) while keeping the
+    /// recorded span. But clearing the flag only re-opens content under the
+    /// TYPED thresholds — 32 lines / 4000 chars, versus 4 lines / 400 for a
+    /// paste. Above those the chip stays Collapsed with a valid span and a
+    /// false flag.
+    ///
+    /// `take_collapsed_paste_block` used to `.filter(|_| self.composer_pasted)`,
+    /// which discarded that valid span and fell through to "clear the whole
+    /// draft". Everything the user had typed around the paste went with it.
+    #[test]
+    fn small_paste_after_a_large_one_does_not_destroy_the_surrounding_draft() {
+        let mut state = AppState::new(
+            vec![SessionView {
+                id: SessionKey("local:test".into()),
+                title: "test".into(),
+                profile_id: Some("coding".into()),
+                messages: vec![Message::assistant("ready")],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            0,
+            "ready".into(),
+            None,
+            false,
+        );
+
+        state.insert_composer_text("before  after");
+        state.composer_cursor = Some("before ".len());
+        // 40 lines: above BOTH the paste thresholds and the 32-line typed one,
+        // so it stays Collapsed even once `composer_pasted` is cleared.
+        let block = (1..=40)
+            .map(|i| format!("pasted line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        state.insert_pasted_text(&block);
+        assert!(state.composer_pasted, "large paste sets the flag");
+        assert!(state.composer_paste_span.is_some(), "span recorded");
+
+        // A tiny fragment delivered as a Paste event (fast IME burst, or
+        // bracketed paste over SSH/tmux). This clears the flag but keeps the
+        // span, and the block is far too big to re-open inline.
+        state.insert_pasted_text("x");
+        assert!(
+            !state.composer_pasted,
+            "precondition: the small paste cleared the flag"
+        );
+        assert!(
+            matches!(
+                state.composer_presentation(),
+                ComposerPresentation::Collapsed(_)
+            ),
+            "precondition: 40 lines stays collapsed past the typed threshold"
+        );
+        assert!(
+            state.composer_paste_span.is_some(),
+            "precondition: the span survived the flag being cleared"
+        );
+
+        state.delete_composer_prev_char();
+
+        assert!(
+            state.composer.contains("before"),
+            "text typed BEFORE the paste must survive: {:?}",
+            state.composer
+        );
+        assert!(
+            state.composer.contains("after"),
+            "text typed AFTER the paste must survive: {:?}",
+            state.composer
+        );
+        assert!(
+            !state.composer.contains("pasted line 1"),
+            "the pasted block itself is what Backspace removes: {:?}",
+            state.composer
+        );
+    }
+
+    fn big_paste_block() -> String {
+        (1..=20)
+            .map(|i| format!("pasted line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// A paste that lands AFTER typed text must keep the chip WHERE THE PASTE
+    /// IS. The presentation used to swallow the whole draft into one chip
+    /// printed at the head of the row, so `/mcp upsert server ` + a pasted JSON
+    /// body read as if the paste came first and the command had vanished.
+    #[test]
+    fn collapsed_paste_renders_after_the_typed_command() {
+        let mut state = paste_test_state();
+        for ch in "/mcp upsert server ".chars() {
+            state.insert_composer_char(ch);
+        }
+        let block = "{\n  \"name\": \"docs\",\n  \"cmd\": \"npx docs-mcp\"\n}";
+        state.insert_pasted_text(block);
+
+        let ComposerPresentation::Collapsed(collapse) = state.composer_presentation() else {
+            panic!("a 4-line paste should collapse");
+        };
+        assert_eq!(
+            &collapse.display[..collapse.chip.start],
+            "/mcp upsert server ",
+            "the typed command renders inline, ahead of the chip"
+        );
+        assert_eq!(
+            &collapse.display[collapse.chip.clone()],
+            format!("[paste 4 lines · {} chars]", block.chars().count()),
+            "the chip counts the PASTE, not the whole draft"
+        );
+        assert_eq!(
+            &collapse.display[collapse.chip.end..],
+            "",
+            "nothing was typed after the paste"
+        );
+        assert_eq!(
+            collapse.preview, "{",
+            "the preview reads the pasted block, not the typed prefix"
+        );
+        assert_eq!(
+            collapse.cursor, collapse.chip.end,
+            "the caret sits just past the chip, where the paste ended"
+        );
+    }
+
+    /// Text on BOTH sides of the paste keeps its order — the chip is an atom
+    /// sitting between the two runs. Reachable by pasting into the middle of a
+    /// restored draft (a restored draft carries no paste span of its own).
+    #[test]
+    fn collapsed_paste_keeps_the_text_on_both_sides() {
+        let mut state = paste_test_state();
+        state.composer = "before  after".into();
+        state.composer_cursor = Some("before ".len());
+        state.insert_pasted_text(&big_paste_block());
+
+        let ComposerPresentation::Collapsed(collapse) = state.composer_presentation() else {
+            panic!("a 20-line paste should collapse");
+        };
+        assert_eq!(&collapse.display[..collapse.chip.start], "before ");
+        assert_eq!(&collapse.display[collapse.chip.end..], " after");
+        assert_eq!(
+            collapse.cursor, collapse.chip.end,
+            "the caret lands where the paste ended, not at the end of the draft"
+        );
+    }
+
+    /// With no recorded span (a draft restored or set wholesale) the chip still
+    /// stands for the ENTIRE draft — the pre-span behavior.
+    #[test]
+    fn collapsed_draft_without_a_paste_span_still_covers_everything() {
+        let mut state = paste_test_state();
+        state.composer = (1..=40)
+            .map(|idx| format!("line {idx}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let ComposerPresentation::Collapsed(collapse) = state.composer_presentation() else {
+            panic!("40 typed lines collapse via the typed threshold");
+        };
+        assert_eq!(collapse.chip.start, 0);
+        assert_eq!(collapse.chip.end, collapse.display.len());
+        assert!(collapse.summary.contains("40 lines"));
+    }
+
+    /// #382: the atomic delete drains ONLY the pasted span — typed text
+    /// around the chip survives (it used to be wiped with the block).
+    #[test]
+    fn atomic_paste_delete_spares_the_typed_prefix() {
+        let mut state = paste_test_state();
+        for ch in "look at this error: ".chars() {
+            state.insert_composer_char(ch);
+        }
+        state.insert_pasted_text(&big_paste_block());
+        assert!(state.composer_pasted);
+        assert!(matches!(
+            state.composer_presentation(),
+            ComposerPresentation::Collapsed(_)
+        ));
+
+        state.delete_composer_prev_char();
+        assert_eq!(
+            state.composer, "look at this error: ",
+            "the typed prefix must survive the atomic paste delete"
+        );
+        assert!(!state.composer_pasted);
+        assert_eq!(
+            state.composer_cursor_index(),
+            "look at this error: ".len(),
+            "cursor lands where the block was"
+        );
+    }
+
+    /// #383: word/line deletes obey the same atomic rule — they used to gnaw
+    /// text HIDDEN under the collapsed chip.
+    #[test]
+    fn word_and_line_deletes_are_atomic_on_collapsed_paste() {
+        // Ctrl+W (delete_composer_prev_word)
+        let mut state = paste_test_state();
+        for ch in "fix: ".chars() {
+            state.insert_composer_char(ch);
+        }
+        state.insert_pasted_text(&big_paste_block());
+        state.delete_composer_prev_word();
+        assert_eq!(
+            state.composer, "fix: ",
+            "Ctrl+W removes the block atomically"
+        );
+
+        // Ctrl+K (kill_composer_to_line_end) from inside the hidden text.
+        let mut state = paste_test_state();
+        state.insert_pasted_text(&big_paste_block());
+        state.composer_cursor = Some(4);
+        state.kill_composer_to_line_end();
+        assert!(
+            state.composer.is_empty(),
+            "Ctrl+K on a paste-only chip clears the block, got {:?}",
+            state.composer
+        );
+
+        // vim dd (delete_composer_line)
+        let mut state = paste_test_state();
+        state.insert_pasted_text(&big_paste_block());
+        state.delete_composer_line();
+        assert!(state.composer.is_empty(), "dd removes the whole block");
+    }
+
+    /// #382: consecutive large pastes union into ONE atomic block; a single
+    /// delete removes both while the typed prefix survives.
+    #[test]
+    fn consecutive_pastes_union_into_one_atomic_block() {
+        let mut state = paste_test_state();
+        for ch in "ctx: ".chars() {
+            state.insert_composer_char(ch);
+        }
+        state.insert_pasted_text(&big_paste_block());
+        state.insert_pasted_text(&big_paste_block());
+        assert!(state.composer_pasted);
+
+        state.delete_composer_prev_char();
+        assert_eq!(
+            state.composer, "ctx: ",
+            "one delete removes the unioned block, sparing the prefix"
+        );
+    }
+
+    /// #382 fallback: a collapsed paste WITHOUT a recorded span (legacy state)
+    /// falls back to the #380 whole-draft clear rather than exploding.
+    #[test]
+    fn collapsed_paste_without_span_falls_back_to_full_clear() {
+        let mut state = paste_test_state();
+        state.insert_pasted_text(&big_paste_block());
+        state.composer_paste_span = None;
+        state.delete_composer_prev_char();
+        assert!(state.composer.is_empty(), "no span -> #380 full clear");
+        assert!(!state.composer_pasted);
+    }
+
+    #[test]
+    fn backspace_on_a_typed_collapsed_block_clears_it_not_char_by_char() {
+        // A paste the terminal delivered as keystrokes (no bracketed-paste
+        // event) leaves `composer_pasted` FALSE, yet the text still collapses
+        // via the typed line/char threshold and renders the `[paste]` chip.
+        // Backspace on that chip must delete the WHOLE block — the user reported
+        // it chipping away one char at a time because the block-delete used to be
+        // gated on `composer_pasted`.
+        let mut state = paste_test_state();
+        state.composer = (0..40)
+            .map(|i| format!("line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        state.composer_pasted = false;
+        state.composer_paste_span = None;
+        state.composer_cursor = Some(state.composer.len());
+        assert!(
+            matches!(
+                state.composer_presentation(),
+                ComposerPresentation::Collapsed(_)
+            ),
+            "40 lines collapses via the typed threshold even without a paste flag"
+        );
+
+        state.delete_composer_prev_char();
+        assert!(
+            state.composer.is_empty(),
+            "one Backspace clears the whole collapsed block, not one char"
+        );
+    }
+}

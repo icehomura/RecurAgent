@@ -1,0 +1,444 @@
+use ra_core::{
+    SessionKey,
+    app_ui::AppUiEvent,
+    ui_protocol::{
+        PermissionProfileSelection, SessionHydrateResult, SessionListResult, SessionRollbackResult,
+        TaskArtifactReadResult, ThreadGraphGetResult, TurnStateGetResult,
+    },
+};
+
+use crate::model::{
+    AgentArtifactListResult, AgentArtifactReadResult, AgentCloseResult, AgentInterruptResult,
+    AgentListResult, AgentOutputReadResult, AgentStatusReadResult, AuthLogoutResult, AuthMeResult,
+    AuthSendCodeResult, AuthStatusResult, AuthVerifyResult, ConfigCapabilitiesListResult,
+    ContextCacheDiagnostics, DiffPreviewGetResult, LaunchResolveResult, LoopCreateResult,
+    LoopListResult, LoopMutationResult, McpConfigListResult, McpConfigMutationResult,
+    McpStatusListResult, ModelListResult, ModelSelectResult, ProfileLlmCatalogResult,
+    ProfileLlmListResult, ProfileLlmMutationResult, ProfileLocalCreateResult,
+    ProfileSkillsListResult, ProfileSkillsMutationResult, ProfileSkillsRegistrySearchResult,
+    ReviewStartResult, SessionGoalClearResult, SessionGoalGetResult, SessionGoalSetResult,
+    SessionStatusReadResult, SubProvidersListResult, SubProvidersMutationResult,
+    ToolConfigListResult, ToolConfigMutationResult, ToolStatusListResult,
+};
+
+#[derive(Debug, Clone)]
+pub enum ClientEvent {
+    App(Box<AppUiEvent>),
+    /// A normal typed lifecycle notification plus additive `context_state`
+    /// fields unknown to the pinned `ra-core`. Keeping the typed event in
+    /// the wrapper preserves all existing reducers while the local diagnostic
+    /// mirror remains backward-compatible with older servers.
+    ContextLifecycle(ContextLifecycleClientEvent),
+    Capabilities(CapabilitiesClientEvent),
+    DiffPreview(DiffPreviewGetResult),
+    ModelList(ModelListClientEvent),
+    ModelSelect(ModelSelectClientEvent),
+    McpStatus(McpStatusClientEvent),
+    McpConfigList(McpConfigListClientEvent),
+    McpConfigMutation(McpConfigMutationClientEvent),
+    PermissionProfile(PermissionProfileClientEvent),
+    SessionHydrate(SessionHydrateResult),
+    /// A hydrate response plus additive semantic-cache fields extracted from
+    /// its raw `context_state` before the pinned protocol crate discards them.
+    /// The wrapper is used even when the fields are absent so the store can
+    /// clear an older epoch atomically with the new lifecycle snapshot.
+    SessionHydrateContext(SessionHydrateContextClientEvent),
+    /// Result of a `session/list` request, used to populate the `/resume`
+    /// session picker.
+    SessionList(SessionListResult),
+    /// Result of a `launch/resolve` request: the per-project launch decision
+    /// that drives whether the client resumes the folder's brain, prompts to
+    /// activate the space, offers a cross-profile switch, or opens onboarding
+    /// on first launch.
+    LaunchResolve(LaunchResolveResult),
+    /// Result of a `session/rollback` request (`/rewind`): the later user turns
+    /// were dropped from the session and `thread` carries the trimmed
+    /// transcript to re-render (same shape as `session/hydrate`).
+    SessionRollback(SessionRollbackResult),
+    /// OUTER_LOOP_REVIEW #22b-r1: a `session/hydrate` failure (response error,
+    /// request cancel, or pre-send rejection) with LOCAL session attribution
+    /// resolved by the transport (`PendingRequest` for on-wire failures, the
+    /// in-hand command for pre-send rejections) — the wire `AppUiError` schema
+    /// is unchanged. The store releases ONLY this session's in-flight marker,
+    /// never a blanket clear that would drop another session's genuinely
+    /// in-flight hydrate. The event still surfaces to the user as an error
+    /// (the store converts it into the same `AppUiEvent::Error` shape after
+    /// releasing the marker).
+    HydrateError(HydrateErrorClientEvent),
+    ReviewStart(ReviewStartResult),
+    AuthStatus(AuthStatusClientEvent),
+    AuthSendCode(AuthSendCodeClientEvent),
+    AuthVerify(AuthVerifyClientEvent),
+    AuthMe(AuthMeClientEvent),
+    AuthLogout(AuthLogoutClientEvent),
+    ProfileLocalCreate(ProfileLocalCreateClientEvent),
+    ProfileLlmCatalog(ProfileLlmCatalogClientEvent),
+    ProfileLlmList(ProfileLlmListClientEvent),
+    ProfileLlmMutation(ProfileLlmMutationClientEvent),
+    SubProvidersList(SubProvidersListClientEvent),
+    /// #1768: snapshot list/restore result (restore echoes refreshed rows).
+    SnapshotList(SnapshotListClientEvent),
+    /// #395: `peer/prepare` result — the server minted a peer slug/topic and
+    /// wrote the durable brief; the store mints the peer session key, stashes
+    /// the kickoff, and follows up with `session/open`.
+    PeerPrepared(PeerPreparedClientEvent),
+    /// octos#1807: `turn/steer` result. `steered:true` — the typed text
+    /// joined the ACTIVE turn (status only; run-state/pre-token untouched,
+    /// the turn was already live). `steered:false` — no active turn existed
+    /// server-side and a NEW real turn started with the input; the store arms
+    /// the client like a normal submit (pre-token marker + run-state
+    /// in-progress) for the returned turn id.
+    TurnSteered(TurnSteeredClientEvent),
+    /// octos#1801 v3: durable `peer/staged` notification — a server-side
+    /// agent staged a peer (its `peer_spawn` tool); the store auto-opens it
+    /// in the background via the same stash → `session/opened` kickoff flow
+    /// as `/peer`. Durable ⇒ replayed on reconnect, so the store handler is
+    /// idempotent (a peer whose session already exists is a no-op).
+    PeerStaged(crate::model::PeerStagedParams),
+    /// octos#1801 v3: durable `peer/closed` notification — a peer session the
+    /// server tore down; the store removes it from the peer dock (Ctrl+L) and
+    /// the session switcher (Ctrl+S). Durable ⇒ replayed on reconnect, so the
+    /// store handler is idempotent (an already-removed peer is a no-op).
+    PeerClosed(crate::model::PeerClosedParams),
+    /// octos#2019: durable `background/activity` notification — one background
+    /// event that woke the model (a monitor event line, a claimed fleet outbox
+    /// event), surfaced to the HUMAN. The store files it under the session that
+    /// OWNS the emitter. Durable ⇒ replayed on reconnect, so a client that
+    /// disconnected mid-loop sees the whole run rather than losing its middle.
+    BackgroundActivity(crate::model::BackgroundActivityParams),
+    /// octos#1801 v2: `peer/gather` result — the peer blackboard rows
+    /// (brief + latest result per staged peer). The store composes the
+    /// `/gather` synthesis prompt from these and submits it into the CURRENT
+    /// session (staging-aware).
+    PeerGathered(PeerGatheredClientEvent),
+    SubProvidersMutation(SubProvidersMutationClientEvent),
+    ProfileSkillsList(ProfileSkillsListClientEvent),
+    ProfileSkillsRegistrySearch(ProfileSkillsRegistrySearchClientEvent),
+    ProfileSkillsMutation(ProfileSkillsMutationClientEvent),
+    SessionStatus(SessionStatusClientEvent),
+    SessionBtw(SessionBtwClientEvent),
+    ToolStatus(ToolStatusClientEvent),
+    ToolConfigList(ToolConfigListClientEvent),
+    ToolConfigMutation(ToolConfigMutationClientEvent),
+    /// M15-E backend-owned autonomy result event. Carries the raw
+    /// typed result from one of the `/agents`, `/goal`, or `/loop`
+    /// RPCs so the store can update its per-session autonomy mirror.
+    Autonomy(AutonomyClientEvent),
+    /// `!`-bang local-shell completion. Carries the exit result of a
+    /// client-local shell command (run where octoscode runs, NOT the agent's
+    /// sandboxed server `shell` tool). The event loop emits this after it
+    /// restores the TUI from the child-terminal handoff; the store folds it
+    /// back into the matching "running" activity chip via its `local_id`.
+    LocalShellResult(LocalShellResultEvent),
+    /// The stdio transport relaunched its `serve --stdio` child after a
+    /// disconnect. A freshly spawned child has no in-flight turns by
+    /// construction, so any turn the client still shows as live belongs to
+    /// the dead process and its terminal event will never arrive — the store
+    /// must fail those latched turns and drain the staged prompt queue, or
+    /// every subsequent prompt wedges behind the phantom turn forever.
+    BackendRelaunched,
+    /// A replacement stdio child just connected. Queued by the transport
+    /// BEFORE any event from the new child can reach the store, so the store
+    /// can tell turns latched under the dead child (older epoch) from turns
+    /// the new child itself started (current epoch — e.g. a durable
+    /// continuation it resumed before the scoped `session/open` landed).
+    /// `BackendRelaunched` then fails only the older-epoch latches.
+    BackendConnectionEpoch,
+}
+
+#[derive(Debug, Clone)]
+pub struct ContextLifecycleClientEvent {
+    pub event: Box<AppUiEvent>,
+    pub session_id: SessionKey,
+    pub diagnostics: Option<ContextCacheDiagnostics>,
+    /// `Some` only when the same raw response carries an authoritative
+    /// negotiated feature list (currently `session/open`). This closes the
+    /// race where open arrives before the separate capabilities response.
+    pub semantic_cache_advertised: Option<bool>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SessionHydrateContextClientEvent {
+    pub result: SessionHydrateResult,
+    pub diagnostics: Option<ContextCacheDiagnostics>,
+}
+
+impl From<AppUiEvent> for ClientEvent {
+    fn from(event: AppUiEvent) -> Self {
+        Self::App(Box::new(event))
+    }
+}
+
+/// See [`ClientEvent::HydrateError`]. The `session_id` is resolved locally by
+/// the transport; `code`/`message` keep the wire error's original shape so
+/// the store can re-emit the identical user-facing `AppUiEvent::Error`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HydrateErrorClientEvent {
+    pub session_id: SessionKey,
+    pub code: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CapabilitiesClientEvent {
+    pub result: ConfigCapabilitiesListResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelListClientEvent {
+    pub result: ModelListResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelSelectClientEvent {
+    pub result: ModelSelectResult,
+    pub message: String,
+    /// The session that initiated the select (correlated by JSON-RPC request
+    /// id in the transport). `None` only for unsolicited/legacy shapes —
+    /// which the store ignores rather than guessing a target.
+    pub initiating_session: Option<ra_core::SessionKey>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpStatusClientEvent {
+    pub result: McpStatusListResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpConfigListClientEvent {
+    pub result: McpConfigListResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpConfigMutationClientEvent {
+    pub result: McpConfigMutationResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PermissionProfileClientEvent {
+    pub session_id: SessionKey,
+    pub current: PermissionProfileSelection,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthStatusClientEvent {
+    pub result: AuthStatusResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthSendCodeClientEvent {
+    pub result: AuthSendCodeResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AuthVerifyClientEvent {
+    pub result: AuthVerifyResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AuthMeClientEvent {
+    pub result: AuthMeResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthLogoutClientEvent {
+    pub result: AuthLogoutResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProfileLocalCreateClientEvent {
+    pub result: ProfileLocalCreateResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProfileLlmCatalogClientEvent {
+    pub result: ProfileLlmCatalogResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProfileLlmListClientEvent {
+    pub result: ProfileLlmListResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProfileLlmMutationClientEvent {
+    pub kind: ProfileLlmMutationKind,
+    pub result: ProfileLlmMutationResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProfileLlmMutationKind {
+    Upsert,
+    Delete,
+    Test,
+}
+
+/// #1768 snapshot undo list (also carries restore acknowledgements).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SnapshotListClientEvent {
+    pub message: String,
+    pub result: crate::model::SnapshotListResult,
+}
+
+/// #395 `peer/prepare` result for the `/peer` flow.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PeerPreparedClientEvent {
+    pub message: String,
+    pub result: crate::model::PeerPrepareResult,
+}
+
+/// octos#1807 `turn/steer` result for the mid-turn steer flow.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TurnSteeredClientEvent {
+    pub message: String,
+    pub result: crate::model::TurnSteerResult,
+}
+
+/// octos#1801 v2 `peer/gather` result for the `/gather` fan-in flow.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PeerGatheredClientEvent {
+    pub message: String,
+    pub result: crate::model::PeerGatherResult,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SubProvidersListClientEvent {
+    pub result: SubProvidersListResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SubProvidersMutationClientEvent {
+    pub result: SubProvidersMutationResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProfileSkillsListClientEvent {
+    pub result: ProfileSkillsListResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProfileSkillsRegistrySearchClientEvent {
+    pub result: ProfileSkillsRegistrySearchResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProfileSkillsMutationClientEvent {
+    pub result: ProfileSkillsMutationResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionStatusClientEvent {
+    pub result: SessionStatusReadResult,
+    pub message: String,
+}
+
+/// Result of a `session/btw` aside — the out-of-band answer to a quick
+/// question asked while the session's turn keeps running.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionBtwClientEvent {
+    pub result: ra_core::ui_protocol::SessionBtwResult,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolStatusClientEvent {
+    pub result: ToolStatusListResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolConfigListClientEvent {
+    pub result: ToolConfigListResult,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolConfigMutationClientEvent {
+    pub result: ToolConfigMutationResult,
+    pub message: String,
+}
+
+/// M15-E typed autonomy result. We keep one variant per RPC so the
+/// store can pattern-match on the precise wire shape rather than
+/// reparsing a generic JSON blob.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AutonomyResult {
+    AgentList(AgentListResult),
+    AgentStatus(AgentStatusReadResult),
+    AgentOutput(AgentOutputReadResult),
+    AgentArtifacts(AgentArtifactListResult),
+    AgentArtifactRead(AgentArtifactReadResult),
+    TaskArtifactRead(TaskArtifactReadResult),
+    ThreadGraph(ThreadGraphGetResult),
+    TurnState(TurnStateGetResult),
+    AgentInterrupt(AgentInterruptResult),
+    AgentClose(AgentCloseResult),
+    GoalGet(SessionGoalGetResult),
+    GoalSet(SessionGoalSetResult),
+    GoalClear(SessionGoalClearResult),
+    LoopCreate(LoopCreateResult),
+    LoopList(LoopListResult),
+    /// `loop/delete`, `loop/pause`, `loop/resume`, `loop/fire_now`
+    /// share one wire shape; we keep the method around so the store
+    /// can emit a precise status line.
+    LoopMutation {
+        method: String,
+        result: LoopMutationResult,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AutonomyClientEvent {
+    pub result: AutonomyResult,
+}
+
+/// Result of a `!`-bang client-local shell command. The event loop runs the
+/// command with inherited stdio while the TUI is suspended and emits one of
+/// these on completion (or spawn failure), keyed by the `local_id` the store
+/// stamped on the "running" activity chip so the store can complete it in place.
+///
+/// Child output is rendered directly in the temporary terminal screen rather
+/// than captured. `stdout`/`stderr` carry only a completion note or a spawn /
+/// signal error for the restored activity card. Nothing is injected into the
+/// next turn's context (ephemeral, by design).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalShellResultEvent {
+    /// Local chip id stamped by `Store::dispatch_bang_command`.
+    pub local_id: String,
+    /// The command line as typed (after the `!`), for display.
+    pub cmdline: String,
+    /// Display form of the directory the command ran in (the TUI process cwd),
+    /// so the transcript card can label WHERE the local command executed.
+    /// `None` only when the cwd could not be resolved at spawn time.
+    pub cwd: Option<String>,
+    /// Completion note shown after the TUI is restored.
+    pub stdout: String,
+    /// Spawn / signal error shown after the TUI is restored.
+    pub stderr: String,
+    /// Process exit code, or `None` if it was signalled or never started.
+    pub exit_code: Option<i32>,
+    /// Wall-clock duration of the command, in milliseconds.
+    pub duration_ms: u64,
+    /// Retained for the activity event shape; terminal-attached output is not
+    /// captured and therefore never truncated.
+    pub truncated: bool,
+}

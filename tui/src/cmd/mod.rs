@@ -1,0 +1,452 @@
+//! `octoscode` subcommands: `update` and `doctor` (design doc).
+//!
+//! The TUI's CLI is a hand-rolled `Cli::parse()` with no clap subcommands, and
+//! the default no-subcommand invocation launches the TUI. To add `update` and
+//! `doctor` without disturbing that, [`dispatch`] inspects `argv` for a leading
+//! `update`/`doctor` positional *before* the normal launch path. When it
+//! matches, it parses that subcommand's flags with a dedicated clap parser and
+//! runs it, returning the desired process exit code; otherwise it returns
+//! `None` and the caller proceeds to the normal TUI launch.
+
+pub mod config;
+pub mod doctor;
+pub mod github;
+pub mod install_method;
+pub mod olp_mcp;
+#[cfg(target_os = "linux")]
+pub mod outer_duty;
+pub mod update;
+
+use clap::Parser;
+use eyre::Result;
+
+use config::{ConfigArgs, ConfigCli};
+use doctor::DoctorArgs;
+use update::UpdateArgs;
+
+/// Recognized subcommand names. Kept tiny so we never shadow a flag.
+const SUBCOMMANDS: &[&str] = &["update", "doctor", "config", "olp-mcp-serve", "outer-duty"];
+
+/// Inspect `argv` (excluding the program name) for a leading subcommand. If the
+/// first non-flag positional is `update`/`doctor`, run it and return its exit
+/// code; otherwise return `None` so the caller launches the TUI as before.
+///
+/// Only a *leading* positional is treated as a subcommand: `octoscode --lang zh`
+/// still launches the TUI, and a config value that happens to be "doctor" is
+/// never misread as a subcommand because we only look at the first bare token.
+pub fn dispatch<I, S>(args: I) -> Result<Option<i32>>
+where
+    I: IntoIterator<Item = S>,
+    S: Into<String>,
+{
+    let argv: Vec<String> = args.into_iter().map(Into::into).collect();
+    match route(&argv) {
+        Some(Route::Update(args)) => Ok(Some(update::run(args)?.exit_code())),
+        Some(Route::Doctor(args)) => Ok(Some(doctor::run(args)?)),
+        Some(Route::Config(args)) => Ok(Some(config::run(args)?)),
+        Some(Route::OlpMcpServe) => Ok(Some(olp_mcp::run())),
+        #[cfg(target_os = "linux")]
+        Some(Route::OuterDuty(args)) => Ok(Some(outer_duty::run(args))),
+        Some(Route::UsageError) => Ok(Some(2)),
+        None => Ok(None),
+    }
+}
+
+/// A routed (parsed) subcommand, ready to run. Splitting routing from
+/// execution lets the routing/arg-parsing be unit-tested without performing the
+/// network I/O the command bodies do.
+#[derive(Debug)]
+enum Route {
+    Update(UpdateArgs),
+    Doctor(DoctorArgs),
+    /// `octoscode olp-mcp-serve` — OUTER_LOOP_REVIEW #31: the Rust OLP-MCP
+    /// outer-loop server (newline-delimited JSON-RPC over stdio).
+    OlpMcpServe,
+    /// `octoscode outer-duty` — OUTER_LOOP_REVIEW #38: the per-project
+    /// session-lifetime OS-exclusive duty lock (hold/check). Linux-only
+    /// (PDEATHSIG + /proc); see OUTER_LOOP_PROTOCOL R7.
+    #[cfg(target_os = "linux")]
+    OuterDuty(OuterDutyArgs),
+    /// Argument parse failure already reported; exit 2 without running.
+    UsageError,
+    Config(ConfigArgs),
+}
+
+/// Parse `argv` into a [`Route`] if it leads with a known subcommand; otherwise
+/// `None` (the caller launches the TUI). The synthetic program name keeps
+/// clap's usage strings accurate (e.g. `octoscode doctor`); the subcommand
+/// token is dropped (`skip(2)`) so clap does not see it as a stray positional.
+/// `octoscode outer-duty` args (manual parse; `--` splits the child command).
+/// Strict: unknown flags / missing values / unknown actions are rejected
+/// with exit 2 (route negative golden).
+#[derive(Debug)]
+#[cfg(target_os = "linux")]
+pub struct OuterDutyArgs {
+    pub action: String, // "hold" | "check"
+    pub project: String,
+    pub signature: String,
+    pub duties: String,
+    pub command: Vec<String>,
+}
+
+#[cfg(target_os = "linux")]
+fn parse_outer_duty_args(rest: &[String]) -> Result<OuterDutyArgs, String> {
+    let mut action = String::new();
+    let mut project = String::new();
+    let mut signature = String::new();
+    let mut duties = String::new();
+    let mut command = Vec::new();
+    let mut i = 0;
+    while i < rest.len() {
+        let token = rest[i].as_str();
+        match token {
+            "hold" | "check" if action.is_empty() => action = token.to_string(),
+            "--" => {
+                command = rest[i + 1..].to_vec();
+                break;
+            }
+            _ if token.starts_with("--") => {
+                let value = rest
+                    .get(i + 1)
+                    .ok_or_else(|| format!("outer-duty: {token} requires a value"))?;
+                match token {
+                    "--project" if project.is_empty() => project = value.clone(),
+                    "--signature" if signature.is_empty() => signature = value.clone(),
+                    "--duties" if duties.is_empty() => duties = value.clone(),
+                    other => return Err(format!("outer-duty: unknown flag {other}")),
+                }
+                i += 1;
+            }
+            other => {
+                return Err(format!(
+                    "outer-duty: unexpected argument {other:?} (expected hold|check)"
+                ));
+            }
+        }
+        i += 1;
+    }
+    if action.is_empty() {
+        return Err("outer-duty: action required (hold|check)".into());
+    }
+    if project.is_empty() {
+        return Err("outer-duty: --project is required".into());
+    }
+    if action == "hold" && command.is_empty() {
+        return Err("outer-duty hold: a child command after `--` is required".into());
+    }
+    Ok(OuterDutyArgs {
+        action,
+        project,
+        signature,
+        duties,
+        command,
+    })
+}
+
+fn route(argv: &[String]) -> Option<Route> {
+    let first = argv.get(1)?;
+    if !SUBCOMMANDS.contains(&first.as_str()) {
+        return None;
+    }
+    let prog = format!("octoscode {first}");
+    let sub_argv: Vec<String> = std::iter::once(prog)
+        .chain(argv.iter().skip(2).cloned())
+        .collect();
+    match first.as_str() {
+        "update" => Some(Route::Update(UpdateCli::parse_from(&sub_argv).into_args())),
+        "doctor" => Some(Route::Doctor(DoctorCli::parse_from(&sub_argv).into_args())),
+        "config" => Some(Route::Config(ConfigCli::parse_from(&sub_argv).into_args())),
+        "olp-mcp-serve" => Some(Route::OlpMcpServe),
+        #[cfg(target_os = "linux")]
+        "outer-duty" => match parse_outer_duty_args(&sub_argv[1..]) {
+            Ok(args) => Some(Route::OuterDuty(args)),
+            Err(message) => {
+                eprintln!("{message}");
+                Some(Route::UsageError)
+            }
+        },
+        #[cfg(not(target_os = "linux"))]
+        "outer-duty" => {
+            eprintln!(
+                "outer-duty: unsupported on this platform (Linux-only; see OUTER_LOOP_PROTOCOL R7)"
+            );
+            Some(Route::UsageError)
+        }
+
+        _ => unreachable!("guarded by SUBCOMMANDS"),
+    }
+}
+
+/// `octoscode update` flags.
+#[derive(Debug, Parser)]
+#[command(
+    name = "octoscode update",
+    about = "Update octoscode in place (cargo-dist installs) or print the right upgrade command"
+)]
+struct UpdateCli {
+    /// Only report whether an update is available (exit 10 if newer).
+    #[arg(long)]
+    check: bool,
+    /// Update to a specific version (e.g. 0.1.2).
+    #[arg(long, value_name = "X.Y.Z", conflicts_with = "tag")]
+    version: Option<String>,
+    /// Update to a specific release tag (e.g. v0.1.2).
+    #[arg(long, value_name = "TAG", conflicts_with = "version")]
+    tag: Option<String>,
+    /// Allow prerelease targets.
+    #[arg(long)]
+    prerelease: bool,
+    /// Re-install even if already current.
+    #[arg(long)]
+    force: bool,
+    /// Skip the interactive confirmation.
+    #[arg(long, short = 'y')]
+    yes: bool,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    json: bool,
+}
+
+impl UpdateCli {
+    fn into_args(self) -> UpdateArgs {
+        UpdateArgs {
+            check: self.check,
+            version: self.version,
+            tag: self.tag,
+            prerelease: self.prerelease,
+            force: self.force,
+            yes: self.yes,
+            json: self.json,
+        }
+    }
+}
+
+/// `octoscode doctor` flags.
+#[derive(Debug, Parser)]
+#[command(
+    name = "octoscode doctor",
+    about = "Diagnose octoscode's environment, install, and protocol compatibility"
+)]
+struct DoctorCli {
+    /// Emit machine-readable JSON (support bundle).
+    #[arg(long)]
+    json: bool,
+    /// Add resolved paths/versions to each line.
+    #[arg(long, short = 'v')]
+    verbose: bool,
+    /// Treat warnings as failures (affects the exit code).
+    #[arg(long)]
+    strict: bool,
+    /// stdio child command to probe (e.g. `ra serve --stdio`).
+    #[arg(long = "stdio-command", value_name = "CMD")]
+    stdio_command: Option<String>,
+    /// WS endpoint to record for the connectivity check.
+    #[arg(long = "endpoint", value_name = "WS_URL")]
+    endpoint: Option<String>,
+    /// Bearer token for UI Protocol authentication. Falls back to OCTOS_AUTH_TOKEN.
+    #[arg(long = "auth-token", value_name = "TOKEN")]
+    auth_token: Option<String>,
+    /// Data dir to check (defaults to ~/.ra).
+    #[arg(long = "data-dir", value_name = "DIR")]
+    data_dir: Option<std::path::PathBuf>,
+}
+
+impl DoctorCli {
+    fn into_args(self) -> DoctorArgs {
+        DoctorArgs {
+            json: self.json,
+            verbose: self.verbose,
+            strict: self.strict,
+            stdio_command: self.stdio_command,
+            endpoint: self.endpoint,
+            auth_token: self.auth_token,
+            data_dir: self.data_dir,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn argv(parts: &[&str]) -> Vec<String> {
+        parts.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// #38-r1 E: outer-duty route golden — recognized, args parsed, unknown
+    /// action rejected, `--` splitting, exit codes.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn route_outer_duty_golden() {
+        let argv = |a: &[&str]| -> Vec<String> {
+            std::iter::once("octoscode".to_string())
+                .chain(a.iter().map(|s| s.to_string()))
+                .collect()
+        };
+        let args = parse_outer_duty_args(&["check".into(), "--project".into(), "/tmp".into()][..])
+            .expect("valid check parses");
+        assert_eq!(args.action, "check");
+        assert_eq!(args.project, "/tmp");
+        assert!(args.command.is_empty());
+        let args = parse_outer_duty_args(
+            &[
+                "hold".into(),
+                "--project".into(),
+                "/tmp".into(),
+                "--signature".into(),
+                "s".into(),
+                "--duties".into(),
+                "d".into(),
+                "--".into(),
+                "agent".into(),
+                "--flag".into(),
+            ][..],
+        )
+        .expect("valid hold parses");
+        assert_eq!(args.action, "hold");
+        assert_eq!(args.signature, "s");
+        assert_eq!(args.duties, "d");
+        assert_eq!(args.command, vec!["agent", "--flag"]);
+
+        // Negative golden (#38-r2 B4): unknown flag / unknown action /
+        // missing --project / hold without a child → parse error (exit 2).
+        assert!(
+            parse_outer_duty_args(
+                &[
+                    "check".into(),
+                    "--project".into(),
+                    "/tmp".into(),
+                    "--wat".into(),
+                    "x".into()
+                ][..]
+            )
+            .is_err()
+        );
+        assert!(
+            parse_outer_duty_args(&["fly".into(), "--project".into(), "/tmp".into()][..]).is_err()
+        );
+        assert!(parse_outer_duty_args(&["check".into()][..]).is_err());
+        assert!(
+            parse_outer_duty_args(&["hold".into(), "--project".into(), "/tmp".into()][..]).is_err()
+        );
+        // A flag missing its value is an error too.
+        assert!(parse_outer_duty_args(&["check".into(), "--project".into()][..]).is_err());
+
+        // Routing: recognized as a subcommand.
+        assert!(matches!(
+            route(&argv(&["outer-duty", "check", "--project", "/tmp"])),
+            Some(Route::OuterDuty(_))
+        ));
+        // Unknown flag routes to UsageError (exit 2 path).
+        assert!(matches!(
+            route(&argv(&[
+                "outer-duty",
+                "check",
+                "--project",
+                "/tmp",
+                "--wat",
+                "x"
+            ])),
+            Some(Route::UsageError)
+        ));
+    }
+
+    #[test]
+    fn route_returns_none_for_no_subcommand() {
+        // Plain launch — no subcommand → TUI path.
+        assert!(route(&argv(&["octoscode"])).is_none());
+        // A flag-only invocation is not a subcommand.
+        assert!(route(&argv(&["octoscode", "--lang", "zh"])).is_none());
+        // A non-subcommand positional also falls through.
+        assert!(route(&argv(&["octoscode", "chat"])).is_none());
+    }
+
+    #[test]
+    fn route_recognizes_update_with_flags() {
+        // Routing + arg-parsing happens here; no network is performed.
+        let routed = route(&argv(&["octoscode", "update", "--check", "--json"]));
+        match routed {
+            Some(Route::Update(args)) => {
+                assert!(args.check);
+                assert!(args.json);
+            }
+            other => panic!("expected Route::Update, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn route_recognizes_doctor_with_flags() {
+        let routed = route(&argv(&["octoscode", "doctor", "--strict", "--verbose"]));
+        match routed {
+            Some(Route::Doctor(args)) => {
+                assert!(args.strict);
+                assert!(args.verbose);
+            }
+            other => panic!("expected Route::Doctor, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn doctor_data_dir_and_stdio_flags_parse() {
+        // The dedicated parser receives flags *without* the subcommand token
+        // (dispatch strips it). Exercises a couple of flags route() doesn't.
+        let args = DoctorCli::parse_from([
+            "octoscode doctor",
+            "--stdio-command",
+            "ra serve --stdio",
+            "--data-dir",
+            "/tmp/x",
+        ])
+        .into_args();
+        assert_eq!(args.stdio_command.as_deref(), Some("ra serve --stdio"));
+        assert_eq!(
+            args.data_dir.as_deref(),
+            Some(std::path::Path::new("/tmp/x"))
+        );
+    }
+
+    #[test]
+    fn route_recognizes_config_and_defaults_to_show() {
+        // Bare `config` → show action (the interactive wizard was removed).
+        match route(&argv(&["octoscode", "config"])) {
+            Some(Route::Config(args)) => {
+                assert!(matches!(args.action, config::ConfigAction::Show));
+            }
+            other => panic!("expected Route::Config, got {other:?}"),
+        }
+        // Explicit actions parse.
+        match route(&argv(&["octoscode", "config", "path"])) {
+            Some(Route::Config(args)) => assert!(matches!(args.action, config::ConfigAction::Path)),
+            other => panic!("expected Route::Config(Path), got {other:?}"),
+        }
+        match route(&argv(&[
+            "octoscode",
+            "config",
+            "show",
+            "--config",
+            "/tmp/c.json",
+        ])) {
+            Some(Route::Config(args)) => {
+                assert!(matches!(args.action, config::ConfigAction::Show));
+                assert_eq!(
+                    args.config.as_deref(),
+                    Some(std::path::Path::new("/tmp/c.json"))
+                );
+            }
+            other => panic!("expected Route::Config(Show), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn update_version_and_tag_conflict() {
+        // Note: no subcommand token — dispatch strips it before this parser.
+        let err = UpdateCli::try_parse_from([
+            "octoscode update",
+            "--version",
+            "0.1.2",
+            "--tag",
+            "v0.1.2",
+        ]);
+        assert!(err.is_err(), "version and tag must conflict");
+    }
+}

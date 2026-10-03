@@ -1,0 +1,2460 @@
+//! `octoscode doctor` — flutter-doctor-style diagnostics (design §B).
+//!
+//! One line per check (`[✓]` pass / `[!]` warn / `[✗]` fail), grouped by
+//! category, each non-pass line followed by an indented `→ fix:` action,
+//! closing with a one-line summary. `--json` emits the same data structured
+//! (support bundle; tokens redacted); `--verbose` adds resolved paths/versions.
+//!
+//! Exit `0` when all checks pass (warnings are OK but mentioned), `1` on any
+//! `[✗]`. `--strict` promotes warnings to failures.
+//!
+//! Checks implemented here:
+//! - **Binary & version**: octoscode on PATH, install method, newer release,
+//!   shadowing installs.
+//! - **Terminal**: TERM/terminfo, UTF-8 locale, CJK width, color support.
+//! - **Config & data**: config dir + data dir writability.
+//! - **Profiles & sessions**: on-disk profiles, the default (`*`), the LLM each
+//!   is configured for, and an on-disk session count. Per-session *folders*
+//!   need a live `session/list` (the session→cwd map is in-process only).
+//! - **Backend**: stdio-command resolves (+ `ra --version`); configured WS
+//!   endpoints are probed with `config/capabilities/list`, falling back to a
+//!   structural protocol-skew check against the compiled-in `ra-core`.
+//! - **Network**: GitHub reachability.
+
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use eyre::Result;
+use futures::{SinkExt, StreamExt};
+use ra_core::ui_protocol::{
+    JSON_RPC_VERSION, UI_PROTOCOL_FEATURE_APPROVAL_TYPED_V1,
+    UI_PROTOCOL_FEATURE_CODING_AGENT_CONTROL_V1, UI_PROTOCOL_FEATURE_CODING_AUTONOMY_V1,
+    UI_PROTOCOL_FEATURE_CODING_GOAL_RUNTIME_V1, UI_PROTOCOL_FEATURE_CODING_LOOP_RUNTIME_V1,
+    UI_PROTOCOL_FEATURE_CONTEXT_LIFECYCLE_V1, UI_PROTOCOL_FEATURE_HARNESS_TASK_CONTROL_V1,
+    UI_PROTOCOL_FEATURE_PANE_SNAPSHOTS_V1, UI_PROTOCOL_FEATURE_SESSION_HYDRATE_V1,
+    UI_PROTOCOL_FEATURE_SESSION_WORKSPACE_CWD_V1, UI_PROTOCOL_FEATURE_USER_QUESTION_V1,
+    UI_PROTOCOL_KNOWN_FEATURES, UI_PROTOCOL_SCHEMA_VERSION, UI_PROTOCOL_V1, UiProtocolCapabilities,
+};
+use tokio::runtime::Builder as TokioRuntimeBuilder;
+use tokio_tungstenite::{
+    connect_async,
+    tungstenite::{Message as WsMessage, client::IntoClientRequest},
+};
+
+use super::github::{self, Reachability};
+use super::install_method::{self, InstallMethod};
+use crate::model::{APPUI_METHOD_CONFIG_CAPABILITIES_LIST, ConfigCapabilitiesListResult};
+
+/// Features the TUI *requires* of any server it connects to (the set it sends
+/// in `X-Ra-Ui-Features`). The skew check fails when the server's schema is
+/// incompatible and warns when a required feature is missing.
+pub const TUI_REQUIRED_FEATURES: &[&str] = &[
+    UI_PROTOCOL_FEATURE_APPROVAL_TYPED_V1,
+    UI_PROTOCOL_FEATURE_PANE_SNAPSHOTS_V1,
+    UI_PROTOCOL_FEATURE_SESSION_WORKSPACE_CWD_V1,
+    UI_PROTOCOL_FEATURE_CODING_AUTONOMY_V1,
+    UI_PROTOCOL_FEATURE_CODING_AGENT_CONTROL_V1,
+    UI_PROTOCOL_FEATURE_CODING_GOAL_RUNTIME_V1,
+    UI_PROTOCOL_FEATURE_CODING_LOOP_RUNTIME_V1,
+    UI_PROTOCOL_FEATURE_HARNESS_TASK_CONTROL_V1,
+    UI_PROTOCOL_FEATURE_SESSION_HYDRATE_V1,
+    UI_PROTOCOL_FEATURE_USER_QUESTION_V1,
+    UI_PROTOCOL_FEATURE_CONTEXT_LIFECYCLE_V1,
+];
+
+/// Parsed `octoscode doctor` flags.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DoctorArgs {
+    /// Emit machine-readable JSON (support bundle).
+    pub json: bool,
+    /// Add resolved paths / versions to each line.
+    pub verbose: bool,
+    /// Promote warnings to failures (affects exit code).
+    pub strict: bool,
+    /// stdio child command, if the TUI is configured for stdio transport.
+    pub stdio_command: Option<String>,
+    /// WS endpoint, if configured.
+    pub endpoint: Option<String>,
+    /// Bearer token for UI Protocol authentication. Falls back to OCTOS_AUTH_TOKEN.
+    pub auth_token: Option<String>,
+    /// Data dir override (defaults to `~/.ra`).
+    pub data_dir: Option<PathBuf>,
+}
+
+/// Pass / warn / fail per check.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckStatus {
+    Pass,
+    Warn,
+    Fail,
+}
+
+impl CheckStatus {
+    fn glyph(self) -> &'static str {
+        match self {
+            CheckStatus::Pass => "[✓]",
+            CheckStatus::Warn => "[!]",
+            CheckStatus::Fail => "[✗]",
+        }
+    }
+
+    fn json_str(self) -> &'static str {
+        match self {
+            CheckStatus::Pass => "pass",
+            CheckStatus::Warn => "warn",
+            CheckStatus::Fail => "fail",
+        }
+    }
+}
+
+/// A single diagnostic line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Check {
+    pub category: &'static str,
+    pub name: String,
+    pub status: CheckStatus,
+    /// One-line detail shown after the name.
+    pub detail: String,
+    /// Actionable fix, rendered as a `→ fix:` line. `None` for passing checks.
+    pub fix: Option<String>,
+    /// Optional resolved value (path/version) shown in `--verbose` and JSON.
+    pub value: Option<String>,
+}
+
+impl Check {
+    fn pass(category: &'static str, name: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self {
+            category,
+            name: name.into(),
+            status: CheckStatus::Pass,
+            detail: detail.into(),
+            fix: None,
+            value: None,
+        }
+    }
+
+    fn warn(
+        category: &'static str,
+        name: impl Into<String>,
+        detail: impl Into<String>,
+        fix: impl Into<String>,
+    ) -> Self {
+        Self {
+            category,
+            name: name.into(),
+            status: CheckStatus::Warn,
+            detail: detail.into(),
+            fix: Some(fix.into()),
+            value: None,
+        }
+    }
+
+    fn fail(
+        category: &'static str,
+        name: impl Into<String>,
+        detail: impl Into<String>,
+        fix: impl Into<String>,
+    ) -> Self {
+        Self {
+            category,
+            name: name.into(),
+            status: CheckStatus::Fail,
+            detail: detail.into(),
+            fix: Some(fix.into()),
+            value: None,
+        }
+    }
+
+    fn with_value(mut self, value: impl Into<String>) -> Self {
+        self.value = Some(value.into());
+        self
+    }
+}
+
+/// Aggregated report.
+#[derive(Debug, Clone)]
+pub struct Report {
+    pub checks: Vec<Check>,
+}
+
+impl Report {
+    pub fn new(checks: Vec<Check>) -> Self {
+        Self { checks }
+    }
+
+    pub fn counts(&self) -> (usize, usize, usize) {
+        let mut pass = 0;
+        let mut warn = 0;
+        let mut fail = 0;
+        for c in &self.checks {
+            match c.status {
+                CheckStatus::Pass => pass += 1,
+                CheckStatus::Warn => warn += 1,
+                CheckStatus::Fail => fail += 1,
+            }
+        }
+        (pass, warn, fail)
+    }
+
+    /// Exit code: `1` on any failure, or (with `strict`) any warning.
+    pub fn exit_code(&self, strict: bool) -> i32 {
+        let (_, warn, fail) = self.counts();
+        if fail > 0 || (strict && warn > 0) {
+            1
+        } else {
+            0
+        }
+    }
+
+    /// Render the flutter-doctor-style human report to a string.
+    pub fn render(&self, verbose: bool, strict: bool) -> String {
+        let mut out = String::new();
+        let mut last_category: Option<&str> = None;
+        for check in &self.checks {
+            if last_category != Some(check.category) {
+                if last_category.is_some() {
+                    out.push('\n');
+                }
+                out.push_str(check.category);
+                out.push('\n');
+                last_category = Some(check.category);
+            }
+            out.push_str(check.status.glyph());
+            out.push(' ');
+            out.push_str(&check.name);
+            if !check.detail.is_empty() {
+                out.push_str(" — ");
+                out.push_str(&check.detail);
+            }
+            if verbose {
+                if let Some(value) = &check.value {
+                    out.push_str(" (");
+                    out.push_str(value);
+                    out.push(')');
+                }
+            }
+            out.push('\n');
+            if let Some(fix) = &check.fix {
+                out.push_str("    → fix: ");
+                out.push_str(fix);
+                out.push('\n');
+            }
+        }
+
+        let (pass, warn, fail) = self.counts();
+        out.push('\n');
+        if fail == 0 && (warn == 0 || !strict) {
+            out.push_str(&format!(
+                "• Doctor summary: {pass} passed, {warn} warning(s). No fatal issues found."
+            ));
+        } else {
+            out.push_str(&format!(
+                "• Doctor summary: {pass} passed, {warn} warning(s), {fail} failure(s)."
+            ));
+        }
+        out.push('\n');
+        out
+    }
+
+    /// Render the support-bundle JSON.
+    pub fn to_json(&self, strict: bool) -> serde_json::Value {
+        let (pass, warn, fail) = self.counts();
+        let checks: Vec<_> = self
+            .checks
+            .iter()
+            .map(|c| {
+                serde_json::json!({
+                    "category": c.category,
+                    "name": c.name,
+                    "status": c.status.json_str(),
+                    "detail": c.detail,
+                    "fix": c.fix,
+                    "value": c.value,
+                })
+            })
+            .collect();
+        serde_json::json!({
+            "checks": checks,
+            "summary": {
+                "passed": pass,
+                "warnings": warn,
+                "failures": fail,
+            },
+            "exit_code": self.exit_code(strict),
+            "octoscode_version": env!("CARGO_PKG_VERSION"),
+            "octos_core_schema_version": UI_PROTOCOL_SCHEMA_VERSION,
+            "octos_protocol": UI_PROTOCOL_V1,
+            "platform": format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
+        })
+    }
+}
+
+/// Entry point: gather all checks, render, return the exit code.
+pub fn run(args: DoctorArgs) -> Result<i32> {
+    let mut checks = Vec::new();
+    checks.extend(binary_checks(&args));
+    checks.extend(installations_checks());
+    checks.extend(terminal_checks());
+    checks.extend(config_checks(&args));
+    checks.extend(profiles_checks(&args));
+    checks.extend(backend_checks(&args));
+    checks.extend(network_checks());
+
+    let report = Report::new(checks);
+    if args.json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report.to_json(args.strict))?
+        );
+    } else {
+        print!("{}", report.render(args.verbose, args.strict));
+    }
+    Ok(report.exit_code(args.strict))
+}
+
+// ---------------------------------------------------------------------------
+// Binary & version
+// ---------------------------------------------------------------------------
+
+const CAT_BINARY: &str = "Binary & version";
+
+fn binary_checks(_args: &DoctorArgs) -> Vec<Check> {
+    let mut checks = Vec::new();
+
+    // current_exe resolves.
+    let current_exe = std::env::current_exe().ok();
+    match &current_exe {
+        Some(exe) => checks.push(
+            Check::pass(
+                CAT_BINARY,
+                "octoscode binary",
+                format!("v{}", env!("CARGO_PKG_VERSION")),
+            )
+            .with_value(exe.display().to_string()),
+        ),
+        None => checks.push(Check::warn(
+            CAT_BINARY,
+            "octoscode binary",
+            "could not resolve current executable",
+            "ensure octoscode is on a real filesystem path",
+        )),
+    }
+
+    // Install method.
+    let method = install_method::detect();
+    checks.push(Check::pass(CAT_BINARY, "install method", method.label()).with_value(method.id()));
+
+    // PATH resolvability + shadowing installs. We track `$PATH` resolutions
+    // separately from extra known-install prefixes so "on PATH" reflects what
+    // can actually be run *by name*, not merely what exists on disk.
+    let located = locate_octoscode();
+    checks.push(on_path_check(&located, current_exe.as_deref(), &method));
+    checks.push(shadow_check(&located, &method));
+
+    // Newer release (best-effort; network failure → warn, not fail).
+    checks.push(release_check(&method));
+
+    checks
+}
+
+/// `octoscode` binaries discovered on the host, with `$PATH` hits tracked
+/// separately from extra known-install prefixes (cargo bin, brew, …) that may
+/// not be on `$PATH`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LocatedBinaries {
+    /// Resolved via `$PATH` (runnable by bare name), in PATH precedence order.
+    pub on_path: Vec<PathBuf>,
+    /// Found only in extra known-install prefixes that are NOT on `$PATH`.
+    pub off_path: Vec<PathBuf>,
+}
+
+impl LocatedBinaries {
+    /// Every distinct binary location (PATH hits first, then off-PATH extras).
+    fn all(&self) -> Vec<PathBuf> {
+        let mut v = self.on_path.clone();
+        v.extend(self.off_path.iter().cloned());
+        v
+    }
+}
+
+/// Whether `octoscode` is runnable by bare name (`$PATH`-resolvable). When the
+/// running executable's directory is not on `$PATH`, warn that it was launched
+/// by path and won't be found by name — folding the cargo-bin/brew prefixes in
+/// would mask exactly this case.
+fn on_path_check(
+    located: &LocatedBinaries,
+    current_exe: Option<&Path>,
+    method: &InstallMethod,
+) -> Check {
+    if let Some(first) = located.on_path.first() {
+        return Check::pass(CAT_BINARY, "octoscode on PATH", "resolvable by name")
+            .with_value(first.display().to_string());
+    }
+    // npm global (esp. Windows): the launcher shim (octoscode.ps1/.cmd) IS on
+    // PATH and runnable by name, but `current_exe()` resolves to the real binary
+    // deep under `node_modules/.bin_real`, whose dir is NOT on PATH and whose
+    // basename isn't `octoscode[.exe]` — so the PATH scan finds nothing. Don't
+    // false-warn, and never suggest adding an internal node_modules dir. (#189)
+    if matches!(method, InstallMethod::Npm) {
+        return Check::pass(
+            CAT_BINARY,
+            "octoscode on PATH",
+            "runnable by name via the npm global shim",
+        )
+        .with_value(
+            current_exe
+                .map(|e| e.display().to_string())
+                .unwrap_or_default(),
+        );
+    }
+    // Not on $PATH at all. If we know where this exe lives, point at its dir.
+    match current_exe.and_then(|e| e.parent()) {
+        Some(dir) => Check::warn(
+            CAT_BINARY,
+            "octoscode on PATH",
+            "octoscode isn't on $PATH — you ran it by path",
+            format!("add {} to PATH to run by name", dir.display()),
+        )
+        .with_value(dir.display().to_string()),
+        None => Check::warn(
+            CAT_BINARY,
+            "octoscode on PATH",
+            "octoscode not found on $PATH",
+            "add the install dir to your PATH",
+        ),
+    }
+}
+
+/// Build the shadowing-install check from the located binaries. Shadowing
+/// considers both `$PATH` hits and off-PATH known-install locations (>1 total
+/// is the Claude Code #22415 failure mode), labelling which is which.
+fn shadow_check(located: &LocatedBinaries, method: &InstallMethod) -> Check {
+    let all = located.all();
+    match all.len() {
+        // npm puts the real binary under node_modules/.bin_real (off PATH, and
+        // not in the unix known-dir list), so the locator finds nothing — but
+        // that's exactly one healthy install, not a missing one. (#189)
+        0 if matches!(method, InstallMethod::Npm) => Check::pass(
+            CAT_BINARY,
+            "no shadowing installs",
+            "exactly one (npm global)",
+        ),
+        0 => Check::warn(
+            CAT_BINARY,
+            "no shadowing installs",
+            "octoscode not found on $PATH or known install dirs",
+            "install octoscode or add its dir to your PATH",
+        ),
+        1 => {
+            let only = &all[0];
+            let where_ = if located.on_path.is_empty() {
+                "off PATH"
+            } else {
+                "on PATH"
+            };
+            Check::pass(
+                CAT_BINARY,
+                "no shadowing installs",
+                format!("exactly one ({where_})"),
+            )
+            .with_value(only.display().to_string())
+        }
+        n => {
+            let label = |p: &PathBuf| -> String {
+                let tag = if located.on_path.contains(p) {
+                    "PATH"
+                } else {
+                    "known-dir"
+                };
+                format!("{} [{tag}]", p.display())
+            };
+            let labelled: Vec<String> = all.iter().map(label).collect();
+            Check::warn(
+                CAT_BINARY,
+                "no shadowing installs",
+                format!("{n} octoscode binaries found; first wins: {}", labelled[0]),
+                format!("remove the extras: {}", labelled[1..].join(", ")),
+            )
+            .with_value(labelled.join(" | "))
+        }
+    }
+}
+
+fn release_check(method: &InstallMethod) -> Check {
+    match github::latest_release(false) {
+        Ok(None) => Check::pass(
+            CAT_BINARY,
+            "up to date",
+            format!("v{} (no published releases yet)", env!("CARGO_PKG_VERSION")),
+        ),
+        Ok(Some(latest)) => {
+            let current = env!("CARGO_PKG_VERSION");
+            let current_v = super::update::parse_version(current);
+            let latest_v = super::update::parse_version(&latest.tag);
+            match (current_v, latest_v) {
+                (Some(c), Some(l)) if super::update::is_newer(&c, &l) => {
+                    let fix = method
+                        .upgrade_command()
+                        .map(|cmd| cmd.to_string())
+                        .unwrap_or_else(|| "run `octoscode update`".to_string());
+                    Check::warn(
+                        CAT_BINARY,
+                        "up to date",
+                        format!("newer release available: {c} -> {l}"),
+                        fix,
+                    )
+                }
+                (Some(c), Some(l)) => {
+                    Check::pass(CAT_BINARY, "up to date", format!("v{c} is current"))
+                        .with_value(l.to_string())
+                }
+                _ => Check::warn(
+                    CAT_BINARY,
+                    "up to date",
+                    format!("could not parse versions (latest tag {})", latest.tag),
+                    "run `octoscode update --check`",
+                ),
+            }
+        }
+        Err(err) => Check::warn(
+            CAT_BINARY,
+            "up to date",
+            format!("could not check GitHub for a newer release: {err}"),
+            "run `octoscode update --check` when online",
+        ),
+    }
+}
+
+/// Enumerate every `octoscode` on `$PATH` plus known install prefixes,
+/// de-duplicated by canonical path, preserving PATH precedence (first wins).
+/// `$PATH` resolutions are tracked separately from extra known-install
+/// prefixes so the "on PATH" check reflects bare-name runnability, not mere
+/// on-disk presence (a cargo-bin install whose dir isn't on `$PATH` would
+/// otherwise be mis-reported as runnable by name).
+pub fn locate_octoscode() -> LocatedBinaries {
+    let exe_name = if cfg!(windows) {
+        "octoscode.exe"
+    } else {
+        "octoscode"
+    };
+    locate_binary(exe_name, &default_install_dirs())
+}
+
+/// `ra` (the backend) discovered across `$PATH` + the known install prefixes,
+/// plus `~/.ra/bin` where octoscode's auto-provisioner drops it. Same
+/// PATH-vs-off-PATH bookkeeping as [`locate_octoscode`].
+fn locate_octos() -> LocatedBinaries {
+    let exe_name = if cfg!(windows) { "ra.exe" } else { "ra" };
+    let mut dirs = default_install_dirs();
+    if let Some(home) = std::env::var_os("HOME") {
+        dirs.push(PathBuf::from(&home).join(".ra").join("bin"));
+    }
+    locate_binary(exe_name, &dirs)
+}
+
+/// Extra known-install prefixes to probe beyond `$PATH` (Homebrew, `/usr`,
+/// cargo's `~/.cargo/bin`, the shell-installer's `~/.local/bin`). Kept distinct
+/// from `$PATH` hits so "on PATH" reflects bare-name runnability, not mere
+/// on-disk presence.
+fn default_install_dirs() -> Vec<PathBuf> {
+    let mut extras: Vec<PathBuf> = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"]
+        .iter()
+        .map(PathBuf::from)
+        .collect();
+    if let Some(home) = std::env::var_os("HOME") {
+        extras.push(PathBuf::from(&home).join(".cargo").join("bin"));
+        extras.push(PathBuf::from(&home).join(".local").join("bin"));
+    }
+    extras
+}
+
+/// Enumerate every `exe_name` on `$PATH` plus `extra_dirs`, de-duplicated by
+/// canonical path, preserving PATH precedence (first wins). `$PATH` resolutions
+/// are tracked separately from the extra prefixes.
+fn locate_binary(exe_name: &str, extra_dirs: &[PathBuf]) -> LocatedBinaries {
+    let mut located = LocatedBinaries::default();
+    let mut seen: Vec<PathBuf> = Vec::new();
+
+    let push_if_present = |dir: &Path, dest: &mut Vec<PathBuf>, seen: &mut Vec<PathBuf>| {
+        let candidate = dir.join(exe_name);
+        if !candidate.is_file() {
+            return;
+        }
+        let canonical = std::fs::canonicalize(&candidate).unwrap_or_else(|_| candidate.clone());
+        if seen.contains(&canonical) {
+            return;
+        }
+        seen.push(canonical);
+        dest.push(candidate);
+    };
+
+    // Actual `$PATH` resolutions, in precedence order (first wins).
+    if let Some(path) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path) {
+            push_if_present(&dir, &mut located.on_path, &mut seen);
+        }
+    }
+    // Extra known-install prefixes that may NOT be on `$PATH`.
+    for dir in extra_dirs {
+        push_if_present(dir, &mut located.off_path, &mut seen);
+    }
+
+    located
+}
+
+// ---------------------------------------------------------------------------
+// Installations (every octoscode + octos on the machine, with versions)
+// ---------------------------------------------------------------------------
+
+const CAT_INSTALLS: &str = "Installations";
+
+/// Best-effort install-method guess from a binary's on-disk path, so the user
+/// knows which package manager put each copy there when cleaning up duplicates.
+fn install_method_label(path: &Path) -> &'static str {
+    let p = path.to_string_lossy();
+    if p.contains("/.cargo/bin/") {
+        "cargo"
+    } else if p.contains("node_modules") {
+        "npm"
+    } else if p.contains("/homebrew/") || p.contains("/Cellar/") || p.starts_with("/usr/local/") {
+        "brew"
+    } else if p.contains("/.ra/bin/") {
+        "octoscode auto-install"
+    } else if p.contains("/.local/bin/") {
+        "shell installer"
+    } else if p.starts_with("/usr/bin/") || p.starts_with("/bin/") {
+        "system"
+    } else {
+        "unknown"
+    }
+}
+
+/// Run `<path> --version` and return its first non-empty line, or `None` if the
+/// binary can't be run / prints nothing. No timeout — these are our own
+/// fast-responding binaries (same as the backend probe in `backend_ensure`).
+fn probe_version(path: &Path) -> Option<String> {
+    let output = std::process::Command::new(path)
+        .arg("--version")
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    text.lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(str::to_owned)
+}
+
+/// One display row per located binary: `<path> [<method>, on/off PATH] → <version>`.
+fn install_rows(located: &LocatedBinaries) -> Vec<String> {
+    located
+        .all()
+        .iter()
+        .map(|p| {
+            let method = install_method_label(p);
+            let on = if located.on_path.contains(p) {
+                "on PATH"
+            } else {
+                "off PATH"
+            };
+            let version = probe_version(p).unwrap_or_else(|| "no --version".to_string());
+            format!("{} [{method}, {on}] → {version}", p.display())
+        })
+        .collect()
+}
+
+/// Summarize one binary's installs: PASS on exactly one, WARN on duplicates (so
+/// the user can clean them up — the first on `$PATH` wins and the rest can
+/// confuse updates), WARN on none.
+fn installs_check(display_name: &str, located: &LocatedBinaries) -> Check {
+    let rows = install_rows(located);
+    match rows.len() {
+        0 => Check::warn(
+            CAT_INSTALLS,
+            format!("{display_name} installs"),
+            "none found on $PATH or known install dirs",
+            format!("install {display_name}"),
+        ),
+        1 => Check::pass(
+            CAT_INSTALLS,
+            format!("{display_name} installs"),
+            rows[0].clone(),
+        ),
+        n => Check::warn(
+            CAT_INSTALLS,
+            format!("{display_name} installs"),
+            format!("{n} installs found — the first on $PATH wins; the rest can confuse updates"),
+            format!(
+                "remove the copies you don't want: {}",
+                rows[1..].join(" ; ")
+            ),
+        )
+        .with_value(rows.join(" | ")),
+    }
+}
+
+/// #5: enumerate every octoscode AND octos on the machine (across `$PATH`,
+/// Homebrew, cargo, the shell installer's `~/.local/bin`, and octoscode's
+/// `~/.ra/bin`), showing each copy's version + install method, plus the
+/// ra version this client needs — so duplicate/mismatched installs are
+/// visible at a glance.
+fn installations_checks() -> Vec<Check> {
+    vec![
+        Check::pass(
+            CAT_INSTALLS,
+            "octoscode needs octos",
+            format!(
+                ">= {} (this is octoscode v{}; auto-install bundle {})",
+                crate::backend_ensure::MIN_OCTOS_VERSION,
+                env!("CARGO_PKG_VERSION"),
+                crate::backend_ensure::REQUIRED_OCTOS_RELEASE,
+            ),
+        ),
+        installs_check("octoscode", &locate_octoscode()),
+        installs_check("ra", &locate_octos()),
+    ]
+}
+
+// ---------------------------------------------------------------------------
+// Terminal environment
+// ---------------------------------------------------------------------------
+
+const CAT_TERM: &str = "Terminal environment";
+
+fn terminal_checks() -> Vec<Check> {
+    let term = std::env::var("TERM").ok();
+    let lang = std::env::var("LANG").ok();
+    let lc_all = std::env::var("LC_ALL").ok();
+    let lc_ctype = std::env::var("LC_CTYPE").ok();
+    let colorterm = std::env::var("COLORTERM").ok();
+    vec![
+        term_check(term.as_deref()),
+        locale_check(lang.as_deref(), lc_all.as_deref(), lc_ctype.as_deref()),
+        cjk_check(),
+        color_check(term.as_deref(), colorterm.as_deref()),
+    ]
+}
+
+/// Result of probing whether a `TERM` value has a loadable terminfo entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TerminfoProbe {
+    /// `infocmp` confirmed the terminfo entry loads.
+    Found,
+    /// `infocmp` ran but reported the entry is missing (non-zero exit).
+    Missing,
+    /// `infocmp` itself isn't available — we can't probe, so don't hard-fail.
+    ProberAbsent,
+}
+
+fn term_check(term: Option<&str>) -> Check {
+    term_check_with(term, probe_terminfo)
+}
+
+/// `term_check` with an injectable terminfo prober (for tests).
+fn term_check_with(term: Option<&str>, probe: impl Fn(&str) -> TerminfoProbe) -> Check {
+    match term {
+        Some("dumb") => Check::warn(
+            CAT_TERM,
+            "TERM set",
+            "TERM=dumb has no terminfo capabilities",
+            "export TERM=xterm-256color",
+        ),
+        Some(t) if !t.is_empty() => match probe(t) {
+            // The entry exists, or we couldn't probe (prober absent) — pass.
+            // Don't hard-fail merely because `infocmp` isn't installed.
+            TerminfoProbe::Found | TerminfoProbe::ProberAbsent => {
+                Check::pass(CAT_TERM, "TERM set", t.to_string()).with_value(t.to_string())
+            }
+            // TERM is plausible but its terminfo entry doesn't load — this is
+            // the documented "can't find terminfo database" failure.
+            TerminfoProbe::Missing => Check::warn(
+                CAT_TERM,
+                "TERM set",
+                format!("TERM=`{t}` has no terminfo entry (the TUI will report 'can't find terminfo database')"),
+                "set TERM=xterm-256color or install the terminfo package for your terminal",
+            )
+            .with_value(t.to_string()),
+        },
+        _ => Check::warn(
+            CAT_TERM,
+            "TERM set",
+            "TERM is unset; the TUI may not render or may report 'can't find terminfo database'",
+            "export TERM=xterm-256color",
+        ),
+    }
+}
+
+/// Probe whether `term`'s terminfo entry is loadable by shelling out to
+/// `infocmp`. A zero exit means the entry was found; a non-zero exit means it's
+/// missing; a spawn failure means `infocmp` isn't installed (can't probe).
+fn probe_terminfo(term: &str) -> TerminfoProbe {
+    match std::process::Command::new("infocmp")
+        .arg("-1")
+        .arg(term)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+    {
+        Ok(status) if status.success() => TerminfoProbe::Found,
+        Ok(_) => TerminfoProbe::Missing,
+        Err(_) => TerminfoProbe::ProberAbsent,
+    }
+}
+
+fn locale_check(lang: Option<&str>, lc_all: Option<&str>, lc_ctype: Option<&str>) -> Check {
+    let effective = lc_all.or(lc_ctype).or(lang);
+    match effective {
+        Some(v)
+            if v.to_ascii_uppercase().contains("UTF-8")
+                || v.to_ascii_uppercase().contains("UTF8") =>
+        {
+            Check::pass(CAT_TERM, "UTF-8 locale", v.to_string()).with_value(v.to_string())
+        }
+        Some(v) => Check::warn(
+            CAT_TERM,
+            "UTF-8 locale",
+            format!("locale `{v}` is not UTF-8; box-drawing and CJK may break"),
+            "export LANG=en_US.UTF-8 (or your locale with .UTF-8)",
+        ),
+        None => Check::warn(
+            CAT_TERM,
+            "UTF-8 locale",
+            "no LANG/LC_ALL/LC_CTYPE set",
+            "export LANG=en_US.UTF-8",
+        ),
+    }
+}
+
+fn cjk_check() -> Check {
+    // Informational: octoscode uses `unicode-width` for CJK double-width; the
+    // visible result also depends on the terminal font, so this never fails.
+    Check::pass(
+        CAT_TERM,
+        "CJK width",
+        "uses unicode-width for double-width glyphs (also depends on terminal font)",
+    )
+}
+
+fn color_check(term: Option<&str>, colorterm: Option<&str>) -> Check {
+    let truecolor = colorterm
+        .map(|c| c.contains("truecolor") || c.contains("24bit"))
+        .unwrap_or(false);
+    let has_256 = term.map(|t| t.contains("256color")).unwrap_or(false);
+    if truecolor {
+        Check::pass(CAT_TERM, "color support", "truecolor (24-bit)")
+    } else if has_256 {
+        Check::pass(CAT_TERM, "color support", "256-color")
+    } else {
+        Check::warn(
+            CAT_TERM,
+            "color support",
+            "no truecolor/256-color advertised; themes may look flat",
+            "use a 256-color terminal and set TERM=xterm-256color (COLORTERM=truecolor)",
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Config & data
+// ---------------------------------------------------------------------------
+
+const CAT_CONFIG: &str = "Config & data";
+
+fn config_checks(args: &DoctorArgs) -> Vec<Check> {
+    let data_dir = data_dir_from_env(
+        args.data_dir.clone(),
+        std::env::var_os("HOME"),
+        std::env::var_os("USERPROFILE"),
+    );
+    vec![writability_check("ra data dir", &data_dir)]
+}
+
+/// Pure resolver for the ra data dir: explicit `--data-dir` first, then
+/// `HOME`, then `USERPROFILE`. Native Windows shells set no `HOME`, so the old
+/// HOME-only probe silently fell back to a CWD-relative `.ra` there.
+/// Mirrors `crate::history`'s home resolution (empty values ignored); split
+/// out so it is testable without mutating process env.
+fn data_dir_from_env(
+    override_dir: Option<PathBuf>,
+    home: Option<std::ffi::OsString>,
+    userprofile: Option<std::ffi::OsString>,
+) -> PathBuf {
+    override_dir
+        .or_else(|| {
+            home.filter(|value| !value.is_empty())
+                .or_else(|| userprofile.filter(|value| !value.is_empty()))
+                .map(|base| PathBuf::from(base).join(".ra"))
+        })
+        .unwrap_or_else(|| PathBuf::from(".ra"))
+}
+
+/// Check that a directory exists and is writable (or creatable). A missing dir
+/// that can be created is a `[!]` with a `--fix`-able action, not a failure. A
+/// path that exists but is **not** a directory (e.g. a stray regular file at
+/// `~/.ra`) is a `[✗]` failure: the `mkdir -p` hint would fail, so we tell
+/// the user to clear the path instead.
+fn writability_check(name: &'static str, dir: &Path) -> Check {
+    if dir.is_dir() {
+        if is_writable(dir) {
+            Check::pass(CAT_CONFIG, name, "present and writable")
+                .with_value(dir.display().to_string())
+        } else {
+            Check::fail(
+                CAT_CONFIG,
+                name,
+                format!("{} is not writable", dir.display()),
+                format!("chmod u+w {}", dir.display()),
+            )
+        }
+    } else if dir.exists() {
+        // Exists but isn't a directory — `mkdir -p` would fail, so don't offer
+        // it. The path is occupied by a file (or other non-dir); clear it.
+        Check::fail(
+            CAT_CONFIG,
+            name,
+            format!("{} exists but is not a directory", dir.display()),
+            format!(
+                "remove the file at {} or point --data-dir elsewhere",
+                dir.display()
+            ),
+        )
+        .with_value(dir.display().to_string())
+    } else {
+        Check::warn(
+            CAT_CONFIG,
+            name,
+            format!("{} does not exist yet", dir.display()),
+            format!("mkdir -p {}", dir.display()),
+        )
+        .with_value(dir.display().to_string())
+    }
+}
+
+fn is_writable(dir: &Path) -> bool {
+    let probe = dir.join(".octoscode-doctor-write-probe");
+    match std::fs::File::create(&probe) {
+        Ok(_) => {
+            let _ = std::fs::remove_file(&probe);
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Profiles & sessions
+// ---------------------------------------------------------------------------
+
+const CAT_PROFILES: &str = "Profiles & sessions";
+
+/// Inventory of on-disk profiles — every `<data_dir>/profiles/<id>.json`, the
+/// default marked `*`, and the LLM each is configured for — plus an on-disk
+/// session count. The data dir is resolved the same way as the `ra data dir`
+/// check. Secrets (`config.env_vars`) are never surfaced; only family/model/
+/// route. Per-session *folders* are intentionally not read: the session→cwd map
+/// is an in-process registry (`session_workspaces()`), so folder attribution
+/// needs a live `session/list` rather than the on-disk stores (hashed by design).
+fn profiles_checks(args: &DoctorArgs) -> Vec<Check> {
+    let data_dir = data_dir_from_env(
+        args.data_dir.clone(),
+        std::env::var_os("HOME"),
+        std::env::var_os("USERPROFILE"),
+    );
+    profiles_checks_in(&data_dir)
+}
+
+/// Testable core of [`profiles_checks`]: build the inventory from a resolved
+/// data dir.
+fn profiles_checks_in(data_dir: &Path) -> Vec<Check> {
+    let mut checks = Vec::new();
+    let profiles_dir = data_dir.join("profiles");
+    let ids = crate::profiles::enumerate_profile_ids(&profiles_dir);
+    let default = read_default_profile(data_dir);
+
+    if ids.is_empty() {
+        checks.push(Check::warn(
+            CAT_PROFILES,
+            "profiles",
+            "no profiles found",
+            format!(
+                "run onboarding (launch octoscode in a folder) — expected under {}",
+                profiles_dir.display()
+            ),
+        ));
+        return checks;
+    }
+
+    // Summary: count + default-pointer health.
+    checks.push(match &default {
+        Some(d) if ids.iter().any(|id| id == d) => Check::pass(
+            CAT_PROFILES,
+            "profiles",
+            format!("{} found; default: {d}", ids.len()),
+        ),
+        Some(d) => Check::warn(
+            CAT_PROFILES,
+            "profiles",
+            format!(
+                "{} found; default pointer → '{d}' has no matching profile",
+                ids.len()
+            ),
+            format!(
+                "fix {}/default-profile, or create profile '{d}'",
+                data_dir.display()
+            ),
+        ),
+        None => Check::warn(
+            CAT_PROFILES,
+            "profiles",
+            format!("{} found; no default set", ids.len()),
+            "set a default during onboarding (make-default) so a bare launch can resume it",
+        ),
+    });
+
+    // One line per profile: the default gets a `*`, the detail is its LLM.
+    for id in &ids {
+        let name = if default.as_deref() == Some(id.as_str()) {
+            format!("{id} *")
+        } else {
+            id.clone()
+        };
+        let detail =
+            read_profile_llm(&profiles_dir, id).unwrap_or_else(|| "LLM not configured".to_string());
+        checks.push(Check::pass(CAT_PROFILES, name, detail));
+    }
+
+    // Sessions: on-disk count only. The session→folder map lives in an
+    // in-process registry, so per-folder attribution needs a live `session/list`.
+    let sessions = count_on_disk_sessions(data_dir);
+    checks.push(if sessions == 0 {
+        Check::pass(CAT_PROFILES, "sessions", "none on disk yet")
+    } else {
+        Check::pass(
+            CAT_PROFILES,
+            "sessions",
+            format!("{sessions} on disk; per-folder mapping needs a live `session/list`"),
+        )
+    });
+
+    checks
+}
+
+/// Read the `default-profile` pointer (a bare profile id), trimmed; `None` when
+/// the file is absent or empty.
+fn read_default_profile(data_dir: &Path) -> Option<String> {
+    let raw = std::fs::read_to_string(data_dir.join("default-profile")).ok()?;
+    let trimmed = raw.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+/// Summarize a profile's primary LLM as `family/model via route (api_type)`
+/// (plus a fallback count), from `<profiles_dir>/<id>.json`. Deliberately reads
+/// only `config.llm` — never `config.env_vars`, which holds API-key secrets.
+/// `None` when the descriptor is unreadable or has no primary LLM.
+fn read_profile_llm(profiles_dir: &Path, id: &str) -> Option<String> {
+    let raw = std::fs::read_to_string(profiles_dir.join(format!("{id}.json"))).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let llm = value.get("config")?.get("llm")?;
+    let primary = llm.get("primary")?;
+    let family = primary
+        .get("family_id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("?");
+    let model = primary
+        .get("model_id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("?");
+    let mut detail = format!("{family}/{model}");
+    if let Some(route) = primary.get("route") {
+        let route_id = route.get("route_id").and_then(serde_json::Value::as_str);
+        let api_type = route.get("api_type").and_then(serde_json::Value::as_str);
+        match (route_id, api_type) {
+            (Some(r), Some(a)) => detail.push_str(&format!(" via {r} ({a})")),
+            (Some(r), None) => detail.push_str(&format!(" via {r}")),
+            _ => {}
+        }
+    }
+    let fallbacks = llm
+        .get("fallbacks")
+        .and_then(serde_json::Value::as_array)
+        .map(Vec::len)
+        .unwrap_or(0);
+    if fallbacks > 0 {
+        detail.push_str(&format!("; {fallbacks} fallback(s)"));
+    }
+    Some(detail)
+}
+
+/// Count session JSONL descriptors across both on-disk layouts the server
+/// writes: the legacy flat `<data_dir>/sessions/*.jsonl` and the per-user
+/// `<data_dir>/users/<base_key>/sessions/*.jsonl`. `.tasks.jsonl` sidecars are
+/// excluded. Best-effort — unreadable dirs count as zero.
+fn count_on_disk_sessions(data_dir: &Path) -> usize {
+    let mut count = count_session_jsonl(&data_dir.join("sessions"));
+    if let Ok(users) = std::fs::read_dir(data_dir.join("users")) {
+        for user in users.flatten() {
+            count += count_session_jsonl(&user.path().join("sessions"));
+        }
+    }
+    count
+}
+
+/// Count `*.jsonl` files in `dir`, excluding `*.tasks.jsonl` sidecars.
+fn count_session_jsonl(dir: &Path) -> usize {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    entries
+        .flatten()
+        .filter(|entry| {
+            let path = entry.path();
+            if !path.is_file() {
+                return false;
+            }
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            name.ends_with(".jsonl") && !name.ends_with(".tasks.jsonl")
+        })
+        .count()
+}
+
+// ---------------------------------------------------------------------------
+// Backend connectivity + protocol skew
+// ---------------------------------------------------------------------------
+
+const CAT_BACKEND: &str = "Backend";
+
+fn backend_checks(args: &DoctorArgs) -> Vec<Check> {
+    let mut checks = Vec::new();
+
+    // Transport resolution.
+    let mut checked_live_protocol = false;
+    if let Some(cmd) = &args.stdio_command {
+        checks.push(stdio_command_check(cmd));
+    } else if let Some(endpoint) = &args.endpoint {
+        let auth_token = args.auth_token.clone().or_else(|| {
+            std::env::var("OCTOS_AUTH_TOKEN")
+                .ok()
+                .filter(|t| !t.is_empty())
+        });
+        match probe_ws_capabilities(endpoint, auth_token) {
+            Ok(capabilities) => {
+                checks.push(
+                    Check::pass(
+                        CAT_BACKEND,
+                        "WS endpoint probe",
+                        "config/capabilities/list responded",
+                    )
+                    .with_value(endpoint.clone()),
+                );
+                checks.push(compare_against_server(&capabilities));
+                checked_live_protocol = true;
+            }
+            Err(message) => checks.push(
+                Check::warn(
+                    CAT_BACKEND,
+                    "WS endpoint probe",
+                    message,
+                    "ensure the ra server is running, the endpoint is correct, and auth requirements are satisfied",
+                )
+                .with_value(endpoint.clone()),
+            ),
+        }
+    } else {
+        checks.push(Check::pass(
+            CAT_BACKEND,
+            "transport",
+            "no backend configured (mock mode); skipping connectivity",
+        ));
+    }
+
+    // Structural fallback when no live capabilities were available. Compares
+    // the TUI's required feature set + compiled-in schema version against the
+    // ra-core feature registry the TUI is built with.
+    if !checked_live_protocol {
+        checks.push(protocol_skew_check());
+    }
+
+    checks
+}
+
+/// Shell operators that mean the stdio command runs as a shell *script*, not a
+/// bare exec — pipes, sequencing, redirection, command substitution, etc. When
+/// any of these are present we cannot statically resolve "the binary".
+const SHELL_OPERATORS: &[&str] = &[
+    "&&", "||", ";", "|", "`", "$(", ">", "<", "&", "\n", "(", ")", "{", "}",
+];
+
+/// What the leading executable of a stdio command resolves to, after stripping
+/// shell prefixes. The stdio child runs via the transport's shell (`sh -c` /
+/// `cmd /C`), so env-assignment prefixes and shell operators are legal and must
+/// not be reported as a hard `[✗]` failure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum StdioResolution {
+    /// A plain `prog arg…` (possibly with `VAR=val` prefixes) whose leading
+    /// program is `prog`.
+    Program(String),
+    /// The command uses shell syntax (operators/substitution); the binary
+    /// can't be statically verified — it'll run via the transport shell.
+    ShellSyntax,
+    /// The command couldn't be parsed (unbalanced quotes, …).
+    Unparsable,
+}
+
+/// Classify a stdio command into a resolvable leading program, shell syntax, or
+/// an unparsable string. Strips leading `VAR=value` env-assignment prefixes.
+fn classify_stdio_command(command: &str) -> StdioResolution {
+    // Shell operators ⇒ the transport shell runs a script; don't hard-fail.
+    if SHELL_OPERATORS.iter().any(|op| command.contains(op)) {
+        return StdioResolution::ShellSyntax;
+    }
+    let Some(tokens) = shlex::split(command) else {
+        return StdioResolution::Unparsable;
+    };
+    // Skip leading `VAR=value` env-assignment prefixes (e.g. `FOO=1 ra …`).
+    let mut rest = tokens.into_iter().skip_while(|tok| is_env_assignment(tok));
+    let Some(program) = rest.next() else {
+        // Only env assignments (or empty) — nothing to exec statically, but the
+        // shell would still run; treat as shell syntax, not a hard failure.
+        return StdioResolution::ShellSyntax;
+    };
+    // An explicit shell wrapper (`sh -c '…'`, `bash -lc '…'`) runs an arbitrary
+    // script; the real binary is inside the quoted argument and can't be
+    // statically resolved.
+    if is_shell_wrapper(&program) && rest.any(|a| a.starts_with("-") && a.contains('c')) {
+        return StdioResolution::ShellSyntax;
+    }
+    StdioResolution::Program(program)
+}
+
+/// Whether `program` is a POSIX shell that would run its `-c` argument as a
+/// script (so the real executable is hidden inside the quoted string).
+fn is_shell_wrapper(program: &str) -> bool {
+    let base = Path::new(program)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(program);
+    matches!(base, "sh" | "bash" | "zsh" | "dash" | "ksh" | "fish")
+}
+
+/// Whether `tok` is a leading `VAR=value` shell env-assignment. The name must
+/// be a non-empty valid shell identifier (`[A-Za-z_][A-Za-z0-9_]*`).
+fn is_env_assignment(tok: &str) -> bool {
+    let Some(eq) = tok.find('=') else {
+        return false;
+    };
+    let name = &tok[..eq];
+    if name.is_empty() {
+        return false;
+    }
+    let mut chars = name.chars();
+    let first = chars.next().unwrap_or('\0');
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return false;
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// Resolve the leading executable of `--stdio-command` on PATH and, if it is
+/// the `ra` server, run `<bin> --version` to surface the build it would
+/// launch. The child runs via the transport's shell, so shell-syntax commands
+/// (env prefixes, `cd … &&`, pipes) are downgraded to `[!]` warns — we can't
+/// statically verify them — rather than reported as a missing binary `[✗]`.
+fn stdio_command_check(command: &str) -> Check {
+    let program = match classify_stdio_command(command) {
+        StdioResolution::Program(p) => p,
+        StdioResolution::ShellSyntax => {
+            return Check::warn(
+                CAT_BACKEND,
+                "stdio command",
+                "stdio command uses shell syntax; can't statically verify the binary — it will run via the transport shell",
+                "ensure the command launches an ra server with `--stdio` (e.g. `ra serve --stdio`)",
+            )
+            .with_value(command.to_string());
+        }
+        StdioResolution::Unparsable => {
+            return Check::fail(
+                CAT_BACKEND,
+                "stdio command",
+                format!("could not parse stdio command `{command}`"),
+                "set a valid --stdio-command (e.g. `ra serve --stdio`)",
+            );
+        }
+    };
+
+    let resolved = which(&program);
+    match resolved {
+        Some(path) => {
+            // Surface the server build (best effort).
+            let version = std::process::Command::new(&path)
+                .arg("--version")
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+            let detail = match &version {
+                Some(v) if !v.is_empty() => format!("resolves to {} ({v})", path.display()),
+                _ => format!("resolves to {}", path.display()),
+            };
+            Check::pass(CAT_BACKEND, "stdio command", detail).with_value(path.display().to_string())
+        }
+        None => Check::fail(
+            CAT_BACKEND,
+            "stdio command",
+            format!("`{program}` not found on PATH"),
+            format!("install `{program}` or correct --stdio-command"),
+        ),
+    }
+}
+
+const WS_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
+/// Overall deadline for the capabilities receive loop. The per-frame
+/// `WS_PROBE_TIMEOUT` resets on EVERY incoming frame, so a chatty
+/// non-conforming endpoint that streams unrelated notifications could keep
+/// the probe alive forever without this.
+const WS_PROBE_OVERALL_TIMEOUT: Duration = Duration::from_secs(10);
+const WS_PROBE_ID: &str = "octoscode-doctor-capabilities";
+
+fn probe_ws_capabilities(
+    endpoint: &str,
+    auth_token: Option<String>,
+) -> std::result::Result<UiProtocolCapabilities, String> {
+    probe_ws_capabilities_with_deadline(endpoint, auth_token, WS_PROBE_OVERALL_TIMEOUT)
+}
+
+fn probe_ws_capabilities_with_deadline(
+    endpoint: &str,
+    auth_token: Option<String>,
+    overall: Duration,
+) -> std::result::Result<UiProtocolCapabilities, String> {
+    let runtime = TokioRuntimeBuilder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|err| format!("failed to create WS probe runtime: {err}"))?;
+
+    runtime.block_on(async move {
+        let mut request = endpoint
+            .into_client_request()
+            .map_err(|err| format!("failed to build WebSocket request: {err}"))?;
+        request.headers_mut().insert(
+            "X-Ra-Ui-Features",
+            TUI_REQUIRED_FEATURES
+                .join(",")
+                .parse()
+                .map_err(|err| format!("failed to build feature header: {err}"))?,
+        );
+        if let Some(token) = auth_token {
+            request.headers_mut().insert(
+                "Authorization",
+                format!("Bearer {token}")
+                    .parse()
+                    .map_err(|err| format!("failed to build Authorization header: {err}"))?,
+            );
+        }
+
+        let (mut ws, _) = tokio::time::timeout(WS_PROBE_TIMEOUT, connect_async(request))
+            .await
+            .map_err(|_| format!("timed out connecting to {endpoint}"))?
+            .map_err(|err| format!("failed to connect to {endpoint}: {err}"))?;
+
+        let request = serde_json::json!({
+            "jsonrpc": JSON_RPC_VERSION,
+            "id": WS_PROBE_ID,
+            "method": APPUI_METHOD_CONFIG_CAPABILITIES_LIST,
+            "params": {}
+        });
+        tokio::time::timeout(
+            WS_PROBE_TIMEOUT,
+            ws.send(WsMessage::Text(request.to_string().into())),
+        )
+        .await
+        .map_err(|_| "timed out sending config/capabilities/list".to_string())?
+        .map_err(|err| format!("failed to send config/capabilities/list: {err}"))?;
+
+        // The per-frame timeout resets on every frame; the whole receive loop
+        // additionally runs under ONE overall deadline so a chatty endpoint
+        // that never answers the request cannot keep the probe alive forever.
+        let receive = async {
+            loop {
+                let Some(message) = tokio::time::timeout(WS_PROBE_TIMEOUT, ws.next())
+                    .await
+                    .map_err(|_| {
+                        "timed out waiting for config/capabilities/list response".to_string()
+                    })?
+                else {
+                    return Err(
+                        "server closed before config/capabilities/list response".to_string()
+                    );
+                };
+                let message = message
+                    .map_err(|err| format!("failed to read capabilities response: {err}"))?;
+                match message {
+                    WsMessage::Text(text) => {
+                        if let Some(capabilities) = decode_matching_capabilities_response(&text)? {
+                            return Ok(capabilities);
+                        }
+                    }
+                    WsMessage::Binary(bytes) => {
+                        let text = String::from_utf8(bytes.to_vec())
+                            .map_err(|err| format!("capabilities response is not UTF-8: {err}"))?;
+                        if let Some(capabilities) = decode_matching_capabilities_response(&text)? {
+                            return Ok(capabilities);
+                        }
+                    }
+                    WsMessage::Ping(_) | WsMessage::Pong(_) => {}
+                    WsMessage::Close(_) => {
+                        return Err(
+                            "server closed before config/capabilities/list response".to_string()
+                        );
+                    }
+                    WsMessage::Frame(_) => {}
+                }
+            }
+        };
+        match tokio::time::timeout(overall, receive).await {
+            Ok(result) => result,
+            Err(_) => Err(format!(
+                "timed out waiting for config/capabilities/list response \
+                 ({overall:?} overall deadline)"
+            )),
+        }
+    })
+}
+
+fn decode_matching_capabilities_response(
+    text: &str,
+) -> std::result::Result<Option<UiProtocolCapabilities>, String> {
+    let frame: serde_json::Value = serde_json::from_str(text)
+        .map_err(|err| format!("capabilities response is not valid JSON: {err}"))?;
+    if frame.get("id") != Some(&serde_json::Value::String(WS_PROBE_ID.to_string())) {
+        return Ok(None);
+    }
+    if let Some(error) = frame.get("error") {
+        let message = error
+            .get("message")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("unknown JSON-RPC error");
+        return Err(format!(
+            "config/capabilities/list returned JSON-RPC error: {message}"
+        ));
+    }
+    let result = frame
+        .get("result")
+        .cloned()
+        .ok_or_else(|| "capabilities response is missing result".to_string())?;
+    serde_json::from_value::<ConfigCapabilitiesListResult>(result)
+        .map(|result| result.capabilities)
+        .map(Some)
+        .map_err(|err| format!("failed to decode config/capabilities/list result: {err}"))
+}
+
+/// Structural protocol-skew check (design §B, P3 fallback).
+///
+/// Compares what the TUI requires against the `ra-core` it was compiled
+/// with: confirms every [`TUI_REQUIRED_FEATURES`] entry is a known feature in
+/// this protocol build (so the TUI isn't asking for a feature the protocol
+/// crate no longer defines), and reports the compiled-in protocol/schema
+/// version.
+fn protocol_skew_check() -> Check {
+    let unknown: Vec<&str> = TUI_REQUIRED_FEATURES
+        .iter()
+        .copied()
+        .filter(|f| !UI_PROTOCOL_KNOWN_FEATURES.contains(f))
+        .collect();
+    if unknown.is_empty() {
+        Check::pass(
+            CAT_BACKEND,
+            "protocol skew",
+            format!(
+                "TUI requires {} features; all known in {UI_PROTOCOL_V1} (schema v{UI_PROTOCOL_SCHEMA_VERSION})",
+                TUI_REQUIRED_FEATURES.len()
+            ),
+        )
+        .with_value(format!("{UI_PROTOCOL_V1} schema v{UI_PROTOCOL_SCHEMA_VERSION}"))
+    } else {
+        Check::fail(
+            CAT_BACKEND,
+            "protocol skew",
+            format!(
+                "TUI requires features absent from its ra-core build: {}",
+                unknown.join(", ")
+            ),
+            "re-pin octoscode's ra-core revision to one that defines these features",
+        )
+    }
+}
+
+/// Compare the TUI's compiled-in protocol against a live server's advertised
+/// capabilities. Reusable by a future live WS/stdio probe.
+///
+/// - `[✗]` when the protocol string differs or the server's schema version is
+///   *older* than the TUI's compiled-in schema (incompatible).
+/// - `[!]` when the server is missing a feature the TUI requires.
+/// - `[✓]` otherwise.
+pub fn compare_against_server(server: &UiProtocolCapabilities) -> Check {
+    if server.version.protocol != UI_PROTOCOL_V1 {
+        return Check::fail(
+            CAT_BACKEND,
+            "protocol skew",
+            format!(
+                "server speaks `{}` but the TUI speaks `{UI_PROTOCOL_V1}`",
+                server.version.protocol
+            ),
+            "upgrade whichever side is on the wrong protocol family",
+        );
+    }
+    if server.version.schema_version < UI_PROTOCOL_SCHEMA_VERSION {
+        return Check::fail(
+            CAT_BACKEND,
+            "protocol skew",
+            format!(
+                "server schema v{} is older than the TUI's v{UI_PROTOCOL_SCHEMA_VERSION}",
+                server.version.schema_version
+            ),
+            "upgrade the ra server (`ra update`) so its schema ≥ the client's",
+        );
+    }
+    let missing: Vec<&str> = TUI_REQUIRED_FEATURES
+        .iter()
+        .copied()
+        .filter(|f| !server.supported_features.iter().any(|s| s == f))
+        .collect();
+    if missing.is_empty() {
+        Check::pass(
+            CAT_BACKEND,
+            "protocol skew",
+            format!(
+                "compatible (server schema v{}, all required features present)",
+                server.version.schema_version
+            ),
+        )
+    } else {
+        Check::warn(
+            CAT_BACKEND,
+            "protocol skew",
+            format!(
+                "server is missing TUI-required features: {}",
+                missing.join(", ")
+            ),
+            "upgrade the ra server to advertise these features, or expect degraded behavior",
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Network
+// ---------------------------------------------------------------------------
+
+const CAT_NETWORK: &str = "Network";
+
+fn network_checks() -> Vec<Check> {
+    let check = match github::reachability() {
+        Reachability::Ok => Check::pass(CAT_NETWORK, "GitHub reachable", "api.github.com OK"),
+        Reachability::RateLimited => Check::warn(
+            CAT_NETWORK,
+            "GitHub reachable",
+            "api.github.com rate-limited (HTTP 403)",
+            "set OCTOSCODE_GITHUB_TOKEN to raise the rate limit",
+        ),
+        Reachability::Unreachable(err) => Check::warn(
+            CAT_NETWORK,
+            "GitHub reachable",
+            format!("api.github.com unreachable: {err}"),
+            "check your network/proxy; update checks will be unavailable",
+        ),
+    };
+    vec![check]
+}
+
+// ---------------------------------------------------------------------------
+// helpers
+// ---------------------------------------------------------------------------
+
+/// Cross-platform `which`: resolve `program` against `$PATH`.
+///
+/// A match must be an *executable* regular file — a non-executable file on PATH
+/// would pass an `is_file()`-only check yet fail to launch, so on Unix we also
+/// require an executable bit (`mode & 0o111`). Windows relies on the `.exe`
+/// extension (added above) as its executability signal.
+fn which(program: &str) -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    let exe = if cfg!(windows) && !program.ends_with(".exe") {
+        format!("{program}.exe")
+    } else {
+        program.to_string()
+    };
+    std::env::split_paths(&path)
+        .map(|dir| dir.join(&exe))
+        .find(|candidate| is_executable_file(candidate))
+}
+
+/// Whether `path` is a regular file that can actually be executed. On Unix the
+/// file must carry an executable bit; on other platforms `is_file()` (with the
+/// `.exe` extension applied by [`which`]) is the best available signal.
+fn is_executable_file(path: &Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        match std::fs::metadata(path) {
+            Ok(meta) => meta.permissions().mode() & 0o111 != 0,
+            Err(_) => false,
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ra_core::ui_protocol::UiProtocolCapabilities;
+
+    fn server_caps() -> UiProtocolCapabilities {
+        UiProtocolCapabilities::full_protocol()
+    }
+
+    #[test]
+    fn decode_capabilities_response_accepts_result() {
+        let caps = server_caps();
+        let text = serde_json::json!({
+            "jsonrpc": JSON_RPC_VERSION,
+            "id": WS_PROBE_ID,
+            "result": {
+                "capabilities": caps
+            }
+        })
+        .to_string();
+
+        let decoded = decode_matching_capabilities_response(&text)
+            .expect("capabilities decode")
+            .expect("matching response");
+        assert_eq!(decoded.version.protocol, UI_PROTOCOL_V1);
+    }
+
+    #[test]
+    fn decode_capabilities_response_reports_jsonrpc_error() {
+        let text = serde_json::json!({
+            "jsonrpc": JSON_RPC_VERSION,
+            "id": WS_PROBE_ID,
+            "error": {
+                "code": -32601,
+                "message": "method not found"
+            }
+        })
+        .to_string();
+
+        let err =
+            decode_matching_capabilities_response(&text).expect_err("error response rejected");
+        assert!(err.contains("method not found"));
+    }
+
+    #[test]
+    fn decode_matching_capabilities_response_ignores_unrelated_frame() {
+        let text = serde_json::json!({
+            "jsonrpc": JSON_RPC_VERSION,
+            "method": "server/heartbeat",
+            "params": {}
+        })
+        .to_string();
+
+        let decoded =
+            decode_matching_capabilities_response(&text).expect("unrelated frame is valid JSON");
+        assert!(decoded.is_none());
+    }
+
+    #[test]
+    fn ws_probe_ignores_unrelated_frames_and_fetches_live_capabilities() {
+        let listener = match std::net::TcpListener::bind("127.0.0.1:0") {
+            Ok(listener) => listener,
+            Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => return,
+            Err(err) => panic!("bind test websocket server: {err}"),
+        };
+        listener
+            .set_nonblocking(true)
+            .expect("test websocket listener nonblocking");
+        let addr = listener.local_addr().expect("test websocket addr");
+
+        let thread = std::thread::spawn(move || {
+            let runtime = TokioRuntimeBuilder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("test websocket runtime");
+            runtime.block_on(async move {
+                let listener = tokio::net::TcpListener::from_std(listener)
+                    .expect("wrap test websocket listener");
+                let (stream, _) = listener.accept().await.expect("accept doctor probe");
+                let mut ws = tokio_tungstenite::accept_async(stream)
+                    .await
+                    .expect("accept doctor websocket");
+                let request = ws
+                    .next()
+                    .await
+                    .expect("doctor request arrives")
+                    .expect("doctor request reads");
+                let text = match request {
+                    WsMessage::Text(text) => text.to_string(),
+                    WsMessage::Binary(bytes) => {
+                        String::from_utf8(bytes.to_vec()).expect("binary request is UTF-8")
+                    }
+                    other => panic!("unexpected doctor websocket message: {other:?}"),
+                };
+                let frame: serde_json::Value =
+                    serde_json::from_str(&text).expect("doctor request is JSON");
+                assert_eq!(frame["method"], APPUI_METHOD_CONFIG_CAPABILITIES_LIST);
+                ws.send(WsMessage::Text(
+                    serde_json::json!({
+                        "jsonrpc": JSON_RPC_VERSION,
+                        "method": "server/heartbeat",
+                        "params": {}
+                    })
+                    .to_string()
+                    .into(),
+                ))
+                .await
+                .expect("send unrelated notification");
+                ws.send(WsMessage::Text(
+                    serde_json::json!({
+                        "jsonrpc": JSON_RPC_VERSION,
+                        "id": frame["id"].clone(),
+                        "result": {
+                            "capabilities": server_caps()
+                        }
+                    })
+                    .to_string()
+                    .into(),
+                ))
+                .await
+                .expect("send doctor capabilities response");
+            });
+        });
+
+        let caps = probe_ws_capabilities(&format!("ws://{addr}/ui-protocol"), None)
+            .expect("doctor probe returns capabilities");
+        thread.join().expect("test websocket exits");
+        assert_eq!(caps.version.protocol, UI_PROTOCOL_V1);
+    }
+
+    #[test]
+    fn ws_probe_chatty_endpoint_hits_the_overall_deadline() {
+        // Fix #10 (b): the per-frame 2s timeout resets on EVERY frame, so an
+        // endpoint that streams unrelated notifications forever kept the probe
+        // alive indefinitely. The receive loop must give up at the overall
+        // deadline (shortened here so the test stays fast).
+        let listener = match std::net::TcpListener::bind("127.0.0.1:0") {
+            Ok(listener) => listener,
+            Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => return,
+            Err(err) => panic!("bind test websocket server: {err}"),
+        };
+        listener
+            .set_nonblocking(true)
+            .expect("test websocket listener nonblocking");
+        let addr = listener.local_addr().expect("test websocket addr");
+
+        let thread = std::thread::spawn(move || {
+            let runtime = TokioRuntimeBuilder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("test websocket runtime");
+            runtime.block_on(async move {
+                let listener = tokio::net::TcpListener::from_std(listener)
+                    .expect("wrap test websocket listener");
+                let (stream, _) = listener.accept().await.expect("accept doctor probe");
+                let mut ws = tokio_tungstenite::accept_async(stream)
+                    .await
+                    .expect("accept doctor websocket");
+                let _ = ws.next().await; // the probe's capabilities request
+                // Spam unrelated frames until the probe hangs up.
+                loop {
+                    let sent = ws
+                        .send(WsMessage::Text(
+                            serde_json::json!({
+                                "jsonrpc": JSON_RPC_VERSION,
+                                "method": "server/heartbeat",
+                                "params": {}
+                            })
+                            .to_string()
+                            .into(),
+                        ))
+                        .await;
+                    if sent.is_err() {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(20)).await;
+                }
+            });
+        });
+
+        let started = std::time::Instant::now();
+        let err = probe_ws_capabilities_with_deadline(
+            &format!("ws://{addr}/ui-protocol"),
+            None,
+            Duration::from_millis(500),
+        )
+        .expect_err("chatty endpoint must hit the overall deadline");
+        assert!(
+            err.contains("overall deadline"),
+            "expected the overall-deadline error, got: {err}"
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "probe must give up promptly, took {:?}",
+            started.elapsed()
+        );
+        thread.join().expect("test websocket exits");
+    }
+
+    #[test]
+    fn data_dir_resolver_prefers_override_then_home_then_userprofile() {
+        // Fix #10 (a): only HOME was consulted, so native Windows (no HOME)
+        // probed a CWD-relative `.ra` instead of the real user data dir.
+        assert_eq!(
+            data_dir_from_env(
+                Some(PathBuf::from("/custom")),
+                Some("/home/u".into()),
+                Some("C:\\Users\\u".into())
+            ),
+            PathBuf::from("/custom")
+        );
+        assert_eq!(
+            data_dir_from_env(None, Some("/home/u".into()), Some("C:\\Users\\u".into())),
+            PathBuf::from("/home/u").join(".ra")
+        );
+        assert_eq!(
+            data_dir_from_env(None, None, Some("C:\\Users\\u".into())),
+            PathBuf::from("C:\\Users\\u").join(".ra")
+        );
+        // Empty values are ignored; with nothing set, fall back to CWD-relative.
+        assert_eq!(
+            data_dir_from_env(None, Some("".into()), Some("".into())),
+            PathBuf::from(".ra")
+        );
+        assert_eq!(data_dir_from_env(None, None, None), PathBuf::from(".ra"));
+    }
+
+    #[test]
+    fn renderer_groups_by_category_and_shows_fix_lines() {
+        let checks = vec![
+            Check::pass("Cat A", "ok thing", "all good"),
+            Check::warn("Cat A", "warny thing", "soft problem", "do the fix"),
+            Check::fail("Cat B", "broken thing", "hard problem", "fix me"),
+        ];
+        let report = Report::new(checks);
+        let text = report.render(false, false);
+        assert!(text.contains("Cat A\n"));
+        assert!(text.contains("Cat B\n"));
+        assert!(text.contains("[✓] ok thing"));
+        assert!(text.contains("[!] warny thing"));
+        assert!(text.contains("[✗] broken thing"));
+        assert!(text.contains("    → fix: do the fix"));
+        assert!(text.contains("    → fix: fix me"));
+        // No fix line for the passing check.
+        assert!(!text.contains("→ fix: \n"));
+        assert!(text.contains("1 passed, 1 warning(s), 1 failure(s)"));
+    }
+
+    #[test]
+    fn exit_code_is_one_on_failure_zero_on_warnings() {
+        let warn_only = Report::new(vec![Check::warn("c", "n", "d", "f")]);
+        assert_eq!(warn_only.exit_code(false), 0);
+        assert_eq!(warn_only.exit_code(true), 1); // strict promotes warnings
+
+        let with_fail = Report::new(vec![Check::fail("c", "n", "d", "f")]);
+        assert_eq!(with_fail.exit_code(false), 1);
+    }
+
+    #[test]
+    fn json_redacts_nothing_sensitive_and_carries_summary() {
+        let report = Report::new(vec![Check::pass("c", "n", "d")]);
+        let json = report.to_json(false);
+        assert_eq!(json["summary"]["passed"], 1);
+        assert_eq!(json["octoscode_version"], env!("CARGO_PKG_VERSION"));
+        assert_eq!(
+            json["octos_core_schema_version"],
+            UI_PROTOCOL_SCHEMA_VERSION
+        );
+        assert!(json["checks"].is_array());
+    }
+
+    #[test]
+    fn install_method_label_infers_from_path() {
+        assert_eq!(
+            install_method_label(Path::new("/home/u/.cargo/bin/ra")),
+            "cargo"
+        );
+        assert_eq!(
+            install_method_label(Path::new("/opt/homebrew/bin/octoscode")),
+            "brew"
+        );
+        assert_eq!(
+            install_method_label(Path::new("/home/u/.local/bin/octoscode")),
+            "shell installer"
+        );
+        assert_eq!(
+            install_method_label(Path::new("/home/u/.ra/bin/ra")),
+            "octoscode auto-install"
+        );
+        assert_eq!(install_method_label(Path::new("/usr/bin/ra")), "system");
+        assert_eq!(
+            install_method_label(Path::new(
+                "/x/node_modules/@octos-org/octoscode/.bin_real/octoscode"
+            )),
+            "npm"
+        );
+    }
+
+    #[test]
+    fn installs_check_passes_on_one_and_warns_on_duplicates() {
+        // Exactly one → PASS.
+        let one = installs_check(
+            "ra",
+            &LocatedBinaries {
+                on_path: vec![PathBuf::from("/opt/homebrew/bin/ra")],
+                off_path: vec![],
+            },
+        );
+        assert_eq!(one.status, CheckStatus::Pass);
+
+        // Duplicates → WARN, and the fix names the extra copy to remove.
+        let dup = installs_check(
+            "ra",
+            &LocatedBinaries {
+                on_path: vec![PathBuf::from("/opt/homebrew/bin/ra")],
+                off_path: vec![PathBuf::from("/home/u/.cargo/bin/ra")],
+            },
+        );
+        assert_eq!(dup.status, CheckStatus::Warn);
+        assert!(dup.fix.as_deref().unwrap().contains(".cargo/bin/ra"));
+
+        // None → WARN.
+        assert_eq!(
+            installs_check("ra", &LocatedBinaries::default()).status,
+            CheckStatus::Warn
+        );
+    }
+
+    #[test]
+    fn installations_checks_surface_required_octos_and_both_binaries() {
+        let checks = installations_checks();
+        let needs = checks
+            .iter()
+            .find(|c| c.name == "octoscode needs octos")
+            .expect("required-ra row present");
+        assert!(
+            needs
+                .detail
+                .contains(crate::backend_ensure::MIN_OCTOS_VERSION)
+        );
+        // Both binaries get an install-summary row.
+        assert!(checks.iter().any(|c| c.name == "octoscode installs"));
+        assert!(checks.iter().any(|c| c.name == "ra installs"));
+    }
+
+    #[test]
+    fn shadow_check_passes_for_single_and_warns_for_multiple() {
+        let one = shadow_check(
+            &LocatedBinaries {
+                on_path: vec![PathBuf::from("/usr/local/bin/octoscode")],
+                off_path: vec![],
+            },
+            &InstallMethod::Homebrew,
+        );
+        assert_eq!(one.status, CheckStatus::Pass);
+        assert!(one.detail.contains("on PATH"));
+
+        let two = shadow_check(
+            &LocatedBinaries {
+                on_path: vec![PathBuf::from("/opt/homebrew/bin/octoscode")],
+                off_path: vec![PathBuf::from("/home/u/.cargo/bin/octoscode")],
+            },
+            &InstallMethod::Homebrew,
+        );
+        assert_eq!(two.status, CheckStatus::Warn);
+        assert!(two.detail.contains("2 octoscode binaries"));
+        let fix = two.fix.unwrap();
+        assert!(fix.contains(".cargo/bin/octoscode"));
+        // The two locations are labelled by where they were found.
+        assert!(fix.contains("[known-dir]") || two.detail.contains("[PATH]"));
+    }
+
+    #[test]
+    fn shadow_check_warns_when_nothing_found() {
+        let none = shadow_check(&LocatedBinaries::default(), &InstallMethod::Homebrew);
+        assert_eq!(none.status, CheckStatus::Warn);
+    }
+
+    #[test]
+    fn npm_install_does_not_false_warn_on_path_or_shadow() {
+        // #189: npm-global (esp. Windows) — the locator finds no `octoscode`
+        // on PATH (the shim is .ps1/.cmd; the real .exe is under
+        // node_modules/.bin_real). Both checks must PASS, not warn.
+        let located = LocatedBinaries::default();
+        let exe = PathBuf::from(
+            "C:/Users/u/AppData/Roaming/npm/node_modules/@octos-org/octoscode/node_modules/.bin_real/octoscode.exe",
+        );
+        let on_path = on_path_check(&located, Some(exe.as_path()), &InstallMethod::Npm);
+        assert_eq!(on_path.status, CheckStatus::Pass);
+        assert!(
+            on_path.fix.is_none(),
+            "npm on-PATH check must not suggest a fix"
+        );
+
+        let shadow = shadow_check(&located, &InstallMethod::Npm);
+        assert_eq!(shadow.status, CheckStatus::Pass);
+        assert!(shadow.detail.contains("npm"));
+    }
+
+    #[test]
+    fn on_path_check_passes_when_resolvable_by_name() {
+        let located = LocatedBinaries {
+            on_path: vec![PathBuf::from("/usr/local/bin/octoscode")],
+            off_path: vec![],
+        };
+        let check = on_path_check(
+            &located,
+            Some(Path::new("/usr/local/bin/octoscode")),
+            &InstallMethod::Homebrew,
+        );
+        assert_eq!(check.status, CheckStatus::Pass);
+    }
+
+    #[test]
+    fn on_path_check_warns_when_ran_by_abs_path_and_dir_not_on_path() {
+        // Finding #1: running `~/.cargo/bin/octoscode doctor` while
+        // `~/.cargo/bin` is NOT on $PATH must WARN that it isn't runnable by
+        // name — not pass because the binary merely exists in a known dir.
+        let located = LocatedBinaries {
+            on_path: vec![],
+            off_path: vec![PathBuf::from("/home/u/.cargo/bin/octoscode")],
+        };
+        let exe = PathBuf::from("/home/u/.cargo/bin/octoscode");
+        let check = on_path_check(&located, Some(&exe), &InstallMethod::CargoGit);
+        assert_eq!(check.status, CheckStatus::Warn);
+        assert!(check.detail.contains("isn't on $PATH"));
+        // The fix points at the running exe's directory.
+        assert!(check.fix.unwrap().contains("/home/u/.cargo/bin"));
+    }
+
+    #[test]
+    fn term_check_warns_when_unset_or_dumb() {
+        // Force the prober to say "Found" so the only warns come from the
+        // TERM value itself, not a missing terminfo entry.
+        let found = |_: &str| TerminfoProbe::Found;
+        assert_eq!(term_check_with(None, found).status, CheckStatus::Warn);
+        assert_eq!(
+            term_check_with(Some("dumb"), found).status,
+            CheckStatus::Warn
+        );
+        assert_eq!(
+            term_check_with(Some("xterm-256color"), found).status,
+            CheckStatus::Pass
+        );
+    }
+
+    #[test]
+    fn term_check_warns_when_terminfo_entry_missing() {
+        // Finding #3: a plausible TERM whose terminfo entry doesn't load must
+        // WARN (the documented "can't find terminfo database" case), not pass.
+        let missing = |_: &str| TerminfoProbe::Missing;
+        let check = term_check_with(Some("xterm-256color"), missing);
+        assert_eq!(check.status, CheckStatus::Warn);
+        assert!(check.detail.contains("terminfo"));
+        assert!(check.fix.unwrap().contains("xterm-256color"));
+    }
+
+    #[test]
+    fn term_check_passes_when_prober_absent() {
+        // If `infocmp` isn't installed we can't probe; pass-with-caveat rather
+        // than hard-fail on the prober being absent.
+        let absent = |_: &str| TerminfoProbe::ProberAbsent;
+        assert_eq!(
+            term_check_with(Some("xterm-256color"), absent).status,
+            CheckStatus::Pass
+        );
+    }
+
+    #[test]
+    fn locale_check_requires_utf8() {
+        assert_eq!(
+            locale_check(Some("en_US.UTF-8"), None, None).status,
+            CheckStatus::Pass
+        );
+        assert_eq!(
+            locale_check(Some("C"), None, None).status,
+            CheckStatus::Warn
+        );
+        assert_eq!(locale_check(None, None, None).status, CheckStatus::Warn);
+        // LC_ALL overrides LANG.
+        assert_eq!(
+            locale_check(Some("C"), Some("en_US.UTF-8"), None).status,
+            CheckStatus::Pass
+        );
+    }
+
+    #[test]
+    fn color_check_recognizes_truecolor_and_256() {
+        assert_eq!(
+            color_check(Some("xterm"), Some("truecolor")).status,
+            CheckStatus::Pass
+        );
+        assert_eq!(
+            color_check(Some("xterm-256color"), None).status,
+            CheckStatus::Pass
+        );
+        assert_eq!(color_check(Some("xterm"), None).status, CheckStatus::Warn);
+    }
+
+    #[test]
+    fn structural_skew_check_passes_against_own_core_build() {
+        // Every TUI-required feature must be a known feature in the ra-core
+        // this crate compiles against — otherwise the TUI ships broken.
+        assert_eq!(protocol_skew_check().status, CheckStatus::Pass);
+    }
+
+    #[test]
+    fn compare_against_server_passes_for_full_protocol() {
+        let check = compare_against_server(&server_caps());
+        assert_eq!(check.status, CheckStatus::Pass, "{:?}", check);
+    }
+
+    #[test]
+    fn compare_against_server_warns_when_feature_missing() {
+        let mut caps = server_caps();
+        caps.supported_features
+            .retain(|f| f != UI_PROTOCOL_FEATURE_USER_QUESTION_V1);
+        let check = compare_against_server(&caps);
+        assert_eq!(check.status, CheckStatus::Warn);
+        assert!(check.detail.contains(UI_PROTOCOL_FEATURE_USER_QUESTION_V1));
+    }
+
+    #[test]
+    fn compare_against_server_fails_on_older_schema() {
+        let mut caps = server_caps();
+        // Force an incompatible (older) server schema.
+        if UI_PROTOCOL_SCHEMA_VERSION > 0 {
+            caps.version.schema_version = UI_PROTOCOL_SCHEMA_VERSION - 1;
+            let check = compare_against_server(&caps);
+            assert_eq!(check.status, CheckStatus::Fail);
+            assert!(check.detail.contains("older"));
+        }
+    }
+
+    #[test]
+    fn compare_against_server_fails_on_wrong_protocol_family() {
+        let mut caps = server_caps();
+        caps.version.protocol = "ra-ui/v2alpha".into();
+        let check = compare_against_server(&caps);
+        assert_eq!(check.status, CheckStatus::Fail);
+    }
+
+    #[test]
+    fn writability_check_passes_for_writable_tempdir() {
+        let dir = std::env::temp_dir();
+        let check = writability_check("tmp", &dir);
+        assert_eq!(check.status, CheckStatus::Pass);
+    }
+
+    #[test]
+    fn writability_check_warns_for_missing_dir() {
+        let missing = std::env::temp_dir().join("octoscode-doctor-nope-xyz-12345");
+        let _ = std::fs::remove_dir_all(&missing);
+        let check = writability_check("missing", &missing);
+        assert_eq!(check.status, CheckStatus::Warn);
+        assert!(check.fix.unwrap().contains("mkdir -p"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn is_executable_file_rejects_non_executable_and_accepts_executable() {
+        use std::os::unix::fs::PermissionsExt;
+        // Finding #4: a non-executable file on PATH must not count as a match,
+        // since launching it would fail with EACCES.
+        let base = std::env::temp_dir().join("octoscode-doctor-exec-probe-13579");
+        let _ = std::fs::remove_file(&base);
+        std::fs::write(&base, b"#!/bin/sh\n").expect("create probe");
+
+        std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o644))
+            .expect("chmod non-exec");
+        assert!(
+            !is_executable_file(&base),
+            "0o644 file must not be executable"
+        );
+
+        std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o755))
+            .expect("chmod exec");
+        assert!(is_executable_file(&base), "0o755 file must be executable");
+
+        let _ = std::fs::remove_file(&base);
+    }
+
+    #[test]
+    fn is_executable_file_rejects_directory_and_missing() {
+        let missing = std::env::temp_dir().join("octoscode-doctor-exec-missing-24680");
+        let _ = std::fs::remove_file(&missing);
+        assert!(!is_executable_file(&missing));
+        // A directory is not a runnable file even though it "exists".
+        assert!(!is_executable_file(&std::env::temp_dir()));
+    }
+
+    #[test]
+    fn stdio_classify_plain_command_resolves_leading_program() {
+        match classify_stdio_command("ra serve --stdio") {
+            StdioResolution::Program(p) => assert_eq!(p, "ra"),
+            other => panic!("expected Program, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn stdio_classify_strips_env_assignment_prefix() {
+        // Finding #2: `FOO=1 ra serve --stdio` resolves to `ra`, not the
+        // env assignment, and must not be a hard `[✗]`.
+        match classify_stdio_command("FOO=1 BAR=2 ra serve --stdio") {
+            StdioResolution::Program(p) => assert_eq!(p, "ra"),
+            other => panic!("expected Program, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn stdio_check_env_prefixed_command_is_not_hard_fail() {
+        // The env-prefixed plain command resolves to `ra`; whether `ra`
+        // is installed in the test env or not, the result must never be a hard
+        // `[✗]` caused by mis-resolving the `FOO=1` token as the program.
+        let check = stdio_command_check("FOO=1 ra serve --stdio");
+        // Either it resolves (Pass) or `ra` is absent (Fail referencing
+        // `ra`, never `FOO=1`).
+        if check.status == CheckStatus::Fail {
+            assert!(
+                check.detail.contains("`ra`"),
+                "fail must reference ra, not the env prefix: {}",
+                check.detail
+            );
+        }
+        assert!(!check.detail.contains("FOO=1"));
+    }
+
+    #[test]
+    fn stdio_check_shell_operator_command_warns_not_fails() {
+        // Finding #2: `cd repo && ./ra serve --stdio` uses shell syntax and
+        // must downgrade to `[!]` warn, never a hard `[✗]` "binary not found".
+        let check = stdio_command_check("cd repo && ./ra serve --stdio");
+        assert_eq!(check.status, CheckStatus::Warn);
+        assert!(check.detail.contains("shell syntax"));
+    }
+
+    #[test]
+    fn stdio_classify_recognizes_pipes_and_substitution_as_shell() {
+        assert_eq!(
+            classify_stdio_command("sh -c 'ra serve --stdio'"),
+            StdioResolution::ShellSyntax
+        );
+        assert_eq!(
+            classify_stdio_command("ra serve --stdio | tee log"),
+            StdioResolution::ShellSyntax
+        );
+        assert_eq!(
+            classify_stdio_command("$(which ra) serve --stdio"),
+            StdioResolution::ShellSyntax
+        );
+    }
+
+    #[test]
+    fn is_env_assignment_matches_only_valid_shell_assignments() {
+        assert!(is_env_assignment("FOO=1"));
+        assert!(is_env_assignment("_FOO_BAR=baz"));
+        assert!(!is_env_assignment("ra"));
+        assert!(!is_env_assignment("./ra"));
+        assert!(!is_env_assignment("=value"));
+        assert!(!is_env_assignment("1FOO=bad"));
+    }
+
+    #[test]
+    fn writability_check_fails_when_path_is_a_file() {
+        // A path that exists as a regular file must NOT report "does not exist
+        // yet (mkdir -p)" — `mkdir -p` would fail. It is a [✗] failure with a
+        // remove/relocate fix (finding #3).
+        let file = std::env::temp_dir().join("octoscode-doctor-datadir-as-file-98765");
+        let _ = std::fs::remove_file(&file);
+        std::fs::write(&file, b"not a dir").expect("create probe file");
+        let check = writability_check("data dir", &file);
+        let _ = std::fs::remove_file(&file);
+        assert_eq!(check.status, CheckStatus::Fail);
+        let fix = check.fix.unwrap();
+        assert!(fix.contains("remove the file"));
+        assert!(!fix.contains("mkdir -p"));
+    }
+
+    // --- Profiles & sessions -------------------------------------------------
+
+    /// Minimal self-cleaning temp dir for the profile-inventory tests.
+    struct DoctorTempDir(PathBuf);
+
+    impl DoctorTempDir {
+        fn new(tag: &str) -> Self {
+            let mut dir = std::env::temp_dir();
+            dir.push(format!(
+                "octoscode-doctor-{tag}-{}-{:?}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
+            std::fs::create_dir_all(&dir).expect("create temp dir");
+            Self(dir)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for DoctorTempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// Seed `<data_dir>/profiles/<id>.json` with a glm-like descriptor carrying
+    /// a primary LLM, an empty fallback list, and a secret in `env_vars`.
+    fn seed_profile(
+        data_dir: &Path,
+        id: &str,
+        family: &str,
+        model: &str,
+        route: &str,
+        secret: &str,
+    ) {
+        let profiles = data_dir.join("profiles");
+        std::fs::create_dir_all(&profiles).unwrap();
+        let body = serde_json::json!({
+            "id": id,
+            "config": {
+                "llm": {
+                    "primary": {
+                        "family_id": family,
+                        "model_id": model,
+                        "route": {
+                            "route_id": route,
+                            "api_type": "openai",
+                            "api_key_env": "ZAI_API_KEY"
+                        }
+                    },
+                    "fallbacks": []
+                },
+                "env_vars": { "ZAI_API_KEY": secret }
+            }
+        });
+        std::fs::write(
+            profiles.join(format!("{id}.json")),
+            serde_json::to_string_pretty(&body).unwrap(),
+        )
+        .unwrap();
+    }
+
+    fn find_check<'a>(checks: &'a [Check], name: &str) -> &'a Check {
+        checks.iter().find(|c| c.name == name).unwrap_or_else(|| {
+            let names: Vec<&str> = checks.iter().map(|c| c.name.as_str()).collect();
+            panic!("no check named `{name}` in {names:?}")
+        })
+    }
+
+    #[test]
+    fn profiles_inventory_lists_profiles_marks_default_and_shows_llm() {
+        let tmp = DoctorTempDir::new("inv");
+        seed_profile(tmp.path(), "glm", "zai", "glm-5.2", "zai", "SECRET-A");
+        seed_profile(
+            tmp.path(),
+            "deepseek",
+            "deepseek",
+            "deepseek-chat",
+            "deepseek",
+            "SECRET-B",
+        );
+        std::fs::write(tmp.path().join("default-profile"), "glm\n").unwrap();
+
+        let checks = profiles_checks_in(tmp.path());
+
+        let summary = find_check(&checks, "profiles");
+        assert_eq!(summary.status, CheckStatus::Pass);
+        assert!(summary.detail.contains("2 found"), "{}", summary.detail);
+        assert!(
+            summary.detail.contains("default: glm"),
+            "{}",
+            summary.detail
+        );
+
+        // The default profile carries the `*` marker and its LLM detail.
+        let glm = find_check(&checks, "glm *");
+        assert_eq!(glm.detail, "zai/glm-5.2 via zai (openai)");
+        // Non-default profile: no star, still shows its LLM.
+        let ds = find_check(&checks, "deepseek");
+        assert!(
+            ds.detail.contains("deepseek/deepseek-chat"),
+            "{}",
+            ds.detail
+        );
+    }
+
+    #[test]
+    fn profiles_inventory_never_leaks_api_key_secret() {
+        let tmp = DoctorTempDir::new("secret");
+        seed_profile(
+            tmp.path(),
+            "glm",
+            "zai",
+            "glm-5.2",
+            "zai",
+            "SUPER-SECRET-TOKEN",
+        );
+        std::fs::write(tmp.path().join("default-profile"), "glm").unwrap();
+
+        let rendered = Report::new(profiles_checks_in(tmp.path())).render(true, false);
+        assert!(
+            !rendered.contains("SUPER-SECRET-TOKEN"),
+            "doctor must never print API-key secrets:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn profiles_inventory_warns_when_no_profiles() {
+        let tmp = DoctorTempDir::new("empty");
+        let checks = profiles_checks_in(tmp.path());
+        let summary = find_check(&checks, "profiles");
+        assert_eq!(summary.status, CheckStatus::Warn);
+        assert!(summary.detail.contains("no profiles"), "{}", summary.detail);
+    }
+
+    #[test]
+    fn profiles_inventory_warns_on_dangling_default_pointer() {
+        let tmp = DoctorTempDir::new("dangling");
+        seed_profile(tmp.path(), "glm", "zai", "glm-5.2", "zai", "s");
+        std::fs::write(tmp.path().join("default-profile"), "ghost").unwrap();
+
+        let checks = profiles_checks_in(tmp.path());
+        let summary = find_check(&checks, "profiles");
+        assert_eq!(summary.status, CheckStatus::Warn);
+        assert!(summary.detail.contains("ghost"), "{}", summary.detail);
+    }
+
+    #[test]
+    fn on_disk_sessions_counted_across_both_layouts_excluding_task_sidecars() {
+        let tmp = DoctorTempDir::new("sessions");
+        // Legacy flat layout.
+        let flat = tmp.path().join("sessions");
+        std::fs::create_dir_all(&flat).unwrap();
+        std::fs::write(flat.join("a.jsonl"), "").unwrap();
+        std::fs::write(flat.join("a.tasks.jsonl"), "").unwrap(); // sidecar → excluded
+        // Per-user layout.
+        let user = tmp
+            .path()
+            .join("users")
+            .join("glm%3Alocal%3Atui")
+            .join("sessions");
+        std::fs::create_dir_all(&user).unwrap();
+        std::fs::write(user.join("coding.jsonl"), "").unwrap();
+
+        assert_eq!(count_on_disk_sessions(tmp.path()), 2);
+    }
+}

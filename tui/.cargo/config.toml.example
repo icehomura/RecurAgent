@@ -1,0 +1,21 @@
+# Local development override (optional).
+#
+# Cargo.toml pins octos-core to a git revision so clean checkouts
+# (`cargo install --git`, release CI) build without a sibling `../octos`.
+# For day-to-day development against a *local* octos checkout — including
+# uncommitted protocol changes — copy this file to `.cargo/config.toml`
+# (which is gitignored) so Cargo builds against the sibling path instead:
+#
+#     cp .cargo/config.toml.example .cargo/config.toml
+#
+# Adjust the path if your `octos` clone lives somewhere other than `../octos`.
+# `paths` overrides any source (git or registry) when the package name matches,
+# so edits to ../octos/crates/octos-core are picked up on the next build — the
+# same live-sibling loop as the old path dependency.
+
+paths = ["../octos/crates/octos-core"]
+
+# Live-develop the splash animation engine against a local ttfx checkout by
+# adding its path to the list above, e.g.:
+#
+#     paths = ["../octos/crates/octos-core", "../../consult/ttfx"]

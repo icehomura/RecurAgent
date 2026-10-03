@@ -1,0 +1,1184 @@
+use clap::{Parser, ValueEnum};
+use eyre::{Result, WrapErr, eyre};
+use serde::Deserialize;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Mode {
+    Mock,
+    Protocol,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ThemeName {
+    Terminal,
+    Slate,
+    #[default]
+    Codex,
+    Claude,
+    Solarized,
+}
+
+impl ThemeName {
+    /// Stable kebab id used by the `/theme` menu items and the runtime
+    /// theme marker. Must match the ids emitted by `theme_menu` so the
+    /// active palette round-trips through `from_id`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ThemeName::Terminal => "terminal",
+            ThemeName::Slate => "slate",
+            ThemeName::Codex => "codex",
+            ThemeName::Claude => "claude",
+            ThemeName::Solarized => "solarized",
+        }
+    }
+
+    /// Parse a `/theme` menu id back into a `ThemeName`. Returns `None`
+    /// for an unknown id so the caller can leave the active theme intact.
+    pub fn from_id(id: &str) -> Option<Self> {
+        match id {
+            "terminal" => Some(ThemeName::Terminal),
+            "slate" => Some(ThemeName::Slate),
+            "codex" => Some(ThemeName::Codex),
+            "claude" => Some(ThemeName::Claude),
+            "solarized" => Some(ThemeName::Solarized),
+            _ => None,
+        }
+    }
+}
+
+/// How scrolling interacts with the chat composer.
+///
+/// `Native` (default) keeps the terminal's own scrollback authoritative: the
+/// wheel scrolls the terminal, native selection/copy work untouched, and the
+/// composer scrolls away with the screen (the transcript pager via Ctrl+T /
+/// PageUp is the pinned view). `Pinned` opts into app-side mouse capture so
+/// the wheel scrolls the transcript pager instead — the composer stays pinned
+/// to the bottom no matter how you scroll, at the cost of native mouse
+/// selection (use Shift+drag in most terminals).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ScrollMode {
+    #[default]
+    Native,
+    Pinned,
+}
+
+impl ScrollMode {
+    /// Kebab id symmetric with the `scroll-mode` config key / `--scroll-mode`
+    /// flag, so a saved value round-trips back through the loader.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ScrollMode::Native => "native",
+            ScrollMode::Pinned => "pinned",
+        }
+    }
+}
+
+/// UI display language (i18n). English is the source/fallback locale.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Lang {
+    En,
+    Zh,
+}
+
+impl Lang {
+    /// The rust-i18n locale code passed to `rust_i18n::set_locale`.
+    pub fn code(self) -> &'static str {
+        match self {
+            Lang::En => "en",
+            Lang::Zh => "zh",
+        }
+    }
+
+    /// Best-effort parse of a `LANG`/`OCTOS_LANG`-style value (e.g.
+    /// `zh_CN.UTF-8`, `zh`, `en_US`) into a supported UI language; `None` if
+    /// unrecognized so the caller can fall through to the default.
+    pub fn from_env_value(value: &str) -> Option<Self> {
+        let v = value.trim().to_ascii_lowercase();
+        if v.starts_with("zh") {
+            Some(Lang::Zh)
+        } else if v.starts_with("en") {
+            Some(Lang::En)
+        } else {
+            None
+        }
+    }
+}
+
+/// The stdio backend command a bare launch defaults to (and that
+/// `backend_ensure` auto-provisions). Mirrors the documented
+/// `ra serve --stdio --solo`.
+pub const DEFAULT_STDIO_COMMAND: &str = "ra serve --stdio --solo";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Cli {
+    /// JSON config file used as launch defaults.
+    pub config: Option<PathBuf>,
+    /// Backend mode.
+    pub mode: Mode,
+    /// UI Protocol v1 WebSocket endpoint.
+    pub base_url: Option<String>,
+    /// UI Protocol v1 stdio child command.
+    pub stdio_command: Option<String>,
+    /// Session id to open first.
+    pub session: Option<String>,
+    /// Profile id to use for the session.
+    pub profile_id: Option<String>,
+    /// Workspace cwd to request for this AppUi session. Defaults to the launch directory.
+    pub cwd: Option<PathBuf>,
+    /// Bearer token for UI Protocol authentication. Falls back to OCTOS_AUTH_TOKEN.
+    pub auth_token: Option<String>,
+    /// Disable turn/start sends and use the client as a read-only viewer.
+    pub readonly: bool,
+    /// Color palette.
+    pub theme: ThemeName,
+    /// UI display language (i18n).
+    pub lang: Lang,
+    /// Wheel-scroll behavior for the chat flow.
+    pub scroll_mode: ScrollMode,
+    /// Vim modal editing for the composer (opt-in; default off).
+    pub vim_mode: bool,
+    /// Mid-turn prompts steer the live turn instead of staging FIFO
+    /// (opt-in; default off — prompts queue and run in order).
+    pub steer_mid_turn: bool,
+    /// Skip the ttfx startup animation (also skipped for non-TTY/CI, or via
+    /// OCTOSCODE_NO_SPLASH).
+    pub no_splash: bool,
+    /// Startup prompt text (`--prompt`): auto-submitted as ONE turn/start
+    /// once the session bootstrap + hydrate completes. See CliArgs::prompt.
+    pub prompt: Option<String>,
+}
+
+/// Version string like `0.2.2-rc.7 (94e43fd 2026-07-17)` — the Cargo version
+/// plus the git short hash + build date captured by `build.rs`. Mirrors the
+/// ra server so an unreleased branch build is distinguishable from the
+/// published release of the same Cargo version (the hash is empty for a build
+/// outside a git checkout, in which case only the bare version is shown).
+fn version_string() -> &'static str {
+    const VERSION: &str = env!("CARGO_PKG_VERSION");
+    const GIT_HASH: &str = match option_env!("OCTOSCODE_GIT_HASH") {
+        Some(v) => v,
+        None => "",
+    };
+    const BUILD_DATE: &str = match option_env!("OCTOSCODE_BUILD_DATE") {
+        Some(v) => v,
+        None => "",
+    };
+    #[allow(clippy::const_is_empty)]
+    if GIT_HASH.is_empty() {
+        VERSION
+    } else {
+        Box::leak(format!("{VERSION} ({GIT_HASH} {BUILD_DATE})").into_boxed_str())
+    }
+}
+
+#[derive(Debug, Parser)]
+#[command(
+    name = "octoscode",
+    version = version_string(),
+    about = "Mock-backed Octoscode prototype on the ra UI Protocol boundary",
+    // These leading positionals are handled before clap (see `cmd::dispatch`),
+    // so they don't appear as clap subcommands above. (Profiles are created in
+    // the TUI — first-launch onboarding, or `/profiles` → "Create a new profile".)
+    after_help = "Subcommands:\n  \
+        doctor   Diagnose octoscode's environment, install, and connectivity\n  \
+        update   Update octoscode in place (or print the upgrade command)\n  \
+        config   Show or locate the TUI config file"
+)]
+struct CliArgs {
+    /// JSON config file used as launch defaults. CLI flags override config values.
+    #[arg(long = "config", value_name = "FILE")]
+    pub config: Option<PathBuf>,
+
+    /// Backend mode.
+    #[arg(long, value_enum)]
+    pub mode: Option<Mode>,
+
+    /// UI Protocol v1 WebSocket endpoint.
+    #[arg(
+        long = "endpoint",
+        alias = "protocol-endpoint",
+        value_name = "WS_URL",
+        value_parser = parse_websocket_url,
+        conflicts_with = "stdio_command",
+    )]
+    pub base_url: Option<String>,
+
+    /// UI Protocol v1 stdio child command.
+    #[arg(
+        long = "stdio-command",
+        value_name = "CMD",
+        value_parser = parse_stdio_command,
+        conflicts_with = "base_url",
+    )]
+    pub stdio_command: Option<String>,
+
+    /// Session id to open first.
+    #[arg(long)]
+    pub session: Option<String>,
+
+    /// Profile id to use for the session.
+    #[arg(long = "profile-id", alias = "profile")]
+    pub profile_id: Option<String>,
+
+    /// Workspace cwd to request for this AppUi session. Defaults to the launch directory.
+    #[arg(long = "cwd", value_name = "DIR")]
+    pub cwd: Option<PathBuf>,
+
+    /// Bearer token for UI Protocol authentication. Falls back to OCTOS_AUTH_TOKEN.
+    #[arg(long = "auth-token", value_name = "TOKEN")]
+    pub auth_token: Option<String>,
+
+    /// Disable turn/start sends and use the client as a read-only viewer.
+    #[arg(long, conflicts_with = "no_readonly")]
+    pub readonly: bool,
+
+    /// Force read-write mode when the config file sets readonly=true.
+    #[arg(long = "no-readonly", conflicts_with = "readonly")]
+    pub no_readonly: bool,
+
+    /// Startup prompt: after the UI Protocol session bootstrap completes
+    /// (launch/resolve → session/open + hydrate ready), automatically start
+    /// ONE turn with this text — exactly like typing it into the composer and
+    /// pressing Enter. The TUI stays fully interactive (this is a startup
+    /// prompt, not headless). Dispatched exactly once: the dispatch marker
+    /// latches when the transport accepts the turn/start, a reconnect after
+    /// a pre-dispatch connection death re-issues it (at-least-once until
+    /// dispatched), and a reconnect after dispatch never re-sends
+    /// (exactly-once after dispatch). OUTER_LOOP_REVIEW #30.
+    #[arg(long, value_name = "TEXT", conflicts_with = "readonly")]
+    pub prompt: Option<String>,
+
+    /// Color palette.
+    #[arg(long, value_enum)]
+    pub theme: Option<ThemeName>,
+
+    /// UI display language (e.g. `en`, `zh`). Falls back to OCTOS_LANG/LANG.
+    #[arg(long, value_enum)]
+    pub lang: Option<Lang>,
+
+    /// Wheel-scroll behavior: `native` keeps terminal scrollback + native
+    /// selection (default); `pinned` captures the mouse so the wheel scrolls
+    /// the transcript pager and the composer stays pinned to the bottom
+    /// (native selection then needs Shift+drag).
+    #[arg(long = "scroll-mode", value_enum)]
+    pub scroll_mode: Option<ScrollMode>,
+
+    /// Enable Vim modal editing in the composer (Normal/Insert). Off by default;
+    /// also toggled at runtime with `/vimmode`.
+    #[arg(long = "vim-mode")]
+    pub vim_mode: bool,
+
+    /// Steer a prompt typed mid-turn into the RUNNING turn (octos#1807)
+    /// instead of queueing it. Off by default: queued prompts each run as
+    /// their own turn, in the order typed. Also toggled at runtime with
+    /// `/steer` (persist with `/saveconfig`).
+    #[arg(long = "steer-mid-turn")]
+    pub steer_mid_turn: bool,
+
+    /// Skip the startup logo animation.
+    #[arg(long = "no-splash")]
+    pub no_splash: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+pub struct CliFileConfig {
+    pub mode: Option<Mode>,
+
+    #[serde(
+        rename = "endpoint",
+        alias = "base-url",
+        alias = "base_url",
+        alias = "protocol-endpoint",
+        alias = "protocol_endpoint"
+    )]
+    pub base_url: Option<String>,
+
+    #[serde(alias = "stdio_command")]
+    pub stdio_command: Option<String>,
+    pub session: Option<String>,
+
+    #[serde(alias = "profile_id", alias = "profile")]
+    pub profile_id: Option<String>,
+
+    pub cwd: Option<PathBuf>,
+
+    #[serde(alias = "auth_token")]
+    pub auth_token: Option<String>,
+
+    pub readonly: Option<bool>,
+    pub theme: Option<ThemeName>,
+    pub lang: Option<Lang>,
+
+    #[serde(alias = "scroll_mode")]
+    pub scroll_mode: Option<ScrollMode>,
+
+    #[serde(alias = "vim_mode")]
+    pub vim_mode: Option<bool>,
+
+    #[serde(alias = "steer_mid_turn")]
+    pub steer_mid_turn: Option<bool>,
+}
+
+impl Cli {
+    pub fn parse() -> Result<Self> {
+        let args = CliArgs::parse();
+        // Production launch reads the default config when no `--config` is
+        // given, so `/saveconfig` settings round-trip on the next plain launch.
+        Self::from_args(args, true)
+    }
+
+    #[cfg(test)]
+    pub fn try_parse_from<I, T>(itr: I) -> Result<Self>
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<std::ffi::OsString> + Clone,
+    {
+        let args = CliArgs::try_parse_from(itr)?;
+        // Tests stay deterministic: don't read the ambient `$HOME` default
+        // config (the default-read path is covered by `load_config_file_if_present`
+        // tests, which inject a path instead of mutating `$HOME`).
+        Self::from_args(args, false)
+    }
+
+    fn from_args(args: CliArgs, use_default_config: bool) -> Result<Self> {
+        let file_config = match args.config.as_ref() {
+            Some(path) => Some(load_config_file(path)?),
+            // No explicit `--config`: fall back to the default location so UI
+            // settings saved via `/saveconfig` (which writes there) round-trip
+            // on the next plain launch. Skipped in tests (`use_default_config`
+            // = false) so the suite never depends on the ambient `$HOME`.
+            None if use_default_config => load_default_config_file(),
+            None => None,
+        };
+        let file_config = file_config.unwrap_or_default();
+
+        let base_url = args.base_url.or(file_config.base_url);
+        let stdio_command = args.stdio_command.or(file_config.stdio_command);
+        if base_url.is_some() && stdio_command.is_some() {
+            return Err(eyre!(
+                "endpoint and stdio-command cannot both be configured; choose one ra UI transport"
+            ));
+        }
+
+        let base_url = match base_url {
+            Some(value) => Some(parse_websocket_url(&value).map_err(|message| eyre!(message))?),
+            None => None,
+        };
+        let stdio_command = match stdio_command {
+            Some(value) => Some(parse_stdio_command(&value).map_err(|message| eyre!(message))?),
+            None => None,
+        };
+
+        let readonly = if args.no_readonly {
+            false
+        } else if args.readonly {
+            true
+        } else {
+            file_config.readonly.unwrap_or(false)
+        };
+
+        // #30: `--prompt` auto-submits a turn/start — meaningless under a
+        // read-only client (turn/start sends are disabled). The CLI-level
+        // `--readonly` conflict is caught by clap (conflicts_with); the
+        // config-file `readonly=true` + `--prompt` combination is caught
+        // here at parse time with the same explicitness.
+        if args.prompt.is_some() && readonly {
+            return Err(eyre::eyre!(
+                "--prompt cannot be combined with read-only mode (readonly=true in config); \
+                 remove --prompt or pass --no-readonly"
+            ));
+        }
+
+        // Mode resolution: an explicit mode (CLI flag, then config) always
+        // wins. With NO explicit mode, default to the real backend
+        // (`Protocol`) — a bare `octoscode` launch spawns/auto-provisions
+        // `ra serve --stdio` (see `backend_ensure`) rather than the mock
+        // demo. The mock is now reachable only via an explicit `--mode mock`
+        // or `"mode": "mock"` in config.
+        let mode = args.mode.or(file_config.mode).unwrap_or(Mode::Protocol);
+
+        // A Protocol launch with no transport configured (the bare case, or a
+        // lone `--mode protocol`) gets the default stdio command, which
+        // `backend_ensure` provisions. An explicit `--endpoint`/`--stdio-command`
+        // is honored as-is; Mock needs no transport.
+        let stdio_command =
+            if mode == Mode::Protocol && stdio_command.is_none() && base_url.is_none() {
+                Some(DEFAULT_STDIO_COMMAND.to_string())
+            } else {
+                stdio_command
+            };
+
+        Ok(Self {
+            config: args.config,
+            mode,
+            base_url,
+            stdio_command,
+            session: args.session.or(file_config.session),
+            profile_id: args.profile_id.or(file_config.profile_id),
+            cwd: args.cwd.or(file_config.cwd),
+            auth_token: args.auth_token.or(file_config.auth_token),
+            readonly,
+            prompt: args.prompt,
+            theme: args.theme.or(file_config.theme).unwrap_or(ThemeName::Codex),
+            lang: args
+                .lang
+                .or(file_config.lang)
+                .or_else(|| {
+                    std::env::var("OCTOS_LANG")
+                        .ok()
+                        .and_then(|v| Lang::from_env_value(&v))
+                })
+                .or_else(|| {
+                    std::env::var("LANG")
+                        .ok()
+                        .and_then(|v| Lang::from_env_value(&v))
+                })
+                .unwrap_or(Lang::En),
+            scroll_mode: args
+                .scroll_mode
+                .or(file_config.scroll_mode)
+                .unwrap_or_default(),
+            // The flag is a bare bool (no way to distinguish "unset" from
+            // "false"), so the CLI flag only force-enables; the config provides
+            // the default when the flag is absent.
+            vim_mode: args.vim_mode || file_config.vim_mode.unwrap_or(false),
+            steer_mid_turn: args.steer_mid_turn || file_config.steer_mid_turn.unwrap_or(false),
+            // Flag + OCTOSCODE_NO_SPLASH env only — no config-file key
+            // (CliFileConfig is deny_unknown_fields; spec gates via these two).
+            no_splash: args.no_splash,
+        })
+    }
+}
+
+pub fn load_config_file(path: &Path) -> Result<CliFileConfig> {
+    let contents = fs::read_to_string(path)
+        .wrap_err_with(|| format!("failed to read TUI config {}", path.display()))?;
+    serde_json::from_str(&contents)
+        .wrap_err_with(|| format!("failed to parse TUI config {}", path.display()))
+}
+
+/// Load the default config file (the path `/saveconfig` writes to when the
+/// session was launched without `--config`) so saved UI settings round-trip on
+/// the next plain launch. `None` when no default path resolves or the file is
+/// absent/unreadable (see [`load_config_file_if_present`]).
+///
+/// A corrupt/unreadable auto-discovered config is NON-FATAL — startup proceeds
+/// with built-in defaults — but the user is told why their saved settings were
+/// ignored, via a prominent stderr notice (an explicit `--config` still
+/// hard-errors, in `from_args`). The notice is produced by the pure loader and
+/// only *printed* here, so its content stays unit-testable without capturing
+/// stderr.
+fn load_default_config_file() -> Option<CliFileConfig> {
+    let (config, notice) = load_config_file_if_present(&default_config_path()?);
+    if let Some(notice) = notice {
+        eprintln!("{notice}");
+    }
+    config
+}
+
+/// Leniently load an *auto-discovered* config file, returning `(maybe-config,
+/// maybe-notice)`. A missing file is the normal first-run case → `(None, None)`.
+/// A present-but-unreadable/corrupt file must NOT block startup — unlike an
+/// explicit `--config`, the user didn't ask for this file — so it yields
+/// `(None, Some(notice))`: no config (the caller falls back to built-in
+/// defaults) plus a user-facing notice (path + parse error + the defaults
+/// fallback) for the caller to surface on stderr. Returning the notice instead
+/// of printing it keeps this pure and unit-testable without capturing stderr,
+/// and keeps it path-injectable (no `$HOME` mutation).
+fn load_config_file_if_present(path: &Path) -> (Option<CliFileConfig>, Option<String>) {
+    if !path.exists() {
+        return (None, None);
+    }
+    match load_config_file(path) {
+        Ok(config) => (Some(config), None),
+        // `{error:#}` renders the whole eyre chain — "failed to parse TUI config
+        // <path>: <serde error>" — so the notice carries both the offending path
+        // and the exact parse error, then we name the defaults fallback.
+        Err(error) => (
+            None,
+            Some(format!(
+                "warning: {error:#}. Starting with built-in defaults instead."
+            )),
+        ),
+    }
+}
+
+/// Default config path used by `/saveconfig` when the session was launched
+/// without an explicit `--config`. Follows the XDG/CLI convention the backend
+/// adopted (`~/.config/octoscode/config.json`). Falls back to `USERPROFILE` on
+/// Windows, where `HOME` is usually unset, so `/saveconfig` still has a default
+/// home to write to there.
+pub fn default_config_path() -> Option<PathBuf> {
+    config_path_from_home(std::env::var_os("HOME"), std::env::var_os("USERPROFILE"))
+}
+
+/// Pure resolver behind [`default_config_path`]: prefer `HOME`, fall back to
+/// `USERPROFILE` (Windows, where `HOME` is usually unset). Empty values are
+/// ignored. Split out so the fallback is testable without mutating process env
+/// (`std::env::set_var` is `unsafe` under edition 2024 + `unsafe_code = deny`).
+fn config_path_from_home(
+    home: Option<std::ffi::OsString>,
+    userprofile: Option<std::ffi::OsString>,
+) -> Option<PathBuf> {
+    let base = home
+        .filter(|value| !value.is_empty())
+        .or_else(|| userprofile.filter(|value| !value.is_empty()))?;
+    Some(
+        PathBuf::from(base)
+            .join(".config")
+            .join("octoscode")
+            .join("config.json"),
+    )
+}
+
+/// Persist the runtime UI settings (theme / lang / scroll-mode / vim-mode /
+/// steer-mid-turn) back
+/// into the config file, MERGING into whatever is already there: the existing
+/// JSON is read as a generic object and only these keys are patched, so
+/// transport keys (stdio-command, profile-id, session, endpoint, …) and any
+/// unknown keys survive untouched. A missing or empty file starts from an empty
+/// object. Returns the path actually written.
+pub fn save_ui_settings(
+    path: &Path,
+    theme: ThemeName,
+    lang: Lang,
+    scroll_mode: ScrollMode,
+    vim_mode: bool,
+    steer_mid_turn: bool,
+) -> Result<()> {
+    let mut entries = serde_json::Map::new();
+    entries.insert("theme".into(), theme.as_str().into());
+    entries.insert("lang".into(), lang.code().into());
+    entries.insert("scroll-mode".into(), scroll_mode.as_str().into());
+    entries.insert("vim-mode".into(), vim_mode.into());
+    entries.insert("steer-mid-turn".into(), steer_mid_turn.into());
+    merge_into_config(path, &entries)
+}
+
+/// Merge `entries` (kebab-case config keys → JSON values) into the config file,
+/// PRESERVING whatever is already there: the existing JSON is read as a generic
+/// object and only these keys are patched, so any keys the caller didn't touch
+/// (transport, UI, unknown) survive. A missing or empty file starts from an
+/// empty object. For each kebab key written, the legacy snake_case alias is
+/// dropped so the canonical key is authoritative. This is the one write path
+/// behind both `/saveconfig` (UI keys) and `octoscode config` (all keys).
+pub fn merge_into_config(
+    path: &Path,
+    entries: &serde_json::Map<String, serde_json::Value>,
+) -> Result<()> {
+    let mut root = match fs::read_to_string(path) {
+        Ok(contents) if contents.trim().is_empty() => {
+            serde_json::Value::Object(serde_json::Map::new())
+        }
+        Ok(contents) => serde_json::from_str::<serde_json::Value>(&contents)
+            .wrap_err_with(|| format!("failed to parse TUI config {}", path.display()))?,
+        // A not-yet-created file is the normal first-save case → start empty.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            serde_json::Value::Object(serde_json::Map::new())
+        }
+        // Any OTHER read error (permissions, invalid UTF-8, …) must NOT be
+        // treated as empty: that would overwrite an existing config with only
+        // these keys, dropping the ones it otherwise preserves. Surface it so
+        // the save aborts instead of clobbering.
+        Err(error) => {
+            return Err(error)
+                .wrap_err_with(|| format!("failed to read TUI config {}", path.display()));
+        }
+    };
+    let object = root
+        .as_object_mut()
+        .ok_or_else(|| eyre!("TUI config {} is not a JSON object", path.display()))?;
+    for (key, value) in entries {
+        // A `null` value means "remove this key" (JSON-merge-patch semantics),
+        // so the wizard can clear the unused transport when the user picks the
+        // other one; any other value is written as-is.
+        if value.is_null() {
+            object.remove(key);
+        } else {
+            object.insert(key.clone(), value.clone());
+        }
+        // Drop the legacy snake_case alias of any kebab key so the canonical
+        // key stays authoritative (e.g. writing `scroll-mode` removes a stale
+        // `scroll_mode`).
+        if key.contains('-') {
+            object.remove(&key.replace('-', "_"));
+        }
+    }
+
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent)
+            .wrap_err_with(|| format!("failed to create config dir {}", parent.display()))?;
+    }
+    let mut serialized =
+        serde_json::to_string_pretty(&root).wrap_err("failed to serialize TUI config")?;
+    serialized.push('\n');
+    fs::write(path, serialized)
+        .wrap_err_with(|| format!("failed to write TUI config {}", path.display()))
+}
+
+/// The clap `Command` for the top-level TUI args — exposed so `octoscode config`
+/// can introspect every option (help text, defaults, enum choices) and stay in
+/// sync as flags are added, rather than hand-mirroring the list.
+pub fn cli_command() -> clap::Command {
+    <CliArgs as clap::CommandFactory>::command()
+}
+
+pub fn parse_websocket_url(value: &str) -> std::result::Result<String, String> {
+    if is_websocket_url(value) {
+        Ok(value.to_string())
+    } else {
+        Err("endpoint must be a WebSocket URL starting with ws:// or wss://".into())
+    }
+}
+
+pub fn parse_stdio_command(value: &str) -> std::result::Result<String, String> {
+    let command = value.trim();
+    if command.is_empty() {
+        Err("stdio command must not be empty".into())
+    } else {
+        Ok(command.to_string())
+    }
+}
+
+fn is_websocket_url(value: &str) -> bool {
+    let value = value.trim_start();
+    value
+        .get(..5)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("ws://"))
+        || value
+            .get(..6)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("wss://"))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    use clap::{Parser, error::ErrorKind};
+
+    use super::{Cli, Mode, ThemeName};
+
+    fn write_config(name: &str, contents: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock is valid")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("octoscode-{name}-{nonce}.json"));
+        fs::write(&path, contents).expect("config writes");
+        path
+    }
+
+    #[test]
+    fn lang_parses_env_values_and_maps_to_locale_code() {
+        use super::Lang;
+        assert_eq!(Lang::from_env_value("zh"), Some(Lang::Zh));
+        assert_eq!(Lang::from_env_value("zh_CN.UTF-8"), Some(Lang::Zh));
+        assert_eq!(Lang::from_env_value("  EN_us "), Some(Lang::En));
+        assert_eq!(Lang::from_env_value("fr"), None);
+        assert_eq!(Lang::from_env_value(""), None);
+        assert_eq!(Lang::Zh.code(), "zh");
+        assert_eq!(Lang::En.code(), "en");
+    }
+
+    #[test]
+    fn config_path_prefers_home_then_userprofile() {
+        use super::config_path_from_home;
+        use std::ffi::OsString;
+
+        let suffix: PathBuf = [".config", "octoscode", "config.json"].iter().collect();
+
+        // HOME wins when set.
+        let from_home = config_path_from_home(Some(OsString::from("/home/u")), None)
+            .expect("HOME resolves a path");
+        assert!(from_home.starts_with("/home/u") && from_home.ends_with(&suffix));
+
+        // Windows: HOME unset/empty → fall back to USERPROFILE.
+        let from_profile = config_path_from_home(
+            Some(OsString::new()),
+            Some(OsString::from("C:\\Users\\Alex")),
+        )
+        .expect("USERPROFILE resolves a path when HOME is empty");
+        assert!(from_profile.ends_with(&suffix));
+        assert!(
+            config_path_from_home(None, Some(OsString::from("C:\\Users\\Alex"))).is_some(),
+            "missing HOME still resolves via USERPROFILE"
+        );
+
+        // Neither set (or both empty) → no default path.
+        assert!(config_path_from_home(None, None).is_none());
+        assert!(config_path_from_home(Some(OsString::new()), Some(OsString::new())).is_none());
+    }
+
+    #[test]
+    fn lang_flag_parses_and_defaults_to_en() {
+        let cli = Cli::try_parse_from(["octoscode", "--lang", "zh"]).expect("parse --lang zh");
+        assert_eq!(cli.lang, super::Lang::Zh);
+        let cli = Cli::try_parse_from(["octoscode"]).expect("parse default");
+        // No flag/config/env override in this minimal invocation → English.
+        assert!(matches!(cli.lang, super::Lang::En | super::Lang::Zh));
+    }
+
+    // The default-config read (used at launch when there's no `--config`) is
+    // lenient and path-injectable: a present file loads, an absent file yields
+    // None (the caller falls back to built-in defaults), and a corrupt/
+    // unreadable file is skipped rather than blocking startup. Exercised via an
+    // explicit path so it never mutates the process-global `$HOME`.
+    #[test]
+    fn default_config_load_is_lenient_and_path_injectable() {
+        let path = write_config("default-config", r#"{ "theme": "claude" }"#);
+
+        // Present + valid → loaded (this is what makes /saveconfig round-trip),
+        // with no notice.
+        let (cfg, notice) = super::load_config_file_if_present(&path);
+        assert_eq!(
+            cfg.expect("present default config loads").theme,
+            Some(ThemeName::Claude)
+        );
+        assert!(notice.is_none(), "a valid config produces no notice");
+
+        // Absent → None, silently (the normal first-run case).
+        fs::remove_file(&path).expect("remove config");
+        let (cfg, notice) = super::load_config_file_if_present(&path);
+        assert!(cfg.is_none(), "absent default config yields None");
+        assert!(notice.is_none(), "absent config is silent");
+
+        // Present but corrupt → None (skipped, not a fatal startup error) WITH a
+        // user-facing notice.
+        fs::write(&path, "{ not valid json").expect("write corrupt config");
+        let (cfg, notice) = super::load_config_file_if_present(&path);
+        assert!(
+            cfg.is_none(),
+            "corrupt default config is skipped, not fatal"
+        );
+        assert!(notice.is_some(), "corrupt default config surfaces a notice");
+        let _ = fs::remove_file(&path);
+    }
+
+    // A corrupt auto-discovered config must be NON-FATAL (startup proceeds with
+    // built-in defaults) yet VISIBLE (the user is told why their saved settings
+    // were ignored — the path + the parse error). An explicit `--config` still
+    // hard-errors; that propagation is exercised by `load_config_file` in
+    // `from_args`, e.g. `rejects_model_provider_fields_in_tui_config`.
+    #[test]
+    fn should_surface_a_notice_and_yield_defaults_when_auto_config_is_corrupt() {
+        let path = write_config("corrupt-auto-config", "{ not valid json");
+        let (config, notice) = super::load_config_file_if_present(&path);
+
+        // Non-fatal: no config → the caller falls back to built-in defaults.
+        assert!(
+            config.is_none(),
+            "corrupt auto-config must not block startup"
+        );
+
+        // Prominent + actionable: names the offending path, the parse error, and
+        // the defaults fallback.
+        let notice = notice.expect("a corrupt auto-config surfaces a user notice");
+        assert!(
+            notice.contains(&path.display().to_string()),
+            "notice names the offending path: {notice}"
+        );
+        assert!(
+            notice.contains("built-in defaults"),
+            "notice explains the defaults fallback: {notice}"
+        );
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn parses_snapshot_launch_flags() {
+        let cli = Cli::try_parse_from([
+            "octoscode",
+            "--mode",
+            "protocol",
+            "--endpoint",
+            "wss://example.test/ui-protocol",
+            "--session",
+            "session-123",
+            "--profile-id",
+            "coding",
+            "--cwd",
+            "/tmp/project",
+            "--auth-token",
+            "secret-token",
+            "--readonly",
+        ])
+        .expect("cli parses");
+
+        assert_eq!(cli.mode, Mode::Protocol);
+        assert_eq!(
+            cli.base_url.as_deref(),
+            Some("wss://example.test/ui-protocol")
+        );
+        assert!(cli.stdio_command.is_none());
+        assert_eq!(cli.session.as_deref(), Some("session-123"));
+        assert_eq!(cli.profile_id.as_deref(), Some("coding"));
+        assert_eq!(
+            cli.cwd.as_deref(),
+            Some(std::path::Path::new("/tmp/project"))
+        );
+        assert_eq!(cli.auth_token.as_deref(), Some("secret-token"));
+        assert!(cli.readonly);
+    }
+
+    #[test]
+    fn should_default_bare_launch_to_stdio_protocol() {
+        // A bare launch (no mode, no transport, no config) now connects to the
+        // real backend over stdio (auto-provisioned) instead of the mock demo.
+        let cli = Cli::try_parse_from(["octoscode"]).expect("cli parses");
+
+        assert_eq!(cli.mode, Mode::Protocol);
+        assert!(cli.base_url.is_none());
+        assert_eq!(
+            cli.stdio_command.as_deref(),
+            Some(super::DEFAULT_STDIO_COMMAND)
+        );
+        assert_eq!(cli.theme, ThemeName::Codex);
+    }
+
+    #[test]
+    fn should_select_mock_only_via_explicit_mode() {
+        // The mock demo is still reachable, but only explicitly.
+        let cli = Cli::try_parse_from(["octoscode", "--mode", "mock"]).expect("cli parses");
+        assert_eq!(cli.mode, Mode::Mock);
+        assert!(cli.stdio_command.is_none());
+        assert!(cli.base_url.is_none());
+    }
+
+    // A configured transport with no explicit mode must NOT silently
+    // launch the mock backend (the transport flag would be ignored and
+    // the user would chat with fake data). Absent mode + a transport
+    // infers Protocol.
+    #[test]
+    fn should_infer_protocol_mode_when_stdio_command_set_without_mode() {
+        let cli = Cli::try_parse_from(["octoscode", "--stdio-command", "octos serve --stdio"])
+            .expect("cli parses");
+
+        assert_eq!(cli.mode, Mode::Protocol);
+        assert_eq!(cli.stdio_command.as_deref(), Some("ra serve --stdio"));
+    }
+
+    #[test]
+    fn should_infer_protocol_mode_when_endpoint_set_without_mode() {
+        let cli = Cli::try_parse_from(["octoscode", "--endpoint", "ws://127.0.0.1:1/ui"])
+            .expect("cli parses");
+
+        assert_eq!(cli.mode, Mode::Protocol);
+        assert_eq!(cli.base_url.as_deref(), Some("ws://127.0.0.1:1/ui"));
+    }
+
+    #[test]
+    fn should_infer_protocol_mode_from_config_transport_without_mode() {
+        let path = write_config(
+            "infer-mode",
+            r#"{ "stdio_command": "ra serve --stdio" }"#,
+        );
+
+        let cli = Cli::try_parse_from(["octoscode", "--config", path.to_str().unwrap()])
+            .expect("cli parses");
+
+        assert_eq!(cli.mode, Mode::Protocol);
+    }
+
+    #[test]
+    fn explicit_mock_mode_wins_over_transport_inference() {
+        let cli = Cli::try_parse_from([
+            "octoscode",
+            "--mode",
+            "mock",
+            "--stdio-command",
+            "ra serve --stdio",
+        ])
+        .expect("cli parses");
+
+        assert_eq!(cli.mode, Mode::Mock);
+
+        // Config-level explicit mode also wins over inference.
+        let path = write_config(
+            "explicit-mock",
+            r#"{ "mode": "mock", "stdio_command": "ra serve --stdio" }"#,
+        );
+        let cli = Cli::try_parse_from(["octoscode", "--config", path.to_str().unwrap()])
+            .expect("cli parses");
+        assert_eq!(cli.mode, Mode::Mock);
+    }
+
+    #[test]
+    fn prints_package_version() {
+        let err = super::CliArgs::try_parse_from(["octoscode", "--version"])
+            .expect_err("version flag exits early");
+
+        assert_eq!(err.kind(), ErrorKind::DisplayVersion);
+        assert!(err.to_string().contains(env!("CARGO_PKG_VERSION")));
+    }
+
+    #[test]
+    fn parses_stdio_command() {
+        let cli = Cli::try_parse_from([
+            "octoscode",
+            "--mode",
+            "protocol",
+            "--stdio-command",
+            "ra serve --stdio",
+        ])
+        .expect("cli parses");
+
+        assert_eq!(cli.mode, Mode::Protocol);
+        assert_eq!(cli.stdio_command.as_deref(), Some("ra serve --stdio"));
+        assert!(cli.base_url.is_none());
+    }
+
+    #[test]
+    fn rejects_empty_stdio_command() {
+        let err = Cli::try_parse_from(["octoscode", "--stdio-command", "   "])
+            .expect_err("empty stdio command should be rejected");
+
+        assert!(err.to_string().contains("stdio command must not be empty"));
+    }
+
+    #[test]
+    fn rejects_endpoint_and_stdio_command_together() {
+        let err = Cli::try_parse_from([
+            "octoscode",
+            "--endpoint",
+            "wss://example.test/ui-protocol",
+            "--stdio-command",
+            "ra serve --stdio",
+        ])
+        .expect_err("endpoint and stdio command should conflict");
+
+        assert!(err.to_string().contains("cannot be used with"));
+    }
+
+    /// specs/task-startup-splash.spec: --no-splash disables the startup animation.
+    #[test]
+    fn cli_parses_no_splash_flag() {
+        let cli = Cli::try_parse_from(["octoscode", "--no-splash"]).expect("cli parses");
+        assert!(cli.no_splash);
+        let cli = Cli::try_parse_from(["octoscode"]).expect("cli parses");
+        assert!(!cli.no_splash);
+    }
+
+    #[test]
+    fn parses_theme_choice() {
+        let cli = Cli::try_parse_from(["octoscode", "--theme", "claude"]).expect("cli parses");
+
+        assert_eq!(cli.theme, ThemeName::Claude);
+    }
+
+    #[test]
+    fn parses_terminal_theme_choice() {
+        let cli = Cli::try_parse_from(["octoscode", "--theme", "terminal"]).expect("cli parses");
+
+        assert_eq!(cli.theme, ThemeName::Terminal);
+    }
+
+    #[test]
+    fn rejects_non_websocket_protocol_endpoint() {
+        let err = Cli::try_parse_from([
+            "octoscode",
+            "--mode",
+            "protocol",
+            "--endpoint",
+            "https://example.test/ui-protocol",
+        ])
+        .expect_err("http endpoint should be rejected");
+
+        assert!(err.to_string().contains("endpoint must be a WebSocket URL"));
+    }
+
+    #[test]
+    fn loads_json_config_file() {
+        let path = write_config(
+            "launch",
+            r#"{
+                "mode": "protocol",
+                "stdio_command": "ra serve --stdio --data-dir ~/.ra",
+                "session": "coding:local:config",
+                "profile_id": "coding",
+                "cwd": "/tmp/config-project",
+                "auth_token": "config-token",
+                "readonly": true,
+                "theme": "solarized"
+            }"#,
+        );
+
+        let cli =
+            Cli::try_parse_from(["octoscode", "--config", path.to_str().unwrap()]).expect("parses");
+
+        assert_eq!(cli.config.as_deref(), Some(path.as_path()));
+        assert_eq!(cli.mode, Mode::Protocol);
+        assert_eq!(
+            cli.stdio_command.as_deref(),
+            Some("ra serve --stdio --data-dir ~/.ra")
+        );
+        assert_eq!(cli.session.as_deref(), Some("coding:local:config"));
+        assert_eq!(cli.profile_id.as_deref(), Some("coding"));
+        assert_eq!(cli.cwd.as_deref(), Some(Path::new("/tmp/config-project")));
+        assert_eq!(cli.auth_token.as_deref(), Some("config-token"));
+        assert!(cli.readonly);
+        assert_eq!(cli.theme, ThemeName::Solarized);
+    }
+
+    #[test]
+    fn cli_flags_override_json_config_file() {
+        let path = write_config(
+            "override",
+            r#"{
+                "mode": "mock",
+                "endpoint": "wss://config.example.test/ui-protocol",
+                "session": "coding:local:config",
+                "profile_id": "coding",
+                "readonly": true,
+                "theme": "slate"
+            }"#,
+        );
+
+        let cli = Cli::try_parse_from([
+            "octoscode",
+            "--config",
+            path.to_str().unwrap(),
+            "--mode",
+            "protocol",
+            "--endpoint",
+            "wss://cli.example.test/ui-protocol",
+            "--session",
+            "coding:local:cli",
+            "--profile-id",
+            "review",
+            "--no-readonly",
+            "--theme",
+            "codex",
+        ])
+        .expect("parses");
+
+        assert_eq!(cli.mode, Mode::Protocol);
+        assert_eq!(
+            cli.base_url.as_deref(),
+            Some("wss://cli.example.test/ui-protocol")
+        );
+        assert_eq!(cli.session.as_deref(), Some("coding:local:cli"));
+        assert_eq!(cli.profile_id.as_deref(), Some("review"));
+        assert!(!cli.readonly);
+        assert_eq!(cli.theme, ThemeName::Codex);
+    }
+
+    #[test]
+    fn rejects_endpoint_and_stdio_command_from_config() {
+        let path = write_config(
+            "conflict",
+            r#"{
+                "mode": "protocol",
+                "endpoint": "wss://example.test/ui-protocol",
+                "stdio_command": "ra serve --stdio"
+            }"#,
+        );
+
+        let err = Cli::try_parse_from(["octoscode", "--config", path.to_str().unwrap()])
+            .expect_err("conflicting config should fail");
+
+        assert!(err.to_string().contains("choose one ra UI transport"));
+    }
+
+    #[test]
+    fn rejects_model_provider_fields_in_tui_config() {
+        let path = write_config(
+            "provider-owned-by-ra",
+            r#"{
+                "mode": "protocol",
+                "stdio_command": "ra serve --stdio",
+                "provider": "deepseek",
+                "model": "deepseek-v4-pro"
+            }"#,
+        );
+
+        let err = Cli::try_parse_from(["octoscode", "--config", path.to_str().unwrap()])
+            .expect_err("model/provider should not be accepted by TUI config");
+        let error = format!("{err:?}");
+
+        assert!(error.contains("unknown field"));
+        assert!(error.contains("provider"));
+    }
+}
+
+#[cfg(test)]
+mod startup_prompt_tests {
+    use super::*;
+
+    #[test]
+    fn prompt_flag_parses_into_cli() {
+        let cli = Cli::try_parse_from(["octoscode", "--prompt", "fix the flaky test"])
+            .expect("--prompt parses");
+        assert_eq!(cli.prompt.as_deref(), Some("fix the flaky test"));
+        assert!(!cli.readonly);
+    }
+
+    #[test]
+    fn prompt_conflicts_with_readonly_flag() {
+        let err = Cli::try_parse_from(["octoscode", "--prompt", "hi", "--readonly"])
+            .expect_err("clap conflict");
+        let text = format!("{err}");
+        assert!(
+            text.contains("cannot be used with") || text.contains("conflict"),
+            "clap conflict error: {text}"
+        );
+    }
+
+    #[test]
+    fn prompt_conflicts_with_config_readonly() {
+        let path = {
+            let dir = std::env::temp_dir().join(format!("octoscode-test-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let path = dir.join("readonly-prompt.json");
+            std::fs::write(&path, r#"{"readonly": true}"#).unwrap();
+            path
+        };
+        let err = Cli::try_parse_from([
+            "octoscode",
+            "--config",
+            path.to_str().unwrap(),
+            "--prompt",
+            "hi",
+        ])
+        .expect_err("config readonly + --prompt must fail at parse time");
+        assert!(
+            err.to_string()
+                .contains("--prompt cannot be combined with read-only mode"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn prompt_with_no_readonly_flag_overrides_config() {
+        let dir = std::env::temp_dir().join(format!("octoscode-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("readonly-off.json");
+        std::fs::write(&path, r#"{"readonly": true}"#).unwrap();
+        let cli = Cli::try_parse_from([
+            "octoscode",
+            "--config",
+            path.to_str().unwrap(),
+            "--no-readonly",
+            "--prompt",
+            "go",
+        ])
+        .expect("--no-readonly clears the config readonly");
+        assert_eq!(cli.prompt.as_deref(), Some("go"));
+        assert!(!cli.readonly);
+    }
+}

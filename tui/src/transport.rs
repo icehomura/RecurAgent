@@ -1,0 +1,14956 @@
+use std::collections::{HashMap, VecDeque};
+
+use chrono::Utc;
+use eyre::{Result, WrapErr, eyre};
+use futures::{SinkExt, StreamExt};
+use ra_core::app_ui::{
+    AppUiError, AppUiEvent, AppUiSession, AppUiSnapshot, AppUiStatus, AppUiTask,
+};
+use ra_core::ui_protocol::{
+    ApprovalCommandDetails, ApprovalDiffDetails, ApprovalFilesystemDetails, ApprovalNetworkDetails,
+    ApprovalRequestedEvent, ApprovalSandboxDetails, ApprovalSandboxEscalationDetails,
+    ApprovalSandboxEscalationEndpoint, ApprovalScopesListResult, ApprovalTypedDetails,
+    HydratedMessage, MessageDeltaEvent, OutputCursor, PermissionProfileListResult,
+    PermissionProfileSelection, PermissionProfileSetResult, PreviewId, SessionHydrateResult,
+    SessionListResult, SessionOpenParams, SessionOpenResult, SessionOpened, SessionRollbackResult,
+    TaskArtifactReadResult, TaskOutputDeltaEvent, TaskOutputReadResult, TaskRuntimeState,
+    TaskUpdatedEvent, ThreadGraphGetResult, ToolCompletedEvent, ToolProgressEvent,
+    ToolStartedEvent, TurnCompletedEvent, TurnId, TurnStartedEvent, TurnStateGetResult, UiCursor,
+    UiNotification, UiPaneSnapshot, UiProtocolCapabilities, WarningEvent, approval_kinds, methods,
+    rpc_error_codes,
+};
+use ra_core::ui_protocol::{
+    JSON_RPC_VERSION, MAX_TEXT_FRAME_BYTES, RpcRequest, UI_PROTOCOL_FEATURE_APPROVAL_TYPED_V1,
+    UI_PROTOCOL_FEATURE_AUXILIARY_REST_TO_WS_V1, UI_PROTOCOL_FEATURE_CODING_AGENT_CONTROL_V1,
+    UI_PROTOCOL_FEATURE_CODING_AUTONOMY_V1, UI_PROTOCOL_FEATURE_CODING_GOAL_RUNTIME_V1,
+    UI_PROTOCOL_FEATURE_CODING_LOOP_RUNTIME_V1, UI_PROTOCOL_FEATURE_CONTEXT_LIFECYCLE_V1,
+    UI_PROTOCOL_FEATURE_HARNESS_TASK_CONTROL_V1, UI_PROTOCOL_FEATURE_PANE_SNAPSHOTS_V1,
+    UI_PROTOCOL_FEATURE_PLAN_TODOS_V1, UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2,
+    UI_PROTOCOL_FEATURE_SESSION_HYDRATE_V1, UI_PROTOCOL_FEATURE_SESSION_WORKSPACE_CWD_V1,
+    UI_PROTOCOL_FEATURE_USER_QUESTION_V1,
+};
+use ra_core::{Message, SessionKey, TaskId};
+use serde_json::Value;
+use std::process::Stdio;
+use std::time::{Duration, Instant};
+use tokio::{
+    io::{AsyncWriteExt, BufReader},
+    process::Command,
+    runtime::Runtime,
+    sync::mpsc,
+};
+use tokio_tungstenite::{
+    connect_async,
+    tungstenite::{
+        Message as WsMessage, client::IntoClientRequest, handshake::client::Request as WsRequest,
+    },
+};
+
+use crate::{
+    cli::{Cli, Mode},
+    client_event::{
+        AuthLogoutClientEvent, AuthMeClientEvent, AuthSendCodeClientEvent, AuthStatusClientEvent,
+        AuthVerifyClientEvent, AutonomyClientEvent, AutonomyResult, CapabilitiesClientEvent,
+        ClientEvent, ContextLifecycleClientEvent, LocalShellResultEvent, McpConfigListClientEvent,
+        McpConfigMutationClientEvent, McpStatusClientEvent, ModelListClientEvent,
+        ModelSelectClientEvent, PermissionProfileClientEvent, ProfileLlmCatalogClientEvent,
+        ProfileLlmListClientEvent, ProfileLlmMutationClientEvent, ProfileLlmMutationKind,
+        ProfileLocalCreateClientEvent, ProfileSkillsListClientEvent,
+        ProfileSkillsMutationClientEvent, ProfileSkillsRegistrySearchClientEvent,
+        SessionBtwClientEvent, SessionHydrateContextClientEvent, SessionStatusClientEvent,
+        SubProvidersListClientEvent, SubProvidersMutationClientEvent, ToolConfigListClientEvent,
+        ToolConfigMutationClientEvent, ToolStatusClientEvent,
+    },
+    model::{
+        AppUiAuthToken, AppUiCommand, AuthLogoutResult, AuthMeResult, AuthSendCodeResult,
+        AuthStatusResult, AuthVerifyResult, ConfigCapabilitiesListParams,
+        ConfigCapabilitiesListResult, ContextCacheDiagnostics, DiffPreview, DiffPreviewFile,
+        DiffPreviewGetResult, DiffPreviewHunk, DiffPreviewLine, McpConfigEntry,
+        McpConfigListResult, McpConfigMutationResult, McpStatus, McpStatusListResult,
+        McpStatusSummary, ModelListResult, ModelSelectResult, ModelStatus, ProfileLlmCatalogResult,
+        ProfileLlmListParams, ProfileLlmListResult, ProfileLlmMutationResult,
+        ProfileLocalCreateResult, ProfileSkillEntry, ProfileSkillRegistryPackage,
+        ProfileSkillsListResult, ProfileSkillsMutationResult, ProfileSkillsRegistrySearchResult,
+        ReviewStartResult, RuntimeHealthStatus, RuntimePolicyMcpServer, RuntimePolicyStamp,
+        SessionStatusReadResult, SubProvidersListResult, SubProvidersMutationResult,
+        ToolConfigEntry, ToolConfigListResult, ToolConfigMutationResult, ToolPolicyDenial,
+        ToolStatus, ToolStatusListResult, ToolStatusSummary, auth_me_email, auth_me_profile_id,
+    },
+};
+
+// ra UI can emit large terminal bursts (`message/persisted`, tool summaries,
+// replay/lifecycle frames) at turn completion. Keep the transport reader well
+// ahead of rendering so stdio stdout does not back up into the backend writer.
+const PROTOCOL_TRANSPORT_QUEUE_CAPACITY: usize = 4096;
+const MAX_PENDING_REQUESTS: usize = 256;
+const APPUI_METHOD_CLIENT_HELLO: &str = "client_hello";
+/// A scoped open is a correctness barrier, not an unbounded wait. On timeout
+/// queued commands are failed explicitly and the connection is recycled so a
+/// later user action can retry the remembered scoped open safely.
+const SESSION_OPEN_RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
+/// `client_hello` is a compatibility negotiation. A server that predates it
+/// falls back to its stdio defaults after this bounded wait.
+const CLIENT_HELLO_RESPONSE_TIMEOUT: Duration = Duration::from_secs(3);
+/// A freshly spawned stdio child serves nothing until its bootstrap finishes
+/// (profile store, plugin verification, ledger recovery: ~10-15 s on a cold
+/// instance dir). Until the child has produced its FIRST frame, the hello and
+/// scoped-open barriers wait this long instead of their steady-state
+/// deadlines; a child that exits early still fails fast through the reader.
+/// Once any frame arrives the barrier clocks restart with the normal
+/// deadlines, so a wedged server is still bounded.
+const STDIO_CHILD_STARTUP_GRACE: Duration = Duration::from_secs(90);
+
+// ---------------------------------------------------------------------------
+// Pre-send error message contract (blackboard #28a)
+//
+// The transport SYNTHESIZES a small set of error messages for failures that
+// happen before a request reaches the wire (pending-cap refusal, oversized
+// frame, send failure, response-result decode failure). The store MATCHES
+// those exact shapes to attribute the error back to the command that was
+// lost (OUTER_LOOP_REVIEW #12/#20, #22b-r1). Historically both sides wrote
+// the wording as independent string literals, so a wording drift on one side
+// silently broke the other (same pathogen as the original #578 bug).
+//
+// This block is the SINGLE definition point: every producer below calls the
+// `*_message` constructors, and every matcher in store.rs calls the
+// `message_is_*` discriminators. The shared fragment constants below are the
+// only place the literal wording exists.
+const PRE_SEND_PENDING_CAP_PREFIX: &str = "UI protocol has ";
+const PRE_SEND_PENDING_CAP_INFIX: &str = " pending request(s); refusing to enqueue ";
+const PRE_SEND_PENDING_CAP_SUFFIX: &str = " request";
+const FRAME_TOO_LARGE_PREFIX: &str = "encoded ";
+const FRAME_TOO_LARGE_INFIX: &str = " request ";
+const FRAME_TOO_LARGE_INFIX_BYTES: &str = " is ";
+const FRAME_TOO_LARGE_SUFFIX_BYTES: &str = " bytes; max is ";
+const TRANSPORT_SEND_PREFIX: &str = "failed to send ";
+const TRANSPORT_SEND_INFIX: &str = " request ";
+const INVALID_RESULT_PREFIX: &str = "failed to decode UI protocol result for ";
+const INVALID_RESULT_INFIX: &str = ": ";
+
+/// Pending-cap pre-send refusal (`too_many_pending_requests`): the message
+/// names the rejected method in a fixed trailer so the store can attribute
+/// the refusal back to the command that lost its queue slot.
+pub(crate) fn pre_send_pending_cap_message(method: &str, pending_count: usize) -> String {
+    format!(
+        "{PRE_SEND_PENDING_CAP_PREFIX}{pending_count}{PRE_SEND_PENDING_CAP_INFIX}{method}{PRE_SEND_PENDING_CAP_SUFFIX}"
+    )
+}
+
+/// Oversized-frame pre-send rejection (`frame_too_large`).
+pub(crate) fn frame_too_large_message(method: &str, request_id: &str, bytes: usize) -> String {
+    format!(
+        "{FRAME_TOO_LARGE_PREFIX}{method}{FRAME_TOO_LARGE_INFIX}{request_id}{FRAME_TOO_LARGE_INFIX_BYTES}{bytes}{FRAME_TOO_LARGE_SUFFIX_BYTES}{MAX_TEXT_FRAME_BYTES}"
+    )
+}
+
+/// Transport send failure (`transport_send`).
+pub(crate) fn transport_send_message(method: &str, request_id: &str, err: &eyre::Report) -> String {
+    format!(
+        "{TRANSPORT_SEND_PREFIX}{method}{TRANSPORT_SEND_INFIX}{request_id}{INVALID_RESULT_INFIX}{err:#}"
+    )
+}
+
+/// Response-result decode failure (`invalid_result`).
+pub(crate) fn invalid_result_message(method: &str, err: &serde_json::Error) -> String {
+    format!("{INVALID_RESULT_PREFIX}{method}{INVALID_RESULT_INFIX}{err}")
+}
+
+/// Discriminator for [`pre_send_pending_cap_message`]: the pending count is
+/// dynamic, so match the fixed trailer that names the method (a bare
+/// `ends_with` on the trailer alone would also match a same-trailer message
+/// without the cap prefix, so gate on the prefix too).
+pub(crate) fn message_is_pending_cap_for_method(message: &str, method: &str) -> bool {
+    message.starts_with(PRE_SEND_PENDING_CAP_PREFIX)
+        && message.ends_with(&format!("{method}{PRE_SEND_PENDING_CAP_SUFFIX}"))
+        && message.contains(PRE_SEND_PENDING_CAP_INFIX)
+}
+
+/// Discriminator for [`frame_too_large_message`]: request id and byte count
+/// are dynamic, so match the fixed prefix that names the method.
+pub(crate) fn message_is_frame_too_large_for_method(message: &str, method: &str) -> bool {
+    message.starts_with(&format!(
+        "{FRAME_TOO_LARGE_PREFIX}{method}{FRAME_TOO_LARGE_INFIX}"
+    ))
+}
+
+/// Discriminator for [`transport_send_message`]: request id and error are
+/// dynamic, so match the fixed prefix that names the method.
+pub(crate) fn message_is_transport_send_for_method(message: &str, method: &str) -> bool {
+    message.starts_with(&format!(
+        "{TRANSPORT_SEND_PREFIX}{method}{TRANSPORT_SEND_INFIX}"
+    ))
+}
+
+/// Discriminator for [`invalid_result_message`]: the decode error is
+/// dynamic, so match the fixed prefix that names the method.
+pub(crate) fn message_is_invalid_result_for_method(message: &str, method: &str) -> bool {
+    message.starts_with(&format!(
+        "{INVALID_RESULT_PREFIX}{method}{INVALID_RESULT_INFIX}"
+    ))
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AppUiLaunch {
+    pub endpoint: Option<AppUiEndpoint>,
+    pub base_url: Option<String>,
+    pub session_id: Option<SessionKey>,
+    pub profile_id: Option<String>,
+    pub cwd: Option<String>,
+    pub auth_token: Option<String>,
+    pub readonly: bool,
+    /// OUTER_LOOP_REVIEW #30: startup prompt (`--prompt`). The store
+    /// auto-submits it as ONE turn/start after the session bootstrap +
+    /// hydrate completes; the exactly-once marker lives in the store state
+    /// (separate from the #27 bootstrap replay).
+    pub prompt: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AppUiEndpoint {
+    WebSocket {
+        url: String,
+        auth_token: Option<String>,
+        profile_id: Option<String>,
+    },
+    Stdio {
+        command: String,
+    },
+}
+
+impl AppUiEndpoint {
+    pub fn websocket(url: impl Into<String>, auth_token: Option<String>) -> Self {
+        Self::WebSocket {
+            url: url.into(),
+            auth_token,
+            profile_id: None,
+        }
+    }
+
+    pub fn websocket_with_profile(
+        url: impl Into<String>,
+        auth_token: Option<String>,
+        profile_id: Option<String>,
+    ) -> Self {
+        Self::WebSocket {
+            url: url.into(),
+            auth_token,
+            profile_id,
+        }
+    }
+
+    pub fn stdio(command: impl Into<String>) -> Self {
+        Self::Stdio {
+            command: command.into(),
+        }
+    }
+
+    pub fn label(&self) -> &str {
+        match self {
+            Self::WebSocket { url, .. } => url,
+            Self::Stdio { command } => command,
+        }
+    }
+}
+
+/// Preserve locally-known hydrate attribution even when no RPC was admitted
+/// (size gates and commands waiting behind a scoped-open barrier).
+fn command_error_event(command: &AppUiCommand, code: &str, message: String) -> ClientEvent {
+    if let AppUiCommand::HydrateSession(params) = command {
+        ClientEvent::HydrateError(crate::client_event::HydrateErrorClientEvent {
+            session_id: params.session_id.clone(),
+            code: code.to_owned(),
+            message,
+        })
+    } else {
+        app_error(code, message).into()
+    }
+}
+
+pub trait AppUiBackend {
+    fn bootstrap(&mut self) -> Result<AppUiSnapshot>;
+    fn send(&mut self, command: AppUiCommand) -> Result<()>;
+    fn next_event(&mut self) -> Result<Option<ClientEvent>>;
+}
+
+pub fn build_backend(cli: &Cli) -> Box<dyn AppUiBackend> {
+    let launch = launch_from_cli(cli);
+    match cli.mode {
+        Mode::Mock => Box::new(MockAppUiBackend::new(launch)),
+        Mode::Protocol => Box::new(ProtocolAppUiBackend::new(launch)),
+    }
+}
+
+fn launch_from_cli(cli: &Cli) -> AppUiLaunch {
+    let auth_token = auth_token_from_cli(cli);
+    AppUiLaunch {
+        endpoint: endpoint_from_cli(cli, auth_token.clone()),
+        base_url: cli.base_url.clone(),
+        session_id: cli.session.clone().map(SessionKey),
+        profile_id: cli.profile_id.clone(),
+        cwd: launch_cwd_from_cli(cli),
+        auth_token,
+        readonly: cli.readonly,
+        prompt: cli.prompt.clone(),
+    }
+}
+
+fn endpoint_from_cli(cli: &Cli, auth_token: Option<String>) -> Option<AppUiEndpoint> {
+    if let Some(command) = &cli.stdio_command {
+        return Some(AppUiEndpoint::stdio(command.clone()));
+    }
+
+    cli.base_url
+        .clone()
+        .map(|url| AppUiEndpoint::websocket_with_profile(url, auth_token, cli.profile_id.clone()))
+}
+
+fn launch_cwd_from_cli(cli: &Cli) -> Option<String> {
+    cli.cwd
+        .clone()
+        .or_else(|| std::env::current_dir().ok())
+        .map(|path| path.to_string_lossy().to_string())
+}
+
+fn auth_token_from_cli(cli: &Cli) -> Option<String> {
+    cli.auth_token
+        .clone()
+        .and_then(clean_auth_token)
+        .or_else(|| {
+            std::env::var("OCTOS_AUTH_TOKEN")
+                .ok()
+                .and_then(clean_auth_token)
+        })
+}
+
+fn clean_auth_token(token: String) -> Option<String> {
+    let token = token.trim();
+    (!token.is_empty()).then(|| token.to_owned())
+}
+
+/// Stable marker the `ra serve` backend prints to stderr when it refuses to
+/// start because another serve already owns the data directory (redb is
+/// single-writer-single-process). We spawn `ra serve --stdio` as a child; on
+/// its exit we grep the captured stderr for this token to recognize the conflict
+/// and STOP relaunching — instead of respawning it in a silent crash-loop. MUST
+/// match the server verbatim (ra `commands/serve.rs` DATA_DIR_LOCKED_MARKER).
+const DATA_DIR_LOCKED_MARKER: &str = "RA_DATA_DIR_LOCKED";
+
+/// User-facing explanation shown (once, as an error) when [`DATA_DIR_LOCKED_MARKER`]
+/// is seen — and the code the store keys on to render it terminally.
+const DATA_DIR_LOCKED_CODE: &str = "data_dir_locked";
+
+pub struct ProtocolAppUiBackend {
+    launch: AppUiLaunch,
+    runtime: Option<Runtime>,
+    runtime_error: Option<String>,
+    driver: Option<ProtocolTransportDriver>,
+    connection_state: ProtocolConnectionState,
+    reconnect: ReconnectBackoff,
+    disconnected_status_reported: bool,
+    /// Latched when the spawned backend refuses to start because another serve
+    /// owns the data dir ([`DATA_DIR_LOCKED_MARKER`]). While set, reconnect is
+    /// suppressed so we don't respawn a backend that will only crash again —
+    /// the fix for the "two octoscode competing for the DB" silent crash-loop.
+    fatal_error: Option<String>,
+    /// The session to re-open after a reconnect: the MOST RECENTLY opened
+    /// session, which tracks the user's current selection (set by `/resume`, a
+    /// tab-switch, or the initial launch open) — NOT the fixed launch
+    /// `--session`. Reopening the launch session instead silently yanked the
+    /// selection back to it (and, with no launch `--session`, never re-opened
+    /// the current session at all). Falls back to the launch session when
+    /// nothing has been opened yet.
+    ///
+    /// An `OpenSession` is only a CANDIDATE here until its scoped
+    /// `session/opened` lands; see [`Self::confirmed_reopen_session`].
+    reopen_session: Option<SessionOpenParams>,
+    /// OUTER_LOOP_REVIEW #27: endpoint mode (WS to a remote `ra serve`)
+    /// reconnects the TRANSPORT but never replays the session bootstrap the
+    /// store issued on the now-dead connection — `launch/resolve` above all:
+    /// its result drives onboarding/routing, and the store only dispatches it
+    /// once per capabilities advertisement, so a lost one leaves the TUI
+    /// staring at "reconnected" with no bootstrap at all (the P3 "假重连":
+    /// composer input silently goes nowhere). Cached when the command goes
+    /// out; replayed BEFORE the session reopen on a real reconnect (a
+    /// disconnect means its result died with the old connection); cleared
+    /// when the result lands.
+    pending_launch_resolve: Option<crate::model::LaunchResolveParams>,
+    /// The most recent reopen target the server actually CONFIRMED (a
+    /// matching `session/opened` through the scoped-open barrier). Hydrating
+    /// a known session may select that already-confirmed scope. When the server
+    /// definitively rejects an open, `reopen_session` reverts to this so a
+    /// reconnect never retries a session the server refused.
+    confirmed_reopen_session: Option<SessionOpenParams>,
+    /// A connection multiplexes the master and peer subscriptions. Remember
+    /// every confirmed scope, not only the last open (often an automatic peer
+    /// subscription), so a replacement cannot receive work for an unopened
+    /// master. The most recent target still reopens last.
+    confirmed_session_scopes: Vec<SessionOpenParams>,
+    /// Remaining scopes in this connection's serial reconnect handshake.
+    /// Deferred work and relaunch reconciliation wait for the whole set.
+    reconnect_session_scopes: VecDeque<AppUiCommand>,
+    /// A replacement stdio child has accepted its transport, but has not yet
+    /// confirmed the scoped `session/open`. Session-bound follow-ups must wait
+    /// here; OUP handles requests concurrently, so wire order alone does not
+    /// prevent a `turn/start` from establishing an unscoped affinity first.
+    reconnect_open_barrier: Option<SessionOpenBarrier>,
+    /// A rejected open leaves the requested workspace unconfirmed. Keep the
+    /// healthy transport usable for correction, but fail session-bound work
+    /// closed until an explicit/reconnect open succeeds (including TTL retries).
+    session_open_required: bool,
+    deferred_until_reconnect_open: VecDeque<AppUiCommand>,
+    sending_reconnect_open: bool,
+    /// A replacement stdio child is connected, but the store must not clear
+    /// dead-child turn state until that child's scoped session reopen lands.
+    /// Startup recovery can emit process-wide continuation notifications
+    /// before `session/open`; reconciling at connect time lets one of those
+    /// turns re-latch after the clear and then lose its terminal when the
+    /// subscription switches to the scoped stream.
+    backend_relaunch_reconcile_pending: bool,
+    client_hello_barrier: Option<RequestBarrier>,
+    refresh_capabilities_on_reconnect: bool,
+    /// The current stdio child has written at least one frame, i.e. its
+    /// bootstrap is over and the steady-state barrier deadlines apply.
+    stdio_child_served_frame: bool,
+    queue: VecDeque<ClientEvent>,
+    protocol: ProtocolExchange,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProtocolConnectionState {
+    Disconnected,
+    Connected,
+}
+
+#[derive(Debug, Clone)]
+struct RequestBarrier {
+    request_id: String,
+    started_at: Instant,
+}
+
+#[derive(Debug, Clone)]
+struct SessionOpenBarrier {
+    request: RequestBarrier,
+    session_id: SessionKey,
+}
+
+/// Delay before the first reconnect retry; doubles per consecutive failure.
+const RECONNECT_BACKOFF_BASE: Duration = Duration::from_millis(500);
+/// Ceiling for the exponential reconnect delay.
+const RECONNECT_BACKOFF_CAP: Duration = Duration::from_secs(5);
+/// A connection that dies within this window of connecting counts as a
+/// failed attempt even though `connect()` itself succeeded — an instantly
+/// exiting stdio child (typo'd `--stdio-command`, crash-looping server)
+/// "connects" successfully every time, so a reset-on-connect policy would
+/// never let the backoff grow.
+const RECONNECT_SHORT_LIVED_WINDOW: Duration = Duration::from_secs(1);
+/// Wall-clock budget for the WebSocket connect + handshake. Without it, a
+/// blackholed endpoint blocks the UI thread for the OS TCP timeout on every
+/// reconnect attempt.
+const WS_CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// Reconnect backoff state machine for the protocol transport.
+///
+/// `ensure_connected` runs on every event-loop tick (~25 ms) *and* on every
+/// send, so without gating, a dead endpoint is re-dialed tens of times per
+/// second forever. This struct schedules attempts at
+/// `RECONNECT_BACKOFF_BASE * 2^(failures-1)` (capped at
+/// `RECONNECT_BACKOFF_CAP`) after each consecutive failure.
+///
+/// Failure-reset choice (documented per review): failures are **not** reset
+/// merely because `connect()` succeeded — a spawn that exits instantly still
+/// "connects". Instead a connection proves itself by either
+///  - delivering a data frame ([`Self::record_frame`]), or
+///  - surviving at least [`RECONNECT_SHORT_LIVED_WINDOW`] before dying
+///    (checked in [`Self::record_disconnect`]).
+///
+/// Until proven, a connection that dies young counts as one more consecutive
+/// failure, so a spawn/exit crash-loop keeps backing off exponentially.
+#[derive(Debug, Default)]
+struct ReconnectBackoff {
+    last_attempt: Option<Instant>,
+    consecutive_failures: u32,
+    connected_at: Option<Instant>,
+}
+
+impl ReconnectBackoff {
+    /// Whether a reconnect may be attempted at `now`. Never blocks the first
+    /// attempt; afterwards gates on the failure-scaled delay since the last
+    /// attempt.
+    fn should_attempt(&self, now: Instant) -> bool {
+        match self.last_attempt {
+            None => true,
+            Some(last) => now.saturating_duration_since(last) >= self.current_delay(),
+        }
+    }
+
+    /// Delay implied by the current consecutive-failure count.
+    fn current_delay(&self) -> Duration {
+        if self.consecutive_failures == 0 {
+            return Duration::ZERO;
+        }
+        // Exponent is clamped so the shift cannot overflow; the cap keeps
+        // the effective delay at RECONNECT_BACKOFF_CAP anyway.
+        let exponent = self.consecutive_failures.saturating_sub(1).min(8);
+        RECONNECT_BACKOFF_BASE
+            .saturating_mul(1u32 << exponent)
+            .min(RECONNECT_BACKOFF_CAP)
+    }
+
+    /// A connect attempt failed outright (spawn error, TCP/WS failure).
+    fn record_failure(&mut self, now: Instant) {
+        self.last_attempt = Some(now);
+        self.consecutive_failures = self.consecutive_failures.saturating_add(1);
+        self.connected_at = None;
+    }
+
+    /// A connect attempt succeeded. Does NOT reset the failure count — see
+    /// the type docs; the connection still has to prove itself.
+    fn record_success(&mut self, now: Instant) {
+        self.last_attempt = Some(now);
+        self.connected_at = Some(now);
+    }
+
+    /// The connection delivered a data frame: it is proven good, so the
+    /// failure streak resets and a later death is treated as fresh.
+    fn record_frame(&mut self) {
+        self.consecutive_failures = 0;
+        self.connected_at = None;
+    }
+
+    /// An established connection dropped. Deaths within
+    /// [`RECONNECT_SHORT_LIVED_WINDOW`] of the connect count as one more
+    /// consecutive failure (crash-loop); longer-lived connections reset the
+    /// streak so a healthy server restart reconnects immediately. Calls
+    /// while already disconnected are no-ops, so the quiet backing-off
+    /// `ensure_connected` error path cannot push the schedule forward.
+    fn record_disconnect(&mut self, now: Instant) {
+        let Some(connected_at) = self.connected_at.take() else {
+            return;
+        };
+        if now.saturating_duration_since(connected_at) < RECONNECT_SHORT_LIVED_WINDOW {
+            self.consecutive_failures = self.consecutive_failures.saturating_add(1);
+            self.last_attempt = Some(now);
+        } else {
+            self.consecutive_failures = 0;
+        }
+    }
+
+    fn consecutive_failures(&self) -> u32 {
+        self.consecutive_failures
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PendingRequest {
+    method: String,
+    /// For `profile/llm/select`: the session that initiated the request, so
+    /// the response updates exactly that session's caches — correlation by
+    /// JSON-RPC request id, immune to reply reordering and queue drift.
+    select_session: Option<SessionKey>,
+    /// OUTER_LOOP_REVIEW #22b-r1: for `session/hydrate`, the session the
+    /// request hydrates — so an error/cancel/invalid-result for THIS request
+    /// releases only this session's in-flight marker (never a blanket clear
+    /// that drops another session's genuinely in-flight hydrate). Same
+    /// local-attribution mechanism as `select_session`; the wire schema is
+    /// unchanged.
+    hydrate_session: Option<SessionKey>,
+}
+
+#[derive(Debug, Default)]
+struct ProtocolExchange {
+    pending_requests: HashMap<String, PendingRequest>,
+    session_cursors: HashMap<SessionKey, UiCursor>,
+    /// Server-confirmed `workspace_root` per session, captured from
+    /// `session/opened` (see [`Self::record_event_state`]). Used by the
+    /// reconnect/launch reopen to scope to the session's real workspace, not
+    /// `launch.cwd` (#476).
+    session_workspace_roots: HashMap<SessionKey, String>,
+    next_request_id: u64,
+}
+
+struct CancelledRequest {
+    method: String,
+    event: AppUiEvent,
+    /// #22b-r1: hydrate session attribution carried from the pending entry —
+    /// the store releases only this session's marker on cancel.
+    hydrate_session: Option<SessionKey>,
+}
+
+impl CancelledRequest {
+    fn is_capabilities_probe(&self) -> bool {
+        self.method == crate::model::APPUI_METHOD_CONFIG_CAPABILITIES_LIST
+    }
+
+    fn into_client_event(self) -> ClientEvent {
+        if let Some(session_id) = self.hydrate_session
+            && let AppUiEvent::Error(error) = self.event
+        {
+            return ClientEvent::HydrateError(crate::client_event::HydrateErrorClientEvent {
+                session_id,
+                code: error.code,
+                message: error.message,
+            });
+        }
+        self.event.into()
+    }
+}
+
+enum ProtocolTransportDriver {
+    WebSocket(WebSocketTransportDriver),
+    Stdio(StdioTransportDriver),
+}
+
+impl ProtocolTransportDriver {
+    /// True for the stdio child-process driver. A reconnect on this driver
+    /// means the previous `serve --stdio` child is GONE (a new process was
+    /// spawned), unlike a WebSocket reconnect where the server — and any
+    /// in-flight turn — kept running across the socket drop.
+    fn is_stdio_child(&self) -> bool {
+        matches!(self, Self::Stdio(_))
+    }
+}
+
+enum TransportCommand {
+    Text(String),
+    Pong(Vec<u8>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TransportFrame {
+    Text(String),
+    Binary(Vec<u8>),
+    Ping(Vec<u8>),
+    Pong,
+    Close,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TransportEvent {
+    Frame(TransportFrame),
+    Disconnected(String),
+    Error {
+        code: String,
+        message: String,
+        disconnect: bool,
+    },
+}
+
+struct WebSocketTransportDriver {
+    endpoint: String,
+    auth_token: Option<String>,
+    profile_id: Option<String>,
+    command_tx: Option<mpsc::Sender<TransportCommand>>,
+    event_rx: Option<mpsc::Receiver<TransportEvent>>,
+    task: Option<tokio::task::JoinHandle<()>>,
+    connected: bool,
+}
+
+struct StdioTransportDriver {
+    command: String,
+    command_tx: Option<mpsc::Sender<TransportCommand>>,
+    event_rx: Option<mpsc::Receiver<TransportEvent>>,
+    task: Option<tokio::task::JoinHandle<()>>,
+    connected: bool,
+}
+
+impl ProtocolExchange {
+    fn next_request_id(&mut self) -> String {
+        self.next_request_id += 1;
+        format!("tui-{}", self.next_request_id)
+    }
+
+    fn build_tracked_request(
+        &mut self,
+        command: AppUiCommand,
+    ) -> Result<RpcRequest<serde_json::Value>> {
+        let command = self.command_with_resume_cursor(command);
+        let method = command.method().to_string();
+        let select_session = match &command {
+            AppUiCommand::ProfileLlmSelect(params) => params.session_id.clone(),
+            _ => None,
+        };
+        let hydrate_session = match &command {
+            AppUiCommand::HydrateSession(params) => Some(params.session_id.clone()),
+            _ => None,
+        };
+        let request_id = self.next_request_id();
+        let request = rpc_request_from_command(request_id.clone(), command)?;
+
+        self.pending_requests.insert(
+            request_id,
+            PendingRequest {
+                method,
+                select_session,
+                hydrate_session,
+            },
+        );
+
+        Ok(request)
+    }
+
+    fn build_client_hello_request(
+        &mut self,
+        supported_features: Vec<String>,
+    ) -> RpcRequest<serde_json::Value> {
+        let request_id = self.next_request_id();
+        self.pending_requests.insert(
+            request_id.clone(),
+            PendingRequest {
+                method: APPUI_METHOD_CLIENT_HELLO.to_owned(),
+                select_session: None,
+                hydrate_session: None,
+            },
+        );
+        RpcRequest::new(
+            request_id,
+            APPUI_METHOD_CLIENT_HELLO,
+            serde_json::json!({
+                "transport": "stdio",
+                "supported_features": supported_features,
+                "client": { "name": "octoscode" },
+            }),
+        )
+    }
+
+    fn command_with_resume_cursor(&self, command: AppUiCommand) -> AppUiCommand {
+        let AppUiCommand::OpenSession(mut params) = command else {
+            return command;
+        };
+
+        if params.after.is_none() {
+            params.after = self.session_cursors.get(&params.session_id).cloned();
+        }
+
+        AppUiCommand::OpenSession(params)
+    }
+
+    fn decode_rpc_text(&mut self, text: &str) -> Result<Option<ClientEvent>> {
+        let event = rpc_text_to_app_event_with_pending(text, &mut self.pending_requests)?;
+        match &event {
+            Some(ClientEvent::App(event)) => self.record_event_state(event),
+            Some(ClientEvent::ContextLifecycle(event)) => self.record_event_state(&event.event),
+            _ => {}
+        }
+        Ok(event)
+    }
+
+    fn record_event_state(&mut self, event: &AppUiEvent) {
+        match event {
+            AppUiEvent::Protocol(UiNotification::SessionOpened(opened)) => {
+                if let Some(cursor) = &opened.cursor {
+                    self.session_cursors
+                        .insert(opened.session_id.clone(), cursor.clone());
+                }
+                // Capture the server-confirmed workspace root so a respawn
+                // reopen scopes to the session's real workspace (#476), not
+                // `launch.cwd` (the shell's dir for a bare `octoscode`).
+                if let Some(root) = &opened.workspace_root {
+                    self.session_workspace_roots
+                        .insert(opened.session_id.clone(), root.clone());
+                }
+            }
+            AppUiEvent::Protocol(UiNotification::TurnCompleted(completed)) => {
+                if let Some(cursor) = &completed.cursor {
+                    self.session_cursors
+                        .insert(completed.session_id.clone(), cursor.clone());
+                }
+            }
+            AppUiEvent::Snapshot(_)
+            | AppUiEvent::Protocol(_)
+            | AppUiEvent::Progress(_)
+            | AppUiEvent::Status(_)
+            | AppUiEvent::Error(_) => {}
+        }
+    }
+
+    fn cancel_pending_requests(&mut self, reason: &str) -> Vec<CancelledRequest> {
+        let mut pending_requests = self.pending_requests.drain().collect::<Vec<_>>();
+        pending_requests.sort_by(|(left_id, _), (right_id, _)| left_id.cmp(right_id));
+
+        pending_requests
+            .into_iter()
+            .map(|(id, request)| {
+                let method = request.method;
+                let event = app_error(
+                    "request_cancelled",
+                    format!("{method} request {id} cancelled: {reason}"),
+                );
+                CancelledRequest {
+                    method,
+                    event,
+                    hydrate_session: request.hydrate_session,
+                }
+            })
+            .collect()
+    }
+}
+
+impl ProtocolTransportDriver {
+    fn from_endpoint(endpoint: &AppUiEndpoint) -> Result<Self> {
+        match endpoint {
+            AppUiEndpoint::WebSocket {
+                url,
+                auth_token,
+                profile_id,
+            } if is_websocket_url(url) => Ok(Self::WebSocket(WebSocketTransportDriver::new(
+                url.clone(),
+                auth_token.clone(),
+                profile_id.clone(),
+            ))),
+            AppUiEndpoint::WebSocket { .. } => Err(eyre!(
+                "UI protocol endpoint must be a WebSocket URL starting with ws:// or wss://"
+            )),
+            AppUiEndpoint::Stdio { command, .. } => {
+                Ok(Self::Stdio(StdioTransportDriver::new(command.clone())?))
+            }
+        }
+    }
+
+    fn label(&self) -> &str {
+        match self {
+            Self::WebSocket(driver) => driver.label(),
+            Self::Stdio(driver) => driver.label(),
+        }
+    }
+
+    fn is_connected(&self) -> bool {
+        match self {
+            Self::WebSocket(driver) => driver.is_connected(),
+            Self::Stdio(driver) => driver.is_connected(),
+        }
+    }
+
+    fn connect(&mut self, runtime: &Runtime) -> Result<()> {
+        match self {
+            Self::WebSocket(driver) => driver.connect(runtime),
+            Self::Stdio(driver) => driver.connect(runtime),
+        }
+    }
+
+    fn disconnect(&mut self) {
+        match self {
+            Self::WebSocket(driver) => driver.disconnect(),
+            Self::Stdio(driver) => driver.disconnect(),
+        }
+    }
+
+    fn send_text(&mut self, text: String) -> Result<()> {
+        match self {
+            Self::WebSocket(driver) => driver.send_text(text),
+            Self::Stdio(driver) => driver.send_text(text),
+        }
+    }
+
+    fn send_pong(&mut self, payload: Vec<u8>) -> Result<()> {
+        match self {
+            Self::WebSocket(driver) => driver.send_pong(payload),
+            Self::Stdio(driver) => driver.send_pong(payload),
+        }
+    }
+
+    fn poll_event(&mut self) -> Result<Option<TransportEvent>> {
+        match self {
+            Self::WebSocket(driver) => driver.poll_event(),
+            Self::Stdio(driver) => driver.poll_event(),
+        }
+    }
+}
+
+impl WebSocketTransportDriver {
+    fn new(endpoint: String, auth_token: Option<String>, profile_id: Option<String>) -> Self {
+        Self {
+            endpoint,
+            auth_token,
+            profile_id,
+            command_tx: None,
+            event_rx: None,
+            task: None,
+            connected: false,
+        }
+    }
+
+    fn label(&self) -> &str {
+        &self.endpoint
+    }
+
+    fn is_connected(&self) -> bool {
+        self.connected
+    }
+
+    fn connect(&mut self, runtime: &Runtime) -> Result<()> {
+        if self.connected {
+            return Ok(());
+        }
+
+        self.disconnect();
+
+        let request = websocket_request(
+            &self.endpoint,
+            self.auth_token.as_deref(),
+            self.profile_id.as_deref(),
+        )?;
+        // `connect` runs on the UI thread (block_on), so the TCP connect +
+        // WS handshake must be time-bounded: a blackholed endpoint would
+        // otherwise freeze the interface for the OS TCP timeout.
+        let (stream, _) = runtime
+            .block_on(async {
+                tokio::time::timeout(WS_CONNECT_TIMEOUT, connect_async(request))
+                    .await
+                    .map_err(|_| {
+                        eyre!("connect timed out after {}s", WS_CONNECT_TIMEOUT.as_secs())
+                    })?
+                    .map_err(eyre::Report::from)
+            })
+            .wrap_err_with(|| {
+                format!("failed to connect UI protocol endpoint {}", self.endpoint)
+            })?;
+        let (mut sink, mut stream) = stream.split();
+        let (command_tx, mut command_rx) = mpsc::channel(PROTOCOL_TRANSPORT_QUEUE_CAPACITY);
+        let (event_tx, event_rx) = mpsc::channel(PROTOCOL_TRANSPORT_QUEUE_CAPACITY);
+
+        let task = runtime.spawn(async move {
+            loop {
+                tokio::select! {
+                    command = command_rx.recv() => {
+                        let Some(command) = command else {
+                            break;
+                        };
+                        let result = match command {
+                            TransportCommand::Text(text) => {
+                                sink.send(WsMessage::Text(text.into())).await
+                            }
+                            TransportCommand::Pong(payload) => {
+                                sink.send(WsMessage::Pong(payload.into())).await
+                            }
+                        };
+
+                        if let Err(err) = result {
+                            let _ = event_tx.send(TransportEvent::Error {
+                                code: "transport_send".into(),
+                                message: format!("failed to send UI protocol WebSocket message: {err}"),
+                                disconnect: true,
+                            }).await;
+                            break;
+                        }
+                    }
+                    message = stream.next() => {
+                        let Some(message) = message else {
+                            let _ = event_tx.send(TransportEvent::Disconnected(
+                                "UI protocol WebSocket closed; reconnect will retry on next send/read.".into(),
+                            )).await;
+                            break;
+                        };
+
+                        match message {
+                            Ok(WsMessage::Text(text)) => {
+                                if event_tx
+                                    .send(TransportEvent::Frame(TransportFrame::Text(text.to_string())))
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            }
+                            Ok(WsMessage::Binary(bytes)) => {
+                                if event_tx
+                                    .send(TransportEvent::Frame(TransportFrame::Binary(bytes.to_vec())))
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            }
+                            Ok(WsMessage::Ping(payload)) => {
+                                if event_tx
+                                    .send(TransportEvent::Frame(TransportFrame::Ping(payload.to_vec())))
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            }
+                            Ok(WsMessage::Pong(_)) => {
+                                if event_tx
+                                    .send(TransportEvent::Frame(TransportFrame::Pong))
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            }
+                            Ok(WsMessage::Close(_)) => {
+                                let _ = event_tx.send(TransportEvent::Frame(TransportFrame::Close)).await;
+                                break;
+                            }
+                            Ok(WsMessage::Frame(_)) => {}
+                            Err(err) => {
+                                let _ = event_tx.send(TransportEvent::Error {
+                                    code: "transport_read".into(),
+                                    message: format!("failed to read UI protocol WebSocket message: {err}"),
+                                    disconnect: true,
+                                }).await;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        self.command_tx = Some(command_tx);
+        self.event_rx = Some(event_rx);
+        self.task = Some(task);
+        self.connected = true;
+        Ok(())
+    }
+
+    fn disconnect(&mut self) {
+        self.command_tx = None;
+        self.event_rx = None;
+        if let Some(task) = self.task.take() {
+            task.abort();
+        }
+        self.connected = false;
+    }
+
+    fn send_text(&mut self, text: String) -> Result<()> {
+        self.command_tx
+            .as_ref()
+            .filter(|_| self.connected)
+            .ok_or_else(|| eyre!("UI protocol WebSocket is not connected"))?
+            .try_send(TransportCommand::Text(text))
+            .map_err(|err| bounded_send_error("UI protocol WebSocket writer", err))
+    }
+
+    fn send_pong(&mut self, payload: Vec<u8>) -> Result<()> {
+        self.command_tx
+            .as_ref()
+            .filter(|_| self.connected)
+            .ok_or_else(|| eyre!("UI protocol WebSocket is not connected"))?
+            .try_send(TransportCommand::Pong(payload))
+            .map_err(|err| bounded_send_error("UI protocol WebSocket writer", err))
+    }
+
+    fn poll_event(&mut self) -> Result<Option<TransportEvent>> {
+        let Some(event_rx) = self.event_rx.as_mut() else {
+            return Ok(None);
+        };
+
+        match event_rx.try_recv() {
+            Ok(event) => {
+                if matches!(
+                    event,
+                    TransportEvent::Disconnected(_)
+                        | TransportEvent::Error {
+                            disconnect: true,
+                            ..
+                        }
+                        | TransportEvent::Frame(TransportFrame::Close)
+                ) {
+                    self.connected = false;
+                }
+                Ok(Some(event))
+            }
+            Err(mpsc::error::TryRecvError::Empty) => Ok(None),
+            Err(mpsc::error::TryRecvError::Disconnected) => {
+                self.connected = false;
+                Ok(Some(TransportEvent::Disconnected(
+                    "UI protocol WebSocket driver stopped; reconnect will retry on next send/read."
+                        .into(),
+                )))
+            }
+        }
+    }
+}
+
+impl StdioTransportDriver {
+    fn new(command: String) -> Result<Self> {
+        let command = command.trim().to_string();
+        if command.is_empty() {
+            return Err(eyre!("UI protocol stdio command must not be empty"));
+        }
+
+        Ok(Self {
+            command,
+            command_tx: None,
+            event_rx: None,
+            task: None,
+            connected: false,
+        })
+    }
+
+    fn label(&self) -> &str {
+        &self.command
+    }
+
+    fn is_connected(&self) -> bool {
+        self.connected
+    }
+
+    fn connect(&mut self, runtime: &Runtime) -> Result<()> {
+        if self.connected {
+            return Ok(());
+        }
+
+        self.disconnect();
+
+        let mut child = runtime
+            .block_on(async {
+                let mut command = shell_command(&self.command);
+                // Multi-instance stdio: isolate this window's runtime (redb
+                // stores, sessions, goals, the serve flock) under a per-cwd
+                // instance dir so several octoscode windows can run at once
+                // while sharing one profile registry. No-op for explicit
+                // --data-dir launches, remote launches, or when opted out via
+                // OCTOSCODE_SHARED_INSTANCE. Re-spawns (reconnects) resolve to
+                // the same dir, so a reconnect re-attaches, not forks.
+                let process_cwd = std::env::current_dir().unwrap_or_default();
+                if let Some(instance_dir) =
+                    crate::profiles::instance_data_dir_for_launch(Some(&self.command), &process_cwd)
+                {
+                    command.env("RA_INSTANCE_DATA_DIR", &instance_dir);
+                }
+                command
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .kill_on_drop(true)
+                    .spawn()
+            })
+            .wrap_err_with(|| {
+                format!(
+                    "failed to launch UI protocol stdio command {}",
+                    self.command
+                )
+            })?;
+
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| eyre!("UI protocol stdio child stdin was not piped"))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| eyre!("UI protocol stdio child stdout was not piped"))?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| eyre!("UI protocol stdio child stderr was not piped"))?;
+        let mut stdin = stdin;
+        // Capped line readers instead of `lines()`: `next_line()` accumulates
+        // a whole line in memory before any size check can run, so a single
+        // giant (or endless, never-newline) stdout line would balloon the
+        // process before the MAX_TEXT_FRAME_BYTES check ever saw it.
+        let mut stdout_lines = CappedLineReader::new(BufReader::new(stdout), MAX_TEXT_FRAME_BYTES);
+        let mut stderr_lines = CappedLineReader::new(BufReader::new(stderr), STDIO_STDERR_LINE_CAP);
+        let mut stderr_open = true;
+        let mut stderr_ring = StderrRing::default();
+        let (command_tx, mut command_rx) = mpsc::channel(PROTOCOL_TRANSPORT_QUEUE_CAPACITY);
+        let (event_tx, event_rx) = mpsc::channel(PROTOCOL_TRANSPORT_QUEUE_CAPACITY);
+
+        let task = runtime.spawn(async move {
+            loop {
+                tokio::select! {
+                    command = command_rx.recv() => {
+                        let Some(command) = command else {
+                            break;
+                        };
+                        let result: std::io::Result<()> = match command {
+                            TransportCommand::Text(text) => {
+                                async {
+                                    stdin.write_all(text.as_bytes()).await?;
+                                    stdin.write_all(b"\n").await?;
+                                    stdin.flush().await?;
+                                    Ok(())
+                                }
+                                .await
+                            }
+                            TransportCommand::Pong(_) => Ok(()),
+                        };
+
+                        if let Err(err) = result {
+                            let _ = event_tx.send(TransportEvent::Error {
+                                code: "transport_send".into(),
+                                message: format!("failed to write UI protocol stdio request: {err}"),
+                                disconnect: true,
+                            }).await;
+                            break;
+                        }
+                    }
+                    line = stdout_lines.next_line() => {
+                        match line {
+                            Ok(CappedLine::Line(text)) => {
+                                if event_tx.send(stdio_text_frame_event(text)).await.is_err() {
+                                    break;
+                                }
+                            }
+                            Ok(CappedLine::TooLong { discarded }) => {
+                                // One oversized frame is dropped, not fatal: a
+                                // stdio disconnect respawns a FRESH server and
+                                // loses all session state, which is strictly
+                                // worse than skipping a single frame.
+                                if event_tx
+                                    .send(stdio_frame_too_large_skipped_event(discarded))
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            }
+                            Ok(CappedLine::NotUtf8 { lossy }) => {
+                                // A mangled frame's request id is unknowable;
+                                // forwarding the lossy text would just decode
+                                // as malformed_json and silently leak its
+                                // pending-request entry. Skip it like TooLong
+                                // (the backend cancels pending requests).
+                                if event_tx
+                                    .send(stdio_frame_not_utf8_skipped_event(lossy.len()))
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            }
+                            Ok(CappedLine::Eof) => {
+                                // stdout closed: the child is usually exiting.
+                                // Reap it (bounded) so the disconnect message
+                                // carries exit status + stderr tail instead of
+                                // a bare "closed".
+                                let status =
+                                    tokio::time::timeout(STDIO_EXIT_DRAIN_BUDGET, child.wait())
+                                        .await;
+                                if stderr_open {
+                                    drain_stderr_to_eof(&mut stderr_lines, &mut stderr_ring).await;
+                                }
+                                let message = match status {
+                                    Ok(status) => stdio_exit_disconnect_message(
+                                        &status,
+                                        stderr_ring.tail(),
+                                    ),
+                                    Err(_) => "UI protocol stdio stdout closed; reconnect will relaunch on next send/read.".to_string(),
+                                };
+                                let _ = event_tx.send(TransportEvent::Disconnected(message)).await;
+                                break;
+                            }
+                            Err(err) => {
+                                let _ = event_tx.send(TransportEvent::Error {
+                                    code: "transport_read".into(),
+                                    message: format!("failed to read UI protocol stdio response: {err}"),
+                                    disconnect: true,
+                                }).await;
+                                break;
+                            }
+                        }
+                    }
+                    line = stderr_lines.next_line(), if stderr_open => {
+                        match line {
+                            Ok(CappedLine::Line(text)) => {
+                                stderr_ring.push(text);
+                            }
+                            Ok(CappedLine::TooLong { discarded }) => {
+                                stderr_ring.push(format!("[stderr line dropped: {discarded} bytes]"));
+                            }
+                            Ok(CappedLine::NotUtf8 { lossy }) => {
+                                // Diagnostics keep best-effort text.
+                                stderr_ring.push(lossy);
+                            }
+                            Ok(CappedLine::Eof) => {
+                                stderr_open = false;
+                            }
+                            Err(err) => {
+                                stderr_open = false;
+                                let _ = event_tx.send(TransportEvent::Error {
+                                    code: "transport_stderr".into(),
+                                    message: format!("failed to drain UI protocol stdio stderr: {err}"),
+                                    disconnect: false,
+                                }).await;
+                            }
+                        }
+                    }
+                    status = child.wait() => {
+                        // Pipe contents survive child death: drain buffered
+                        // stdout to EOF first (bounded) so final responses are
+                        // delivered before the disconnect, then collect the
+                        // stderr tail for the exit report.
+                        drain_stdout_to_eof(&mut stdout_lines, &event_tx).await;
+                        if stderr_open {
+                            drain_stderr_to_eof(&mut stderr_lines, &mut stderr_ring).await;
+                        }
+                        let _ = event_tx.send(TransportEvent::Disconnected(
+                            stdio_exit_disconnect_message(&status, stderr_ring.tail()),
+                        )).await;
+                        break;
+                    }
+                }
+            }
+        });
+
+        self.command_tx = Some(command_tx);
+        self.event_rx = Some(event_rx);
+        self.task = Some(task);
+        self.connected = true;
+        Ok(())
+    }
+
+    fn disconnect(&mut self) {
+        self.command_tx = None;
+        self.event_rx = None;
+        if let Some(task) = self.task.take() {
+            task.abort();
+        }
+        self.connected = false;
+    }
+
+    fn send_text(&mut self, text: String) -> Result<()> {
+        self.command_tx
+            .as_ref()
+            .filter(|_| self.connected)
+            .ok_or_else(|| eyre!("UI protocol stdio transport is not connected"))?
+            .try_send(TransportCommand::Text(text))
+            .map_err(|err| bounded_send_error("UI protocol stdio writer", err))
+    }
+
+    fn send_pong(&mut self, _payload: Vec<u8>) -> Result<()> {
+        Ok(())
+    }
+
+    fn poll_event(&mut self) -> Result<Option<TransportEvent>> {
+        let Some(event_rx) = self.event_rx.as_mut() else {
+            return Ok(None);
+        };
+
+        match event_rx.try_recv() {
+            Ok(event) => {
+                if matches!(
+                    event,
+                    TransportEvent::Disconnected(_)
+                        | TransportEvent::Error {
+                            disconnect: true,
+                            ..
+                        }
+                ) {
+                    self.connected = false;
+                }
+                Ok(Some(event))
+            }
+            Err(mpsc::error::TryRecvError::Empty) => Ok(None),
+            Err(mpsc::error::TryRecvError::Disconnected) => {
+                self.connected = false;
+                Ok(Some(TransportEvent::Disconnected(
+                    "UI protocol stdio driver stopped; reconnect will relaunch on next send/read."
+                        .into(),
+                )))
+            }
+        }
+    }
+}
+
+fn stdio_text_frame_event(text: String) -> TransportEvent {
+    if text.len() > MAX_TEXT_FRAME_BYTES {
+        return TransportEvent::Error {
+            code: "frame_too_large".into(),
+            message: format!(
+                "UI protocol stdio frame is {} bytes; max is {MAX_TEXT_FRAME_BYTES}",
+                text.len()
+            ),
+            disconnect: true,
+        };
+    }
+    TransportEvent::Frame(TransportFrame::Text(text))
+}
+
+/// Per-line cap for child stderr: diagnostics only, so a small bound is fine.
+const STDIO_STDERR_LINE_CAP: usize = 8 * 1024;
+/// Ring bounds for retained child stderr (most recent wins).
+const STDIO_STDERR_RING_MAX_LINES: usize = 20;
+const STDIO_STDERR_RING_MAX_BYTES: usize = 8 * 1024;
+/// Wall-clock budget for post-exit pipe drains and the bounded `child.wait()`
+/// reap. Pipe data survives child death, but a grandchild inheriting the
+/// write end could keep the pipe open forever — the budget guarantees the
+/// Disconnected event is still emitted promptly.
+const STDIO_EXIT_DRAIN_BUDGET: Duration = Duration::from_secs(2);
+
+/// Outcome of reading one line through [`CappedLineReader`].
+#[derive(Debug, PartialEq, Eq)]
+enum CappedLine {
+    /// A complete line (newline / trailing `\r` stripped, strict UTF-8).
+    Line(String),
+    /// The line exceeded the cap and was discarded up to (and including) its
+    /// terminating newline; `discarded` counts the dropped bytes.
+    TooLong { discarded: u64 },
+    /// A complete line whose bytes were not valid UTF-8. Carries the lossy
+    /// decoding for DIAGNOSTIC consumers (the stderr ring); the stdout frame
+    /// path must NOT forward it as a frame — a mangled response's id is
+    /// untrustworthy, so it is skipped with pending requests cancelled
+    /// (same treatment as `TooLong`, codex round-2 P2).
+    NotUtf8 { lossy: String },
+    /// End of stream.
+    Eof,
+}
+
+/// Line reader that never buffers more than `cap` bytes for a single line,
+/// unlike `AsyncBufReadExt::lines()`, which accumulates the entire line in
+/// memory before any size check can run. Once a line crosses the cap the
+/// remainder is discarded (streamed, not buffered) until the next newline
+/// and reported as [`CappedLine::TooLong`], so the reader recovers on the
+/// following line.
+///
+/// Cancel-safe by construction: partial-line state lives in the struct, not
+/// the future, so dropping a `next_line` future at a `select!` never loses
+/// consumed bytes — the same guarantee `tokio::io::Lines` documents.
+///
+/// Non-UTF-8 bytes are decoded lossily (U+FFFD) instead of erroring the
+/// transport down: one bad byte in a frame surfaces as a JSON decode error
+/// for that frame rather than killing the child session.
+struct CappedLineReader<R> {
+    reader: R,
+    cap: usize,
+    buf: Vec<u8>,
+    /// `Some(bytes_discarded_so_far)` while skipping an over-cap line to its
+    /// terminating newline.
+    discarding: Option<u64>,
+}
+
+impl<R: tokio::io::AsyncBufRead + Unpin> CappedLineReader<R> {
+    fn new(reader: R, cap: usize) -> Self {
+        Self {
+            reader,
+            cap,
+            buf: Vec::new(),
+            discarding: None,
+        }
+    }
+
+    async fn next_line(&mut self) -> std::io::Result<CappedLine> {
+        use tokio::io::AsyncBufReadExt;
+
+        loop {
+            let available = self.reader.fill_buf().await?;
+            if available.is_empty() {
+                // EOF: flush discard state, then any final unterminated line.
+                if let Some(discarded) = self.discarding.take() {
+                    return Ok(CappedLine::TooLong { discarded });
+                }
+                if self.buf.is_empty() {
+                    return Ok(CappedLine::Eof);
+                }
+                return Ok(take_line(&mut self.buf));
+            }
+
+            let newline = available.iter().position(|&byte| byte == b'\n');
+            match (self.discarding.is_some(), newline) {
+                (true, Some(pos)) => {
+                    let discarded = self.discarding.take().unwrap_or(0) + (pos as u64) + 1;
+                    self.reader.consume(pos + 1);
+                    return Ok(CappedLine::TooLong { discarded });
+                }
+                (true, None) => {
+                    let chunk = available.len();
+                    if let Some(discarded) = self.discarding.as_mut() {
+                        *discarded += chunk as u64;
+                    }
+                    self.reader.consume(chunk);
+                }
+                (false, Some(pos)) => {
+                    if self.buf.len() + pos > self.cap {
+                        // Complete line, but over cap: drop it without ever
+                        // materializing the full copy.
+                        let discarded = (self.buf.len() + pos + 1) as u64;
+                        self.buf = Vec::new();
+                        self.reader.consume(pos + 1);
+                        return Ok(CappedLine::TooLong { discarded });
+                    }
+                    self.buf.extend_from_slice(&available[..pos]);
+                    self.reader.consume(pos + 1);
+                    return Ok(take_line(&mut self.buf));
+                }
+                (false, None) => {
+                    let chunk = available.len();
+                    if self.buf.len() + chunk > self.cap {
+                        // Crossed the cap mid-line: release the partial buffer
+                        // and stream-discard until the newline.
+                        self.discarding = Some((self.buf.len() + chunk) as u64);
+                        self.buf = Vec::new();
+                    } else {
+                        self.buf.extend_from_slice(available);
+                    }
+                    self.reader.consume(chunk);
+                }
+            }
+        }
+    }
+}
+
+/// Take the accumulated line bytes: strips one trailing `\r` (CRLF input).
+/// Strict UTF-8 yields [`CappedLine::Line`]; invalid bytes yield
+/// [`CappedLine::NotUtf8`] with a lossy decoding for diagnostic consumers —
+/// forwarding a lossily-mangled frame would decode as `malformed_json` with
+/// an unknowable request id, silently leaking its pending-request entry.
+fn take_line(buf: &mut Vec<u8>) -> CappedLine {
+    if buf.last() == Some(&b'\r') {
+        buf.pop();
+    }
+    let bytes = std::mem::take(buf);
+    match String::from_utf8(bytes) {
+        Ok(line) => CappedLine::Line(line),
+        Err(err) => CappedLine::NotUtf8 {
+            lossy: String::from_utf8_lossy(err.as_bytes()).into_owned(),
+        },
+    }
+}
+
+/// Error event for a skipped over-cap stdio line. `disconnect: false` on
+/// purpose: the child stays alive and the reader has already resynced to the
+/// next line.
+fn stdio_frame_too_large_skipped_event(discarded: u64) -> TransportEvent {
+    TransportEvent::Error {
+        code: "frame_too_large".into(),
+        message: format!(
+            "UI protocol stdio frame exceeded {MAX_TEXT_FRAME_BYTES} bytes ({discarded} bytes discarded); skipped to next line"
+        ),
+        disconnect: false,
+    }
+}
+
+/// Error event for a skipped invalid-UTF-8 stdio line. Same non-fatal
+/// semantics as [`stdio_frame_too_large_skipped_event`], and the same
+/// pending-request cancellation in the backend: the frame may have been a
+/// response whose id is now unknowable.
+fn stdio_frame_not_utf8_skipped_event(lossy_len: usize) -> TransportEvent {
+    TransportEvent::Error {
+        code: "frame_not_utf8".into(),
+        message: format!(
+            "UI protocol stdio frame was not valid UTF-8 (~{lossy_len} bytes); skipped to next line"
+        ),
+        disconnect: false,
+    }
+}
+
+/// Bounded ring of the most recent child stderr lines, kept so a nonzero
+/// exit can report *why* the child died (previously stderr was read and
+/// dropped).
+#[derive(Debug, Default)]
+struct StderrRing {
+    lines: VecDeque<String>,
+    bytes: usize,
+}
+
+impl StderrRing {
+    fn push(&mut self, line: String) {
+        self.bytes += line.len();
+        self.lines.push_back(line);
+        // Always keep at least the newest line, even if it alone exceeds the
+        // byte budget.
+        while self.lines.len() > 1
+            && (self.lines.len() > STDIO_STDERR_RING_MAX_LINES
+                || self.bytes > STDIO_STDERR_RING_MAX_BYTES)
+        {
+            if let Some(evicted) = self.lines.pop_front() {
+                self.bytes -= evicted.len();
+            }
+        }
+    }
+
+    fn tail(&self) -> Option<String> {
+        (!self.lines.is_empty()).then(|| {
+            self.lines
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+    }
+}
+
+/// Disconnect message for a reaped stdio child: exit status plus, on failure,
+/// the retained stderr tail (the actionable part of "my server won't start").
+fn stdio_exit_disconnect_message(
+    status: &std::io::Result<std::process::ExitStatus>,
+    stderr_tail: Option<String>,
+) -> String {
+    let (base, failed) = match status {
+        Ok(status) => (
+            format!(
+                "UI protocol stdio child exited with {status}; reconnect will relaunch on next send/read."
+            ),
+            !status.success(),
+        ),
+        Err(err) => (
+            format!(
+                "failed to wait for UI protocol stdio child: {err}; reconnect will relaunch on next send/read."
+            ),
+            true,
+        ),
+    };
+    match stderr_tail {
+        Some(tail) if failed => format!("{base}\nstderr tail:\n{tail}"),
+        _ => base,
+    }
+}
+
+/// Drain remaining stdout lines to EOF after child exit, forwarding them as
+/// frames so responses already written to the pipe are not dropped. Bounded
+/// by [`STDIO_EXIT_DRAIN_BUDGET`].
+async fn drain_stdout_to_eof<R: tokio::io::AsyncBufRead + Unpin>(
+    reader: &mut CappedLineReader<R>,
+    event_tx: &mpsc::Sender<TransportEvent>,
+) {
+    let _ = tokio::time::timeout(STDIO_EXIT_DRAIN_BUDGET, async {
+        loop {
+            match reader.next_line().await {
+                Ok(CappedLine::Line(text)) => {
+                    if event_tx.send(stdio_text_frame_event(text)).await.is_err() {
+                        break;
+                    }
+                }
+                Ok(CappedLine::TooLong { discarded }) => {
+                    if event_tx
+                        .send(stdio_frame_too_large_skipped_event(discarded))
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+                Ok(CappedLine::NotUtf8 { lossy }) => {
+                    if event_tx
+                        .send(stdio_frame_not_utf8_skipped_event(lossy.len()))
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+                Ok(CappedLine::Eof) | Err(_) => break,
+            }
+        }
+    })
+    .await;
+}
+
+/// Drain remaining stderr lines to EOF into the ring after child exit so the
+/// final error output (written just before death) reaches the disconnect
+/// message. Bounded by [`STDIO_EXIT_DRAIN_BUDGET`].
+async fn drain_stderr_to_eof<R: tokio::io::AsyncBufRead + Unpin>(
+    reader: &mut CappedLineReader<R>,
+    ring: &mut StderrRing,
+) {
+    let _ = tokio::time::timeout(STDIO_EXIT_DRAIN_BUDGET, async {
+        loop {
+            match reader.next_line().await {
+                Ok(CappedLine::Line(text)) => ring.push(text),
+                Ok(CappedLine::TooLong { discarded }) => {
+                    ring.push(format!("[stderr line dropped: {discarded} bytes]"));
+                }
+                Ok(CappedLine::NotUtf8 { lossy }) => ring.push(lossy),
+                Ok(CappedLine::Eof) | Err(_) => break,
+            }
+        }
+    })
+    .await;
+}
+
+fn bounded_send_error(
+    label: &str,
+    err: mpsc::error::TrySendError<TransportCommand>,
+) -> eyre::Report {
+    match err {
+        mpsc::error::TrySendError::Full(_) => {
+            eyre!("{label} queue is full; reconnect will retry on next send/read")
+        }
+        mpsc::error::TrySendError::Closed(_) => eyre!("{label} is closed"),
+    }
+}
+
+fn shell_command(command: &str) -> Command {
+    // `cfg!(windows)` (runtime) rather than `#[cfg(windows)]` so BOTH branches
+    // type-check on every host — the Windows path can't be cross-compiled from
+    // macOS/Linux, so keeping it compiled everywhere is our only static check.
+    if cfg!(windows) {
+        let mut process = Command::new("cmd");
+        process.arg("/C").arg(command);
+        // Prepend the auto-installer's dir (`~\.ra\bin`) to the CHILD's PATH
+        // so a bare `ra` in `command` resolves to the exe `backend_ensure`
+        // dropped there — WITHOUT embedding a path in the command string, which
+        // `cmd /C` + Rust arg-quoting mangle (that was the exit-1 launch bug).
+        // Setting the child's env is not `unsafe` and never touches our own PATH.
+        if let Some(bin) = crate::backend_ensure::install_bin_dir() {
+            let mut path = bin.into_os_string();
+            if let Some(existing) = std::env::var_os("PATH") {
+                path.push(";"); // Windows PATH separator (this branch is Windows-only at runtime)
+                path.push(existing);
+            }
+            process.env("PATH", path);
+        }
+        process
+    } else {
+        let mut process = Command::new("sh");
+        process.arg("-c").arg(command);
+        process
+    }
+}
+
+impl ProtocolAppUiBackend {
+    pub fn new(launch: AppUiLaunch) -> Self {
+        let (runtime, runtime_error) = match Runtime::new() {
+            Ok(runtime) => (Some(runtime), None),
+            Err(err) => (None, Some(err.to_string())),
+        };
+
+        Self {
+            launch,
+            runtime,
+            runtime_error,
+            driver: None,
+            connection_state: ProtocolConnectionState::Disconnected,
+            reconnect: ReconnectBackoff::default(),
+            disconnected_status_reported: false,
+            fatal_error: None,
+            reopen_session: None,
+            pending_launch_resolve: None,
+            confirmed_reopen_session: None,
+            confirmed_session_scopes: Vec::new(),
+            reconnect_session_scopes: VecDeque::new(),
+            reconnect_open_barrier: None,
+            session_open_required: false,
+            deferred_until_reconnect_open: VecDeque::new(),
+            sending_reconnect_open: false,
+            backend_relaunch_reconcile_pending: false,
+            client_hello_barrier: None,
+            stdio_child_served_frame: false,
+            refresh_capabilities_on_reconnect: false,
+            queue: VecDeque::new(),
+            protocol: ProtocolExchange::default(),
+        }
+    }
+
+    fn endpoint_label(&self) -> Result<String> {
+        self.launch
+            .endpoint
+            .as_ref()
+            .map(|endpoint| endpoint.label().to_string())
+            .ok_or_else(|| eyre!("--mode protocol requires --endpoint <ws://...|wss://...> or --stdio-command <CMD>"))
+    }
+
+    fn ensure_driver(&mut self) -> Result<()> {
+        if self.driver.is_none() {
+            let endpoint =
+                self.launch.endpoint.as_ref().ok_or_else(|| {
+                    eyre!("--mode protocol requires --endpoint <ws://...|wss://...> or --stdio-command <CMD>")
+                })?;
+            self.driver = Some(ProtocolTransportDriver::from_endpoint(endpoint)?);
+        }
+        Ok(())
+    }
+
+    fn ensure_connected(&mut self) -> Result<()> {
+        if self
+            .driver
+            .as_ref()
+            .is_some_and(ProtocolTransportDriver::is_connected)
+        {
+            return Ok(());
+        }
+
+        // Fatal, non-retryable: the backend refused to start because another
+        // serve owns the data dir. Never respawn — that was the crash-loop. The
+        // user-facing error was already emitted once in `mark_disconnected`; keep
+        // this return quiet (like the backoff gate below).
+        if let Some(reason) = &self.fatal_error {
+            return Err(eyre!("{reason}"));
+        }
+
+        // Backoff gate: `ensure_connected` runs on every event-loop tick and
+        // every send, so a dead endpoint must not be re-dialed each time —
+        // return a quiet error without attempting until the schedule allows.
+        let now = Instant::now();
+        if !self.reconnect.should_attempt(now) {
+            return Err(eyre!(
+                "reconnect is backing off after {} consecutive failure(s)",
+                self.reconnect.consecutive_failures()
+            ));
+        }
+
+        self.ensure_driver()?;
+        // Compute the reconnect reopen target BEFORE borrowing `driver` mutably
+        // (and before `mark_connected` clears `disconnected_status_reported`).
+        let mut reopen_commands = if self.disconnected_status_reported {
+            self.reopen_session_open_commands()
+        } else {
+            VecDeque::new()
+        };
+        let runtime = self
+            .runtime
+            .as_ref()
+            .ok_or_else(|| runtime_unavailable(self.runtime_error.as_deref()))?;
+        let driver = self
+            .driver
+            .as_mut()
+            .ok_or_else(|| eyre!("UI protocol transport driver is not initialized"))?;
+
+        if let Err(err) = driver.connect(runtime) {
+            self.reconnect.record_failure(now);
+            return Err(err);
+        }
+        let reconnected_stdio_child = driver.is_stdio_child();
+        // A new child (or socket) has not served anything yet.
+        self.stdio_child_served_frame = false;
+        self.reconnect.record_success(now);
+        let endpoint = driver.label().to_string();
+        self.mark_connected(&endpoint);
+        if reconnected_stdio_child {
+            self.start_stdio_client_hello()?;
+        }
+        self.refresh_capabilities_after_reconnect()?;
+        // #27: replay the session bootstrap BEFORE the session reopen — the
+        // store's launch/resolve went out on the now-dead connection, its
+        // result died with it, and the store only dispatches it once per
+        // capabilities advertisement, so without the replay the TUI shows
+        // "reconnected" while onboarding/routing never re-runs (the P3
+        // "假重连": composer input silently went nowhere).
+        // `reopen_command.is_some()` marks a REAL reconnect (it is computed
+        // only when a disconnect was reported) — replay the cached bootstrap
+        // only then, never on the first connect of `bootstrap` itself.
+        if !reopen_commands.is_empty()
+            && let Some(params) = self.pending_launch_resolve.clone()
+        {
+            self.send(AppUiCommand::LaunchResolve(params))?;
+        }
+        if let Some(command) = reopen_commands.pop_front() {
+            self.reconnect_session_scopes = reopen_commands;
+            self.sending_reconnect_open = true;
+            let result = self.send(command);
+            self.sending_reconnect_open = false;
+            result?;
+        } else {
+            // No session scope exists to establish. Reconcile immediately;
+            // the scoped path queues this only after its `session/opened`.
+            self.queue_pending_backend_relaunch_reconcile();
+        }
+        Ok(())
+    }
+
+    fn start_stdio_client_hello(&mut self) -> Result<()> {
+        let request = self
+            .protocol
+            .build_client_hello_request(appui_feature_tokens_for(old_server_features_requested()));
+        let request_id = request.id.clone();
+        let text = serde_json::to_string(&request)
+            .wrap_err("failed to encode stdio client_hello request")?;
+        self.client_hello_barrier = Some(RequestBarrier {
+            request_id: request_id.clone(),
+            started_at: Instant::now(),
+        });
+        let send_result = self
+            .driver
+            .as_mut()
+            .ok_or_else(|| eyre!("UI protocol transport driver is not initialized"))?
+            .send_text(text);
+        if let Err(err) = send_result {
+            self.client_hello_barrier = None;
+            self.protocol.pending_requests.remove(&request_id);
+            self.mark_disconnected(
+                "UI protocol disconnected during stdio feature negotiation; reconnect will retry.",
+            );
+            return Err(err).wrap_err("failed to send stdio client_hello request");
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    fn is_connected(&self) -> bool {
+        self.driver
+            .as_ref()
+            .is_some_and(ProtocolTransportDriver::is_connected)
+    }
+
+    fn mark_connected(&mut self, endpoint: &str) {
+        let should_report_reconnect = self.disconnected_status_reported;
+        self.connection_state = ProtocolConnectionState::Connected;
+        self.disconnected_status_reported = false;
+
+        if should_report_reconnect {
+            self.queue.push_back(
+                AppUiEvent::Status(AppUiStatus {
+                    message: format!("UI protocol reconnected to {endpoint}."),
+                })
+                .into(),
+            );
+            // A stdio reconnect spawned a NEW child process: none of the old
+            // client's turns can still be in flight there, but the app may
+            // still show one as live from the dead child. The new daemon may
+            // also emit its own recovered continuation before scoped reopen,
+            // so latch the reconcile here and deliver it only after scope is
+            // established (or immediately when there is no reopen target).
+            if self
+                .driver
+                .as_ref()
+                .is_some_and(ProtocolTransportDriver::is_stdio_child)
+            {
+                self.backend_relaunch_reconcile_pending = true;
+                // Stamp the connection epoch BEFORE any frame of the
+                // replacement child can be read (`next_event` drains this
+                // queue first), so the store can tell the dead child's
+                // latched turns from turns the new child starts itself
+                // (a resumed continuation announced before the scoped open).
+                self.queue.push_back(ClientEvent::BackendConnectionEpoch);
+            }
+        }
+    }
+
+    fn queue_pending_backend_relaunch_reconcile(&mut self) {
+        if std::mem::take(&mut self.backend_relaunch_reconcile_pending) {
+            self.queue.push_back(ClientEvent::BackendRelaunched);
+        }
+    }
+
+    fn mark_disconnected(&mut self, message: impl Into<String>) {
+        let message = message.into();
+
+        // The backend refused to start because another ra serve already owns
+        // this data directory (redb single-writer). Respawning it would only
+        // crash again — the silent ~5s loop the user hit with two octoscode
+        // windows. Latch a fatal state (suppresses reconnect in
+        // `ensure_connected`) and surface one clear, terminal error INSTEAD OF
+        // the raw stderr status (suppressed below). Latch once so a
+        // backoff-driven repeat is quiet.
+        let is_fatal_conflict = message.contains(DATA_DIR_LOCKED_MARKER);
+        if is_fatal_conflict && self.fatal_error.is_none() {
+            let explanation =
+                "Another octoscode is already running and using this data directory, so this \
+                 window can't start its own backend (the database allows only one at a time). \
+                 Close the other octoscode window (or any `octos serve`), then restart this one. \
+                 To run two at once, start this one in a workspace with its own data directory."
+                    .to_string();
+            self.fatal_error = Some(explanation.clone());
+            self.queue.push_back(
+                AppUiEvent::Error(AppUiError {
+                    code: DATA_DIR_LOCKED_CODE.to_string(),
+                    message: explanation,
+                })
+                .into(),
+            );
+        }
+
+        if let Some(driver) = self.driver.as_mut() {
+            driver.disconnect();
+        }
+        // No-op when there was no live connection, so the repeated
+        // mark_disconnected calls made while backing off cannot push the
+        // reconnect schedule forward.
+        self.reconnect.record_disconnect(Instant::now());
+        self.refresh_capabilities_on_reconnect = true;
+        self.client_hello_barrier = None;
+        self.reconnect_open_barrier = None;
+        self.reconnect_session_scopes.clear();
+        // A command deferred behind this connection's barriers never crosses
+        // to the replacement child: it has no pending entry (so it would be
+        // flushed silently after the NEXT scoped open, on top of the store's
+        // own relaunch re-stage — a duplicate `turn/start`) or, worse, it
+        // would ride an unrelated child. Cancel it explicitly like a timed-out
+        // barrier does; the store re-stages a dead `turn/start` from its gate.
+        for command in self.deferred_until_reconnect_open.drain(..) {
+            self.queue.push_back(
+                command_error_event(
+                    &command,
+                    "request_cancelled",
+                    format!(
+                        "{} request cancelled because the connection was lost before the scoped session opened: {message}",
+                        command.method()
+                    ),
+                )
+                ,
+            );
+        }
+        let cancelled_requests = self.protocol.cancel_pending_requests(&message);
+
+        let should_report = self.connection_state != ProtocolConnectionState::Disconnected
+            || !self.disconnected_status_reported;
+        self.connection_state = ProtocolConnectionState::Disconnected;
+
+        if should_report {
+            // Suppress the raw stderr-tail status for the fatal-conflict case:
+            // the clean, actionable error above is what the user should read, and
+            // a following Status would overwrite it in the status line.
+            if !is_fatal_conflict {
+                self.queue
+                    .push_back(AppUiEvent::Status(AppUiStatus { message }).into());
+            }
+            self.disconnected_status_reported = true;
+        }
+        self.queue
+            .extend(cancelled_requests.into_iter().filter_map(|cancelled| {
+                (!cancelled.is_capabilities_probe()).then_some(cancelled.into_client_event())
+            }));
+    }
+
+    fn launch_session_open_command(&self) -> Option<AppUiCommand> {
+        self.launch.session_id.clone().map(|session_id| {
+            // Same workspace-root precedence as the reconnect reopen: prefer
+            // the session's server-confirmed root over `launch.cwd` so a
+            // relaunch from a different shell directory does not rescope the
+            // launch session (#476).
+            let cwd = self
+                .protocol
+                .session_workspace_roots
+                .get(&session_id)
+                .cloned()
+                .or_else(|| self.launch.cwd.clone());
+            AppUiCommand::OpenSession(SessionOpenParams {
+                session_id,
+                topic: None,
+                profile_id: self.launch.profile_id.clone(),
+                cwd,
+                sandbox: None,
+                after: None,
+            })
+        })
+    }
+
+    /// Record the reconnect reopen target from an outgoing command so a
+    /// reconnect re-opens the user's CURRENT session, not the fixed launch
+    /// `--session`.
+    ///
+    /// Both `OpenSession` (initial launch open, explicit open) and
+    /// `HydrateSession` (the `/resume` path — store.rs returns a
+    /// `HydrateSession`, never an `OpenSession`) mark the session the user has
+    /// switched their attention to. Hydration has no scope authority: for a
+    /// known session it reuses the full confirmed open, including sandbox
+    /// narrowing. `send` scopes an unknown hydrate through an explicit open
+    /// barrier before it reaches this helper.
+    ///
+    /// The resume cursor is reset — `command_with_resume_cursor` refills it from
+    /// `session_cursors` at reopen time so we resume from the latest seq rather
+    /// than a stale one captured here.
+    ///
+    /// Purely-local session-pane switches are surfaced by the store as an
+    /// explicit `OpenSession`, so this target also follows tab navigation.
+    ///
+    /// An `OpenSession` becomes only the CANDIDATE: it is promoted to
+    /// [`Self::confirmed_reopen_session`] when its scoped `session/opened`
+    /// lands, and reverted to the previous confirmed target if the server
+    /// rejects it. A `HydrateSession` must never invent a confirmed scope from
+    /// launch defaults or overwrite the restrictions of an existing one.
+    fn record_reopen_target(&mut self, command: &AppUiCommand) {
+        let params = match command {
+            AppUiCommand::OpenSession(params) => SessionOpenParams {
+                after: None,
+                ..params.clone()
+            },
+            AppUiCommand::HydrateSession(params) => {
+                let Some(params) = self
+                    .confirmed_session_scopes
+                    .iter()
+                    .find(|scope| scope.session_id == params.session_id)
+                    .cloned()
+                else {
+                    return;
+                };
+                self.confirmed_reopen_session = Some(params.clone());
+                params
+            }
+            _ => return,
+        };
+        self.reopen_session = Some(params);
+    }
+
+    fn open_before_unknown_hydrate(&self, command: &AppUiCommand) -> Option<AppUiCommand> {
+        let AppUiCommand::HydrateSession(params) = command else {
+            return None;
+        };
+        if self
+            .confirmed_session_scopes
+            .iter()
+            .any(|scope| scope.session_id == params.session_id)
+        {
+            return None;
+        }
+        Some(AppUiCommand::OpenSession(SessionOpenParams {
+            session_id: params.session_id.clone(),
+            topic: None,
+            profile_id: self.launch.profile_id.clone(),
+            cwd: self
+                .protocol
+                .session_workspace_roots
+                .get(&params.session_id)
+                .cloned()
+                .or_else(|| self.launch.cwd.clone()),
+            sandbox: None,
+            after: None,
+        }))
+    }
+
+    fn remember_confirmed_session_scope(&mut self, params: SessionOpenParams) {
+        self.confirmed_session_scopes
+            .retain(|known| known.session_id != params.session_id);
+        self.confirmed_session_scopes.push(params);
+    }
+
+    fn reopen_session_open_commands(&self) -> VecDeque<AppUiCommand> {
+        let current = self.reopen_session_open_command();
+        let current_session = current.as_ref().and_then(|command| match command {
+            AppUiCommand::OpenSession(params) => Some(&params.session_id),
+            _ => None,
+        });
+        let mut commands: VecDeque<_> = self
+            .confirmed_session_scopes
+            .iter()
+            .filter(|params| Some(&params.session_id) != current_session)
+            .map(|params| {
+                let mut params = params.clone();
+                if let Some(root) = self
+                    .protocol
+                    .session_workspace_roots
+                    .get(&params.session_id)
+                {
+                    params.cwd = Some(root.clone());
+                }
+                AppUiCommand::OpenSession(params)
+            })
+            .collect();
+        commands.extend(current);
+        commands
+    }
+
+    /// The session to re-open after a reconnect: the most recently opened
+    /// session (tracks the current selection), falling back to the launch
+    /// `--session` when nothing has been opened yet.
+    fn reopen_session_open_command(&self) -> Option<AppUiCommand> {
+        // Prefer the session's server-confirmed workspace root for the reopen
+        // cwd: a bare `octoscode` (no --cwd) falls back to the shell's
+        // current_dir for `launch.cwd`, which may differ from the session's
+        // workspace. Reopening with the shell's cwd rescopes the session to
+        // the wrong `~cwd-<hash>` and presents an empty session (#476). The
+        // captured root is the authoritative scope; `launch.cwd` is only the
+        // launch-time request and must not override it.
+        self.reopen_session
+            .clone()
+            .map(|mut params| {
+                if let Some(root) = self
+                    .protocol
+                    .session_workspace_roots
+                    .get(&params.session_id)
+                {
+                    params.cwd = Some(root.clone());
+                }
+                AppUiCommand::OpenSession(params)
+            })
+            .or_else(|| self.launch_session_open_command())
+    }
+
+    fn send_capabilities_request(&mut self) -> Result<()> {
+        self.send(AppUiCommand::ListConfigCapabilities(
+            ConfigCapabilitiesListParams {},
+        ))
+    }
+
+    fn refresh_capabilities_after_reconnect(&mut self) -> Result<()> {
+        if !self.refresh_capabilities_on_reconnect {
+            return Ok(());
+        }
+        self.refresh_capabilities_on_reconnect = false;
+        if let Err(err) = self.send_capabilities_request() {
+            self.refresh_capabilities_on_reconnect = true;
+            return Err(err);
+        }
+        Ok(())
+    }
+
+    fn build_tracked_request(
+        &mut self,
+        command: AppUiCommand,
+    ) -> Result<RpcRequest<serde_json::Value>> {
+        let command = self.fill_session_list_cwd(command);
+        let command = self.fill_session_open_cwd(command);
+        self.protocol.build_tracked_request(command)
+    }
+
+    /// Scope an outgoing `session/open` that carries no `cwd` to the session's
+    /// server-confirmed workspace root, when one was captured from an earlier
+    /// `session/opened` (#476). The store's local tab-switch open takes its
+    /// cwd only from the per-session runtime status, which may not exist yet;
+    /// a cwd-less open would let the server rescope the session to its
+    /// default workspace. Mirrors [`Self::fill_session_list_cwd`]: only fills
+    /// when the caller left `cwd` unset (an explicit cwd — reconnect reopen,
+    /// launch open, a test — is preserved) and leaves it absent when no root
+    /// is known, so the server fallback is unchanged.
+    fn fill_session_open_cwd(&self, command: AppUiCommand) -> AppUiCommand {
+        let AppUiCommand::OpenSession(mut params) = command else {
+            return command;
+        };
+        if params.cwd.is_none() {
+            params.cwd = self
+                .protocol
+                .session_workspace_roots
+                .get(&params.session_id)
+                .cloned();
+        }
+        AppUiCommand::OpenSession(params)
+    }
+
+    /// Stamp the launch workspace cwd onto an outgoing `session/list` request
+    /// so a server with per-project session storage (`appui.sessions_in_cwd`)
+    /// lists THIS project's sessions rather than the global/per-profile store.
+    ///
+    /// Reuses the exact same `self.launch.cwd` the client already sends on
+    /// `session/open` (see [`Self::launch_session_open_command`] and
+    /// `bootstrap`), so `/resume` and the `/sessions` picker scope to the
+    /// current project. Only fills when the caller left `cwd` unset — the
+    /// store always constructs `SessionListParams { cwd: None }`, and an
+    /// explicit cwd (e.g. a test) is preserved.
+    ///
+    /// Backward compatible with old servers: when `launch.cwd` is `None` the
+    /// params still serialize to the historical empty object `{}`, and a
+    /// server without the `appui.sessions_in_cwd` flag (or one that never
+    /// negotiated `session.workspace_cwd.v1`) simply ignores the field. This
+    /// mirrors how `session/open` already sends `cwd` unconditionally from
+    /// this layer — the transport does not track the negotiated capability
+    /// set (the store does), and sending an ignored `cwd` is harmless.
+    fn fill_session_list_cwd(&self, command: AppUiCommand) -> AppUiCommand {
+        let AppUiCommand::ListSessions(mut params) = command else {
+            return command;
+        };
+        if params.cwd.is_none() {
+            params.cwd = self.launch.cwd.clone();
+        }
+        AppUiCommand::ListSessions(params)
+    }
+
+    fn decode_rpc_text(&mut self, text: &str) -> Result<Option<ClientEvent>> {
+        let response_request = response_request_id(text).and_then(|request_id| {
+            self.protocol
+                .pending_requests
+                .get(&request_id)
+                .cloned()
+                .map(|pending| (request_id, pending))
+        });
+        let event = self.protocol.decode_rpc_text(text)?;
+        let Some((request_id, pending)) = response_request else {
+            return Ok(event);
+        };
+
+        if pending.method == APPUI_METHOD_CLIENT_HELLO
+            && self
+                .client_hello_barrier
+                .as_ref()
+                .is_some_and(|barrier| barrier.request_id == request_id)
+        {
+            self.client_hello_barrier = None;
+            self.protocol.pending_requests.remove(&request_id);
+            let negotiated = matches!(event, Some(ClientEvent::Capabilities(_)));
+            if !negotiated {
+                self.queue.push_back(
+                    AppUiEvent::Status(AppUiStatus {
+                        message: "Server does not support stdio client feature negotiation; using legacy defaults."
+                            .into(),
+                    })
+                    .into(),
+                );
+            }
+            self.flush_deferred_after_protocol_barrier();
+            return if negotiated {
+                Ok(event)
+            } else {
+                Ok(self.queue.pop_front())
+            };
+        }
+
+        if pending.method == methods::SESSION_OPEN
+            && self
+                .reconnect_open_barrier
+                .as_ref()
+                .is_some_and(|barrier| barrier.request.request_id == request_id)
+        {
+            let expected_session = self
+                .reconnect_open_barrier
+                .as_ref()
+                .map(|barrier| barrier.session_id.clone());
+            let opened_session = opened_session_from_client_event(event.as_ref());
+            if opened_session == expected_session {
+                self.reconnect_open_barrier = None;
+                self.session_open_required = false;
+                // The server confirmed this scope: promote the candidate so a
+                // later rejected open has a known-good target to fall back to.
+                self.confirmed_reopen_session = self.reopen_session.clone();
+                if let Some(params) = self.confirmed_reopen_session.clone() {
+                    self.remember_confirmed_session_scope(params);
+                }
+                // Queue the clear BEFORE releasing deferred session commands.
+                // `next_event` drains this queue before reading their replies,
+                // so the store sees: stray startup events -> session/opened ->
+                // relaunch reconcile -> any newly submitted scoped turn.
+                if let Some(command) = self.reconnect_session_scopes.pop_front() {
+                    self.sending_reconnect_open = true;
+                    let result = self.send(command);
+                    self.sending_reconnect_open = false;
+                    result?;
+                } else {
+                    self.queue_pending_backend_relaunch_reconcile();
+                    self.flush_deferred_after_protocol_barrier();
+                }
+            } else if response_is_rpc_error(text) {
+                // The transport is healthy, but the requested scope was NOT
+                // established. Keep global discovery/corrective opens usable;
+                // reject scoped follow-ups rather than letting turn/start
+                // establish an unscoped affinity. A queued corrective open
+                // re-arms the barrier before its own follow-ups are sent.
+                self.reconnect_open_barrier = None;
+                self.session_open_required = true;
+                self.reconnect_session_scopes.clear();
+                self.reopen_session = self.confirmed_reopen_session.clone();
+                self.queue_pending_backend_relaunch_reconcile();
+                self.flush_deferred_after_protocol_barrier();
+            } else {
+                // Ambiguous: a success response that did not name the expected
+                // session (mismatched id, malformed `opened`). The server may
+                // have scoped the connection to something we did not ask for,
+                // so tearing the transport down and reopening the remembered
+                // session is the only way back to a known scope.
+                self.fail_session_open_barrier(format!(
+                    "session/open request {request_id} did not return the expected scoped session"
+                ));
+            }
+        }
+        Ok(event)
+    }
+
+    fn defer_until_protocol_barrier(
+        &mut self,
+        command: AppUiCommand,
+        waiting_on: &str,
+    ) -> Result<()> {
+        if self.deferred_until_reconnect_open.len() >= MAX_PENDING_REQUESTS {
+            self.queue.push_back(
+                command_error_event(&command,
+                    "protocol_barrier_queue_full",
+                    format!(
+                        "{waiting_on} is still pending; refusing to queue {} after {MAX_PENDING_REQUESTS} deferred request(s)",
+                        command.method()
+                    ),
+                ),
+            );
+        } else {
+            self.deferred_until_reconnect_open.push_back(command);
+        }
+        Ok(())
+    }
+
+    fn flush_deferred_after_protocol_barrier(&mut self) {
+        while let Some(command) = self.deferred_until_reconnect_open.pop_front() {
+            if let Err(error) = self.send(command.clone()) {
+                self.deferred_until_reconnect_open.push_front(command);
+                self.queue.push_back(
+                    AppUiEvent::Error(AppUiError {
+                        code: "reconnect_followup_deferred".into(),
+                        message: format!(
+                            "session reopened, but a deferred follow-up is still waiting: {error:#}"
+                        ),
+                    })
+                    .into(),
+                );
+                break;
+            }
+            if self.client_hello_barrier.is_some() || self.reconnect_open_barrier.is_some() {
+                break;
+            }
+        }
+    }
+
+    fn reject_command_without_confirmed_open(&mut self, command: AppUiCommand) {
+        let message = format!(
+            "{} was not sent because session/open was rejected; open the intended session successfully before retrying",
+            command.method()
+        );
+        if matches!(command, AppUiCommand::HydrateSession(_)) {
+            self.queue.push_back(command_error_event(
+                &command,
+                "session_open_rejected",
+                message,
+            ));
+            return;
+        }
+        let event = match command {
+            // A generic request_cancelled automatically re-stages turn/start
+            // in the store. Use its typed terminal to settle exactly this
+            // submission, retain its prompt/error, and avoid a retry loop.
+            AppUiCommand::SubmitPrompt(params) => AppUiEvent::Protocol(UiNotification::TurnError(
+                ra_core::ui_protocol::TurnErrorEvent {
+                    token_usage: None,
+                    partial_result: None,
+                    session_id: params.session_id,
+                    topic: params.topic,
+                    turn_id: params.turn_id,
+                    code: "session_open_rejected".into(),
+                    message,
+                },
+            )),
+            _ => app_error("session_open_rejected", message),
+        };
+        self.queue.push_back(event.into());
+    }
+
+    /// Tear down the scoped-open barrier when scope establishment is
+    /// AMBIGUOUS — a success response naming a different session, a malformed
+    /// `opened`, or no response at all (timeout). A definite RPC rejection is
+    /// NOT routed here (see `decode_rpc_text`): the server answered on a live
+    /// connection, so the transport stays up but scoped work fails closed.
+    fn fail_session_open_barrier(&mut self, reason: String) {
+        let request_id = self
+            .reconnect_open_barrier
+            .take()
+            .map(|barrier| barrier.request.request_id);
+        if let Some(request_id) = request_id {
+            self.protocol.pending_requests.remove(&request_id);
+        }
+        for command in self.deferred_until_reconnect_open.drain(..) {
+            self.queue.push_back(command_error_event(
+                &command,
+                "request_cancelled",
+                format!(
+                    "{} request cancelled because the scoped session did not open: {reason}",
+                    command.method()
+                ),
+            ));
+        }
+        self.mark_disconnected(format!(
+            "UI protocol scope establishment failed: {reason}; reconnect will retry the remembered session."
+        ));
+    }
+
+    /// The first frame from a connection ends its startup grace: restart the
+    /// clocks of any armed barrier so the steady-state deadlines count from
+    /// the moment the server is demonstrably serving, not from spawn.
+    fn note_connection_served_frame(&mut self) {
+        if self.stdio_child_served_frame {
+            return;
+        }
+        self.stdio_child_served_frame = true;
+        let now = Instant::now();
+        if let Some(barrier) = self.client_hello_barrier.as_mut() {
+            barrier.started_at = now;
+        }
+        if let Some(barrier) = self.reconnect_open_barrier.as_mut() {
+            barrier.request.started_at = now;
+        }
+    }
+
+    /// True while a stdio child is connected but has not produced a frame:
+    /// its bootstrap is still running and barrier deadlines use the startup
+    /// grace instead of the steady-state values.
+    fn stdio_child_startup_pending(&self) -> bool {
+        self.driver
+            .as_ref()
+            .is_some_and(ProtocolTransportDriver::is_stdio_child)
+            && !self.stdio_child_served_frame
+    }
+
+    fn check_protocol_barrier_timeouts(&mut self) {
+        let now = Instant::now();
+        let startup_pending = self.stdio_child_startup_pending();
+        let hello_deadline = if startup_pending {
+            STDIO_CHILD_STARTUP_GRACE
+        } else {
+            CLIENT_HELLO_RESPONSE_TIMEOUT
+        };
+        let open_deadline = if startup_pending {
+            STDIO_CHILD_STARTUP_GRACE
+        } else {
+            SESSION_OPEN_RESPONSE_TIMEOUT
+        };
+        if self.client_hello_barrier.as_ref().is_some_and(|barrier| {
+            now.saturating_duration_since(barrier.started_at) >= hello_deadline
+        }) {
+            if let Some(barrier) = self.client_hello_barrier.take() {
+                self.protocol.pending_requests.remove(&barrier.request_id);
+            }
+            self.queue.push_back(
+                AppUiEvent::Status(AppUiStatus {
+                    message: "Stdio feature negotiation timed out; using legacy server defaults."
+                        .into(),
+                })
+                .into(),
+            );
+            self.flush_deferred_after_protocol_barrier();
+        }
+        if self.reconnect_open_barrier.as_ref().is_some_and(|barrier| {
+            now.saturating_duration_since(barrier.request.started_at) >= open_deadline
+        }) {
+            self.fail_session_open_barrier("session/open response timed out".into());
+        }
+    }
+
+    fn readonly_allows_command(command: &AppUiCommand) -> bool {
+        matches!(
+            command,
+            AppUiCommand::ListConfigCapabilities(_)
+                | AppUiCommand::OpenSession(_)
+                | AppUiCommand::ReadSessionStatus(_)
+                | AppUiCommand::SessionBtw(_)
+                | AppUiCommand::ListModels(_)
+                | AppUiCommand::ListApprovalScopes(_)
+                | AppUiCommand::ListPermissionProfiles(_)
+                | AppUiCommand::ListMcpStatus(_)
+                | AppUiCommand::ListToolStatus(_)
+                | AppUiCommand::ListMcpConfig(_)
+                | AppUiCommand::ListToolConfig(_)
+                | AppUiCommand::GetDiffPreview(_)
+                | AppUiCommand::ReadTaskOutput(_)
+                | AppUiCommand::ReadTaskArtifact(_)
+                | AppUiCommand::HydrateSession(_)
+                | AppUiCommand::ListSessions(_)
+                | AppUiCommand::LaunchResolve(_)
+                | AppUiCommand::ListTasks(_)
+                | AppUiCommand::GetThreadGraph(_)
+                | AppUiCommand::GetTurnState(_)
+                | AppUiCommand::AuthStatus(_)
+                | AppUiCommand::AuthMe(_)
+                | AppUiCommand::ProfileLlmCatalog(_)
+                | AppUiCommand::ProfileLlmList(_)
+                | AppUiCommand::ProfileLlmFetchModels(_)
+                | AppUiCommand::ProfileSubProvidersList(_)
+                | AppUiCommand::SnapshotList(_)
+                // octos#1801 v2: `peer/gather` only reads brief/result files
+                // off the peer blackboard — readonly viewers may gather.
+                | AppUiCommand::PeerGather(_)
+                | AppUiCommand::ProfileSkillsList(_)
+                | AppUiCommand::ProfileSkillsRegistrySearch(_)
+                // M15-E read-only autonomy inspection. Reconnect
+                // hydration depends on these, and `--readonly` users
+                // still want to see backend agent/goal/loop state.
+                | AppUiCommand::ListAgents(_)
+                | AppUiCommand::ReadAgentStatus(_)
+                | AppUiCommand::ReadAgentOutput(_)
+                | AppUiCommand::ListAgentArtifacts(_)
+                | AppUiCommand::ReadAgentArtifact(_)
+                | AppUiCommand::GetSessionGoal(_)
+                | AppUiCommand::ListLoops(_)
+        )
+    }
+
+    fn send_text(&mut self, text: String) -> Result<()> {
+        self.ensure_connected()?;
+        let send_result = self
+            .driver
+            .as_mut()
+            .ok_or_else(|| eyre!("UI protocol transport driver is not initialized"))?
+            .send_text(text);
+
+        match send_result {
+            Ok(()) => Ok(()),
+            Err(err) => {
+                self.mark_disconnected(
+                    "UI protocol disconnected while sending; reconnect will retry on next send/read.",
+                );
+                Err(err).wrap_err("failed to send UI protocol request")
+            }
+        }
+    }
+
+    fn read_next_transport_event(&mut self) -> Result<Option<TransportEvent>> {
+        if let Err(err) = self.ensure_connected() {
+            self.mark_disconnected(format!(
+                "UI protocol disconnected; reconnect will retry on next send/read: {err:#}"
+            ));
+            return Ok(None);
+        }
+
+        let read_result = self
+            .driver
+            .as_mut()
+            .ok_or_else(|| eyre!("UI protocol transport driver is not initialized"))?
+            .poll_event();
+
+        match read_result {
+            Ok(event) => {
+                // A delivered data frame proves the connection is real, so
+                // the reconnect failure streak resets (control frames such as
+                // WS Close don't count — a connect/close loop must still back
+                // off).
+                if matches!(
+                    event,
+                    Some(TransportEvent::Frame(
+                        TransportFrame::Text(_) | TransportFrame::Binary(_)
+                    ))
+                ) {
+                    self.reconnect.record_frame();
+                    self.note_connection_served_frame();
+                }
+                Ok(event)
+            }
+            Err(err) => {
+                self.mark_disconnected(
+                    "UI protocol disconnected while reading; reconnect will retry on next send/read.",
+                );
+                self.queue.push_back(
+                    AppUiEvent::Error(AppUiError {
+                        code: "transport_read".into(),
+                        message: format!("failed to read UI protocol transport message: {err}"),
+                    })
+                    .into(),
+                );
+                Ok(None)
+            }
+        }
+    }
+
+    fn handle_transport_event(&mut self, event: TransportEvent) -> Result<Option<ClientEvent>> {
+        match event {
+            TransportEvent::Frame(frame) => self.handle_transport_frame(frame),
+            TransportEvent::Disconnected(message) => {
+                self.mark_disconnected(message);
+                Ok(self.queue.pop_front())
+            }
+            TransportEvent::Error {
+                code,
+                message,
+                disconnect,
+            } => {
+                if disconnect {
+                    self.mark_disconnected(
+                        "UI protocol disconnected; reconnect will retry on next send/read.",
+                    );
+                } else if code == "frame_too_large" || code == "frame_not_utf8" {
+                    // A skipped stdio line (over-cap, or invalid UTF-8) may
+                    // have BEEN the response to an in-flight request — its id
+                    // is unknowable (the frame was discarded before decode),
+                    // so the matching `pending_requests` entry would otherwise
+                    // leak forever and repeated bad responses would wedge
+                    // sends at MAX_PENDING_REQUESTS. Cancel pending requests
+                    // like the disconnect path does, but keep the connection
+                    // up.
+                    let reason = if code == "frame_not_utf8" {
+                        "response may have been discarded (frame was not valid UTF-8)"
+                    } else {
+                        "response may have been discarded (frame too large)"
+                    };
+                    let cancelled = self.protocol.cancel_pending_requests(reason);
+                    self.queue
+                        .extend(cancelled.into_iter().filter_map(|cancelled| {
+                            (!cancelled.is_capabilities_probe())
+                                .then_some(cancelled.into_client_event())
+                        }));
+                }
+                self.queue
+                    .push_back(AppUiEvent::Error(AppUiError { code, message }).into());
+                Ok(self.queue.pop_front())
+            }
+        }
+    }
+
+    fn handle_transport_frame(&mut self, frame: TransportFrame) -> Result<Option<ClientEvent>> {
+        match frame {
+            TransportFrame::Text(text) => self.decode_rpc_text(&text),
+            TransportFrame::Binary(bytes) => {
+                let text = match String::from_utf8(bytes) {
+                    Ok(text) => text,
+                    Err(err) => {
+                        return Ok(Some(
+                            AppUiEvent::Error(AppUiError {
+                                code: "malformed_frame".into(),
+                                message: format!(
+                                    "UI protocol binary frame was not UTF-8 JSON: {err}"
+                                ),
+                            })
+                            .into(),
+                        ));
+                    }
+                };
+                self.decode_rpc_text(&text)
+            }
+            TransportFrame::Ping(payload) => {
+                let pong_result = self
+                    .driver
+                    .as_mut()
+                    .ok_or_else(|| eyre!("UI protocol transport driver is not initialized"))?
+                    .send_pong(payload);
+                if let Err(err) = pong_result {
+                    self.mark_disconnected(
+                        "UI protocol disconnected while sending pong; reconnect will retry on next send/read.",
+                    );
+                    self.queue.push_back(
+                        AppUiEvent::Error(AppUiError {
+                            code: "transport_send".into(),
+                            message: format!("failed to send UI protocol pong: {err}"),
+                        })
+                        .into(),
+                    );
+                    return Ok(self.queue.pop_front());
+                }
+                Ok(None)
+            }
+            TransportFrame::Pong => Ok(None),
+            TransportFrame::Close => {
+                self.mark_disconnected(
+                    "UI protocol WebSocket closed; reconnect will retry on next send/read.",
+                );
+                Ok(self.queue.pop_front())
+            }
+        }
+    }
+
+    #[allow(unreachable_patterns)]
+    fn enqueue_readonly_blocked_response(&mut self, command: AppUiCommand) {
+        let method = command.method().to_string();
+        match command {
+            AppUiCommand::SubmitPrompt(params) => {
+                self.queue.push_back(
+                    AppUiEvent::Protocol(UiNotification::Warning(WarningEvent {
+                        session_id: params.session_id,
+                        turn_id: Some(params.turn_id),
+                        code: "readonly".into(),
+                        message: "Read-only mode blocks turn/start; no network request was sent."
+                            .into(),
+                    }))
+                    .into(),
+                );
+            }
+            AppUiCommand::InterruptTurn(_)
+            | AppUiCommand::RespondApproval(_)
+            | AppUiCommand::RespondUserQuestion(_)
+            | AppUiCommand::SetPermissionProfile(_)
+            | AppUiCommand::AuthSendCode(_)
+            | AppUiCommand::AuthVerify(_)
+            | AppUiCommand::AuthLogout(_)
+            | AppUiCommand::ProfileLocalCreate(_)
+            | AppUiCommand::ProfileLlmUpsert(_)
+            | AppUiCommand::ProfileLlmDelete(_)
+            | AppUiCommand::SnapshotRestore(_)
+            | AppUiCommand::PeerPrepare(_)
+            | AppUiCommand::TurnSteer(_)
+            | AppUiCommand::ProfileSubProvidersUpsert(_)
+            | AppUiCommand::ProfileSubProvidersRemove(_)
+            | AppUiCommand::ProfileLlmSelect(_)
+            | AppUiCommand::ProfileLlmTest(_)
+            | AppUiCommand::ProfileSkillsInstall(_)
+            | AppUiCommand::ProfileSkillsRemove(_)
+            | AppUiCommand::UpsertMcpConfig(_)
+            | AppUiCommand::DeleteMcpConfig(_)
+            | AppUiCommand::SetMcpConfigEnabled(_)
+            | AppUiCommand::TestMcpConfig(_)
+            | AppUiCommand::SetToolConfigEnabled(_)
+            | AppUiCommand::UpsertToolConfig(_)
+            | AppUiCommand::DeleteToolConfig(_)
+            | AppUiCommand::TestToolConfig(_)
+            // M15-era + session/review/model mutations: expected readonly
+            // blocks, labeled like the set above. Without these arms they
+            // fell into the `_` fallback, which mislabels the block as an
+            // "unexpectedly blocked read-style" readonly_policy bug.
+            | AppUiCommand::SessionRollback(_)
+            | AppUiCommand::StartReview(_)
+            | AppUiCommand::SelectModel(_)
+            | AppUiCommand::CancelTask(_)
+            | AppUiCommand::RestartTaskFromNode(_)
+            | AppUiCommand::InterruptAgent(_)
+            | AppUiCommand::CloseAgent(_)
+            | AppUiCommand::SetSessionGoal(_)
+            | AppUiCommand::ClearSessionGoal(_)
+            | AppUiCommand::CreateLoop(_)
+            | AppUiCommand::DeleteLoop(_)
+            | AppUiCommand::PauseLoop(_)
+            | AppUiCommand::ResumeLoop(_)
+            | AppUiCommand::FireLoopNow(_)
+            | AppUiCommand::CompactContext(_)
+            | AppUiCommand::SetCompactionMode(_) => {
+                self.queue.push_back(
+                    AppUiEvent::Error(AppUiError {
+                        code: "readonly".into(),
+                        message: format!(
+                            "Read-only mode blocks {method}; no network request was sent."
+                        ),
+                    })
+                    .into(),
+                );
+            }
+            _ => {
+                self.queue.push_back(
+                    AppUiEvent::Error(AppUiError {
+                        code: "readonly_policy".into(),
+                        message: format!(
+                            "Read-only mode unexpectedly blocked read-style {method}; no network request was sent."
+                        ),
+                    })
+                    .into(),
+                );
+            }
+        };
+    }
+}
+
+impl AppUiBackend for ProtocolAppUiBackend {
+    fn bootstrap(&mut self) -> Result<AppUiSnapshot> {
+        let endpoint = self.endpoint_label()?;
+        if let Err(err) = self.ensure_connected() {
+            if self.launch.readonly {
+                let message =
+                    format!("Protocol backend read-only; no network connection opened: {err:#}");
+                self.mark_disconnected(message.clone());
+                return Ok(protocol_readonly_offline_snapshot_from_launch(
+                    &self.launch,
+                    &endpoint,
+                    message,
+                ));
+            }
+            return Err(err);
+        }
+
+        self.send_capabilities_request()?;
+        if let Some(profile_id) = self.launch.profile_id.clone() {
+            self.send(AppUiCommand::ProfileLlmList(ProfileLlmListParams {
+                profile_id: Some(profile_id),
+            }))?;
+        }
+
+        if let Some(session_id) = self.launch.session_id.clone() {
+            self.send(AppUiCommand::OpenSession(
+                ra_core::ui_protocol::SessionOpenParams {
+                    session_id,
+                    topic: None,
+                    profile_id: self.launch.profile_id.clone(),
+                    cwd: self.launch.cwd.clone(),
+                    sandbox: None,
+                    after: None,
+                },
+            ))?;
+        }
+
+        Ok(protocol_snapshot_from_launch(&self.launch, &endpoint))
+    }
+
+    fn send(&mut self, command: AppUiCommand) -> Result<()> {
+        self.check_protocol_barrier_timeouts();
+        // `!`-bang local exec is a client-local action, not a backend turn:
+        // intercept it before the readonly gate and before any JSON-RPC
+        // encoding. The real event loop consumes it first because only that
+        // layer can safely hand the controlling terminal to the child.
+        if let AppUiCommand::LocalShellExec { cmd, local_id } = command {
+            // The event loop normally consumes this variant before it can
+            // reach the transport because only that layer owns the TUI's
+            // raw-mode and alternate-screen state. Fail closed if a future
+            // call site bypasses the handoff instead of silently recreating
+            // the detached-stdin hang this mode exists to prevent.
+            self.queue
+                .push_back(ClientEvent::LocalShellResult(LocalShellResultEvent {
+                    local_id,
+                    cmdline: cmd,
+                    cwd: std::env::current_dir()
+                        .ok()
+                        .map(|path| path.display().to_string()),
+                    stdout: String::new(),
+                    stderr: t!("status.bang_terminal_handoff_missed").into_owned(),
+                    exit_code: None,
+                    duration_ms: 0,
+                    truncated: false,
+                }));
+            return Ok(());
+        }
+
+        if self.launch.readonly && !Self::readonly_allows_command(&command) {
+            self.enqueue_readonly_blocked_response(command);
+            return Ok(());
+        }
+
+        if self.protocol.pending_requests.len() >= MAX_PENDING_REQUESTS {
+            // M22-B: include the rejected method in the error
+            // message so onboarding (and any future callers) can
+            // attribute pre-send rejections back to the command
+            // that was just blocked. Without this the store cannot
+            // tell which command lost its slot in the queue.
+            let method = command.method();
+            // #28a: the wording lives in the shared contract above — the
+            // store's matcher discriminates the SAME constants.
+            let message =
+                pre_send_pending_cap_message(method, self.protocol.pending_requests.len());
+            // #22b-r1: a hydrate refusal is attributable LOCALLY from the
+            // in-hand command — emit the attributed event so the store
+            // releases only that session's marker.
+            let event: ClientEvent = if let AppUiCommand::HydrateSession(params) = &command {
+                ClientEvent::HydrateError(crate::client_event::HydrateErrorClientEvent {
+                    session_id: params.session_id.clone(),
+                    code: "too_many_pending_requests".into(),
+                    message,
+                })
+            } else {
+                AppUiEvent::Error(AppUiError {
+                    code: "too_many_pending_requests".into(),
+                    message,
+                })
+                .into()
+            };
+            self.queue.push_back(event);
+            return Ok(());
+        }
+
+        // Reject intrinsically oversized requests before connecting or
+        // opening a scope. The final tracked-wire gate below still checks
+        // the actual request after reconnect can change cursors/identifiers.
+        let preview_id = format!("tui-{}", self.protocol.next_request_id.saturating_add(1));
+        let preview_command =
+            self.fill_session_open_cwd(self.fill_session_list_cwd(command.clone()));
+        let preview = rpc_request_from_command(preview_id.clone(), preview_command)?;
+        let preview_bytes = serde_json::to_vec(&preview)
+            .wrap_err("failed to encode JSON-RPC request preflight")?
+            .len();
+        if preview_bytes > MAX_TEXT_FRAME_BYTES {
+            self.queue.push_back(command_error_event(
+                &command,
+                "frame_too_large",
+                frame_too_large_message(command.method(), &preview_id, preview_bytes),
+            ));
+            return Ok(());
+        }
+
+        // A fresh stdio connection first negotiates its feature set through
+        // the server-supported `client_hello` RPC. Hold all public commands
+        // until that response (or compatibility fallback) so concurrent OUP
+        // handlers cannot observe a pre-negotiation session/open.
+        self.ensure_connected()?;
+        if self.client_hello_barrier.is_some() {
+            self.defer_until_protocol_barrier(command, "stdio client feature negotiation")?;
+            return Ok(());
+        }
+
+        // Every session/open — reconnect-generated or locally selected — is a
+        // scoped affinity barrier. Wire order is insufficient because OUP
+        // dispatches requests concurrently.
+        let may_cross_reconnect_barrier = self.sending_reconnect_open
+            || matches!(command, AppUiCommand::ListConfigCapabilities(_));
+        if self.reconnect_open_barrier.is_some() && !may_cross_reconnect_barrier {
+            self.defer_until_protocol_barrier(command, "session/open")?;
+            return Ok(());
+        }
+
+        if self.session_open_required
+            && !matches!(
+                command,
+                AppUiCommand::OpenSession(_)
+                    | AppUiCommand::ListSessions(_)
+                    | AppUiCommand::ListConfigCapabilities(_)
+                    | AppUiCommand::LaunchResolve(_)
+            )
+            && !command.method().starts_with("profile/")
+            && !command.method().starts_with("auth/")
+        {
+            self.reject_command_without_confirmed_open(command);
+            return Ok(());
+        }
+
+        if let Some(open) = self.open_before_unknown_hydrate(&command) {
+            self.send(open)?;
+            if self.reconnect_open_barrier.is_some()
+                && self.deferred_until_reconnect_open.len() < MAX_PENDING_REQUESTS
+            {
+                // This expands the current FIFO item in place: hydration must
+                // still precede the commands that were queued after it.
+                self.deferred_until_reconnect_open.push_front(command);
+            } else {
+                self.reject_command_without_confirmed_open(command);
+            }
+            return Ok(());
+        }
+
+        // Record the reconnect reopen target AFTER the readonly/pending-cap
+        // gates (so a genuinely-rejected command never becomes the reopen
+        // target) and before `build_tracked_request` consumes `command`.
+        self.record_reopen_target(&command);
+        // #27: cache the session bootstrap dispatch for replay after a
+        // reconnect — see the field doc. Same gate placement: a genuinely
+        // rejected command (readonly / pending-cap) never enters the cache.
+        if let AppUiCommand::LaunchResolve(params) = &command {
+            self.pending_launch_resolve = Some(params.clone());
+        }
+
+        let opening_session = match &command {
+            AppUiCommand::OpenSession(params) => Some(params.session_id.clone()),
+            _ => None,
+        };
+        let request = self.build_tracked_request(command)?;
+        let request_id = request.id.clone();
+        let method = request.method.clone();
+        let text = serde_json::to_string(&request).wrap_err("failed to encode JSON-RPC request")?;
+        if text.len() > MAX_TEXT_FRAME_BYTES {
+            // #22b-r1: recover the hydrate session attribution before dropping
+            // the pending entry.
+            let hydrate_session = self
+                .protocol
+                .pending_requests
+                .remove(&request_id)
+                .and_then(|pending| pending.hydrate_session);
+            let message = frame_too_large_message(method.as_str(), &request_id, text.len());
+            let event: ClientEvent = match hydrate_session {
+                Some(session_id) => {
+                    ClientEvent::HydrateError(crate::client_event::HydrateErrorClientEvent {
+                        session_id,
+                        code: "frame_too_large".into(),
+                        message,
+                    })
+                }
+                None => AppUiEvent::Error(AppUiError {
+                    code: "frame_too_large".into(),
+                    message,
+                })
+                .into(),
+            };
+            self.queue.push_back(event);
+            return Ok(());
+        }
+
+        if let Some(session_id) = opening_session {
+            self.reconnect_open_barrier = Some(SessionOpenBarrier {
+                request: RequestBarrier {
+                    request_id: request_id.clone(),
+                    started_at: Instant::now(),
+                },
+                session_id,
+            });
+        }
+
+        if let Err(err) = self.send_text(text) {
+            // Remove the pending entry before mark_disconnected so that
+            // cancel_pending_requests does not emit a duplicate "cancelled"
+            // event for this request on top of the transport_send error below.
+            // #22b-r1: recover the hydrate session attribution (see above).
+            let hydrate_session = self
+                .protocol
+                .pending_requests
+                .remove(&request_id)
+                .and_then(|pending| pending.hydrate_session);
+            self.mark_disconnected(format!(
+                "UI protocol disconnected; reconnect will retry on next send/read: {err:#}"
+            ));
+            let message = transport_send_message(method.as_str(), &request_id, &err);
+            let event: ClientEvent = match hydrate_session {
+                Some(session_id) => {
+                    ClientEvent::HydrateError(crate::client_event::HydrateErrorClientEvent {
+                        session_id,
+                        code: "transport_send".into(),
+                        message,
+                    })
+                }
+                None => AppUiEvent::Error(AppUiError {
+                    code: "transport_send".into(),
+                    message,
+                })
+                .into(),
+            };
+            self.queue.push_back(event);
+        }
+
+        Ok(())
+    }
+
+    fn next_event(&mut self) -> Result<Option<ClientEvent>> {
+        self.check_protocol_barrier_timeouts();
+        let event = if let Some(event) = self.queue.pop_front() {
+            Some(event)
+        } else {
+            loop {
+                let Some(event) = self.read_next_transport_event()? else {
+                    break self.queue.pop_front();
+                };
+
+                if let Some(event) = self.handle_transport_event(event)? {
+                    break Some(event);
+                }
+            }
+        };
+        // #27: a delivered launch/resolve result answers the cached bootstrap
+        // dispatch — drop the replay copy so a LATER reconnect does not
+        // re-issue an already-answered resolve. (Error/cancel paths leave the
+        // cache armed: the store treats those as terminal for this connection,
+        // but a subsequent reconnect still needs the resolve re-issued.)
+        if matches!(event, Some(ClientEvent::LaunchResolve(_))) {
+            self.pending_launch_resolve = None;
+        }
+        Ok(event)
+    }
+}
+
+fn runtime_unavailable(error: Option<&str>) -> eyre::Report {
+    eyre!(
+        "failed to create tokio runtime for UI protocol backend: {}",
+        error.unwrap_or("unknown runtime initialization error")
+    )
+}
+
+/// Build the cross-platform `(program, args)` for running `cmd` through the
+/// system shell, mirroring ra conventions: `sh -c <cmd>` on unix,
+/// `cmd /C <cmd>` on windows. The command string is passed as a single
+/// argument so the shell — not us — does the word splitting.
+fn local_shell_command_args(cmd: &str) -> (&'static str, Vec<String>) {
+    if cfg!(windows) {
+        ("cmd", vec!["/C".to_string(), cmd.to_string()])
+    } else {
+        ("sh", vec!["-c".to_string(), cmd.to_string()])
+    }
+}
+
+/// Install a process-lifetime parent signal shield for terminal-generated
+/// cancellation while a `!` child is in the foreground process group. In TUI
+/// raw mode Ctrl+C is delivered as a key event, so keeping this handler for the
+/// rest of the process does not change the normal double-Ctrl+C / Ctrl+Q UX.
+/// A spawned shell resets caught signals to their defaults on exec and still
+/// terminates normally. `signal-hook` provides the equivalent SIGINT handling
+/// on Windows consoles; SIGQUIT only exists on Unix.
+pub(crate) fn install_local_shell_parent_signal_shield() -> std::io::Result<()> {
+    use std::sync::{Arc, OnceLock, atomic::AtomicBool};
+
+    static INSTALL_ERROR: OnceLock<Option<String>> = OnceLock::new();
+    let error = INSTALL_ERROR.get_or_init(|| {
+        let intercepted = Arc::new(AtomicBool::new(false));
+        let sigint_error = signal_hook::flag::register(
+            signal_hook::consts::signal::SIGINT,
+            Arc::clone(&intercepted),
+        )
+        .err()
+        .map(|err| format!("failed to shield parent from SIGINT: {err}"));
+        if sigint_error.is_some() {
+            return sigint_error;
+        }
+
+        #[cfg(not(windows))]
+        {
+            signal_hook::flag::register(signal_hook::consts::signal::SIGQUIT, intercepted)
+                .err()
+                .map(|err| format!("failed to shield parent from SIGQUIT: {err}"))
+        }
+        #[cfg(windows)]
+        {
+            None
+        }
+    });
+
+    match error {
+        Some(error) => Err(std::io::Error::other(error.clone())),
+        None => Ok(()),
+    }
+}
+
+/// Run a terminal-attached `!` command synchronously with all three standard
+/// streams inherited from octoscode. The event loop disables raw mode and
+/// clears/reserves its inline viewport around this call, so prompts,
+/// device-login selectors, editors, and password input see a real controlling
+/// terminal while child output remains in normal-screen scrollback.
+/// There is intentionally no timeout: once the terminal is handed to the child,
+/// cancellation belongs to that child (normally Ctrl+C) just as it does in a
+/// regular shell.
+pub(crate) fn run_attached_local_shell_command(
+    cmd: String,
+    cwd: Option<std::path::PathBuf>,
+    local_id: String,
+) -> LocalShellResultEvent {
+    let started = std::time::Instant::now();
+    let cwd_display = cwd
+        .as_ref()
+        .map(|path| path.display().to_string())
+        .or_else(|| {
+            std::env::current_dir()
+                .ok()
+                .map(|path| path.display().to_string())
+        });
+    let (program, args) = local_shell_command_args(&cmd);
+    let mut builder = std::process::Command::new(program);
+    builder
+        .args(&args)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
+    if let Some(cwd) = cwd {
+        builder.current_dir(cwd);
+    }
+
+    if let Err(err) = install_local_shell_parent_signal_shield() {
+        return LocalShellResultEvent {
+            local_id,
+            cmdline: cmd,
+            cwd: cwd_display,
+            stdout: String::new(),
+            stderr: t!("status.bang_terminal_prepare_failed", error = err).into_owned(),
+            exit_code: None,
+            duration_ms: started.elapsed().as_millis() as u64,
+            truncated: false,
+        };
+    }
+
+    match builder.status() {
+        Ok(status) => LocalShellResultEvent {
+            local_id,
+            cmdline: cmd,
+            cwd: cwd_display,
+            stdout: String::new(),
+            stderr: if status.code().is_none() {
+                t!("status.bang_terminal_signalled").into_owned()
+            } else {
+                String::new()
+            },
+            exit_code: status.code(),
+            duration_ms: started.elapsed().as_millis() as u64,
+            truncated: false,
+        },
+        Err(err) => LocalShellResultEvent {
+            local_id,
+            cmdline: cmd,
+            cwd: cwd_display,
+            stdout: String::new(),
+            stderr: t!("status.bang_terminal_spawn_failed", error = err).into_owned(),
+            exit_code: None,
+            duration_ms: started.elapsed().as_millis() as u64,
+            truncated: false,
+        },
+    }
+}
+
+fn websocket_request(
+    endpoint: &str,
+    auth_token: Option<&str>,
+    profile_id: Option<&str>,
+) -> Result<WsRequest> {
+    let mut request = endpoint
+        .into_client_request()
+        .wrap_err("failed to build UI protocol WebSocket request")?;
+
+    if let Some(token) = auth_token.map(str::trim).filter(|token| !token.is_empty()) {
+        let value = format!("Bearer {token}")
+            .parse()
+            .wrap_err("failed to build UI protocol Authorization header")?;
+        request.headers_mut().insert("Authorization", value);
+    }
+    if let Some(profile_id) = profile_id
+        .map(str::trim)
+        .filter(|profile| !profile.is_empty())
+    {
+        let value = profile_id
+            .parse()
+            .wrap_err("failed to build UI protocol X-Profile-Id header")?;
+        request.headers_mut().insert("X-Profile-Id", value);
+    }
+    request.headers_mut().insert(
+        "X-Ra-Ui-Features",
+        appui_feature_header_value()
+            .parse()
+            .wrap_err("failed to build UI protocol feature header")?,
+    );
+
+    Ok(request)
+}
+
+/// Build the `X-Ra-Ui-Features` negotiation value.
+///
+/// Normally the TUI advertises the full modern feature set. When
+/// `OCTOSCODE_OLD_SERVER_FEATURES=1` is set it advertises only the
+/// pre-autonomy baseline, dropping the coding autonomy / agent-control /
+/// goal / loop / harness-task-control features. This lets the onboarding
+/// soak exercise the genuine old-server fallback path (header-negotiated):
+/// a backend that never advertises supervised-task inspection, so the TUI
+/// must hide those controls and never probe `review/start`, `task/list`,
+/// or `task/artifact/*`.
+fn appui_feature_header_value() -> String {
+    appui_feature_header_for(old_server_features_requested())
+}
+
+fn old_server_features_requested() -> bool {
+    std::env::var("OCTOSCODE_OLD_SERVER_FEATURES").as_deref() == Ok("1")
+}
+
+fn appui_feature_header_for(old_server: bool) -> String {
+    appui_feature_tokens_for(old_server).join(", ")
+}
+
+fn appui_feature_tokens_for(old_server: bool) -> Vec<String> {
+    let baseline = [
+        UI_PROTOCOL_FEATURE_APPROVAL_TYPED_V1,
+        UI_PROTOCOL_FEATURE_AUXILIARY_REST_TO_WS_V1,
+        UI_PROTOCOL_FEATURE_PANE_SNAPSHOTS_V1,
+        UI_PROTOCOL_FEATURE_SESSION_WORKSPACE_CWD_V1,
+        UI_PROTOCOL_FEATURE_SESSION_HYDRATE_V1,
+        UI_PROTOCOL_FEATURE_USER_QUESTION_V1,
+    ];
+    if old_server {
+        return baseline.into_iter().map(str::to_owned).collect();
+    }
+    [
+        UI_PROTOCOL_FEATURE_APPROVAL_TYPED_V1,
+        // session/list (and therefore /resume) is gated by this feature on
+        // both transports, including servers using the compatibility baseline.
+        UI_PROTOCOL_FEATURE_AUXILIARY_REST_TO_WS_V1,
+        UI_PROTOCOL_FEATURE_PANE_SNAPSHOTS_V1,
+        UI_PROTOCOL_FEATURE_SESSION_WORKSPACE_CWD_V1,
+        UI_PROTOCOL_FEATURE_CODING_AUTONOMY_V1,
+        UI_PROTOCOL_FEATURE_CODING_AGENT_CONTROL_V1,
+        UI_PROTOCOL_FEATURE_CODING_GOAL_RUNTIME_V1,
+        UI_PROTOCOL_FEATURE_CODING_LOOP_RUNTIME_V1,
+        UI_PROTOCOL_FEATURE_HARNESS_TASK_CONTROL_V1,
+        UI_PROTOCOL_FEATURE_SESSION_HYDRATE_V1,
+        UI_PROTOCOL_FEATURE_USER_QUESTION_V1,
+        UI_PROTOCOL_FEATURE_CONTEXT_LIFECYCLE_V1,
+        UI_PROTOCOL_FEATURE_PLAN_TODOS_V1,
+        crate::model::APPUI_FEATURE_BACKGROUND_ACTIVITY_V1,
+        UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2,
+        crate::model::APPUI_FEATURE_TURN_STEER_DROPPED_V1,
+        crate::model::APPUI_FEATURE_CONTEXT_SEMANTIC_CACHE_V1,
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect()
+}
+
+fn protocol_snapshot_from_launch(launch: &AppUiLaunch, endpoint: &str) -> AppUiSnapshot {
+    let sessions = launch
+        .session_id
+        .clone()
+        .map(|session_id| AppUiSession {
+            id: session_id,
+            title: "Protocol session".into(),
+            profile_id: launch.profile_id.clone(),
+            // Connection/read-only state belongs to snapshot.status below,
+            // not canonical conversation history. An invisible local system
+            // placeholder shifts the committed prefix and makes the first
+            // hydrate re-flush a user prompt already in native scrollback.
+            messages: Vec::new(),
+            tasks: vec![],
+            live_reply: None,
+        })
+        .into_iter()
+        .collect();
+
+    AppUiSnapshot {
+        sessions,
+        selected_session: 0,
+        status: if launch.readonly && launch.session_id.is_some() {
+            "Protocol backend connected read-only; session/open sent.".into()
+        } else if launch.readonly {
+            "Protocol backend connected read-only. Pass --session to open an existing session."
+                .into()
+        } else if launch.session_id.is_some() {
+            "Protocol backend connected; session/open sent.".into()
+        } else {
+            "Protocol backend connected. Pass --session to open an interactive session.".into()
+        },
+        target: Some(protocol_target_label(endpoint)),
+        readonly: launch.readonly,
+    }
+}
+
+fn protocol_target_label(endpoint: &str) -> String {
+    if is_websocket_url(endpoint) {
+        endpoint.into()
+    } else {
+        format!("stdio:{}", redact_secret_assignments(endpoint))
+    }
+}
+
+/// Redact secret-bearing `NAME=VALUE` assignments inside a displayed
+/// stdio backend command. A `--stdio-command` may carry an inline
+/// `env DEEPSEEK_API_KEY=sk-...` prefix; the raw value must never reach
+/// a rendered status pane (it ends up in tmux/screen captures and soak
+/// artifacts). Only the value of an assignment whose name looks like a
+/// credential (`*KEY`, `*TOKEN`, `*SECRET`, `*PASSWORD`, `*_API_KEY`) is
+/// masked — the command structure stays visible for debugging.
+fn redact_secret_assignments(command: &str) -> String {
+    command
+        .split(' ')
+        .map(|token| match token.split_once('=') {
+            Some((name, value)) if !value.is_empty() && is_secret_env_name(name) => {
+                format!("{name}=<redacted>")
+            }
+            _ => token.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn is_secret_env_name(name: &str) -> bool {
+    let upper = name.trim().to_ascii_uppercase();
+    upper.ends_with("KEY")
+        || upper.ends_with("TOKEN")
+        || upper.ends_with("SECRET")
+        || upper.ends_with("PASSWORD")
+        || upper.contains("API_KEY")
+}
+
+fn tui_capabilities() -> UiProtocolCapabilities {
+    let mut capabilities = UiProtocolCapabilities::first_server_slice();
+    if !capabilities
+        .supported_features
+        .iter()
+        .any(|feature| feature == UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2)
+    {
+        capabilities
+            .supported_features
+            .push(UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2.into());
+    }
+    if !capabilities.supports_feature(crate::model::APPUI_FEATURE_CONTEXT_SEMANTIC_CACHE_V1) {
+        capabilities
+            .supported_features
+            .push(crate::model::APPUI_FEATURE_CONTEXT_SEMANTIC_CACHE_V1.into());
+    }
+    for method in [
+        crate::model::APPUI_METHOD_CONFIG_CAPABILITIES_LIST,
+        crate::model::APPUI_METHOD_SESSION_STATUS_READ,
+        crate::model::APPUI_METHOD_MODEL_LIST,
+        crate::model::APPUI_METHOD_MODEL_SELECT,
+        crate::model::APPUI_METHOD_MCP_STATUS_LIST,
+        crate::model::APPUI_METHOD_TOOL_STATUS_LIST,
+        crate::model::APPUI_METHOD_AUTH_STATUS,
+        crate::model::APPUI_METHOD_AUTH_SEND_CODE,
+        crate::model::APPUI_METHOD_AUTH_VERIFY,
+        crate::model::APPUI_METHOD_AUTH_ME,
+        crate::model::APPUI_METHOD_AUTH_LOGOUT,
+        crate::model::APPUI_METHOD_PROFILE_LOCAL_CREATE,
+        crate::model::APPUI_METHOD_PROFILE_LLM_CATALOG,
+        crate::model::APPUI_METHOD_PROFILE_LLM_UPSERT,
+        crate::model::APPUI_METHOD_PROFILE_LLM_DELETE,
+        crate::model::APPUI_METHOD_PROFILE_LLM_TEST,
+        crate::model::APPUI_METHOD_PROFILE_LLM_FETCH_MODELS,
+        crate::model::APPUI_METHOD_PROFILE_SKILLS_LIST,
+        crate::model::APPUI_METHOD_PROFILE_SKILLS_REGISTRY_SEARCH,
+        crate::model::APPUI_METHOD_PROFILE_SKILLS_INSTALL,
+        crate::model::APPUI_METHOD_PROFILE_SKILLS_REMOVE,
+    ] {
+        if !capabilities
+            .supported_methods
+            .iter()
+            .any(|existing| existing == method)
+        {
+            capabilities.supported_methods.push(method.into());
+        }
+    }
+    capabilities
+}
+
+fn protocol_readonly_offline_snapshot_from_launch(
+    launch: &AppUiLaunch,
+    endpoint: &str,
+    status: String,
+) -> AppUiSnapshot {
+    let mut snapshot = protocol_snapshot_from_launch(launch, endpoint);
+    snapshot.status = status;
+    snapshot
+}
+
+#[allow(unreachable_patterns)]
+fn rpc_request_from_command(
+    id: String,
+    command: AppUiCommand,
+) -> Result<RpcRequest<serde_json::Value>> {
+    let method = command.method().to_string();
+    let params = match command {
+        AppUiCommand::OpenSession(params) => serde_json::to_value(params),
+        AppUiCommand::ListConfigCapabilities(params) => serde_json::to_value(params),
+        AppUiCommand::ReadSessionStatus(params) => serde_json::to_value(params),
+        AppUiCommand::SessionBtw(params) => serde_json::to_value(params),
+        AppUiCommand::CompactContext(params) => serde_json::to_value(params),
+        AppUiCommand::SetCompactionMode(params) => serde_json::to_value(params),
+        AppUiCommand::SubmitPrompt(params) => serde_json::to_value(params),
+        AppUiCommand::InterruptTurn(params) => serde_json::to_value(params),
+        AppUiCommand::ListModels(params) => serde_json::to_value(params),
+        AppUiCommand::SelectModel(params) => serde_json::to_value(params),
+        AppUiCommand::RespondApproval(params) => serde_json::to_value(params),
+        AppUiCommand::RespondUserQuestion(params) => serde_json::to_value(params),
+        AppUiCommand::ListApprovalScopes(params) => serde_json::to_value(params),
+        AppUiCommand::ListPermissionProfiles(params) => serde_json::to_value(params),
+        AppUiCommand::SetPermissionProfile(params) => serde_json::to_value(params),
+        AppUiCommand::ListMcpStatus(params) => serde_json::to_value(params),
+        AppUiCommand::ListToolStatus(params) => serde_json::to_value(params),
+        AppUiCommand::ListMcpConfig(params) => serde_json::to_value(params),
+        AppUiCommand::UpsertMcpConfig(params) => serde_json::to_value(params),
+        AppUiCommand::DeleteMcpConfig(params) => serde_json::to_value(params),
+        AppUiCommand::SetMcpConfigEnabled(params) => serde_json::to_value(params),
+        AppUiCommand::TestMcpConfig(params) => serde_json::to_value(params),
+        AppUiCommand::ListToolConfig(params) => serde_json::to_value(params),
+        AppUiCommand::SetToolConfigEnabled(params) => serde_json::to_value(params),
+        AppUiCommand::UpsertToolConfig(params) => serde_json::to_value(params),
+        AppUiCommand::DeleteToolConfig(params) => serde_json::to_value(params),
+        AppUiCommand::TestToolConfig(params) => serde_json::to_value(params),
+        AppUiCommand::GetDiffPreview(params) => serde_json::to_value(params),
+        AppUiCommand::ListTasks(params) => serde_json::to_value(params),
+        AppUiCommand::CancelTask(params) => serde_json::to_value(params),
+        AppUiCommand::RestartTaskFromNode(params) => serde_json::to_value(params),
+        AppUiCommand::ReadTaskOutput(params) => serde_json::to_value(params),
+        AppUiCommand::ReadTaskArtifact(params) => serde_json::to_value(params),
+        AppUiCommand::HydrateSession(params) => serde_json::to_value(params),
+        AppUiCommand::ListSessions(params) => serde_json::to_value(params),
+        AppUiCommand::SessionRollback(params) => serde_json::to_value(params),
+        AppUiCommand::GetThreadGraph(params) => serde_json::to_value(params),
+        AppUiCommand::GetTurnState(params) => serde_json::to_value(params),
+        AppUiCommand::StartReview(params) => serde_json::to_value(params),
+        AppUiCommand::AuthStatus(params) => serde_json::to_value(params),
+        AppUiCommand::AuthSendCode(params) => serde_json::to_value(params),
+        AppUiCommand::AuthVerify(params) => serde_json::to_value(params),
+        AppUiCommand::AuthMe(params) => serde_json::to_value(params),
+        AppUiCommand::AuthLogout(params) => serde_json::to_value(params),
+        AppUiCommand::ProfileLocalCreate(params) => serde_json::to_value(params),
+        AppUiCommand::LaunchResolve(params) => serde_json::to_value(params),
+        AppUiCommand::ProfileLlmCatalog(params) => serde_json::to_value(params),
+        AppUiCommand::ProfileLlmList(params) => serde_json::to_value(params),
+        AppUiCommand::ProfileLlmUpsert(params) => serde_json::to_value(params),
+        AppUiCommand::ProfileLlmDelete(params) => serde_json::to_value(params),
+        AppUiCommand::ProfileSubProvidersList(params) => serde_json::to_value(params),
+        AppUiCommand::SnapshotList(params) => serde_json::to_value(params),
+        AppUiCommand::SnapshotRestore(params) => serde_json::to_value(params),
+        AppUiCommand::PeerPrepare(params) => serde_json::to_value(params),
+        AppUiCommand::TurnSteer(params) => serde_json::to_value(params),
+        AppUiCommand::PeerGather(params) => serde_json::to_value(params),
+        AppUiCommand::ProfileSubProvidersUpsert(params) => serde_json::to_value(params),
+        AppUiCommand::ProfileSubProvidersRemove(params) => serde_json::to_value(params),
+        AppUiCommand::ProfileLlmSelect(params) => serde_json::to_value(params),
+        AppUiCommand::ProfileLlmTest(params) => serde_json::to_value(params),
+        AppUiCommand::ProfileLlmFetchModels(params) => serde_json::to_value(params),
+        AppUiCommand::ProfileSkillsList(params) => serde_json::to_value(params),
+        AppUiCommand::ProfileSkillsRegistrySearch(params) => serde_json::to_value(params),
+        AppUiCommand::ProfileSkillsInstall(params) => serde_json::to_value(params),
+        AppUiCommand::ProfileSkillsRemove(params) => serde_json::to_value(params),
+        AppUiCommand::ListAgents(params) => serde_json::to_value(params),
+        AppUiCommand::ReadAgentStatus(params) => serde_json::to_value(params),
+        AppUiCommand::ReadAgentOutput(params) => serde_json::to_value(params),
+        AppUiCommand::ListAgentArtifacts(params) => serde_json::to_value(params),
+        AppUiCommand::ReadAgentArtifact(params) => serde_json::to_value(params),
+        AppUiCommand::InterruptAgent(params) => serde_json::to_value(params),
+        AppUiCommand::CloseAgent(params) => serde_json::to_value(params),
+        AppUiCommand::GetSessionGoal(params) => serde_json::to_value(params),
+        AppUiCommand::SetSessionGoal(params) => serde_json::to_value(params),
+        AppUiCommand::ClearSessionGoal(params) => serde_json::to_value(params),
+        AppUiCommand::CreateLoop(params) => serde_json::to_value(params),
+        AppUiCommand::ListLoops(params) => serde_json::to_value(params),
+        AppUiCommand::DeleteLoop(params)
+        | AppUiCommand::PauseLoop(params)
+        | AppUiCommand::ResumeLoop(params)
+        | AppUiCommand::FireLoopNow(params) => serde_json::to_value(params),
+        _ => {
+            return Err(eyre!(
+                "unsupported ra UI command for first-server transport: {method}"
+            ));
+        }
+    }
+    .wrap_err_with(|| format!("failed to encode params for {method}"))?;
+
+    Ok(RpcRequest {
+        jsonrpc: JSON_RPC_VERSION.into(),
+        id,
+        method,
+        params,
+    })
+}
+
+#[cfg(test)]
+fn rpc_text_to_app_event(text: &str) -> Result<Option<ClientEvent>> {
+    let mut pending_requests = HashMap::new();
+    rpc_text_to_app_event_with_pending(text, &mut pending_requests)
+}
+
+fn rpc_text_to_app_event_with_pending(
+    text: &str,
+    pending_requests: &mut HashMap<String, PendingRequest>,
+) -> Result<Option<ClientEvent>> {
+    if text.len() > MAX_TEXT_FRAME_BYTES {
+        return Ok(Some(
+            app_error(
+                "frame_too_large",
+                format!(
+                    "UI protocol frame is {} bytes; max is {MAX_TEXT_FRAME_BYTES}",
+                    text.len()
+                ),
+            )
+            .into(),
+        ));
+    }
+
+    let value = match serde_json::from_str(text) {
+        Ok(value) => value,
+        Err(err) => {
+            let preview: String = text.chars().take(80).collect();
+            return Ok(Some(
+                app_error(
+                    "malformed_json",
+                    format!("UI protocol frame is not JSON: {err}; preview={preview:?}"),
+                )
+                .into(),
+            ));
+        }
+    };
+
+    rpc_value_to_app_event(value, pending_requests)
+}
+
+fn rpc_value_to_app_event(
+    value: Value,
+    pending_requests: &mut HashMap<String, PendingRequest>,
+) -> Result<Option<ClientEvent>> {
+    let Some(frame) = value.as_object() else {
+        return Ok(Some(
+            app_error("malformed_frame", "UI protocol frame must be a JSON object").into(),
+        ));
+    };
+
+    if let Some(error) = validate_jsonrpc_v2(frame) {
+        return Ok(Some(error.into()));
+    }
+
+    let has_method = frame.contains_key("method");
+    let has_id = frame.contains_key("id");
+    let has_result = frame.contains_key("result");
+    let has_error = frame.contains_key("error");
+
+    if has_method {
+        if has_id || has_result || has_error {
+            return Ok(Some(
+                app_error(
+                    "malformed_frame",
+                    "UI protocol notification must not include id, result, or error",
+                )
+                .into(),
+            ));
+        }
+
+        let Some(method) = frame.get("method").and_then(Value::as_str) else {
+            return Ok(Some(
+                app_error(
+                    "malformed_frame",
+                    "UI protocol notification method must be a string",
+                )
+                .into(),
+            ));
+        };
+
+        let params = frame.get("params").cloned().unwrap_or(Value::Null);
+        if method == "server/heartbeat" {
+            return Ok(None);
+        }
+        // octos#1801 v3: `peer/staged` is decoded tui-locally BEFORE the
+        // vendored `UiNotification::from_method_and_params` — the pinned
+        // ra-core rev predates the variant, so routing it through the
+        // vendored decoder would degrade it to an `unknown_notification`
+        // error event.
+        if method == crate::model::APPUI_METHOD_PEER_STAGED {
+            return Ok(Some(peer_staged_notification_to_client_event(params)));
+        }
+        if method == crate::model::APPUI_METHOD_PEER_CLOSED {
+            return Ok(Some(peer_closed_notification_to_client_event(params)));
+        }
+        // octos#2019: `background/activity` is decoded tui-locally for the same
+        // reason — the pinned ra-core rev predates the variant, so the
+        // vendored decoder would degrade it to an `unknown_notification` error.
+        if method == crate::model::APPUI_METHOD_BACKGROUND_ACTIVITY {
+            return Ok(Some(background_activity_notification_to_client_event(
+                params,
+            )));
+        }
+        return Ok(Some(notification_to_client_event(method, params)));
+    }
+
+    if has_result || has_error || has_id {
+        if !has_id {
+            return Ok(Some(
+                app_error("malformed_frame", "UI protocol response is missing id").into(),
+            ));
+        }
+        if has_result == has_error {
+            return Ok(Some(
+                app_error(
+                    "malformed_frame",
+                    "UI protocol response must include exactly one of result or error",
+                )
+                .into(),
+            ));
+        }
+
+        return if has_error {
+            Ok(Some(error_response_to_app_event(frame, pending_requests)))
+        } else {
+            success_response_to_app_event(frame, pending_requests)
+        };
+    }
+
+    Ok(Some(
+        app_error(
+            "malformed_frame",
+            "unsupported UI protocol frame: expected JSON-RPC notification or response",
+        )
+        .into(),
+    ))
+}
+
+fn validate_jsonrpc_v2(frame: &serde_json::Map<String, Value>) -> Option<AppUiEvent> {
+    match frame.get("jsonrpc") {
+        Some(Value::String(version)) if version == JSON_RPC_VERSION => None,
+        Some(Value::String(version)) => Some(app_error(
+            "invalid_jsonrpc",
+            format!("unsupported JSON-RPC version: {version}"),
+        )),
+        Some(_) => Some(app_error(
+            "invalid_jsonrpc",
+            "UI protocol frame jsonrpc field must be \"2.0\"",
+        )),
+        None => Some(app_error(
+            "invalid_jsonrpc",
+            "UI protocol frame is missing jsonrpc \"2.0\"",
+        )),
+    }
+}
+
+fn success_response_to_app_event(
+    frame: &serde_json::Map<String, Value>,
+    pending_requests: &mut HashMap<String, PendingRequest>,
+) -> Result<Option<ClientEvent>> {
+    let id = match response_id(frame) {
+        Ok(Some(id)) => id,
+        Ok(None) => {
+            return Ok(Some(
+                app_error(
+                    "malformed_frame",
+                    "UI protocol success response id must not be null",
+                )
+                .into(),
+            ));
+        }
+        Err(event) => return Ok(Some((*event).into())),
+    };
+
+    let Some(result) = frame.get("result").cloned() else {
+        return Ok(Some(
+            app_error(
+                "malformed_frame",
+                "UI protocol response is missing result field",
+            )
+            .into(),
+        ));
+    };
+
+    let pending_request = pending_requests.remove(&id);
+    let Some(pending_request) = pending_request else {
+        return Ok(None);
+    };
+
+    match pending_request.method.as_str() {
+        APPUI_METHOD_CLIENT_HELLO => {
+            match serde_json::from_value::<ConfigCapabilitiesListResult>(result) {
+                Ok(result) => Ok(Some(capabilities_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for {APPUI_METHOD_CLIENT_HELLO}: {err}"
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_CONFIG_CAPABILITIES_LIST => {
+            match serde_json::from_value::<ConfigCapabilitiesListResult>(result) {
+                Ok(result) => Ok(Some(capabilities_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for {}: {err}",
+                            crate::model::APPUI_METHOD_CONFIG_CAPABILITIES_LIST
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        methods::SESSION_OPEN => {
+            let diagnostics = context_cache_diagnostics_from_context_state(
+                result
+                    .get("opened")
+                    .and_then(|opened| opened.get("context_state")),
+            );
+            let semantic_cache_advertised = result
+                .get("opened")
+                .and_then(|opened| opened.get("capabilities"))
+                .and_then(|capabilities| capabilities.get("supported_features"))
+                .and_then(Value::as_array)
+                .map(|features| {
+                    features.iter().any(|feature| {
+                        feature.as_str()
+                            == Some(crate::model::APPUI_FEATURE_CONTEXT_SEMANTIC_CACHE_V1)
+                    })
+                });
+            match serde_json::from_value::<SessionOpenResult>(result) {
+                Ok(result) => {
+                    let session_id = result.opened.session_id.clone();
+                    let has_context_state = result.opened.context_state.is_some();
+                    let event = AppUiEvent::Protocol(UiNotification::SessionOpened(result.opened));
+                    if has_context_state {
+                        Ok(Some(ClientEvent::ContextLifecycle(
+                            ContextLifecycleClientEvent {
+                                event: Box::new(event),
+                                session_id,
+                                diagnostics,
+                                semantic_cache_advertised,
+                            },
+                        )))
+                    } else {
+                        Ok(Some(event.into()))
+                    }
+                }
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for {}: {err}",
+                            methods::SESSION_OPEN
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_SESSION_STATUS_READ => {
+            match serde_json::from_value::<SessionStatusReadResult>(result) {
+                Ok(result) => Ok(Some(session_status_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for {}: {err}",
+                            crate::model::APPUI_METHOD_SESSION_STATUS_READ
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        ra_core::ui_protocol::methods::SESSION_BTW => {
+            match serde_json::from_value::<ra_core::ui_protocol::SessionBtwResult>(result) {
+                Ok(result) => Ok(Some(ClientEvent::SessionBtw(SessionBtwClientEvent {
+                    result,
+                }))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        invalid_result_message(ra_core::ui_protocol::methods::SESSION_BTW, &err),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_MODEL_LIST => {
+            if result.get("models").is_none()
+                && let Ok(result) = serde_json::from_value::<ProfileLlmListResult>(result.clone())
+            {
+                Ok(Some(profile_llm_list_event(result)))
+            } else {
+                match serde_json::from_value::<ModelListResult>(result) {
+                    Ok(result) => Ok(Some(model_list_event(result))),
+                    Err(err) => Ok(Some(
+                        app_error(
+                            "invalid_result",
+                            format!(
+                                "failed to decode UI protocol result for {}: {err}",
+                                crate::model::APPUI_METHOD_MODEL_LIST
+                            ),
+                        )
+                        .into(),
+                    )),
+                }
+            }
+        }
+        crate::model::APPUI_METHOD_MODEL_SELECT => {
+            match serde_json::from_value::<ModelSelectResult>(result) {
+                Ok(result) => Ok(Some(model_select_event(
+                    result,
+                    pending_request.select_session.clone(),
+                ))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for {}: {err}",
+                            crate::model::APPUI_METHOD_MODEL_SELECT
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_AUTH_STATUS => {
+            match serde_json::from_value::<AuthStatusResult>(result) {
+                Ok(result) => Ok(Some(auth_status_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!("failed to decode UI protocol result for auth/status: {err}"),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_AUTH_ME => {
+            match serde_json::from_value::<AuthMeResult>(result) {
+                Ok(result) => Ok(Some(auth_me_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!("failed to decode UI protocol result for auth/me: {err}"),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_AUTH_SEND_CODE => {
+            match serde_json::from_value::<AuthSendCodeResult>(result) {
+                Ok(result) => Ok(Some(auth_send_code_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!("failed to decode UI protocol result for auth/send_code: {err}"),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_AUTH_VERIFY => {
+            match serde_json::from_value::<AuthVerifyResult>(result) {
+                Ok(result) => Ok(Some(auth_verify_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!("failed to decode UI protocol result for auth/verify: {err}"),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_AUTH_LOGOUT => {
+            match serde_json::from_value::<AuthLogoutResult>(result) {
+                Ok(result) => Ok(Some(auth_logout_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!("failed to decode UI protocol result for auth/logout: {err}"),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_PROFILE_LOCAL_CREATE => {
+            match serde_json::from_value::<ProfileLocalCreateResult>(result) {
+                Ok(result) => Ok(Some(profile_local_create_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for {}: {err}",
+                            crate::model::APPUI_METHOD_PROFILE_LOCAL_CREATE
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_LAUNCH_RESOLVE => {
+            match serde_json::from_value::<crate::model::LaunchResolveResult>(result) {
+                Ok(result) => Ok(Some(ClientEvent::LaunchResolve(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for {}: {err}",
+                            crate::model::APPUI_METHOD_LAUNCH_RESOLVE
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_PROFILE_LLM_CATALOG => {
+            match serde_json::from_value::<ProfileLlmCatalogResult>(result) {
+                Ok(result) => Ok(Some(profile_llm_catalog_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for profile/llm/catalog: {err}"
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        method @ (crate::model::APPUI_METHOD_PROFILE_LLM_UPSERT
+        | crate::model::APPUI_METHOD_PROFILE_LLM_DELETE
+        | crate::model::APPUI_METHOD_PROFILE_LLM_TEST) => {
+            match serde_json::from_value::<ProfileLlmMutationResult>(result) {
+                Ok(result) => Ok(Some(profile_llm_mutation_event(method, result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for profile/llm mutation: {err}"
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_SNAPSHOT_LIST | crate::model::APPUI_METHOD_SNAPSHOT_RESTORE => {
+            match serde_json::from_value::<crate::model::SnapshotListResult>(result) {
+                Ok(result) => Ok(Some(snapshot_list_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for snapshot list/restore: {err}"
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_PEER_PREPARE => {
+            match serde_json::from_value::<crate::model::PeerPrepareResult>(result) {
+                Ok(result) => Ok(Some(peer_prepare_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for {}: {err}",
+                            crate::model::APPUI_METHOD_PEER_PREPARE
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_PEER_GATHER => {
+            match serde_json::from_value::<crate::model::PeerGatherResult>(result) {
+                Ok(result) => Ok(Some(peer_gather_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for {}: {err}",
+                            crate::model::APPUI_METHOD_PEER_GATHER
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_TURN_STEER => {
+            match serde_json::from_value::<crate::model::TurnSteerResult>(result) {
+                Ok(result) => Ok(Some(turn_steered_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        invalid_result_message(crate::model::APPUI_METHOD_TURN_STEER, &err),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_PROFILE_SUB_PROVIDERS_LIST => {
+            match serde_json::from_value::<SubProvidersListResult>(result) {
+                Ok(result) => Ok(Some(sub_providers_list_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for profile/sub_providers/list: {err}"
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_PROFILE_SUB_PROVIDERS_UPSERT
+        | crate::model::APPUI_METHOD_PROFILE_SUB_PROVIDERS_REMOVE => {
+            match serde_json::from_value::<SubProvidersMutationResult>(result) {
+                Ok(result) => Ok(Some(sub_providers_mutation_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for profile/sub_providers mutation: {err}"
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_PROFILE_SKILLS_LIST => {
+            match serde_json::from_value::<ProfileSkillsListResult>(result) {
+                Ok(result) => Ok(Some(profile_skills_list_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for profile/skills/list: {err}"
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_PROFILE_SKILLS_REGISTRY_SEARCH => {
+            match serde_json::from_value::<ProfileSkillsRegistrySearchResult>(result) {
+                Ok(result) => Ok(Some(profile_skills_registry_search_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for profile/skills/registry/search: {err}"
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_PROFILE_SKILLS_INSTALL
+        | crate::model::APPUI_METHOD_PROFILE_SKILLS_REMOVE => {
+            match serde_json::from_value::<ProfileSkillsMutationResult>(result) {
+                Ok(result) => Ok(Some(profile_skills_mutation_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for profile/skills mutation: {err}"
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        methods::DIFF_PREVIEW_GET => match serde_json::from_value::<DiffPreviewGetResult>(result) {
+            Ok(result) => Ok(Some(ClientEvent::DiffPreview(result))),
+            Err(err) => Ok(Some(
+                app_error(
+                    "invalid_result",
+                    format!(
+                        "failed to decode UI protocol result for {}: {err}",
+                        methods::DIFF_PREVIEW_GET
+                    ),
+                )
+                .into(),
+            )),
+        },
+        methods::TASK_OUTPUT_READ => match decode_task_output_read_result(result) {
+            Ok(result) => {
+                let text = task_output_display_text(&result);
+                Ok(Some(
+                    AppUiEvent::Protocol(UiNotification::TaskOutputDelta(TaskOutputDeltaEvent {
+                        session_id: result.session_id,
+                        topic: None,
+                        task_id: result.task_id,
+                        cursor: result.next_cursor,
+                        text,
+                    }))
+                    .into(),
+                ))
+            }
+            Err(err) => Ok(Some(
+                app_error(
+                    "invalid_result",
+                    format!(
+                        "failed to decode UI protocol result for {}: {err}",
+                        methods::TASK_OUTPUT_READ
+                    ),
+                )
+                .into(),
+            )),
+        },
+        methods::TASK_ARTIFACT_READ => {
+            match serde_json::from_value::<TaskArtifactReadResult>(result) {
+                Ok(result) => Ok(Some(autonomy_event(AutonomyResult::TaskArtifactRead(
+                    result,
+                )))),
+                Err(err) => Ok(Some(autonomy_decode_error(
+                    methods::TASK_ARTIFACT_READ,
+                    err,
+                ))),
+            }
+        }
+        methods::SESSION_HYDRATE => {
+            let diagnostics =
+                context_cache_diagnostics_from_context_state(result.get("context_state"));
+            match serde_json::from_value::<SessionHydrateResult>(result) {
+                Ok(result) if result.context_state.is_some() => Ok(Some(
+                    ClientEvent::SessionHydrateContext(SessionHydrateContextClientEvent {
+                        result,
+                        diagnostics,
+                    }),
+                )),
+                Ok(result) => Ok(Some(ClientEvent::SessionHydrate(result))),
+                Err(err) => {
+                    // #22b-r1: decode failure is attributable LOCALLY via the
+                    // pending entry — release only that session's marker.
+                    let message = invalid_result_message(methods::SESSION_HYDRATE, &err);
+                    Ok(Some(match pending_request.hydrate_session.clone() {
+                        Some(session_id) => ClientEvent::HydrateError(
+                            crate::client_event::HydrateErrorClientEvent {
+                                session_id,
+                                code: "invalid_result".into(),
+                                message,
+                            },
+                        ),
+                        None => app_error("invalid_result", message).into(),
+                    }))
+                }
+            }
+        }
+        methods::SESSION_LIST => match serde_json::from_value::<SessionListResult>(result) {
+            Ok(result) => Ok(Some(ClientEvent::SessionList(result))),
+            Err(err) => Ok(Some(autonomy_decode_error(methods::SESSION_LIST, err))),
+        },
+        methods::SESSION_ROLLBACK => {
+            match serde_json::from_value::<SessionRollbackResult>(result) {
+                Ok(result) => Ok(Some(ClientEvent::SessionRollback(result))),
+                Err(err) => Ok(Some(autonomy_decode_error(methods::SESSION_ROLLBACK, err))),
+            }
+        }
+        methods::THREAD_GRAPH_GET => match serde_json::from_value::<ThreadGraphGetResult>(result) {
+            Ok(result) => Ok(Some(autonomy_event(AutonomyResult::ThreadGraph(result)))),
+            Err(err) => Ok(Some(autonomy_decode_error(methods::THREAD_GRAPH_GET, err))),
+        },
+        methods::TURN_STATE_GET => match serde_json::from_value::<TurnStateGetResult>(result) {
+            Ok(result) => Ok(Some(autonomy_event(AutonomyResult::TurnState(result)))),
+            Err(err) => Ok(Some(autonomy_decode_error(methods::TURN_STATE_GET, err))),
+        },
+        methods::REVIEW_START => match serde_json::from_value::<ReviewStartResult>(result) {
+            Ok(result) => Ok(Some(ClientEvent::ReviewStart(result))),
+            Err(err) => Ok(Some(autonomy_decode_error(methods::REVIEW_START, err))),
+        },
+        methods::TURN_INTERRUPT => Ok(Some(
+            AppUiEvent::Status(AppUiStatus {
+                message: interrupt_ack_status(&result),
+            })
+            .into(),
+        )),
+        methods::APPROVAL_RESPOND => Ok(Some(
+            AppUiEvent::Status(AppUiStatus {
+                message: "Approval response acknowledged".into(),
+            })
+            .into(),
+        )),
+        methods::APPROVAL_SCOPES_LIST => {
+            match serde_json::from_value::<ApprovalScopesListResult>(result) {
+                Ok(result) => Ok(Some(
+                    AppUiEvent::Status(AppUiStatus {
+                        message: approval_scopes_status(&result),
+                    })
+                    .into(),
+                )),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for {}: {err}",
+                            methods::APPROVAL_SCOPES_LIST
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        methods::PERMISSION_PROFILE_LIST => {
+            match serde_json::from_value::<PermissionProfileListResult>(result) {
+                Ok(result) => Ok(Some(permission_profile_list_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for {}: {err}",
+                            methods::PERMISSION_PROFILE_LIST
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        methods::PERMISSION_PROFILE_SET => {
+            match serde_json::from_value::<PermissionProfileSetResult>(result) {
+                Ok(result) => Ok(Some(permission_profile_set_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for {}: {err}",
+                            methods::PERMISSION_PROFILE_SET
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_MCP_CONFIG_LIST => {
+            match serde_json::from_value::<McpConfigListResult>(result) {
+                Ok(result) => Ok(Some(mcp_config_list_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for {}: {err}",
+                            crate::model::APPUI_METHOD_MCP_CONFIG_LIST
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_MCP_CONFIG_UPSERT
+        | crate::model::APPUI_METHOD_MCP_CONFIG_DELETE
+        | crate::model::APPUI_METHOD_MCP_CONFIG_SET_ENABLED
+        | crate::model::APPUI_METHOD_MCP_CONFIG_TEST => {
+            match serde_json::from_value::<McpConfigMutationResult>(result) {
+                Ok(result) => Ok(Some(mcp_config_mutation_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for mcp/config mutation: {err}"
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_MCP_STATUS_LIST => {
+            match serde_json::from_value::<McpStatusListResult>(result) {
+                Ok(result) => Ok(Some(mcp_status_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for {}: {err}",
+                            crate::model::APPUI_METHOD_MCP_STATUS_LIST
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_TOOL_CONFIG_LIST => {
+            match serde_json::from_value::<ToolConfigListResult>(result) {
+                Ok(result) => Ok(Some(tool_config_list_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for {}: {err}",
+                            crate::model::APPUI_METHOD_TOOL_CONFIG_LIST
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_TOOL_CONFIG_SET_ENABLED
+        | crate::model::APPUI_METHOD_TOOL_CONFIG_UPSERT
+        | crate::model::APPUI_METHOD_TOOL_CONFIG_DELETE
+        | crate::model::APPUI_METHOD_TOOL_CONFIG_TEST => {
+            match serde_json::from_value::<ToolConfigMutationResult>(result) {
+                Ok(result) => Ok(Some(tool_config_mutation_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for tool/config mutation: {err}"
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        crate::model::APPUI_METHOD_TOOL_STATUS_LIST => {
+            match serde_json::from_value::<ToolStatusListResult>(result) {
+                Ok(result) => Ok(Some(tool_status_event(result))),
+                Err(err) => Ok(Some(
+                    app_error(
+                        "invalid_result",
+                        format!(
+                            "failed to decode UI protocol result for {}: {err}",
+                            crate::model::APPUI_METHOD_TOOL_STATUS_LIST
+                        ),
+                    )
+                    .into(),
+                )),
+            }
+        }
+        // M15-E autonomy results. We decode and forward as
+        // ClientEvent::Autonomy so the store can update the per-session
+        // mirror.
+        crate::model::APPUI_METHOD_AGENT_LIST => {
+            match serde_json::from_value::<crate::model::AgentListResult>(result) {
+                Ok(result) => Ok(Some(autonomy_event(AutonomyResult::AgentList(result)))),
+                Err(err) => Ok(Some(autonomy_decode_error(
+                    crate::model::APPUI_METHOD_AGENT_LIST,
+                    err,
+                ))),
+            }
+        }
+        crate::model::APPUI_METHOD_AGENT_STATUS_READ => {
+            match serde_json::from_value::<crate::model::AgentStatusReadResult>(result) {
+                Ok(result) => Ok(Some(autonomy_event(AutonomyResult::AgentStatus(result)))),
+                Err(err) => Ok(Some(autonomy_decode_error(
+                    crate::model::APPUI_METHOD_AGENT_STATUS_READ,
+                    err,
+                ))),
+            }
+        }
+        crate::model::APPUI_METHOD_AGENT_OUTPUT_READ => {
+            match serde_json::from_value::<crate::model::AgentOutputReadResult>(result) {
+                Ok(result) => Ok(Some(autonomy_event(AutonomyResult::AgentOutput(result)))),
+                Err(err) => Ok(Some(autonomy_decode_error(
+                    crate::model::APPUI_METHOD_AGENT_OUTPUT_READ,
+                    err,
+                ))),
+            }
+        }
+        crate::model::APPUI_METHOD_AGENT_ARTIFACT_LIST => {
+            match serde_json::from_value::<crate::model::AgentArtifactListResult>(result) {
+                Ok(result) => Ok(Some(autonomy_event(AutonomyResult::AgentArtifacts(result)))),
+                Err(err) => Ok(Some(autonomy_decode_error(
+                    crate::model::APPUI_METHOD_AGENT_ARTIFACT_LIST,
+                    err,
+                ))),
+            }
+        }
+        crate::model::APPUI_METHOD_AGENT_ARTIFACT_READ => {
+            match serde_json::from_value::<crate::model::AgentArtifactReadResult>(result) {
+                Ok(result) => Ok(Some(autonomy_event(AutonomyResult::AgentArtifactRead(
+                    result,
+                )))),
+                Err(err) => Ok(Some(autonomy_decode_error(
+                    crate::model::APPUI_METHOD_AGENT_ARTIFACT_READ,
+                    err,
+                ))),
+            }
+        }
+        crate::model::APPUI_METHOD_AGENT_INTERRUPT => {
+            match serde_json::from_value::<crate::model::AgentInterruptResult>(result) {
+                Ok(result) => Ok(Some(autonomy_event(AutonomyResult::AgentInterrupt(result)))),
+                Err(err) => Ok(Some(autonomy_decode_error(
+                    crate::model::APPUI_METHOD_AGENT_INTERRUPT,
+                    err,
+                ))),
+            }
+        }
+        crate::model::APPUI_METHOD_AGENT_CLOSE => {
+            match serde_json::from_value::<crate::model::AgentCloseResult>(result) {
+                Ok(result) => Ok(Some(autonomy_event(AutonomyResult::AgentClose(result)))),
+                Err(err) => Ok(Some(autonomy_decode_error(
+                    crate::model::APPUI_METHOD_AGENT_CLOSE,
+                    err,
+                ))),
+            }
+        }
+        crate::model::APPUI_METHOD_SESSION_GOAL_GET => {
+            match serde_json::from_value::<crate::model::SessionGoalGetResult>(result) {
+                Ok(result) => Ok(Some(autonomy_event(AutonomyResult::GoalGet(result)))),
+                Err(err) => Ok(Some(autonomy_decode_error(
+                    crate::model::APPUI_METHOD_SESSION_GOAL_GET,
+                    err,
+                ))),
+            }
+        }
+        crate::model::APPUI_METHOD_SESSION_GOAL_SET => {
+            match serde_json::from_value::<crate::model::SessionGoalSetResult>(result) {
+                Ok(result) => Ok(Some(autonomy_event(AutonomyResult::GoalSet(result)))),
+                Err(err) => Ok(Some(autonomy_decode_error(
+                    crate::model::APPUI_METHOD_SESSION_GOAL_SET,
+                    err,
+                ))),
+            }
+        }
+        crate::model::APPUI_METHOD_SESSION_GOAL_CLEAR => {
+            match serde_json::from_value::<crate::model::SessionGoalClearResult>(result) {
+                Ok(result) => Ok(Some(autonomy_event(AutonomyResult::GoalClear(result)))),
+                Err(err) => Ok(Some(autonomy_decode_error(
+                    crate::model::APPUI_METHOD_SESSION_GOAL_CLEAR,
+                    err,
+                ))),
+            }
+        }
+        crate::model::APPUI_METHOD_LOOP_CREATE => {
+            match serde_json::from_value::<crate::model::LoopCreateResult>(result) {
+                Ok(result) => Ok(Some(autonomy_event(AutonomyResult::LoopCreate(result)))),
+                Err(err) => Ok(Some(autonomy_decode_error(
+                    crate::model::APPUI_METHOD_LOOP_CREATE,
+                    err,
+                ))),
+            }
+        }
+        crate::model::APPUI_METHOD_LOOP_LIST => {
+            match serde_json::from_value::<crate::model::LoopListResult>(result) {
+                Ok(result) => Ok(Some(autonomy_event(AutonomyResult::LoopList(result)))),
+                Err(err) => Ok(Some(autonomy_decode_error(
+                    crate::model::APPUI_METHOD_LOOP_LIST,
+                    err,
+                ))),
+            }
+        }
+        crate::model::APPUI_METHOD_LOOP_DELETE
+        | crate::model::APPUI_METHOD_LOOP_PAUSE
+        | crate::model::APPUI_METHOD_LOOP_RESUME
+        | crate::model::APPUI_METHOD_LOOP_FIRE_NOW => {
+            match serde_json::from_value::<crate::model::LoopMutationResult>(result) {
+                Ok(result) => Ok(Some(autonomy_event(AutonomyResult::LoopMutation {
+                    method: pending_request.method.clone(),
+                    result,
+                }))),
+                Err(err) => Ok(Some(autonomy_decode_error(
+                    pending_request.method.as_str(),
+                    err,
+                ))),
+            }
+        }
+        crate::model::APPUI_METHOD_PROFILE_LLM_FETCH_MODELS => {
+            Ok(Some(profile_llm_fetch_models_event(&result)))
+        }
+        _ => Ok(None),
+    }
+}
+
+/// `profile/llm/fetch_models` result → status event.
+///
+/// The server result (`{profile_id, family_id, models: [String], reason?}` —
+/// see `raw_profile_llm_fetch_models` in ra-cli's `ui_protocol.rs`)
+/// carries a plain model-id list, not the provider configuration
+/// `ProfileLlmListResult` describes, and this client cannot add new
+/// `ClientEvent` variants, so the outcome surfaces as a status line the way
+/// `approval/respond` acks do. Without this arm the response was silently
+/// dropped and onboarding's "Fetch models" button looked dead on a real
+/// backend.
+fn profile_llm_fetch_models_event(result: &Value) -> ClientEvent {
+    let count = result
+        .get("models")
+        .and_then(Value::as_array)
+        .map_or(0, Vec::len);
+    let message = match result.get("reason").and_then(Value::as_str) {
+        Some(reason) => format!("Fetched {count} models ({reason})"),
+        None => format!("Fetched {count} models"),
+    };
+    AppUiEvent::Status(AppUiStatus { message }).into()
+}
+
+fn autonomy_event(result: AutonomyResult) -> ClientEvent {
+    ClientEvent::Autonomy(AutonomyClientEvent { result })
+}
+
+fn autonomy_decode_error(method: &str, err: serde_json::Error) -> ClientEvent {
+    app_error(
+        "invalid_result",
+        format!("failed to decode UI protocol result for {method}: {err}"),
+    )
+    .into()
+}
+
+fn decode_task_output_read_result(mut result: Value) -> serde_json::Result<TaskOutputReadResult> {
+    if let Some(object) = result.as_object_mut() {
+        object
+            .entry("is_snapshot_projection")
+            .or_insert(Value::Bool(false));
+    }
+    serde_json::from_value(result)
+}
+
+fn capabilities_event(result: ConfigCapabilitiesListResult) -> ClientEvent {
+    let message = format!(
+        "ra UI capabilities refreshed: {} methods",
+        result.capabilities.supported_methods.len()
+    );
+    ClientEvent::Capabilities(CapabilitiesClientEvent { result, message })
+}
+
+fn session_status_event(result: SessionStatusReadResult) -> ClientEvent {
+    // The active model is shown persistently on the composer's bottom
+    // border (bottom-right) since #257; repeating it in this transient
+    // status line duplicated the model one row away. Keep the message
+    // model-free — `result` still carries the model data that refreshes
+    // the composer footer.
+    ClientEvent::SessionStatus(SessionStatusClientEvent {
+        message: "Runtime status refreshed".to_string(),
+        result,
+    })
+}
+
+fn model_list_event(result: ModelListResult) -> ClientEvent {
+    let count = result.models.len();
+    ClientEvent::ModelList(ModelListClientEvent {
+        message: match count {
+            0 => "Model list refreshed: no models".into(),
+            1 => "Model list refreshed: 1 model".into(),
+            _ => format!("Model list refreshed: {count} models"),
+        },
+        result,
+    })
+}
+
+fn model_select_event(
+    result: ModelSelectResult,
+    initiating_session: Option<SessionKey>,
+) -> ClientEvent {
+    let prefix = if result.restart_required && result.applied {
+        "Model saved; restart required"
+    } else if result.applied {
+        "Model selected"
+    } else {
+        "Model unchanged"
+    };
+    ClientEvent::ModelSelect(ModelSelectClientEvent {
+        message: format!(
+            "{prefix}: {} / {}",
+            result.selected.provider, result.selected.model
+        ),
+        result,
+        initiating_session,
+    })
+}
+
+fn profile_llm_catalog_event(result: ProfileLlmCatalogResult) -> ClientEvent {
+    let count = result.families.len();
+    ClientEvent::ProfileLlmCatalog(ProfileLlmCatalogClientEvent {
+        message: format!("Provider catalog refreshed: {count} family(s)"),
+        result,
+    })
+}
+
+fn profile_llm_list_event(result: ProfileLlmListResult) -> ClientEvent {
+    let count = result.primary.iter().count() + result.fallbacks.len();
+    ClientEvent::ProfileLlmList(ProfileLlmListClientEvent {
+        message: match count {
+            0 => "Configured providers refreshed: none".into(),
+            1 => "Configured providers refreshed: 1 provider".into(),
+            _ => format!("Configured providers refreshed: {count} providers"),
+        },
+        result,
+    })
+}
+
+fn profile_llm_mutation_event(method: &str, result: ProfileLlmMutationResult) -> ClientEvent {
+    let kind = match method {
+        crate::model::APPUI_METHOD_PROFILE_LLM_UPSERT => ProfileLlmMutationKind::Upsert,
+        crate::model::APPUI_METHOD_PROFILE_LLM_DELETE => ProfileLlmMutationKind::Delete,
+        crate::model::APPUI_METHOD_PROFILE_LLM_TEST => ProfileLlmMutationKind::Test,
+        _ => unreachable!("not a profile/llm mutation method: {method}"),
+    };
+    let count = result.models().len();
+    let message = match (
+        result.applied,
+        result.message.as_deref(),
+        result.error.as_deref(),
+    ) {
+        (false, Some(message), Some(error)) => format!("{message}: {error}"),
+        (_, Some(message), _) => message.to_owned(),
+        (false, None, Some(error)) => format!("Provider operation failed: {error}"),
+        _ => format!("Provider profile updated: {count} configured provider(s)"),
+    };
+    ClientEvent::ProfileLlmMutation(ProfileLlmMutationClientEvent {
+        kind,
+        message,
+        result,
+    })
+}
+
+fn snapshot_list_event(result: crate::model::SnapshotListResult) -> ClientEvent {
+    let count = result.snapshots.len();
+    let message = if let Some(restored) = result.restored.as_deref() {
+        format!(
+            "Workspace restored to snapshot {}",
+            &restored[..restored.len().min(8)]
+        )
+    } else if !result.available {
+        "Snapshots unavailable for this session".into()
+    } else {
+        match count {
+            0 => "No snapshots yet".into(),
+            1 => "1 snapshot".into(),
+            _ => format!("{count} snapshots"),
+        }
+    };
+    ClientEvent::SnapshotList(crate::client_event::SnapshotListClientEvent { message, result })
+}
+
+fn peer_prepare_event(result: crate::model::PeerPrepareResult) -> ClientEvent {
+    let message = format!("Peer session prepared: {}", result.slug);
+    ClientEvent::PeerPrepared(crate::client_event::PeerPreparedClientEvent { message, result })
+}
+
+/// octos#1807: decode a `turn/steer` result into the typed
+/// [`ClientEvent::TurnSteered`]. The store owns the user-facing status line;
+/// this message is diagnostic.
+fn turn_steered_event(result: crate::model::TurnSteerResult) -> ClientEvent {
+    let message = if result.steered {
+        format!("Steered into active turn {}", result.turn_id.0)
+    } else {
+        format!("No active turn; started turn {}", result.turn_id.0)
+    };
+    ClientEvent::TurnSteered(crate::client_event::TurnSteeredClientEvent { message, result })
+}
+
+fn peer_gather_event(result: crate::model::PeerGatherResult) -> ClientEvent {
+    let with_results = result
+        .peers
+        .iter()
+        .filter(|peer| peer.result.is_some())
+        .count();
+    let message = match result.peers.len() {
+        0 => "No peers staged on the blackboard".into(),
+        total => format!("Gathered {with_results}/{total} peer result(s)"),
+    };
+    ClientEvent::PeerGathered(crate::client_event::PeerGatheredClientEvent { message, result })
+}
+
+fn sub_providers_list_event(result: SubProvidersListResult) -> ClientEvent {
+    let count = result.sub_providers.len();
+    ClientEvent::SubProvidersList(SubProvidersListClientEvent {
+        message: match count {
+            0 => "Research lanes refreshed: none configured".into(),
+            1 => "Research lanes refreshed: 1 lane".into(),
+            _ => format!("Research lanes refreshed: {count} lanes"),
+        },
+        result,
+    })
+}
+
+fn sub_providers_mutation_event(result: SubProvidersMutationResult) -> ClientEvent {
+    let count = result.sub_providers.len();
+    let message = if result.applied {
+        format!("Research lanes updated: {count} configured — restart to apply")
+    } else {
+        "Research lane unchanged".into()
+    };
+    ClientEvent::SubProvidersMutation(SubProvidersMutationClientEvent { message, result })
+}
+
+fn profile_skills_list_event(result: ProfileSkillsListResult) -> ClientEvent {
+    let count = result.skills.len();
+    ClientEvent::ProfileSkillsList(ProfileSkillsListClientEvent {
+        message: match count {
+            0 => "Profile skills refreshed: none installed".into(),
+            1 => "Profile skills refreshed: 1 installed skill".into(),
+            _ => format!("Profile skills refreshed: {count} installed skills"),
+        },
+        result,
+    })
+}
+
+fn profile_skills_registry_search_event(result: ProfileSkillsRegistrySearchResult) -> ClientEvent {
+    let count = result.packages.len();
+    ClientEvent::ProfileSkillsRegistrySearch(ProfileSkillsRegistrySearchClientEvent {
+        message: match count {
+            0 => "Skill registry search returned no packages".into(),
+            1 => "Skill registry search returned 1 package".into(),
+            _ => format!("Skill registry search returned {count} packages"),
+        },
+        result,
+    })
+}
+
+fn profile_skills_mutation_event(result: ProfileSkillsMutationResult) -> ClientEvent {
+    let message = if !result.ok {
+        result
+            .message
+            .clone()
+            .unwrap_or_else(|| "Skill operation failed".into())
+    } else if let Some(removed) = &result.removed {
+        format!("Removed skill: {removed}")
+    } else if !result.installed.is_empty() {
+        format!("Installed skill(s): {}", result.installed.join(", "))
+    } else if !result.skipped.is_empty() {
+        format!("Skill install skipped: {}", result.skipped.join(", "))
+    } else {
+        result
+            .message
+            .clone()
+            .unwrap_or_else(|| "Skill operation completed".into())
+    };
+    ClientEvent::ProfileSkillsMutation(ProfileSkillsMutationClientEvent { message, result })
+}
+
+fn auth_status_event(result: AuthStatusResult) -> ClientEvent {
+    ClientEvent::AuthStatus(AuthStatusClientEvent {
+        message: auth_status_message(&result),
+        result,
+    })
+}
+
+fn auth_send_code_event(result: AuthSendCodeResult) -> ClientEvent {
+    let message = result
+        .message
+        .clone()
+        .unwrap_or_else(|| "OTP send acknowledged".into());
+    ClientEvent::AuthSendCode(AuthSendCodeClientEvent { result, message })
+}
+
+fn auth_verify_event(result: AuthVerifyResult) -> ClientEvent {
+    let message = result.message.clone().unwrap_or_else(|| {
+        if result.ok {
+            "OTP verified"
+        } else {
+            "OTP verify failed"
+        }
+        .into()
+    });
+    ClientEvent::AuthVerify(AuthVerifyClientEvent { result, message })
+}
+
+fn auth_me_event(result: AuthMeResult) -> ClientEvent {
+    ClientEvent::AuthMe(AuthMeClientEvent {
+        message: auth_me_message(&result),
+        result,
+    })
+}
+
+fn auth_logout_event(result: AuthLogoutResult) -> ClientEvent {
+    let message = result.message.clone().unwrap_or_else(|| {
+        if result.ok {
+            "Logged out"
+        } else {
+            "Logout failed"
+        }
+        .into()
+    });
+    ClientEvent::AuthLogout(AuthLogoutClientEvent { result, message })
+}
+
+fn profile_local_create_event(result: ProfileLocalCreateResult) -> ClientEvent {
+    let action = if result.created { "created" } else { "loaded" };
+    // Surface the server-assigned final id (it may be collision-suffixed, e.g.
+    // `glm-2`). The email suffix is only shown when present — the nameable
+    // (requested_id) flow sends no email, so the message reads cleanly as
+    // "Local solo profile created: glm-2" instead of a dangling "( )".
+    let message = if result.email.trim().is_empty() {
+        format!("Local solo profile {action}: {}", result.profile_id)
+    } else {
+        format!(
+            "Local solo profile {action}: {} ({})",
+            result.profile_id, result.email
+        )
+    };
+    ClientEvent::ProfileLocalCreate(ProfileLocalCreateClientEvent { message, result })
+}
+
+fn auth_status_message(result: &AuthStatusResult) -> String {
+    if let Some(profile) = result.scoped_profile.as_ref() {
+        format!("Authenticated for profile {}", profile.id)
+    } else if result.authenticated {
+        format!(
+            "Authenticated{}",
+            result
+                .profile_id
+                .as_deref()
+                .map(|profile| format!(" for profile {profile}"))
+                .unwrap_or_default()
+        )
+    } else if result.email_login_enabled || result.email_otp {
+        "Not authenticated; email OTP is available".into()
+    } else {
+        "Not authenticated".into()
+    }
+}
+
+fn auth_me_message(result: &AuthMeResult) -> String {
+    let email = auth_me_email(result).unwrap_or("unknown account");
+    let profile = auth_me_profile_id(result).unwrap_or("no profile");
+    format!("Authenticated account: {email} ({profile})")
+}
+
+fn mcp_status_event(result: McpStatusListResult) -> ClientEvent {
+    let connected = result
+        .servers
+        .iter()
+        .filter(|server| server.status == "connected")
+        .count();
+    let failed = result
+        .servers
+        .iter()
+        .filter(|server| server.status == "failed")
+        .count();
+    ClientEvent::McpStatus(McpStatusClientEvent {
+        message: format!(
+            "MCP status refreshed: {} server(s), {connected} connected, {failed} failed",
+            result.servers.len()
+        ),
+        result,
+    })
+}
+
+fn mcp_config_list_event(result: McpConfigListResult) -> ClientEvent {
+    let enabled = result
+        .servers
+        .iter()
+        .filter(|server| server.enabled)
+        .count();
+    ClientEvent::McpConfigList(McpConfigListClientEvent {
+        message: format!(
+            "MCP config refreshed: {} server(s), {enabled} enabled",
+            result.servers.len()
+        ),
+        result,
+    })
+}
+
+fn mcp_config_mutation_event(result: McpConfigMutationResult) -> ClientEvent {
+    let subject = result
+        .server
+        .as_deref()
+        .or_else(|| result.entry.as_ref().map(|entry| entry.name.as_str()))
+        .unwrap_or("server");
+    let status = if result.applied || result.ok {
+        "applied"
+    } else {
+        "completed"
+    };
+    let message = result
+        .message
+        .clone()
+        .unwrap_or_else(|| format!("MCP config {status}: {subject}"));
+    ClientEvent::McpConfigMutation(McpConfigMutationClientEvent { message, result })
+}
+
+fn tool_status_event(result: ToolStatusListResult) -> ClientEvent {
+    let visible = result.tools.iter().filter(|tool| tool.visible).count();
+    let denied = result
+        .tools
+        .iter()
+        .filter(|tool| tool.denial.is_some())
+        .count();
+    ClientEvent::ToolStatus(ToolStatusClientEvent {
+        message: format!(
+            "Tool status refreshed: {visible} visible, {denied} denied under {}",
+            result.policy_id.as_deref().unwrap_or("server policy")
+        ),
+        result,
+    })
+}
+
+fn tool_config_list_event(result: ToolConfigListResult) -> ClientEvent {
+    let enabled = result.tools.iter().filter(|tool| tool.enabled).count();
+    ClientEvent::ToolConfigList(ToolConfigListClientEvent {
+        message: format!(
+            "Tool config refreshed: {} tool(s), {enabled} enabled",
+            result.tools.len()
+        ),
+        result,
+    })
+}
+
+fn tool_config_mutation_event(result: ToolConfigMutationResult) -> ClientEvent {
+    let subject = result
+        .tool
+        .as_deref()
+        .or_else(|| result.entry.as_ref().map(|entry| entry.tool.as_str()))
+        .unwrap_or("tool");
+    let status = if result.applied || result.ok {
+        "applied"
+    } else {
+        "completed"
+    };
+    let message = result
+        .message
+        .clone()
+        .unwrap_or_else(|| format!("Tool config {status}: {subject}"));
+    ClientEvent::ToolConfigMutation(ToolConfigMutationClientEvent { message, result })
+}
+
+fn approval_scopes_status(result: &ApprovalScopesListResult) -> String {
+    let count = result.scopes.len();
+    match count {
+        0 => "No persisted approval scopes for this session".into(),
+        1 => "1 persisted approval scope for this session".into(),
+        _ => format!("{count} persisted approval scopes for this session"),
+    }
+}
+
+fn permission_profile_list_status(result: &PermissionProfileListResult) -> String {
+    format!("Permissions: {}", result.current.summary())
+}
+
+fn permission_profile_list_event(result: PermissionProfileListResult) -> ClientEvent {
+    ClientEvent::PermissionProfile(PermissionProfileClientEvent {
+        message: permission_profile_list_status(&result),
+        session_id: result.session_id,
+        current: result.current,
+    })
+}
+
+fn permission_profile_set_status(result: &PermissionProfileSetResult) -> String {
+    let prefix = if result.applied {
+        "Permissions updated"
+    } else {
+        "Permissions unchanged"
+    };
+    format!("{prefix}: {}", result.current.summary())
+}
+
+fn permission_profile_set_event(result: PermissionProfileSetResult) -> ClientEvent {
+    ClientEvent::PermissionProfile(PermissionProfileClientEvent {
+        message: permission_profile_set_status(&result),
+        session_id: result.session_id,
+        current: result.current,
+    })
+}
+
+fn task_output_display_text(result: &TaskOutputReadResult) -> String {
+    let mut text = result.text.clone();
+    if !result.output_files.is_empty() && !text.contains("output_files:") {
+        append_metadata_section(
+            &mut text,
+            "output_files",
+            result.output_files.iter().map(String::as_str),
+        );
+    }
+    if !result.limitations.is_empty() && !text.contains("limitations:") {
+        append_metadata_section(
+            &mut text,
+            "limitations",
+            result
+                .limitations
+                .iter()
+                .map(|limitation| limitation.message.as_str()),
+        );
+    }
+    text
+}
+
+fn append_metadata_section<'a>(
+    text: &mut String,
+    title: &str,
+    items: impl IntoIterator<Item = &'a str>,
+) {
+    if !text.is_empty() && !text.ends_with('\n') {
+        text.push('\n');
+    }
+    text.push_str(title);
+    text.push_str(":\n");
+    for item in items {
+        text.push_str("- ");
+        text.push_str(item);
+        text.push('\n');
+    }
+}
+
+fn interrupt_ack_status(result: &Value) -> String {
+    match result.get("interrupted").and_then(Value::as_bool) {
+        Some(false) => "Interrupt acknowledged; turn was already idle".into(),
+        Some(true) => "Interrupt acknowledged; active turn cancelled".into(),
+        None => "Interrupt acknowledged".into(),
+    }
+}
+
+fn error_response_to_app_event(
+    frame: &serde_json::Map<String, Value>,
+    pending_requests: &mut HashMap<String, PendingRequest>,
+) -> ClientEvent {
+    let request_id = match response_id(frame) {
+        Ok(request_id) => request_id,
+        Err(event) => return (*event).into(),
+    };
+    let Some(error) = frame.get("error") else {
+        return app_error(
+            "malformed_frame",
+            "UI protocol response is missing error field",
+        )
+        .into();
+    };
+    if !error.is_object() {
+        return app_error(
+            "malformed_frame",
+            "UI protocol error response error field must be an object",
+        )
+        .into();
+    }
+
+    let pending_request = request_id
+        .as_ref()
+        .and_then(|id| pending_requests.remove(id));
+    let code = rpc_error_code(error);
+    let message = rpc_error_message(error);
+    // #22b-r1: a hydrate failure is attributable LOCALLY via the pending
+    // entry — emit the attributed event so the store releases only that
+    // session's in-flight marker.
+    let hydrate_session = pending_request
+        .as_ref()
+        .and_then(|request| request.hydrate_session.clone());
+    let message = match (pending_request, request_id) {
+        (Some(request), Some(id)) => {
+            format!("{} request {id} failed: {message}", request.method)
+        }
+        (None, Some(id)) => format!("request {id} failed: {message}"),
+        (_, None) => message,
+    };
+
+    match hydrate_session {
+        Some(session_id) => {
+            ClientEvent::HydrateError(crate::client_event::HydrateErrorClientEvent {
+                session_id,
+                code,
+                message,
+            })
+        }
+        None => app_error(code, message).into(),
+    }
+}
+
+fn response_id(
+    frame: &serde_json::Map<String, Value>,
+) -> std::result::Result<Option<String>, Box<AppUiEvent>> {
+    let Some(id) = frame.get("id") else {
+        return Err(Box::new(app_error(
+            "malformed_frame",
+            "UI protocol response is missing id",
+        )));
+    };
+
+    match id {
+        Value::Null => Ok(None),
+        Value::String(value) => Ok(Some(value.clone())),
+        Value::Number(value) if value.is_i64() || value.is_u64() => Ok(Some(value.to_string())),
+        _ => Err(Box::new(app_error(
+            "malformed_frame",
+            "UI protocol response id must be a string, integer, or null",
+        ))),
+    }
+}
+
+fn response_request_id(text: &str) -> Option<String> {
+    let frame = serde_json::from_str::<Value>(text).ok()?;
+    let frame = frame.as_object()?;
+    (frame.contains_key("result") || frame.contains_key("error"))
+        .then(|| response_id(frame).ok().flatten())
+        .flatten()
+}
+
+/// True for a JSON-RPC response frame that carries an `error` member (and no
+/// `result`): the server DEFINITELY rejected the request, as opposed to a
+/// success response whose shape could not be interpreted.
+fn response_is_rpc_error(text: &str) -> bool {
+    serde_json::from_str::<Value>(text)
+        .ok()
+        .and_then(|frame| {
+            frame
+                .as_object()
+                .map(|frame| frame.contains_key("error") && !frame.contains_key("result"))
+        })
+        .unwrap_or(false)
+}
+
+fn opened_session_from_client_event(event: Option<&ClientEvent>) -> Option<SessionKey> {
+    let app_event = match event? {
+        ClientEvent::App(event) => event.as_ref(),
+        ClientEvent::ContextLifecycle(event) => event.event.as_ref(),
+        _ => return None,
+    };
+    match app_event {
+        AppUiEvent::Protocol(UiNotification::SessionOpened(opened)) => {
+            Some(opened.session_id.clone())
+        }
+        _ => None,
+    }
+}
+
+/// octos#1801 v3: decodes the durable `peer/staged` notification into the
+/// typed [`ClientEvent::PeerStaged`] via the tui-local
+/// [`crate::model::PeerStagedParams`] mirror (the vendored ra-core rev has
+/// no `UiNotification` variant for it yet). Malformed params surface as the
+/// standard `invalid_params` error event rather than wedging the stream.
+fn peer_staged_notification_to_client_event(params: Value) -> ClientEvent {
+    match serde_json::from_value::<crate::model::PeerStagedParams>(params) {
+        Ok(staged) => ClientEvent::PeerStaged(staged),
+        Err(err) => app_error(
+            "invalid_params",
+            format!(
+                "failed to decode UI protocol params for {}: {err}",
+                crate::model::APPUI_METHOD_PEER_STAGED
+            ),
+        )
+        .into(),
+    }
+}
+
+/// octos#2019: decodes the durable `background/activity` notification into the
+/// typed [`ClientEvent::BackgroundActivity`] via the tui-local
+/// [`crate::model::BackgroundActivityParams`] mirror (the vendored ra-core
+/// rev has no `UiNotification` variant for it yet). Malformed params surface as
+/// the standard `invalid_params` error event rather than wedging the stream.
+fn background_activity_notification_to_client_event(params: Value) -> ClientEvent {
+    match serde_json::from_value::<crate::model::BackgroundActivityParams>(params) {
+        Ok(event) => ClientEvent::BackgroundActivity(event),
+        Err(err) => app_error(
+            "invalid_params",
+            format!(
+                "failed to decode UI protocol params for {}: {err}",
+                crate::model::APPUI_METHOD_BACKGROUND_ACTIVITY
+            ),
+        )
+        .into(),
+    }
+}
+
+/// octos#1801 v3: decodes the durable `peer/closed` notification into the
+/// typed [`ClientEvent::PeerClosed`] via the tui-local
+/// [`crate::model::PeerClosedParams`] mirror (the vendored ra-core rev has
+/// no `UiNotification` variant for it yet). Mirror of
+/// [`peer_staged_notification_to_client_event`]: malformed params surface as
+/// the standard `invalid_params` error event rather than wedging the stream.
+fn peer_closed_notification_to_client_event(params: Value) -> ClientEvent {
+    match serde_json::from_value::<crate::model::PeerClosedParams>(params) {
+        Ok(closed) => ClientEvent::PeerClosed(closed),
+        Err(err) => app_error(
+            "invalid_params",
+            format!(
+                "failed to decode UI protocol params for {}: {err}",
+                crate::model::APPUI_METHOD_PEER_CLOSED
+            ),
+        )
+        .into(),
+    }
+}
+
+fn notification_to_app_event(method: &str, params: Value) -> AppUiEvent {
+    match UiNotification::from_method_and_params(method, params) {
+        Ok(UiNotification::ProgressUpdated(progress)) => AppUiEvent::Progress(progress),
+        Ok(notification) => AppUiEvent::Protocol(notification),
+        Err(err) if err.code == rpc_error_codes::METHOD_NOT_FOUND => app_error(
+            "unknown_notification",
+            format!("unknown UI protocol notification: {method}"),
+        ),
+        Err(err) => app_error(
+            "invalid_params",
+            format!(
+                "failed to decode UI protocol params for {method}: {}",
+                err.message
+            ),
+        ),
+    }
+}
+
+/// Decode a notification through the pinned protocol crate, while retaining
+/// additive semantic-cache fields that this OctosCode revision does not yet
+/// know about. Lifecycle notifications always use the wrapper, including for
+/// an old server with no fields, so a new lifecycle generation can atomically
+/// clear diagnostics from the prior generation.
+fn notification_to_client_event(method: &str, params: Value) -> ClientEvent {
+    let diagnostics = context_cache_diagnostics_from_params(method, &params);
+    let event = notification_to_app_event(method, params);
+    let session_id = match &event {
+        AppUiEvent::Protocol(UiNotification::ContextCompactionStarted(event)) => {
+            Some(event.session_id.clone())
+        }
+        AppUiEvent::Protocol(UiNotification::ContextCompactionCompleted(event)) => {
+            Some(event.session_id.clone())
+        }
+        AppUiEvent::Protocol(UiNotification::ContextNormalizationReported(event)) => {
+            Some(event.session_id.clone())
+        }
+        _ => None,
+    };
+
+    match session_id {
+        Some(session_id) => ClientEvent::ContextLifecycle(ContextLifecycleClientEvent {
+            event: Box::new(event),
+            session_id,
+            diagnostics,
+            semantic_cache_advertised: None,
+        }),
+        None => event.into(),
+    }
+}
+
+fn context_cache_diagnostics_from_params(
+    method: &str,
+    params: &Value,
+) -> Option<ContextCacheDiagnostics> {
+    if !matches!(
+        method,
+        methods::CONTEXT_COMPACTION_STARTED
+            | methods::CONTEXT_COMPACTION_COMPLETED
+            | methods::CONTEXT_NORMALIZATION_REPORTED
+    ) {
+        return None;
+    }
+
+    context_cache_diagnostics_from_context_state(params.get("context_state"))
+}
+
+fn context_cache_diagnostics_from_context_state(
+    context_state: Option<&Value>,
+) -> Option<ContextCacheDiagnostics> {
+    let context_state = context_state?;
+    let diagnostics = ContextCacheDiagnostics {
+        cache_epoch_id: bounded_context_diagnostic(context_state, "cache_epoch_id"),
+        last_cache_invalidation_reason: bounded_context_diagnostic(
+            context_state,
+            "last_cache_invalidation_reason",
+        ),
+        semantic_head_id: bounded_context_diagnostic(context_state, "semantic_head_id"),
+        semantic_head_kind: bounded_context_diagnostic(context_state, "semantic_head_kind"),
+    };
+    (!diagnostics.is_empty()).then_some(diagnostics)
+}
+
+/// Diagnostic fields are untrusted wire labels. Strip terminal control
+/// sequences at ingestion and bound them independently so a valid protocol
+/// frame cannot turn the `/context` pane into an unbounded allocation.
+fn bounded_context_diagnostic(context_state: &Value, key: &str) -> Option<String> {
+    const MAX_DIAGNOSTIC_CHARS: usize = 256;
+
+    let raw = context_state.get(key)?.as_str()?;
+    let sanitized = crate::sanitize::strip_terminal_controls(raw);
+    let normalized = sanitized.split_whitespace().collect::<Vec<_>>().join(" ");
+    if normalized.is_empty() {
+        return None;
+    }
+    let mut chars = normalized.chars();
+    let bounded: String = chars.by_ref().take(MAX_DIAGNOSTIC_CHARS).collect();
+    Some(if chars.next().is_some() {
+        format!("{bounded}…")
+    } else {
+        bounded
+    })
+}
+
+fn rpc_error_code(error: &Value) -> String {
+    // Prefer the structured `data.kind` discriminator the M12-F /
+    // mcp/profile/tool error families publish (`policy_rejected`,
+    // `tenant_restriction`, `cloud_restriction`, `mcp_invalid_config`,
+    // `tool_not_found`, `profile_not_found`, `readonly_profile`, …).
+    // The numeric JSON-RPC `code` is the fallback because it collapses
+    // every server-side rejection into the same generic
+    // `application_error` integer and would otherwise hide the policy
+    // reason from the structured error renderer.
+    if let Some(kind) = error
+        .get("data")
+        .and_then(|data| data.get("kind"))
+        .and_then(Value::as_str)
+        .filter(|kind| !kind.trim().is_empty())
+    {
+        return kind.to_owned();
+    }
+    error
+        .get("code")
+        .map(|code| {
+            code.as_str()
+                .map(ToOwned::to_owned)
+                .unwrap_or_else(|| code.to_string())
+        })
+        .unwrap_or_else(|| "json_rpc_error".into())
+}
+
+fn rpc_error_message(error: &Value) -> String {
+    // Prefer `data.message` when present (the structured-error family
+    // uses it for the human-readable variant of `data.kind`). Fall
+    // back to the top-level JSON-RPC `message`.
+    if let Some(message) = error
+        .get("data")
+        .and_then(|data| data.get("message"))
+        .and_then(Value::as_str)
+        .filter(|message| !message.trim().is_empty())
+    {
+        return message.to_owned();
+    }
+    error
+        .get("message")
+        .and_then(Value::as_str)
+        .unwrap_or("JSON-RPC error")
+        .to_string()
+}
+
+fn app_error(code: impl Into<String>, message: impl Into<String>) -> AppUiEvent {
+    AppUiEvent::Error(AppUiError {
+        code: code.into(),
+        message: message.into(),
+    })
+}
+
+fn is_websocket_url(value: &str) -> bool {
+    let value = value.trim_start();
+    value
+        .get(..5)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("ws://"))
+        || value
+            .get(..6)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("wss://"))
+}
+
+fn session_opened_compat(
+    session_id: SessionKey,
+    active_profile_id: Option<String>,
+    workspace_root: Option<String>,
+    cursor: Option<UiCursor>,
+    panes: Option<UiPaneSnapshot>,
+) -> SessionOpened {
+    serde_json::from_value(serde_json::json!({
+        "session_id": session_id,
+        "active_profile_id": active_profile_id,
+        "workspace_root": workspace_root,
+        "cursor": cursor,
+        "panes": panes,
+    }))
+    .expect("mock session/opened payload must match ra-core")
+}
+
+#[derive(Default)]
+pub struct MockAppUiBackend {
+    queue: VecDeque<ClientEvent>,
+    launch: AppUiLaunch,
+    permission_profiles: HashMap<SessionKey, PermissionProfileSelection>,
+}
+
+impl MockAppUiBackend {
+    pub fn new(launch: AppUiLaunch) -> Self {
+        Self {
+            queue: VecDeque::new(),
+            launch,
+            permission_profiles: HashMap::new(),
+        }
+    }
+
+    fn profile_id(&self) -> String {
+        self.launch
+            .profile_id
+            .clone()
+            .unwrap_or_else(|| "coding".into())
+    }
+
+    fn target_label(&self) -> Option<String> {
+        self.launch
+            .endpoint
+            .as_ref()
+            .map(|endpoint| endpoint.label().to_string())
+            .or_else(|| Some("local mock snapshot".into()))
+    }
+
+    fn mock_session_key(profile_id: &str, topic: &str) -> SessionKey {
+        SessionKey::with_profile_topic(profile_id, "local", "prototype", topic)
+    }
+
+    fn enqueue_protocol(&mut self, notification: UiNotification) {
+        self.queue
+            .push_back(AppUiEvent::Protocol(notification).into());
+    }
+
+    fn enqueue_turn_script(&mut self, session_id: &SessionKey, turn_id: TurnId) {
+        let build_task_id = TaskId::new();
+
+        self.enqueue_protocol(UiNotification::TurnStarted(TurnStartedEvent {
+            session_id: session_id.clone(),
+            turn_id: turn_id.clone(),
+            timestamp: Utc::now(),
+            topic: None,
+        }));
+        self.enqueue_protocol(UiNotification::ToolStarted(ToolStartedEvent {
+            session_id: session_id.clone(),
+            topic: None,
+            turn_id: turn_id.clone(),
+            tool_call_id: "mock.read_file.1".into(),
+            tool_name: "read_file".into(),
+            arguments: Some(serde_json::json!({"path": "src/lib.rs"})),
+        }));
+        self.enqueue_protocol(UiNotification::ToolProgress(ToolProgressEvent {
+            session_id: session_id.clone(),
+            topic: None,
+            turn_id: turn_id.clone(),
+            tool_call_id: "mock.read_file.1".into(),
+            message: Some("Hydrating prototype context".into()),
+            progress_pct: Some(0.25),
+        }));
+        self.enqueue_protocol(UiNotification::MessageDelta(MessageDeltaEvent {
+            session_id: session_id.clone(),
+            topic: None,
+            turn_id: turn_id.clone(),
+            text: "Planning ".into(),
+        }));
+        self.enqueue_protocol(UiNotification::MessageDelta(MessageDeltaEvent {
+            session_id: session_id.clone(),
+            topic: None,
+            turn_id: turn_id.clone(),
+            text: "a safe ".into(),
+        }));
+        self.enqueue_protocol(UiNotification::MessageDelta(MessageDeltaEvent {
+            session_id: session_id.clone(),
+            topic: None,
+            turn_id: turn_id.clone(),
+            text: "M9 scaffold over mock transport.".into(),
+        }));
+        self.enqueue_protocol(UiNotification::TaskUpdated(TaskUpdatedEvent {
+            started_at: None,
+            relaunched_from: None,
+            session_id: session_id.clone(),
+            topic: None,
+            task_id: build_task_id.clone(),
+            tool_call_id: None,
+            title: "mock background synthesis".into(),
+            state: TaskRuntimeState::Running,
+            runtime_detail: Some("Synthesizing task output stream".into()),
+            source: None,
+            role: None,
+            summary: None,
+            artifact_count: None,
+            runtime_policy_stamp: None,
+            turn_id: Some(turn_id.clone()),
+        }));
+        self.enqueue_protocol(UiNotification::TaskOutputDelta(TaskOutputDeltaEvent {
+            session_id: session_id.clone(),
+            topic: None,
+            task_id: build_task_id.clone(),
+            cursor: OutputCursor { offset: 42 },
+            text: "mock worker: draft protocol notifications\n".into(),
+        }));
+        self.enqueue_protocol(UiNotification::ApprovalRequested(mock_approval_event(
+            session_id.clone(),
+            turn_id.clone(),
+            mock_approval_kind(),
+        )));
+        self.enqueue_protocol(UiNotification::ToolCompleted(ToolCompletedEvent {
+            session_id: session_id.clone(),
+            topic: None,
+            turn_id: turn_id.clone(),
+            tool_call_id: "mock.read_file.1".into(),
+            tool_name: "read_file".into(),
+            success: Some(true),
+            output_preview: Some("1 | pub fn demo() {}\n".into()),
+            duration_ms: Some(420),
+        }));
+        self.enqueue_protocol(UiNotification::TaskUpdated(TaskUpdatedEvent {
+            started_at: None,
+            relaunched_from: None,
+            session_id: session_id.clone(),
+            topic: None,
+            task_id: build_task_id,
+            tool_call_id: None,
+            title: "mock background synthesis".into(),
+            state: TaskRuntimeState::Completed,
+            runtime_detail: Some("Summary ready in runtime_detail".into()),
+            source: None,
+            role: None,
+            summary: None,
+            artifact_count: None,
+            runtime_policy_stamp: None,
+            turn_id: Some(turn_id.clone()),
+        }));
+        self.enqueue_protocol(UiNotification::Warning(WarningEvent {
+            session_id: session_id.clone(),
+            turn_id: Some(turn_id.clone()),
+            code: "mock_protocol_boundary".into(),
+            message:
+                "Interactive approval, diff preview, and task output are still draft M9 surfaces."
+                    .into(),
+        }));
+        self.enqueue_protocol(UiNotification::TurnCompleted(TurnCompletedEvent {
+            session_id: session_id.clone(),
+            topic: None,
+            turn_id,
+            cursor: Some(UiCursor {
+                stream: "session_events".into(),
+                seq: 1,
+            }),
+            tokens_in: None,
+            tokens_out: None,
+            session_result: None,
+        }));
+    }
+}
+
+impl AppUiBackend for MockAppUiBackend {
+    fn bootstrap(&mut self) -> Result<AppUiSnapshot> {
+        let profile_id = self.profile_id();
+        let requested_session = self.launch.session_id.clone();
+        let coding_session = AppUiSession {
+            id: requested_session
+                .clone()
+                .unwrap_or_else(|| Self::mock_session_key(&profile_id, "m9")),
+            title: if requested_session.is_some() {
+                "Requested session".into()
+            } else {
+                "M9 protocol draft".into()
+            },
+            profile_id: Some(profile_id.clone()),
+            messages: vec![
+                Message::system("Mock bootstrap over ra-app-ui/v1alpha1"),
+                Message::assistant(
+                    "This prototype is intentionally decoupled from unresolved M8 runtime behavior.",
+                ),
+            ],
+            tasks: vec![AppUiTask {
+                id: TaskId::new(),
+                title: "protocol spike".into(),
+                state: TaskRuntimeState::Running,
+                runtime_detail: Some("Spec + types drafted in ra-core".into()),
+                output_tail: "bootstrap: seeded mock session\n".into(),
+                turn_id: None,
+            }],
+            live_reply: None,
+        };
+
+        let review_session = AppUiSession {
+            id: Self::mock_session_key(&profile_id, "review"),
+            title: "M8 gate review".into(),
+            profile_id: Some(profile_id.clone()),
+            messages: vec![
+                Message::system("Known M8 runtime defects stay out of the protocol contract."),
+                Message::assistant(
+                    "Use this session to pressure-test session/task UI without touching server behavior.",
+                ),
+            ],
+            tasks: vec![AppUiTask {
+                id: TaskId::new(),
+                title: "fix-first checklist".into(),
+                state: TaskRuntimeState::Completed,
+                runtime_detail: Some("Checklist written in docs/".into()),
+                output_tail: "review: m8 gate recorded\n".into(),
+                turn_id: None,
+            }],
+            live_reply: None,
+        };
+
+        self.enqueue_protocol(UiNotification::SessionOpened(session_opened_compat(
+            coding_session.id.clone(),
+            coding_session.profile_id.clone(),
+            self.launch.cwd.clone(),
+            Some(UiCursor {
+                stream: "session_events".into(),
+                seq: 0,
+            }),
+            None,
+        )));
+
+        Ok(AppUiSnapshot {
+            sessions: vec![coding_session, review_session],
+            selected_session: 0,
+            status: if self.launch.readonly {
+                "Mock snapshot ready in read-only mode. Turn sends are disabled.".into()
+            } else {
+                "Mock backend ready. Start typing to exercise M9.1 app-ui events.".into()
+            },
+            target: self.target_label(),
+            readonly: self.launch.readonly,
+        })
+    }
+
+    #[allow(unreachable_patterns)]
+    fn send(&mut self, command: AppUiCommand) -> Result<()> {
+        let method = command.method().to_string();
+        match command {
+            AppUiCommand::ListConfigCapabilities(_) => {
+                self.queue
+                    .push_back(capabilities_event(ConfigCapabilitiesListResult {
+                        capabilities: tui_capabilities(),
+                    }));
+                Ok(())
+            }
+            AppUiCommand::SubmitPrompt(params) => {
+                if self.launch.readonly {
+                    self.enqueue_protocol(UiNotification::Warning(WarningEvent {
+                        session_id: params.session_id,
+                        turn_id: Some(params.turn_id),
+                        code: "readonly".into(),
+                        message: "Read-only mode blocks turn/start.".into(),
+                    }));
+                    return Ok(());
+                }
+                self.enqueue_turn_script(&params.session_id, params.turn_id);
+                Ok(())
+            }
+            AppUiCommand::OpenSession(params) => {
+                self.enqueue_protocol(UiNotification::SessionOpened(session_opened_compat(
+                    params.session_id,
+                    params.profile_id,
+                    params.cwd,
+                    params.after,
+                    None,
+                )));
+                Ok(())
+            }
+            AppUiCommand::ReadSessionStatus(params) => {
+                self.queue
+                    .push_back(session_status_event(mock_session_status(
+                        params.session_id,
+                        self.launch.cwd.clone(),
+                        self.launch.readonly,
+                    )));
+                Ok(())
+            }
+            AppUiCommand::SessionBtw(params) => {
+                self.queue
+                    .push_back(ClientEvent::SessionBtw(SessionBtwClientEvent {
+                        result: ra_core::ui_protocol::SessionBtwResult {
+                            session_id: params.session_id,
+                            answer: "Mock aside answer — the prototype backend has no LLM, \
+                                     but the /btw card, busy gate, and dismissal all work."
+                                .into(),
+                            model: Some("mock".into()),
+                        },
+                    }));
+                Ok(())
+            }
+            AppUiCommand::InterruptTurn(_) => {
+                self.enqueue_protocol(UiNotification::Warning(WarningEvent {
+                    session_id: SessionKey("local:prototype#interrupt".into()),
+                    turn_id: None,
+                    code: "mock_interrupt".into(),
+                    message: "Interrupt is not yet wired in the mock backend.".into(),
+                }));
+                Ok(())
+            }
+            AppUiCommand::ListModels(params) => {
+                self.queue.push_back(model_list_event(ModelListResult {
+                    session_id: params.session_id,
+                    models: vec![mock_model_status(true), mock_alt_model_status()],
+                }));
+                Ok(())
+            }
+            AppUiCommand::ProfileLlmList(_) => {
+                self.queue
+                    .push_back(profile_llm_list_event(mock_profile_llm_list()));
+                Ok(())
+            }
+            AppUiCommand::SelectModel(params) => {
+                let selected = ModelStatus {
+                    model: params.model,
+                    provider: params.provider.unwrap_or_else(|| "mock".into()),
+                    title: None,
+                    family: None,
+                    route: params.route,
+                    selected: true,
+                    available: Some(true),
+                    queue_mode: Some("interactive".into()),
+                    qoe_policy: Some("mock".into()),
+                };
+                self.queue.push_back(model_select_event(
+                    ModelSelectResult {
+                        session_id: params.session_id.clone(),
+                        selected,
+                        applied: true,
+                        restart_required: false,
+                        runtime_policy_stamp: None,
+                    },
+                    Some(params.session_id),
+                ));
+                Ok(())
+            }
+            AppUiCommand::ProfileLlmCatalog(_) => {
+                self.queue
+                    .push_back(profile_llm_catalog_event(mock_profile_llm_catalog()));
+                Ok(())
+            }
+            AppUiCommand::ProfileLlmSelect(params) => {
+                let selected = ModelStatus {
+                    model: params.model_id,
+                    provider: params.family_id,
+                    title: None,
+                    family: None,
+                    route: Some(params.route_id),
+                    selected: true,
+                    available: Some(true),
+                    queue_mode: None,
+                    qoe_policy: None,
+                };
+                let initiating = params
+                    .session_id
+                    .clone()
+                    .unwrap_or_else(|| Self::mock_session_key(&self.profile_id(), "m9"));
+                self.queue.push_back(model_select_event(
+                    ModelSelectResult {
+                        session_id: initiating.clone(),
+                        selected,
+                        applied: true,
+                        restart_required: false,
+                        runtime_policy_stamp: None,
+                    },
+                    Some(initiating),
+                ));
+                Ok(())
+            }
+            command @ (AppUiCommand::ProfileLlmUpsert(_)
+            | AppUiCommand::ProfileLlmDelete(_)
+            | AppUiCommand::ProfileLlmTest(_)) => {
+                let method = match command {
+                    AppUiCommand::ProfileLlmUpsert(_) => {
+                        crate::model::APPUI_METHOD_PROFILE_LLM_UPSERT
+                    }
+                    AppUiCommand::ProfileLlmDelete(_) => {
+                        crate::model::APPUI_METHOD_PROFILE_LLM_DELETE
+                    }
+                    AppUiCommand::ProfileLlmTest(_) => crate::model::APPUI_METHOD_PROFILE_LLM_TEST,
+                    _ => unreachable!(),
+                };
+                self.queue.push_back(profile_llm_mutation_event(
+                    method,
+                    ProfileLlmMutationResult {
+                        profile_id: Some(self.profile_id()),
+                        primary: mock_profile_llm_list().primary,
+                        fallbacks: mock_profile_llm_list().fallbacks,
+                        applied: true,
+                        llm: None,
+                        runtime_policy_stamp: None,
+                        message: None,
+                        error: None,
+                    },
+                ));
+                Ok(())
+            }
+            AppUiCommand::AuthStatus(_) => {
+                self.queue.push_back(auth_status_event(AuthStatusResult {
+                    bootstrap_mode: false,
+                    email_login_enabled: true,
+                    admin_token_login_enabled: false,
+                    allow_self_registration: true,
+                    scoped_profile: None,
+                    authenticated: false,
+                    email_otp: true,
+                    token_login: false,
+                    profile_id: None,
+                }));
+                Ok(())
+            }
+            AppUiCommand::AuthMe(_) => {
+                self.queue.push_back(auth_me_event(AuthMeResult::Legacy {
+                    email: Some("mock@example.com".into()),
+                    profile_id: Some(self.profile_id()),
+                }));
+                Ok(())
+            }
+            AppUiCommand::AuthSendCode(_) => {
+                self.queue
+                    .push_back(auth_send_code_event(AuthSendCodeResult {
+                        ok: true,
+                        message: Some("OTP send acknowledged".into()),
+                    }));
+                Ok(())
+            }
+            AppUiCommand::AuthVerify(_) => {
+                self.queue.push_back(auth_verify_event(AuthVerifyResult {
+                    ok: true,
+                    token: Some(AppUiAuthToken::new("mock-token")),
+                    user: Some(serde_json::json!({
+                        "id": self.profile_id(),
+                        "email": "mock@example.com"
+                    })),
+                    message: Some("OTP verify acknowledged".into()),
+                }));
+                Ok(())
+            }
+            AppUiCommand::AuthLogout(_) => {
+                self.queue.push_back(auth_logout_event(AuthLogoutResult {
+                    ok: true,
+                    message: Some("Logout acknowledged".into()),
+                }));
+                Ok(())
+            }
+            AppUiCommand::ProfileLocalCreate(params) => {
+                self.queue
+                    .push_back(profile_local_create_event(ProfileLocalCreateResult {
+                        profile_id: format!("local-{}", params.username),
+                        user_id: format!("local-{}", params.username),
+                        name: params.name,
+                        username: params.username,
+                        email: params.email,
+                        created: true,
+                        runtime_mode: "solo".into(),
+                    }));
+                Ok(())
+            }
+            AppUiCommand::ProfileLlmFetchModels(_) => {
+                // Same event shape as the real decode arm
+                // (profile_llm_fetch_models_event) so the mock cannot mask a
+                // missing real-backend mapping.
+                self.queue
+                    .push_back(profile_llm_fetch_models_event(&serde_json::json!({
+                        "models": [],
+                        "reason": "mock backend",
+                    })));
+                Ok(())
+            }
+            AppUiCommand::ProfileSkillsList(_) => {
+                self.queue
+                    .push_back(profile_skills_list_event(mock_profile_skills()));
+                Ok(())
+            }
+            AppUiCommand::ProfileSkillsRegistrySearch(_) => {
+                self.queue
+                    .push_back(profile_skills_registry_search_event(mock_skill_registry()));
+                Ok(())
+            }
+            AppUiCommand::ProfileSkillsInstall(params) => {
+                self.queue
+                    .push_back(profile_skills_mutation_event(ProfileSkillsMutationResult {
+                        profile_id: params.profile_id,
+                        ok: true,
+                        installed: vec![
+                            params
+                                .repo
+                                .rsplit('/')
+                                .next()
+                                .unwrap_or(params.repo.as_str())
+                                .to_owned(),
+                        ],
+                        skipped: Vec::new(),
+                        deps_installed: Vec::new(),
+                        removed: None,
+                        message: None,
+                    }));
+                Ok(())
+            }
+            AppUiCommand::ProfileSkillsRemove(params) => {
+                self.queue
+                    .push_back(profile_skills_mutation_event(ProfileSkillsMutationResult {
+                        profile_id: params.profile_id,
+                        ok: true,
+                        installed: Vec::new(),
+                        skipped: Vec::new(),
+                        deps_installed: Vec::new(),
+                        removed: Some(params.name),
+                        message: None,
+                    }));
+                Ok(())
+            }
+            AppUiCommand::RespondApproval(params) => {
+                self.enqueue_protocol(UiNotification::Warning(WarningEvent {
+                    session_id: params.session_id,
+                    turn_id: None,
+                    code: "mock_approval_response".into(),
+                    message: format!("Mock approval response recorded: {:?}", params.decision),
+                }));
+                Ok(())
+            }
+            AppUiCommand::ListApprovalScopes(_) => {
+                self.queue.push_back(
+                    AppUiEvent::Status(AppUiStatus {
+                        message: "Mock backend has no persisted approval scopes.".into(),
+                    })
+                    .into(),
+                );
+                Ok(())
+            }
+            AppUiCommand::ListPermissionProfiles(params) => {
+                let current = self
+                    .permission_profiles
+                    .get(&params.session_id)
+                    .copied()
+                    .unwrap_or_default();
+                self.queue
+                    .push_back(permission_profile_list_event(PermissionProfileListResult {
+                        session_id: params.session_id,
+                        current,
+                        profiles: Vec::new(),
+                    }));
+                Ok(())
+            }
+            AppUiCommand::SetPermissionProfile(params) => {
+                let previous = self
+                    .permission_profiles
+                    .get(&params.session_id)
+                    .copied()
+                    .unwrap_or_default();
+                let current = params.update.apply_to(previous);
+                let applied = current != previous;
+                self.permission_profiles
+                    .insert(params.session_id.clone(), current);
+                self.queue
+                    .push_back(permission_profile_set_event(PermissionProfileSetResult {
+                        session_id: params.session_id,
+                        current,
+                        applied,
+                    }));
+                Ok(())
+            }
+            AppUiCommand::ListMcpStatus(params) => {
+                self.queue.push_back(mcp_status_event(McpStatusListResult {
+                    session_id: params.session_id,
+                    servers: mock_mcp_servers(),
+                }));
+                Ok(())
+            }
+            AppUiCommand::ListMcpConfig(params) => {
+                self.queue
+                    .push_back(mcp_config_list_event(McpConfigListResult {
+                        session_id: params.session_id,
+                        profile_id: params.profile_id,
+                        servers: mock_mcp_config_entries(),
+                    }));
+                Ok(())
+            }
+            AppUiCommand::UpsertMcpConfig(params) => {
+                self.queue
+                    .push_back(mcp_config_mutation_event(McpConfigMutationResult {
+                        profile_id: params.profile_id,
+                        ok: true,
+                        applied: true,
+                        server: Some(params.server),
+                        message: Some("Mock MCP config upserted".into()),
+                        ..McpConfigMutationResult::default()
+                    }));
+                Ok(())
+            }
+            AppUiCommand::DeleteMcpConfig(params) => {
+                self.queue
+                    .push_back(mcp_config_mutation_event(McpConfigMutationResult {
+                        profile_id: params.profile_id,
+                        ok: true,
+                        applied: true,
+                        server: Some(params.server),
+                        message: Some("Mock MCP config deleted".into()),
+                        ..McpConfigMutationResult::default()
+                    }));
+                Ok(())
+            }
+            AppUiCommand::SetMcpConfigEnabled(params) => {
+                self.queue
+                    .push_back(mcp_config_mutation_event(McpConfigMutationResult {
+                        profile_id: params.profile_id,
+                        ok: true,
+                        applied: true,
+                        server: Some(params.server),
+                        message: Some(if params.enabled {
+                            "Mock MCP config enabled".into()
+                        } else {
+                            "Mock MCP config disabled".into()
+                        }),
+                        ..McpConfigMutationResult::default()
+                    }));
+                Ok(())
+            }
+            AppUiCommand::TestMcpConfig(params) => {
+                self.queue
+                    .push_back(mcp_config_mutation_event(McpConfigMutationResult {
+                        session_id: params.session_id,
+                        profile_id: params.profile_id,
+                        ok: true,
+                        applied: false,
+                        server: Some(params.server),
+                        message: Some("Mock MCP config test passed".into()),
+                        ..McpConfigMutationResult::default()
+                    }));
+                Ok(())
+            }
+            AppUiCommand::ListToolStatus(params) => {
+                self.queue
+                    .push_back(tool_status_event(ToolStatusListResult {
+                        session_id: params.session_id,
+                        policy_id: Some("mock-coding".into()),
+                        coding_tool_contract: None,
+                        tools: mock_tool_statuses(),
+                    }));
+                Ok(())
+            }
+            AppUiCommand::ListToolConfig(params) => {
+                self.queue
+                    .push_back(tool_config_list_event(ToolConfigListResult {
+                        session_id: params.session_id,
+                        profile_id: params.profile_id,
+                        policy_id: Some("mock-coding".into()),
+                        tools: mock_tool_config_entries(),
+                    }));
+                Ok(())
+            }
+            AppUiCommand::SetToolConfigEnabled(params) => {
+                self.queue
+                    .push_back(tool_config_mutation_event(ToolConfigMutationResult {
+                        profile_id: params.profile_id,
+                        ok: true,
+                        applied: true,
+                        tool: Some(params.tool),
+                        message: Some(if params.enabled {
+                            "Mock tool config enabled".into()
+                        } else {
+                            "Mock tool config disabled".into()
+                        }),
+                        ..ToolConfigMutationResult::default()
+                    }));
+                Ok(())
+            }
+            AppUiCommand::UpsertToolConfig(params) => {
+                self.queue
+                    .push_back(tool_config_mutation_event(ToolConfigMutationResult {
+                        profile_id: params.profile_id,
+                        ok: true,
+                        applied: true,
+                        tool: Some(params.tool),
+                        message: Some("Mock tool config upserted".into()),
+                        ..ToolConfigMutationResult::default()
+                    }));
+                Ok(())
+            }
+            AppUiCommand::DeleteToolConfig(params) => {
+                self.queue
+                    .push_back(tool_config_mutation_event(ToolConfigMutationResult {
+                        profile_id: params.profile_id,
+                        ok: true,
+                        applied: true,
+                        tool: Some(params.tool),
+                        message: Some("Mock tool config deleted".into()),
+                        ..ToolConfigMutationResult::default()
+                    }));
+                Ok(())
+            }
+            AppUiCommand::TestToolConfig(params) => {
+                self.queue
+                    .push_back(tool_config_mutation_event(ToolConfigMutationResult {
+                        session_id: params.session_id,
+                        profile_id: params.profile_id,
+                        ok: true,
+                        applied: false,
+                        tool: Some(params.tool),
+                        message: Some("Mock tool config test passed".into()),
+                        ..ToolConfigMutationResult::default()
+                    }));
+                Ok(())
+            }
+            AppUiCommand::GetDiffPreview(params) => {
+                self.queue
+                    .push_back(ClientEvent::DiffPreview(DiffPreviewGetResult {
+                        status: "ready".into(),
+                        source: "mock approval fixture".into(),
+                        preview: mock_diff_preview(params.session_id, params.preview_id),
+                    }));
+                Ok(())
+            }
+            AppUiCommand::ReadTaskOutput(_) => Err(eyre!(
+                "mock app-ui backend does not implement task output reads yet"
+            )),
+            AppUiCommand::ReadTaskArtifact(_) => Err(eyre!(
+                "mock app-ui backend does not implement task artifact reads yet"
+            )),
+            AppUiCommand::HydrateSession(_) => Err(eyre!(
+                "mock app-ui backend does not implement session hydrate yet"
+            )),
+            // Stub a small `session/list` so `--mock` and tests can exercise the
+            // `/resume` picker end-to-end. Mirrors the server's `SessionInfo`
+            // shape (`{id, message_count, title?}`); `updated_at` is included on
+            // one row to exercise the ordering path.
+            AppUiCommand::ListSessions(_) => {
+                self.queue
+                    .push_back(ClientEvent::SessionList(SessionListResult {
+                        sessions: serde_json::json!([
+                            {
+                                "id": "local:mock#alpha",
+                                "message_count": 12,
+                                "title": "Mock session alpha",
+                                "updated_at": "2026-06-30T10:00:00Z"
+                            },
+                            {
+                                "id": "local:mock#bravo",
+                                "message_count": 3,
+                                "title": "Mock session bravo",
+                                "updated_at": "2026-07-01T09:30:00Z"
+                            },
+                            {
+                                "id": "local:mock#charlie",
+                                "message_count": 47
+                            }
+                        ]),
+                    }));
+                Ok(())
+            }
+            // Stub a `session/rollback` so `--mock` and tests can exercise the
+            // `/rewind` picker end-to-end: drop one user turn and return a
+            // trimmed `thread` (same shape as `session/hydrate`) with a single
+            // surviving user message, echoing the request's session id.
+            AppUiCommand::SessionRollback(params) => {
+                let session_id = params.session_id.clone();
+                self.queue
+                    .push_back(ClientEvent::SessionRollback(SessionRollbackResult {
+                        dropped_turns: 1,
+                        thread: SessionHydrateResult {
+                            replayed_projection_envelopes: None,
+                            projection_thread_sequences: None,
+                            session_id: session_id.clone(),
+                            cursor: UiCursor {
+                                stream: session_id.0.clone(),
+                                seq: 1,
+                            },
+                            context: None,
+                            context_state: None,
+                            replayed_tool_envelopes: None,
+                            messages: Some(vec![HydratedMessage {
+                                seq: 1,
+                                role: "user".into(),
+                                content: "first mock prompt".into(),
+                                turn_id: None,
+                                thread_id: None,
+                                client_message_id: None,
+                                persisted_at: Utc::now(),
+                                reasoning_content: None,
+                                message_id: None,
+                                source: None,
+                                media: Vec::new(),
+                            }]),
+                            threads: None,
+                            turns: None,
+                            pending_approvals: None,
+                            pending_questions: None,
+                            replayed_envelopes: None,
+                        },
+                    }));
+                Ok(())
+            }
+            AppUiCommand::GetThreadGraph(_) => Err(eyre!(
+                "mock app-ui backend does not implement thread graph reads yet"
+            )),
+            AppUiCommand::GetTurnState(_) => Err(eyre!(
+                "mock app-ui backend does not implement turn state reads yet"
+            )),
+            AppUiCommand::StartReview(_) => Err(eyre!(
+                "mock app-ui backend does not implement review start yet"
+            )),
+            // `!`-bang local exec is a client-local action; the mock backend
+            // does not run real processes, so it is a no-op here. Tests drive
+            // the completion path by feeding a synthetic LocalShellResult into
+            // the store directly.
+            AppUiCommand::LocalShellExec { .. } => Ok(()),
+            _ => Err(eyre!(
+                "mock app-ui backend does not implement unsupported command {method} yet"
+            )),
+        }
+    }
+
+    fn next_event(&mut self) -> Result<Option<ClientEvent>> {
+        Ok(self.queue.pop_front())
+    }
+}
+
+fn mock_approval_kind() -> String {
+    std::env::var("OCTOSCODE_MOCK_APPROVAL_KIND").unwrap_or_else(|_| approval_kinds::COMMAND.into())
+}
+
+fn mock_model_status(selected: bool) -> ModelStatus {
+    ModelStatus {
+        model: "mock-coding".into(),
+        provider: "mock".into(),
+        title: Some("Mock Coding".into()),
+        family: Some("mock".into()),
+        route: None,
+        selected,
+        available: Some(true),
+        queue_mode: Some("interactive".into()),
+        qoe_policy: Some("mock".into()),
+    }
+}
+
+fn mock_alt_model_status() -> ModelStatus {
+    ModelStatus {
+        model: "mock-review".into(),
+        provider: "mock".into(),
+        title: Some("Mock Review".into()),
+        family: Some("mock".into()),
+        route: Some("review".into()),
+        selected: false,
+        available: Some(true),
+        queue_mode: Some("collect".into()),
+        qoe_policy: Some("mock".into()),
+    }
+}
+
+fn mock_profile_llm_catalog() -> ProfileLlmCatalogResult {
+    let mut families = serde_json::Map::new();
+    families.insert(
+        "moonshot".into(),
+        serde_json::json!({
+            "env": "MOONSHOT_API_KEY",
+            "models": [{
+                "id": "kimi-k2.5",
+                "endpoints": [
+                    {"id": "moonshot", "label": "Official API"},
+                    {
+                        "id": "autodl",
+                        "label": "AutoDL",
+                        "base_url": "https://www.autodl.art/api/v1",
+                        "api_key_env": "AUTODL_API_KEY"
+                    }
+                ]
+            }]
+        }),
+    );
+    // Keyless local-server family (empty env) so --mock runs can exercise the
+    // keyless onboarding path at all (red-team pass, octoscode#562).
+    families.insert(
+        "local".into(),
+        serde_json::json!({
+            "env": "",
+            "models": [{
+                "id": "local-default",
+                "endpoints": [{"id": "official", "label": "Official API (local)"}]
+            }]
+        }),
+    );
+    families.insert(
+        "minimax".into(),
+        serde_json::json!({
+            "env": "MINIMAX_API_KEY",
+            "models": [{
+                "id": "MiniMax-M2.5-highspeed",
+                "endpoints": [{
+                    "id": "wisemodel",
+                    "label": "WiseModel",
+                    "base_url": "https://open.ospreyai.cn/v1",
+                    "api_key_env": "WISEMODEL_API_KEY"
+                }]
+            }]
+        }),
+    );
+    ProfileLlmCatalogResult { families }
+}
+
+fn mock_profile_llm_list() -> ProfileLlmListResult {
+    ProfileLlmListResult {
+        profile_id: Some("coding".into()),
+        primary: Some(crate::model::LlmConfiguredProvider {
+            provider: "moonshot".into(),
+            model: "kimi-k2.5".into(),
+            family_id: Some("moonshot".into()),
+            model_id: Some("kimi-k2.5".into()),
+            route: None,
+            route_id: Some("autodl".into()),
+            base_url: Some("https://www.autodl.art/api/v1".into()),
+            api_key_env: Some("AUTODL_API_KEY".into()),
+            has_api_key: true,
+            selected: true,
+            available: Some(true),
+            model_hints: None,
+            cost_per_m: None,
+            strong: None,
+        }),
+        fallbacks: Vec::new(),
+        llm: None,
+        runtime_policy_stamp: None,
+    }
+}
+
+fn mock_profile_skills() -> ProfileSkillsListResult {
+    ProfileSkillsListResult {
+        profile_id: Some("coding".into()),
+        count: 1,
+        skills: vec![ProfileSkillEntry {
+            name: "deep-search".into(),
+            version: Some("0.1.0".into()),
+            tool_count: 1,
+            source_repo: Some("octos-org/octos-hub/skills/deep-search".into()),
+            installed: true,
+            status: Some("installed".into()),
+        }],
+    }
+}
+
+fn mock_skill_registry() -> ProfileSkillsRegistrySearchResult {
+    ProfileSkillsRegistrySearchResult {
+        profile_id: Some("coding".into()),
+        packages: vec![ProfileSkillRegistryPackage {
+            name: "deep-search".into(),
+            description: "Mock registry package for deep research.".into(),
+            repo: "octos-org/octos-hub/skills/deep-search".into(),
+            version: Some("0.1.0".into()),
+            author: Some("ra".into()),
+            license: Some("MIT".into()),
+            skills: vec!["deep-search".into()],
+            requires: Vec::new(),
+            provides_tools: true,
+            tags: vec!["research".into()],
+            installed: true,
+            installed_skills: vec!["deep-search".into()],
+        }],
+    }
+}
+
+fn mock_session_status(
+    session_id: SessionKey,
+    cwd: Option<String>,
+    readonly: bool,
+) -> SessionStatusReadResult {
+    let sandbox = if readonly {
+        "read-only"
+    } else {
+        "workspace-write"
+    };
+    SessionStatusReadResult {
+        session_id,
+        runtime_mode: Some("solo".into()),
+        profile_id: Some("coding".into()),
+        cwd: cwd.clone(),
+        workspace_root: cwd,
+        active_turn_id: None,
+        runtime_policy_stamp: Some(RuntimePolicyStamp {
+            runtime_mode: Some("solo".into()),
+            profile_id: Some("coding".into()),
+            model: Some("mock-coding".into()),
+            provider: Some("mock".into()),
+            approval_policy: Some(if readonly { "on-request" } else { "on-failure" }.into()),
+            sandbox_mode: Some(sandbox.into()),
+            sandbox: Some(sandbox.into()),
+            permission_profile: Some(sandbox.into()),
+            filesystem_scope: Some(if readonly { "read-only" } else { "workspace" }.into()),
+            network: Some("blocked".into()),
+            tool_policy_id: Some("mock-coding".into()),
+            mcp_servers: vec![RuntimePolicyMcpServer::name("mock-filesystem")],
+            memory_scope: Some("mock-session".into()),
+            qoe_policy: Some("mock".into()),
+            queue_mode: Some("interactive".into()),
+            tool_contract_id: Some("codex-compatible-coding-v1".into()),
+            tool_contract_version: Some("1".into()),
+            model_toolset: Some("coding".into()),
+            dynamic_tool_discovery: Some("enabled".into()),
+        }),
+        model: Some(mock_model_status(true)),
+        permission_profile: Some(sandbox.into()),
+        approval_policy: Some(if readonly { "on-request" } else { "on-failure" }.into()),
+        sandbox_mode: Some(sandbox.into()),
+        sandbox: Some(sandbox.into()),
+        filesystem_scope: Some(if readonly { "read-only" } else { "workspace" }.into()),
+        network: Some("blocked".into()),
+        tool_policy_id: Some("mock-coding".into()),
+        mcp_servers: vec!["mock-filesystem".into()],
+        memory_scope: Some("mock-session".into()),
+        health: Some(RuntimeHealthStatus {
+            status: "healthy".into(),
+            message: Some("mock backend".into()),
+        }),
+        mcp_summary: Some(McpStatusSummary {
+            connected: 1,
+            connecting: 0,
+            failed: 1,
+            disabled: 0,
+        }),
+        tool_summary: Some(ToolStatusSummary {
+            visible: 2,
+            enabled: 1,
+            denied: 1,
+            policy_id: Some("mock-coding".into()),
+        }),
+        usage: None,
+        cursor: None,
+        capabilities: Some(tui_capabilities()),
+    }
+}
+
+fn mock_mcp_servers() -> Vec<McpStatus> {
+    vec![
+        McpStatus {
+            server: "mock-filesystem".into(),
+            status: "connected".into(),
+            transport: Some("stdio".into()),
+            endpoint: None,
+            tool_count: Some(2),
+            detail: Some("mock server".into()),
+            last_error: None,
+        },
+        McpStatus {
+            server: "mock-playwright".into(),
+            status: "failed".into(),
+            transport: Some("stdio".into()),
+            endpoint: None,
+            tool_count: Some(0),
+            detail: None,
+            last_error: Some("mock failure".into()),
+        },
+    ]
+}
+
+fn mock_mcp_config_entries() -> Vec<McpConfigEntry> {
+    vec![
+        McpConfigEntry {
+            name: "mock-filesystem".into(),
+            enabled: true,
+            transport: Some("stdio".into()),
+            command: Some("ra-mcp-filesystem".into()),
+            args: vec!["/tmp".into()],
+            env_keys: Vec::new(),
+            status: Some("connected".into()),
+            tool_count: Some(4),
+            detail: Some("mock server truth".into()),
+            ..McpConfigEntry::default()
+        },
+        McpConfigEntry {
+            name: "mock-playwright".into(),
+            enabled: false,
+            transport: Some("stdio".into()),
+            command: Some("ra-mcp-playwright".into()),
+            status: Some("disabled".into()),
+            last_error: Some("disabled by mock config".into()),
+            ..McpConfigEntry::default()
+        },
+    ]
+}
+
+fn mock_tool_statuses() -> Vec<ToolStatus> {
+    vec![
+        ToolStatus {
+            tool: "read_file".into(),
+            title: Some("Read File".into()),
+            source: Some("platform".into()),
+            enabled: true,
+            visible: true,
+            tags: vec!["filesystem".into(), "read".into()],
+            risk: Some("low".into()),
+            policy_id: Some("mock-coding".into()),
+            denial: None,
+        },
+        ToolStatus {
+            tool: "shell".into(),
+            title: Some("Shell".into()),
+            source: Some("platform".into()),
+            enabled: false,
+            visible: true,
+            tags: vec!["shell".into(), "write".into()],
+            risk: Some("high".into()),
+            policy_id: Some("mock-coding".into()),
+            denial: Some(ToolPolicyDenial {
+                code: "tool_denied".into(),
+                tool: "shell".into(),
+                policy: Some("mock-coding".into()),
+                reason: "shell disabled in mock read-only policy".into(),
+                recoverable: true,
+            }),
+        },
+    ]
+}
+
+fn mock_tool_config_entries() -> Vec<ToolConfigEntry> {
+    vec![
+        ToolConfigEntry {
+            tool: "search".into(),
+            title: Some("Search".into()),
+            source: Some("platform".into()),
+            enabled: true,
+            visible: true,
+            tags: vec!["search".into()],
+            risk: Some("low".into()),
+            status: Some("ready".into()),
+            detail: Some("mock server truth".into()),
+        },
+        ToolConfigEntry {
+            tool: "web_fetch".into(),
+            title: Some("Web Fetch".into()),
+            source: Some("platform".into()),
+            enabled: false,
+            visible: true,
+            tags: vec!["web".into()],
+            risk: Some("medium".into()),
+            status: Some("disabled".into()),
+            detail: Some("disabled by mock config".into()),
+        },
+    ]
+}
+
+fn mock_approval_event(
+    session_id: SessionKey,
+    turn_id: TurnId,
+    requested_kind: impl AsRef<str>,
+) -> ApprovalRequestedEvent {
+    let requested_kind = requested_kind.as_ref();
+    let kind = match requested_kind {
+        approval_kinds::DIFF => approval_kinds::DIFF,
+        approval_kinds::FILESYSTEM => approval_kinds::FILESYSTEM,
+        approval_kinds::NETWORK => approval_kinds::NETWORK,
+        approval_kinds::SANDBOX_ESCALATION | "sandbox-escalation" => {
+            approval_kinds::SANDBOX_ESCALATION
+        }
+        _ => approval_kinds::COMMAND,
+    };
+
+    let mut approval = ApprovalRequestedEvent::generic(
+        session_id,
+        ra_core::ui_protocol::ApprovalId::new(),
+        turn_id,
+        mock_approval_tool_name(kind),
+        mock_approval_title(kind),
+        mock_approval_body(kind),
+    );
+    approval.approval_kind = Some(kind.into());
+    approval.risk = Some(mock_approval_risk(kind).into());
+    approval.typed_details = Some(mock_approval_details(kind));
+    approval
+}
+
+fn mock_approval_tool_name(kind: &str) -> &'static str {
+    match kind {
+        approval_kinds::DIFF => "diff_edit",
+        approval_kinds::FILESYSTEM => "write_file",
+        approval_kinds::NETWORK => "web_fetch",
+        approval_kinds::SANDBOX_ESCALATION => "shell",
+        _ => "shell",
+    }
+}
+
+/// Workspace root shown in mock approval details: the current directory,
+/// so no fixed machine path is compiled into the binary.
+fn mock_workspace_root() -> String {
+    std::env::current_dir()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|_| ".".into())
+}
+
+fn mock_approval_title(kind: &str) -> &'static str {
+    match kind {
+        approval_kinds::DIFF => "Mock diff approval boundary",
+        approval_kinds::FILESYSTEM => "Mock filesystem approval boundary",
+        approval_kinds::NETWORK => "Mock network approval boundary",
+        approval_kinds::SANDBOX_ESCALATION => "Mock sandbox escalation boundary",
+        _ => "Mock approval boundary",
+    }
+}
+
+fn mock_approval_body(kind: &str) -> &'static str {
+    match kind {
+        approval_kinds::DIFF => "Review the structured diff preview before approving.",
+        approval_kinds::FILESYSTEM => "The tool wants to write outside the workspace root.",
+        approval_kinds::NETWORK => "The tool wants outbound network access.",
+        approval_kinds::SANDBOX_ESCALATION => {
+            "The tool wants to expand sandbox permissions for this command."
+        }
+        _ => "M9.14 pauses here with a typed approval surface.",
+    }
+}
+
+fn mock_approval_risk(kind: &str) -> &'static str {
+    match kind {
+        approval_kinds::SANDBOX_ESCALATION => "high",
+        approval_kinds::FILESYSTEM | approval_kinds::NETWORK => "medium",
+        _ => "low",
+    }
+}
+
+fn mock_approval_details(kind: &str) -> ApprovalTypedDetails {
+    match kind {
+        approval_kinds::DIFF => ApprovalTypedDetails {
+            kind: approval_kinds::DIFF.into(),
+            command: None,
+            sandbox: None,
+            diff: Some(ApprovalDiffDetails {
+                preview_id: PreviewId::new(),
+                operation: Some("apply".into()),
+                file_count: Some(1),
+                additions: Some(6),
+                deletions: Some(2),
+                summary: Some("Update the coding loop parser and tests".into()),
+            }),
+            filesystem: None,
+            network: None,
+            sandbox_escalation: None,
+        },
+        approval_kinds::FILESYSTEM => ApprovalTypedDetails {
+            kind: approval_kinds::FILESYSTEM.into(),
+            command: None,
+            sandbox: None,
+            diff: None,
+            filesystem: Some(ApprovalFilesystemDetails {
+                operation: "write".into(),
+                paths: vec!["/tmp/ra-mock-approval.txt".into()],
+                outside_workspace: true,
+                writable_roots: vec![mock_workspace_root()],
+            }),
+            network: None,
+            sandbox_escalation: None,
+        },
+        approval_kinds::NETWORK => ApprovalTypedDetails {
+            kind: approval_kinds::NETWORK.into(),
+            command: None,
+            sandbox: None,
+            diff: None,
+            filesystem: None,
+            network: Some(ApprovalNetworkDetails {
+                operation: "fetch".into(),
+                hosts: vec!["example.com".into()],
+                ports: vec![443],
+                urls: vec!["https://example.com".into()],
+            }),
+            sandbox_escalation: None,
+        },
+        approval_kinds::SANDBOX_ESCALATION => ApprovalTypedDetails {
+            kind: approval_kinds::SANDBOX_ESCALATION.into(),
+            command: None,
+            sandbox: None,
+            diff: None,
+            filesystem: None,
+            network: None,
+            sandbox_escalation: Some(ApprovalSandboxEscalationDetails {
+                from: Some(ApprovalSandboxEscalationEndpoint {
+                    mode: Some("workspace-write".into()),
+                    network_access: Some(false),
+                }),
+                to: Some(ApprovalSandboxEscalationEndpoint {
+                    mode: Some("danger-full-access".into()),
+                    network_access: Some(true),
+                }),
+                requested_permissions: vec!["network".into(), "write:/tmp".into()],
+                justification: Some("probe a privileged command in the mock fixture".into()),
+                suggested_prefix_rule: vec!["sudo".into(), "true".into()],
+            }),
+        },
+        _ => ApprovalTypedDetails::command(
+            ApprovalCommandDetails {
+                argv: vec![
+                    "cargo".into(),
+                    "test".into(),
+                    "-p".into(),
+                    "ra-core".into(),
+                ],
+                command_line: Some("cargo test -p ra-core ui_protocol".into()),
+                cwd: std::env::current_dir()
+                    .ok()
+                    .map(|path| path.display().to_string()),
+                env_keys: vec!["RUST_BACKTRACE".into()],
+                tool_call_id: Some("mock.shell.approval".into()),
+            },
+            Some(ApprovalSandboxDetails {
+                mode: Some("workspace-write".into()),
+                filesystem_access: Some("workspace-write".into()),
+                network_access: Some(false),
+                writable_roots: vec![mock_workspace_root()],
+            }),
+        ),
+    }
+}
+
+fn mock_diff_preview(session_id: SessionKey, preview_id: PreviewId) -> DiffPreview {
+    DiffPreview {
+        session_id,
+        preview_id,
+        title: Some("Mock approval diff".into()),
+        files: vec![DiffPreviewFile {
+            path: "src/coding_loop.rs".into(),
+            old_path: None,
+            status: "modified".into(),
+            hunks: vec![DiffPreviewHunk {
+                header: "@@ -1,3 +1,5 @@".into(),
+                lines: vec![
+                    DiffPreviewLine {
+                        kind: "context".into(),
+                        content: "pub fn parse(input: &str) -> Plan {".into(),
+                        old_line: Some(1),
+                        new_line: Some(1),
+                    },
+                    DiffPreviewLine {
+                        kind: "removed".into(),
+                        content: "    Plan::default()".into(),
+                        old_line: Some(2),
+                        new_line: None,
+                    },
+                    DiffPreviewLine {
+                        kind: "added".into(),
+                        content: "    Plan::from_markdown(input)".into(),
+                        old_line: None,
+                        new_line: Some(2),
+                    },
+                ],
+            }],
+        }],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{
+        AgentArtifactReadParams, ConfigCapabilitiesListParams, McpConfigDeleteParams,
+        McpConfigListParams, McpConfigSetEnabledParams, McpConfigTestParams, McpConfigUpsertParams,
+        McpStatusListParams, ModelListParams, ModelSelectParams, ProfileLocalCreateParams,
+        ProfileSkillsInstallParams, ProfileSkillsListParams, ProfileSkillsRegistrySearchParams,
+        ProfileSkillsRemoveParams, ReviewStartParams, SessionStatusReadParams,
+        ToolConfigDeleteParams, ToolConfigListParams, ToolConfigSetEnabledParams,
+        ToolConfigTestParams, ToolConfigUpsertParams, ToolStatusListParams,
+    };
+    use ra_core::TaskId;
+    use ra_core::ui_protocol::{
+        ApprovalDecision, ApprovalRespondParams, ApprovalScopesListParams, DiffPreviewGetParams,
+        InputItem, PermissionNetworkPolicy, PermissionProfileListParams, PermissionProfileMode,
+        PermissionProfileSetParams, PermissionProfileUpdate, PreviewId, SessionHydrateParams,
+        SessionListParams, SessionOpenParams, TaskArtifactReadParams, TaskCancelParams,
+        TaskListParams, TaskOutputReadParams, TaskRestartFromNodeParams, ThreadGraphGetParams,
+        TurnInterruptParams, TurnLifecycleState, TurnStartParams, TurnStateGetParams, UiCursor,
+    };
+    use serde_json::json;
+    use std::{
+        io,
+        net::TcpListener as StdTcpListener,
+        sync::mpsc,
+        thread,
+        time::{Duration, Instant},
+    };
+
+    #[test]
+    fn stdio_target_label_redacts_inline_secret_env_assignments() {
+        let cmd = "env DEEPSEEK_API_KEY=sk-abc123secret OCTOS_FOO=1 ra serve --stdio --solo --data-dir /d";
+        let label = protocol_target_label(cmd);
+        assert!(
+            label.starts_with("stdio:"),
+            "stdio target label must keep the stdio: scheme: {label}"
+        );
+        assert!(
+            !label.contains("sk-abc123secret"),
+            "secret API key value must not appear in the displayed stdio target: {label}"
+        );
+        assert!(
+            label.contains("DEEPSEEK_API_KEY=<redacted>"),
+            "secret env name must remain visible with a redacted value: {label}"
+        );
+        // Non-secret structure stays intact for debuggability.
+        assert!(
+            label.contains("OCTOS_FOO=1"),
+            "non-secret env preserved: {label}"
+        );
+        assert!(
+            label.contains("serve --stdio --solo"),
+            "command preserved: {label}"
+        );
+    }
+
+    #[test]
+    fn websocket_target_label_is_unchanged() {
+        let ws = "ws://127.0.0.1:50179/api/ui-protocol/ws";
+        assert_eq!(protocol_target_label(ws), ws);
+    }
+
+    #[test]
+    fn negotiated_stdio_and_websocket_features_enable_resume_and_rewind() {
+        use crate::menu::{
+            AvailabilityContext, CapabilitySet, CommandRegistry, ConnectionState, RuntimeMode,
+            TaskActivity,
+        };
+
+        let registry = CommandRegistry::with_core_commands();
+        for old_server in [false, true] {
+            let mut exchange = ProtocolExchange::default();
+            let hello = exchange.build_client_hello_request(appui_feature_tokens_for(old_server));
+            let stdio_features: Vec<String> =
+                serde_json::from_value(hello.params["supported_features"].clone())
+                    .expect("stdio feature tokens");
+            let websocket_features: Vec<String> = appui_feature_header_for(old_server)
+                .split(',')
+                .map(|token| token.trim().to_owned())
+                .collect();
+
+            for (transport, features) in
+                [("stdio", stdio_features), ("websocket", websocket_features)]
+            {
+                // Exercise the server's real capability negotiation, rather than
+                // supplying synthetic methods that bypass the feature gates.
+                let negotiated = UiProtocolCapabilities::for_negotiated_features(features);
+                let capabilities = CapabilitySet::from(&negotiated);
+                let context = AvailabilityContext {
+                    task: TaskActivity::Idle,
+                    approval_modal_visible: false,
+                    readonly: false,
+                    runtime: RuntimeMode::Protocol,
+                    connection: ConnectionState::Connected,
+                    capabilities: Some(&capabilities),
+                    feature_flags: &[],
+                    session_open: true,
+                };
+                let commands = registry.available_commands(&context);
+                for name in ["resume", "rewind"] {
+                    assert!(
+                        commands.iter().any(|command| command.name == name),
+                        "/{name} must be available after {transport} negotiation (old_server={old_server})"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn old_server_features_drop_autonomy_negotiation() {
+        // Modern (default) advertises the full autonomy/agent-control set.
+        let modern = appui_feature_header_for(false);
+        assert!(modern.contains(UI_PROTOCOL_FEATURE_CODING_AUTONOMY_V1));
+        assert!(modern.contains(UI_PROTOCOL_FEATURE_CODING_AGENT_CONTROL_V1));
+        assert!(modern.contains(UI_PROTOCOL_FEATURE_HARNESS_TASK_CONTROL_V1));
+        assert!(modern.contains(UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2));
+        assert!(modern.contains(crate::model::APPUI_FEATURE_CONTEXT_SEMANTIC_CACHE_V1));
+        // Modern advertises the plan/todo checklist so the server streams
+        // `plan/updated`; old-server mode drops it.
+        assert!(modern.contains(UI_PROTOCOL_FEATURE_PLAN_TODOS_V1));
+        assert!(!appui_feature_header_for(true).contains(UI_PROTOCOL_FEATURE_PLAN_TODOS_V1));
+        assert!(
+            !appui_feature_header_for(true).contains(UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2)
+        );
+        assert!(
+            !appui_feature_header_for(true)
+                .contains(crate::model::APPUI_FEATURE_CONTEXT_SEMANTIC_CACHE_V1)
+        );
+
+        // Old-server mode drops autonomy/agent-control/goal/loop/task-control
+        // so the backend behaves as a pre-autonomy server and the TUI hides
+        // supervised-task inspection controls.
+        let legacy = appui_feature_header_for(true);
+        assert!(!legacy.contains(UI_PROTOCOL_FEATURE_CODING_AUTONOMY_V1));
+        assert!(!legacy.contains(UI_PROTOCOL_FEATURE_CODING_AGENT_CONTROL_V1));
+        assert!(!legacy.contains(UI_PROTOCOL_FEATURE_CODING_GOAL_RUNTIME_V1));
+        assert!(!legacy.contains(UI_PROTOCOL_FEATURE_CODING_LOOP_RUNTIME_V1));
+        assert!(!legacy.contains(UI_PROTOCOL_FEATURE_HARNESS_TASK_CONTROL_V1));
+        // Baseline features remain so the session still works.
+        assert!(legacy.contains(UI_PROTOCOL_FEATURE_SESSION_HYDRATE_V1));
+        assert!(legacy.contains(UI_PROTOCOL_FEATURE_APPROVAL_TYPED_V1));
+    }
+
+    #[test]
+    fn tui_capabilities_advertise_projection_envelope_v2() {
+        assert!(
+            tui_capabilities().supports_feature(UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2),
+            "the TUI capability response must opt into canonical v2 envelopes"
+        );
+        assert!(
+            tui_capabilities()
+                .supports_feature(crate::model::APPUI_FEATURE_CONTEXT_SEMANTIC_CACHE_V1),
+            "the TUI capability response must request semantic-cache diagnostics"
+        );
+    }
+
+    fn unwrap_app_event(event: ClientEvent) -> AppUiEvent {
+        let ClientEvent::App(event) = event else {
+            panic!("expected app event");
+        };
+        *event
+    }
+
+    #[test]
+    fn local_shell_args_are_cross_platform() {
+        let (program, args) = local_shell_command_args("echo hi");
+        if cfg!(windows) {
+            assert_eq!(program, "cmd");
+            assert_eq!(args, vec!["/C".to_string(), "echo hi".to_string()]);
+        } else {
+            assert_eq!(program, "sh");
+            assert_eq!(args, vec!["-c".to_string(), "echo hi".to_string()]);
+        }
+    }
+
+    #[test]
+    fn attached_local_shell_reports_exit_status_and_explicit_cwd() {
+        let dir = std::env::temp_dir();
+        let event = run_attached_local_shell_command(
+            "exit 0".into(),
+            Some(dir.clone()),
+            "local-shell:t2".into(),
+        );
+        assert_eq!(event.exit_code, Some(0));
+        assert!(event.stdout.is_empty());
+        assert!(event.stderr.is_empty());
+        assert_eq!(
+            event.cwd.as_deref(),
+            Some(dir.display().to_string().as_str())
+        );
+    }
+
+    #[test]
+    fn attached_local_shell_preserves_nonzero_exit_status() {
+        let event =
+            run_attached_local_shell_command("exit 7".into(), None, "local-shell:failed".into());
+        assert_eq!(event.exit_code, Some(7));
+        assert!(event.stderr.is_empty());
+    }
+
+    #[test]
+    fn protocol_backend_never_recreates_a_detached_local_shell() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch::default());
+        backend
+            .send(AppUiCommand::LocalShellExec {
+                cmd: "read value".into(),
+                local_id: "local-shell:missed-handoff".into(),
+            })
+            .unwrap();
+
+        let event = backend.next_event().unwrap().expect("synthetic result");
+        let ClientEvent::LocalShellResult(result) = event else {
+            panic!("expected local shell result");
+        };
+        assert_eq!(result.exit_code, None);
+        assert!(result.stderr.contains("missed the terminal handoff"));
+    }
+
+    struct ProtocolCaptureServer {
+        endpoint: String,
+        received: mpsc::Receiver<Value>,
+        thread: thread::JoinHandle<()>,
+    }
+
+    impl ProtocolCaptureServer {
+        fn recv_json(&self) -> Value {
+            self.received
+                .recv_timeout(Duration::from_secs(2))
+                .expect("protocol server captured request")
+        }
+
+        fn join(self) {
+            self.thread.join().expect("protocol server exits cleanly");
+        }
+    }
+
+    // ---- OUTER_LOOP_REVIEW #30: startup prompt exactly-once across
+    // reconnects (fake WS server, same play as the #27 replay test) ----
+
+    /// Fake server scripting the bootstrap (capabilities + launch/resolve +
+    /// session/open + session/hydrate) then counting every turn/start it
+    /// receives across BOTH connections (pre- and post-reconnect).
+    fn spawn_startup_prompt_server(
+        kill_after_bootstrap: bool,
+    ) -> io::Result<(
+        ProtocolCaptureServer,
+        std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    )> {
+        let listener = StdTcpListener::bind("127.0.0.1:0")?;
+        listener.set_nonblocking(true)?;
+        let addr = listener.local_addr()?;
+        let (frame_tx, frame_rx) = mpsc::channel();
+        let turn_starts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = turn_starts.clone();
+        let thread =
+            thread::spawn(move || {
+                let runtime = Runtime::new().expect("test server runtime");
+                runtime.block_on(async move {
+                    let listener = tokio::net::TcpListener::from_std(listener).expect("wrap");
+                    for connection in 0..2 {
+                        let Ok((stream, _)) = listener.accept().await else {
+                            break;
+                        };
+                        let mut ws = tokio_tungstenite::accept_async(stream)
+                            .await
+                            .expect("accept websocket");
+                        let mut served = 0usize;
+                        loop {
+                            let Some(Ok(message)) = ws.next().await else {
+                                break;
+                            };
+                            let WsMessage::Text(text) = message else {
+                                continue;
+                            };
+                            let frame: Value = serde_json::from_str(&text).expect("json");
+                            let method = frame["method"].as_str().unwrap_or("");
+                            if method == "turn/start" {
+                                counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                                frame_tx.send(frame.clone()).expect("capture turn/start");
+                                ws.send(WsMessage::Text(
+                                    json!({
+                                        "jsonrpc": "2.0", "id": frame["id"].clone(),
+                                        "result": {"turn_id": frame["params"]["turn_id"].clone()},
+                                    })
+                                    .to_string()
+                                    .into(),
+                                ))
+                                .await
+                                .expect("ack turn");
+                                continue;
+                            }
+                            let result = match method {
+                                "config/capabilities/list" => {
+                                    json!({"capabilities": tui_capabilities()})
+                                }
+                                "launch/resolve" => json!({"decision": "resume"}),
+                                "session/open" => json!({"opened": {
+                                "session_id": frame["params"]["session_id"].clone(),
+                                "active_profile_id": "coding", "workspace_root": "/repo"}}),
+                                "session/hydrate" => json!({
+                                "session_id": frame["params"]["session_id"].clone(),
+                                "cursor": {"stream": "session", "seq": 1}}),
+                                "session/status/read" => json!({
+                                "session_id": frame["params"]["session_id"].clone()}),
+                                _ => break,
+                            };
+                            ws.send(WsMessage::Text(
+                            json!({"jsonrpc": "2.0", "id": frame["id"].clone(), "result": result})
+                                .to_string().into(),
+                        )).await.expect("respond");
+                            served += 1;
+                            if kill_after_bootstrap && connection == 0 && served >= 4 {
+                                break; // connection dies after the bootstrap
+                            }
+                        }
+                        // keep the socket briefly on the second connection
+                        if connection == 1 {
+                            let _ = ws.next().await;
+                        }
+                    }
+                });
+            });
+        Ok((
+            ProtocolCaptureServer {
+                endpoint: format!("ws://{addr}/ui-protocol"),
+                received: frame_rx,
+                thread,
+            },
+            turn_starts,
+        ))
+    }
+
+    /// 场景 1: the startup prompt dispatches exactly ONE turn/start after
+    /// the bootstrap + hydrate completes — and the transport never
+    /// originates one on its own (the store once-machine is the trigger).
+    #[test]
+    fn startup_prompt_dispatches_exactly_one_turn_start() {
+        let (server, turn_starts) = match spawn_startup_prompt_server(false) {
+            Ok(pair) => pair,
+            Err(err) if err.kind() == io::ErrorKind::PermissionDenied => return,
+            Err(err) => panic!("server: {err}"),
+        };
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(server.endpoint.clone(), None)),
+            session_id: Some(SessionKey("local:test".into())),
+            prompt: Some("hello startup".into()),
+            ..AppUiLaunch::default()
+        });
+        backend.bootstrap().expect("bootstrap");
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while Instant::now() < deadline {
+            match backend.next_event() {
+                Ok(Some(ClientEvent::SessionHydrate(_))) => break,
+                Ok(_) => {}
+                Err(_) => break,
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(
+            turn_starts.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "transport alone never originates a turn/start (store arm is the trigger)"
+        );
+        drop(backend);
+        let _ = server;
+    }
+
+    /// 场景 2/3 交界: reconnect — the #27 bootstrap replay sequence
+    /// (launch/resolve → session/open → hydrate) contains NO turn/start;
+    /// the startup-prompt re-dispatch is the store once-machine re-armed by
+    /// the replayed hydrate (pinned by the store-level tests).
+    #[test]
+    fn reconnect_bootstrap_replay_never_carries_turn_start() {
+        let (server, turn_starts) = match spawn_startup_prompt_server(true) {
+            Ok(pair) => pair,
+            Err(err) if err.kind() == io::ErrorKind::PermissionDenied => return,
+            Err(err) => panic!("server: {err}"),
+        };
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(server.endpoint.clone(), None)),
+            session_id: Some(SessionKey("local:test".into())),
+            prompt: Some("hello startup".into()),
+            ..AppUiLaunch::default()
+        });
+        backend.bootstrap().expect("bootstrap");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut hydrates = 0usize;
+        while Instant::now() < deadline && hydrates < 2 {
+            let _ = backend.send(AppUiCommand::ReadSessionStatus(
+                crate::model::SessionStatusReadParams {
+                    session_id: SessionKey("local:test".into()),
+                },
+            ));
+            match backend.next_event() {
+                Ok(Some(ClientEvent::SessionHydrate(_))) => hydrates += 1,
+                Ok(_) => {}
+                Err(_) => break,
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(
+            turn_starts.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "the #27 bootstrap replay never carries a turn/start"
+        );
+        drop(backend);
+        let _ = server;
+    }
+
+    /// OUTER_LOOP_REVIEW #27 server: connection 1 serves capabilities +
+    /// launch/resolve then DIES (writer closed mid-session); connection 2
+    /// (the reconnect) captures every request so the test can assert the
+    /// session bootstrap (launch/resolve) is REPLAYED before the session
+    /// reopen — the "假重连" fix.
+    fn spawn_bootstrap_replay_reconnect_server() -> io::Result<ProtocolCaptureServer> {
+        let listener = StdTcpListener::bind("127.0.0.1:0")?;
+        listener.set_nonblocking(true)?;
+        let addr = listener.local_addr()?;
+        let (frame_tx, frame_rx) = mpsc::channel();
+        let thread = thread::spawn(move || {
+            let runtime = Runtime::new().expect("test protocol server runtime");
+            runtime.block_on(async move {
+                let listener = tokio::net::TcpListener::from_std(listener)
+                    .expect("wrap protocol test server listener");
+
+                // Connection 1: answer capabilities + launch/resolve, then
+                // drop the socket (simulate the remote serve dying).
+                let (stream, _) = listener.accept().await.expect("accept first connection");
+                let mut ws = tokio_tungstenite::accept_async(stream)
+                    .await
+                    .expect("accept first websocket");
+                // Answer whatever the bootstrap + store dispatch send
+                // (capabilities, launch/resolve, session/open), then drop
+                // the socket (simulate the remote serve dying).
+                let mut answered = 0usize;
+                while answered < 3 {
+                    let message = ws
+                        .next()
+                        .await
+                        .expect("first-connection request arrives")
+                        .expect("read first-connection request");
+                    let text = match message {
+                        WsMessage::Text(text) => text.to_string(),
+                        other => panic!("unexpected websocket message: {other:?}"),
+                    };
+                    let frame: Value = serde_json::from_str(&text).expect("request is JSON");
+                    let method = frame["method"].as_str().expect("method");
+                    // Simulate a LOST launch/resolve response, not an
+                    // acknowledged one (acknowledgement disarms replay).
+                    if method == "launch/resolve" {
+                        break;
+                    }
+                    let result = match method {
+                        "config/capabilities/list" => json!({ "capabilities": tui_capabilities() }),
+                        // LaunchResolveResult: decision is the bare snake_case
+                        // enum variant (`resume`), rest serde-defaulted.
+                        "launch/resolve" => json!({ "decision": "resume" }),
+                        "session/open" => json!({
+                            "opened": {
+                                "session_id": frame["params"]["session_id"].clone(),
+                                "active_profile_id": "coding",
+                                "workspace_root": "/repo",
+                            }
+                        }),
+                        other => panic!("unexpected first-connection method: {other}"),
+                    };
+                    ws.send(WsMessage::Text(
+                        json!({
+                            "jsonrpc": "2.0",
+                            "id": frame["id"].clone(),
+                            "result": result,
+                        })
+                        .to_string()
+                        .into(),
+                    ))
+                    .await
+                    .expect("send first-connection response");
+                    answered += 1;
+                }
+                drop(ws); // the "remote serve died" moment
+
+                // Connection 2 (reconnect): capture capabilities retry +
+                // the REPLAYED launch/resolve + the session reopen.
+                let (stream, _) = listener.accept().await.expect("accept reconnect");
+                let mut ws = tokio_tungstenite::accept_async(stream)
+                    .await
+                    .expect("accept reconnect websocket");
+                for _ in 0..3 {
+                    let message = ws
+                        .next()
+                        .await
+                        .expect("reconnect request arrives")
+                        .expect("read reconnect request");
+                    let text = match message {
+                        WsMessage::Text(text) => text.to_string(),
+                        other => panic!("unexpected reconnect message: {other:?}"),
+                    };
+                    let frame: Value = serde_json::from_str(&text).expect("request is JSON");
+                    frame_tx
+                        .send(frame.clone())
+                        .expect("capture reconnect request");
+                    if frame["method"].as_str() == Some("config/capabilities/list") {
+                        ws.send(WsMessage::Text(
+                            json!({
+                                "jsonrpc": "2.0",
+                                "id": frame["id"].clone(),
+                                "result": { "capabilities": tui_capabilities() },
+                            })
+                            .to_string()
+                            .into(),
+                        ))
+                        .await
+                        .expect("send reconnect capabilities");
+                    }
+                }
+            });
+        });
+        Ok(ProtocolCaptureServer {
+            endpoint: format!("ws://{addr}/ui-protocol"),
+            received: frame_rx,
+            thread,
+        })
+    }
+
+    fn spawn_protocol_capture_server(
+        expected_requests: usize,
+        respond_to_session_open: bool,
+    ) -> io::Result<ProtocolCaptureServer> {
+        let listener = StdTcpListener::bind("127.0.0.1:0")?;
+        listener.set_nonblocking(true)?;
+        let addr = listener.local_addr()?;
+        let (frame_tx, frame_rx) = mpsc::channel();
+        let thread = thread::spawn(move || {
+            let runtime = Runtime::new().expect("test protocol server runtime");
+            runtime.block_on(async move {
+                let listener = tokio::net::TcpListener::from_std(listener)
+                    .expect("wrap protocol test server listener");
+
+                let (stream, _) = listener
+                    .accept()
+                    .await
+                    .expect("accept protocol test connection");
+                let mut ws = tokio_tungstenite::accept_async(stream)
+                    .await
+                    .expect("accept protocol test websocket");
+
+                for _ in 0..expected_requests {
+                    let Some(message) = ws.next().await else {
+                        break;
+                    };
+                    let message = message.expect("read protocol test websocket message");
+                    let text = match message {
+                        WsMessage::Text(text) => text.to_string(),
+                        WsMessage::Binary(bytes) => {
+                            String::from_utf8(bytes.to_vec()).expect("binary request is UTF-8")
+                        }
+                        _ => continue,
+                    };
+                    let frame: Value =
+                        serde_json::from_str(&text).expect("request is JSON-RPC object");
+                    frame_tx
+                        .send(frame.clone())
+                        .expect("capture protocol test request");
+
+                    let method = frame.get("method").and_then(Value::as_str);
+                    let response =
+                        if method == Some(crate::model::APPUI_METHOD_CONFIG_CAPABILITIES_LIST) {
+                            Some(json!({
+                                "jsonrpc": "2.0",
+                                "id": frame.get("id").cloned().expect("request id"),
+                                "result": {
+                                    "capabilities": tui_capabilities()
+                                }
+                            }))
+                        } else if respond_to_session_open && method == Some(methods::SESSION_OPEN) {
+                            Some(json!({
+                                "jsonrpc": "2.0",
+                                "id": frame.get("id").cloned().expect("request id"),
+                                "result": {
+                                    "opened": {
+                                        "session_id": frame["params"]["session_id"].clone(),
+                                        "active_profile_id": "coding",
+                                        "workspace_root": "/repo",
+                                        "cursor": {
+                                            "stream": "session_events",
+                                            "seq": 1
+                                        }
+                                    }
+                                }
+                            }))
+                        } else {
+                            None
+                        };
+                    if let Some(response) = response {
+                        ws.send(WsMessage::Text(response.to_string().into()))
+                            .await
+                            .expect("send protocol test response");
+                    }
+                }
+            });
+        });
+        Ok(ProtocolCaptureServer {
+            endpoint: format!("ws://{addr}/ui-protocol"),
+            received: frame_rx,
+            thread,
+        })
+    }
+
+    fn spawn_capabilities_reconnect_server() -> io::Result<ProtocolCaptureServer> {
+        let listener = StdTcpListener::bind("127.0.0.1:0")?;
+        listener.set_nonblocking(true)?;
+        let addr = listener.local_addr()?;
+        let (frame_tx, frame_rx) = mpsc::channel();
+        let thread = thread::spawn(move || {
+            let runtime = Runtime::new().expect("test protocol server runtime");
+            runtime.block_on(async move {
+                let listener = tokio::net::TcpListener::from_std(listener)
+                    .expect("wrap protocol test server listener");
+
+                let (stream, _) = listener
+                    .accept()
+                    .await
+                    .expect("accept first protocol test connection");
+                let mut ws = tokio_tungstenite::accept_async(stream)
+                    .await
+                    .expect("accept first protocol test websocket");
+                let first = ws
+                    .next()
+                    .await
+                    .expect("first request arrives")
+                    .expect("read first request");
+                let first = match first {
+                    WsMessage::Text(text) => text.to_string(),
+                    WsMessage::Binary(bytes) => {
+                        String::from_utf8(bytes.to_vec()).expect("binary request is UTF-8")
+                    }
+                    other => panic!("unexpected first websocket message: {other:?}"),
+                };
+                frame_tx
+                    .send(serde_json::from_str(&first).expect("first request is JSON"))
+                    .expect("capture first request");
+                drop(ws);
+
+                let (stream, _) = listener
+                    .accept()
+                    .await
+                    .expect("accept reconnect protocol test connection");
+                let mut ws = tokio_tungstenite::accept_async(stream)
+                    .await
+                    .expect("accept reconnect protocol test websocket");
+                let second = ws
+                    .next()
+                    .await
+                    .expect("retry request arrives")
+                    .expect("read retry request");
+                let second = match second {
+                    WsMessage::Text(text) => text.to_string(),
+                    WsMessage::Binary(bytes) => {
+                        String::from_utf8(bytes.to_vec()).expect("binary request is UTF-8")
+                    }
+                    other => panic!("unexpected reconnect websocket message: {other:?}"),
+                };
+                let frame: Value = serde_json::from_str(&second).expect("retry request is JSON");
+                frame_tx.send(frame.clone()).expect("capture retry request");
+                ws.send(WsMessage::Text(
+                    json!({
+                        "jsonrpc": "2.0",
+                        "id": frame.get("id").cloned().expect("request id"),
+                        "result": {
+                            "capabilities": tui_capabilities()
+                        }
+                    })
+                    .to_string()
+                    .into(),
+                ))
+                .await
+                .expect("send capabilities response");
+            });
+        });
+        Ok(ProtocolCaptureServer {
+            endpoint: format!("ws://{addr}/ui-protocol"),
+            received: frame_rx,
+            thread,
+        })
+    }
+
+    fn next_event_until(backend: &mut ProtocolAppUiBackend) -> ClientEvent {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            if let Some(event) = backend.next_event().expect("poll protocol backend") {
+                return event;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for protocol event"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    #[test]
+    fn protocol_command_serializes_json_rpc_without_command_kind() {
+        let request = rpc_request_from_command(
+            "tui-7".into(),
+            AppUiCommand::SubmitPrompt(TurnStartParams {
+                // Ordinary chat turn: context-scoped tools stay unadvertised.
+                tool_context: None,
+                session_id: SessionKey("local:test".into()),
+                turn_id: TurnId::new(),
+                input: vec![InputItem::Text {
+                    text: "hello".into(),
+                }],
+                media: Vec::new(),
+                topic: None,
+                rewrite_for: None,
+                reasoning_effort: None,
+                live_video: false,
+            }),
+        )
+        .expect("request encodes");
+
+        assert_eq!(request.jsonrpc, "2.0");
+        assert_eq!(request.id, "tui-7");
+        assert_eq!(request.method, methods::TURN_START);
+        assert_eq!(request.params["session_id"], "local:test");
+        assert!(request.params.get("kind").is_none());
+        assert_eq!(request.params["input"][0]["kind"], "text");
+        assert_eq!(request.params["input"][0]["text"], "hello");
+    }
+
+    #[test]
+    fn protocol_turn_start_request_preserves_submitted_prompt_text() {
+        let request = rpc_request_from_command(
+            "tui-9".into(),
+            AppUiCommand::SubmitPrompt(TurnStartParams {
+                // Ordinary chat turn: context-scoped tools stay unadvertised.
+                tool_context: None,
+                session_id: SessionKey("local:test".into()),
+                turn_id: TurnId::new(),
+                input: vec![
+                    InputItem::Text {
+                        text: "complete m9 contract".into(),
+                    },
+                    InputItem::Text {
+                        text: "second paragraph".into(),
+                    },
+                ],
+                media: Vec::new(),
+                topic: None,
+                rewrite_for: None,
+                reasoning_effort: None,
+                live_video: false,
+            }),
+        )
+        .expect("request encodes");
+
+        assert_eq!(request.method, methods::TURN_START);
+        assert_eq!(request.params["session_id"], "local:test");
+        assert_eq!(request.params["input"][0]["kind"], "text");
+        assert_eq!(request.params["input"][0]["text"], "complete m9 contract");
+        assert_eq!(request.params["input"][1]["kind"], "text");
+        assert_eq!(request.params["input"][1]["text"], "second paragraph");
+    }
+
+    #[test]
+    fn protocol_command_serializes_approval_scopes_list() {
+        let request = rpc_request_from_command(
+            "tui-8".into(),
+            AppUiCommand::ListApprovalScopes(ApprovalScopesListParams {
+                session_id: SessionKey("local:test".into()),
+            }),
+        )
+        .expect("request encodes");
+
+        assert_eq!(request.jsonrpc, "2.0");
+        assert_eq!(request.id, "tui-8");
+        assert_eq!(request.method, methods::APPROVAL_SCOPES_LIST);
+        assert_eq!(request.params["session_id"], "local:test");
+        assert!(request.params.get("kind").is_none());
+    }
+
+    #[test]
+    fn protocol_command_serializes_agent_artifact_read() {
+        let request = rpc_request_from_command(
+            "tui-10".into(),
+            AppUiCommand::ReadAgentArtifact(AgentArtifactReadParams {
+                session_id: SessionKey("local:test".into()),
+                agent_id: "ag-7".into(),
+                artifact_id: Some("artifact-1".into()),
+                path: None,
+            }),
+        )
+        .expect("request encodes");
+
+        assert_eq!(request.jsonrpc, "2.0");
+        assert_eq!(request.method, methods::AGENT_ARTIFACT_READ);
+        assert_eq!(request.params["session_id"], "local:test");
+        assert_eq!(request.params["agent_id"], "ag-7");
+        assert_eq!(request.params["artifact_id"], "artifact-1");
+        assert!(request.params.get("path").is_none());
+    }
+
+    #[test]
+    fn protocol_decodes_agent_artifact_read_result() {
+        let mut exchange = ProtocolExchange::default();
+        let request = exchange
+            .build_tracked_request(AppUiCommand::ReadAgentArtifact(AgentArtifactReadParams {
+                session_id: SessionKey("local:test".into()),
+                agent_id: "ag-7".into(),
+                artifact_id: Some("artifact-1".into()),
+                path: None,
+            }))
+            .expect("tracked request");
+        let response = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": {
+                "session_id": "local:test",
+                "agent_id": "ag-7",
+                "artifact": {
+                    "id": "artifact-1",
+                    "title": "notes.md",
+                    "kind": "markdown",
+                    "status": "ready"
+                },
+                "content": "artifact body"
+            }
+        });
+
+        let event = exchange
+            .decode_rpc_text(&response.to_string())
+            .expect("response decodes")
+            .expect("event");
+
+        let ClientEvent::Autonomy(AutonomyClientEvent {
+            result: AutonomyResult::AgentArtifactRead(result),
+        }) = event
+        else {
+            panic!("expected agent artifact read event");
+        };
+        assert_eq!(result.agent_id, "ag-7");
+        assert_eq!(result.artifact.id, "artifact-1");
+        assert_eq!(result.content.as_deref(), Some("artifact body"));
+    }
+
+    #[test]
+    fn protocol_command_serializes_task_artifact_read() {
+        let task_id = TaskId::default();
+        let request = rpc_request_from_command(
+            "tui-11".into(),
+            AppUiCommand::ReadTaskArtifact(TaskArtifactReadParams {
+                session_id: SessionKey("local:test".into()),
+                task_id: task_id.clone(),
+                artifact_id: Some("summary".into()),
+                path: None,
+                cursor: None,
+                limit_bytes: Some(4096),
+                profile_id: Some("coding".into()),
+                agent_id: None,
+            }),
+        )
+        .expect("request encodes");
+
+        assert_eq!(request.jsonrpc, "2.0");
+        assert_eq!(request.method, methods::TASK_ARTIFACT_READ);
+        assert_eq!(request.params["session_id"], "local:test");
+        assert_eq!(request.params["task_id"], serde_json::json!(task_id));
+        assert_eq!(request.params["artifact_id"], "summary");
+        assert_eq!(request.params["profile_id"], "coding");
+        assert!(request.params.get("path").is_none());
+    }
+
+    #[test]
+    fn protocol_decodes_task_artifact_read_result() {
+        let mut exchange = ProtocolExchange::default();
+        let task_id = TaskId::default();
+        let request = exchange
+            .build_tracked_request(AppUiCommand::ReadTaskArtifact(TaskArtifactReadParams {
+                session_id: SessionKey("local:test".into()),
+                task_id: task_id.clone(),
+                artifact_id: Some("summary".into()),
+                path: None,
+                cursor: None,
+                limit_bytes: Some(4096),
+                profile_id: None,
+                agent_id: None,
+            }))
+            .expect("tracked request");
+        let response = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": {
+                "session_id": "local:test",
+                "task_id": task_id,
+                "artifact": {
+                    "id": "summary",
+                    "title": "Summary",
+                    "kind": "markdown",
+                    "status": "ready"
+                },
+                "content": "task artifact body",
+                "has_more": false
+            }
+        });
+
+        let event = exchange
+            .decode_rpc_text(&response.to_string())
+            .expect("response decodes")
+            .expect("event");
+
+        let ClientEvent::Autonomy(AutonomyClientEvent {
+            result: AutonomyResult::TaskArtifactRead(result),
+        }) = event
+        else {
+            panic!("expected task artifact read event");
+        };
+        assert_eq!(result.task_id, task_id);
+        assert_eq!(result.artifact.id, "summary");
+        assert_eq!(result.content.as_deref(), Some("task artifact body"));
+    }
+
+    #[test]
+    fn protocol_command_serializes_thread_graph_get() {
+        let request = rpc_request_from_command(
+            "tui-12".into(),
+            AppUiCommand::GetThreadGraph(ThreadGraphGetParams {
+                session_id: SessionKey("local:test".into()),
+                at: None,
+            }),
+        )
+        .expect("request encodes");
+
+        assert_eq!(request.jsonrpc, "2.0");
+        assert_eq!(request.method, methods::THREAD_GRAPH_GET);
+        assert_eq!(request.params["session_id"], "local:test");
+        assert!(request.params.get("at").is_none());
+    }
+
+    #[test]
+    fn protocol_decodes_thread_graph_result() {
+        let mut exchange = ProtocolExchange::default();
+        let request = exchange
+            .build_tracked_request(AppUiCommand::GetThreadGraph(ThreadGraphGetParams {
+                session_id: SessionKey("local:test".into()),
+                at: None,
+            }))
+            .expect("tracked request");
+        let response = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": {
+                "session_id": "local:test",
+                "cursor": {"stream": "session", "seq": 7},
+                "threads": [{
+                    "thread_id": "thread-1",
+                    "root_seq": 1,
+                    "message_seqs": [1, 2],
+                    "status": "active"
+                }],
+                "orphans": [99]
+            }
+        });
+
+        let event = exchange
+            .decode_rpc_text(&response.to_string())
+            .expect("response decodes")
+            .expect("event");
+
+        let ClientEvent::Autonomy(AutonomyClientEvent {
+            result: AutonomyResult::ThreadGraph(result),
+        }) = event
+        else {
+            panic!("expected thread graph event");
+        };
+        assert_eq!(
+            result.cursor,
+            UiCursor {
+                stream: "session".into(),
+                seq: 7
+            }
+        );
+        assert_eq!(result.threads[0].thread_id, "thread-1");
+        assert_eq!(result.orphans, vec![99]);
+    }
+
+    #[test]
+    fn protocol_command_serializes_session_hydrate() {
+        let request = rpc_request_from_command(
+            "tui-13".into(),
+            AppUiCommand::HydrateSession(SessionHydrateParams {
+                session_id: SessionKey("local:test".into()),
+                after: Some(UiCursor {
+                    stream: "session".into(),
+                    seq: 7,
+                }),
+                include: vec!["messages".into(), "pending_approvals".into()],
+            }),
+        )
+        .expect("request encodes");
+
+        assert_eq!(request.jsonrpc, "2.0");
+        assert_eq!(request.method, methods::SESSION_HYDRATE);
+        assert_eq!(request.params["session_id"], "local:test");
+        assert_eq!(request.params["after"]["seq"], 7);
+        assert_eq!(request.params["include"][0], "messages");
+    }
+
+    #[test]
+    fn protocol_decodes_session_hydrate_result() {
+        let mut exchange = ProtocolExchange::default();
+        let request = exchange
+            .build_tracked_request(AppUiCommand::HydrateSession(SessionHydrateParams {
+                session_id: SessionKey("local:test".into()),
+                after: None,
+                include: Vec::new(),
+            }))
+            .expect("tracked request");
+        let response = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": {
+                "session_id": "local:test",
+                "cursor": {"stream": "session", "seq": 9},
+                "messages": [{
+                    "seq": 1,
+                    "role": "user",
+                    "content": "hello",
+                    "persisted_at": "2026-05-31T00:00:00Z"
+                }],
+                "pending_approvals": []
+            }
+        });
+
+        let event = exchange
+            .decode_rpc_text(&response.to_string())
+            .expect("response decodes")
+            .expect("event");
+
+        let ClientEvent::SessionHydrate(result) = event else {
+            panic!("expected session hydrate event");
+        };
+        assert_eq!(result.session_id, SessionKey("local:test".into()));
+        assert_eq!(result.cursor.seq, 9);
+        assert_eq!(result.messages.unwrap()[0].content, "hello");
+        assert_eq!(result.pending_approvals.unwrap().len(), 0);
+    }
+
+    #[test]
+    fn protocol_command_serializes_review_start() {
+        let turn_id = TurnId::new();
+        let request = rpc_request_from_command(
+            "tui-14".into(),
+            AppUiCommand::StartReview(ReviewStartParams {
+                session_id: SessionKey("local:test".into()),
+                profile_id: Some("coding".into()),
+                turn_id: Some(turn_id.clone()),
+                target: Some(json!({"type": "working_tree"})),
+                prompt: Some("Check regressions".into()),
+                instructions: None,
+                delivery: Some("inline".into()),
+            }),
+        )
+        .expect("request encodes");
+
+        assert_eq!(request.jsonrpc, "2.0");
+        assert_eq!(request.method, methods::REVIEW_START);
+        assert_eq!(request.params["session_id"], "local:test");
+        assert_eq!(request.params["profile_id"], "coding");
+        assert_eq!(request.params["turn_id"], turn_id.0.to_string());
+        assert_eq!(request.params["target"]["type"], "working_tree");
+        assert_eq!(request.params["prompt"], "Check regressions");
+        assert_eq!(request.params["delivery"], "inline");
+    }
+
+    #[test]
+    fn protocol_decodes_review_start_result() {
+        let mut exchange = ProtocolExchange::default();
+        let turn_id = TurnId::new();
+        let request = exchange
+            .build_tracked_request(AppUiCommand::StartReview(ReviewStartParams {
+                session_id: SessionKey("local:test".into()),
+                profile_id: Some("coding".into()),
+                turn_id: Some(turn_id.clone()),
+                target: None,
+                prompt: None,
+                instructions: None,
+                delivery: Some("inline".into()),
+            }))
+            .expect("tracked request");
+        let response = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": {
+                "accepted": true,
+                "session_id": "local:test",
+                "turn_id": turn_id,
+                "workflow": "code_review",
+                "backend": "native",
+                "agent_count": 3
+            }
+        });
+
+        let event = exchange
+            .decode_rpc_text(&response.to_string())
+            .expect("response decodes")
+            .expect("event");
+
+        let ClientEvent::ReviewStart(result) = event else {
+            panic!("expected review start event");
+        };
+        assert!(result.accepted);
+        assert_eq!(result.session_id, SessionKey("local:test".into()));
+        assert_eq!(result.turn_id, turn_id);
+        assert_eq!(result.agent_count, Some(3));
+    }
+
+    #[test]
+    fn protocol_command_serializes_turn_state_get() {
+        let turn_id = TurnId::new();
+        let request = rpc_request_from_command(
+            "tui-13".into(),
+            AppUiCommand::GetTurnState(TurnStateGetParams {
+                session_id: SessionKey("local:test".into()),
+                turn_id: turn_id.clone(),
+            }),
+        )
+        .expect("request encodes");
+
+        assert_eq!(request.jsonrpc, "2.0");
+        assert_eq!(request.method, methods::TURN_STATE_GET);
+        assert_eq!(request.params["session_id"], "local:test");
+        assert_eq!(request.params["turn_id"], turn_id.0.to_string());
+    }
+
+    #[test]
+    fn protocol_decodes_turn_state_result() {
+        let mut exchange = ProtocolExchange::default();
+        let turn_id = TurnId::new();
+        let request = exchange
+            .build_tracked_request(AppUiCommand::GetTurnState(TurnStateGetParams {
+                session_id: SessionKey("local:test".into()),
+                turn_id: turn_id.clone(),
+            }))
+            .expect("tracked request");
+        let response = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": {
+                "session_id": "local:test",
+                "turn_id": turn_id,
+                "state": "active",
+                "thread_id": "thread-1",
+                "committed_seqs": [1, 2]
+            }
+        });
+
+        let event = exchange
+            .decode_rpc_text(&response.to_string())
+            .expect("response decodes")
+            .expect("event");
+
+        let ClientEvent::Autonomy(AutonomyClientEvent {
+            result: AutonomyResult::TurnState(result),
+        }) = event
+        else {
+            panic!("expected turn state event");
+        };
+        assert_eq!(result.turn_id, turn_id);
+        assert_eq!(result.state, TurnLifecycleState::Active);
+        assert_eq!(result.thread_id.as_deref(), Some("thread-1"));
+        assert_eq!(result.committed_seqs, vec![1, 2]);
+    }
+
+    #[test]
+    fn protocol_command_serializes_permission_profile_commands() {
+        let session_id = SessionKey("local:test".into());
+        let list = rpc_request_from_command(
+            "tui-9".into(),
+            AppUiCommand::ListPermissionProfiles(PermissionProfileListParams {
+                session_id: session_id.clone(),
+            }),
+        )
+        .expect("list request encodes");
+        assert_eq!(list.method, methods::PERMISSION_PROFILE_LIST);
+        assert_eq!(list.params["session_id"], "local:test");
+
+        let set = rpc_request_from_command(
+            "tui-10".into(),
+            AppUiCommand::SetPermissionProfile(PermissionProfileSetParams {
+                session_id,
+                update: PermissionProfileUpdate {
+                    mode: None,
+                    network: Some(PermissionNetworkPolicy::Allow),
+                    approval_policy: None,
+                },
+                runtime_mode: None,
+            }),
+        )
+        .expect("set request encodes");
+        assert_eq!(set.method, methods::PERMISSION_PROFILE_SET);
+        assert_eq!(set.params["update"]["network"], "allow");
+        assert!(set.params["update"].get("mode").is_none());
+    }
+
+    #[test]
+    fn protocol_command_serializes_runtime_cockpit_commands() {
+        let session_id = SessionKey("local:test".into());
+        let capabilities = rpc_request_from_command(
+            "tui-11".into(),
+            AppUiCommand::ListConfigCapabilities(ConfigCapabilitiesListParams {}),
+        )
+        .expect("capabilities request encodes");
+        assert_eq!(
+            capabilities.method,
+            crate::model::APPUI_METHOD_CONFIG_CAPABILITIES_LIST
+        );
+        assert!(
+            capabilities
+                .params
+                .as_object()
+                .is_some_and(|object| object.is_empty())
+        );
+
+        let local_profile = rpc_request_from_command(
+            "tui-11b".into(),
+            AppUiCommand::ProfileLocalCreate(ProfileLocalCreateParams {
+                requested_id: None,
+                name: "Ada Lovelace".into(),
+                username: "ada".into(),
+                email: "ada@example.com".into(),
+                make_default: None,
+            }),
+        )
+        .expect("local profile request encodes");
+        assert_eq!(
+            local_profile.method,
+            crate::model::APPUI_METHOD_PROFILE_LOCAL_CREATE
+        );
+        assert_eq!(local_profile.params["name"], "Ada Lovelace");
+        assert_eq!(local_profile.params["username"], "ada");
+        assert_eq!(local_profile.params["email"], "ada@example.com");
+
+        let status = rpc_request_from_command(
+            "tui-12".into(),
+            AppUiCommand::ReadSessionStatus(SessionStatusReadParams {
+                session_id: session_id.clone(),
+            }),
+        )
+        .expect("status request encodes");
+        assert_eq!(
+            status.method,
+            crate::model::APPUI_METHOD_SESSION_STATUS_READ
+        );
+        assert_eq!(status.params["session_id"], "local:test");
+
+        let models = rpc_request_from_command(
+            "tui-13".into(),
+            AppUiCommand::ListModels(ModelListParams {
+                session_id: session_id.clone(),
+            }),
+        )
+        .expect("model list request encodes");
+        assert_eq!(models.method, crate::model::APPUI_METHOD_MODEL_LIST);
+
+        let select = rpc_request_from_command(
+            "tui-14".into(),
+            AppUiCommand::SelectModel(ModelSelectParams {
+                session_id: session_id.clone(),
+                model: "deepseek-v4-pro".into(),
+                provider: Some("deepseek".into()),
+                route: None,
+            }),
+        )
+        .expect("model select request encodes");
+        assert_eq!(select.method, crate::model::APPUI_METHOD_MODEL_SELECT);
+        assert_eq!(select.params["model"], "deepseek-v4-pro");
+        assert_eq!(select.params["provider"], "deepseek");
+
+        let mcp = rpc_request_from_command(
+            "tui-15".into(),
+            AppUiCommand::ListMcpStatus(McpStatusListParams {
+                session_id: session_id.clone(),
+                include_disabled: true,
+            }),
+        )
+        .expect("mcp status request encodes");
+        assert_eq!(mcp.method, crate::model::APPUI_METHOD_MCP_STATUS_LIST);
+        assert_eq!(mcp.params["include_disabled"], true);
+
+        let tools = rpc_request_from_command(
+            "tui-16".into(),
+            AppUiCommand::ListToolStatus(ToolStatusListParams {
+                session_id,
+                include_denied: true,
+            }),
+        )
+        .expect("tool status request encodes");
+        assert_eq!(tools.method, crate::model::APPUI_METHOD_TOOL_STATUS_LIST);
+        assert_eq!(tools.params["include_denied"], true);
+    }
+
+    #[test]
+    fn protocol_task_control_commands_reach_the_wire() {
+        let session_id = SessionKey("local:test".into());
+        let task_id = TaskId::new();
+
+        let list = rpc_request_from_command(
+            "task-list-1".into(),
+            AppUiCommand::ListTasks(TaskListParams {
+                session_id: session_id.clone(),
+                topic: Some("coding".into()),
+            }),
+        )
+        .expect("task list request encodes");
+        assert_eq!(list.method, methods::TASK_LIST);
+        assert_eq!(list.params["session_id"], "local:test");
+        assert_eq!(list.params["topic"], "coding");
+
+        let cancel = rpc_request_from_command(
+            "task-cancel-1".into(),
+            AppUiCommand::CancelTask(TaskCancelParams {
+                task_id: task_id.clone(),
+                session_id: Some(session_id.clone()),
+                profile_id: Some("profile-a".into()),
+            }),
+        )
+        .expect("task cancel request encodes");
+        assert_eq!(cancel.method, methods::TASK_CANCEL);
+        assert_eq!(cancel.params["task_id"], task_id.0.to_string());
+        assert_eq!(cancel.params["session_id"], "local:test");
+        assert_eq!(cancel.params["profile_id"], "profile-a");
+
+        let restart = rpc_request_from_command(
+            "task-restart-1".into(),
+            AppUiCommand::RestartTaskFromNode(TaskRestartFromNodeParams {
+                task_id: task_id.clone(),
+                node_id: Some("synthesize".into()),
+                session_id: Some(session_id),
+                profile_id: Some("profile-a".into()),
+            }),
+        )
+        .expect("task restart request encodes");
+        assert_eq!(restart.method, methods::TASK_RESTART_FROM_NODE);
+        assert_eq!(restart.params["task_id"], task_id.0.to_string());
+        assert_eq!(restart.params["node_id"], "synthesize");
+        assert_eq!(restart.params["session_id"], "local:test");
+        assert_eq!(restart.params["profile_id"], "profile-a");
+    }
+
+    #[test]
+    fn protocol_command_serializes_mcp_and_tool_config_commands() {
+        let mcp_list = rpc_request_from_command(
+            "mcp-config-1".into(),
+            AppUiCommand::ListMcpConfig(McpConfigListParams {
+                session_id: Some(SessionKey("local:test".into())),
+                profile_id: Some("coding".into()),
+                include_disabled: true,
+            }),
+        )
+        .expect("mcp config list encodes");
+        assert_eq!(mcp_list.method, crate::model::APPUI_METHOD_MCP_CONFIG_LIST);
+        assert_eq!(mcp_list.params["session_id"], "local:test");
+        assert_eq!(mcp_list.params["profile_id"], "coding");
+        assert_eq!(mcp_list.params["include_disabled"], true);
+
+        let mcp_upsert = rpc_request_from_command(
+            "mcp-config-2".into(),
+            AppUiCommand::UpsertMcpConfig(McpConfigUpsertParams {
+                profile_id: Some("coding".into()),
+                server: "github".into(),
+                config: json!({"transport": "stdio"}),
+                enabled: Some(true),
+            }),
+        )
+        .expect("mcp config upsert encodes");
+        assert_eq!(
+            mcp_upsert.method,
+            crate::model::APPUI_METHOD_MCP_CONFIG_UPSERT
+        );
+        assert_eq!(mcp_upsert.params["server"], "github");
+        assert_eq!(mcp_upsert.params["config"]["transport"], "stdio");
+
+        let mcp_delete = rpc_request_from_command(
+            "mcp-config-3".into(),
+            AppUiCommand::DeleteMcpConfig(McpConfigDeleteParams {
+                profile_id: Some("coding".into()),
+                server: "github".into(),
+            }),
+        )
+        .expect("mcp config delete encodes");
+        assert_eq!(
+            mcp_delete.method,
+            crate::model::APPUI_METHOD_MCP_CONFIG_DELETE
+        );
+
+        let mcp_toggle = rpc_request_from_command(
+            "mcp-config-4".into(),
+            AppUiCommand::SetMcpConfigEnabled(McpConfigSetEnabledParams {
+                profile_id: Some("coding".into()),
+                server: "github".into(),
+                enabled: false,
+            }),
+        )
+        .expect("mcp config toggle encodes");
+        assert_eq!(
+            mcp_toggle.method,
+            crate::model::APPUI_METHOD_MCP_CONFIG_SET_ENABLED
+        );
+        assert_eq!(mcp_toggle.params["enabled"], false);
+
+        let mcp_test = rpc_request_from_command(
+            "mcp-config-5".into(),
+            AppUiCommand::TestMcpConfig(McpConfigTestParams {
+                session_id: Some(SessionKey("local:test".into())),
+                profile_id: Some("coding".into()),
+                server: "github".into(),
+            }),
+        )
+        .expect("mcp config test encodes");
+        assert_eq!(mcp_test.method, crate::model::APPUI_METHOD_MCP_CONFIG_TEST);
+
+        let tool_list = rpc_request_from_command(
+            "tool-config-1".into(),
+            AppUiCommand::ListToolConfig(ToolConfigListParams {
+                session_id: Some(SessionKey("local:test".into())),
+                profile_id: Some("coding".into()),
+                include_disabled: true,
+            }),
+        )
+        .expect("tool config list encodes");
+        assert_eq!(
+            tool_list.method,
+            crate::model::APPUI_METHOD_TOOL_CONFIG_LIST
+        );
+
+        let tool_toggle = rpc_request_from_command(
+            "tool-config-2".into(),
+            AppUiCommand::SetToolConfigEnabled(ToolConfigSetEnabledParams {
+                profile_id: Some("coding".into()),
+                tool: "web_fetch".into(),
+                enabled: true,
+            }),
+        )
+        .expect("tool config toggle encodes");
+        assert_eq!(
+            tool_toggle.method,
+            crate::model::APPUI_METHOD_TOOL_CONFIG_SET_ENABLED
+        );
+
+        let tool_upsert = rpc_request_from_command(
+            "tool-config-3".into(),
+            AppUiCommand::UpsertToolConfig(ToolConfigUpsertParams {
+                profile_id: Some("coding".into()),
+                tool: "browser".into(),
+                config: json!({"mode": "restricted"}),
+                enabled: None,
+            }),
+        )
+        .expect("tool config upsert encodes");
+        assert_eq!(
+            tool_upsert.method,
+            crate::model::APPUI_METHOD_TOOL_CONFIG_UPSERT
+        );
+        assert_eq!(tool_upsert.params["config"]["mode"], "restricted");
+
+        let tool_delete = rpc_request_from_command(
+            "tool-config-4".into(),
+            AppUiCommand::DeleteToolConfig(ToolConfigDeleteParams {
+                profile_id: Some("coding".into()),
+                tool: "browser".into(),
+            }),
+        )
+        .expect("tool config delete encodes");
+        assert_eq!(
+            tool_delete.method,
+            crate::model::APPUI_METHOD_TOOL_CONFIG_DELETE
+        );
+
+        let tool_test = rpc_request_from_command(
+            "tool-config-5".into(),
+            AppUiCommand::TestToolConfig(ToolConfigTestParams {
+                session_id: Some(SessionKey("local:test".into())),
+                profile_id: Some("coding".into()),
+                tool: "browser".into(),
+            }),
+        )
+        .expect("tool config test encodes");
+        assert_eq!(
+            tool_test.method,
+            crate::model::APPUI_METHOD_TOOL_CONFIG_TEST
+        );
+    }
+
+    #[test]
+    fn protocol_command_serializes_profile_skill_commands() {
+        let list = rpc_request_from_command(
+            "skills-1".into(),
+            AppUiCommand::ProfileSkillsList(ProfileSkillsListParams {
+                profile_id: Some("coding".into()),
+            }),
+        )
+        .expect("list request encodes");
+        assert_eq!(list.method, crate::model::APPUI_METHOD_PROFILE_SKILLS_LIST);
+        assert_eq!(list.params["profile_id"], "coding");
+
+        let search = rpc_request_from_command(
+            "skills-2".into(),
+            AppUiCommand::ProfileSkillsRegistrySearch(ProfileSkillsRegistrySearchParams {
+                profile_id: Some("coding".into()),
+                q: Some("research".into()),
+            }),
+        )
+        .expect("search request encodes");
+        assert_eq!(
+            search.method,
+            crate::model::APPUI_METHOD_PROFILE_SKILLS_REGISTRY_SEARCH
+        );
+        assert_eq!(search.params["q"], "research");
+
+        let install = rpc_request_from_command(
+            "skills-3".into(),
+            AppUiCommand::ProfileSkillsInstall(ProfileSkillsInstallParams {
+                profile_id: Some("coding".into()),
+                repo: "octos-org/octos-hub/skills/deep-search".into(),
+                branch: Some("main".into()),
+                force: true,
+            }),
+        )
+        .expect("install request encodes");
+        assert_eq!(
+            install.method,
+            crate::model::APPUI_METHOD_PROFILE_SKILLS_INSTALL
+        );
+        assert_eq!(
+            install.params["repo"],
+            "octos-org/octos-hub/skills/deep-search"
+        );
+        assert_eq!(install.params["branch"], "main");
+        assert_eq!(install.params["force"], true);
+
+        let remove = rpc_request_from_command(
+            "skills-4".into(),
+            AppUiCommand::ProfileSkillsRemove(ProfileSkillsRemoveParams {
+                profile_id: Some("coding".into()),
+                name: "deep-search".into(),
+            }),
+        )
+        .expect("remove request encodes");
+        assert_eq!(
+            remove.method,
+            crate::model::APPUI_METHOD_PROFILE_SKILLS_REMOVE
+        );
+        assert_eq!(remove.params["name"], "deep-search");
+    }
+
+    /// The ws handshake advertises `projection.envelope.v2`, and a server that
+    /// honors it stops sending `message/delta` + `turn/completed` entirely —
+    /// the reply text and the turn terminal ride inside `projection/envelope`
+    /// instead. This is the exact frame a live server emits for a reasoning
+    /// delta; it must reach the v2 notification to settle the live turn.
+    /// task-consume-turn-steer-dropped: the modern negotiation header asks the
+    /// server for the dropped-before-terminal steer guarantee; the old-server
+    /// baseline does not.
+    #[test]
+    fn feature_header_requests_turn_steer_dropped() {
+        assert!(
+            appui_feature_header_for(false)
+                .contains(crate::model::APPUI_FEATURE_TURN_STEER_DROPPED_V1)
+        );
+        assert!(
+            !appui_feature_header_for(true)
+                .contains(crate::model::APPUI_FEATURE_TURN_STEER_DROPPED_V1)
+        );
+    }
+
+    /// task-consume-turn-steer-dropped: the REAL wire entry decodes the
+    /// server's `turn/steer_dropped` into the typed protocol event.
+    #[test]
+    fn transport_decodes_turn_steer_dropped_notification() {
+        let mut pending = HashMap::new();
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "method": "turn/steer_dropped",
+            "params": {
+                "session_id": "local:tui#coding",
+                "turn_id": "09910166-03a0-4037-8d34-e27d634ef2a9",
+                "inputs": ["first steer", "second steer"],
+                "reason": "interrupted"
+            }
+        })
+        .to_string();
+
+        let event = rpc_text_to_app_event_with_pending(&frame, &mut pending)
+            .expect("frame decodes")
+            .expect("client event");
+        let ClientEvent::App(app_event) = event else {
+            panic!("expected an app event");
+        };
+        let AppUiEvent::Protocol(UiNotification::TurnSteerDropped(dropped)) = *app_event else {
+            panic!("expected Protocol(TurnSteerDropped)");
+        };
+        assert_eq!(dropped.session_id, SessionKey("local:tui#coding".into()));
+        assert_eq!(
+            dropped.turn_id.0.to_string(),
+            "09910166-03a0-4037-8d34-e27d634ef2a9"
+        );
+        assert_eq!(dropped.inputs, vec!["first steer", "second steer"]);
+        assert_eq!(dropped.reason, "interrupted");
+    }
+
+    #[test]
+    fn projection_envelope_v2_frame_decodes_to_the_v2_notification() {
+        let mut pending = HashMap::new();
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "method": "projection/envelope",
+            "params": {
+                "session_id": "probe-features-2",
+                "thread_id": "09910166-03a0-4037-8d34-e27d634ef2a9",
+                "seq": 1,
+                "cursor": {"stream": "probe-features-2\u{0}~cwd-74427c29e62e0989", "seq": 7},
+                "turn_id": "09910166-03a0-4037-8d34-e27d634ef2a9",
+                "payload": {"type": "reasoning_delta", "data": {"text": "The"}}
+            }
+        })
+        .to_string();
+
+        let event = rpc_text_to_app_event_with_pending(&frame, &mut pending)
+            .expect("frame decodes")
+            .expect("client event");
+
+        let ClientEvent::App(app_event) = event else {
+            panic!("expected an app event");
+        };
+        let AppUiEvent::Protocol(notification) = *app_event else {
+            panic!("expected a protocol notification");
+        };
+        assert!(
+            matches!(notification, UiNotification::EnvelopeV2(_)),
+            "v2 wire payload must not decode to the dropped v1 arm: {notification:?}"
+        );
+    }
+
+    /// End-to-end repro of the ws-only stall, replayed from frames captured
+    /// off a live server. The client submits with its OWN turn id; the server
+    /// answers `turn/started` carrying a DIFFERENT (thread-shaped) id and then
+    /// streams every envelope under that server id. The reply must still land
+    /// and the turn must still settle — otherwise the composer spins on
+    /// "Working" forever and the answer only appears after a restart
+    /// re-hydrates the session, which is the reported symptom.
+    #[test]
+    fn envelope_v2_turn_under_a_server_assigned_turn_id_lands_and_settles() {
+        const SERVER_TURN: &str = "b6a0e44e-8336-4cc0-a9db-93439010b313";
+        let session = "probe-term-1";
+
+        let mut store = crate::store::Store::from_snapshot(AppUiSnapshot {
+            sessions: vec![AppUiSession {
+                id: SessionKey(session.into()),
+                title: "test".into(),
+                profile_id: Some("alan".into()),
+                messages: vec![],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            selected_session: 0,
+            status: "ready".into(),
+            target: None,
+            readonly: false,
+        });
+
+        // The client's own submit: this is where the client-side turn id and
+        // the InProgress run state come from.
+        store.state.composer = "hello".into();
+        let command = store.compose_command().expect("submit starts a turn");
+        let AppUiCommand::SubmitPrompt(params) = command else {
+            panic!("expected a submit-prompt command");
+        };
+        assert_ne!(
+            params.turn_id.0.to_string(),
+            SERVER_TURN,
+            "repro requires the client and server to disagree on the turn id"
+        );
+
+        let mut pending = HashMap::new();
+        let frames = [
+            json!({"jsonrpc":"2.0","method":"turn/started","params":{
+                "session_id": session, "turn_id": SERVER_TURN,
+                "timestamp":"2026-08-10T07:50:12.385814Z"}}),
+            json!({"jsonrpc":"2.0","method":"projection/envelope","params":{
+                "session_id": session, "thread_id": SERVER_TURN, "seq": 33,
+                "cursor": {"stream": session, "seq": 39}, "turn_id": SERVER_TURN,
+                "payload": {"type":"assistant_delta","data":{
+                    "text":"Hello! ",
+                    "assistant_segment_id": "b6a0e44e-8336-4cc0-a9db-93439010b313:assistant:1"}}}}),
+            json!({"jsonrpc":"2.0","method":"projection/envelope","params":{
+                "session_id": session, "thread_id": SERVER_TURN, "seq": 43,
+                "cursor": {"stream": session, "seq": 52}, "turn_id": SERVER_TURN,
+                "payload": {"type":"assistant_persisted","data":{
+                    "text":"Hello! How can I help you today?",
+                    "assistant_segment_id": "b6a0e44e-8336-4cc0-a9db-93439010b313:assistant:1",
+                    "meta": {"message_id":"probe-term-1:1:1786348294194329000",
+                             "persisted_at":"2026-08-10T07:51:34.194329Z"}}}}}),
+            json!({"jsonrpc":"2.0","method":"projection/envelope","params":{
+                "session_id": session, "thread_id": SERVER_TURN, "seq": 44,
+                "cursor": {"stream": session, "seq": 53}, "turn_id": SERVER_TURN,
+                "payload": {"type":"turn_terminal","data":{
+                    "outcome":"completed",
+                    "token_usage":{"input_tokens":87,"output_tokens":43}}}}}),
+        ];
+
+        for frame in frames {
+            let event = rpc_text_to_app_event_with_pending(&frame.to_string(), &mut pending)
+                .expect("frame decodes")
+                .expect("client event");
+            let ClientEvent::App(app_event) = event else {
+                panic!("expected an app event for {frame}");
+            };
+            store.apply_event(*app_event);
+        }
+
+        let transcript = store.state.sessions[0]
+            .messages
+            .iter()
+            .map(|message| message.content.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            transcript.contains("How can I help you today?"),
+            "assistant answer never reached the transcript: {transcript:?}"
+        );
+        assert!(
+            store.state.sessions[0].live_reply.is_none(),
+            "terminal left the turn live, so the spinner never clears"
+        );
+        assert_ne!(
+            store.state.run_state,
+            crate::model::SessionRunState::InProgress,
+            "run state stuck InProgress after the turn terminal"
+        );
+    }
+
+    /// A server using the legacy delta lane still needs to settle the turn
+    /// when its terminal notification arrives.
+    #[test]
+    fn legacy_delta_turn_lands_and_settles() {
+        let turn_id = TurnId::new();
+        let session = "legacy-delta-session";
+        let mut store = crate::store::Store::from_snapshot(AppUiSnapshot {
+            sessions: vec![AppUiSession {
+                id: SessionKey(session.into()),
+                title: "test".into(),
+                profile_id: Some("alan".into()),
+                messages: vec![],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            selected_session: 0,
+            status: "ready".into(),
+            target: None,
+            readonly: false,
+        });
+        store.state.composer = "hello".into();
+        store.compose_command().expect("submit starts a turn");
+
+        let mut pending = HashMap::new();
+        let frames = [
+            json!({"jsonrpc":"2.0","method":methods::MESSAGE_DELTA,"params":{
+                "session_id": session, "turn_id": turn_id, "text": "Hello! How can I help you today?"}}),
+            json!({"jsonrpc":"2.0","method":methods::TURN_COMPLETED,"params":{
+                "session_id": session, "turn_id": turn_id}}),
+        ];
+        for frame in frames {
+            let event = rpc_text_to_app_event_with_pending(&frame.to_string(), &mut pending)
+                .expect("frame decodes")
+                .expect("client event");
+            let ClientEvent::App(app_event) = event else {
+                panic!("expected an app event for {frame}");
+            };
+            store.apply_event(*app_event);
+        }
+
+        let transcript = store.state.sessions[0]
+            .messages
+            .iter()
+            .map(|message| message.content.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(transcript.contains("How can I help you today?"));
+        assert!(store.state.sessions[0].live_reply.is_none());
+        assert_ne!(
+            store.state.run_state,
+            crate::model::SessionRunState::InProgress
+        );
+    }
+
+    /// Envelopes arrive with the session key SPLIT: `session_id` carries the
+    /// base key and the topic rides alongside in `topic` (verified against a
+    /// live server — opening `alan:local:tui#coding` yields
+    /// `session_id='alan:local:tui' topic='coding'`). The TUI keys its sessions
+    /// by the FULL key, so routing deltas on the bare `session_id` finds no
+    /// session and discards the whole turn: nothing renders, the spinner never
+    /// clears, and the answer only appears once a restart re-hydrates.
+    #[test]
+    fn envelope_with_split_session_topic_routes_to_the_full_key_session() {
+        const THREAD: &str = "aaae41c6-9491-4913-8167-4de07c2a57b1";
+        let full_key = "alan:local:tui#coding";
+        let base_key = "alan:local:tui";
+        let topic = "coding";
+
+        let mut store = crate::store::Store::from_snapshot(AppUiSnapshot {
+            sessions: vec![AppUiSession {
+                id: SessionKey(full_key.into()),
+                title: "coding".into(),
+                profile_id: Some("alan".into()),
+                messages: vec![],
+                tasks: vec![],
+                live_reply: None,
+            }],
+            selected_session: 0,
+            status: "ready".into(),
+            target: None,
+            readonly: false,
+        });
+        store.state.composer = "hello".into();
+        store.compose_command().expect("submit starts a turn");
+
+        let mut pending = HashMap::new();
+        let frames = [
+            json!({"jsonrpc":"2.0","method":"projection/envelope","params":{
+                "session_id": base_key, "topic": topic, "thread_id": THREAD,
+                "seq": 1, "turn_id": THREAD,
+                "payload": {"type":"assistant_delta","data":{
+                    "text":"Hello! ",
+                    "assistant_segment_id": "aaae41c6:assistant:1"}}}}),
+            json!({"jsonrpc":"2.0","method":"projection/envelope","params":{
+                "session_id": base_key, "topic": topic, "thread_id": THREAD,
+                "seq": 2, "turn_id": THREAD,
+                "payload": {"type":"assistant_persisted","data":{
+                    "text":"Hello! How can I help you today?",
+                    "assistant_segment_id": "aaae41c6:assistant:1",
+                    "meta": {"message_id":"m1","persisted_at":"2026-08-10T07:51:34.194329Z"}}}}}),
+            json!({"jsonrpc":"2.0","method":"projection/envelope","params":{
+                "session_id": base_key, "topic": topic, "thread_id": THREAD,
+                "seq": 3, "turn_id": THREAD,
+                "payload": {"type":"turn_terminal","data":{
+                    "outcome":"completed",
+                    "token_usage":{"input_tokens":87,"output_tokens":43}}}}}),
+        ];
+
+        for frame in frames {
+            let event = rpc_text_to_app_event_with_pending(&frame.to_string(), &mut pending)
+                .expect("frame decodes")
+                .expect("client event");
+            let ClientEvent::App(app_event) = event else {
+                panic!("expected an app event for {frame}");
+            };
+            store.apply_event(*app_event);
+        }
+
+        let session = store
+            .state
+            .sessions
+            .iter()
+            .find(|session| session.id.0 == full_key)
+            .expect("the topic-keyed session still exists");
+        let transcript = session
+            .messages
+            .iter()
+            .map(|message| message.content.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            transcript.contains("How can I help you today?"),
+            "answer never reached the topic-keyed session: {transcript:?}"
+        );
+        assert!(
+            session.live_reply.is_none(),
+            "terminal never settled the topic-keyed session's turn"
+        );
+        assert_ne!(
+            store.state.run_state,
+            crate::model::SessionRunState::InProgress,
+            "run state stuck InProgress: the spinner never clears"
+        );
+    }
+
+    #[test]
+    fn profile_skill_results_decode_to_client_events() {
+        let mut pending = HashMap::new();
+        pending.insert(
+            "skills-list".into(),
+            PendingRequest {
+                select_session: None,
+                method: crate::model::APPUI_METHOD_PROFILE_SKILLS_LIST.into(),
+                hydrate_session: None,
+            },
+        );
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": "skills-list",
+            "result": {
+                "profile_id": "coding",
+                "count": 1,
+                "skills": [{
+                    "name": "deep-search",
+                    "version": "0.1.0",
+                    "tool_count": 1,
+                    "installed": true,
+                    "status": "installed"
+                }]
+            }
+        })
+        .to_string();
+
+        let event = rpc_text_to_app_event_with_pending(&frame, &mut pending)
+            .expect("frame decodes")
+            .expect("client event");
+        let ClientEvent::ProfileSkillsList(event) = event else {
+            panic!("expected profile skills list event");
+        };
+        assert_eq!(event.result.profile_id.as_deref(), Some("coding"));
+        assert_eq!(event.result.skills[0].name, "deep-search");
+        assert_eq!(event.result.skills[0].status.as_deref(), Some("installed"));
+    }
+
+    /// #395: `peer/prepare` requests encode brief/worktree/cwd/session_id and
+    /// omit the unused optionals; results decode into the typed
+    /// `ClientEvent::PeerPrepared` carrying the tui-local result struct.
+    #[test]
+    fn peer_prepare_request_encodes_and_result_decodes_to_client_event() {
+        let request = rpc_request_from_command(
+            "peer-1".into(),
+            AppUiCommand::PeerPrepare(crate::model::PeerPrepareParams {
+                brief: "fix the nav flicker".into(),
+                n: None,
+                title: None,
+                worktree: true,
+                cwd: Some("/repo".into()),
+                session_id: Some(SessionKey("coding:local:tui#coding".into())),
+                profile_id: None,
+            }),
+        )
+        .expect("peer/prepare request encodes");
+        assert_eq!(request.method, crate::model::APPUI_METHOD_PEER_PREPARE);
+        assert_eq!(request.params["brief"], "fix the nav flicker");
+        assert_eq!(request.params["worktree"], true);
+        assert_eq!(request.params["cwd"], "/repo");
+        assert_eq!(request.params["session_id"], "coding:local:tui#coding");
+        assert!(
+            request.params.get("profile_id").is_none(),
+            "profile_id: None must be omitted from the wire shape"
+        );
+        assert!(
+            request.params.get("title").is_none(),
+            "title: None must be omitted from the wire shape"
+        );
+
+        let mut pending = HashMap::new();
+        pending.insert(
+            "peer-1".into(),
+            PendingRequest {
+                method: crate::model::APPUI_METHOD_PEER_PREPARE.into(),
+                select_session: None,
+                hydrate_session: None,
+            },
+        );
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": "peer-1",
+            "result": {
+                "slug": "fix-nav-flicker",
+                "topic": "peer-fix-nav-flicker",
+                "brief_path": "/repo/.ra/peers/fix-nav-flicker/BRIEF.md",
+                "cwd": "/repo",
+                "worktree_branch": "peer/fix-nav-flicker",
+                "profile_id": "coding"
+            }
+        })
+        .to_string();
+        let event = rpc_text_to_app_event_with_pending(&frame, &mut pending)
+            .expect("frame decodes")
+            .expect("client event");
+        let ClientEvent::PeerPrepared(event) = event else {
+            panic!("expected peer prepared event, got {event:?}");
+        };
+        assert_eq!(event.result.slug, "fix-nav-flicker");
+        assert_eq!(event.result.topic, "peer-fix-nav-flicker");
+        assert_eq!(
+            event.result.brief_path,
+            "/repo/.ra/peers/fix-nav-flicker/BRIEF.md"
+        );
+        assert_eq!(event.result.cwd, "/repo");
+        assert_eq!(
+            event.result.worktree_branch.as_deref(),
+            Some("peer/fix-nav-flicker")
+        );
+        assert_eq!(event.result.profile_id, "coding");
+        assert!(event.message.contains("fix-nav-flicker"));
+        assert!(
+            event.result.peers.is_empty(),
+            "a v1 scalar-only result decodes with the serde-default empty fleet"
+        );
+    }
+
+    /// octos#1801 v2: `peer/prepare` fleet requests encode `n` (omitted when
+    /// absent), and fleet results decode the `peers` array alongside the
+    /// scalar head.
+    #[test]
+    fn peer_prepare_fleet_n_encodes_and_peers_decode() {
+        let request = rpc_request_from_command(
+            "peer-2".into(),
+            AppUiCommand::PeerPrepare(crate::model::PeerPrepareParams {
+                brief: "fix the nav".into(),
+                n: Some(3),
+                title: None,
+                worktree: false,
+                cwd: None,
+                session_id: None,
+                profile_id: None,
+            }),
+        )
+        .expect("peer/prepare fleet request encodes");
+        assert_eq!(request.params["n"], 3);
+
+        let mut pending = HashMap::new();
+        pending.insert(
+            "peer-2".into(),
+            PendingRequest {
+                method: crate::model::APPUI_METHOD_PEER_PREPARE.into(),
+                select_session: None,
+                hydrate_session: None,
+            },
+        );
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": "peer-2",
+            "result": {
+                "slug": "fix-nav",
+                "topic": "peer-fix-nav",
+                "brief_path": "/repo/.ra/peers/fix-nav/brief.md",
+                "cwd": "/repo",
+                "worktree_branch": null,
+                "profile_id": "coding",
+                "peers": [
+                    {
+                        "slug": "fix-nav",
+                        "topic": "peer-fix-nav",
+                        "brief_path": "/repo/.ra/peers/fix-nav/brief.md",
+                        "cwd": "/repo",
+                        "worktree_branch": null,
+                        "profile_id": "coding"
+                    },
+                    {
+                        "slug": "fix-nav-2",
+                        "topic": "peer-fix-nav-2",
+                        "brief_path": "/repo/.ra/peers/fix-nav-2/brief.md",
+                        "cwd": "/repo",
+                        "worktree_branch": null,
+                        "profile_id": "coding"
+                    }
+                ]
+            }
+        })
+        .to_string();
+        let event = rpc_text_to_app_event_with_pending(&frame, &mut pending)
+            .expect("frame decodes")
+            .expect("client event");
+        let ClientEvent::PeerPrepared(event) = event else {
+            panic!("expected peer prepared event, got {event:?}");
+        };
+        assert_eq!(event.result.peers.len(), 2);
+        assert_eq!(event.result.peers[1].slug, "fix-nav-2");
+        assert_eq!(event.result.peers[1].topic, "peer-fix-nav-2");
+    }
+
+    /// octos#1807: `turn/steer` requests encode session/expected-turn/input
+    /// (`expected_turn_id: None` omitted from the wire), and both result
+    /// shapes decode into the typed `ClientEvent::TurnSteered`.
+    #[test]
+    fn turn_steer_request_encodes_and_result_decodes_to_client_event() {
+        let expected_turn = TurnId::new();
+        let request = rpc_request_from_command(
+            "steer-1".into(),
+            AppUiCommand::TurnSteer(crate::model::TurnSteerParams {
+                session_id: SessionKey("coding:local:tui#coding".into()),
+                expected_turn_id: Some(expected_turn.clone()),
+                input: vec![ra_core::ui_protocol::InputItem::Text {
+                    text: "also check the tests".into(),
+                }],
+            }),
+        )
+        .expect("turn/steer request encodes");
+        assert_eq!(request.method, crate::model::APPUI_METHOD_TURN_STEER);
+        assert_eq!(request.params["session_id"], "coding:local:tui#coding");
+        assert_eq!(
+            request.params["expected_turn_id"],
+            expected_turn.0.to_string()
+        );
+        assert_eq!(request.params["input"][0]["text"], "also check the tests");
+
+        let absent = rpc_request_from_command(
+            "steer-2".into(),
+            AppUiCommand::TurnSteer(crate::model::TurnSteerParams {
+                session_id: SessionKey("coding:local:tui#coding".into()),
+                expected_turn_id: None,
+                input: vec![ra_core::ui_protocol::InputItem::Text {
+                    text: "steer whatever is live".into(),
+                }],
+            }),
+        )
+        .expect("turn/steer request without expected turn encodes");
+        assert!(
+            absent.params.get("expected_turn_id").is_none(),
+            "expected_turn_id: None must be omitted from the wire shape"
+        );
+
+        // steered:true — the ACTIVE turn's id echoes back.
+        let mut pending = HashMap::new();
+        pending.insert(
+            "steer-1".into(),
+            PendingRequest {
+                method: crate::model::APPUI_METHOD_TURN_STEER.into(),
+                select_session: None,
+                hydrate_session: None,
+            },
+        );
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": "steer-1",
+            "result": { "turn_id": expected_turn.0.to_string(), "steered": true }
+        })
+        .to_string();
+        let event = rpc_text_to_app_event_with_pending(&frame, &mut pending)
+            .expect("frame decodes")
+            .expect("client event");
+        let ClientEvent::TurnSteered(event) = event else {
+            panic!("expected turn steered event, got {event:?}");
+        };
+        assert!(event.result.steered);
+        assert_eq!(event.result.turn_id, expected_turn);
+
+        // steered:false — the server-minted NEW turn id comes back.
+        let new_turn = TurnId::new();
+        let mut pending = HashMap::new();
+        pending.insert(
+            "steer-3".into(),
+            PendingRequest {
+                method: crate::model::APPUI_METHOD_TURN_STEER.into(),
+                select_session: None,
+                hydrate_session: None,
+            },
+        );
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": "steer-3",
+            "result": { "turn_id": new_turn.0.to_string(), "steered": false }
+        })
+        .to_string();
+        let event = rpc_text_to_app_event_with_pending(&frame, &mut pending)
+            .expect("frame decodes")
+            .expect("client event");
+        let ClientEvent::TurnSteered(event) = event else {
+            panic!("expected turn steered event, got {event:?}");
+        };
+        assert!(!event.result.steered);
+        assert_eq!(event.result.turn_id, new_turn);
+    }
+
+    /// octos#1801 v3: the durable `peer/staged` NOTIFICATION decodes via the
+    /// tui-local string-keyed match into `ClientEvent::PeerStaged` — the
+    /// vendored ra-core rev predates the `UiNotification` variant, so
+    /// routing it through `from_method_and_params` would degrade it to an
+    /// `unknown_notification` error event.
+    #[test]
+    fn should_decode_background_activity_onto_the_owning_session_when_the_frame_arrives() {
+        // octos#2019 — the wire frame's `session_id` is the ROUTING key and
+        // must survive decode intact. A decoder that lost it would force the
+        // store to fall back to the focused session (octos-tui#461/#466/#483).
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "method": "background/activity",
+            "params": {
+                "session_id": "coding:local:tui#coding",
+                "profile_id": "coding",
+                "origin_kind": "monitor",
+                "origin_id": "monitor_01",
+                "origin_label": "ci-tail",
+                "text": "ERROR bus test flaked",
+                "emitted_at_ms": 1_760_000_000_000i64,
+                "suppressed": false
+            }
+        })
+        .to_string();
+        let event = rpc_text_to_app_event_with_pending(&frame, &mut HashMap::new())
+            .expect("frame decodes")
+            .expect("client event");
+        let ClientEvent::BackgroundActivity(activity) = event else {
+            panic!("expected background activity event, got {event:?}");
+        };
+        assert_eq!(
+            activity.session_id,
+            SessionKey("coding:local:tui#coding".into()),
+            "the owning session is the routing key"
+        );
+        assert_eq!(activity.origin_kind, "monitor");
+        assert_eq!(activity.origin_id, "monitor_01");
+        assert_eq!(activity.display_origin(), "ci-tail");
+        assert_eq!(activity.text, "ERROR bus test flaked");
+        assert!(!activity.suppressed);
+        assert!(activity.dropped_count.is_none());
+    }
+
+    /// octos#2019 — the cap's drop marker decodes with its total intact, so
+    /// the client can say so out loud instead of truncating silently.
+    #[test]
+    fn should_decode_the_drop_marker_when_background_activity_was_capped() {
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "method": "background/activity",
+            "params": {
+                "session_id": "coding:local:tui",
+                "origin_kind": "monitor",
+                "origin_id": "monitor_01",
+                "text": "further events from this origin are suppressed",
+                "emitted_at_ms": 1_760_000_000_001i64,
+                "dropped_count": 12,
+                "suppressed": true
+            }
+        })
+        .to_string();
+        let event = rpc_text_to_app_event_with_pending(&frame, &mut HashMap::new())
+            .expect("frame decodes")
+            .expect("client event");
+        let ClientEvent::BackgroundActivity(activity) = event else {
+            panic!("expected background activity event, got {event:?}");
+        };
+        assert!(activity.suppressed);
+        assert_eq!(activity.dropped_count, Some(12));
+        // No label on the wire ⇒ attribution falls back to the origin id, so a
+        // row is never unattributed.
+        assert_eq!(activity.display_origin(), "monitor_01");
+    }
+
+    /// Malformed `background/activity` params surface as the standard
+    /// `invalid_params` error event instead of the `unknown_notification`
+    /// trap or wedging the durable replay stream.
+    #[test]
+    fn should_report_invalid_params_when_background_activity_is_malformed() {
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "method": "background/activity",
+            "params": { "origin_kind": "monitor" }
+        })
+        .to_string();
+        let event = rpc_text_to_app_event_with_pending(&frame, &mut HashMap::new())
+            .expect("frame decodes")
+            .expect("client event");
+        let ClientEvent::App(app_event) = event else {
+            panic!("expected an app error event, got {event:?}");
+        };
+        let AppUiEvent::Error(error) = *app_event else {
+            panic!("expected an error event, got {app_event:?}");
+        };
+        assert_eq!(error.code, "invalid_params");
+        assert!(error.message.contains("background/activity"));
+    }
+
+    /// octos#2019 — the client must ADVERTISE the capability, or the server
+    /// (which gates the notification on it) never sends the frame and the
+    /// human sink is silently dead.
+    #[test]
+    fn should_advertise_background_activity_when_negotiating_features() {
+        let header = appui_feature_header_for(false);
+        assert!(
+            header.contains(crate::model::APPUI_FEATURE_BACKGROUND_ACTIVITY_V1),
+            "modern feature header must request the human sink: {header}"
+        );
+        assert!(
+            !appui_feature_header_for(true)
+                .contains(crate::model::APPUI_FEATURE_BACKGROUND_ACTIVITY_V1),
+            "the old-server baseline must not request it"
+        );
+    }
+
+    #[test]
+    fn peer_staged_notification_decodes_to_client_event() {
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "method": "peer/staged",
+            "params": {
+                "session_id": "coding:local:tui#coding",
+                "topic": "peer-fix-nav",
+                "slug": "fix-nav",
+                "brief": "fix the nav",
+                "brief_path": "/repo/.ra/peers/fix-nav/BRIEF.md",
+                "cwd": "/repo",
+                "worktree_branch": null,
+                "profile_id": "coding"
+            }
+        })
+        .to_string();
+        let event = rpc_text_to_app_event_with_pending(&frame, &mut HashMap::new())
+            .expect("frame decodes")
+            .expect("client event");
+        let ClientEvent::PeerStaged(staged) = event else {
+            panic!("expected peer staged event, got {event:?}");
+        };
+        assert_eq!(
+            staged.session_id,
+            SessionKey("coding:local:tui#coding".into())
+        );
+        assert_eq!(staged.topic, "peer-fix-nav");
+        assert_eq!(staged.slug, "fix-nav");
+        assert_eq!(staged.brief, "fix the nav");
+        assert_eq!(staged.brief_path, "/repo/.ra/peers/fix-nav/BRIEF.md");
+        assert_eq!(staged.cwd, "/repo");
+        assert!(staged.worktree_branch.is_none());
+        assert_eq!(staged.profile_id, "coding");
+    }
+
+    /// Malformed `peer/staged` params surface as the standard
+    /// `invalid_params` error event instead of wedging the stream (durable
+    /// replay would re-deliver the same frame on every reconnect).
+    #[test]
+    fn peer_staged_notification_with_bad_params_yields_invalid_params_error() {
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "method": "peer/staged",
+            "params": { "topic": "peer-fix-nav" }
+        })
+        .to_string();
+        let event = rpc_text_to_app_event_with_pending(&frame, &mut HashMap::new())
+            .expect("frame decodes")
+            .expect("client event");
+        let ClientEvent::App(event) = event else {
+            panic!("expected an app error event, got {event:?}");
+        };
+        let AppUiEvent::Error(error) = *event else {
+            panic!("expected an error event, got {event:?}");
+        };
+        assert_eq!(error.code, "invalid_params");
+        assert!(error.message.contains("peer/staged"));
+    }
+
+    /// octos#1801 v3: the durable `peer/closed` NOTIFICATION decodes via the
+    /// tui-local string-keyed match into `ClientEvent::PeerClosed` — the mirror
+    /// of the `peer/staged` decode (the vendored ra-core rev predates the
+    /// `UiNotification` variant, so `from_method_and_params` would degrade it to
+    /// an `unknown_notification` error event).
+    #[test]
+    fn peer_closed_notification_decodes_to_client_event() {
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "method": "peer/closed",
+            "params": {
+                "session_id": "coding:local:tui#coding",
+                "topic": "peer-fix-nav",
+                "slug": "fix-nav",
+                "profile_id": "coding"
+            }
+        })
+        .to_string();
+        let event = rpc_text_to_app_event_with_pending(&frame, &mut HashMap::new())
+            .expect("frame decodes")
+            .expect("client event");
+        let ClientEvent::PeerClosed(closed) = event else {
+            panic!("expected peer closed event, got {event:?}");
+        };
+        assert_eq!(
+            closed.session_id,
+            SessionKey("coding:local:tui#coding".into())
+        );
+        assert_eq!(closed.topic, "peer-fix-nav");
+        assert_eq!(closed.slug, "fix-nav");
+        assert_eq!(closed.profile_id, "coding");
+    }
+
+    /// Malformed `peer/closed` params surface as the standard `invalid_params`
+    /// error event instead of wedging the stream (durable replay would
+    /// re-deliver the same frame on every reconnect).
+    #[test]
+    fn peer_closed_notification_with_bad_params_yields_invalid_params_error() {
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "method": "peer/closed",
+            "params": { "topic": "peer-fix-nav" }
+        })
+        .to_string();
+        let event = rpc_text_to_app_event_with_pending(&frame, &mut HashMap::new())
+            .expect("frame decodes")
+            .expect("client event");
+        let ClientEvent::App(event) = event else {
+            panic!("expected an app error event, got {event:?}");
+        };
+        let AppUiEvent::Error(error) = *event else {
+            panic!("expected an error event, got {event:?}");
+        };
+        assert_eq!(error.code, "invalid_params");
+        assert!(error.message.contains("peer/closed"));
+    }
+
+    /// octos#1801 v2: `peer/gather` requests encode the slug filter (omitted
+    /// for gather-all) and results decode into
+    /// `ClientEvent::PeerGathered` — including a peer with no result yet.
+    #[test]
+    fn peer_gather_request_encodes_and_result_decodes_to_client_event() {
+        let request = rpc_request_from_command(
+            "gather-1".into(),
+            AppUiCommand::PeerGather(crate::model::PeerGatherParams {
+                slugs: None,
+                session_id: Some(SessionKey("coding:local:tui#coding".into())),
+                profile_id: None,
+            }),
+        )
+        .expect("peer/gather request encodes");
+        assert_eq!(request.method, crate::model::APPUI_METHOD_PEER_GATHER);
+        assert_eq!(request.params["session_id"], "coding:local:tui#coding");
+        assert!(
+            request.params.get("slugs").is_none(),
+            "slugs: None (gather all) must be omitted from the wire shape"
+        );
+        assert!(request.params.get("profile_id").is_none());
+
+        let filtered = rpc_request_from_command(
+            "gather-2".into(),
+            AppUiCommand::PeerGather(crate::model::PeerGatherParams {
+                slugs: Some(vec!["fix-nav".into()]),
+                session_id: None,
+                profile_id: None,
+            }),
+        )
+        .expect("filtered peer/gather request encodes");
+        assert_eq!(filtered.params["slugs"], json!(["fix-nav"]));
+
+        let mut pending = HashMap::new();
+        pending.insert(
+            "gather-1".into(),
+            PendingRequest {
+                method: crate::model::APPUI_METHOD_PEER_GATHER.into(),
+                select_session: None,
+                hydrate_session: None,
+            },
+        );
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": "gather-1",
+            "result": {
+                "profile_id": "coding",
+                "peers": [
+                    {
+                        "slug": "fix-nav",
+                        "topic": "peer-fix-nav",
+                        "brief": "make the nav not flicker",
+                        "brief_truncated": false,
+                        "result": "Nav fixed.",
+                        "result_truncated": false,
+                        "result_updated_unix": 1753000000,
+                        "has_worktree": true
+                    },
+                    {
+                        "slug": "fix-nav-2",
+                        "topic": "peer-fix-nav-2",
+                        "brief": "make the nav not flicker",
+                        "brief_truncated": false,
+                        "result": null,
+                        "result_truncated": false,
+                        "result_updated_unix": null,
+                        "has_worktree": false
+                    }
+                ]
+            }
+        })
+        .to_string();
+        let event = rpc_text_to_app_event_with_pending(&frame, &mut pending)
+            .expect("frame decodes")
+            .expect("client event");
+        let ClientEvent::PeerGathered(event) = event else {
+            panic!("expected peer gathered event, got {event:?}");
+        };
+        assert_eq!(event.result.profile_id, "coding");
+        assert_eq!(event.result.peers.len(), 2);
+        assert_eq!(event.result.peers[0].result.as_deref(), Some("Nav fixed."));
+        assert_eq!(event.result.peers[0].result_updated_unix, Some(1753000000));
+        assert!(event.result.peers[0].has_worktree);
+        assert!(event.result.peers[1].result.is_none());
+        assert!(event.message.contains("1/2"));
+    }
+
+    /// Realistic `session/status/read` result body as emitted by an ra
+    /// server (protocol 1.1.0) for a fresh data dir where onboarding has not
+    /// saved a provider yet — captured verbatim from `ra serve --stdio`
+    /// (capabilities trimmed to a representative subset). `model_member`
+    /// controls the `model` key: `Some(value)` inserts it, `None` omits it.
+    fn server_status_read_result(model_member: Option<Value>) -> Value {
+        let mut result = json!({
+            "session_id": "local:tui#coding",
+            "profile_id": "ada",
+            "runtime_policy_stamp": {
+                "runtime_mode": "solo",
+                "profile_id": "ada",
+                "workspace_root": null,
+                "approval_policy": "on-request",
+                "sandbox_mode": "workspace-write",
+                "permission_profile": "workspace_write",
+                "filesystem_scope": "workspace",
+                "network": "blocked",
+                "model": null,
+                "provider": null,
+                "tool_policy_id": "profile",
+                "mcp_servers": [],
+                "memory_scope": "profile-session",
+                "qoe_policy": "profile",
+                "queue_mode": "adaptive",
+                "tool_contract_id": "codex-compatible-coding-v1",
+                "tool_contract_version": "1",
+                "model_toolset": "coding",
+                "dynamic_tool_discovery": "enabled"
+            },
+            "context": null,
+            "context_state": null,
+            "permission_profile": "workspace_write",
+            "sandbox": "workspace-write",
+            "health": { "status": "ok" },
+            "mcp_summary": { "connected": 0, "connecting": 0, "failed": 0, "disabled": 0 },
+            "tool_summary": { "visible": 0, "enabled": 0, "denied": 0, "policy_id": "profile" },
+            "usage": {},
+            "cursor": { "healthy": true, "replay_supported": true },
+            "capabilities": {
+                "version": { "protocol": "ra-ui/v1alpha1", "schema_version": 1, "jsonrpc": "2.0" },
+                "capabilities_schema_version": 2,
+                "supported_methods": ["session/open", "session/status/read"],
+                "supported_notifications": ["turn/started"]
+            }
+        });
+        if let Some(model) = model_member {
+            result["model"] = model;
+        }
+        result
+    }
+
+    fn decode_status_read_frame(result: Value) -> ClientEvent {
+        let mut pending = HashMap::new();
+        pending.insert(
+            "status-1".into(),
+            PendingRequest {
+                method: crate::model::APPUI_METHOD_SESSION_STATUS_READ.into(),
+                select_session: None,
+                hydrate_session: None,
+            },
+        );
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": "status-1",
+            "result": result,
+        })
+        .to_string();
+        rpc_text_to_app_event_with_pending(&frame, &mut pending)
+            .expect("frame decodes")
+            .expect("client event")
+    }
+
+    fn expect_session_status(event: ClientEvent) -> crate::model::SessionStatusReadResult {
+        let ClientEvent::SessionStatus(event) = event else {
+            panic!("expected session status event, got {event:?}");
+        };
+        event.result
+    }
+
+    /// The version-skew shape that used to fail the whole decode: a server
+    /// with no resolved model emits
+    /// `"model": {"model": null, "provider": null, "selected": true}`.
+    /// That null-member object MEANS "no model resolved" and must decode to
+    /// `model == None` — never take the entire SessionStatusReadResult down
+    /// with an `invalid_result` error that degrades the composer footer to
+    /// the `<server authenticated profile>` placeholder.
+    #[test]
+    fn session_status_null_member_model_object_decodes_as_no_model() {
+        let status = expect_session_status(decode_status_read_frame(server_status_read_result(
+            Some(json!({
+                "model": null,
+                "provider": null,
+                "selected": true
+            })),
+        )));
+
+        assert_eq!(status.model, None);
+        // The rest of the result must land — this is what keeps the footer
+        // on real data instead of the placeholder.
+        assert_eq!(status.profile_id.as_deref(), Some("ada"));
+        assert_eq!(status.sandbox.as_deref(), Some("workspace-write"));
+        assert_eq!(
+            status
+                .runtime_policy_stamp
+                .as_ref()
+                .and_then(|stamp| stamp.profile_id.as_deref()),
+            Some("ada")
+        );
+    }
+
+    #[test]
+    fn session_status_resolved_model_object_still_decodes() {
+        let status = expect_session_status(decode_status_read_frame(server_status_read_result(
+            Some(json!({
+                "model": "deepseek-v4-pro",
+                "provider": "deepseek",
+                "selected": true
+            })),
+        )));
+
+        let model = status.model.expect("resolved model decodes to Some");
+        assert_eq!(model.model, "deepseek-v4-pro");
+        assert_eq!(model.provider, "deepseek");
+        assert!(model.selected);
+    }
+
+    #[test]
+    fn session_status_null_model_decodes_as_no_model() {
+        let status = expect_session_status(decode_status_read_frame(server_status_read_result(
+            Some(Value::Null),
+        )));
+        assert_eq!(status.model, None);
+        assert_eq!(status.profile_id.as_deref(), Some("ada"));
+    }
+
+    #[test]
+    fn session_status_missing_model_key_decodes_as_no_model() {
+        let status =
+            expect_session_status(decode_status_read_frame(server_status_read_result(None)));
+        assert_eq!(status.model, None);
+        assert_eq!(status.profile_id.as_deref(), Some("ada"));
+    }
+
+    /// Tolerance is ONLY for the no-model shapes. A model object whose
+    /// members are present but wrongly typed is a real protocol error and
+    /// must keep surfacing `invalid_result` — the deserializer must not
+    /// silently swallow it as `None`.
+    #[test]
+    fn session_status_malformed_model_object_still_reports_invalid_result() {
+        let event = decode_status_read_frame(server_status_read_result(Some(json!({
+            "model": 42,
+            "provider": "deepseek",
+            "selected": true
+        }))));
+
+        let ClientEvent::App(event) = event else {
+            panic!("expected app error event, got {event:?}");
+        };
+        let AppUiEvent::Error(error) = *event else {
+            panic!("expected invalid_result error, got {event:?}");
+        };
+        assert_eq!(error.code, "invalid_result");
+    }
+
+    /// A null `model` member must not become a validation bypass: siblings
+    /// that ARE present still have to be well-typed, otherwise the
+    /// no-model mapping would mask a genuinely malformed result.
+    #[test]
+    fn session_status_null_model_member_with_malformed_sibling_still_errors() {
+        let event = decode_status_read_frame(server_status_read_result(Some(json!({
+            "model": null,
+            "provider": 42,
+            "selected": true
+        }))));
+
+        let ClientEvent::App(event) = event else {
+            panic!("expected app error event, got {event:?}");
+        };
+        let AppUiEvent::Error(error) = *event else {
+            panic!("expected invalid_result error, got {event:?}");
+        };
+        assert_eq!(error.code, "invalid_result");
+    }
+
+    #[test]
+    fn session_status_no_model_shape_with_malformed_selected_still_errors() {
+        let event = decode_status_read_frame(server_status_read_result(Some(json!({
+            "model": null,
+            "provider": null,
+            "selected": "yes"
+        }))));
+
+        let ClientEvent::App(event) = event else {
+            panic!("expected app error event, got {event:?}");
+        };
+        let AppUiEvent::Error(error) = *event else {
+            panic!("expected invalid_result error, got {event:?}");
+        };
+        assert_eq!(error.code, "invalid_result");
+    }
+
+    #[test]
+    fn protocol_readonly_policy_allows_read_style_and_blocks_mutations() {
+        let session_id = SessionKey("local:test".into());
+        let read_style_commands = [
+            AppUiCommand::ListConfigCapabilities(ConfigCapabilitiesListParams {}),
+            AppUiCommand::OpenSession(SessionOpenParams {
+                session_id: session_id.clone(),
+                topic: None,
+                sandbox: None,
+                profile_id: Some("coding".into()),
+                cwd: Some("/repo".into()),
+                after: None,
+            }),
+            AppUiCommand::ReadSessionStatus(SessionStatusReadParams {
+                session_id: session_id.clone(),
+            }),
+            AppUiCommand::ListModels(ModelListParams {
+                session_id: session_id.clone(),
+            }),
+            AppUiCommand::ListApprovalScopes(ApprovalScopesListParams {
+                session_id: session_id.clone(),
+            }),
+            AppUiCommand::ListPermissionProfiles(PermissionProfileListParams {
+                session_id: session_id.clone(),
+            }),
+            AppUiCommand::ListMcpStatus(McpStatusListParams {
+                session_id: session_id.clone(),
+                include_disabled: true,
+            }),
+            AppUiCommand::ListToolStatus(ToolStatusListParams {
+                session_id: session_id.clone(),
+                include_denied: true,
+            }),
+            AppUiCommand::GetDiffPreview(DiffPreviewGetParams {
+                session_id: session_id.clone(),
+                preview_id: PreviewId::new(),
+            }),
+            AppUiCommand::HydrateSession(SessionHydrateParams {
+                session_id: session_id.clone(),
+                after: None,
+                include: Vec::new(),
+            }),
+            AppUiCommand::ListSessions(ra_core::ui_protocol::SessionListParams { cwd: None }),
+            AppUiCommand::GetThreadGraph(ThreadGraphGetParams {
+                session_id: session_id.clone(),
+                at: None,
+            }),
+            AppUiCommand::GetTurnState(TurnStateGetParams {
+                session_id: session_id.clone(),
+                turn_id: TurnId::new(),
+            }),
+            AppUiCommand::ReadTaskOutput(TaskOutputReadParams {
+                session_id: session_id.clone(),
+                task_id: TaskId::new(),
+                cursor: Some(OutputCursor { offset: 0 }),
+                limit_bytes: Some(4096),
+            }),
+            AppUiCommand::ProfileSkillsList(ProfileSkillsListParams {
+                profile_id: Some("coding".into()),
+            }),
+            AppUiCommand::ProfileSkillsRegistrySearch(ProfileSkillsRegistrySearchParams {
+                profile_id: Some("coding".into()),
+                q: Some("search".into()),
+            }),
+            // octos#1801 v2: `peer/gather` only reads the blackboard —
+            // readonly viewers may gather (the follow-up SubmitPrompt is
+            // where readonly blocks).
+            AppUiCommand::PeerGather(crate::model::PeerGatherParams {
+                slugs: None,
+                session_id: Some(session_id.clone()),
+                profile_id: None,
+            }),
+        ];
+        for command in &read_style_commands {
+            assert!(
+                ProtocolAppUiBackend::readonly_allows_command(command),
+                "{} should stay available in read-only mode",
+                command.method()
+            );
+        }
+
+        let mutating_commands = [
+            AppUiCommand::SubmitPrompt(TurnStartParams {
+                // Ordinary chat turn: context-scoped tools stay unadvertised.
+                tool_context: None,
+                session_id: session_id.clone(),
+                turn_id: TurnId::new(),
+                input: vec![InputItem::Text {
+                    text: "hello".into(),
+                }],
+                media: Vec::new(),
+                topic: None,
+                rewrite_for: None,
+                reasoning_effort: None,
+                live_video: false,
+            }),
+            AppUiCommand::InterruptTurn(TurnInterruptParams {
+                session_id: session_id.clone(),
+                turn_id: TurnId::new(),
+            }),
+            AppUiCommand::SessionRollback(ra_core::ui_protocol::SessionRollbackParams {
+                session_id: session_id.clone(),
+                num_turns: 1,
+            }),
+            AppUiCommand::StartReview(ReviewStartParams {
+                session_id: session_id.clone(),
+                profile_id: Some("coding".into()),
+                turn_id: Some(TurnId::new()),
+                target: None,
+                prompt: None,
+                instructions: None,
+                delivery: Some("inline".into()),
+            }),
+            AppUiCommand::SelectModel(ModelSelectParams {
+                session_id: session_id.clone(),
+                model: "deepseek-v4-pro".into(),
+                provider: Some("deepseek".into()),
+                route: None,
+            }),
+            AppUiCommand::RespondApproval(ApprovalRespondParams::new(
+                session_id.clone(),
+                ra_core::ui_protocol::ApprovalId::new(),
+                ApprovalDecision::Deny,
+            )),
+            AppUiCommand::ProfileLocalCreate(ProfileLocalCreateParams {
+                requested_id: None,
+                name: "Ada Lovelace".into(),
+                username: "ada".into(),
+                email: "ada@example.com".into(),
+                make_default: None,
+            }),
+            AppUiCommand::SetPermissionProfile(PermissionProfileSetParams {
+                session_id,
+                update: PermissionProfileUpdate {
+                    mode: None,
+                    network: Some(PermissionNetworkPolicy::Allow),
+                    approval_policy: None,
+                },
+                runtime_mode: None,
+            }),
+            AppUiCommand::ProfileSkillsInstall(ProfileSkillsInstallParams {
+                profile_id: Some("coding".into()),
+                repo: "octos-org/octos-hub/skills/deep-search".into(),
+                branch: None,
+                force: false,
+            }),
+            AppUiCommand::ProfileSkillsRemove(ProfileSkillsRemoveParams {
+                profile_id: Some("coding".into()),
+                name: "deep-search".into(),
+            }),
+            // #395: `peer/prepare` writes the brief file (and may create a
+            // worktree) server-side — a mutation, blocked in read-only mode.
+            AppUiCommand::PeerPrepare(crate::model::PeerPrepareParams {
+                brief: "fix the thing".into(),
+                n: None,
+                title: None,
+                worktree: false,
+                cwd: None,
+                session_id: None,
+                profile_id: None,
+            }),
+            // octos#1807: `turn/steer` injects input into a running turn —
+            // the same mutation class as `turn/start`, blocked in read-only.
+            AppUiCommand::TurnSteer(crate::model::TurnSteerParams {
+                session_id: SessionKey("local:test".into()),
+                expected_turn_id: Some(TurnId::new()),
+                input: vec![ra_core::ui_protocol::InputItem::Text {
+                    text: "steer".into(),
+                }],
+            }),
+        ];
+        for command in &mutating_commands {
+            assert!(
+                !ProtocolAppUiBackend::readonly_allows_command(command),
+                "{} should be blocked in read-only mode",
+                command.method()
+            );
+        }
+    }
+
+    /// `task/list` is a pure read (M15-E inspection); `--readonly` viewers
+    /// must keep it, like the other task/agent/goal/loop reads.
+    #[test]
+    fn readonly_allows_task_list() {
+        assert!(ProtocolAppUiBackend::readonly_allows_command(
+            &AppUiCommand::ListTasks(TaskListParams {
+                session_id: SessionKey("local:test".into()),
+                topic: None,
+            })
+        ));
+    }
+
+    /// M15-era mutating commands blocked in readonly mode must be labeled as
+    /// ordinary readonly blocks (code "readonly"), not fall into the
+    /// "unexpectedly blocked read-style" readonly_policy arm that claims a
+    /// policy bug.
+    #[test]
+    fn readonly_blocks_m15_mutations_with_proper_label() {
+        let session_id = SessionKey("local:test".into());
+        let mutations = [
+            AppUiCommand::SessionRollback(ra_core::ui_protocol::SessionRollbackParams {
+                session_id: session_id.clone(),
+                num_turns: 1,
+            }),
+            AppUiCommand::StartReview(ReviewStartParams {
+                session_id: session_id.clone(),
+                profile_id: None,
+                turn_id: None,
+                target: None,
+                prompt: None,
+                instructions: None,
+                delivery: None,
+            }),
+            AppUiCommand::SelectModel(ModelSelectParams {
+                session_id: session_id.clone(),
+                model: "deepseek-v4-pro".into(),
+                provider: None,
+                route: None,
+            }),
+            AppUiCommand::CancelTask(TaskCancelParams {
+                task_id: TaskId::new(),
+                session_id: Some(session_id.clone()),
+                profile_id: None,
+            }),
+            AppUiCommand::RestartTaskFromNode(TaskRestartFromNodeParams {
+                session_id: Some(session_id.clone()),
+                task_id: TaskId::new(),
+                node_id: Some("node-1".into()),
+                profile_id: None,
+            }),
+            AppUiCommand::InterruptAgent(crate::model::AgentInterruptParams {
+                session_id: session_id.clone(),
+                agent_id: "ag-1".into(),
+            }),
+            AppUiCommand::CloseAgent(crate::model::AgentCloseParams {
+                session_id: session_id.clone(),
+                agent_id: "ag-1".into(),
+            }),
+            AppUiCommand::SetSessionGoal(crate::model::SessionGoalSetParams {
+                session_id: session_id.clone(),
+                profile_id: None,
+                objective: "goal".into(),
+                status: None,
+                token_budget: None,
+                transition_actor: None,
+                action: Default::default(),
+            }),
+            AppUiCommand::ClearSessionGoal(crate::model::SessionGoalClearParams {
+                session_id: session_id.clone(),
+                profile_id: None,
+            }),
+            AppUiCommand::CreateLoop(crate::model::LoopCreateParams {
+                session_id: session_id.clone(),
+                profile_id: None,
+                prompt: "poll".into(),
+                mode: crate::model::LoopMode::FixedInterval,
+                interval_seconds: Some(60),
+            }),
+            AppUiCommand::DeleteLoop(crate::model::LoopIdParams {
+                session_id: session_id.clone(),
+                loop_id: "loop-1".into(),
+            }),
+            AppUiCommand::PauseLoop(crate::model::LoopIdParams {
+                session_id: session_id.clone(),
+                loop_id: "loop-1".into(),
+            }),
+            AppUiCommand::ResumeLoop(crate::model::LoopIdParams {
+                session_id: session_id.clone(),
+                loop_id: "loop-1".into(),
+            }),
+            AppUiCommand::FireLoopNow(crate::model::LoopIdParams {
+                session_id: session_id.clone(),
+                loop_id: "loop-1".into(),
+            }),
+            // #395: `/peer`'s prepare RPC — a labeled readonly block, not the
+            // "unexpectedly blocked read-style" policy-bug arm.
+            AppUiCommand::PeerPrepare(crate::model::PeerPrepareParams {
+                brief: "fix the thing".into(),
+                n: None,
+                title: None,
+                worktree: false,
+                cwd: None,
+                session_id: Some(session_id.clone()),
+                profile_id: None,
+            }),
+        ];
+
+        for command in mutations {
+            let method = command.method().to_string();
+            assert!(
+                !ProtocolAppUiBackend::readonly_allows_command(&command),
+                "{method} must be blocked in read-only mode"
+            );
+
+            let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+                endpoint: Some(AppUiEndpoint::websocket(
+                    "wss://example.test/ui-protocol",
+                    None,
+                )),
+                readonly: true,
+                ..AppUiLaunch::default()
+            });
+            backend
+                .send(command)
+                .expect("readonly block is reported as an app event");
+            let event = backend.next_event().expect("poll").expect("queued event");
+            let AppUiEvent::Error(error) = unwrap_app_event(event) else {
+                panic!("expected readonly error event for {method}");
+            };
+            assert_eq!(
+                error.code, "readonly",
+                "{method} must use the ordinary readonly label, got {}: {}",
+                error.code, error.message
+            );
+            assert!(
+                error.message.contains(&method),
+                "message names the blocked method: {}",
+                error.message
+            );
+            assert!(
+                !error.message.contains("unexpectedly"),
+                "{method} is an expected block, not a policy bug: {}",
+                error.message
+            );
+        }
+    }
+
+    #[test]
+    fn protocol_notification_maps_to_app_event() {
+        let turn_id = TurnId::new();
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "method": methods::MESSAGE_DELTA,
+            "params": {
+                "session_id": "local:test",
+                "turn_id": turn_id,
+                "text": "hello"
+            }
+        })
+        .to_string();
+
+        let event = rpc_text_to_app_event(&frame)
+            .expect("frame decodes")
+            .expect("notification yields event");
+        let event = unwrap_app_event(event);
+
+        let AppUiEvent::Protocol(UiNotification::MessageDelta(event)) = event else {
+            panic!("expected message delta notification");
+        };
+        assert_eq!(event.session_id.0, "local:test");
+        assert_eq!(event.turn_id, turn_id);
+        assert_eq!(event.text, "hello");
+    }
+
+    #[test]
+    fn lifecycle_notification_retains_additive_cache_diagnostics() {
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "method": methods::CONTEXT_NORMALIZATION_REPORTED,
+            "params": {
+                "session_id": "local:test",
+                "context_state": {
+                    "session_id": "local:test",
+                    "thread_id": "thread-1",
+                    "generation": 7,
+                    "transcript_hash": "sha256:transcript",
+                    "item_count": 12,
+                    "token_estimate": 5000,
+                    "recovery_state": "healthy",
+                    "cache_epoch_id": "sha256:epoch-7",
+                    "last_cache_invalidation_reason": "compaction_installed",
+                    "semantic_head_id": "semblk_000012",
+                    "semantic_head_kind": "tool_interaction"
+                },
+                "normalization": {
+                    "generation": 7,
+                    "input_transcript_hash": "sha256:transcript",
+                    "output_prompt_hash": "sha256:prompt",
+                    "model_capability_id": "openai/gpt-5",
+                    "prompt_message_count": 12,
+                    "token_estimate": 5000,
+                    "repaired_count": 0,
+                    "dropped_count": 0,
+                    "synthetic_count": 0,
+                    "truncated_count": 0
+                }
+            }
+        })
+        .to_string();
+
+        let event = rpc_text_to_app_event(&frame)
+            .expect("frame decodes")
+            .expect("notification yields event");
+        let ClientEvent::ContextLifecycle(event) = event else {
+            panic!("expected lifecycle wrapper");
+        };
+        assert_eq!(event.session_id.0, "local:test");
+        let diagnostics = event.diagnostics.expect("semantic diagnostics");
+        assert_eq!(
+            diagnostics.cache_epoch_id.as_deref(),
+            Some("sha256:epoch-7")
+        );
+        assert_eq!(
+            diagnostics.last_cache_invalidation_reason.as_deref(),
+            Some("compaction_installed")
+        );
+        assert_eq!(
+            diagnostics.semantic_head_id.as_deref(),
+            Some("semblk_000012")
+        );
+        assert_eq!(
+            diagnostics.semantic_head_kind.as_deref(),
+            Some("tool_interaction")
+        );
+        assert!(matches!(
+            *event.event,
+            AppUiEvent::Protocol(UiNotification::ContextNormalizationReported(_))
+        ));
+    }
+
+    #[test]
+    fn compaction_started_and_completed_retain_cache_diagnostics() {
+        let context_state = json!({
+            "session_id": "local:test",
+            "thread_id": "thread-1",
+            "generation": 7,
+            "transcript_hash": "sha256:transcript",
+            "item_count": 12,
+            "token_estimate": 5000,
+            "recovery_state": "healthy",
+            "cache_epoch_id": "sha256:epoch-7",
+            "semantic_head_id": "semblk_000012",
+            "semantic_head_kind": "tool_interaction"
+        });
+        let started = json!({
+            "jsonrpc": "2.0",
+            "method": methods::CONTEXT_COMPACTION_STARTED,
+            "params": {
+                "session_id": "local:test",
+                "context_state": context_state.clone(),
+                "trigger": "token_budget",
+                "threshold_tokens": 8000
+            }
+        });
+        let completed = json!({
+            "jsonrpc": "2.0",
+            "method": methods::CONTEXT_COMPACTION_COMPLETED,
+            "params": {
+                "session_id": "local:test",
+                "context_state": context_state,
+                "compaction": {
+                    "compaction_id": "comp-7",
+                    "checkpoint_id": "chk-7",
+                    "status": "applied",
+                    "policy_id": "default",
+                    "trigger": "token_budget",
+                    "input_generation": 6,
+                    "output_generation": 7,
+                    "input_transcript_hash": "sha256:old",
+                    "replacement_transcript_hash": "sha256:transcript",
+                    "installed_transcript_hash": "sha256:transcript",
+                    "input_item_count": 30,
+                    "retained_count": 12,
+                    "dropped_count": 18,
+                    "summary_item_id": "sum-7",
+                    "token_estimate_before": 11000,
+                    "token_estimate_after": 5000,
+                    "error": null
+                }
+            }
+        });
+
+        for (frame, started_expected) in [(started, true), (completed, false)] {
+            let event = rpc_text_to_app_event(&frame.to_string())
+                .expect("frame decodes")
+                .expect("notification yields event");
+            let ClientEvent::ContextLifecycle(event) = event else {
+                panic!("expected lifecycle wrapper");
+            };
+            let diagnostics = event.diagnostics.expect("semantic diagnostics");
+            assert_eq!(
+                diagnostics.cache_epoch_id.as_deref(),
+                Some("sha256:epoch-7")
+            );
+            assert_eq!(
+                matches!(
+                    *event.event,
+                    AppUiEvent::Protocol(UiNotification::ContextCompactionStarted(_))
+                ),
+                started_expected
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_lifecycle_notification_carries_an_explicit_empty_diagnostic_snapshot() {
+        let mut fixture: Value =
+            serde_json::from_str(include_str!("../fixtures/m16_context_lifecycle.json"))
+                .expect("fixture parses");
+        let event = fixture["events"].as_array_mut().expect("events").remove(0);
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "method": event["method"].clone(),
+            "params": event["params"].clone(),
+        })
+        .to_string();
+
+        let event = rpc_text_to_app_event(&frame)
+            .expect("frame decodes")
+            .expect("notification yields event");
+        let ClientEvent::ContextLifecycle(event) = event else {
+            panic!("lifecycle frames must carry an atomic diagnostic snapshot");
+        };
+        assert!(event.diagnostics.is_none());
+    }
+
+    #[test]
+    fn context_diagnostic_wire_labels_are_sanitized_and_bounded() {
+        let long_epoch = format!("\u{1b}[2J{}", "e".repeat(400));
+        let params = json!({
+            "context_state": {
+                "cache_epoch_id": long_epoch,
+                "semantic_head_kind": "tool\u{1b}[31m\ninteraction"
+            }
+        });
+
+        let diagnostics =
+            context_cache_diagnostics_from_params(methods::CONTEXT_COMPACTION_STARTED, &params)
+                .expect("diagnostics retained");
+        let epoch = diagnostics.cache_epoch_id.expect("epoch");
+        assert!(!epoch.contains('\u{1b}'));
+        assert_eq!(epoch.chars().count(), 257, "256 chars plus ellipsis");
+        assert_eq!(
+            diagnostics.semantic_head_kind.as_deref(),
+            Some("tool interaction")
+        );
+    }
+
+    #[test]
+    fn progress_notification_maps_to_app_progress_event() {
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "method": methods::PROGRESS_UPDATED,
+            "params": {
+                "session_id": "local:test",
+                "turn_id": null,
+                "metadata": {
+                    "kind": ra_core::ui_protocol::progress_kinds::STATUS,
+                    "message": "indexing workspace"
+                }
+            }
+        })
+        .to_string();
+
+        let event = rpc_text_to_app_event(&frame)
+            .expect("frame decodes")
+            .expect("notification yields event");
+        let event = unwrap_app_event(event);
+
+        let AppUiEvent::Progress(progress) = event else {
+            panic!("expected progress event");
+        };
+        assert_eq!(progress.session_id.0, "local:test");
+        assert_eq!(
+            progress.metadata.message.as_deref(),
+            Some("indexing workspace")
+        );
+    }
+
+    #[test]
+    fn server_heartbeat_notification_is_ignored() {
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "method": "server/heartbeat",
+            "params": {
+                "timestamp": "2026-05-13T17:17:00Z"
+            }
+        })
+        .to_string();
+
+        let event = rpc_text_to_app_event(&frame).expect("frame decodes");
+        assert!(event.is_none());
+    }
+
+    #[test]
+    fn websocket_request_includes_bearer_auth_header() {
+        let request = websocket_request(
+            "wss://example.test/ui-protocol",
+            Some(" secret-token "),
+            Some(" coding "),
+        )
+        .expect("request builds");
+        let expected_features = appui_feature_header_for(false);
+
+        assert_eq!(
+            request
+                .headers()
+                .get("Authorization")
+                .and_then(|value| value.to_str().ok()),
+            Some("Bearer secret-token")
+        );
+        assert_eq!(
+            request
+                .headers()
+                .get("X-Ra-Ui-Features")
+                .and_then(|value| value.to_str().ok()),
+            Some(expected_features.as_str())
+        );
+        assert_eq!(
+            request
+                .headers()
+                .get("X-Profile-Id")
+                .and_then(|value| value.to_str().ok()),
+            Some("coding")
+        );
+    }
+
+    // --- ReconnectBackoff state machine (no networks involved) ---
+
+    fn ms(n: u64) -> Duration {
+        Duration::from_millis(n)
+    }
+
+    #[test]
+    fn reconnect_backoff_allows_first_attempt_immediately() {
+        let backoff = ReconnectBackoff::default();
+        assert!(backoff.should_attempt(Instant::now()));
+    }
+
+    #[test]
+    fn reconnect_backoff_schedule_doubles_and_caps_at_five_seconds() {
+        let t0 = Instant::now();
+        let mut backoff = ReconnectBackoff::default();
+
+        // Failure 1 → wait 500ms.
+        backoff.record_failure(t0);
+        assert!(!backoff.should_attempt(t0 + ms(499)));
+        assert!(backoff.should_attempt(t0 + ms(500)));
+
+        // Failure 2 → wait 1s.
+        let t1 = t0 + ms(500);
+        backoff.record_failure(t1);
+        assert!(!backoff.should_attempt(t1 + ms(999)));
+        assert!(backoff.should_attempt(t1 + ms(1000)));
+
+        // Failures 3/4 → 2s/4s.
+        let t2 = t1 + ms(1000);
+        backoff.record_failure(t2);
+        assert!(!backoff.should_attempt(t2 + ms(1999)));
+        assert!(backoff.should_attempt(t2 + ms(2000)));
+        let t3 = t2 + ms(2000);
+        backoff.record_failure(t3);
+        assert!(!backoff.should_attempt(t3 + ms(3999)));
+        assert!(backoff.should_attempt(t3 + ms(4000)));
+
+        // Failure 5+ → capped at 5s (8s uncapped).
+        let t4 = t3 + ms(4000);
+        backoff.record_failure(t4);
+        assert!(!backoff.should_attempt(t4 + ms(4999)));
+        assert!(backoff.should_attempt(t4 + ms(5000)));
+        let t5 = t4 + ms(5000);
+        backoff.record_failure(t5);
+        assert!(!backoff.should_attempt(t5 + ms(4999)));
+        assert!(backoff.should_attempt(t5 + ms(5000)));
+    }
+
+    #[test]
+    fn reconnect_backoff_treats_instant_exit_loop_as_failures() {
+        // The storm scenario: spawn always "succeeds", the child dies
+        // instantly. Successful connects must NOT reset the streak; the
+        // short-lived disconnect keeps growing it.
+        let t0 = Instant::now();
+        let mut backoff = ReconnectBackoff::default();
+
+        assert!(backoff.should_attempt(t0));
+        backoff.record_success(t0);
+        backoff.record_disconnect(t0 + ms(10)); // died 10ms after connect
+        assert_eq!(backoff.consecutive_failures(), 1);
+        let t1 = t0 + ms(10);
+        assert!(!backoff.should_attempt(t1 + ms(489)));
+        assert!(backoff.should_attempt(t1 + ms(500)));
+
+        backoff.record_success(t1 + ms(500));
+        backoff.record_disconnect(t1 + ms(510));
+        assert_eq!(backoff.consecutive_failures(), 2);
+        let t2 = t1 + ms(510);
+        assert!(!backoff.should_attempt(t2 + ms(999)));
+        assert!(backoff.should_attempt(t2 + ms(1000)));
+    }
+
+    #[test]
+    fn reconnect_backoff_long_lived_connection_resets_failures() {
+        let t0 = Instant::now();
+        let mut backoff = ReconnectBackoff::default();
+        backoff.record_failure(t0);
+        backoff.record_failure(t0 + ms(500));
+        assert_eq!(backoff.consecutive_failures(), 2);
+
+        // Connection survives past the short-lived window before dying.
+        let connect = t0 + ms(1500);
+        backoff.record_success(connect);
+        backoff.record_disconnect(connect + ms(1500));
+        assert_eq!(backoff.consecutive_failures(), 0);
+        assert!(backoff.should_attempt(connect + ms(1500)));
+    }
+
+    #[test]
+    fn reconnect_backoff_frame_delivery_resets_failures() {
+        let t0 = Instant::now();
+        let mut backoff = ReconnectBackoff::default();
+        backoff.record_failure(t0);
+        backoff.record_failure(t0 + ms(500));
+
+        // Connect, receive a data frame, die 100ms in: the frame proved the
+        // connection, so the quick death does not count as a failure.
+        let connect = t0 + ms(1500);
+        backoff.record_success(connect);
+        backoff.record_frame();
+        backoff.record_disconnect(connect + ms(100));
+        assert_eq!(backoff.consecutive_failures(), 0);
+        assert!(backoff.should_attempt(connect + ms(100)));
+    }
+
+    #[test]
+    fn reconnect_backoff_ignores_disconnects_while_already_disconnected() {
+        // The quiet ensure_connected error path calls mark_disconnected on
+        // every tick; that must not slide the schedule forward.
+        let t0 = Instant::now();
+        let mut backoff = ReconnectBackoff::default();
+        backoff.record_success(t0);
+        backoff.record_disconnect(t0 + ms(10));
+        assert_eq!(backoff.consecutive_failures(), 1);
+
+        for tick in 1..100u64 {
+            backoff.record_disconnect(t0 + ms(10 + tick * 25));
+        }
+        assert_eq!(backoff.consecutive_failures(), 1);
+        assert!(backoff.should_attempt(t0 + ms(10) + ms(500)));
+    }
+
+    /// End-to-end storm guard: an instantly-exiting stdio child must be
+    /// respawned on the backoff schedule, not once per event-loop poll.
+    #[cfg(unix)]
+    #[test]
+    fn stdio_reconnect_backs_off_for_instantly_exiting_child() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock is valid")
+            .as_nanos();
+        let marker = std::env::temp_dir().join(format!("octoscode-backoff-{nonce}.log"));
+        let command = format!("echo spawned >> {}; exit 7", marker.display());
+
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::stdio(command)),
+            ..AppUiLaunch::default()
+        });
+
+        // Bootstrap performs the first connect; then poll aggressively for
+        // ~1.2s the way the event loop would.
+        let _ = backend.bootstrap();
+        let deadline = Instant::now() + Duration::from_millis(1200);
+        while Instant::now() < deadline {
+            let _ = backend.next_event();
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        let spawns = std::fs::read_to_string(&marker)
+            .unwrap_or_default()
+            .lines()
+            .count();
+        let _ = std::fs::remove_file(&marker);
+        assert!(
+            (1..=4).contains(&spawns),
+            "instantly-exiting stdio child should respawn on the backoff \
+             schedule (expected 1..=4 spawns in 1.2s, got {spawns})"
+        );
+    }
+
+    /// The WS connect path must give up after WS_CONNECT_TIMEOUT instead of
+    /// blocking the UI thread until the OS TCP timeout: a listener that
+    /// accepts but never answers the handshake simulates a blackholed
+    /// endpoint.
+    #[test]
+    fn websocket_connect_times_out_against_unresponsive_endpoint() {
+        let listener = match StdTcpListener::bind("127.0.0.1:0") {
+            Ok(listener) => listener,
+            Err(err) if err.kind() == io::ErrorKind::PermissionDenied => return,
+            Err(err) => panic!("bind test listener: {err}"),
+        };
+        let addr = listener.local_addr().expect("listener addr");
+        let hold = thread::spawn(move || {
+            // Accept the TCP connection and then never answer the WS
+            // handshake until the client hangs up.
+            if let Ok((stream, _)) = listener.accept() {
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+                let mut buf = [0u8; 1024];
+                use std::io::Read;
+                let mut stream = stream;
+                while matches!(stream.read(&mut buf), Ok(n) if n > 0) {}
+            }
+        });
+
+        let runtime = Runtime::new().expect("test runtime");
+        let mut driver = WebSocketTransportDriver::new(format!("ws://{addr}/ui"), None, None);
+        let started = Instant::now();
+        let err = driver
+            .connect(&runtime)
+            .expect_err("handshake-less endpoint must not connect");
+        let elapsed = started.elapsed();
+
+        assert!(
+            format!("{err:#}").contains("timed out"),
+            "expected connect timeout error, got: {err:#}"
+        );
+        assert!(
+            elapsed < Duration::from_secs(8),
+            "connect must be bounded by WS_CONNECT_TIMEOUT, took {elapsed:?}"
+        );
+        drop(driver);
+        hold.join().expect("hold thread exits");
+    }
+
+    #[test]
+    fn stdio_transport_driver_rejects_empty_command() {
+        let err = match StdioTransportDriver::new("   ".into()) {
+            Ok(_) => panic!("empty command should be rejected"),
+            Err(err) => err,
+        };
+
+        assert!(
+            err.to_string()
+                .contains("UI protocol stdio command must not be empty")
+        );
+    }
+
+    #[test]
+    fn stdio_transport_driver_shape_is_line_oriented_text() {
+        let driver =
+            StdioTransportDriver::new("ra serve --stdio".into()).expect("driver builds");
+
+        assert_eq!(driver.label(), "ra serve --stdio");
+        assert!(!driver.is_connected());
+    }
+
+    // --- CappedLineReader: bounded stdio line buffering ---
+
+    #[tokio::test]
+    async fn capped_line_reader_discards_giant_line_and_recovers() {
+        // A 3 MB line (newline-terminated) followed by a normal line: the
+        // giant line must be discarded without ever buffering it whole, and
+        // the reader must resync on the next line.
+        let giant = 3 * 1024 * 1024;
+        let mut input = vec![b'a'; giant];
+        input.push(b'\n');
+        input.extend_from_slice(b"next line\n");
+
+        let mut reader = CappedLineReader::new(BufReader::new(&input[..]), 1024);
+        match reader.next_line().await.expect("read giant line") {
+            CappedLine::TooLong { discarded } => {
+                assert_eq!(discarded, (giant + 1) as u64, "content + newline discarded");
+            }
+            other => panic!("expected TooLong for the giant line, got {other:?}"),
+        }
+        assert_eq!(
+            reader.next_line().await.expect("read next line"),
+            CappedLine::Line("next line".into())
+        );
+        assert_eq!(reader.next_line().await.expect("read eof"), CappedLine::Eof);
+    }
+
+    #[tokio::test]
+    async fn capped_line_reader_discards_giant_line_without_trailing_newline() {
+        // Giant input with NO newline at all (the pathological
+        // never-newline stream): must terminate with TooLong at EOF, not
+        // accumulate unboundedly. A small BufReader capacity exercises the
+        // incremental chunked path a real pipe produces.
+        let input = vec![b'b'; 256 * 1024];
+        let mut reader = CappedLineReader::new(BufReader::with_capacity(64, &input[..]), 1024);
+
+        match reader.next_line().await.expect("read") {
+            CappedLine::TooLong { discarded } => {
+                assert_eq!(discarded, input.len() as u64);
+            }
+            other => panic!("expected TooLong, got {other:?}"),
+        }
+        assert_eq!(reader.next_line().await.expect("read eof"), CappedLine::Eof);
+    }
+
+    #[tokio::test]
+    async fn capped_line_reader_keeps_lines_at_the_cap_boundary() {
+        // len == cap passes; len == cap+1 is dropped.
+        let mut input = vec![b'x'; 8];
+        input.push(b'\n');
+        input.extend_from_slice(&[b'y'; 9]);
+        input.push(b'\n');
+        let mut reader = CappedLineReader::new(BufReader::new(&input[..]), 8);
+
+        assert_eq!(
+            reader.next_line().await.expect("read"),
+            CappedLine::Line("xxxxxxxx".into())
+        );
+        assert!(matches!(
+            reader.next_line().await.expect("read"),
+            CappedLine::TooLong { discarded: 10 }
+        ));
+    }
+
+    #[tokio::test]
+    async fn capped_line_reader_handles_crlf_final_partial_and_non_utf8() {
+        let input: &[u8] = b"first\r\ncaf\xE9 latte\nlast-no-newline";
+        let mut reader = CappedLineReader::new(BufReader::new(input), 1024);
+
+        assert_eq!(
+            reader.next_line().await.expect("read"),
+            CappedLine::Line("first".into()),
+            "trailing CR is stripped"
+        );
+        assert_eq!(
+            reader.next_line().await.expect("read"),
+            CappedLine::NotUtf8 {
+                lossy: "caf\u{FFFD} latte".into()
+            },
+            "invalid UTF-8 is surfaced as NotUtf8 (skipped on the frame path, \
+             lossy for stderr diagnostics) — delivering it lossily decoded as \
+             malformed_json and leaked the pending request (codex round-2 P2)"
+        );
+        assert_eq!(
+            reader.next_line().await.expect("read"),
+            CappedLine::Line("last-no-newline".into()),
+            "final unterminated line is still delivered"
+        );
+        assert_eq!(reader.next_line().await.expect("read"), CappedLine::Eof);
+    }
+
+    /// Shell snippet emitting one giant `x…x` line (`over` bytes, newline
+    /// terminated) followed by `after-too-long`. head/tr instead of awk: BSD
+    /// awk's gsub is quadratic on a 1 MB string (~9 s), which starves test
+    /// deadlines.
+    #[cfg(unix)]
+    fn giant_line_script(over: usize) -> String {
+        format!("head -c {over} /dev/zero | tr '\\000' 'x'; echo; echo after-too-long")
+    }
+
+    /// Same discard-and-recover contract, but over a real child pipe (chunked
+    /// delivery + backpressure) rather than an in-memory slice.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn capped_line_reader_discards_giant_line_on_a_real_pipe() {
+        let over = MAX_TEXT_FRAME_BYTES + 512;
+        let script = giant_line_script(over);
+        let mut child = Command::new("sh")
+            .arg("-c")
+            .arg(&script)
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("spawn awk child");
+        let stdout = child.stdout.take().expect("stdout piped");
+        let mut reader = CappedLineReader::new(BufReader::new(stdout), MAX_TEXT_FRAME_BYTES);
+
+        match tokio::time::timeout(Duration::from_secs(5), reader.next_line())
+            .await
+            .expect("giant line read within budget")
+            .expect("read")
+        {
+            CappedLine::TooLong { discarded } => assert_eq!(discarded, (over + 1) as u64),
+            other => panic!("expected TooLong, got {other:?}"),
+        }
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(5), reader.next_line())
+                .await
+                .expect("next line within budget")
+                .expect("read"),
+            CappedLine::Line("after-too-long".into())
+        );
+        let _ = child.wait().await;
+    }
+
+    #[test]
+    fn stdio_skipped_frame_error_does_not_disconnect() {
+        let TransportEvent::Error {
+            code,
+            message,
+            disconnect,
+        } = stdio_frame_too_large_skipped_event(2048)
+        else {
+            panic!("expected error event");
+        };
+        assert_eq!(code, "frame_too_large");
+        assert!(message.contains("2048 bytes discarded"));
+        assert!(!disconnect, "a skipped frame must keep the child session");
+    }
+
+    // --- StderrRing + exit disconnect message ---
+
+    #[test]
+    fn stderr_ring_keeps_only_the_most_recent_lines() {
+        let mut ring = StderrRing::default();
+        for index in 0..40 {
+            ring.push(format!("line-{index}"));
+        }
+        let tail = ring.tail().expect("tail present");
+        assert!(!tail.contains("line-19"), "old lines evicted: {tail}");
+        assert!(tail.contains("line-20") && tail.contains("line-39"));
+        assert_eq!(tail.lines().count(), STDIO_STDERR_RING_MAX_LINES);
+    }
+
+    #[test]
+    fn stderr_ring_bounds_bytes_but_keeps_newest_line() {
+        let mut ring = StderrRing::default();
+        ring.push("first".into());
+        ring.push("z".repeat(STDIO_STDERR_RING_MAX_BYTES + 100));
+        let tail = ring.tail().expect("tail present");
+        assert!(!tail.contains("first"), "byte budget evicts older lines");
+        assert!(tail.starts_with("zzz"), "newest line survives even if huge");
+    }
+
+    #[test]
+    fn stdio_exit_message_attaches_stderr_tail_only_on_failure() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::ExitStatusExt;
+            let failing = std::process::ExitStatus::from_raw(3 << 8);
+            let message =
+                stdio_exit_disconnect_message(&Ok(failing), Some("boom: bad config".into()));
+            assert!(message.contains("exited with"));
+            assert!(message.contains("stderr tail:"));
+            assert!(message.contains("boom: bad config"));
+
+            let clean = std::process::ExitStatus::from_raw(0);
+            let message = stdio_exit_disconnect_message(&Ok(clean), Some("noise".into()));
+            assert!(!message.contains("stderr tail:"), "clean exit stays terse");
+            assert!(!message.contains("noise"));
+        }
+
+        let message = stdio_exit_disconnect_message(
+            &Err(std::io::Error::other("wait failed")),
+            Some("diagnostic".into()),
+        );
+        assert!(message.contains("wait failed"));
+        assert!(
+            message.contains("diagnostic"),
+            "wait errors count as failure"
+        );
+    }
+
+    // --- stdio driver end-to-end: exit race + stderr tail + oversized skip ---
+
+    #[cfg(unix)]
+    fn drive_stdio_until_disconnect(
+        command: &str,
+    ) -> (Vec<String>, Vec<(String, String, bool)>, String) {
+        let runtime = Runtime::new().expect("test runtime");
+        let mut driver = StdioTransportDriver::new(command.into()).expect("driver builds");
+        driver.connect(&runtime).expect("stdio child spawns");
+
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut frames = Vec::new();
+        let mut errors = Vec::new();
+        loop {
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for stdio disconnect; frames={frames:?} errors={errors:?}"
+            );
+            match driver.poll_event().expect("poll stdio driver") {
+                Some(TransportEvent::Frame(TransportFrame::Text(text))) => frames.push(text),
+                Some(TransportEvent::Frame(_)) => {}
+                Some(TransportEvent::Error {
+                    code,
+                    message,
+                    disconnect,
+                }) => errors.push((code, message, disconnect)),
+                Some(TransportEvent::Disconnected(message)) => return (frames, errors, message),
+                None => thread::sleep(Duration::from_millis(5)),
+            }
+        }
+    }
+
+    /// Child-exit race: the final stdout line written right before death must
+    /// be delivered before Disconnected, and a nonzero exit must carry the
+    /// stderr tail instead of discarding it.
+    #[cfg(unix)]
+    #[test]
+    fn stdio_child_exit_delivers_final_stdout_and_stderr_tail() {
+        let (frames, _errors, message) = drive_stdio_until_disconnect(
+            "echo final-response; echo 'boom: config invalid' >&2; exit 3",
+        );
+
+        assert_eq!(
+            frames,
+            vec!["final-response".to_string()],
+            "final stdout line survives the child-exit race"
+        );
+        assert!(
+            message.contains("exited with") && message.contains("3"),
+            "exit status reported: {message}"
+        );
+        assert!(
+            message.contains("boom: config invalid"),
+            "stderr tail attached on nonzero exit: {message}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stdio_clean_exit_reports_no_stderr_tail() {
+        let (frames, _errors, message) =
+            drive_stdio_until_disconnect("echo done; echo routine-noise >&2; exit 0");
+
+        assert_eq!(frames, vec!["done".to_string()]);
+        assert!(
+            message.contains("exited with"),
+            "status reported: {message}"
+        );
+        assert!(
+            !message.contains("routine-noise"),
+            "clean exits stay terse: {message}"
+        );
+    }
+
+    /// End-to-end (real child process): when the spawned `ra serve` refuses to
+    /// start because another serve owns the data dir, it prints
+    /// `DATA_DIR_LOCKED_MARKER` to stderr and exits nonzero. That marker must
+    /// survive into the Disconnected message so `mark_disconnected` can latch the
+    /// fatal, no-reconnect state — this pins the driver→message seam that the
+    /// `mark_disconnected` unit test then keys on.
+    #[cfg(unix)]
+    #[test]
+    fn stdio_child_exit_preserves_data_dir_locked_marker() {
+        let (_frames, _errors, message) = drive_stdio_until_disconnect(&format!(
+            "echo '{DATA_DIR_LOCKED_MARKER}: another ra server already owns data directory /x' \
+             >&2; exit 1"
+        ));
+        assert!(
+            message.contains(DATA_DIR_LOCKED_MARKER),
+            "the data-dir-lock marker must reach the disconnect message: {message}"
+        );
+    }
+
+    /// An oversized stdout line must surface as a non-fatal frame_too_large
+    /// error and the stream must keep delivering subsequent lines.
+    #[cfg(unix)]
+    #[test]
+    fn stdio_oversized_line_is_skipped_without_killing_the_session() {
+        let over = MAX_TEXT_FRAME_BYTES + 512;
+        let command = giant_line_script(over);
+        let (frames, errors, _message) = drive_stdio_until_disconnect(&command);
+
+        let (code, message, disconnect) = errors
+            .iter()
+            .find(|(code, _, _)| code == "frame_too_large")
+            .expect("oversized line reported");
+        assert_eq!(code, "frame_too_large");
+        assert!(message.contains("discarded"));
+        assert!(!disconnect, "skip must not tear down the session");
+        assert_eq!(
+            frames,
+            vec!["after-too-long".to_string()],
+            "stream recovers on the next line"
+        );
+    }
+
+    #[test]
+    fn stdio_transport_rejects_oversized_text_frame_before_decode() {
+        let event = stdio_text_frame_event("x".repeat(MAX_TEXT_FRAME_BYTES + 1));
+
+        let TransportEvent::Error {
+            code,
+            message,
+            disconnect,
+        } = event
+        else {
+            panic!("expected oversized stdio frame error");
+        };
+        assert_eq!(code, "frame_too_large");
+        assert!(message.contains("UI protocol stdio frame"));
+        assert!(disconnect);
+    }
+
+    #[test]
+    fn launch_from_cli_uses_stdio_endpoint_when_requested() {
+        let cli = Cli {
+            config: None,
+            mode: crate::cli::Mode::Protocol,
+            base_url: None,
+            stdio_command: Some("ra serve --stdio".into()),
+            session: None,
+            profile_id: None,
+            cwd: None,
+            auth_token: Some("ignored-for-stdio".into()),
+            readonly: false,
+            theme: crate::cli::ThemeName::Codex,
+            lang: crate::cli::Lang::En,
+            scroll_mode: crate::cli::ScrollMode::Native,
+            vim_mode: false,
+            steer_mid_turn: false,
+            no_splash: false,
+            prompt: None,
+        };
+
+        let launch = launch_from_cli(&cli);
+
+        assert_eq!(
+            launch
+                .endpoint
+                .as_ref()
+                .map(|endpoint| endpoint.label().to_string()),
+            Some("ra serve --stdio".into())
+        );
+    }
+
+    #[test]
+    fn protocol_preserves_profile_llm_delete_kind() {
+        let mut exchange = ProtocolExchange::default();
+        let request = exchange
+            .build_tracked_request(AppUiCommand::ProfileLlmDelete(
+                crate::model::ProfileLlmDeleteParams {
+                    profile_id: Some("coding".into()),
+                    family_id: "moonshot-coding".into(),
+                    model_id: "k3".into(),
+                    route_id: "official".into(),
+                },
+            ))
+            .expect("request builds");
+        let response = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": {
+                "profile_id": "coding",
+                "primary": null,
+                "fallbacks": [],
+                "applied": true
+            }
+        });
+
+        let event = exchange
+            .decode_rpc_text(&response.to_string())
+            .expect("response decodes")
+            .expect("delete result yields an event");
+        let ClientEvent::ProfileLlmMutation(event) = event else {
+            panic!("expected profile LLM mutation event");
+        };
+        assert_eq!(event.kind, ProfileLlmMutationKind::Delete);
+    }
+
+    /// `profile/llm/fetch_models` responses must produce an event: this arm
+    /// was missing, so the result was silently dropped and onboarding's
+    /// "Fetch models" button appeared dead against a real backend (the mock
+    /// faked a status, masking it).
+    #[test]
+    fn protocol_decodes_profile_llm_fetch_models_result_as_status() {
+        let mut exchange = ProtocolExchange::default();
+        let request = exchange
+            .build_tracked_request(AppUiCommand::ProfileLlmFetchModels(
+                crate::model::ProfileLlmFetchModelsParams {
+                    profile_id: Some("ada".into()),
+                    selection: Default::default(),
+                    api_key: None,
+                },
+            ))
+            .expect("request builds");
+
+        // Server result shape (see raw_profile_llm_fetch_models in
+        // ra-cli's ui_protocol.rs): profile_id/family_id/models[String]
+        // plus an optional reason. It does NOT carry provider config, so it
+        // must not be decoded as ProfileLlmListResult.
+        let response = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": {
+                "profile_id": "ada",
+                "family_id": "openai",
+                "models": ["gpt-a", "gpt-b", "gpt-c"],
+            }
+        })
+        .to_string();
+
+        let event = exchange
+            .decode_rpc_text(&response)
+            .expect("response decodes")
+            .expect("fetch_models result must yield an event, not be dropped");
+        let AppUiEvent::Status(status) = unwrap_app_event(event) else {
+            panic!("expected a status event for fetch_models");
+        };
+        assert!(
+            status.message.contains("Fetched 3 models"),
+            "count surfaces: {}",
+            status.message
+        );
+        assert!(exchange.pending_requests.is_empty());
+    }
+
+    #[test]
+    fn protocol_fetch_models_status_reports_server_reason() {
+        let event = profile_llm_fetch_models_event(&json!({
+            "profile_id": "ada",
+            "family_id": "openai",
+            "models": [],
+            "reason": "no_api_key",
+        }));
+        let AppUiEvent::Status(status) = unwrap_app_event(event) else {
+            panic!("expected a status event");
+        };
+        assert!(
+            status.message.contains("Fetched 0 models") && status.message.contains("no_api_key"),
+            "reason surfaces: {}",
+            status.message
+        );
+    }
+
+    /// The mock backend must produce the same event shape as the real decode
+    /// arm so it cannot mask a missing real-backend mapping again.
+    #[test]
+    fn mock_fetch_models_matches_real_decode_arm_shape() {
+        let mut backend = MockAppUiBackend::new(AppUiLaunch::default());
+        backend
+            .send(AppUiCommand::ProfileLlmFetchModels(
+                crate::model::ProfileLlmFetchModelsParams {
+                    profile_id: Some("ada".into()),
+                    selection: Default::default(),
+                    api_key: None,
+                },
+            ))
+            .expect("mock accepts fetch_models");
+
+        let event = backend
+            .next_event()
+            .expect("poll mock")
+            .expect("mock emits an event");
+        let AppUiEvent::Status(status) = unwrap_app_event(event) else {
+            panic!("expected a status event from the mock");
+        };
+        assert!(
+            status.message.starts_with("Fetched 0 models"),
+            "mock aligns with the real arm: {}",
+            status.message
+        );
+    }
+
+    #[test]
+    fn protocol_success_response_is_ack_only() {
+        let event = rpc_text_to_app_event(r#"{"jsonrpc":"2.0","id":"tui-1","result":{}}"#)
+            .expect("response decodes");
+
+        assert!(event.is_none());
+    }
+
+    #[test]
+    fn protocol_error_response_maps_to_app_error() {
+        let event = rpc_text_to_app_event(
+            r#"{"jsonrpc":"2.0","id":"tui-1","error":{"code":"unknown_session","message":"missing session"}}"#,
+        )
+        .expect("response decodes")
+        .expect("error yields event");
+        let event = unwrap_app_event(event);
+
+        let AppUiEvent::Error(error) = event else {
+            panic!("expected app error");
+        };
+        assert_eq!(error.code, "unknown_session");
+        assert_eq!(error.message, "request tui-1 failed: missing session");
+    }
+
+    /// M12-F structured policy error: when the server attaches
+    /// `data.kind` + `data.message` to a JSON-RPC error response, the
+    /// TUI must surface those rather than the numeric JSON-RPC `code`
+    ///     + the top-level `message`. Otherwise tenant/cloud rejection
+    ///     renders as a generic "application_error" line, which violates
+    ///     the M12-F acceptance bar.
+    #[test]
+    fn rpc_error_prefers_structured_data_kind_over_numeric_code() {
+        let event = rpc_text_to_app_event(
+            r#"{"jsonrpc":"2.0","id":"tui-set-perms","error":{"code":-32603,"message":"application error","data":{"kind":"policy_rejected","message":"tenant policy forbids danger-full-access"}}}"#,
+        )
+        .expect("response decodes")
+        .expect("error yields event");
+        let event = unwrap_app_event(event);
+        let AppUiEvent::Error(error) = event else {
+            panic!("expected app error");
+        };
+        // `data.kind` wins for both renderer code (so "policy_rejected"
+        // shows up structured) and message (so the tenant-specific
+        // detail surfaces).
+        assert_eq!(error.code, "policy_rejected");
+        assert!(
+            error.message.contains("tenant policy forbids"),
+            "structured detail must reach the user: {}",
+            error.message
+        );
+    }
+
+    /// Guard: when `data` is absent the legacy fallback still kicks
+    /// in. Existing ra UI callers that do not emit structured errors
+    /// keep working.
+    #[test]
+    fn rpc_error_falls_back_to_top_level_code_when_data_kind_absent() {
+        let event = rpc_text_to_app_event(
+            r#"{"jsonrpc":"2.0","id":"tui-1","error":{"code":"unknown_session","message":"missing session","data":{"hint":"check the session id"}}}"#,
+        )
+        .expect("response decodes")
+        .expect("error yields event");
+        let event = unwrap_app_event(event);
+        let AppUiEvent::Error(error) = event else {
+            panic!("expected app error");
+        };
+        // No `data.kind` -> top-level code/message win.
+        assert_eq!(error.code, "unknown_session");
+        assert!(
+            error.message.contains("missing session"),
+            "{}",
+            error.message
+        );
+    }
+
+    /// Guard: empty / whitespace `data.kind` does NOT win over the
+    /// numeric code. The TUI cannot surface an empty discriminator as
+    /// "the policy reason."
+    #[test]
+    fn rpc_error_ignores_blank_data_kind() {
+        let event = rpc_text_to_app_event(
+            r#"{"jsonrpc":"2.0","id":"tui-1","error":{"code":"unknown_session","message":"missing session","data":{"kind":"   "}}}"#,
+        )
+        .expect("response decodes")
+        .expect("error yields event");
+        let event = unwrap_app_event(event);
+        let AppUiEvent::Error(error) = event else {
+            panic!("expected app error");
+        };
+        assert_eq!(error.code, "unknown_session");
+    }
+
+    #[test]
+    fn protocol_malformed_frames_become_recoverable_errors() {
+        let event = rpc_text_to_app_event("{")
+            .expect("malformed JSON is recoverable")
+            .expect("error event");
+        let event = unwrap_app_event(event);
+        let AppUiEvent::Error(error) = event else {
+            panic!("expected malformed JSON error");
+        };
+        assert_eq!(error.code, "malformed_json");
+
+        let event = rpc_text_to_app_event(
+            &json!({
+                "method": methods::MESSAGE_DELTA,
+                "params": {}
+            })
+            .to_string(),
+        )
+        .expect("missing jsonrpc is recoverable")
+        .expect("error event");
+        let event = unwrap_app_event(event);
+        let AppUiEvent::Error(error) = event else {
+            panic!("expected invalid jsonrpc error");
+        };
+        assert_eq!(error.code, "invalid_jsonrpc");
+
+        let event = rpc_text_to_app_event(
+            &json!({
+                "jsonrpc": "2.0",
+                "method": methods::MESSAGE_DELTA,
+                "params": {
+                    "session_id": "local:test"
+                }
+            })
+            .to_string(),
+        )
+        .expect("bad notification params are recoverable")
+        .expect("error event");
+        let event = unwrap_app_event(event);
+        let AppUiEvent::Error(error) = event else {
+            panic!("expected invalid params error");
+        };
+        assert_eq!(error.code, "invalid_params");
+        assert!(error.message.contains(methods::MESSAGE_DELTA));
+    }
+
+    #[test]
+    fn protocol_exchange_tracks_requests_without_transport() {
+        let mut exchange = ProtocolExchange::default();
+        let session_id = SessionKey("local:test".into());
+        let request = exchange
+            .build_tracked_request(AppUiCommand::ListApprovalScopes(ApprovalScopesListParams {
+                session_id: session_id.clone(),
+            }))
+            .expect("request builds");
+
+        assert_eq!(
+            exchange.pending_requests.get(&request.id),
+            Some(&PendingRequest {
+                select_session: None,
+                method: methods::APPROVAL_SCOPES_LIST.into(),
+                hydrate_session: None,
+            })
+        );
+
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": {
+                "scopes": []
+            }
+        })
+        .to_string();
+        let event = exchange
+            .decode_rpc_text(&frame)
+            .expect("response decodes")
+            .expect("status event");
+        let event = unwrap_app_event(event);
+
+        let AppUiEvent::Status(status) = event else {
+            panic!("expected approval scopes status");
+        };
+        assert_eq!(
+            status.message,
+            "No persisted approval scopes for this session"
+        );
+        assert!(exchange.pending_requests.is_empty());
+    }
+
+    #[test]
+    fn protocol_exchange_replays_session_cursor_without_transport() {
+        let mut exchange = ProtocolExchange::default();
+        let session_id = SessionKey("local:test".into());
+        let cursor = UiCursor {
+            stream: "session_events".into(),
+            seq: 21,
+        };
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "method": methods::SESSION_OPEN,
+            "params": {
+                "session_id": session_id.clone(),
+                "active_profile_id": "coding",
+                "cursor": cursor.clone()
+            }
+        })
+        .to_string();
+
+        exchange
+            .decode_rpc_text(&frame)
+            .expect("session/opened decodes")
+            .expect("session opened event");
+        let request = exchange
+            .build_tracked_request(AppUiCommand::OpenSession(SessionOpenParams {
+                session_id: session_id.clone(),
+                topic: None,
+                sandbox: None,
+                profile_id: Some("coding".into()),
+                cwd: None,
+                after: None,
+            }))
+            .expect("request builds");
+
+        assert_eq!(request.params["after"]["stream"], json!(cursor.stream));
+        assert_eq!(request.params["after"]["seq"], json!(cursor.seq));
+    }
+
+    #[test]
+    fn protocol_backend_cancels_pending_requests_on_disconnect() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        let request = backend
+            .build_tracked_request(AppUiCommand::GetDiffPreview(DiffPreviewGetParams {
+                session_id: SessionKey("local:test".into()),
+                preview_id: PreviewId::new(),
+            }))
+            .expect("request builds");
+        backend.mark_connected("wss://example.test/ui-protocol");
+
+        backend.mark_disconnected("transport closed for test");
+
+        assert!(backend.protocol.pending_requests.is_empty());
+        let status = backend.queue.pop_front().expect("disconnect status");
+        let status = unwrap_app_event(status);
+        assert!(matches!(status, AppUiEvent::Status(_)));
+
+        let cancelled = backend.queue.pop_front().expect("cancelled request");
+        let cancelled = unwrap_app_event(cancelled);
+        let AppUiEvent::Error(error) = cancelled else {
+            panic!("expected cancellation error");
+        };
+        assert_eq!(error.code, "request_cancelled");
+        assert!(error.message.contains(methods::DIFF_PREVIEW_GET));
+        assert!(error.message.contains(&request.id));
+        assert!(error.message.contains("transport closed for test"));
+    }
+
+    /// Two octoscode competing for the DB: the spawned backend refuses to start
+    /// (its stderr tail carries `DATA_DIR_LOCKED_MARKER`). The client must latch
+    /// a fatal state — surface ONE clean terminal error (not the raw stderr
+    /// status) and suppress reconnect so it stops the silent respawn crash-loop.
+    #[test]
+    fn data_dir_lock_conflict_latches_fatal_and_stops_reconnect() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        backend.mark_connected("wss://example.test/ui-protocol");
+
+        // The stdio child died at startup; its exit message carries the server's
+        // stable marker in the stderr tail.
+        backend.mark_disconnected(format!(
+            "UI protocol stdio child exited with exit status: 1; reconnect will relaunch on next \
+             send/read.\nstderr tail:\n{DATA_DIR_LOCKED_MARKER}: another ra server is already \
+             running for this data directory (/tmp/x)."
+        ));
+
+        // Exactly one user-facing event: the clean, actionable terminal error —
+        // the raw stderr Status is suppressed so it can't overwrite it.
+        let event = unwrap_app_event(backend.queue.pop_front().expect("a surfaced event"));
+        let AppUiEvent::Error(error) = event else {
+            panic!("data-dir conflict must surface as an Error, got: {event:?}");
+        };
+        assert_eq!(error.code, DATA_DIR_LOCKED_CODE);
+        assert!(
+            error.message.contains("Close the other octoscode"),
+            "message must be the actionable explanation; got: {}",
+            error.message
+        );
+        assert!(
+            backend.queue.is_empty(),
+            "only the clean error should surface; the raw stderr Status must be suppressed",
+        );
+
+        // Latched fatal → reconnect refuses (no respawn = the loop is broken).
+        assert!(backend.fatal_error.is_some(), "fatal state must latch");
+        assert!(
+            backend.ensure_connected().is_err(),
+            "a latched data-dir conflict must never attempt to reconnect",
+        );
+    }
+
+    /// Regression guard: an ordinary transport disconnect (no marker) must NOT
+    /// latch fatal — it still reports a status and stays retryable, or a healthy
+    /// server restart would never reconnect.
+    #[test]
+    fn ordinary_disconnect_does_not_latch_fatal() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        backend.mark_connected("wss://example.test/ui-protocol");
+        backend.mark_disconnected("UI protocol stdio child exited with exit status: 0");
+
+        assert!(
+            backend.fatal_error.is_none(),
+            "a normal disconnect must stay retryable",
+        );
+        let event = unwrap_app_event(backend.queue.pop_front().expect("a status event"));
+        assert!(
+            matches!(event, AppUiEvent::Status(_)),
+            "a normal disconnect still reports its raw status",
+        );
+    }
+
+    #[test]
+    fn skipped_oversized_frame_cancels_pending_requests_without_disconnect() {
+        // codex P2 (deep-review wave): a skipped over-cap stdio line may have
+        // BEEN the response to an in-flight request — its id is unknowable, so
+        // the pending entry leaked forever and repeated large responses wedged
+        // sends at MAX_PENDING_REQUESTS. The skip now cancels pending requests
+        // like the disconnect path does, while keeping the connection up.
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        let request = backend
+            .build_tracked_request(AppUiCommand::GetDiffPreview(DiffPreviewGetParams {
+                session_id: SessionKey("local:test".into()),
+                preview_id: PreviewId::new(),
+            }))
+            .expect("request builds");
+        backend.mark_connected("wss://example.test/ui-protocol");
+
+        let first = backend
+            .handle_transport_event(stdio_frame_too_large_skipped_event(2_000_000))
+            .expect("event handled")
+            .expect("event surfaced");
+
+        assert!(backend.protocol.pending_requests.is_empty());
+        let AppUiEvent::Error(error) = unwrap_app_event(first) else {
+            panic!("expected cancellation error first");
+        };
+        assert_eq!(error.code, "request_cancelled");
+        assert!(error.message.contains(&request.id));
+
+        let next = backend.queue.pop_front().expect("frame_too_large error");
+        let AppUiEvent::Error(error) = unwrap_app_event(next) else {
+            panic!("expected frame_too_large error");
+        };
+        assert_eq!(error.code, "frame_too_large");
+        assert!(
+            matches!(backend.connection_state, ProtocolConnectionState::Connected),
+            "the child stays alive; a skipped frame must not disconnect"
+        );
+        assert!(
+            backend.queue.is_empty(),
+            "no disconnect status may be queued"
+        );
+    }
+
+    #[test]
+    fn skipped_not_utf8_frame_cancels_pending_requests_without_disconnect() {
+        // codex round-2 P2: an invalid-UTF-8 stdio line used to be delivered
+        // LOSSILY — decoding as malformed_json with an unknowable id and
+        // silently leaking its pending-request entry. It is now skipped like
+        // an over-cap frame, with pending requests cancelled.
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        let request = backend
+            .build_tracked_request(AppUiCommand::GetDiffPreview(DiffPreviewGetParams {
+                session_id: SessionKey("local:test".into()),
+                preview_id: PreviewId::new(),
+            }))
+            .expect("request builds");
+        backend.mark_connected("wss://example.test/ui-protocol");
+
+        let first = backend
+            .handle_transport_event(stdio_frame_not_utf8_skipped_event(42))
+            .expect("event handled")
+            .expect("event surfaced");
+
+        assert!(backend.protocol.pending_requests.is_empty());
+        let AppUiEvent::Error(error) = unwrap_app_event(first) else {
+            panic!("expected cancellation error first");
+        };
+        assert_eq!(error.code, "request_cancelled");
+        assert!(error.message.contains(&request.id));
+        let next = backend.queue.pop_front().expect("frame_not_utf8 error");
+        let AppUiEvent::Error(error) = unwrap_app_event(next) else {
+            panic!("expected frame_not_utf8 error");
+        };
+        assert_eq!(error.code, "frame_not_utf8");
+        assert!(matches!(
+            backend.connection_state,
+            ProtocolConnectionState::Connected
+        ));
+    }
+
+    #[test]
+    fn take_line_yields_not_utf8_for_invalid_bytes() {
+        let mut buf = vec![0xf0, 0x9f, b'x', 0xff, b'\r'];
+        let CappedLine::NotUtf8 { lossy } = take_line(&mut buf) else {
+            panic!("expected NotUtf8 for invalid bytes");
+        };
+        assert!(lossy.contains('x'), "lossy text keeps readable bytes");
+        // Strict UTF-8 still yields Line.
+        let mut ok = b"hello\r".to_vec();
+        assert_eq!(take_line(&mut ok), CappedLine::Line("hello".into()));
+    }
+
+    #[test]
+    fn protocol_backend_retries_cancelled_capabilities_without_surfacing_error() {
+        let server = match spawn_capabilities_reconnect_server() {
+            Ok(server) => server,
+            Err(err) if err.kind() == io::ErrorKind::PermissionDenied => return,
+            Err(err) => panic!("protocol test server starts: {err}"),
+        };
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(server.endpoint.clone(), None)),
+            ..AppUiLaunch::default()
+        });
+
+        backend.bootstrap().expect("bootstrap sends capabilities");
+
+        let first = server.recv_json();
+        assert_eq!(
+            first["method"],
+            crate::model::APPUI_METHOD_CONFIG_CAPABILITIES_LIST
+        );
+
+        let mut saw_disconnect_status = false;
+        let mut saw_capabilities = false;
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline {
+            let Some(event) = backend.next_event().expect("poll protocol backend") else {
+                thread::sleep(Duration::from_millis(5));
+                continue;
+            };
+            match event {
+                ClientEvent::Capabilities(_) => {
+                    saw_capabilities = true;
+                    break;
+                }
+                ClientEvent::App(event) => match *event {
+                    AppUiEvent::Status(status) => {
+                        saw_disconnect_status |= status.message.contains("disconnected")
+                            || status.message.contains("closed");
+                    }
+                    AppUiEvent::Error(error) if error.code == "request_cancelled" => {
+                        panic!(
+                            "capabilities cancellation should be retried, not surfaced: {error:?}"
+                        );
+                    }
+                    AppUiEvent::Error(_) => {}
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+
+        assert!(saw_disconnect_status);
+        assert!(saw_capabilities);
+        let retry = server.recv_json();
+        assert_eq!(
+            retry["method"],
+            crate::model::APPUI_METHOD_CONFIG_CAPABILITIES_LIST
+        );
+        server.join();
+    }
+
+    // ---- OUTER_LOOP_REVIEW #28b: producer-side pins for the six hydrate
+    // error synthesis seams — each MUST emit ClientEvent::HydrateError
+    // carrying the command's session. Expected messages come from the #28a
+    // shared constructors, never hand-written literals.
+
+    fn hydrate_command(session: &str) -> AppUiCommand {
+        AppUiCommand::HydrateSession(SessionHydrateParams {
+            session_id: SessionKey(session.into()),
+            after: None,
+            include: vec!["messages".into()],
+        })
+    }
+
+    fn unwrap_hydrate_error(event: ClientEvent) -> crate::client_event::HydrateErrorClientEvent {
+        let ClientEvent::HydrateError(event) = event else {
+            panic!("expected ClientEvent::HydrateError, got: {event:?}");
+        };
+        event
+    }
+
+    #[test]
+    fn scoped_barrier_failures_keep_deferred_hydrate_attributed() {
+        for fail_scope in [false, true] {
+            let mut backend = ProtocolAppUiBackend::new(AppUiLaunch::default());
+            backend
+                .deferred_until_reconnect_open
+                .push_back(hydrate_command("local:held"));
+            if fail_scope {
+                backend.fail_session_open_barrier("fixture malformed open".into());
+            } else {
+                backend.mark_disconnected("fixture child lost");
+            }
+            let errors: Vec<_> = backend
+                .queue
+                .into_iter()
+                .filter_map(|event| match event {
+                    ClientEvent::HydrateError(error) => Some(error),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(errors.len(), 1);
+            assert_eq!(errors[0].session_id, SessionKey("local:held".into()));
+            assert_eq!(errors[0].code, "request_cancelled");
+        }
+    }
+
+    #[test]
+    fn delivered_launch_resolve_disarms_bootstrap_replay() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch::default());
+        backend.pending_launch_resolve = Some(crate::model::LaunchResolveParams {
+            cwd: "/repo".into(),
+            profile_id: None,
+        });
+        backend.queue.push_back(ClientEvent::LaunchResolve(
+            crate::model::LaunchResolveResult {
+                decision: crate::model::LaunchDecisionKind::Resume,
+                resolved_profile: None,
+                existing_profiles: vec![],
+            },
+        ));
+        assert!(matches!(
+            backend.next_event().unwrap(),
+            Some(ClientEvent::LaunchResolve(_))
+        ));
+        assert!(backend.pending_launch_resolve.is_none());
+    }
+
+    /// Seam 1: pending-cap refusal (send-time, pre-wire).
+    #[test]
+    fn hydrate_pending_cap_refusal_emits_attributed_error() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        for index in 0..MAX_PENDING_REQUESTS {
+            backend.protocol.pending_requests.insert(
+                format!("existing-{index}"),
+                PendingRequest {
+                    select_session: None,
+                    method: methods::APPROVAL_SCOPES_LIST.into(),
+                    hydrate_session: None,
+                },
+            );
+        }
+
+        backend
+            .send(hydrate_command("local:hydrate-a"))
+            .expect("pending saturation is reported as an event");
+
+        let event = backend.next_event().expect("poll").expect("queued error");
+        let error = unwrap_hydrate_error(event);
+        assert_eq!(error.session_id, SessionKey("local:hydrate-a".into()));
+        assert_eq!(error.code, "too_many_pending_requests");
+        assert_eq!(
+            error.message,
+            pre_send_pending_cap_message(
+                crate::model::APPUI_METHOD_SESSION_HYDRATE,
+                MAX_PENDING_REQUESTS,
+            )
+        );
+    }
+
+    /// Seam 2: oversized-frame pre-send rejection.
+    #[test]
+    fn hydrate_frame_too_large_emits_attributed_error() {
+        let mut exchange = ProtocolExchange::default();
+        // A session id longer than the frame cap forces the encoded request
+        // over MAX_TEXT_FRAME_BYTES.
+        let oversized_session = format!("local:{}", "x".repeat(MAX_TEXT_FRAME_BYTES));
+        let request = exchange
+            .build_tracked_request(hydrate_command(&oversized_session))
+            .expect("tracked request");
+        let text = serde_json::to_string(&request).expect("encode");
+        assert!(text.len() > MAX_TEXT_FRAME_BYTES);
+
+        // Drive the real send path through a backend whose driver is absent:
+        // the size gate fires before any transport touch.
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        backend
+            .send(hydrate_command(&oversized_session))
+            .expect("oversized frame is reported as an event");
+
+        let event = backend.next_event().expect("poll").expect("queued error");
+        let error = unwrap_hydrate_error(event);
+        assert_eq!(error.session_id, SessionKey(oversized_session.clone()));
+        assert_eq!(error.code, "frame_too_large");
+        // The request id is assigned inside send; rebuild the expectation
+        // from the emitted message's own id by checking the constructor
+        // contract holds (prefix/infix/suffix around method + id + bytes).
+        assert!(
+            error.message.starts_with(&format!(
+                "encoded {} request ",
+                crate::model::APPUI_METHOD_SESSION_HYDRATE
+            )),
+            "frame_too_large message names the method: {}",
+            error.message
+        );
+        assert!(error.message.contains("bytes; max is "));
+    }
+
+    /// Seam 3: transport send failure after the writer dies — fake WS
+    /// server accepts, answers capabilities, then drops the socket; the next
+    /// hydrate send fails and must emit the attributed HydrateError.
+    #[test]
+    fn hydrate_transport_send_failure_emits_attributed_error() {
+        let listener = match StdTcpListener::bind("127.0.0.1:0") {
+            Ok(listener) => listener,
+            Err(err) if err.kind() == io::ErrorKind::PermissionDenied => return,
+            Err(err) => panic!("bind test server: {err}"),
+        };
+        listener.set_nonblocking(true).expect("nonblocking");
+        let addr = listener.local_addr().expect("addr");
+        let server = thread::spawn(move || {
+            let runtime = Runtime::new().expect("runtime");
+            runtime.block_on(async move {
+                let listener = tokio::net::TcpListener::from_std(listener).expect("wrap");
+                let (stream, _) = listener.accept().await.expect("accept");
+                let mut ws = tokio_tungstenite::accept_async(stream).await.expect("ws");
+                // Answer the capabilities request, then die.
+                let message = ws.next().await.expect("request").expect("ok");
+                if let WsMessage::Text(text) = message {
+                    let frame: Value = serde_json::from_str(&text).expect("json");
+                    ws.send(WsMessage::Text(
+                        json!({
+                            "jsonrpc": "2.0",
+                            "id": frame["id"].clone(),
+                            "result": { "capabilities": tui_capabilities() },
+                        })
+                        .to_string()
+                        .into(),
+                    ))
+                    .await
+                    .expect("respond");
+                }
+                drop(ws); // writer dies before the hydrate arrives
+            });
+        });
+
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                format!("ws://{addr}/ui-protocol"),
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        backend.bootstrap().expect("bootstrap over live socket");
+        // This seam tests a hydrate writer failure in an ALREADY opened
+        // scope; unknown-scope hydration has a separate session/open gate.
+        backend.remember_confirmed_session_scope(SessionOpenParams {
+            session_id: SessionKey("local:hydrate-send".into()),
+            topic: None,
+            profile_id: None,
+            cwd: None,
+            sandbox: None,
+            after: None,
+        });
+        // Let the writer task observe the close before we send.
+        thread::sleep(Duration::from_millis(200));
+
+        // The hydrate send fails at the transport layer (closed writer).
+        let _ = backend.send(hydrate_command("local:hydrate-send"));
+        // Drain until the attributed error surfaces (send error or the
+        // cancel burst from the disconnect path — either way it must be
+        // attributed to the hydrate session).
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let mut attributed: Option<crate::client_event::HydrateErrorClientEvent> = None;
+        while Instant::now() < deadline {
+            match backend.next_event() {
+                Ok(Some(event @ ClientEvent::HydrateError(_))) => {
+                    attributed = Some(unwrap_hydrate_error(event));
+                    break;
+                }
+                Ok(_) => {}
+                Err(_) => break,
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        let error = attributed.expect("hydrate failure surfaces attributed");
+        assert_eq!(error.session_id, SessionKey("local:hydrate-send".into()));
+        assert!(
+            matches!(error.code.as_str(), "transport_send" | "request_cancelled"),
+            "send-layer failure codes, got: {}",
+            error.code
+        );
+        assert!(error.message.contains("session/hydrate"));
+        server.join().expect("server exits");
+    }
+
+    /// Seam 4: server-side response error for a hydrate request.
+    #[test]
+    fn hydrate_response_error_emits_attributed_error() {
+        let mut pending_requests = HashMap::new();
+        pending_requests.insert(
+            "tui-9".to_string(),
+            PendingRequest {
+                method: crate::model::APPUI_METHOD_SESSION_HYDRATE.into(),
+                select_session: None,
+                hydrate_session: Some(SessionKey("local:hydrate-b".into())),
+            },
+        );
+        let frame = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": "tui-9",
+            "error": {"code": "unknown_session", "message": "no such session"},
+        });
+        let event =
+            error_response_to_app_event(frame.as_object().expect("object"), &mut pending_requests);
+        let error = unwrap_hydrate_error(event);
+        assert_eq!(error.session_id, SessionKey("local:hydrate-b".into()));
+        assert_eq!(error.code, "unknown_session");
+        assert!(
+            error
+                .message
+                .starts_with("session/hydrate request tui-9 failed: ")
+        );
+
+        // Without a hydrate session on the pending entry, the same frame
+        // falls back to the unattributed AppUiEvent::Error.
+        let mut pending_requests = HashMap::new();
+        pending_requests.insert(
+            "tui-9".to_string(),
+            PendingRequest {
+                method: crate::model::APPUI_METHOD_SESSION_HYDRATE.into(),
+                select_session: None,
+                hydrate_session: None,
+            },
+        );
+        let frame = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": "tui-9",
+            "error": {"code": "unknown_session", "message": "no such session"},
+        });
+        let event =
+            error_response_to_app_event(frame.as_object().expect("object"), &mut pending_requests);
+        assert!(matches!(event, ClientEvent::App(_)));
+    }
+
+    /// Seam 5: request cancellation carries the hydrate session out of the
+    /// pending entry.
+    #[test]
+    fn hydrate_request_cancelled_emits_attributed_error() {
+        let mut exchange = ProtocolExchange::default();
+        let request = exchange
+            .build_tracked_request(hydrate_command("local:hydrate-c"))
+            .expect("tracked request");
+        assert!(exchange.pending_requests.contains_key(&request.id));
+
+        let cancelled = exchange.cancel_pending_requests("test disconnect");
+        assert_eq!(cancelled.len(), 1);
+        let event = cancelled
+            .into_iter()
+            .next()
+            .expect("one")
+            .into_client_event();
+        let error = unwrap_hydrate_error(event);
+        assert_eq!(error.session_id, SessionKey("local:hydrate-c".into()));
+        assert_eq!(error.code, "request_cancelled");
+        assert!(error.message.contains("session/hydrate request"));
+        assert!(error.message.contains("cancelled: test disconnect"));
+
+        // A non-hydrate pending entry cancels to the plain AppUiEvent::Error.
+        let mut exchange = ProtocolExchange::default();
+        exchange
+            .build_tracked_request(AppUiCommand::ListApprovalScopes(ApprovalScopesListParams {
+                session_id: SessionKey("local:plain".into()),
+            }))
+            .expect("tracked request");
+        let cancelled = exchange.cancel_pending_requests("test disconnect");
+        let event = cancelled
+            .into_iter()
+            .next()
+            .expect("one")
+            .into_client_event();
+        assert!(matches!(event, ClientEvent::App(_)));
+    }
+
+    /// Seam 6: invalid_result decode failure on a hydrate response.
+    #[test]
+    fn hydrate_invalid_result_emits_attributed_error() {
+        let mut exchange = ProtocolExchange::default();
+        let request = exchange
+            .build_tracked_request(hydrate_command("local:hydrate-d"))
+            .expect("tracked request");
+        // A result whose shape cannot decode as SessionHydrateResult.
+        let response = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": {"unexpected": true},
+        });
+        let event = rpc_value_to_app_event(response, &mut exchange.pending_requests)
+            .expect("decode")
+            .expect("event");
+        let error = unwrap_hydrate_error(event);
+        assert_eq!(error.session_id, SessionKey("local:hydrate-d".into()));
+        assert_eq!(error.code, "invalid_result");
+        let decode_err = serde_json::from_value::<ra_core::ui_protocol::SessionHydrateResult>(
+            serde_json::json!({"unexpected": true}),
+        )
+        .expect_err("shape is invalid");
+        assert_eq!(
+            error.message,
+            invalid_result_message(crate::model::APPUI_METHOD_SESSION_HYDRATE, &decode_err)
+        );
+    }
+
+    /// OUTER_LOOP_REVIEW #27 (P3 真机 "假重连"): after a remote-serve death,
+    /// the reconnect must REPLAY the session bootstrap (launch/resolve)
+    /// before the session reopen — the store dispatches launch/resolve once
+    /// per capabilities advertisement, so losing it to the dead connection
+    /// used to leave the TUI "reconnected" with no bootstrap at all.
+    #[test]
+    fn endpoint_reconnect_replays_launch_resolve_before_reopen() {
+        let server = match spawn_bootstrap_replay_reconnect_server() {
+            Ok(server) => server,
+            Err(err) if err.kind() == io::ErrorKind::PermissionDenied => return,
+            Err(err) => panic!("protocol test server starts: {err}"),
+        };
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(server.endpoint.clone(), None)),
+            session_id: Some(SessionKey("local:test".into())),
+            ..AppUiLaunch::default()
+        });
+
+        backend.bootstrap().expect("bootstrap connects");
+
+        // Simulate the store's once-per-capabilities launch/resolve dispatch
+        // (the server asserts it arrives right after capabilities).
+        backend
+            .send(AppUiCommand::LaunchResolve(
+                crate::model::LaunchResolveParams {
+                    cwd: "/repo".into(),
+                    profile_id: None,
+                },
+            ))
+            .expect("launch/resolve sends on the first connection");
+
+        // Drain until the reconnect happens: the dead writer makes the next
+        // send/poll fail, the disconnect is reported, and the backend
+        // reconnects (server accepts connection 2 and captures 3 requests).
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut saw_disconnect = false;
+        while Instant::now() < deadline {
+            match backend.next_event() {
+                Ok(Some(ClientEvent::App(event))) => {
+                    if let AppUiEvent::Status(status) = *event {
+                        saw_disconnect |= status.message.contains("disconnected")
+                            || status.message.contains("closed");
+                    }
+                }
+                Ok(Some(_)) | Ok(None) => {}
+                Err(_) => {}
+            }
+            // Trigger the reconnect path (ensure_connected runs on send).
+            let _ = backend.send(AppUiCommand::ReadSessionStatus(
+                crate::model::SessionStatusReadParams {
+                    session_id: SessionKey("local:test".into()),
+                },
+            ));
+            if let Ok(frame) = server.received.recv_timeout(Duration::from_millis(50)) {
+                // First reconnect request must be the capabilities refresh.
+                assert_eq!(
+                    frame["method"],
+                    crate::model::APPUI_METHOD_CONFIG_CAPABILITIES_LIST
+                );
+                break;
+            }
+        }
+        assert!(saw_disconnect, "the dead connection was reported");
+
+        // The REPLAYED launch/resolve lands BEFORE the session reopen.
+        let replayed = server.recv_json();
+        assert_eq!(
+            replayed["method"],
+            crate::model::APPUI_METHOD_LAUNCH_RESOLVE,
+            "reconnect replays the lost session bootstrap (#27)"
+        );
+        let reopen = server.recv_json();
+        assert_eq!(
+            reopen["method"],
+            methods::SESSION_OPEN,
+            "session reopen follows the bootstrap replay"
+        );
+        server.join();
+    }
+
+    #[test]
+    fn protocol_backend_bounds_pending_requests_before_transport_send() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        for index in 0..MAX_PENDING_REQUESTS {
+            backend.protocol.pending_requests.insert(
+                format!("existing-{index}"),
+                PendingRequest {
+                    select_session: None,
+                    method: methods::APPROVAL_SCOPES_LIST.into(),
+                    hydrate_session: None,
+                },
+            );
+        }
+
+        backend
+            .send(AppUiCommand::ListApprovalScopes(ApprovalScopesListParams {
+                session_id: SessionKey("local:test".into()),
+            }))
+            .expect("pending saturation is reported as an app event");
+
+        assert_eq!(
+            backend.protocol.pending_requests.len(),
+            MAX_PENDING_REQUESTS
+        );
+        let event = backend.next_event().expect("poll").expect("queued error");
+        let event = unwrap_app_event(event);
+        let AppUiEvent::Error(error) = event else {
+            panic!("expected pending request limit error");
+        };
+        assert_eq!(error.code, "too_many_pending_requests");
+        assert!(error.message.contains("pending request"));
+        // M22-B: the message must include the rejected method name
+        // so onboarding (and other callers) can attribute pre-send
+        // rejections to the command that lost its slot.
+        assert!(
+            error.message.contains(methods::APPROVAL_SCOPES_LIST),
+            "expected method name in too_many_pending_requests message, got: {}",
+            error.message
+        );
+    }
+
+    #[test]
+    fn protocol_backend_maps_malformed_transport_frame_to_error() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch::default());
+
+        let event = backend
+            .handle_transport_frame(TransportFrame::Binary(vec![0xff]))
+            .expect("malformed frame is recoverable")
+            .expect("error event");
+        let event = unwrap_app_event(event);
+
+        let AppUiEvent::Error(error) = event else {
+            panic!("expected malformed frame error");
+        };
+        assert_eq!(error.code, "malformed_frame");
+        assert!(error.message.contains("not UTF-8 JSON"));
+    }
+
+    #[test]
+    fn protocol_backend_tracks_requests_and_clears_success_acks() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+
+        let request = backend
+            .build_tracked_request(AppUiCommand::SubmitPrompt(TurnStartParams {
+                // Ordinary chat turn: context-scoped tools stay unadvertised.
+                tool_context: None,
+                session_id: SessionKey("local:test".into()),
+                turn_id: TurnId::new(),
+                input: vec![InputItem::Text {
+                    text: "hello".into(),
+                }],
+                media: Vec::new(),
+                topic: None,
+                rewrite_for: None,
+                reasoning_effort: None,
+                live_video: false,
+            }))
+            .expect("request builds");
+
+        assert_eq!(
+            backend.protocol.pending_requests.get(&request.id),
+            Some(&PendingRequest {
+                select_session: None,
+                method: methods::TURN_START.into(),
+                hydrate_session: None,
+            })
+        );
+
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": { "accepted": true }
+        })
+        .to_string();
+        let event = backend.decode_rpc_text(&frame).expect("ack decodes");
+
+        assert!(event.is_none());
+        assert!(backend.protocol.pending_requests.is_empty());
+    }
+
+    #[test]
+    fn protocol_backend_maps_diff_preview_success_to_client_event() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        let session_id = SessionKey("local:test".into());
+        let preview_id = PreviewId::new();
+        let request = backend
+            .build_tracked_request(AppUiCommand::GetDiffPreview(DiffPreviewGetParams {
+                session_id: session_id.clone(),
+                preview_id: preview_id.clone(),
+            }))
+            .expect("request builds");
+
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": {
+                "status": "requires_refresh",
+                "source": "future_cache",
+                "preview": {
+                    "session_id": session_id,
+                    "preview_id": preview_id,
+                    "title": "Preview",
+                    "files": [{
+                        "path": "src/lib.rs",
+                        "status": "copied",
+                        "hunks": [{
+                            "header": "@@ metadata @@",
+                            "lines": [{
+                                "kind": "metadata",
+                                "content": "mode change"
+                            }]
+                        }]
+                    }]
+                }
+            }
+        })
+        .to_string();
+
+        let event = backend
+            .decode_rpc_text(&frame)
+            .expect("diff response decodes")
+            .expect("diff event");
+
+        let ClientEvent::DiffPreview(result) = event else {
+            panic!("expected diff preview client event");
+        };
+        assert_eq!(result.status, "requires_refresh");
+        assert_eq!(result.source, "future_cache");
+        assert_eq!(result.preview.files[0].status, "copied");
+        assert_eq!(result.preview.files[0].hunks[0].lines[0].kind, "metadata");
+        assert!(backend.protocol.pending_requests.is_empty());
+    }
+
+    #[test]
+    fn protocol_backend_maps_session_open_result_to_opened_notification() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        let session_id = SessionKey("local:test".into());
+        let request = backend
+            .build_tracked_request(AppUiCommand::OpenSession(SessionOpenParams {
+                session_id: session_id.clone(),
+                topic: None,
+                sandbox: None,
+                profile_id: Some("coding".into()),
+                cwd: Some("/repo".into()),
+                after: None,
+            }))
+            .expect("request builds");
+
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": {
+                "opened": {
+                    "session_id": session_id,
+                    "active_profile_id": "coding",
+                    "workspace_root": "/repo",
+                    "cursor": {
+                        "stream": "session_events",
+                        "seq": 11
+                    }
+                }
+            }
+        })
+        .to_string();
+
+        let event = backend
+            .decode_rpc_text(&frame)
+            .expect("session open response decodes")
+            .expect("session opened event");
+        let event = unwrap_app_event(event);
+
+        let AppUiEvent::Protocol(UiNotification::SessionOpened(opened)) = event else {
+            panic!("expected session opened notification");
+        };
+        assert_eq!(opened.session_id.0, "local:test");
+        assert_eq!(opened.workspace_root.as_deref(), Some("/repo"));
+        assert_eq!(opened.cursor.as_ref().map(|cursor| cursor.seq), Some(11));
+        assert!(backend.protocol.pending_requests.is_empty());
+    }
+
+    #[test]
+    fn protocol_backend_maps_approval_scopes_list_success_to_status() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        let session_id = SessionKey("local:test".into());
+        let request = backend
+            .build_tracked_request(AppUiCommand::ListApprovalScopes(ApprovalScopesListParams {
+                session_id: session_id.clone(),
+            }))
+            .expect("request builds");
+
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": {
+                "scopes": [{
+                    "session_id": session_id,
+                    "scope": "session",
+                    "scope_match": "cargo test",
+                    "decision": "approve"
+                }]
+            }
+        })
+        .to_string();
+
+        let event = backend
+            .decode_rpc_text(&frame)
+            .expect("approval scopes response decodes")
+            .expect("status event");
+        let event = unwrap_app_event(event);
+
+        let AppUiEvent::Status(status) = event else {
+            panic!("expected status event");
+        };
+        assert_eq!(
+            status.message,
+            "1 persisted approval scope for this session"
+        );
+        assert!(backend.protocol.pending_requests.is_empty());
+    }
+
+    #[test]
+    fn protocol_backend_maps_permission_profile_success_to_client_state() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        let session_id = SessionKey("local:test".into());
+        let list_request = backend
+            .build_tracked_request(AppUiCommand::ListPermissionProfiles(
+                PermissionProfileListParams {
+                    session_id: session_id.clone(),
+                },
+            ))
+            .expect("list request builds");
+        let list_frame = json!({
+            "jsonrpc": "2.0",
+            "id": list_request.id,
+            "result": {
+                "session_id": session_id,
+                "current": {
+                    "mode": "workspace-write",
+                    "network": "deny"
+                },
+                "profiles": []
+            }
+        })
+        .to_string();
+
+        let event = backend
+            .decode_rpc_text(&list_frame)
+            .expect("permission list response decodes")
+            .expect("permission profile event");
+        let ClientEvent::PermissionProfile(profile) = event else {
+            panic!("expected permission profile event");
+        };
+        assert_eq!(
+            profile.message,
+            "Permissions: Workspace Write, network blocked"
+        );
+        assert_eq!(profile.session_id, SessionKey("local:test".into()));
+        assert_eq!(profile.current, PermissionProfileSelection::default());
+
+        let set_request = backend
+            .build_tracked_request(AppUiCommand::SetPermissionProfile(
+                PermissionProfileSetParams {
+                    session_id: SessionKey("local:test".into()),
+                    update: PermissionProfileUpdate {
+                        mode: Some(PermissionProfileMode::DangerFullAccess),
+                        network: Some(PermissionNetworkPolicy::Allow),
+                        approval_policy: Some("never".into()),
+                    },
+                    runtime_mode: None,
+                },
+            ))
+            .expect("set request builds");
+        let set_frame = json!({
+            "jsonrpc": "2.0",
+            "id": set_request.id,
+            "result": {
+                "session_id": "local:test",
+                "current": {
+                    "mode": "danger-full-access",
+                    "network": "allow"
+                },
+                "applied": true
+            }
+        })
+        .to_string();
+
+        let event = backend
+            .decode_rpc_text(&set_frame)
+            .expect("permission set response decodes")
+            .expect("permission profile event");
+        let ClientEvent::PermissionProfile(profile) = event else {
+            panic!("expected permission profile event");
+        };
+        assert_eq!(
+            profile.message,
+            "Permissions updated: Full Access, network allowed"
+        );
+        assert_eq!(
+            profile.current,
+            PermissionProfileSelection {
+                mode: PermissionProfileMode::DangerFullAccess,
+                network: PermissionNetworkPolicy::Allow,
+            }
+        );
+        assert!(backend.protocol.pending_requests.is_empty());
+    }
+
+    #[test]
+    fn protocol_backend_maps_runtime_cockpit_success_to_client_state_events() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        let session_id = SessionKey("local:test".into());
+
+        let status_request = backend
+            .build_tracked_request(AppUiCommand::ReadSessionStatus(SessionStatusReadParams {
+                session_id: session_id.clone(),
+            }))
+            .expect("status request builds");
+        let status_frame = json!({
+            "jsonrpc": "2.0",
+            "id": status_request.id,
+            "result": {
+                "session_id": "local:test",
+                "profile_id": "coding",
+                "runtime_policy_stamp": {
+                    "model": "deepseek-v4-pro",
+                    "provider": "deepseek",
+                    "tool_policy_id": "coding-v3",
+                    "tool_contract_id": "codex-compatible-coding-v1",
+                    "tool_contract_version": "1",
+                    "model_toolset": "coding",
+                    "dynamic_tool_discovery": "enabled",
+                    "mcp_servers": [{
+                        "id": "github",
+                        "display_name": "GitHub",
+                        "status": "connected",
+                        "tool_count": 4
+                    }]
+                }
+            }
+        })
+        .to_string();
+        let event = backend
+            .decode_rpc_text(&status_frame)
+            .expect("session status response decodes")
+            .expect("session status event");
+        let ClientEvent::SessionStatus(status) = event else {
+            panic!("expected session status event");
+        };
+        assert_eq!(status.result.session_id, session_id);
+        assert_eq!(status.result.profile_id.as_deref(), Some("coding"));
+        let stamp = status
+            .result
+            .runtime_policy_stamp
+            .as_ref()
+            .expect("runtime policy stamp");
+        assert_eq!(
+            stamp.tool_contract_id.as_deref(),
+            Some("codex-compatible-coding-v1")
+        );
+        assert_eq!(stamp.mcp_servers[0].label(), "GitHub (connected, 4 tools)");
+
+        let local_profile_request = backend
+            .build_tracked_request(AppUiCommand::ProfileLocalCreate(ProfileLocalCreateParams {
+                requested_id: None,
+                name: "Ada Lovelace".into(),
+                username: "ada".into(),
+                email: "ada@example.com".into(),
+                make_default: None,
+            }))
+            .expect("local profile request builds");
+        let local_profile_frame = json!({
+            "jsonrpc": "2.0",
+            "id": local_profile_request.id,
+            "result": {
+                "profile_id": "ada-server",
+                "user_id": "ada-user",
+                "name": "Ada Lovelace",
+                "username": "ada",
+                "email": "ada@example.com",
+                "created": true,
+                "runtime_mode": "solo"
+            }
+        })
+        .to_string();
+        let event = backend
+            .decode_rpc_text(&local_profile_frame)
+            .expect("local profile response decodes")
+            .expect("local profile event");
+        let ClientEvent::ProfileLocalCreate(profile) = event else {
+            panic!("expected profile/local/create event");
+        };
+        assert_eq!(profile.result.profile_id, "ada-server");
+
+        let model_request = backend
+            .build_tracked_request(AppUiCommand::ListModels(ModelListParams {
+                session_id: SessionKey("local:test".into()),
+            }))
+            .expect("model list request builds");
+        let model_frame = json!({
+            "jsonrpc": "2.0",
+            "id": model_request.id,
+            "result": {
+                "session_id": "local:test",
+                "models": [{
+                    "model": "deepseek-v4-pro",
+                    "provider": "deepseek",
+                    "selected": true,
+                    "available": true
+                }]
+            }
+        })
+        .to_string();
+        let event = backend
+            .decode_rpc_text(&model_frame)
+            .expect("model list response decodes")
+            .expect("model list event");
+        let ClientEvent::ModelList(models) = event else {
+            panic!("expected model list event");
+        };
+        assert_eq!(models.result.models[0].model, "deepseek-v4-pro");
+
+        let mcp_request = backend
+            .build_tracked_request(AppUiCommand::ListMcpStatus(McpStatusListParams {
+                session_id: SessionKey("local:test".into()),
+                include_disabled: true,
+            }))
+            .expect("mcp status request builds");
+        let mcp_frame = json!({
+            "jsonrpc": "2.0",
+            "id": mcp_request.id,
+            "result": {
+                "session_id": "local:test",
+                "servers": [{
+                    "server": "github",
+                    "status": "connected",
+                    "tool_count": 8
+                }, {
+                    "server": "playwright",
+                    "status": "failed",
+                    "last_error": "not installed"
+                }]
+            }
+        })
+        .to_string();
+        let event = backend
+            .decode_rpc_text(&mcp_frame)
+            .expect("mcp status response decodes")
+            .expect("mcp status event");
+        let ClientEvent::McpStatus(mcp) = event else {
+            panic!("expected mcp status event");
+        };
+        assert_eq!(mcp.result.servers.len(), 2);
+        assert_eq!(
+            mcp.result.servers[1].last_error.as_deref(),
+            Some("not installed")
+        );
+
+        let tool_request = backend
+            .build_tracked_request(AppUiCommand::ListToolStatus(ToolStatusListParams {
+                session_id: SessionKey("local:test".into()),
+                include_denied: true,
+            }))
+            .expect("tool status request builds");
+        let tool_frame = json!({
+            "jsonrpc": "2.0",
+            "id": tool_request.id,
+            "result": {
+                "session_id": "local:test",
+                "policy_id": "coding-v3",
+                "coding_tool_contract": {
+                    "id": "codex-compatible-coding-v1",
+                    "version": "1",
+                    "feature": "coding.tool_contract.v1",
+                    "status": "incomplete",
+                    "required_tool_names": ["apply_patch", "exec_command"],
+                    "missing_required_tools": ["exec_command"],
+                    "policy": {
+                        "tool_policy_id": "coding-v3",
+                        "sandbox_mode": "workspace-write",
+                        "approval_policy": "on-request"
+                    },
+                    "required_tools": [{
+                        "name": "exec_command",
+                        "category": "runtime",
+                        "aliases": ["shell"],
+                        "capability": "coding.exec_session.v1",
+                        "policy": "approval_gated",
+                        "status": "missing",
+                        "backend_tool": null
+                    }]
+                },
+                "tools": []
+            }
+        })
+        .to_string();
+        let event = backend
+            .decode_rpc_text(&tool_frame)
+            .expect("tool status response decodes")
+            .expect("tool status event");
+        let ClientEvent::ToolStatus(tools) = event else {
+            panic!("expected tool status event");
+        };
+        let contract = tools
+            .result
+            .coding_tool_contract
+            .as_ref()
+            .expect("coding tool contract");
+        assert_eq!(contract.status, "incomplete");
+        assert_eq!(
+            contract.missing_required_tools,
+            vec!["exec_command".to_string()]
+        );
+        assert!(backend.protocol.pending_requests.is_empty());
+    }
+
+    #[test]
+    fn protocol_backend_maps_task_output_read_success_to_output_delta() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        let session_id = SessionKey("local:test".into());
+        let task_id = TaskId::new();
+        let request = backend
+            .build_tracked_request(AppUiCommand::ReadTaskOutput(TaskOutputReadParams {
+                session_id: session_id.clone(),
+                task_id: task_id.clone(),
+                cursor: Some(OutputCursor { offset: 12 }),
+                limit_bytes: Some(4096),
+            }))
+            .expect("request builds");
+
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": {
+                "session_id": session_id,
+                "task_id": task_id,
+                "source": "runtime_projection",
+                "cursor": { "offset": 12 },
+                "next_cursor": { "offset": 31 },
+                "text": "task output window\n",
+                "bytes_read": 19,
+                "total_bytes": 31,
+                "truncated": false,
+                "complete": true,
+                "live_tail_supported": false,
+                "task_status": "completed",
+                "runtime_state": "completed",
+                "lifecycle_state": "completed",
+                "output_files": [],
+                "limitations": []
+            }
+        })
+        .to_string();
+
+        let event = backend
+            .decode_rpc_text(&frame)
+            .expect("task output response decodes")
+            .expect("task output event");
+        let event = unwrap_app_event(event);
+
+        let AppUiEvent::Protocol(UiNotification::TaskOutputDelta(event)) = event else {
+            panic!("expected task output delta event");
+        };
+        assert_eq!(event.session_id.0, "local:test");
+        assert_eq!(event.cursor, OutputCursor { offset: 31 });
+        assert_eq!(event.text, "task output window\n");
+        assert!(backend.protocol.pending_requests.is_empty());
+    }
+
+    #[test]
+    fn protocol_backend_preserves_task_output_metadata_when_window_omits_it() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        let session_id = SessionKey("local:test".into());
+        let task_id = TaskId::new();
+        let request = backend
+            .build_tracked_request(AppUiCommand::ReadTaskOutput(TaskOutputReadParams {
+                session_id: session_id.clone(),
+                task_id: task_id.clone(),
+                cursor: Some(OutputCursor { offset: 128 }),
+                limit_bytes: Some(128),
+            }))
+            .expect("request builds");
+
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": {
+                "session_id": session_id,
+                "task_id": task_id,
+                "source": "runtime_projection",
+                "cursor": { "offset": 128 },
+                "next_cursor": { "offset": 156 },
+                "text": "tail window without metadata\n",
+                "bytes_read": 28,
+                "total_bytes": 512,
+                "truncated": true,
+                "complete": false,
+                "live_tail_supported": false,
+                "task_status": "completed",
+                "runtime_state": "completed",
+                "lifecycle_state": "completed",
+                "output_files": ["/repo/out/report.md"],
+                "limitations": [
+                    {
+                        "code": "runtime_projection",
+                        "message": "snapshot projection, not live stdout"
+                    }
+                ]
+            }
+        })
+        .to_string();
+
+        let event = backend
+            .decode_rpc_text(&frame)
+            .expect("task output response decodes")
+            .expect("task output event");
+        let event = unwrap_app_event(event);
+
+        let AppUiEvent::Protocol(UiNotification::TaskOutputDelta(event)) = event else {
+            panic!("expected task output delta event");
+        };
+        assert!(event.text.contains("tail window without metadata"));
+        assert!(event.text.contains("output_files:\n- /repo/out/report.md"));
+        assert!(
+            event
+                .text
+                .contains("limitations:\n- snapshot projection, not live stdout")
+        );
+        assert!(backend.protocol.pending_requests.is_empty());
+    }
+
+    #[test]
+    fn model_select_restart_required_is_preserved_and_reported_as_pending() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        let initiating_session = SessionKey("local:test".into());
+        let request = backend
+            .build_tracked_request(AppUiCommand::ProfileLlmSelect(
+                crate::model::ProfileLlmSelectParams {
+                    profile_id: Some("dev".into()),
+                    session_id: Some(initiating_session.clone()),
+                    family_id: "deepseek".into(),
+                    model_id: "deepseek-chat".into(),
+                    route_id: "official".into(),
+                },
+            ))
+            .expect("model select request builds");
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": {
+                "session_id": "dev:local:tui#coding",
+                "selected": {
+                    "model": "deepseek-chat",
+                    "provider": "deepseek",
+                    "selected": true,
+                    "available": true
+                },
+                "applied": true,
+                "restart_required": true
+            }
+        })
+        .to_string();
+
+        let event = backend
+            .decode_rpc_text(&frame)
+            .expect("model select response decodes")
+            .expect("model select event");
+        let ClientEvent::ModelSelect(event) = event else {
+            panic!("expected model select event");
+        };
+        assert!(event.result.restart_required);
+        assert_eq!(event.initiating_session, Some(initiating_session));
+        assert_eq!(
+            event.message,
+            "Model saved; restart required: deepseek / deepseek-chat"
+        );
+    }
+
+    #[test]
+    fn protocol_backend_maps_interrupt_success_to_cancel_status() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        let request = backend
+            .build_tracked_request(AppUiCommand::InterruptTurn(TurnInterruptParams {
+                session_id: SessionKey("local:test".into()),
+                turn_id: TurnId::new(),
+            }))
+            .expect("request builds");
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": { "interrupted": true }
+        })
+        .to_string();
+
+        let event = backend
+            .decode_rpc_text(&frame)
+            .expect("interrupt response decodes")
+            .expect("status event");
+        let event = unwrap_app_event(event);
+
+        let AppUiEvent::Status(status) = event else {
+            panic!("expected interrupt status event");
+        };
+        assert_eq!(
+            status.message,
+            "Interrupt acknowledged; active turn cancelled"
+        );
+        assert!(backend.protocol.pending_requests.is_empty());
+    }
+
+    #[test]
+    fn protocol_backend_maps_error_responses_with_request_context() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+        let request = backend
+            .build_tracked_request(AppUiCommand::OpenSession(SessionOpenParams {
+                session_id: SessionKey("local:test".into()),
+                topic: None,
+                sandbox: None,
+                profile_id: Some("coding".into()),
+                cwd: None,
+                after: None,
+            }))
+            .expect("request builds");
+        let request_id = request.id.clone();
+
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "error": {
+                "code": -32602,
+                "message": "missing session"
+            }
+        })
+        .to_string();
+        let event = backend
+            .decode_rpc_text(&frame)
+            .expect("error decodes")
+            .expect("error event");
+        let event = unwrap_app_event(event);
+
+        let AppUiEvent::Error(error) = event else {
+            panic!("expected app error");
+        };
+        assert_eq!(error.code, "-32602");
+        assert!(error.message.contains(methods::SESSION_OPEN));
+        assert!(error.message.contains(&request.id));
+        assert!(error.message.contains("missing session"));
+        assert!(backend.protocol.pending_requests.is_empty());
+    }
+
+    #[test]
+    fn launch_from_cli_defaults_cwd_to_process_current_dir() {
+        let cli = Cli {
+            config: None,
+            mode: crate::cli::Mode::Protocol,
+            base_url: Some("wss://example.test/ui-protocol".into()),
+            stdio_command: None,
+            session: Some("local:test".into()),
+            profile_id: Some("coding".into()),
+            cwd: None,
+            auth_token: None,
+            readonly: false,
+            theme: crate::cli::ThemeName::Codex,
+            lang: crate::cli::Lang::En,
+            scroll_mode: crate::cli::ScrollMode::Native,
+            vim_mode: false,
+            steer_mid_turn: false,
+            no_splash: false,
+            prompt: None,
+        };
+
+        let launch = launch_from_cli(&cli);
+
+        assert_eq!(
+            launch.cwd,
+            Some(
+                std::env::current_dir()
+                    .expect("current dir")
+                    .to_string_lossy()
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn protocol_session_open_request_includes_cwd() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            cwd: Some("/tmp/project".into()),
+            ..AppUiLaunch::default()
+        });
+        let request = backend
+            .build_tracked_request(AppUiCommand::OpenSession(SessionOpenParams {
+                session_id: SessionKey("local:test".into()),
+                topic: None,
+                sandbox: None,
+                profile_id: Some("coding".into()),
+                cwd: Some("/tmp/project".into()),
+                after: None,
+            }))
+            .expect("request builds");
+
+        assert_eq!(request.params["cwd"], json!("/tmp/project"));
+    }
+
+    #[test]
+    fn protocol_session_list_request_includes_workspace_cwd_when_launch_has_one() {
+        // `session/list` carries the SAME launch workspace cwd the client
+        // already sends on `session/open` (see `fill_session_list_cwd`), so a
+        // server with per-project session storage lists THIS project's
+        // sessions. The store constructs the command with `cwd: None`; the
+        // transport stamps `launch.cwd`.
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            cwd: Some("/tmp/project".into()),
+            ..AppUiLaunch::default()
+        });
+        let request = backend
+            .build_tracked_request(AppUiCommand::ListSessions(
+                ra_core::ui_protocol::SessionListParams { cwd: None },
+            ))
+            .expect("request builds");
+
+        assert_eq!(request.method, methods::SESSION_LIST);
+        assert_eq!(request.params["cwd"], json!("/tmp/project"));
+    }
+
+    #[test]
+    fn protocol_session_list_request_is_empty_object_when_launch_has_no_cwd() {
+        // Backward compat: with no launch cwd the `session/list` request
+        // serializes to the historical empty object `{}` (no `cwd` key), so an
+        // old server deserializes it unchanged.
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            cwd: None,
+            ..AppUiLaunch::default()
+        });
+        let request = backend
+            .build_tracked_request(AppUiCommand::ListSessions(
+                ra_core::ui_protocol::SessionListParams { cwd: None },
+            ))
+            .expect("request builds");
+
+        assert_eq!(request.method, methods::SESSION_LIST);
+        assert_eq!(request.params, json!({}));
+    }
+
+    /// P2-20: a locally generated `session/open` (the tab switch) can carry
+    /// `cwd: None` when no runtime status was captured for the session; the
+    /// server would then rescope it to its default workspace (#476). The
+    /// transport is the one place that knows the server-confirmed workspace
+    /// root, so it fills the cwd from `session_workspace_roots` — and leaves
+    /// it absent when nothing was captured (server fallback unchanged).
+    #[test]
+    fn local_session_open_without_cwd_is_scoped_to_the_captured_workspace_root() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            cwd: None,
+            ..AppUiLaunch::default()
+        });
+        backend.protocol.session_workspace_roots.insert(
+            SessionKey("local:known".into()),
+            "/confirmed/workspace".into(),
+        );
+        let open = |session_id: &str, cwd: Option<&str>| {
+            AppUiCommand::OpenSession(SessionOpenParams {
+                session_id: SessionKey(session_id.into()),
+                topic: None,
+                profile_id: Some("dev".into()),
+                cwd: cwd.map(str::to_owned),
+                sandbox: None,
+                after: None,
+            })
+        };
+
+        let request = backend
+            .build_tracked_request(open("local:known", None))
+            .expect("request builds");
+        assert_eq!(request.method, methods::SESSION_OPEN);
+        assert_eq!(
+            request.params["cwd"],
+            json!("/confirmed/workspace"),
+            "a cwd-less local open is scoped to the captured workspace root"
+        );
+
+        let request = backend
+            .build_tracked_request(open("local:unknown", None))
+            .expect("request builds");
+        assert!(
+            request.params.get("cwd").is_none_or(Value::is_null),
+            "no captured root: cwd stays absent for the server fallback, got {:?}",
+            request.params
+        );
+
+        let request = backend
+            .build_tracked_request(open("local:known", Some("/explicit")))
+            .expect("request builds");
+        assert_eq!(
+            request.params["cwd"],
+            json!("/explicit"),
+            "an explicit cwd is never overridden"
+        );
+    }
+
+    #[test]
+    fn protocol_backend_captures_cursor_and_reuses_it_on_session_open() {
+        let session_id = SessionKey("local:test".into());
+        let opened_cursor = UiCursor {
+            stream: "session_events".into(),
+            seq: 7,
+        };
+        let turn_cursor = UiCursor {
+            stream: "session_events".into(),
+            seq: 9,
+        };
+        let turn_id = TurnId::new();
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+
+        let session_opened = json!({
+            "jsonrpc": "2.0",
+            "method": methods::SESSION_OPEN,
+            "params": {
+                "session_id": session_id.clone(),
+                "active_profile_id": "coding",
+                "cursor": opened_cursor.clone()
+            }
+        })
+        .to_string();
+        let event = backend
+            .decode_rpc_text(&session_opened)
+            .expect("session/opened decodes")
+            .expect("event");
+        let event = unwrap_app_event(event);
+        assert!(matches!(
+            event,
+            AppUiEvent::Protocol(UiNotification::SessionOpened(_))
+        ));
+        assert_eq!(
+            backend.protocol.session_cursors.get(&session_id),
+            Some(&opened_cursor)
+        );
+
+        let turn_completed = json!({
+            "jsonrpc": "2.0",
+            "method": methods::TURN_COMPLETED,
+            "params": {
+                "session_id": session_id.clone(),
+                "turn_id": turn_id,
+                "cursor": turn_cursor.clone()
+            }
+        })
+        .to_string();
+        backend
+            .decode_rpc_text(&turn_completed)
+            .expect("turn/completed decodes")
+            .expect("event");
+        assert_eq!(
+            backend.protocol.session_cursors.get(&session_id),
+            Some(&turn_cursor)
+        );
+
+        let request = backend
+            .build_tracked_request(AppUiCommand::OpenSession(SessionOpenParams {
+                session_id: session_id.clone(),
+                topic: None,
+                sandbox: None,
+                profile_id: Some("coding".into()),
+                cwd: None,
+                after: None,
+            }))
+            .expect("request builds");
+
+        assert_eq!(
+            request.params["after"]["stream"],
+            json!(turn_cursor.stream.clone())
+        );
+        assert_eq!(request.params["after"]["seq"], json!(turn_cursor.seq));
+    }
+
+    #[test]
+    fn protocol_backend_readonly_bootstrap_connects_opens_and_reads_existing_session() {
+        let server = match spawn_protocol_capture_server(4, true) {
+            Ok(server) => server,
+            Err(err) if err.kind() == io::ErrorKind::PermissionDenied => return,
+            Err(err) => panic!("protocol test server starts: {err}"),
+        };
+        let session_id = SessionKey("session-123".into());
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(server.endpoint.clone(), None)),
+            session_id: Some(session_id.clone()),
+            profile_id: Some("coding".into()),
+            cwd: Some("/repo".into()),
+            readonly: true,
+            ..AppUiLaunch::default()
+        });
+
+        let snapshot = backend.bootstrap().expect("readonly bootstrap connects");
+
+        assert_eq!(snapshot.sessions[0].id.0, "session-123");
+        assert!(snapshot.status.contains("read-only"));
+        assert!(snapshot.readonly);
+        assert!(snapshot.sessions[0].messages.is_empty());
+        assert!(backend.is_connected());
+        assert_eq!(backend.connection_state, ProtocolConnectionState::Connected);
+
+        let capabilities_request = server.recv_json();
+        assert_eq!(
+            capabilities_request["method"],
+            crate::model::APPUI_METHOD_CONFIG_CAPABILITIES_LIST
+        );
+
+        let llm_request = server.recv_json();
+        assert_eq!(llm_request["method"], crate::model::APPUI_METHOD_MODEL_LIST);
+        assert_eq!(llm_request["params"]["profile_id"], json!("coding"));
+
+        let open_request = server.recv_json();
+        assert_eq!(open_request["method"], methods::SESSION_OPEN);
+        assert_eq!(open_request["params"]["session_id"], json!("session-123"));
+        assert_eq!(open_request["params"]["cwd"], json!("/repo"));
+
+        let event = next_event_until(&mut backend);
+        let ClientEvent::Capabilities(_) = event else {
+            panic!("expected capabilities event");
+        };
+
+        let event = next_event_until(&mut backend);
+        let event = unwrap_app_event(event);
+        let AppUiEvent::Protocol(UiNotification::SessionOpened(opened)) = event else {
+            panic!("expected session opened notification");
+        };
+        assert_eq!(opened.session_id, session_id);
+        assert_eq!(opened.workspace_root.as_deref(), Some("/repo"));
+
+        let preview_id = PreviewId::new();
+        backend
+            .send(AppUiCommand::GetDiffPreview(DiffPreviewGetParams {
+                session_id: opened.session_id,
+                preview_id: preview_id.clone(),
+            }))
+            .expect("readonly diff preview request sends");
+
+        let diff_request = server.recv_json();
+        assert_eq!(diff_request["method"], methods::DIFF_PREVIEW_GET);
+        assert_eq!(diff_request["params"]["preview_id"], json!(preview_id));
+        server.join();
+    }
+
+    #[test]
+    fn protocol_backend_readonly_bootstrap_survives_connection_failure() {
+        let session_id = SessionKey("session-123".into());
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            session_id: Some(session_id.clone()),
+            profile_id: Some("coding".into()),
+            readonly: true,
+            ..AppUiLaunch::default()
+        });
+        backend.runtime = None;
+        backend.runtime_error = Some("runtime unavailable for test".into());
+
+        let snapshot = backend
+            .bootstrap()
+            .expect("readonly bootstrap returns offline snapshot");
+
+        assert!(snapshot.readonly);
+        assert_eq!(snapshot.sessions[0].id, session_id);
+        assert!(snapshot.status.contains("read-only"));
+        assert!(snapshot.status.contains("no network connection opened"));
+        assert_eq!(
+            backend.connection_state,
+            ProtocolConnectionState::Disconnected
+        );
+        let event = backend.queue.pop_front().expect("offline status event");
+        let event = unwrap_app_event(event);
+        let AppUiEvent::Status(status) = event else {
+            panic!("expected status event");
+        };
+        assert!(status.message.contains("no network connection opened"));
+    }
+
+    #[test]
+    fn protocol_backend_records_disconnected_status() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            ..AppUiLaunch::default()
+        });
+
+        backend.mark_connected("wss://example.test/ui-protocol");
+        backend.mark_disconnected("UI protocol disconnected for test.");
+
+        assert_eq!(
+            backend.connection_state,
+            ProtocolConnectionState::Disconnected
+        );
+        let event = backend.queue.pop_front().expect("status event");
+        let event = unwrap_app_event(event);
+        let AppUiEvent::Status(status) = event else {
+            panic!("expected status event");
+        };
+        assert!(status.message.contains("disconnected"));
+    }
+
+    #[test]
+    fn reconnect_session_open_command_resumes_from_recorded_cursor() {
+        let session_id = SessionKey("local:test".into());
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            profile_id: Some("coding".into()),
+            session_id: Some(session_id.clone()),
+            cwd: Some("/tmp/workspace".into()),
+            ..AppUiLaunch::default()
+        });
+        backend.protocol.session_cursors.insert(
+            session_id.clone(),
+            UiCursor {
+                stream: session_id.0.clone(),
+                seq: 42,
+            },
+        );
+
+        let command = backend
+            .launch_session_open_command()
+            .expect("launch session should reopen");
+        let request = backend
+            .build_tracked_request(command)
+            .expect("request builds");
+
+        assert_eq!(request.method, methods::SESSION_OPEN);
+        assert_eq!(request.params["session_id"], "local:test");
+        assert_eq!(request.params["profile_id"], "coding");
+        assert_eq!(request.params["cwd"], "/tmp/workspace");
+        assert_eq!(request.params["after"]["stream"], "local:test");
+        assert_eq!(request.params["after"]["seq"], 42);
+    }
+
+    /// #476: a stdio respawn must tell the REPLACEMENT child the workspace
+    /// cwd. `cwd` is what scopes the server's session store — without it the
+    /// new child opens the UNSCOPED store, so the user's transcript stays on
+    /// disk under `<key>\0~cwd-<hash>` while the UI shows an empty session and
+    /// any peer of the dead child is orphaned. Observed live: ~10 MB of ledger
+    /// stranded that way after the child exited.
+    ///
+    /// `reconnect_reopens_current_session_not_launch_session` below pins
+    /// `session_id` and `profile_id` on the same three paths but never pinned
+    /// `cwd`, so a reopen could lose scoping while every reconnect test stayed
+    /// green.
+    #[test]
+    fn reconnect_reopen_carries_the_workspace_cwd() {
+        let launch_session = SessionKey("local:launch".into());
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            profile_id: Some("coding".into()),
+            session_id: Some(launch_session.clone()),
+            cwd: Some("/tmp/workspace".into()),
+            ..AppUiLaunch::default()
+        });
+
+        let expect_reopen = |backend: &ProtocolAppUiBackend| -> SessionOpenParams {
+            match backend
+                .reopen_session_open_command()
+                .expect("a reopen target must exist")
+            {
+                AppUiCommand::OpenSession(params) => params,
+                other => panic!("reopen must be an OpenSession, got {other:?}"),
+            }
+        };
+
+        // 1. Nothing opened yet — the launch fallback must carry the cwd.
+        assert_eq!(
+            expect_reopen(&backend).cwd.as_deref(),
+            Some("/tmp/workspace"),
+            "the launch-fallback reopen must scope to the workspace"
+        );
+
+        // 2. An explicit open carries its OWN cwd, not the launch one.
+        backend.record_reopen_target(&AppUiCommand::OpenSession(SessionOpenParams {
+            session_id: SessionKey("local:other".into()),
+            topic: None,
+            profile_id: Some("research".into()),
+            cwd: Some("/tmp/other".into()),
+            sandbox: None,
+            after: None,
+        }));
+        assert_eq!(
+            expect_reopen(&backend).cwd.as_deref(),
+            Some("/tmp/other"),
+            "an explicitly opened session reopens under its own workspace"
+        );
+
+        // 3. Unknown `/resume` hydration has no scope authority. Its explicit
+        //    open carries the launch cwd before hydration may be sent.
+        let hydrate = AppUiCommand::HydrateSession(SessionHydrateParams {
+            session_id: SessionKey("local:hydrated".into()),
+            after: None,
+            include: vec!["messages".into(), "turns".into()],
+        });
+        backend.record_reopen_target(&hydrate);
+        assert_eq!(expect_reopen(&backend).cwd.as_deref(), Some("/tmp/other"));
+        let open = backend
+            .open_before_unknown_hydrate(&hydrate)
+            .expect("unknown resume needs scope");
+        backend.record_reopen_target(&open);
+        assert_eq!(
+            expect_reopen(&backend).cwd.as_deref(),
+            Some("/tmp/workspace"),
+            "the explicit open preceding unknown hydration must carry the launch workspace cwd"
+        );
+    }
+
+    /// Real stdio-process regression for the soak failure: after a child dies,
+    /// the replacement accepts requests concurrently. A restored/background
+    /// turn must not cross the transport until the scoped `session/open`
+    /// response has landed.
+    #[cfg(unix)]
+    #[test]
+    fn stdio_reconnect_waits_for_scoped_open_before_releasing_background_continuation() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace = temp.path().join("workspace");
+        std::fs::create_dir(&workspace).expect("workspace");
+        let marker = temp.path().join("sequence.log");
+        let fixture = temp.path().join("stdio-fixture.sh");
+        std::fs::write(
+            &fixture,
+            r#"#!/bin/sh
+marker="$1"
+scope_marker="${marker}.scoped"
+while IFS= read -r line; do
+  id=$(printf '%s' "$line" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+  case "$line" in
+    *'"method":"client_hello"'*)
+      printf 'HELLO:%s\n' "$line" >> "$marker"
+      printf '{"jsonrpc":"2.0","id":"%s","result":{"type":"server_hello","capabilities":{"version":{"protocol":"ra-ui/v1alpha1","schema_version":1,"jsonrpc":"2.0"},"capabilities_schema_version":2,"supported_methods":["session/open"],"supported_notifications":[],"supported_features":[]}}}\n' "$id"
+      ;;
+    *'"method":"session/open"'*)
+      printf 'OPEN:%s\n' "$line" >> "$marker"
+      # A freshly spawned ra process can resume a durable/background
+      # continuation before this client's workspace-scoped open is confirmed.
+      # The client may observe its start, but must clear it only AFTER OPENED;
+      # otherwise the subscription switch can hide its later terminal.
+      printf '{"jsonrpc":"2.0","method":"turn/started","params":{"session_id":"local:reconnect","turn_id":"01a06669-b4bd-7280-9243-7a3326ee354c","timestamp":"2026-09-03T08:36:38.717287Z"}}\n'
+      (
+        sleep 0.1
+        : > "$scope_marker"
+        printf 'OPENED\n' >> "$marker"
+        printf '{"jsonrpc":"2.0","id":"%s","result":{"opened":{"session_id":"local:reconnect","active_profile_id":"dev","workspace_root":"/confirmed/workspace","cursor":{"stream":"local:reconnect\\u0000~cwd-scope","seq":1}}}}\n' "$id"
+      ) &
+      ;;
+    *'"method":"turn/start"'*)
+      if [ -f "$scope_marker" ]; then
+        printf 'TURN_SCOPED:%s\n' "$line" >> "$marker"
+      else
+        printf 'TURN_UNSCOPED:%s\n' "$line" >> "$marker"
+      fi
+      ;;
+  esac
+done
+"#,
+        )
+        .expect("write fixture");
+
+        let session_id = SessionKey("local:reconnect".into());
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::stdio(format!(
+                "sh {} {}",
+                fixture.display(),
+                marker.display()
+            ))),
+            session_id: Some(session_id.clone()),
+            profile_id: Some("dev".into()),
+            cwd: Some(workspace.display().to_string()),
+            ..AppUiLaunch::default()
+        });
+        // Model the state immediately after the original child disconnect was
+        // observed. The next send launches the replacement and must reopen.
+        backend.disconnected_status_reported = true;
+        backend.refresh_capabilities_on_reconnect = true;
+        backend
+            .send(AppUiCommand::SubmitPrompt(TurnStartParams {
+                tool_context: None,
+                session_id: session_id.clone(),
+                turn_id: TurnId::new(),
+                input: vec![InputItem::Text {
+                    text: "background continuation".into(),
+                }],
+                media: Vec::new(),
+                topic: None,
+                rewrite_for: None,
+                reasoning_effort: None,
+                live_video: false,
+            }))
+            .expect("replacement launch + deferred submit");
+
+        assert!(backend.client_hello_barrier.is_some());
+        assert_eq!(backend.deferred_until_reconnect_open.len(), 3);
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut reconnect_events = Vec::new();
+        while Instant::now() < deadline {
+            if let Some(event) = backend.next_event().expect("poll fixture") {
+                match event {
+                    ClientEvent::BackendRelaunched => {
+                        reconnect_events.push("reconciled");
+                    }
+                    ClientEvent::BackendConnectionEpoch => {
+                        reconnect_events.push("epoch");
+                    }
+                    ClientEvent::App(event)
+                        if matches!(
+                            event.as_ref(),
+                            AppUiEvent::Protocol(UiNotification::TurnStarted(_))
+                        ) =>
+                    {
+                        reconnect_events.push("startup-turn");
+                    }
+                    ClientEvent::App(event)
+                        if matches!(
+                            event.as_ref(),
+                            AppUiEvent::Protocol(UiNotification::SessionOpened(_))
+                        ) =>
+                    {
+                        reconnect_events.push("opened");
+                    }
+                    _ => {}
+                }
+                if reconnect_events.contains(&"opened") && reconnect_events.contains(&"reconciled")
+                {
+                    break;
+                }
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+        let startup_turn = reconnect_events
+            .iter()
+            .position(|event| *event == "startup-turn");
+        let opened_event = reconnect_events.iter().position(|event| *event == "opened");
+        let reconciled = reconnect_events
+            .iter()
+            .position(|event| *event == "reconciled");
+        assert!(
+            startup_turn.is_some()
+                && opened_event.is_some()
+                && reconciled.is_some()
+                && startup_turn < opened_event
+                && opened_event < reconciled,
+            "dead-child state must be reconciled after the scoped reopen clears any startup turn; events={reconnect_events:?}"
+        );
+        // P1-3: the connection-epoch marker must reach the store BEFORE any
+        // event from the new child, so the store can stamp the new child's
+        // startup turn as current-epoch and the reconcile spares it.
+        let epoch = reconnect_events.iter().position(|event| *event == "epoch");
+        assert!(
+            epoch.is_some() && epoch < startup_turn,
+            "the connection epoch marker must precede the new child's startup turn; events={reconnect_events:?}"
+        );
+        assert!(backend.reconnect_open_barrier.is_none());
+        assert!(backend.deferred_until_reconnect_open.is_empty());
+
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let sequence = loop {
+            let sequence = std::fs::read_to_string(&marker).unwrap_or_default();
+            if sequence.contains("TURN_SCOPED:")
+                || sequence.contains("TURN_UNSCOPED:")
+                || Instant::now() >= deadline
+            {
+                break sequence;
+            }
+            thread::sleep(Duration::from_millis(5));
+        };
+        let opened = sequence.lines().position(|line| line == "OPENED");
+        let turn = sequence
+            .lines()
+            .position(|line| line.starts_with("TURN_SCOPED:"));
+        assert!(
+            sequence.contains(&format!("\"cwd\":\"{}\"", workspace.display())),
+            "replacement session/open retains the workspace cwd; sequence={sequence}"
+        );
+        assert!(
+            opened.is_some() && turn.is_some() && opened < turn,
+            "background continuation must follow scoped session/opened; sequence={sequence}"
+        );
+        assert!(
+            !sequence.contains("TURN_UNSCOPED:"),
+            "a continuation must never establish unscoped affinity; sequence={sequence}"
+        );
+        assert!(sequence.contains("HELLO:"));
+        assert!(
+            sequence.contains(crate::model::APPUI_FEATURE_CONTEXT_SEMANTIC_CACHE_V1),
+            "stdio client_hello must request the production feature set; sequence={sequence}"
+        );
+    }
+
+    /// P31/P32 real-soak regression: the peer subscription is the most recent
+    /// open, but a cold replacement also needs the master's scoped affinity.
+    #[cfg(unix)]
+    #[test]
+    fn stdio_reconnect_reopens_master_and_peer_before_releasing_either_turn() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let marker = temp.path().join("sequence.log");
+        let fixture = temp.path().join("multiplex-reconnect.sh");
+        std::fs::write(
+            &fixture,
+            r#"#!/bin/sh
+marker="$1"
+printf 'BOOT\n' >> "$marker"
+while IFS= read -r line; do
+  id=$(printf '%s' "$line" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+  session=$(printf '%s' "$line" | sed -n 's/.*"session_id":"\([^"]*\)".*/\1/p')
+  case "$line" in
+    *'"method":"client_hello"'*)
+      printf '{"jsonrpc":"2.0","id":"%s","result":{"type":"server_hello","capabilities":{"version":{"protocol":"ra-ui/v1alpha1","schema_version":1,"jsonrpc":"2.0"},"capabilities_schema_version":2,"supported_methods":["session/open","turn/start"],"supported_notifications":[],"supported_features":[]}}}\n' "$id"
+      ;;
+    *'"method":"session/open"'*)
+      printf 'OPEN:%s\n' "$line" >> "$marker"
+      cwd=$(printf '%s' "$line" | sed -n 's/.*"cwd":"\([^"]*\)".*/\1/p')
+      profile=$(printf '%s' "$line" | sed -n 's/.*"profile_id":"\([^"]*\)".*/\1/p')
+      (
+        sleep 0.05
+        printf 'ACK:%s\n' "$session" >> "$marker"
+        printf '{"jsonrpc":"2.0","id":"%s","result":{"opened":{"session_id":"%s","active_profile_id":"%s","workspace_root":"%s","cursor":{"stream":"%s\\u0000~cwd-scoped","seq":42}}}}\n' "$id" "$session" "$profile" "$cwd" "$session"
+      ) &
+      ;;
+    *'"method":"session/hydrate"'*)
+      printf '{"jsonrpc":"2.0","id":"%s","result":{"session_id":"%s","cursor":{"stream":"%s\\u0000~cwd-scoped","seq":42},"messages":[]}}\n' "$id" "$session" "$session"
+      ;;
+    *'"method":"turn/start"'*)
+      printf 'TURN:%s\n' "$session" >> "$marker"
+      ;;
+  esac
+done
+wait
+"#,
+        )
+        .expect("write fixture");
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::stdio(format!(
+                "sh {} {}",
+                fixture.display(),
+                marker.display()
+            ))),
+            session_id: Some(SessionKey("local:master".into())),
+            profile_id: Some("dev".into()),
+            cwd: Some("/workspace/master".into()),
+            ..AppUiLaunch::default()
+        });
+        for (session, cwd) in [
+            ("local:master", "/workspace/master"),
+            ("local:peer", "/workspace/peer"),
+        ] {
+            backend
+                .send(AppUiCommand::OpenSession(SessionOpenParams {
+                    session_id: SessionKey(session.into()),
+                    topic: None,
+                    profile_id: Some(
+                        if session == "local:master" {
+                            "restricted"
+                        } else {
+                            "dev"
+                        }
+                        .into(),
+                    ),
+                    cwd: Some(cwd.into()),
+                    sandbox: (session == "local:master").then(|| {
+                        ra_core::ui_protocol::SessionSandboxParams {
+                            enabled: Some(true),
+                            network_access: Some(false),
+                            read_allow_paths: vec!["/workspace/master".into()],
+                        }
+                    }),
+                    after: None,
+                }))
+                .expect("open original scoped session");
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                let event = backend.next_event().expect("poll original child");
+                if opened_session_from_client_event(event.as_ref())
+                    == Some(SessionKey(session.into()))
+                {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "original open did not finish");
+                thread::sleep(Duration::from_millis(5));
+            }
+            backend
+                .send(AppUiCommand::HydrateSession(SessionHydrateParams {
+                    session_id: SessionKey(session.into()),
+                    after: None,
+                    include: vec!["messages".into()],
+                }))
+                .expect("normal hydrate preserves confirmed scope");
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !matches!(
+                backend.next_event().expect("poll hydrate"),
+                Some(ClientEvent::SessionHydrate(_))
+            ) {
+                assert!(Instant::now() < deadline, "hydrate did not finish");
+                thread::sleep(Duration::from_millis(5));
+            }
+        }
+        assert_eq!(reopen_target(&backend), "local:peer");
+        backend.mark_disconnected("test-owned child cold restart");
+        for session in ["local:master", "local:peer"] {
+            backend
+                .send(AppUiCommand::SubmitPrompt(TurnStartParams {
+                    tool_context: None,
+                    session_id: SessionKey(session.into()),
+                    turn_id: TurnId::new(),
+                    input: vec![InputItem::Text {
+                        text: "continue".into(),
+                    }],
+                    media: Vec::new(),
+                    topic: None,
+                    rewrite_for: None,
+                    reasoning_effort: None,
+                    live_video: false,
+                }))
+                .expect("defer replacement-child turn");
+        }
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut opened_before_reconcile = Vec::new();
+        let mut reconciled = false;
+        let sequence = loop {
+            if let Some(event) = backend.next_event().expect("poll replacement") {
+                if let Some(session) = opened_session_from_client_event(Some(&event)) {
+                    assert!(
+                        !reconciled,
+                        "every scope must precede relaunch reconciliation"
+                    );
+                    opened_before_reconcile.push(session.0);
+                }
+                if matches!(event, ClientEvent::BackendRelaunched) {
+                    reconciled = true;
+                }
+            }
+            let sequence = std::fs::read_to_string(&marker).unwrap_or_default();
+            if sequence.matches("TURN:").count() == 2 && reconciled {
+                break sequence;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "replacement turns did not finish: {sequence}"
+            );
+            thread::sleep(Duration::from_millis(5));
+        };
+        assert_eq!(opened_before_reconcile, ["local:master", "local:peer"]);
+        let replacement = sequence.rsplit("BOOT\n").next().expect("replacement log");
+        let lines: Vec<_> = replacement.lines().collect();
+        let first_turn = lines
+            .iter()
+            .position(|line| line.starts_with("TURN:"))
+            .unwrap();
+        for session in ["local:master", "local:peer"] {
+            let ack = lines
+                .iter()
+                .position(|line| *line == format!("ACK:{session}"));
+            assert!(
+                ack.is_some_and(|index| index < first_turn),
+                "both scoped ACKs must precede either turn: {replacement}"
+            );
+            let request = lines
+                .iter()
+                .filter_map(|line| line.strip_prefix("OPEN:"))
+                .map(|line| serde_json::from_str::<Value>(line).expect("open request"))
+                .find(|request| request["params"]["session_id"] == session)
+                .expect("each session reopens");
+            let suffix = session.strip_prefix("local:").unwrap();
+            assert_eq!(request["params"]["cwd"], format!("/workspace/{suffix}"));
+            if session == "local:master" {
+                assert_eq!(request["params"]["profile_id"], "restricted");
+                assert_eq!(request["params"]["sandbox"]["enabled"], true);
+                assert_eq!(request["params"]["sandbox"]["network_access"], false);
+                assert_eq!(
+                    request["params"]["sandbox"]["read_allow_paths"],
+                    json!(["/workspace/master"])
+                );
+            }
+            assert_eq!(request["params"]["after"]["seq"], 42);
+            assert_eq!(
+                request["params"]["after"]["stream"],
+                format!("{session}\0~cwd-scoped")
+            );
+        }
+        assert!(backend.reconnect_open_barrier.is_none());
+        assert!(backend.deferred_until_reconnect_open.is_empty());
+    }
+
+    #[test]
+    fn failed_unknown_hydrate_never_poisoned_confirmed_reopen_scopes() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch::default());
+        let request_id = arm_session_open_barrier(&mut backend, "local:confirmed");
+        backend.decode_rpc_text(&json!({
+            "jsonrpc": "2.0", "id": request_id,
+            "result": {"opened": {"session_id": "local:confirmed", "active_profile_id": "dev", "workspace_root": "/workspace"}}
+        }).to_string()).expect("confirm original scope");
+        let before = backend.confirmed_session_scopes.clone();
+        let hydrate = AppUiCommand::HydrateSession(SessionHydrateParams {
+            session_id: SessionKey("local:unknown".into()),
+            after: None,
+            include: vec!["messages".into()],
+        });
+        backend.record_reopen_target(&hydrate);
+        assert_eq!(
+            backend.confirmed_session_scopes, before,
+            "sending hydrate is not scope confirmation"
+        );
+        assert_eq!(reopen_target(&backend), "local:confirmed");
+        let request = backend
+            .build_tracked_request(hydrate)
+            .expect("hydrate request");
+        backend
+            .decode_rpc_text(
+                &json!({
+                    "jsonrpc": "2.0", "id": request.id,
+                    "error": {"code": -32602, "message": "unknown session"}
+                })
+                .to_string(),
+            )
+            .expect("hydrate failure");
+        assert_eq!(backend.confirmed_session_scopes, before);
+        assert_eq!(reopen_target(&backend), "local:confirmed");
+    }
+
+    #[test]
+    fn unknown_resume_hydrate_waits_for_explicit_scoped_open() {
+        let server = spawn_protocol_capture_server(2, true).expect("capture server");
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(server.endpoint.clone(), None)),
+            profile_id: Some("coding".into()),
+            cwd: Some("/workspace/resume".into()),
+            ..AppUiLaunch::default()
+        });
+        backend
+            .send(AppUiCommand::HydrateSession(SessionHydrateParams {
+                session_id: SessionKey("local:resumed".into()),
+                after: None,
+                include: vec!["messages".into()],
+            }))
+            .expect("resume request");
+        let open = server.recv_json();
+        assert_eq!(open["method"], methods::SESSION_OPEN);
+        assert_eq!(open["params"]["session_id"], "local:resumed");
+        assert_eq!(open["params"]["profile_id"], "coding");
+        assert_eq!(open["params"]["cwd"], "/workspace/resume");
+        assert!(
+            backend.confirmed_session_scopes.is_empty(),
+            "an in-flight open is not confirmed"
+        );
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while backend.reconnect_open_barrier.is_some() {
+            backend.next_event().expect("poll scoped open");
+            assert!(Instant::now() < deadline, "scope was not confirmed");
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(server.recv_json()["method"], methods::SESSION_HYDRATE);
+        assert_eq!(reopen_target(&backend), "local:resumed");
+        assert_eq!(backend.confirmed_session_scopes.len(), 1);
+        server.join();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejected_mid_multiplex_reopen_fails_closed_until_corrective_open() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let marker = temp.path().join("sequence.log");
+        let fixture = temp.path().join("rejected-multiplex.sh");
+        std::fs::write(&fixture, r#"#!/bin/sh
+marker="$1"
+while IFS= read -r line; do
+  id=$(printf '%s' "$line" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+  session=$(printf '%s' "$line" | sed -n 's/.*"session_id":"\([^"]*\)".*/\1/p')
+  case "$line" in
+    *'"method":"client_hello"'*)
+      printf '{"jsonrpc":"2.0","id":"%s","result":{"type":"server_hello","capabilities":{"version":{"protocol":"ra-ui/v1alpha1","schema_version":1,"jsonrpc":"2.0"},"capabilities_schema_version":2,"supported_methods":["session/open","turn/start"],"supported_notifications":[],"supported_features":[]}}}\n' "$id"
+      ;;
+    *'"method":"session/open"'*)
+      printf 'OPEN:%s\n' "$session" >> "$marker"
+      case "$line" in
+        *'"cwd":"/corrected"'*) reject=no ;;
+        *'"session_id":"local:peer"'*) reject=yes ;;
+        *) reject=no ;;
+      esac
+      if [ "$reject" = yes ]; then
+        printf 'REJECTED\n' >> "$marker"
+        printf '{"jsonrpc":"2.0","id":"%s","error":{"code":-32602,"message":"scope rejected"}}\n' "$id"
+      else
+        (
+          sleep 0.05
+          printf 'ACK:%s\n' "$session" >> "$marker"
+          printf '{"jsonrpc":"2.0","id":"%s","result":{"opened":{"session_id":"%s","active_profile_id":"dev","workspace_root":"/workspace"}}}\n' "$id" "$session"
+        ) &
+      fi
+      ;;
+    *'"method":"turn/start"'*) printf 'TURN:%s\n' "$session" >> "$marker" ;;
+  esac
+done
+wait
+"#).expect("fixture");
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::stdio(format!(
+                "sh {} {}",
+                fixture.display(),
+                marker.display()
+            ))),
+            ..AppUiLaunch::default()
+        });
+        for session in ["local:master", "local:peer", "local:later"] {
+            let request_id = arm_session_open_barrier(&mut backend, session);
+            backend.decode_rpc_text(&json!({
+                "jsonrpc": "2.0", "id": request_id,
+                "result": {"opened": {"session_id": session, "active_profile_id": "dev", "workspace_root": "/workspace"}}
+            }).to_string()).expect("prior confirmed scope");
+        }
+        backend.disconnected_status_reported = true;
+        let prompt = |session: &str| {
+            AppUiCommand::SubmitPrompt(TurnStartParams {
+                tool_context: None,
+                session_id: SessionKey(session.into()),
+                turn_id: TurnId::new(),
+                input: vec![InputItem::Text {
+                    text: "scoped work".into(),
+                }],
+                media: Vec::new(),
+                topic: None,
+                rewrite_for: None,
+                reasoning_effort: None,
+                live_video: false,
+            })
+        };
+        backend.send(prompt("local:master")).expect("defer master");
+        backend.send(prompt("local:peer")).expect("defer peer");
+        let mut rejected = 0;
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while rejected < 2 {
+            if let Some(ClientEvent::App(event)) = backend.next_event().expect("poll rejection")
+                && matches!(event.as_ref(), AppUiEvent::Protocol(UiNotification::TurnError(error)) if error.code == "session_open_rejected")
+            {
+                rejected += 1;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "both turns must be explicitly rejected"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert!(backend.is_connected());
+        assert!(backend.session_open_required);
+        assert!(backend.reconnect_session_scopes.is_empty());
+        let sequence = std::fs::read_to_string(&marker).expect("sequence");
+        assert!(!sequence.contains("TURN:"), "{sequence}");
+        assert!(
+            !sequence.contains("OPEN:local:later"),
+            "failed batch must not continue: {sequence}"
+        );
+        backend
+            .send(AppUiCommand::OpenSession(SessionOpenParams {
+                session_id: SessionKey("local:peer".into()),
+                topic: None,
+                profile_id: Some("dev".into()),
+                cwd: Some("/corrected".into()),
+                sandbox: None,
+                after: None,
+            }))
+            .expect("corrective open");
+        backend
+            .send(prompt("local:peer"))
+            .expect("defer corrected turn");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            backend.next_event().expect("poll correction");
+            let sequence = std::fs::read_to_string(&marker).expect("sequence");
+            if sequence.contains("TURN:") {
+                assert_eq!(sequence.matches("TURN:").count(), 1, "{sequence}");
+                assert!(
+                    sequence
+                        .find("ACK:local:peer")
+                        .expect("corrective open ACK")
+                        < sequence
+                            .find("TURN:local:peer")
+                            .expect("corrected peer turn"),
+                    "{sequence}"
+                );
+                break;
+            }
+            assert!(Instant::now() < deadline, "corrected turn was not sent");
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    fn backend_with_pending_open_barrier() -> (ProtocolAppUiBackend, String) {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch::default());
+        let session_id = SessionKey("local:barrier".into());
+        let request = backend
+            .build_tracked_request(AppUiCommand::OpenSession(SessionOpenParams {
+                session_id: session_id.clone(),
+                topic: None,
+                profile_id: Some("dev".into()),
+                cwd: Some("/workspace".into()),
+                sandbox: None,
+                after: None,
+            }))
+            .expect("open request");
+        let request_id = request.id;
+        backend.reconnect_open_barrier = Some(SessionOpenBarrier {
+            request: RequestBarrier {
+                request_id: request_id.clone(),
+                started_at: Instant::now(),
+            },
+            session_id,
+        });
+        backend
+            .deferred_until_reconnect_open
+            .push_back(AppUiCommand::ListSessions(SessionListParams { cwd: None }));
+        (backend, request_id)
+    }
+
+    /// Arm the scoped-open barrier for `session_id` exactly the way `send`
+    /// does, minus the wire: record the reopen candidate and build the tracked
+    /// request so a response can correlate. Returns the request id.
+    fn arm_session_open_barrier(backend: &mut ProtocolAppUiBackend, session_id: &str) -> String {
+        let session_id = SessionKey(session_id.into());
+        let command = AppUiCommand::OpenSession(SessionOpenParams {
+            session_id: session_id.clone(),
+            topic: None,
+            profile_id: Some("dev".into()),
+            cwd: Some("/workspace".into()),
+            sandbox: None,
+            after: None,
+        });
+        backend.record_reopen_target(&command);
+        let request = backend
+            .build_tracked_request(command)
+            .expect("open request");
+        backend.reconnect_open_barrier = Some(SessionOpenBarrier {
+            request: RequestBarrier {
+                request_id: request.id.clone(),
+                started_at: Instant::now(),
+            },
+            session_id,
+        });
+        request.id
+    }
+
+    fn reopen_target(backend: &ProtocolAppUiBackend) -> String {
+        match backend
+            .reopen_session_open_command()
+            .expect("a reopen target must exist")
+        {
+            AppUiCommand::OpenSession(params) => params.session_id.0,
+            other => panic!("reopen must be an OpenSession, got {other:?}"),
+        }
+    }
+
+    fn queued_error_codes(backend: &ProtocolAppUiBackend) -> Vec<String> {
+        backend
+            .queue
+            .iter()
+            .filter_map(|event| match event {
+                ClientEvent::App(event) => match event.as_ref() {
+                    AppUiEvent::Error(error) => Some(error.code.clone()),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// P1-4: a `session/open` the server DEFINITELY rejects (an RPC error
+    /// response) on a healthy connection is an ordinary error, not a failed
+    /// scope establishment. The barrier releases, nothing is cancelled, the
+    /// connection stays up, and the reconnect reopen target reverts to the
+    /// last session the server actually CONFIRMED — otherwise every reconnect
+    /// retried the refused session at the backoff cap forever, with the
+    /// user's corrective open deferred behind the re-armed barrier and
+    /// cancelled on the next failure.
+    #[test]
+    fn rejected_session_open_reverts_reopen_target_to_last_confirmed_session() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            profile_id: Some("dev".into()),
+            session_id: Some(SessionKey("local:launch".into())),
+            cwd: Some("/tmp/workspace".into()),
+            ..AppUiLaunch::default()
+        });
+
+        // The server confirmed session A through the barrier.
+        let open_a = arm_session_open_barrier(&mut backend, "local:a");
+        let opened = json!({
+            "jsonrpc": "2.0",
+            "id": open_a,
+            "result": { "opened": { "session_id": "local:a", "active_profile_id": "dev", "workspace_root": "/workspace" } }
+        });
+        let event = backend
+            .decode_rpc_text(&opened.to_string())
+            .expect("opened decodes")
+            .expect("opened event");
+        assert_eq!(
+            opened_session_from_client_event(Some(&event)),
+            Some(SessionKey("local:a".into()))
+        );
+        assert!(backend.reconnect_open_barrier.is_none());
+        assert_eq!(reopen_target(&backend), "local:a");
+
+        // The user then opens B, which the server rejects outright.
+        let open_b = arm_session_open_barrier(&mut backend, "local:b");
+        assert_eq!(
+            reopen_target(&backend),
+            "local:b",
+            "precondition: the in-flight open is the reopen candidate"
+        );
+        let rejected = json!({
+            "jsonrpc": "2.0",
+            "id": open_b,
+            "error": { "code": -32602, "message": "bad scope" }
+        });
+        let event = backend
+            .decode_rpc_text(&rejected.to_string())
+            .expect("error decodes")
+            .expect("error event");
+
+        assert!(
+            matches!(event, ClientEvent::App(ref event) if matches!(event.as_ref(), AppUiEvent::Error(_))),
+            "the rejection surfaces as an ordinary error event"
+        );
+        assert!(
+            backend.reconnect_open_barrier.is_none(),
+            "a definite rejection releases the barrier"
+        );
+        assert_eq!(
+            reopen_target(&backend),
+            "local:a",
+            "the reopen target reverts to the last CONFIRMED session, never the refused one"
+        );
+        assert!(
+            backend.protocol.pending_requests.is_empty(),
+            "the rejected request is no longer pending"
+        );
+        assert!(
+            queued_error_codes(&backend).is_empty(),
+            "nothing is cancelled on a healthy connection, got {:?}",
+            queued_error_codes(&backend)
+        );
+        assert!(
+            !backend.queue.iter().any(|event| matches!(
+                event,
+                ClientEvent::App(event)
+                    if matches!(event.as_ref(), AppUiEvent::Status(status) if status.message.contains("scope establishment failed"))
+            )),
+            "a rejected open must not disconnect the healthy transport"
+        );
+    }
+
+    #[test]
+    fn malformed_session_open_success_fails_deferred_commands_instead_of_wedging() {
+        let (mut backend, request_id) = backend_with_pending_open_barrier();
+        let frame = json!({ "jsonrpc": "2.0", "id": request_id, "result": {} });
+        let _ = backend
+            .decode_rpc_text(&frame.to_string())
+            .expect("malformed result becomes an event");
+        assert!(backend.reconnect_open_barrier.is_none());
+        assert!(backend.deferred_until_reconnect_open.is_empty());
+    }
+
+    #[test]
+    fn timed_out_session_open_fails_deferred_commands_instead_of_wedging() {
+        let (mut backend, _) = backend_with_pending_open_barrier();
+        backend
+            .reconnect_open_barrier
+            .as_mut()
+            .expect("barrier")
+            .request
+            .started_at = Instant::now() - SESSION_OPEN_RESPONSE_TIMEOUT - Duration::from_millis(1);
+        backend.check_protocol_barrier_timeouts();
+        assert!(backend.reconnect_open_barrier.is_none());
+        assert!(backend.deferred_until_reconnect_open.is_empty());
+    }
+
+    /// Real stdio child that boots slowly (as `ra serve --stdio` does on a
+    /// cold instance dir: profile store, plugin verification, ledger recovery
+    /// take 10-15 s). Before the startup grace, the 3 s hello barrier expired
+    /// into "legacy defaults" and the 10 s scoped-open barrier recycled the
+    /// child while it was still booting; the deferred `turn/start` was
+    /// cancelled and never reached any child. With the grace, both barriers
+    /// wait for the child's first frame and the prompt lands exactly once.
+    #[cfg(unix)]
+    #[test]
+    fn stdio_child_startup_grace_keeps_barriers_armed_until_the_first_frame() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let marker = temp.path().join("sequence.log");
+        let fixture = temp.path().join("stdio-slow-boot.sh");
+        std::fs::write(
+            &fixture,
+            r#"#!/bin/sh
+marker="$1"
+# Bootstrap: nothing is read or written for longer than the steady-state
+# hello barrier (3 s).
+sleep 4
+while IFS= read -r line; do
+  id=$(printf '%s' "$line" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+  case "$line" in
+    *'"method":"client_hello"'*)
+      printf 'HELLO\n' >> "$marker"
+      printf '{"jsonrpc":"2.0","id":"%s","result":{"type":"server_hello","capabilities":{"version":{"protocol":"ra-ui/v1alpha1","schema_version":1,"jsonrpc":"2.0"},"capabilities_schema_version":2,"supported_methods":["session/open","turn/start"],"supported_notifications":[],"supported_features":[]}}}\n' "$id"
+      ;;
+    *'"method":"session/open"'*)
+      printf 'OPEN\n' >> "$marker"
+      printf '{"jsonrpc":"2.0","id":"%s","result":{"opened":{"session_id":"local:slow","active_profile_id":"dev","workspace_root":"/confirmed/workspace"}}}\n' "$id"
+      ;;
+    *'"method":"turn/start"'*)
+      printf 'TURN:%s\n' "$line" >> "$marker"
+      printf '{"jsonrpc":"2.0","id":"%s","result":{}}\n' "$id"
+      ;;
+  esac
+done
+"#,
+        )
+        .expect("write fixture");
+
+        let session_id = SessionKey("local:slow".into());
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::stdio(format!(
+                "sh {} {}",
+                fixture.display(),
+                marker.display()
+            ))),
+            session_id: Some(session_id.clone()),
+            profile_id: Some("dev".into()),
+            cwd: Some("/tmp/workspace".into()),
+            ..AppUiLaunch::default()
+        });
+        // State right after the previous child's death was observed: the next
+        // send spawns the replacement and must reopen behind the hello.
+        backend.disconnected_status_reported = true;
+        backend.refresh_capabilities_on_reconnect = true;
+        backend
+            .send(AppUiCommand::SubmitPrompt(TurnStartParams {
+                tool_context: None,
+                session_id: session_id.clone(),
+                turn_id: TurnId::new(),
+                input: vec![InputItem::Text {
+                    text: "prompt typed during the daemon restart".into(),
+                }],
+                media: Vec::new(),
+                topic: None,
+                rewrite_for: None,
+                reasoning_effort: None,
+                live_video: false,
+            }))
+            .expect("replacement launch + deferred submit");
+        assert!(backend.client_hello_barrier.is_some());
+        assert!(backend.stdio_child_startup_pending());
+
+        let deadline = Instant::now() + Duration::from_secs(12);
+        let mut statuses = Vec::new();
+        let mut cancelled = 0usize;
+        let mut opened = false;
+        while Instant::now() < deadline {
+            if let Some(ClientEvent::App(event)) = backend.next_event().expect("poll fixture") {
+                match event.as_ref() {
+                    AppUiEvent::Status(status) => statuses.push(status.message.clone()),
+                    AppUiEvent::Error(error) if error.code == "request_cancelled" => {
+                        cancelled += 1;
+                    }
+                    AppUiEvent::Protocol(UiNotification::SessionOpened(_)) => opened = true,
+                    _ => {}
+                }
+            }
+            let log = std::fs::read_to_string(&marker).unwrap_or_default();
+            if opened && log.contains("TURN:") {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        let log = std::fs::read_to_string(&marker).unwrap_or_default();
+        assert!(
+            !statuses
+                .iter()
+                .any(|status| status.contains("negotiation timed out")),
+            "a booting child must not be mistaken for a pre-hello server; statuses={statuses:?}"
+        );
+        assert_eq!(
+            cancelled, 0,
+            "nothing may be cancelled while the child boots"
+        );
+        assert_eq!(
+            log.matches("TURN:").count(),
+            1,
+            "the deferred turn/start must reach the slow child exactly once; log={log}"
+        );
+        assert!(log.contains("prompt typed during the daemon restart"));
+        assert!(backend.client_hello_barrier.is_none());
+        assert!(backend.reconnect_open_barrier.is_none());
+        assert!(backend.deferred_until_reconnect_open.is_empty());
+        assert!(!backend.stdio_child_startup_pending());
+    }
+
+    /// A child that dies while commands are deferred behind its barriers
+    /// must cancel them explicitly (`request_cancelled`, so the store can
+    /// re-stage a dead `turn/start` from its gate) instead of flushing them
+    /// to the NEXT child after its scoped open — which duplicated the prompt
+    /// on top of the store's own relaunch re-stage.
+    #[cfg(unix)]
+    #[test]
+    fn child_death_during_barrier_cancels_deferred_commands_instead_of_flushing_to_next_child() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let marker = temp.path().join("sequence.log");
+        let fixture = temp.path().join("stdio-dies-once.sh");
+        std::fs::write(
+            &fixture,
+            r#"#!/bin/sh
+marker="$1"
+if [ ! -f "$marker.first" ]; then
+  : > "$marker.first"
+  # First child: read the hello, then die without answering it.
+  IFS= read -r line
+  printf 'FIRST_DIED\n' >> "$marker"
+  exit 0
+fi
+while IFS= read -r line; do
+  id=$(printf '%s' "$line" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+  case "$line" in
+    *'"method":"client_hello"'*)
+      printf '{"jsonrpc":"2.0","id":"%s","result":{"type":"server_hello","capabilities":{"version":{"protocol":"ra-ui/v1alpha1","schema_version":1,"jsonrpc":"2.0"},"capabilities_schema_version":2,"supported_methods":["session/open","turn/start"],"supported_notifications":[],"supported_features":[]}}}\n' "$id"
+      ;;
+    *'"method":"session/open"'*)
+      printf 'OPEN\n' >> "$marker"
+      printf '{"jsonrpc":"2.0","id":"%s","result":{"opened":{"session_id":"local:dies","active_profile_id":"dev","workspace_root":"/confirmed/workspace"}}}\n' "$id"
+      ;;
+    *'"method":"turn/start"'*)
+      printf 'TURN:%s\n' "$line" >> "$marker"
+      printf '{"jsonrpc":"2.0","id":"%s","result":{}}\n' "$id"
+      ;;
+  esac
+done
+"#,
+        )
+        .expect("write fixture");
+
+        let session_id = SessionKey("local:dies".into());
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::stdio(format!(
+                "sh {} {}",
+                fixture.display(),
+                marker.display()
+            ))),
+            session_id: Some(session_id.clone()),
+            profile_id: Some("dev".into()),
+            cwd: Some("/tmp/workspace".into()),
+            ..AppUiLaunch::default()
+        });
+        backend.disconnected_status_reported = true;
+        backend.refresh_capabilities_on_reconnect = true;
+        backend
+            .send(AppUiCommand::SubmitPrompt(TurnStartParams {
+                tool_context: None,
+                session_id: session_id.clone(),
+                turn_id: TurnId::new(),
+                input: vec![InputItem::Text {
+                    text: "deferred behind the dying child".into(),
+                }],
+                media: Vec::new(),
+                topic: None,
+                rewrite_for: None,
+                reasoning_effort: None,
+                live_video: false,
+            }))
+            .expect("first child launch + deferred submit");
+        assert!(backend.client_hello_barrier.is_some());
+
+        let deadline = Instant::now() + Duration::from_secs(8);
+        let mut cancelled_turn_starts = 0usize;
+        let mut opened = false;
+        while Instant::now() < deadline {
+            if let Some(ClientEvent::App(event)) = backend.next_event().expect("poll fixture") {
+                match event.as_ref() {
+                    AppUiEvent::Error(error)
+                        if error.code == "request_cancelled"
+                            && error.message.starts_with("turn/start") =>
+                    {
+                        cancelled_turn_starts += 1;
+                    }
+                    AppUiEvent::Protocol(UiNotification::SessionOpened(_)) => opened = true,
+                    _ => {}
+                }
+            }
+            if opened {
+                // Give a wrongly flushed command time to hit the marker.
+                thread::sleep(Duration::from_millis(200));
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        let log = std::fs::read_to_string(&marker).unwrap_or_default();
+        assert!(
+            log.contains("FIRST_DIED"),
+            "fixture did not run its dying phase: {log}"
+        );
+        assert!(
+            opened,
+            "the replacement child must reopen the session; log={log}"
+        );
+        assert_eq!(
+            cancelled_turn_starts, 1,
+            "the deferred turn/start must be cancelled exactly once so the store re-stages it"
+        );
+        assert_eq!(
+            log.matches("TURN:").count(),
+            0,
+            "a command deferred on the dead child must not ride the replacement child; log={log}"
+        );
+        assert!(backend.deferred_until_reconnect_open.is_empty());
+    }
+
+    /// P1-4 against a real stdio child: a rejected `session/open` on a
+    /// HEALTHY connection must not tear the transport down. Pre-barrier a
+    /// rejected open was just an error event on a live connection; the
+    /// scoped-open barrier turned it into `fail_session_open_barrier` —
+    /// cancelling every deferred user command as `request_cancelled`, killing
+    /// the healthy child, and retrying the refused session on every reconnect.
+    #[cfg(unix)]
+    #[test]
+    fn session_open_rpc_error_keeps_connection_but_requires_scope_before_turns() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let marker = temp.path().join("sequence.log");
+        let fixture = temp.path().join("stdio-fixture.sh");
+        std::fs::write(
+            &fixture,
+            r#"#!/bin/sh
+marker="$1"
+while IFS= read -r line; do
+  id=$(printf '%s' "$line" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+  case "$line" in
+    *'"method":"client_hello"'*)
+      printf '{"jsonrpc":"2.0","id":"%s","result":{"type":"server_hello","capabilities":{"version":{"protocol":"ra-ui/v1alpha1","schema_version":1,"jsonrpc":"2.0"},"capabilities_schema_version":2,"supported_methods":["session/open","session/list"],"supported_notifications":[],"supported_features":[]}}}\n' "$id"
+      ;;
+    *'"method":"session/open"'*'"session_id":"local:rejected"'*)
+      printf 'OPEN_REJECTED\n' >> "$marker"
+      printf '{"jsonrpc":"2.0","id":"%s","error":{"code":-32602,"message":"session scope rejected"}}\n' "$id"
+      ;;
+    *'"method":"turn/start"'*)
+      printf 'TURN\n' >> "$marker"
+      ;;
+    *'"method":"session/open"'*)
+      printf 'OPEN_OK\n' >> "$marker"
+      printf '{"jsonrpc":"2.0","id":"%s","result":{"opened":{"session_id":"local:launch","active_profile_id":"dev","workspace_root":"/confirmed/workspace"}}}\n' "$id"
+      ;;
+    *'"method":"session/list"'*)
+      printf 'LIST\n' >> "$marker"
+      ;;
+  esac
+done
+"#,
+        )
+        .expect("write fixture");
+
+        fn poll_until(
+            backend: &mut ProtocolAppUiBackend,
+            seen: &mut Vec<ClientEvent>,
+            done: impl Fn(&ClientEvent) -> bool,
+        ) -> bool {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while Instant::now() < deadline {
+                if let Some(event) = backend.next_event().expect("poll fixture") {
+                    let finished = done(&event);
+                    seen.push(event);
+                    if finished {
+                        return true;
+                    }
+                }
+                thread::sleep(Duration::from_millis(5));
+            }
+            false
+        }
+
+        let launch_session = SessionKey("local:launch".into());
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::stdio(format!(
+                "sh {} {}",
+                fixture.display(),
+                marker.display()
+            ))),
+            session_id: Some(launch_session.clone()),
+            profile_id: Some("dev".into()),
+            cwd: Some(temp.path().display().to_string()),
+            ..AppUiLaunch::default()
+        });
+        // Model the state right after an earlier disconnect was observed: the
+        // next send launches the child and reopens the launch session.
+        backend.disconnected_status_reported = true;
+        backend.refresh_capabilities_on_reconnect = true;
+        backend
+            .send(AppUiCommand::ListSessions(SessionListParams { cwd: None }))
+            .expect("child launch + deferred list");
+
+        let mut seen = Vec::new();
+        assert!(
+            poll_until(&mut backend, &mut seen, |event| {
+                opened_session_from_client_event(Some(event)).as_ref() == Some(&launch_session)
+            }),
+            "the launch session must reopen first; events={seen:?}"
+        );
+        assert!(backend.is_connected());
+        assert!(backend.reconnect_open_barrier.is_none());
+        assert!(
+            backend.deferred_until_reconnect_open.is_empty(),
+            "the confirmed reopen releases the deferred list"
+        );
+
+        let prompt = || {
+            AppUiCommand::SubmitPrompt(TurnStartParams {
+                tool_context: None,
+                session_id: SessionKey("local:rejected".into()),
+                turn_id: TurnId::new(),
+                input: vec![InputItem::Text {
+                    text: "must not run unscoped".into(),
+                }],
+                media: Vec::new(),
+                topic: None,
+                rewrite_for: None,
+                reasoning_effort: None,
+                live_video: false,
+            })
+        };
+        // Healthy connection; the user now opens a session the server refuses,
+        // with a follow-up command queued behind the barrier.
+        backend
+            .send(AppUiCommand::OpenSession(SessionOpenParams {
+                session_id: SessionKey("local:rejected".into()),
+                topic: None,
+                profile_id: Some("dev".into()),
+                cwd: None,
+                sandbox: None,
+                after: None,
+            }))
+            .expect("open sends");
+        assert!(
+            backend.reconnect_open_barrier.is_some(),
+            "every open arms the scoped barrier"
+        );
+        backend
+            .send(AppUiCommand::ListSessions(SessionListParams { cwd: None }))
+            .expect("list defers behind the barrier");
+        backend.send(prompt()).expect("submit defers");
+        assert_eq!(backend.deferred_until_reconnect_open.len(), 2);
+
+        let mut seen = Vec::new();
+        assert!(
+            poll_until(&mut backend, &mut seen, |event| matches!(
+                event,
+                ClientEvent::App(event)
+                    if matches!(event.as_ref(), AppUiEvent::Error(error) if error.message.contains("session scope rejected"))
+            )),
+            "the rejection must surface as an error event; events={seen:?}"
+        );
+
+        assert!(
+            backend.is_connected(),
+            "a rejected open must not tear down the healthy connection"
+        );
+        assert!(
+            backend.reconnect_open_barrier.is_none(),
+            "the barrier releases on a definite rejection"
+        );
+        assert!(
+            backend.deferred_until_reconnect_open.is_empty(),
+            "deferred commands are either safely sent or explicitly rejected"
+        );
+        while let Some(event) = backend.next_event().expect("drain") {
+            seen.push(event);
+        }
+        assert!(
+            !seen.iter().any(|event| matches!(
+                event,
+                ClientEvent::App(event)
+                    if matches!(event.as_ref(), AppUiEvent::Error(error) if error.code == "request_cancelled")
+            )),
+            "no turn/start may use the automatically retried request_cancelled code; events={seen:?}"
+        );
+        let rejected_turns = |events: &[ClientEvent]| {
+            events.iter().filter(|event| matches!(
+            event,
+            ClientEvent::App(event)
+                if matches!(event.as_ref(), AppUiEvent::Protocol(UiNotification::TurnError(error))
+                    if error.code == "session_open_rejected")
+        )).count()
+        };
+        assert_eq!(
+            rejected_turns(&seen),
+            1,
+            "deferred turn must fail closed: {seen:?}"
+        );
+        backend
+            .send(prompt())
+            .expect("later submit rejected locally");
+        while let Some(event) = backend.next_event().expect("drain") {
+            seen.push(event);
+        }
+        assert_eq!(
+            rejected_turns(&seen),
+            2,
+            "later submits still require a successful scoped open"
+        );
+
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let sequence = loop {
+            let sequence = std::fs::read_to_string(&marker).unwrap_or_default();
+            if sequence.lines().filter(|line| *line == "LIST").count() >= 2
+                || Instant::now() >= deadline
+            {
+                break sequence;
+            }
+            thread::sleep(Duration::from_millis(5));
+        };
+        assert_eq!(
+            sequence.lines().filter(|line| *line == "LIST").count(),
+            2,
+            "the deferred session/list must reach the child after the rejection; sequence={sequence}"
+        );
+        assert_eq!(
+            sequence.lines().filter(|line| *line == "OPEN_OK").count(),
+            1,
+            "no reconnect reopen may follow a rejected open; sequence={sequence}"
+        );
+        assert_eq!(
+            reopen_target(&backend),
+            launch_session.0,
+            "a later reconnect must reopen the confirmed session, never the refused one"
+        );
+        assert!(
+            !sequence.lines().any(|line| line == "TURN"),
+            "no rejected-scope turn reaches the wire: {sequence}"
+        );
+        backend
+            .send(AppUiCommand::OpenSession(SessionOpenParams {
+                session_id: launch_session.clone(),
+                topic: None,
+                profile_id: Some("dev".into()),
+                cwd: None,
+                sandbox: None,
+                after: None,
+            }))
+            .expect("corrective open allowed");
+        let mut corrected = prompt();
+        if let AppUiCommand::SubmitPrompt(params) = &mut corrected {
+            params.session_id = launch_session.clone();
+        }
+        backend.send(corrected).expect("corrected submit defers");
+        assert!(poll_until(&mut backend, &mut seen, |event| {
+            opened_session_from_client_event(Some(event)).as_ref() == Some(&launch_session)
+        }));
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let sequence = std::fs::read_to_string(&marker).expect("read sequence");
+            if sequence.lines().any(|line| line == "TURN") {
+                assert_eq!(sequence.lines().filter(|line| *line == "TURN").count(), 1);
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "corrective open must release submit: {sequence}"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    #[test]
+    fn stdio_client_hello_uses_modern_or_old_server_feature_tokens() {
+        let mut exchange = ProtocolExchange::default();
+        let modern = exchange.build_client_hello_request(appui_feature_tokens_for(false));
+        assert_eq!(modern.method, APPUI_METHOD_CLIENT_HELLO);
+        assert_eq!(modern.params["transport"], "stdio");
+        assert!(
+            modern.params["supported_features"]
+                .as_array()
+                .expect("feature list")
+                .iter()
+                .any(|feature| feature == crate::model::APPUI_FEATURE_CONTEXT_SEMANTIC_CACHE_V1)
+        );
+        let legacy = exchange.build_client_hello_request(appui_feature_tokens_for(true));
+        assert!(
+            !legacy.params["supported_features"]
+                .as_array()
+                .expect("feature list")
+                .iter()
+                .any(|feature| feature == crate::model::APPUI_FEATURE_CONTEXT_SEMANTIC_CACHE_V1)
+        );
+    }
+
+    #[test]
+    fn unsupported_client_hello_falls_back_without_leaving_a_barrier() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch::default());
+        let request = backend
+            .protocol
+            .build_client_hello_request(appui_feature_tokens_for(false));
+        backend.client_hello_barrier = Some(RequestBarrier {
+            request_id: request.id.clone(),
+            started_at: Instant::now(),
+        });
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "error": { "code": -32601, "message": "method not found" }
+        });
+
+        let event = backend
+            .decode_rpc_text(&frame.to_string())
+            .expect("fallback decodes")
+            .expect("fallback status");
+
+        assert!(backend.client_hello_barrier.is_none());
+        assert!(
+            matches!(event, ClientEvent::App(ref event) if matches!(event.as_ref(), AppUiEvent::Status(_)))
+        );
+    }
+
+    #[test]
+    fn open_and_hydrate_responses_retain_raw_semantic_cache_diagnostics() {
+        let mut exchange = ProtocolExchange::default();
+        let open = exchange
+            .build_tracked_request(AppUiCommand::OpenSession(SessionOpenParams {
+                session_id: SessionKey("local:context".into()),
+                topic: None,
+                profile_id: None,
+                cwd: None,
+                sandbox: None,
+                after: None,
+            }))
+            .expect("open request");
+        let context_state = json!({
+            "session_id": "local:context", "generation": 7,
+            "transcript_hash": "sha256:t", "item_count": 3,
+            "token_estimate": 42, "recovery_state": "healthy",
+            "cache_epoch_id": "sha256:epoch-7", "semantic_head_kind": "tool_interaction"
+        });
+        let open_frame = json!({
+            "jsonrpc": "2.0", "id": open.id,
+            "result": { "opened": { "session_id": "local:context", "context_state": context_state } }
+        });
+        let ClientEvent::ContextLifecycle(opened) = exchange
+            .decode_rpc_text(&open_frame.to_string())
+            .expect("decode")
+            .expect("event")
+        else {
+            panic!("context-wrapped open")
+        };
+        assert_eq!(
+            opened.diagnostics.and_then(|d| d.cache_epoch_id).as_deref(),
+            Some("sha256:epoch-7")
+        );
+
+        let hydrate = exchange
+            .build_tracked_request(AppUiCommand::HydrateSession(SessionHydrateParams {
+                session_id: SessionKey("local:context".into()),
+                after: None,
+                include: vec!["context".into()],
+            }))
+            .expect("hydrate request");
+        let hydrate_frame = json!({
+            "jsonrpc": "2.0", "id": hydrate.id,
+            "result": {
+                "session_id": "local:context",
+                "cursor": { "stream": "local:context", "seq": 1 },
+                "context_state": {
+                    "session_id": "local:context", "generation": 8,
+                    "transcript_hash": "sha256:t2", "item_count": 4,
+                    "token_estimate": 44, "recovery_state": "healthy",
+                    "cache_epoch_id": "sha256:epoch-8"
+                }
+            }
+        });
+        let ClientEvent::SessionHydrateContext(hydrated) = exchange
+            .decode_rpc_text(&hydrate_frame.to_string())
+            .expect("decode")
+            .expect("event")
+        else {
+            panic!("context-wrapped hydrate")
+        };
+        assert_eq!(hydrated.result.context_state.expect("state").generation, 8);
+        assert_eq!(
+            hydrated
+                .diagnostics
+                .and_then(|d| d.cache_epoch_id)
+                .as_deref(),
+            Some("sha256:epoch-8")
+        );
+    }
+
+    #[test]
+    fn reopen_prefers_server_confirmed_workspace_root_over_launch_cwd() {
+        // Regression (#476): a bare `octoscode` (no --cwd) falls back to the
+        // shell's current_dir for `launch.cwd`, which may differ from the
+        // session's real workspace. A respawn reopen must scope to the
+        // server-confirmed `workspace_root` from `session/opened`, not
+        // `launch.cwd`, else the session is rescoped to the wrong
+        // `~cwd-<hash>` and presents as empty.
+        let session_id = SessionKey("local:test".into());
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            profile_id: Some("coding".into()),
+            session_id: Some(session_id.clone()),
+            cwd: Some("/shell/cwd".into()),
+            ..AppUiLaunch::default()
+        });
+
+        // The server confirms the session's real workspace via session/opened.
+        backend
+            .protocol
+            .record_event_state(&AppUiEvent::Protocol(UiNotification::SessionOpened(
+                session_opened_compat(
+                    session_id.clone(),
+                    None,
+                    Some("/real/workspace".into()),
+                    None,
+                    None,
+                ),
+            )));
+
+        // The reconnect reopen (launch-session fallback path) uses the
+        // captured workspace root, not `launch.cwd`.
+        let reopen = backend
+            .reopen_session_open_command()
+            .expect("launch session is the fallback reopen target");
+        let AppUiCommand::OpenSession(reopen) = reopen else {
+            panic!("reopen command must be an OpenSession");
+        };
+        assert_eq!(reopen.session_id, session_id);
+        assert_eq!(
+            reopen.cwd.as_deref(),
+            Some("/real/workspace"),
+            "reopen cwd must be the server-confirmed workspace_root, not launch.cwd"
+        );
+
+        // An explicitly recorded reopen target (e.g. after /resume) also gets
+        // its cwd corrected to the confirmed root.
+        backend.record_reopen_target(&AppUiCommand::OpenSession(SessionOpenParams {
+            session_id: session_id.clone(),
+            topic: None,
+            profile_id: Some("coding".into()),
+            cwd: Some("/shell/cwd".into()),
+            sandbox: None,
+            after: None,
+        }));
+        let reopen = backend
+            .reopen_session_open_command()
+            .expect("a reopen target is recorded after opening a session");
+        let AppUiCommand::OpenSession(reopen) = reopen else {
+            panic!("reopen command must be an OpenSession");
+        };
+        assert_eq!(
+            reopen.cwd.as_deref(),
+            Some("/real/workspace"),
+            "recorded reopen target cwd must be overridden by the confirmed workspace_root"
+        );
+
+        // A session with no captured root still falls back to `launch.cwd`.
+        let unknown = SessionKey("local:unknown".into());
+        let backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            session_id: Some(unknown.clone()),
+            cwd: Some("/shell/cwd".into()),
+            ..AppUiLaunch::default()
+        });
+        let reopen = backend
+            .launch_session_open_command()
+            .expect("launch session should reopen");
+        let AppUiCommand::OpenSession(reopen) = reopen else {
+            panic!("reopen command must be an OpenSession");
+        };
+        assert_eq!(reopen.cwd.as_deref(), Some("/shell/cwd"));
+    }
+
+    #[test]
+    fn reconnect_reopens_current_session_not_launch_session() {
+        // Regression: a reconnect must re-open the session the user is CURRENTLY
+        // on (set by /resume, tab-switch, …), not the fixed launch `--session`.
+        // The old code always re-sent the launch session, silently yanking the
+        // selection back to it and auto-draining its staged prompts.
+        let launch_session = SessionKey("local:launch".into());
+        let resumed_session = SessionKey("local:resumed".into());
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            profile_id: Some("coding".into()),
+            session_id: Some(launch_session.clone()),
+            cwd: Some("/tmp/workspace".into()),
+            ..AppUiLaunch::default()
+        });
+
+        // Before any open, reconnect falls back to the launch session.
+        let fallback = backend
+            .reopen_session_open_command()
+            .expect("launch session is the fallback reopen target");
+        let AppUiCommand::OpenSession(fallback) = fallback else {
+            panic!("reopen command must be an OpenSession");
+        };
+        assert_eq!(fallback.session_id, launch_session);
+
+        // The user /resumes a different session (profile differs too). `send`
+        // records the reopen target via `record_reopen_target` before any
+        // network I/O; drive that helper directly so the test never dials out.
+        backend.record_reopen_target(&AppUiCommand::OpenSession(SessionOpenParams {
+            session_id: resumed_session.clone(),
+            topic: None,
+            profile_id: Some("research".into()),
+            cwd: Some("/tmp/other".into()),
+            sandbox: None,
+            after: Some(UiCursor {
+                stream: resumed_session.0.clone(),
+                seq: 7,
+            }),
+        }));
+
+        let reopen = backend
+            .reopen_session_open_command()
+            .expect("a reopen target is recorded after opening a session");
+        let AppUiCommand::OpenSession(reopen) = reopen else {
+            panic!("reopen command must be an OpenSession");
+        };
+        assert_eq!(
+            reopen.session_id, resumed_session,
+            "reconnect must reopen the currently-selected session, not the launch session"
+        );
+        assert_eq!(
+            reopen.profile_id.as_deref(),
+            Some("research"),
+            "the reopen carries the resumed session's own profile"
+        );
+        assert!(
+            reopen.after.is_none(),
+            "the stored reopen resets the cursor; command_with_resume_cursor refills it at send time"
+        );
+
+        // /resume emits hydration, which must establish an unknown scope via
+        // explicit open before updating the reopen target. Hydration alone
+        // cannot manufacture a confirmed profile/sandbox.
+        let hydrated_session = SessionKey("local:hydrated".into());
+        let hydrate = AppUiCommand::HydrateSession(SessionHydrateParams {
+            session_id: hydrated_session.clone(),
+            after: None,
+            include: vec!["messages".into(), "turns".into()],
+        });
+        backend.record_reopen_target(&hydrate);
+        assert_eq!(reopen_target(&backend), resumed_session.0);
+        let open = backend
+            .open_before_unknown_hydrate(&hydrate)
+            .expect("unknown resume needs scope");
+        backend.record_reopen_target(&open);
+        let reopen = backend
+            .reopen_session_open_command()
+            .expect("a HydrateSession updates the reopen target");
+        let AppUiCommand::OpenSession(reopen) = reopen else {
+            panic!("reopen command must be an OpenSession");
+        };
+        assert_eq!(
+            reopen.session_id, hydrated_session,
+            "a /resume (HydrateSession) must become the reconnect reopen target"
+        );
+        assert_eq!(
+            reopen.profile_id.as_deref(),
+            Some("coding"),
+            "a hydrate-sourced reopen carries the launch profile (hydrate has none)"
+        );
+    }
+
+    #[test]
+    fn protocol_bootstrap_delayed_hydrate_keeps_native_prompt_once() {
+        use crate::viewport::ScrollbackTracker;
+        const PROMPT: &str = "LOCALPARENTROUND1 create and gather one peer";
+        let session = SessionKey("bootstrap-hydrate".into());
+        let launch = AppUiLaunch {
+            session_id: Some(session.clone()),
+            ..Default::default()
+        };
+        let mut store = crate::store::Store::from_snapshot(protocol_snapshot_from_launch(
+            &launch,
+            "stdio-test",
+        ));
+        let palette = crate::theme::Palette::for_theme(crate::cli::ThemeName::Codex);
+        let mut tracker = ScrollbackTracker::new();
+        let mut visible = String::new();
+        let flush = |store: &mut crate::store::Store,
+                     tracker: &mut ScrollbackTracker,
+                     visible: &mut String| {
+            if let Some(scope) = store.state.take_transcript_reflush_request() {
+                match scope {
+                    crate::model::TranscriptReflushScope::WithLive => tracker.mark_flushed_stale(),
+                    crate::model::TranscriptReflushScope::CommittedOnly => {
+                        tracker.mark_committed_flush_stale()
+                    }
+                }
+            }
+            for line in tracker.sync(&store.state, palette, 210).lines_to_insert {
+                for span in line.spans {
+                    visible.push_str(&span.content);
+                }
+                visible.push('\n');
+            }
+        };
+        flush(&mut store, &mut tracker, &mut visible);
+        store.state.composer = PROMPT.into();
+        let Some(AppUiCommand::SubmitPrompt(submit)) = store.compose_command() else {
+            panic!("submit");
+        };
+        flush(&mut store, &mut tracker, &mut visible);
+        for _ in 0..2 {
+            store.apply_client_event(ClientEvent::SessionHydrate(
+                serde_json::from_value(json!({
+                    "session_id": session, "cursor": {"stream": session.0, "seq": 1},
+                    "messages": [], "turns": [{"turn_id": submit.turn_id, "state": "active"}],
+                }))
+                .unwrap(),
+            ));
+            flush(&mut store, &mut tracker, &mut visible);
+        }
+        assert_eq!(
+            visible.matches(PROMPT).count(),
+            1,
+            "bootstrap → submit → delayed hydrate: {visible}"
+        );
+        assert_eq!(store.state.sessions[0].messages.len(), 1);
+    }
+
+    #[test]
+    fn protocol_snapshot_honors_requested_session() {
+        let launch = AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            session_id: Some(SessionKey("session-123".into())),
+            profile_id: Some("coding".into()),
+            readonly: true,
+            ..AppUiLaunch::default()
+        };
+
+        let snapshot = protocol_snapshot_from_launch(&launch, "wss://example.test/ui-protocol");
+
+        assert_eq!(
+            snapshot.target.as_deref(),
+            Some("wss://example.test/ui-protocol")
+        );
+        assert!(snapshot.readonly);
+        assert_eq!(snapshot.sessions[0].id.0, "session-123");
+        assert_eq!(snapshot.sessions[0].profile_id.as_deref(), Some("coding"));
+        assert!(snapshot.sessions[0].messages.is_empty());
+        assert!(snapshot.status.contains("read-only"));
+    }
+
+    #[test]
+    fn protocol_backend_readonly_blocks_mutations_without_network() {
+        let mut backend = ProtocolAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            readonly: true,
+            ..AppUiLaunch::default()
+        });
+        let session_id = SessionKey("local:test".into());
+
+        backend
+            .send(AppUiCommand::SubmitPrompt(TurnStartParams {
+                // Ordinary chat turn: context-scoped tools stay unadvertised.
+                tool_context: None,
+                session_id: session_id.clone(),
+                turn_id: TurnId::new(),
+                input: vec![InputItem::Text {
+                    text: "hello".into(),
+                }],
+                media: Vec::new(),
+                topic: None,
+                rewrite_for: None,
+                reasoning_effort: None,
+                live_video: false,
+            }))
+            .expect("readonly send is local");
+        backend
+            .send(AppUiCommand::InterruptTurn(TurnInterruptParams {
+                session_id: session_id.clone(),
+                turn_id: TurnId::new(),
+            }))
+            .expect("readonly interrupt is local");
+        backend
+            .send(AppUiCommand::RespondApproval(ApprovalRespondParams::new(
+                session_id,
+                ra_core::ui_protocol::ApprovalId::new(),
+                ApprovalDecision::Deny,
+            )))
+            .expect("readonly approval response is local");
+
+        let event = backend.next_event().expect("poll").expect("warning");
+        let event = unwrap_app_event(event);
+        assert!(matches!(
+            event,
+            AppUiEvent::Protocol(UiNotification::Warning(_))
+        ));
+        let event = backend
+            .next_event()
+            .expect("poll")
+            .expect("interrupt error");
+        let event = unwrap_app_event(event);
+        let AppUiEvent::Error(error) = event else {
+            panic!("expected interrupt readonly error");
+        };
+        assert!(error.message.contains(methods::TURN_INTERRUPT));
+
+        let event = backend
+            .next_event()
+            .expect("poll")
+            .expect("approval response error");
+        let event = unwrap_app_event(event);
+        let AppUiEvent::Error(error) = event else {
+            panic!("expected approval readonly error");
+        };
+        assert!(error.message.contains(methods::APPROVAL_RESPOND));
+        assert!(!backend.is_connected());
+    }
+
+    #[test]
+    fn mock_backend_queues_turn_events() {
+        let mut backend = MockAppUiBackend::default();
+        backend.bootstrap().expect("bootstrap");
+        let session = MockAppUiBackend::mock_session_key("coding", "m9");
+
+        backend
+            .send(AppUiCommand::SubmitPrompt(TurnStartParams {
+                // Ordinary chat turn: context-scoped tools stay unadvertised.
+                tool_context: None,
+                session_id: session,
+                turn_id: TurnId::new(),
+                input: vec![InputItem::Text {
+                    text: "hello".into(),
+                }],
+                media: Vec::new(),
+                topic: None,
+                rewrite_for: None,
+                reasoning_effort: None,
+                live_video: false,
+            }))
+            .expect("send");
+
+        let first = backend.next_event().expect("poll");
+        assert!(first.is_some());
+    }
+
+    #[test]
+    fn mock_backend_submit_prompt_does_not_replace_session_before_approval() {
+        let mut backend = MockAppUiBackend::default();
+        let snapshot = backend.bootstrap().expect("bootstrap");
+        let session_id = snapshot.sessions[0].id.clone();
+
+        let opened = backend.next_event().expect("poll").expect("session opened");
+        let opened = unwrap_app_event(opened);
+        let AppUiEvent::Protocol(UiNotification::SessionOpened(opened)) = opened else {
+            panic!("expected bootstrap session/opened");
+        };
+        assert_eq!(opened.session_id, session_id);
+
+        let turn_id = TurnId::new();
+        backend
+            .send(AppUiCommand::SubmitPrompt(TurnStartParams {
+                // Ordinary chat turn: context-scoped tools stay unadvertised.
+                tool_context: None,
+                session_id: session_id.clone(),
+                turn_id: turn_id.clone(),
+                input: vec![InputItem::Text {
+                    text: "complete m9 contract".into(),
+                }],
+                media: Vec::new(),
+                topic: None,
+                rewrite_for: None,
+                reasoning_effort: None,
+                live_video: false,
+            }))
+            .expect("submit prompt");
+
+        let mut saw_turn_started = false;
+        loop {
+            let event = backend
+                .next_event()
+                .expect("poll")
+                .expect("mock turn event before approval");
+            let event = unwrap_app_event(event);
+            match event {
+                AppUiEvent::Snapshot(_) => {
+                    panic!("turn/send must not emit a snapshot that can erase optimistic user text")
+                }
+                AppUiEvent::Protocol(UiNotification::SessionOpened(_)) => {
+                    panic!("turn/send must not reopen the session before approval")
+                }
+                AppUiEvent::Protocol(UiNotification::TurnStarted(event)) => {
+                    assert_eq!(event.session_id, session_id);
+                    assert_eq!(event.turn_id, turn_id);
+                    saw_turn_started = true;
+                }
+                AppUiEvent::Protocol(UiNotification::ApprovalRequested(event)) => {
+                    assert_eq!(event.session_id, session_id);
+                    assert_eq!(event.turn_id, turn_id);
+                    assert!(
+                        saw_turn_started,
+                        "approval must follow turn/started so store state is active first"
+                    );
+                    break;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn mock_approval_event_supports_all_m9_14_kinds() {
+        let session_id = SessionKey("local:test".into());
+        let turn_id = TurnId::new();
+        let cases = [
+            (approval_kinds::COMMAND, "command", "cargo test"),
+            (approval_kinds::DIFF, "diff", "Update the coding loop"),
+            (
+                approval_kinds::FILESYSTEM,
+                "filesystem",
+                "/tmp/ra-mock-approval.txt",
+            ),
+            (approval_kinds::NETWORK, "network", "example.com"),
+            (
+                approval_kinds::SANDBOX_ESCALATION,
+                "sandbox_escalation",
+                "danger-full-access",
+            ),
+        ];
+
+        for (input, expected_kind, expected_detail) in cases {
+            let event = mock_approval_event(session_id.clone(), turn_id.clone(), input);
+            assert_eq!(event.approval_kind.as_deref(), Some(expected_kind));
+            let payload = serde_json::to_string(&event).expect("approval event serializes");
+            assert!(
+                payload.contains(expected_detail),
+                "missing {expected_detail} in {payload}"
+            );
+        }
+    }
+
+    #[test]
+    fn mock_backend_accepts_approval_response_and_diff_preview_requests() {
+        let mut backend = MockAppUiBackend::default();
+        let session_id = MockAppUiBackend::mock_session_key("coding", "m9");
+        let approval_id = ra_core::ui_protocol::ApprovalId::new();
+        let preview_id = PreviewId::new();
+
+        backend
+            .send(AppUiCommand::RespondApproval(ApprovalRespondParams::new(
+                session_id.clone(),
+                approval_id,
+                ApprovalDecision::Deny,
+            )))
+            .expect("mock approval response accepted");
+
+        let warning = backend.next_event().expect("poll").expect("warning");
+        let warning = unwrap_app_event(warning);
+        assert!(matches!(
+            warning,
+            AppUiEvent::Protocol(UiNotification::Warning(_))
+        ));
+
+        backend
+            .send(AppUiCommand::GetDiffPreview(DiffPreviewGetParams {
+                session_id: session_id.clone(),
+                preview_id: preview_id.clone(),
+            }))
+            .expect("mock diff preview accepted");
+
+        let event = backend.next_event().expect("poll").expect("diff preview");
+        let ClientEvent::DiffPreview(result) = event else {
+            panic!("expected diff preview event");
+        };
+        assert_eq!(result.preview.session_id, session_id);
+        assert_eq!(result.preview.preview_id, preview_id);
+        assert_eq!(result.status, "ready");
+        assert_eq!(result.preview.files[0].path, "src/coding_loop.rs");
+    }
+
+    #[test]
+    fn mock_backend_bootstrap_honors_launch_options() {
+        let mut backend = MockAppUiBackend::new(AppUiLaunch {
+            endpoint: Some(AppUiEndpoint::websocket(
+                "wss://example.test/ui-protocol",
+                None,
+            )),
+            session_id: Some(SessionKey("session-123".into())),
+            profile_id: Some("review".into()),
+            readonly: true,
+            ..AppUiLaunch::default()
+        });
+
+        let data = backend.bootstrap().expect("bootstrap");
+
+        assert_eq!(data.selected_session, 0);
+        assert_eq!(
+            data.target.as_deref(),
+            Some("wss://example.test/ui-protocol")
+        );
+        assert!(data.readonly);
+        assert_eq!(data.sessions[0].id.0, "session-123");
+        assert_eq!(data.sessions[0].profile_id.as_deref(), Some("review"));
+    }
+
+    #[test]
+    fn mock_backend_readonly_submit_prompt_emits_warning() {
+        let mut backend = MockAppUiBackend::new(AppUiLaunch {
+            readonly: true,
+            ..AppUiLaunch::default()
+        });
+        let session_id = MockAppUiBackend::mock_session_key("coding", "m9");
+        let turn_id = TurnId::new();
+
+        backend
+            .send(AppUiCommand::SubmitPrompt(TurnStartParams {
+                // Ordinary chat turn: context-scoped tools stay unadvertised.
+                tool_context: None,
+                session_id,
+                turn_id,
+                input: vec![InputItem::Text {
+                    text: "hello".into(),
+                }],
+                media: Vec::new(),
+                topic: None,
+                rewrite_for: None,
+                reasoning_effort: None,
+                live_video: false,
+            }))
+            .expect("send");
+
+        let notification = backend.next_event().expect("poll").expect("warning");
+        let notification = unwrap_app_event(notification);
+        assert!(matches!(
+            notification,
+            AppUiEvent::Protocol(UiNotification::Warning(_))
+        ));
+    }
+}
