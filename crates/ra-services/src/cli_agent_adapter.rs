@@ -618,7 +618,7 @@ printf 'NODE_OPTIONS=%s\n' "${NODE_OPTIONS:-<unset>}"
             .arg("--nocapture")
             .env("NODE_OPTIONS", "--require /tmp/evil")
             .env("PYTHONSTARTUP", "/tmp/evil.py")
-            .env("OCTOS_CLI_AGENT_ENV_TEST_MARKER", "present")
+            .env("RA_CLI_AGENT_ENV_TEST_MARKER", "present")
             .output()
             .unwrap();
 
@@ -635,7 +635,7 @@ printf 'NODE_OPTIONS=%s\n' "${NODE_OPTIONS:-<unset>}"
     #[cfg(unix)]
     #[tokio::test]
     async fn cli_agent_child_inherited_env_inner() {
-        if std::env::var_os("OCTOS_CLI_AGENT_ENV_TEST_MARKER").is_none() {
+        if ra_core::brand::env_compat("CLI_AGENT_ENV_TEST_MARKER").is_none() {
             return;
         }
         // Sanity: the harness really did hand us the injection-class vars,
@@ -653,7 +653,7 @@ printf 'NODE_OPTIONS=%s\n' "${NODE_OPTIONS:-<unset>}"
             r#"#!/bin/sh
 printf 'NODE_OPTIONS=%s\n' "${NODE_OPTIONS:-<unset>}"
 printf 'PYTHONSTARTUP=%s\n' "${PYTHONSTARTUP:-<unset>}"
-printf 'MARKER=%s\n' "${OCTOS_CLI_AGENT_ENV_TEST_MARKER:-<unset>}"
+printf 'MARKER=%s\n' "${RA_CLI_AGENT_ENV_TEST_MARKER:-<unset>}"
 "#,
         );
 

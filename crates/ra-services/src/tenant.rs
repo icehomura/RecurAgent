@@ -1,8 +1,9 @@
 //! Tunnel tenant management for self-hosted Mac Mini deployments.
 //!
 //! Each tenant represents a remote machine that connects to the VPS relay
-//! via frp tunnel. Tenants are stored as individual JSON files in
-//! `~/.ra/tenants/`.
+//! via frp tunnel. Tenants are stored as individual JSON files in the
+//! resolved state home's `tenants/` directory (`~/.ra`; a legacy install that
+//! already has `~/.ra` keeps using it — see [`ra_core::brand::state_home`]).
 
 use std::path::{Path, PathBuf};
 

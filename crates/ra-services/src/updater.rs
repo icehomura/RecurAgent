@@ -468,12 +468,16 @@ impl Updater {
 
     /// Clean skill dirs so bootstrap recreates them on next start.
     fn clean_skills(&self) {
-        let octos_dir = match &self.skills_root {
+        // Production: the brand state home's `skills/` (`RA_HOME`/`OCTOS_HOME`,
+        // else the existing `~/.ra`, else the existing legacy `~/.ra`, else
+        // `~/.ra`). Tests override the *skills dir* itself via
+        // `with_skills_root`.
+        let skills_dir = match &self.skills_root {
             Some(root) => Some(root.clone()),
-            None => dirs::home_dir().map(|h| h.join(".ra").join("skills")),
+            None => ra_core::brand::state_home().map(|state_home| state_home.join("skills")),
         };
 
-        if let Some(skills_dir) = octos_dir {
+        if let Some(skills_dir) = skills_dir {
             if skills_dir.exists() {
                 let skills = [
                     "news",
@@ -501,10 +505,7 @@ impl Updater {
     /// Get the current version string.
     pub fn current_version() -> String {
         let version = env!("CARGO_PKG_VERSION");
-        match (
-            option_env!("OCTOS_GIT_HASH"),
-            option_env!("OCTOS_BUILD_DATE"),
-        ) {
+        match (option_env!("RA_GIT_HASH"), option_env!("RA_BUILD_DATE")) {
             (Some(hash), Some(date)) => format!("{version} ({hash} {date})"),
             _ => version.to_string(),
         }
