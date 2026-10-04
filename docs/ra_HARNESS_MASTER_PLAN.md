@@ -47,12 +47,12 @@ Verification tied to this phase:
 
 Goal:
 
-- make the current `ra-web` persistent-state layer reliable enough for
+- make the current `octos-web` persistent-state layer reliable enough for
   long-running task recovery on the public canary
 
 Rule:
 
-- do not patch `ra-web` unless a concrete post-deploy gate proves a single
+- do not patch `octos-web` unless a concrete post-deploy gate proves a single
   web blocker
 
 ### Phase 3: Freeform Coding And Richer Harness Runtime

@@ -42,7 +42,7 @@ This repository now implements a first event-ledger step:
 - `api_channel` broadcasts:
   - `task_status`
   - `session_result`
-- `ra-web` `task-watcher` opens a dedicated background session stream for watched sessions and applies committed `session_result` events through `MessageStore.appendHistoryMessages()`
+- `octos-web` `task-watcher` opens a dedicated background session stream for watched sessions and applies committed `session_result` events through `MessageStore.appendHistoryMessages()`
 
 ## Phase 2 — Sticky thread_id and committed_seq (M8.10)
 

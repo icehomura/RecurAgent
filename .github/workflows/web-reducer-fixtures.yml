@@ -1,17 +1,17 @@
 name: Web reducer fixtures (Layer 1)
 
 # Layer 1 SPA reducer fixture tests. Runs deterministic UI Protocol v1
-# event fixtures against the ra-web reducer in milliseconds, no LLM,
-# no fleet, no Playwright. See crates/ra-web/src/state/__tests__/README.md
+# event fixtures against the octos-web reducer in milliseconds, no LLM,
+# no fleet, no Playwright. See crates/octos-web/src/state/__tests__/README.md
 # for the contract.
 #
-# Triggers on every PR touching ra-web or the UI protocol surface
+# Triggers on every PR touching octos-web or the UI protocol surface
 # (ra-core/src/ui_protocol.rs). Total runtime target: <1s.
 
 on:
   pull_request:
     paths:
-      - 'crates/ra-web/**'
+      - 'crates/octos-web/**'
       - 'crates/ra-core/src/ui_protocol.rs'
       # Server-side surfaces that emit the events the reducer consumes.
       # If any of these change, replay this layer to catch event-shape
@@ -23,7 +23,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'crates/ra-web/**'
+      - 'crates/octos-web/**'
       - 'crates/ra-core/src/ui_protocol.rs'
       - 'crates/ra-bus/src/api_channel.rs'
       - 'crates/ra-cli/src/api/ui_protocol.rs'
@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 5
     defaults:
       run:
-        working-directory: crates/ra-web
+        working-directory: crates/octos-web
     steps:
       - uses: actions/checkout@v6
 
@@ -46,7 +46,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: crates/ra-web/package-lock.json
+          cache-dependency-path: crates/octos-web/package-lock.json
 
       - name: Install deps
         run: npm ci

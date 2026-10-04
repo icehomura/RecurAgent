@@ -1171,7 +1171,7 @@ jobs:
           npm ci
           npm run build
           cd ..
-          git submodule update --init ra-web
+          git submodule update --init octos-web
           bash scripts/build-web-app.sh
           cargo build --release -p ra-cli --features ${{ env.FEATURES }}
           cargo build --release -p ra-sandbox
@@ -1211,7 +1211,7 @@ jobs:
           npm ci
           npm run build
           cd ..
-          git submodule update --init ra-web
+          git submodule update --init octos-web
           bash scripts/build-web-app.sh
           cargo build --release -p ra-cli --features ${{ env.FEATURES }}
           cargo build --release -p ra-sandbox
@@ -1253,7 +1253,7 @@ jobs:
           npm ci
           npm run build
           cd ..
-          git submodule update --init ra-web
+          git submodule update --init octos-web
           bash scripts/build-web-app.sh
           cargo build --release -p ra-cli --features ${{ env.FEATURES }}
           cargo build --release -p ra-sandbox
@@ -1295,7 +1295,7 @@ jobs:
           npm ci
           npm run build
           cd ..
-          git submodule update --init ra-web
+          git submodule update --init octos-web
           bash scripts/build-web-app.sh
           cargo build --release -p ra-cli --features ${{ env.FEATURES }}
           cargo build --release -p ra-sandbox

@@ -1530,7 +1530,7 @@ export LARK_FROM_ADDRESS="your-feishu-email@company.com"
 **前置条件：** 需要先为该 profile 配置好桥接（设置 → 智能家居）
 **上下文触发：** 当对话提到"智能家居"、"设备"、"灯"、"空调"、"开灯"、"关灯"、"窗帘"等关键词时激活
 
-通过当前 profile 配置的桥接（如 Home Assistant）列出并控制智能家居设备（灯具、空调、窗帘、音箱等）。直接从 profile 读取桥接 URL 和 token —— 不经过正在运行的 gateway 转发。摄像头视频串流仍然是 ra-web 中面向人类、仅通过 WebSocket 提供的功能，不对 agent 开放。
+通过当前 profile 配置的桥接（如 Home Assistant）列出并控制智能家居设备（灯具、空调、窗帘、音箱等）。直接从 profile 读取桥接 URL 和 token —— 不经过正在运行的 gateway 转发。摄像头视频串流仍然是 octos-web 中面向人类、仅通过 WebSocket 提供的功能，不对 agent 开放。
 
 #### smart_home_list_devices 参数
 

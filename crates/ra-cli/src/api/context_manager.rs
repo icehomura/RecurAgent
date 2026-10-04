@@ -2557,7 +2557,7 @@ impl ContextManager {
                 // intentionally still carried on the wire / session JSONL /
                 // displayed bubble, which the voice frontend depends on (it
                 // renders the "generating" state from the marker and strips it
-                // for display — see ra-web `use-voice-conversation.ts`); the
+                // for display — see octos-web `use-voice-conversation.ts`); the
                 // ContextManager is model-only, so cleaning here never touches
                 // those surfaces. No-op for a reply without a trailing marker.
                 let assistant_content = strip_trailing_visual_marker(&message.content);

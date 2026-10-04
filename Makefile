@@ -21,8 +21,8 @@ serve: ## Start the local API server (default: password-free local login).
 dashboard-build: ## Build the embedded /admin/ dashboard.
 	./scripts/build-dashboard.sh
 
-web-build: ## Initialize ra-web and build the embedded /app/ client.
-	git submodule update --init ra-web
+web-build: ## Initialize octos-web and build the embedded /app/ client.
+	git submodule update --init octos-web
 	./scripts/build-web-app.sh
 
 app-build: dashboard-build web-build ## Build all embedded browser assets.

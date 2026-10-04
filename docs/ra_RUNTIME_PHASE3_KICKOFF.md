@@ -6,7 +6,7 @@ It is the execution plan for the still-open issue set after the shipped canary
 release slice on:
 
 - `ra` branch `phase3/integrator`
-- `ra-web` branch `phase3/web-release`
+- `octos-web` branch `phase3/web-release`
 
 Use this document together with:
 
@@ -35,7 +35,7 @@ Out of scope:
 The following slices are already landed in the current Phase 3 release branch:
 
 - contract-backed artifact truth for contract-owned background slides/site runs
-- durable `ra-web` reload recovery for long-running tasks
+- durable `octos-web` reload recovery for long-running tasks
 - tighter shell retry bounds and two live coding hard-case proofs
 - operator summary source provenance
 
@@ -236,7 +236,7 @@ describes is actually true.
 - integration branch: `phase3/integrator`
 - per-lane branches should fork from the current integration head
 
-`ra-web`:
+`octos-web`:
 
 - integration branch: `phase3/web-release`
 - per-lane branches should fork from the current integration head
@@ -385,7 +385,7 @@ Outputs:
 
 Role:
 
-- `ra-web` persistence and operator UI consumer lane
+- `octos-web` persistence and operator UI consumer lane
 
 Responsibilities:
 

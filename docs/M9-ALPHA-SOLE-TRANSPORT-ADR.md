@@ -11,9 +11,9 @@ The chat surface ships with two parallel transports for assistant
 turns:
 
 1. Legacy SSE foreground path (`/api/chat`, `/api/sessions/*/stream`),
-   ingested in `ra-web` by `src/runtime/sse-bridge.ts`.
+   ingested in `octos-web` by `src/runtime/sse-bridge.ts`.
 2. M9 UI Protocol v1 WebSocket (`/api/ui-protocol/ws`), ingested in
-   `ra-web` by `src/runtime/ui-protocol-bridge.ts` +
+   `octos-web` by `src/runtime/ui-protocol-bridge.ts` +
    `ui-protocol-event-router.ts`.
 
 Both deliver assistant streaming, tool_progress, and lifecycle events
@@ -31,7 +31,7 @@ lives:
 - `2026-05-09` phantom-bubble bug — multi-iteration agent loops emit
   duplicate `assistant`-role `message/persisted` events; the second
   arrived empty under the M10 metadata-only wire shape and rendered
-  as a phantom timestamp-only bubble. Fix shipped as PR `ra-web#92`
+  as a phantom timestamp-only bubble. Fix shipped as PR `octos-web#92`
   but is a defensive guard, not the root.
 - `2026-05-09` base_domain WS misroute — old fleet binary on
   mini2/mini3 omitted `/api/status.base_domain`; web bundle
@@ -62,7 +62,7 @@ chat lifecycle. Browser client never calls it.
 | M9-α-2 | #(open) | Migrate background `tool_progress` events from SSE to WS UI Protocol | Runtime worker | Soak: deep_research delivers progress over WS only; no SSE bytes on the wire |
 | M9-α-3 | #(open) | Migrate session lifecycle events (open/close/title/result) from SSE to WS | Runtime worker | Soak: full session sees no SSE frames |
 | M9-α-4 | #(open) | Migrate status / heartbeat / progress-gate events to WS | Runtime worker | Heartbeat + progress events go through one WS stream |
-| M9-α-5 | #(open) | Delete `ra-web` SSE bridge (`sse-bridge.ts`, `task-watcher.ts` SSE paths, `runtime-provider.tsx` SSE wiring) | Web worker | `git grep EventSource` returns 0; `sse-bridge` modules deleted |
+| M9-α-5 | #(open) | Delete `octos-web` SSE bridge (`sse-bridge.ts`, `task-watcher.ts` SSE paths, `runtime-provider.tsx` SSE wiring) | Web worker | `git grep EventSource` returns 0; `sse-bridge` modules deleted |
 | M9-α-6 | #(open) | Delete server SSE routes + handlers (anything emitting `text/event-stream`) | Server worker | `git grep text/event-stream` returns 0; route table has no SSE |
 | M9-α-7 | #(open) | Update e2e harness to drop SSE-specific selectors / waits (`isSpawnAckOnly` SSE chrome, etc.) | E2E worker | Soak full pass; no `EventSource` polyfill needed in playwright |
 | M9-α-8 | #(open) | Fleet redeploy: build + deploy WS-only binary to mini1/2/3/5 (mini4 separate) | Deploy worker | All minis serve `/api/status` + `/api/ui-protocol/ws`; SSE 404 |
@@ -98,7 +98,7 @@ After all M9-α fixes land:
 
 1. `git grep -E "EventSource|text/event-stream|/api/sessions/.*stream"`
    in both repos returns ZERO non-test results.
-2. `ra-web` ships exactly one ingest module (`ui-protocol-bridge.ts`)
+2. `octos-web` ships exactly one ingest module (`ui-protocol-bridge.ts`)
    and one event router (`ui-protocol-event-router.ts`).
 3. The full 9-scenario soak gate (overflow-stress + thread-interleave +
    marathon-thirty-messages) passes 9/9 on mini1, mini2, mini3 with

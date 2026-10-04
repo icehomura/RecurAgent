@@ -23,7 +23,7 @@
 //
 // All wire strings; the projection treats them as opaque. They mirror
 // the Rust newtypes in `ra-core` but are NOT the same as the legacy
-// fixture-types in `crates/ra-web/src/state/__tests__/lib/fixture-types.ts`,
+// fixture-types in `crates/octos-web/src/state/__tests__/lib/fixture-types.ts`,
 // which carry `turn_id`. Identity in M9-γ collapses to `seq` — there
 // is no `turn_id` on the envelope.
 

@@ -3064,7 +3064,7 @@ Field contract:
 
 Rust source: [`Envelope`](../crates/ra-core/src/ui_protocol.rs)
 in `ra-core::ui_protocol`. TS source: `Envelope` in
-[`crates/ra-web/src/runtime/ui-protocol-types.ts`](../crates/ra-web/src/runtime/ui-protocol-types.ts).
+[`crates/octos-web/src/runtime/ui-protocol-types.ts`](../crates/octos-web/src/runtime/ui-protocol-types.ts).
 
 ### 14.2 Payload (sealed tagged union)
 
@@ -3376,7 +3376,7 @@ time from initial provider attempt to failover decision.
 
 ### 15.3 `queue/state` (notification — client-emitted today)
 
-Pending-queue snapshot. The queue is client-side (`ra-web`
+Pending-queue snapshot. The queue is client-side (`octos-web`
 `runtime/ui-protocol-send.ts`); the server never emits this variant.
 The wire shape is defined here so a future server-side queue (or a TUI
 client) can publish into the same DOM event channel:

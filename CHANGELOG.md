@@ -5,7 +5,7 @@ All notable changes to ra will be documented in this file.
 
 ### Features
 
-- Smart Home control — list and control smart-home devices (lights, thermostats, curtains, etc.) via a per-profile bridge (e.g. Home Assistant), through both the UI Protocol (`smart_home/*` WS methods, backing ra-web's Smart Home panel) and a new bundled `smart-home` agent skill (`smart_home_list_devices`, `smart_home_control_device`). Camera video streaming stays a human-facing, WebSocket-only feature and is not exposed to the agent.
+- Smart Home control — list and control smart-home devices (lights, thermostats, curtains, etc.) via a per-profile bridge (e.g. Home Assistant), through both the UI Protocol (`smart_home/*` WS methods, backing octos-web's Smart Home panel) and a new bundled `smart-home` agent skill (`smart_home_list_devices`, `smart_home_control_device`). Camera video streaming stays a human-facing, WebSocket-only feature and is not exposed to the agent.
 
 ### Changed
 

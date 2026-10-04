@@ -11369,7 +11369,7 @@ mod tests {
             },
             crate::model::SessionChipView {
                 session_id: ra_core::SessionKey("local:b".into()),
-                title: "ra-web".into(),
+                title: "octos-web".into(),
                 focused: false,
                 live: true,
                 unread: 3,

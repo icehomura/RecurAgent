@@ -43,7 +43,7 @@ Primary surfaces:
 - `crates/ra-cli/src/session_actor.rs`
 - `crates/ra-agent/src/tools/spawn.rs`
 - `crates/ra-agent/src/task_supervisor.rs`
-- `crates/ra-web/src/runtime/*`
+- `crates/octos-web/src/runtime/*`
 
 Must produce:
 - per-session and per-child-session lifecycle events
@@ -125,7 +125,7 @@ Primary surfaces:
 - `crates/ra-agent/src/workspace_policy.rs`
 - `crates/ra-agent/src/behaviour.rs`
 - `e2e/*`
-- `~/home/ra-web/tests/*`
+- `~/home/octos-web/tests/*`
 
 Must produce:
 - broader artifact truth for multi-file and mixed-media outputs

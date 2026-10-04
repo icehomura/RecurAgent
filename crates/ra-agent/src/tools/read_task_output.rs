@@ -747,7 +747,7 @@ mod tests {
         // NO router.append — mirrors a spawn child.
         supervisor.record_final_output(
             &task_id,
-            "Status: SUCCESS\n\nREVIEW 1: ra-web\nfinding: token in localStorage\n",
+            "Status: SUCCESS\n\nREVIEW 1: octos-web\nfinding: token in localStorage\n",
         );
 
         let head = tool

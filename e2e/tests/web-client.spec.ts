@@ -246,7 +246,7 @@ test('session persists across requests', async ({ request, baseURL }) => {
 test.fixme('file delivery is visible via WS or committed session result', async ({ request, baseURL }) => {
   test.slow();
   const sid = `test-file-${Date.now()}`;
-  const fileDir = `ra-web-file-${Date.now()}`;
+  const fileDir = `octos-web-file-${Date.now()}`;
   const filePath = `./${fileDir}/octos_e2e_test.txt`;
 
   const { events, doneEvent } = await chatViaWs(

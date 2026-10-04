@@ -91,7 +91,7 @@ jobs:
           npm ci
           npm run build
           cd ..
-          git submodule update --init ra-web
+          git submodule update --init octos-web
           bash scripts/build-web-app.sh
           bash scripts/build-swarm-app.sh
 
@@ -151,7 +151,7 @@ jobs:
           npm ci
           npm run build
           cd ..
-          git submodule update --init ra-web
+          git submodule update --init octos-web
           bash scripts/build-web-app.sh
           bash scripts/build-swarm-app.sh
 
@@ -211,7 +211,7 @@ jobs:
           npm ci
           npm run build
           cd ..
-          git submodule update --init ra-web
+          git submodule update --init octos-web
           bash scripts/build-web-app.sh
           bash scripts/build-swarm-app.sh
 
@@ -273,7 +273,7 @@ jobs:
           npm ci
           npm run build
           cd ..
-          git submodule update --init ra-web
+          git submodule update --init octos-web
           bash scripts/build-web-app.sh
           bash scripts/build-swarm-app.sh
 

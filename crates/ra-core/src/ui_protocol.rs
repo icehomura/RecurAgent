@@ -183,7 +183,7 @@ pub const UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2: &str = "projection.envelop
 ///
 /// REST endpoints stay live for clients that do not negotiate this
 /// feature; D-1 is additive only. Phase D-5 retires the REST routes
-/// once `ra-web` has migrated (tracked separately).
+/// once `octos-web` has migrated (tracked separately).
 pub const UI_PROTOCOL_FEATURE_AUXILIARY_REST_TO_WS_V1: &str = "auxiliary.rest_to_ws.v1";
 
 /// Required feature flag for UPCR-2026-021 M15 autonomy inspection/control.
@@ -1390,7 +1390,7 @@ pub mod methods {
     pub const PEER_INPUT: &str = "peer/input";
 
     // ---- Smart-home bridge integration ----
-    // Device control/state moved server-side from ra-web's client-only
+    // Device control/state moved server-side from octos-web's client-only
     // widget so bridge credentials never reach the browser. Camera video
     // stays a direct browser-to-bridge stream; these methods only return
     // the playback URL. All five are capability-gated on
@@ -4116,7 +4116,7 @@ pub struct AttachmentOwnerV2 {
 /// This deliberately mirrors [`Payload`] as a NEW type rather than extending
 /// it: `projection.envelope.v1` remains frozen. The wire stays
 /// `{ "type": "…", "data": { … } }`, which is the flattened boundary
-/// shape accepted by the Stage-0 ra-web parser.
+/// shape accepted by the Stage-0 octos-web parser.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum PayloadV2 {
@@ -6648,7 +6648,7 @@ pub struct RouterFailoverEvent {
 /// is empty (after the in-flight turn lands).
 ///
 /// **Server emission status:** the queue itself is client-side today
-/// (`ra-web/src/runtime/ui-protocol-send.ts` per-session FIFO). The
+/// (`octos-web/src/runtime/ui-protocol-send.ts` per-session FIFO). The
 /// server never emits this variant — the web bridge manufactures it
 /// locally using the existing DOM event pattern so other clients can
 /// observe queue state uniformly. The variant is defined here so the
@@ -7190,7 +7190,7 @@ impl UiNotification {
             // on `session_id`; a topic-scoped pane routes on `topic`.
             //
             // The flatten keeps the bare Envelope keys at the TOP level so
-            // an older/tolerant client (e.g. the ra-web bridge) that
+            // an older/tolerant client (e.g. the octos-web bridge) that
             // reads `thread_id`/`seq`/`payload` top-level and ignores
             // unknown keys decodes it unchanged. The matching decoder in
             // `from_method_and_params` accepts an OLD frame lacking

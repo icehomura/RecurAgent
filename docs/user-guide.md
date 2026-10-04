@@ -94,9 +94,9 @@ If you're running behind a reverse proxy (e.g., Caddy or Nginx), configure it to
 
 Deployment behavior depends on `config.mode`:
 
-- `local` — Standalone machine. `/` redirects to `/app/` (the ra-web app); when the web bundle isn't embedded it falls back to `/admin/`.
+- `local` — Standalone machine. `/` redirects to `/app/` (the octos-web app); when the web bundle isn't embedded it falls back to `/admin/`.
 - `tenant` — Default end-user machine setup. Direct installs land on `/app/` the same way; managed registration setup can also configure the machine's public tunnel. `/admin/` remains the admin dashboard.
-- `cloud` — Advanced relay-host setup. `/` serves the landing page, `/app/` serves the ra-web app, and `/admin/` remains the admin dashboard.
+- `cloud` — Advanced relay-host setup. `/` serves the landing page, `/app/` serves the octos-web app, and `/admin/` remains the admin dashboard.
 
 `~/.ra/config.json` is the file that `ra serve` reads at startup. Tenant and local installs create it through the normal installers; host installs can now bootstrap it with `scripts/cloud-host-deploy.sh`, which writes `mode: "cloud"` plus the relay settings used by the landing page and frps plugin.
 
@@ -1634,7 +1634,7 @@ WebSocket bridge for WeChat personal accounts. Connects to the WeChat client via
 **Requires:** A bridge configured for the profile first (Settings → Smart Home)
 **Context-triggered:** Activated when conversation mentions "smart home", "device", "light", "thermostat", "智能家居", "开灯", "关灯", "空调", "窗帘"
 
-Lists and controls smart-home devices (lights, thermostats, curtains, speakers, etc.) through the bridge configured for the active profile (e.g. Home Assistant). Reads the bridge URL and token directly from the profile — does not proxy through the running gateway. Camera video streaming stays a human-facing, WebSocket-only feature in ra-web and is not exposed to the agent.
+Lists and controls smart-home devices (lights, thermostats, curtains, speakers, etc.) through the bridge configured for the active profile (e.g. Home Assistant). Reads the bridge URL and token directly from the profile — does not proxy through the running gateway. Camera video streaming stays a human-facing, WebSocket-only feature in octos-web and is not exposed to the agent.
 
 #### smart_home_list_devices Parameters
 

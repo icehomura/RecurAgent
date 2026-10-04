@@ -97,5 +97,5 @@ and `turn/completed`, so the `projection.envelope.v1` cutover (UPCR-2026-014
   `crates/ra-core/src/ui_protocol.rs`.
 - UPCR-2026-024 (voice rich-output visual lifecycle) — the in-band-marker +
   typed-event pattern this change mirrors.
-- Frontend: ra-web `feat/voice-exit-intent` (`voice/exit` → `crew:voice_exit`
+- Frontend: octos-web `feat/voice-exit-intent` (`voice/exit` → `crew:voice_exit`
   DOM event → voice hook navigates home after audio drains).

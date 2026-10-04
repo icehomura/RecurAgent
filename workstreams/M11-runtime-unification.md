@@ -404,7 +404,7 @@ Blocks: M11-H.
 
 ### M11-G: Coding-agent multi-session e2e
 
-Repository: `ra` + `ra-web` (if needed for client driver)
+Repository: `ra` + `octos-web` (if needed for client driver)
 
 Owns:
 

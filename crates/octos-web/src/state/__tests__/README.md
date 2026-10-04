@@ -1,6 +1,6 @@
 # Layer 1: SPA reducer fixture tests
 
-This directory is the **Layer 1 testing pyramid** for ra-web's SPA
+This directory is the **Layer 1 testing pyramid** for octos-web's SPA
 reducer. It feeds canned UI Protocol v1 SSE event fixtures into the
 reducer and asserts thread-graph correctness — in **milliseconds, with no
 LLM, no fleet, no Playwright**.
@@ -75,7 +75,7 @@ __tests__/
 
 ## How to run
 
-From `crates/ra-web/`:
+From `crates/octos-web/`:
 
 ```bash
 npm install
@@ -158,7 +158,7 @@ deliberately mirrors that JSON format, so the import is mechanical.
 ## CI
 
 `.github/workflows/web-reducer-fixtures.yml` runs on every PR touching
-`crates/ra-web/` or `crates/ra-core/src/ui_protocol.rs`. Total
+`crates/octos-web/` or `crates/ra-core/src/ui_protocol.rs`. Total
 runtime <1s. No flake budget — these are deterministic.
 
 ## Cross-references

@@ -129,4 +129,4 @@ assistant deltas on voice turns rather than having the bare ephemeral
   `crates/ra-core/src/ui_protocol.rs`.
 - UPCR-2026-014 (projection envelope) — the cutover this lifecycle is designed
   to survive.
-- #1476 (live-camera context hint), frontend ra-web #232 / #238 / #239.
+- #1476 (live-camera context hint), frontend octos-web #232 / #238 / #239.

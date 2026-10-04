@@ -247,7 +247,7 @@ pub struct ProfileConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub apps: Option<AppsConfig>,
     /// Home dashboard UI configuration. The backend stores this as opaque JSON
-    /// because Home is a web-owned surface; typed validation lives in ra-web.
+    /// because Home is a web-owned surface; typed validation lives in octos-web.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub home: Option<serde_json::Value>,
     /// Robotics runtime configuration (heartbeat + sensor context injection).

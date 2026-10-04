@@ -15,7 +15,7 @@
 //! `POST {base}/devices/{id}` form-encoded, Bearer auth, same
 //! token/token_env resolution precedence). Camera streaming is deliberately
 //! NOT exposed here: an LLM tool call can't consume a live video stream, so
-//! that stays a human-driven, WS-only feature in ra-web
+//! that stays a human-driven, WS-only feature in octos-web
 //! (`smart_home/camera.*`).
 
 use std::collections::HashMap;

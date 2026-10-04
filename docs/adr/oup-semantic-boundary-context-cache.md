@@ -3367,7 +3367,7 @@ real-provider30+4 are still running at this checkpoint. The latter started at
 18:32:54UTC, is local-only, and uses an isolated0700 home/0600 copied profile.
 
 The separately read-only pinned-web check establishes that
-`ra-web@1e985386a4dff3dddcee409157f6d36fe2a462c8` uses WS/OUP rather than the
+`octos-web@1e985386a4dff3dddcee409157f6d36fe2a462c8` uses WS/OUP rather than the
 legacy SSE completion bridge. It does not establish deployed versions or external
 old SSE consumers. Other explicit limits remain: retained-ledger hydrate reads
 are not constant-time; ephemeral explicit tool writes share profile state; FFI

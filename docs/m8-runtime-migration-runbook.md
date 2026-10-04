@@ -59,7 +59,7 @@ Each track's PR follows the same merge-and-deploy template:
 
 **W1 (pipeline host + frontend cards/cost)**
 
-- Merging this changes both backend and `ra-web`. The web bundle is
+- Merging this changes both backend and `octos-web`. The web bundle is
   served from `crates/ra-cli/static/admin/`; ensure the new bundle is
   in the release build (cargo wraps it via `build.rs`).
 - Smoke: trigger `run_pipeline` from the chat UI, verify NodeCards appear

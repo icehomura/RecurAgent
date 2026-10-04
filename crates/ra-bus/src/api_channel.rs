@@ -1,7 +1,7 @@
 //! API channel — HTTP endpoint for web clients.
 //!
 //! Provides a `POST /chat` endpoint that accepts messages and returns SSE responses.
-//! Used by ra-web to route through the gateway for adaptive routing, queue modes,
+//! Used by octos-web to route through the gateway for adaptive routing, queue modes,
 //! multi-provider failover, etc.
 
 use std::collections::HashMap;

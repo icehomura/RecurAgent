@@ -252,7 +252,7 @@ out-of-band; they are not committed to the repo.
 | mini3 | `<mini3-ip>` | `dspfac.ra.ominix.io` | **USER agent** at `~/Library/LaunchAgents/io.ominix.ra-serve.plist` on port 50080 — root daemon `io.ra.serve` is in pre-existing crash-loop on port 8080, leave it alone | yellow | ✅ safe |
 | mini4 | `<mini4-ip>` | `dspfac.river.ominix.io` | root LaunchDaemon | blue (intentional baseline / rollback target) | ✅ safe |
 | mini5 | `<mini5-ip>` | `dspfac.ocean.ominix.io` | root LaunchDaemon | yellow | ❌ **DO NOT SOAK** — reserved for active sprint work; active deploys will break your run |
-| mini6 | `<mini6-ip>` | (varies — check `~/ra-web` symlink target) | check both root + user daemon | (newer host, profile TBD) | check with maintainer |
+| mini6 | `<mini6-ip>` | (varies — check `~/octos-web` symlink target) | check both root + user daemon | (newer host, profile TBD) | check with maintainer |
 
 **Excluded — do NOT touch**: `cloud@<excluded-host-ip>` (`macmini-31.ra.bot`).
 Earlier deploy scripts had it as "mini4"; the river.ominix.io box
@@ -300,9 +300,9 @@ daemon itself.
 
 ### 8.5 Web bundle
 
-ra-web has only ONE release branch (`release/coding-blue`). Same web
-bundle deploys to all minis at `~/ra-web/`. **mini4 has no
-`~/ra-web/`** — its admin/chat assets are embedded in the ra
+octos-web has only ONE release branch (`release/coding-blue`). Same web
+bundle deploys to all minis at `~/octos-web/`. **mini4 has no
+`~/octos-web/`** — its admin/chat assets are embedded in the ra
 binary directly (this is by design — `./scripts/build-dashboard.sh`
 embeds them; same step you ran in §3).
 

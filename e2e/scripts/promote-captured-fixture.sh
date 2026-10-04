@@ -11,7 +11,7 @@
 #       overflow-stress-thread-binding
 #
 # Result:
-#   crates/ra-web/src/state/__tests__/fixtures/captured/overflow-stress-thread-binding.fixture.json
+#   crates/octos-web/src/state/__tests__/fixtures/captured/overflow-stress-thread-binding.fixture.json
 #
 # Idempotency:
 #   - The default REFUSES to overwrite an existing target. This prevents
@@ -35,7 +35,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-TARGET_DIR="$REPO_ROOT/crates/ra-web/src/state/__tests__/fixtures/captured"
+TARGET_DIR="$REPO_ROOT/crates/octos-web/src/state/__tests__/fixtures/captured"
 
 DRY_RUN=0
 FORCE=0

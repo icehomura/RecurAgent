@@ -15,7 +15,7 @@
 //! delivered as a `.html` file artifact. Any client that renders it **MUST**
 //! isolate it in a sandboxed iframe with scripts but **no same-origin access**
 //! — i.e. `srcdoc` + `sandbox="allow-scripts"` (NOT `allow-same-origin`), as the
-//! ra-web `VisualPanel` does. Never inject it into the host DOM or render it
+//! octos-web `VisualPanel` does. Never inject it into the host DOM or render it
 //! same-origin: that would expose the host origin's cookies/storage/DOM to the
 //! model output (XSS / credential theft). The host `/api/files` endpoint does
 //! not serve `.html` as `text/html`, so direct navigation can't execute it

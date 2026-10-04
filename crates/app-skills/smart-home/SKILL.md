@@ -10,7 +10,7 @@ always: false
 
 List and control smart-home devices through the bridge configured on this
 profile (e.g. Home Assistant or a compatible gateway). Camera video is not
-available through this skill — it is a UI-only feature in the ra-web
+available through this skill — it is a UI-only feature in the octos-web
 dashboard.
 
 Requires a bridge to be configured for the profile first (dashboard:

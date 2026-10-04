@@ -27,8 +27,8 @@ const BACKGROUND_DEADLINE: std::time::Duration = std::time::Duration::from_secs(
 
 #[test]
 fn frame_subagent_task_leads_with_identity_and_directive() {
-    let out = frame_subagent_task("review-ra-web", "Clone and review the repo.");
-    assert!(out.starts_with("You are a delegated SUB-AGENT named \"review-ra-web\""));
+    let out = frame_subagent_task("review-octos-web", "Clone and review the repo.");
+    assert!(out.starts_with("You are a delegated SUB-AGENT named \"review-octos-web\""));
     assert!(out.contains("do NOT respond to it"));
     // The real task is present and clearly delimited AFTER the framing.
     let task_pos = out.find("=== YOUR TASK ===").expect("task delimiter");
@@ -45,7 +45,7 @@ fn role_task_warning_fires_for_readonly_role_with_clone_and_write_task() {
     ];
     let note = role_task_capability_warning(
         &reviewer,
-        "Clone the repo and write a review to ra-web-review.md",
+        "Clone the repo and write a review to octos-web-review.md",
     )
     .expect("mismatch must warn");
     assert!(
@@ -69,7 +69,7 @@ fn role_task_warning_silent_when_tools_are_sufficient() {
     assert!(
         role_task_capability_warning(
             &equipped,
-            "Clone the repo and write a review to ra-web-review.md"
+            "Clone the repo and write a review to octos-web-review.md"
         )
         .is_none()
     );
@@ -91,8 +91,8 @@ fn role_task_warning_silent_for_unconstrained_and_for_pure_read_task() {
 fn derive_deliverable_filename_matches_the_declared_glob() {
     // The single-* review glob → slug from label's first word.
     assert_eq!(
-        derive_deliverable_filename("*-review.md", "ra-web review"),
-        "ra-web-review.md"
+        derive_deliverable_filename("*-review.md", "octos-web review"),
+        "octos-web-review.md"
     );
     assert_eq!(
         derive_deliverable_filename("*.md", "ra-one review"),
@@ -104,8 +104,8 @@ fn derive_deliverable_filename_matches_the_declared_glob() {
         "report.md"
     );
     // Odd/multi-* glob → sensible fallback that matches *-review.md / *.md.
-    let fb = derive_deliverable_filename("**/*.md", "ra-web review");
-    assert_eq!(fb, "ra-web-review.md");
+    let fb = derive_deliverable_filename("**/*.md", "octos-web review");
+    assert_eq!(fb, "octos-web-review.md");
     // Non-alnum label sanitized; empty → output.
     assert_eq!(
         derive_deliverable_filename("*-review.md", "  "),
@@ -170,8 +170,8 @@ async fn background_deliverable_auto_materializes_inline_final_output() {
 
     let result = tool
         .execute(&serde_json::json!({
-            "task": "review the repo and write ra-web-review.md",
-            "label": "ra-web review",
+            "task": "review the repo and write octos-web-review.md",
+            "label": "octos-web review",
             "mode": "background",
             "allowed_tools": ["read_file"],
             "deliverable": "*-review.md"
@@ -209,7 +209,7 @@ async fn background_deliverable_auto_materializes_inline_final_output() {
         "inline review must be auto-materialized into a deliverable file: {:?}",
         task.output_files
     );
-    assert!(task.output_files[0].ends_with("ra-web-review.md"));
+    assert!(task.output_files[0].ends_with("octos-web-review.md"));
     let written = std::fs::read_to_string(&task.output_files[0]).unwrap();
     assert!(written.contains("# Code Review"));
 }

@@ -5431,7 +5431,7 @@ async fn persist_assistant_with_media(
 /// merged them into a "phantom" empty assistant bubble that briefly
 /// flickered into the chat pane (the 2026-05-09 phantom-bubble bug).
 ///
-/// The defensive web-side fix in ra-web #92 hid those bubbles. The
+/// The defensive web-side fix in octos-web #92 hid those bubbles. The
 /// authoritative server-side fix is to suppress the v2 assistant-persisted
 /// emit for these intermediate metadata-only assistant rows so the wire
 /// surface emits exactly one canonical assistant-persisted envelope per turn for the final

@@ -309,8 +309,8 @@ fn site_preset_from_topic(session_topic: &str) -> Option<SitePreset> {
             site_name: "React Lab",
             description: "Lean React/Vite shell for prototypes, interface experiments, and lightweight tools.",
             accent: "#be123c",
-            reference: "adora-website",
-            reference_label: "adora-website",
+            reference: "adooctos-website",
+            reference_label: "adooctos-website",
         },
         _ => SitePreset {
             preset_key: "learning",

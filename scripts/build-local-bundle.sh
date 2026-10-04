@@ -95,14 +95,14 @@ else
     [ "$INSTALL_DEPS" = true ] && DASHBOARD_ARGS+=(--install-deps)
     ./scripts/build-dashboard.sh "${DASHBOARD_ARGS[@]}"
 
-    # ra-web SPA (embedded same-origin at /app — also baked in by rust_embed,
+    # octos-web SPA (embedded same-origin at /app — also baked in by rust_embed,
     # so it must be built before cargo). Best-effort: skip with a warning if the
     # submodule isn't checked out, so a bundle still builds (the binary serves a
-    # 503 "web_bundle_missing" at /app until ra-web is built).
-    if [ -f ra-web/package.json ] || git submodule update --init ra-web 2>/dev/null; then
+    # 503 "web_bundle_missing" at /app until octos-web is built).
+    if [ -f octos-web/package.json ] || git submodule update --init octos-web 2>/dev/null; then
         bash scripts/build-web-app.sh
     else
-        echo "==> Skipping ra-web build (submodule not available); /app will 503 until built"
+        echo "==> Skipping octos-web build (submodule not available); /app will 503 until built"
     fi
 fi
 

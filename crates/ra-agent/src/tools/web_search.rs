@@ -1802,7 +1802,7 @@ async fn render_and_parse_bing(
     use futures::StreamExt;
 
     let temp_dir = tempfile::Builder::new()
-        .prefix("ra-websearch-cdp-")
+        .prefix("octos-websearch-cdp-")
         .tempdir()
         .wrap_err("failed to create temp dir for Chrome")?;
 

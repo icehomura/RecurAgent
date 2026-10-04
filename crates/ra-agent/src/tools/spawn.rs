@@ -2606,8 +2606,8 @@ const DELIVERABLE_AUTOMATERIALIZE_MIN_BYTES: usize = 400;
 /// glob so [`resolve_deliverable_terminal_files`] then surfaces it.
 ///
 /// - single-`*` glob (`*-review.md`, `*.md`, `report-*.txt`) → replace `*`
-///   with a slug of the label's first word (`ra-web review` → `ra-web`
-///   → `ra-web-review.md`);
+///   with a slug of the label's first word (`octos-web review` → `octos-web`
+///   → `octos-web-review.md`);
 /// - literal filename (no `*`) → use it verbatim;
 /// - anything else → `<slug>-review.md` (matches the common `*-review.md` /
 ///   `*.md` review globs).

@@ -182,7 +182,7 @@ fn should_release_voice_admission_claim_after_start_failure() {
 #[test]
 fn spawn_report_announcement_inlines_small_reports_in_full() {
     let body = "Status: SUCCESS\n\nshort review body";
-    let out = format_spawn_report_announcement("review-ra-web", body, Some("task-1"));
+    let out = format_spawn_report_announcement("review-octos-web", body, Some("task-1"));
     assert!(out.contains(body), "small report must be inlined verbatim");
     assert!(!out.contains("preview truncated"));
 }
@@ -193,7 +193,7 @@ fn spawn_report_announcement_previews_large_reports_with_recovery_pointer() {
     // pointer left the parent no way to recover a child's multi-KB
     // report; it concluded the result "was lost".
     let body = "x".repeat(SPAWN_REPORT_INLINE_CAP_CHARS + 500);
-    let out = format_spawn_report_announcement("review-ra-web", &body, Some("019f6e66-f94c"));
+    let out = format_spawn_report_announcement("review-octos-web", &body, Some("019f6e66-f94c"));
     assert!(out.contains("preview truncated"));
     assert!(
         out.contains("read_task_output(task_handle=\"019f6e66-f94c\")"),

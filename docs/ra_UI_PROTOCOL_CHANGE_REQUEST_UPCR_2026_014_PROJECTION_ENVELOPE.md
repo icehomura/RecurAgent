@@ -232,7 +232,7 @@ Capability feature: `projection.envelope.v1`
 
 ### Client-side
 
-- TS types in `crates/ra-web/src/runtime/ui-protocol-types.ts`
+- TS types in `crates/octos-web/src/runtime/ui-protocol-types.ts`
   mirror the Rust enum bit-for-bit. `tsc --noEmit` keeps them honest.
 - M9-γ-2 will land property tests for the projection function
   (replay determinism: any `seq`-ordered prefix of a turn's envelopes
@@ -246,7 +246,7 @@ Capability feature: `projection.envelope.v1`
 - **γ-1 (this UPCR)**: spec lands; types regenerated for Rust + TS;
   capability flag wired into the known-features registry.
 - **γ-2**: pure-function `projection(envelopes) → ChatViewModel` lands
-  in `ra-web/src/runtime/projection.ts` behind the
+  in `octos-web/src/runtime/projection.ts` behind the
   `chat_projection_v1` flag.
 - **γ-3**: `ThreadStore` cutover — the ten reducer entry points
   collapse to one `ingest(envelope)` dispatcher.
@@ -306,7 +306,7 @@ Each step is gated behind 7-day soak green per ADR.
       `crates/ra-core/src/ui_protocol.rs` with serde
       `tag = "type", content = "data", rename_all = "snake_case"`.
 - [x] TS counterparts land in
-      `crates/ra-web/src/runtime/ui-protocol-types.ts` and pass
+      `crates/octos-web/src/runtime/ui-protocol-types.ts` and pass
       `tsc --noEmit`.
 - [x] Golden round-trip tests in `ra-core::ui_protocol::tests`
       pass (`cargo test -p ra-core`), including coverage for
