@@ -74,11 +74,12 @@ ra-swarm = { path = "crates/ra-swarm" }
 ra-fleet = { path = "crates/ra-fleet" }
 ra-fleet-worker = { path = "crates/ra-fleet-worker" }
 ra-embed-llama = { path = "crates/ra-embed-llama" }
-# codex-rs crates (reused)
-codex-execpolicy = { git = "https://github.com/openai/codex", path = "codex-rs/execpolicy" }
-codex-state = { git = "https://github.com/openai/codex", path = "codex-rs/state" }
-codex-file-search = { git = "https://github.com/openai/codex", path = "codex-rs/file-search" }
-codex-linux-sandbox = { git = "https://github.com/openai/codex", path = "codex-rs/linux-sandbox" }
+# The Codex crates (codex-execpolicy / codex-state / codex-file-search /
+# codex-linux-sandbox) were declared here as git deps of github.com/openai/codex.
+# Nothing referenced them — every use site was commented out "enable when codex
+# builds" — and a git dependency on a foreign repository is exactly what this
+# fork avoids, so the declarations are gone. To bring that integration back,
+# depend on your own hub's path/registry copies from ra-agent and ra-memory.
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"

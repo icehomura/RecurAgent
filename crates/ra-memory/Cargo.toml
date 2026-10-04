@@ -9,7 +9,9 @@ description = "Episodic memory layer for ra, extends codex-state"
 [dependencies]
 regex = { workspace = true }
 ra-core = { workspace = true }
-# codex-state = { workspace = true }  # Enable when codex builds
+# `codex-state` (a git dep of github.com/openai/codex) was disabled here and its
+# workspace declaration is gone with the fork's no-foreign-git policy. This crate
+# keeps its own episodic store (redb) and needs nothing from Codex.
 redb = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }

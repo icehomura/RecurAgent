@@ -12,9 +12,9 @@ ra-bus = { workspace = true }
 ra-memory = { workspace = true }
 ra-llm = { workspace = true }
 ra-plugin = { workspace = true }
-# codex-execpolicy = { workspace = true }  # Enable when codex builds
-# codex-file-search = { workspace = true }
-# codex-linux-sandbox = { workspace = true }
+# The Codex sandbox/file-search crates used to be optional deps here (declared as
+# git deps of github.com/openai/codex and disabled). The workspace declaration is
+# gone with the fork's no-foreign-git policy; re-add your own copies to use them.
 async-trait = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
