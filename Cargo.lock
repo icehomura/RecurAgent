@@ -4323,7 +4323,6 @@ dependencies = [
 [[package]]
 name = "makepad-error-log"
 version = "1.0.0"
-source = "git+https://github.com/OctoSense-org/makepad.git?rev=6e5898fecbe5931c16fb7b1e54357104dd54e825#6e5898fecbe5931c16fb7b1e54357104dd54e825"
 dependencies = [
  "makepad-micro-serde",
 ]
@@ -4331,7 +4330,6 @@ dependencies = [
 [[package]]
 name = "makepad-html"
 version = "1.0.0"
-source = "git+https://github.com/OctoSense-org/makepad.git?rev=6e5898fecbe5931c16fb7b1e54357104dd54e825#6e5898fecbe5931c16fb7b1e54357104dd54e825"
 dependencies = [
  "makepad-live-id",
 ]
@@ -4339,15 +4337,14 @@ dependencies = [
 [[package]]
 name = "makepad-live-id"
 version = "1.0.0"
-source = "git+https://github.com/OctoSense-org/makepad.git?rev=6e5898fecbe5931c16fb7b1e54357104dd54e825#6e5898fecbe5931c16fb7b1e54357104dd54e825"
 dependencies = [
  "makepad-live-id-macros",
+ "serde",
 ]
 
 [[package]]
 name = "makepad-live-id-macros"
 version = "1.0.0"
-source = "git+https://github.com/OctoSense-org/makepad.git?rev=6e5898fecbe5931c16fb7b1e54357104dd54e825#6e5898fecbe5931c16fb7b1e54357104dd54e825"
 dependencies = [
  "makepad-micro-proc-macro",
 ]
@@ -4355,7 +4352,6 @@ dependencies = [
 [[package]]
 name = "makepad-math"
 version = "1.0.0"
-source = "git+https://github.com/OctoSense-org/makepad.git?rev=6e5898fecbe5931c16fb7b1e54357104dd54e825#6e5898fecbe5931c16fb7b1e54357104dd54e825"
 dependencies = [
  "makepad-micro-serde",
 ]
@@ -4363,12 +4359,10 @@ dependencies = [
 [[package]]
 name = "makepad-micro-proc-macro"
 version = "1.0.0"
-source = "git+https://github.com/OctoSense-org/makepad.git?rev=6e5898fecbe5931c16fb7b1e54357104dd54e825#6e5898fecbe5931c16fb7b1e54357104dd54e825"
 
 [[package]]
 name = "makepad-micro-serde"
 version = "1.0.0"
-source = "git+https://github.com/OctoSense-org/makepad.git?rev=6e5898fecbe5931c16fb7b1e54357104dd54e825#6e5898fecbe5931c16fb7b1e54357104dd54e825"
 dependencies = [
  "makepad-live-id",
  "makepad-micro-serde-derive",
@@ -4377,7 +4371,6 @@ dependencies = [
 [[package]]
 name = "makepad-micro-serde-derive"
 version = "1.0.0"
-source = "git+https://github.com/OctoSense-org/makepad.git?rev=6e5898fecbe5931c16fb7b1e54357104dd54e825#6e5898fecbe5931c16fb7b1e54357104dd54e825"
 dependencies = [
  "makepad-micro-proc-macro",
 ]
@@ -4385,12 +4378,10 @@ dependencies = [
 [[package]]
 name = "makepad-regex"
 version = "0.1.0"
-source = "git+https://github.com/OctoSense-org/makepad.git?rev=6e5898fecbe5931c16fb7b1e54357104dd54e825#6e5898fecbe5931c16fb7b1e54357104dd54e825"
 
 [[package]]
 name = "makepad-script"
 version = "1.0.0"
-source = "git+https://github.com/OctoSense-org/makepad.git?rev=6e5898fecbe5931c16fb7b1e54357104dd54e825#6e5898fecbe5931c16fb7b1e54357104dd54e825"
 dependencies = [
  "makepad-error-log",
  "makepad-html",
@@ -4399,13 +4390,12 @@ dependencies = [
  "makepad-regex",
  "makepad-script-derive",
  "makepad-stitch",
- "smallvec 1.15.1 (git+https://github.com/OctoSense-org/makepad.git?rev=6e5898fecbe5931c16fb7b1e54357104dd54e825)",
+ "smallvec 1.15.1",
 ]
 
 [[package]]
 name = "makepad-script-derive"
 version = "1.0.0"
-source = "git+https://github.com/OctoSense-org/makepad.git?rev=6e5898fecbe5931c16fb7b1e54357104dd54e825#6e5898fecbe5931c16fb7b1e54357104dd54e825"
 dependencies = [
  "makepad-micro-proc-macro",
 ]
@@ -4413,7 +4403,6 @@ dependencies = [
 [[package]]
 name = "makepad-stitch"
 version = "0.1.0"
-source = "git+https://github.com/OctoSense-org/makepad.git?rev=6e5898fecbe5931c16fb7b1e54357104dd54e825#6e5898fecbe5931c16fb7b1e54357104dd54e825"
 
 [[package]]
 name = "markup5ever"
@@ -4927,7 +4916,6 @@ dependencies = [
 [[package]]
 name = "octoscript-core"
 version = "0.1.0"
-source = "git+https://github.com/OctoSense-org/Octoscript.git?rev=e152f8bc1fd7dae1ce51993cab1c5fcb0fdc8b23#e152f8bc1fd7dae1ce51993cab1c5fcb0fdc8b23"
 dependencies = [
  "makepad-script",
  "octoscript-ui-l0",
@@ -4937,7 +4925,6 @@ dependencies = [
 [[package]]
 name = "octoscript-ui-l0"
 version = "0.1.0"
-source = "git+https://github.com/OctoSense-org/Octoscript.git?rev=e152f8bc1fd7dae1ce51993cab1c5fcb0fdc8b23#e152f8bc1fd7dae1ce51993cab1c5fcb0fdc8b23"
 dependencies = [
  "blake3",
  "serde_json",
@@ -7494,13 +7481,15 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 [[package]]
 name = "smallvec"
 version = "1.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "smallvec"
 version = "1.15.1"
-source = "git+https://github.com/OctoSense-org/makepad.git?rev=6e5898fecbe5931c16fb7b1e54357104dd54e825#6e5898fecbe5931c16fb7b1e54357104dd54e825"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "smart-home"

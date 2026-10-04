@@ -213,6 +213,12 @@ tsconfig.tsbuildinfo
 /scripts/rename_to_ra.py
 
 # Imported terminal client (tui/). It is its own workspace with its own
-# .gitignore, but the repo-wide `*.md` and `.ra/*` rules above would drop its
+# .gitignore, but the repo-wide `*.md` and `.octos/*` rules above would drop its
 # docs, skills and loop state, so re-include the whole tree here.
 !tui/**
+
+# Vendored third-party sources (upstream code copied in so the build needs no
+# foreign git dependency). Their manifests/provenance/readmes are part of the
+# tree, so the repo-wide `*.md` rule must not drop them.
+!vendor/**
+!tui/vendor/**
