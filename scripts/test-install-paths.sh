@@ -108,26 +108,15 @@ EOF
     chmod +x "$mock_bin/sudo"
 }
 
-# Mock curl so the installer's default download arm (no OCTOS_DOWNLOAD_URL)
-# runs without the internet: GET bodies are served from $MOCK_HTTP_ROOT by
-# URL basename. Only the installer's form is supported: curl -fsSL -o OUT URL.
-# A missing source is a 404: exit non-zero, write no output file.
+# Mock curl so a network fetch fails the test loudly: the default arm
+# (no OCTOS_DOWNLOAD_URL) must install from the auto-detected local bundle
+# in the working directory, never over HTTP.
 create_mock_curl() {
     local mock_bin="$1"
     cat >"$mock_bin/curl" <<'EOF'
 #!/usr/bin/env bash
-out=""
-prev=""
-for arg in "$@"; do
-    [ "$prev" = "-o" ] && out="$arg"
-    prev="$arg"
-done
-src="$MOCK_HTTP_ROOT/$(basename "${@: -1}")"
-if [ ! -f "$src" ]; then
-    exit 22
-fi
-[ -n "$out" ] || exit 2
-cp "$src" "$out"
+echo "curl must not be called by the default install arm: $*" >&2
+exit 99
 EOF
     chmod +x "$mock_bin/curl"
 }
@@ -257,34 +246,34 @@ main() {
     grep -q "checksum verified" "$test_root/crlf.out" \
         || fail "CRLF sidecar was not verified"
 
-    # ── The default download arm: no OCTOS_DOWNLOAD_URL, both the bundle
-    # and its sidecar are fetched over HTTP (mocked) and verified (#2514).
-    local net_dir="$test_root/http-root"
+    # ── The default arm: no OCTOS_DOWNLOAD_URL, so the installer
+    # auto-detects a bundle tarball in the working directory and installs it
+    # (no network, no source build) (#2514).
+    local auto_dir="$test_root/auto-detect"
     DOWNLOAD_BASE=""
-    mkdir -p "$net_dir"
-    create_fake_bundle "$net_dir"
-    export MOCK_HTTP_ROOT="$net_dir"
-    run_installer "$test_root" "$test_root/home-net" \
-        "$test_root/net-bin" "$test_root/net.out" "$mock_bin"
-    [ -x "$test_root/net-bin/ra" ] \
-        || fail "network download arm did not install"
-    grep -q "checksum verified" "$test_root/net.out" \
-        || fail "network download arm did not verify the sidecar"
+    mkdir -p "$auto_dir"
+    create_fake_bundle "$auto_dir"
+    run_installer "$auto_dir" "$test_root/home-auto" \
+        "$test_root/auto-bin" "$test_root/auto.out" "$mock_bin"
+    [ -x "$test_root/auto-bin/ra" ] \
+        || fail "auto-detected bundle did not install"
+    grep -q "bundle: file://" "$test_root/auto.out" \
+        || fail "auto-detected bundle was not used as the install source"
+    grep -q "checksum verified" "$test_root/auto.out" \
+        || fail "auto-detected bundle did not verify the sidecar"
 
-    # A mirror missing the sidecar (404 on <bundle>.sha256) warns and
-    # still installs.
-    local net404_dir="$test_root/http-root-404"
+    # The same arm without a sidecar warns and still installs.
+    local auto_bare_dir="$test_root/auto-detect-bare"
     DOWNLOAD_BASE=""
-    mkdir -p "$net404_dir"
-    create_fake_bundle "$net404_dir"
-    rm -f "$net404_dir"/*.sha256
-    export MOCK_HTTP_ROOT="$net404_dir"
-    run_installer "$test_root" "$test_root/home-net404" \
-        "$test_root/net404-bin" "$test_root/net404.out" "$mock_bin"
-    [ -x "$test_root/net404-bin/ra" ] \
-        || fail "network 404 sidecar aborted the install"
-    grep -q "skipping checksum verification" "$test_root/net404.out" \
-        || fail "network 404 sidecar was not surfaced to the operator"
+    mkdir -p "$auto_bare_dir"
+    create_fake_bundle "$auto_bare_dir"
+    rm -f "$auto_bare_dir"/*.sha256
+    run_installer "$auto_bare_dir" "$test_root/home-auto-bare" \
+        "$test_root/auto-bare-bin" "$test_root/auto-bare.out" "$mock_bin"
+    [ -x "$test_root/auto-bare-bin/ra" ] \
+        || fail "auto-detected bundle without a sidecar aborted the install"
+    grep -q "skipping checksum verification" "$test_root/auto-bare.out" \
+        || fail "missing sidecar was not surfaced to the operator"
 
     echo "install path tests passed"
 }
