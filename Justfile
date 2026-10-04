@@ -3,8 +3,10 @@
 # `build` is a RELEASE build; `build-debug` is the debug one. Both use
 # `--no-default-features --features api,impersonate` because `ra-cli`'s default
 # features include `embed-llama`, which compiles llama.cpp and therefore needs
-# LLVM's libclang (`LIBCLANG_PATH`); the `*-full` recipes use that default set
-# once LLVM is installed.
+# LLVM's libclang (`LIBCLANG_PATH`) plus cmake; the `*-full` recipes use that
+# default set. Install the prerequisites with:
+#     scoop install llvm cmake
+#     setx LIBCLANG_PATH "%USERPROFILE%\scoop\apps\llvm\current\bin"
 
 # `just` cannot find a shell on Windows when Git Bash is not on PATH (its own
 # default is `sh`). Git Bash is the shell this repo is developed and tested with
