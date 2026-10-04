@@ -508,7 +508,7 @@ proxy, the server has to be told to trust its address: set
 `OCTOS_APPUI_ALLOWED_ORIGINS=http://<client host>:<port>` on the server, or
 `appui.allowed_origins` in its config. It trusts only its own address otherwise.
 
-> ra `v2.0.3-rc.12` can print a one-time pairing link with
+> ra `v0.1.0` can print a one-time pairing link with
 > `ra serve --web-url …`; the browser can open it without copying a token.
 
 Both clients can open the **same session**. Pass `--session <id>` here and pick

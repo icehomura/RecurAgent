@@ -5660,7 +5660,7 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "ra-agent"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "base64",
@@ -5724,7 +5724,7 @@ dependencies = [
 
 [[package]]
 name = "ra-bus"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "aes",
  "async-imap",
@@ -5767,7 +5767,7 @@ dependencies = [
 
 [[package]]
 name = "ra-cli"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
  "argon2",
@@ -5854,7 +5854,7 @@ dependencies = [
 
 [[package]]
 name = "ra-core"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "dirs",
@@ -5870,7 +5870,7 @@ dependencies = [
 
 [[package]]
 name = "ra-diagnostics"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "eyre",
  "ra-core",
@@ -5882,14 +5882,14 @@ dependencies = [
 
 [[package]]
 name = "ra-dora-mcp"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "ra-agent",
 ]
 
 [[package]]
 name = "ra-embed-llama"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "eyre",
@@ -5904,7 +5904,7 @@ dependencies = [
 
 [[package]]
 name = "ra-ffi"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -5925,7 +5925,7 @@ dependencies = [
 
 [[package]]
 name = "ra-fleet"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "eyre",
  "ra-core",
@@ -5941,7 +5941,7 @@ dependencies = [
 
 [[package]]
 name = "ra-fleet-worker"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "eyre",
@@ -5958,7 +5958,7 @@ dependencies = [
 
 [[package]]
 name = "ra-llm"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "base64",
@@ -5985,7 +5985,7 @@ dependencies = [
 
 [[package]]
 name = "ra-memory"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "bincode",
  "chrono",
@@ -6005,7 +6005,7 @@ dependencies = [
 
 [[package]]
 name = "ra-pipeline"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -6029,7 +6029,7 @@ dependencies = [
 
 [[package]]
 name = "ra-plugin"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "eyre",
  "metrics",
@@ -6045,7 +6045,7 @@ dependencies = [
 
 [[package]]
 name = "ra-pyo3"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "pyo3",
  "ra-core",
@@ -6054,7 +6054,7 @@ dependencies = [
 
 [[package]]
 name = "ra-research"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "base64",
  "chromiumoxide",
@@ -6098,7 +6098,7 @@ dependencies = [
 
 [[package]]
 name = "ra-server"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -6135,7 +6135,7 @@ dependencies = [
 
 [[package]]
 name = "ra-services"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -6158,7 +6158,7 @@ dependencies = [
 
 [[package]]
 name = "ra-store"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "base64",
  "chrono",
@@ -6178,7 +6178,7 @@ dependencies = [
 
 [[package]]
 name = "ra-swarm"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -6198,7 +6198,7 @@ dependencies = [
 
 [[package]]
 name = "ra-uniffi"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "ra-core",
  "ra-ffi",
@@ -6208,7 +6208,7 @@ dependencies = [
 
 [[package]]
 name = "ra-wasm"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "console_error_panic_hook",
@@ -6224,7 +6224,7 @@ dependencies = [
 
 [[package]]
 name = "ra-workflows"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "eyre",
@@ -9147,7 +9147,7 @@ dependencies = [
 
 [[package]]
 name = "wechat-bridge"
-version = "2.0.3-rc.13"
+version = "0.1.0"
 dependencies = [
  "clap",
  "futures-util",

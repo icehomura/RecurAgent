@@ -26,7 +26,7 @@ and is why the TUI can be rebuilt without touching the kernel.
    (a) a sibling of the running TUI binary, (b) `ra` on `PATH`, (c) the install dir `~/.ra/bin/ra`
    (`$RA_PREFIX`), (d) a legacy `~/.ra/bin/ra` (protocol-compatible). `DEFAULT_STDIO_COMMAND` is
    `ra serve --stdio --solo`; the version parser reads the leading `X.Y.Z` from
-   `ra 2.0.3-rc.13 (…)`; and no upstream install is attempted — a missing backend errors with
+   `ra 0.1.0 (…)`; and no upstream install is attempted — a missing backend errors with
    `cargo build --bin ra` / `--stdio-command` guidance. The upstream installer/download helpers were
    **deleted** (nothing is auto-installed). The child-PATH prepend is derived from the *chosen*
    resolution (`OnPath` ⇒ prepend nothing, `AtPath(p)` ⇒ `p.parent()`), so an outdated sibling that

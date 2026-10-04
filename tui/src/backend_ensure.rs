@@ -31,7 +31,7 @@
 //! syntax — and that rewrite bails to a clear error when it can't. An explicit
 //! path, a `PATH=` override, a non-`ra` program, or a user-specified legacy
 //! `ra` command is the user's own setup and is left untouched. A backend
-//! older than [`MIN_OCTOS_VERSION`] surfaces a clear "please update" error.
+//! older than [`MIN_BACKEND_VERSION`] surfaces a clear "please update" error.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -43,7 +43,7 @@ use eyre::{Result, eyre};
 /// octoscode pins `ra-core` (the UI-Protocol crate) by git rev; this is the
 /// released server version carrying a compatible protocol. Bump it alongside
 /// the pinned `ra-core` rev whenever the protocol surface moves.
-pub(crate) const MIN_OCTOS_VERSION: &str = "1.1.0";
+pub(crate) const MIN_BACKEND_VERSION: &str = "0.1.0";
 
 /// Set to any value to disable auto-install (a missing backend then errors).
 const OPT_OUT_ENV: &str = "OCTOSCODE_NO_AUTO_INSTALL";
@@ -130,7 +130,7 @@ enum Resolved {
 
 /// Outcome of probing one candidate ra.
 enum Probe {
-    /// Runs and is at least [`MIN_OCTOS_VERSION`].
+    /// Runs and is at least [`MIN_BACKEND_VERSION`].
     Ready,
     /// Runs but is older (carries the found version).
     Outdated(String),
@@ -309,7 +309,7 @@ fn backend_missing_error() -> eyre::Report {
 
 fn outdated_error(found: &str) -> eyre::Report {
     eyre!(
-        "backend {found} is older than the {MIN_OCTOS_VERSION} this client needs. \
+        "backend {found} is older than the {MIN_BACKEND_VERSION} this client needs. \
          Build the current server (`cargo build --bin ra`) and relaunch, or point \
          --endpoint at a newer server."
     )
@@ -344,7 +344,7 @@ fn probe(candidate: &Path) -> Probe {
     match output {
         Ok(output) if output.status.success() => {
             match parse_octos_version(&String::from_utf8_lossy(&output.stdout)) {
-                Some(found) if version_lt(&found, MIN_OCTOS_VERSION) => Probe::Outdated(found),
+                Some(found) if version_lt(&found, MIN_BACKEND_VERSION) => Probe::Outdated(found),
                 _ => Probe::Ready,
             }
         }
@@ -570,7 +570,7 @@ fn rewrite_program(command: &str, octos_path: &Path) -> Option<String> {
 
 /// Pull the first `X.Y.Z` token out of a `--version` line, e.g.
 /// `ra 1.1.0 (79c19f6d4 2026-07-11)` → `1.1.0`. `ra --version` prints
-/// `ra 2.0.3-rc.13 (…)`, so a leading `v` and any `-pre`/`+build` suffix are
+/// `ra 0.1.0 (…)`, so a leading `v` and any `-pre`/`+build` suffix are
 /// stripped before reading the leading `X.Y.Z` core.
 fn parse_octos_version(output: &str) -> Option<String> {
     output.split_whitespace().find_map(|tok| {
@@ -619,9 +619,9 @@ fn run_installer() -> Result<()> {
 /// release tag that contains that rev. [`REQUIRED_OCTOS_CORE_REV`] and the test
 /// beside it make the pair checkable: the rev moved to v2.0.3-rc.1 while this
 /// stayed on v2.0.2, so the tag and the pinned rev must move together.
-pub(crate) const REQUIRED_OCTOS_RELEASE: &str = "v2.0.3-rc.12";
+pub(crate) const REQUIRED_BACKEND_RELEASE: &str = "v0.1.0";
 
-/// The `ra-core` rev that [`REQUIRED_OCTOS_RELEASE`] resolves to — i.e. the
+/// The `ra-core` rev that [`REQUIRED_BACKEND_RELEASE`] resolves to — i.e. the
 /// commit the release tag points at, and the rev Cargo.toml must pin.
 ///
 /// These are two halves of one decision (which server protocol this client
@@ -901,7 +901,7 @@ mod tests {
         assert_eq!(parse_octos_version("ra 1.2.3.4"), None); // 4-part isn't X.Y.Z
         // `ra --version` prints a prerelease; the leading X.Y.Z must still read.
         assert_eq!(
-            parse_octos_version("ra 2.0.3-rc.13 (dde7655 2026-10-03)").as_deref(),
+            parse_octos_version("ra 0.1.0 (dde7655 2026-10-03)").as_deref(),
             Some("2.0.3")
         );
     }
@@ -956,7 +956,7 @@ mod tests {
     /// targets are two halves of ONE decision — which server protocol this
     /// client speaks — living in two files, joined only by a doc comment saying
     /// "bump this too". That drifted: the rev reached v2.0.3-rc.1 while
-    /// REQUIRED_OCTOS_RELEASE stayed at v2.0.2, so `doctor` pointed at a server
+    /// REQUIRED_BACKEND_RELEASE stayed at v2.0.2, so `doctor` pointed at a server
     /// older than the protocol the client had been built against.
     ///
     /// Reading Cargo.toml at test time turns the comment into a check.
@@ -978,9 +978,9 @@ mod tests {
             rev, REQUIRED_OCTOS_CORE_REV,
             "Cargo.toml records ra-core rev {rev}, but backend_ensure records \
              {REQUIRED_OCTOS_CORE_REV} as the rev behind \
-             REQUIRED_OCTOS_RELEASE ({REQUIRED_OCTOS_RELEASE}).\n\
+             REQUIRED_BACKEND_RELEASE ({REQUIRED_BACKEND_RELEASE}).\n\
              \n\
-             If you bumped the rev, also bump REQUIRED_OCTOS_RELEASE to the \
+             If you bumped the rev, also bump REQUIRED_BACKEND_RELEASE to the \
              release tag containing it, and update \
              REQUIRED_OCTOS_CORE_REV to match. Otherwise the recorded protocol \
              revision disagrees with this client."
@@ -992,8 +992,8 @@ mod tests {
     #[test]
     fn octos_release_pin_is_a_tag() {
         assert!(
-            REQUIRED_OCTOS_RELEASE.starts_with('v'),
-            "REQUIRED_OCTOS_RELEASE must be a tag like `v2.0.3-rc.1`, got {REQUIRED_OCTOS_RELEASE}"
+            REQUIRED_BACKEND_RELEASE.starts_with('v'),
+            "REQUIRED_BACKEND_RELEASE must be a tag like `v2.0.3-rc.1`, got {REQUIRED_BACKEND_RELEASE}"
         );
     }
 }

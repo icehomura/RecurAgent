@@ -651,9 +651,9 @@ fn installations_checks() -> Vec<Check> {
             "ra-tui needs ra",
             format!(
                 ">= {} (this is ra-tui v{}; target server release {})",
-                crate::backend_ensure::MIN_OCTOS_VERSION,
+                crate::backend_ensure::MIN_BACKEND_VERSION,
                 env!("CARGO_PKG_VERSION"),
-                crate::backend_ensure::REQUIRED_OCTOS_RELEASE,
+                crate::backend_ensure::REQUIRED_BACKEND_RELEASE,
             ),
         ),
         installs_check("ra-tui", &locate_ra_tui()),
@@ -1887,7 +1887,7 @@ mod tests {
         assert!(
             needs
                 .detail
-                .contains(crate::backend_ensure::MIN_OCTOS_VERSION)
+                .contains(crate::backend_ensure::MIN_BACKEND_VERSION)
         );
         // Both binaries get an install-summary row.
         assert!(checks.iter().any(|c| c.name == "ra-tui installs"));

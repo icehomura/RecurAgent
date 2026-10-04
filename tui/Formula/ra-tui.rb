@@ -1,7 +1,7 @@
 class Octoscode < Formula
   desc "Terminal UI client for the ra UI Protocol"
   homepage "https://github.com/octos-org/octoscode"
-  version "0.3.0"
+  version "0.1.0"
   if OS.mac? && Hardware::CPU.arm?
     url "https://github.com/octos-org/octoscode/releases/download/v0.3.0/octoscode-aarch64-apple-darwin.tar.xz"
     sha256 "c8c6321018d6576e5db6e41f9decdf45c5cca92788c3558124aaa175039b1ae0"

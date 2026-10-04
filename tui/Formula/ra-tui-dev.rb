@@ -14,7 +14,7 @@
 class OctoscodeDev < Formula
   desc "Terminal UI client for the ra UI Protocol (prerelease channel)"
   homepage "https://github.com/octos-org/octoscode"
-  version "0.3.0-rc.11"
+  version "0.1.0"
   if OS.mac? && Hardware::CPU.arm?
     url "https://github.com/octos-org/octoscode/releases/download/v0.3.0-rc.11/octoscode-aarch64-apple-darwin.tar.xz"
     sha256 "0f91572b5b349fef0fda5f1e9f36ccfa1d7f102d6e165c35e3debb046bf3f735"
