@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# install.sh — Install ra from pre-built binaries on a fresh machine.
-# Self-contained: no repo clone, Rust, or Node.js needed.
+# install.sh — Install ra on a fresh machine from this source tree.
+# Default path: builds the release binaries locally with cargo and installs
+# them. Set OCTOS_DOWNLOAD_URL (or drop a ra-bundle-<triple>.tar.gz next to
+# this script) to install an already-built bundle instead.
 #
 # Usage:
-#   curl -fsSL https://github.com/octos-org/octos/releases/latest/download/install.sh | bash
-#   curl -fsSL ... | bash -s -- --tunnel --tenant-name alice --frps-token <token>
+#   ./scripts/install.sh
+#   ./scripts/install.sh --tunnel --tenant-name alice --frps-token <token>
 #
 # Options:
-#   --version TAG            Release version to install (default: latest)
+#   --version TAG            Bundle version label (accepted for compatibility;
+#                            a source build ignores it)
 #   --prefix DIR             Install prefix (default: ~/.ra/bin)
 #   --port PORT              ra serve port (default: 8080)
 #   --auth-token TOKEN       Dashboard auth token (default: auto-generated)
@@ -32,11 +35,28 @@
 set -euo pipefail
 
 # ── Defaults ──────────────────────────────────────────────────────────
-GITHUB_REPO="octos-org/octos"
-VERSION="latest"
+VERSION=""
 PREFIX="${OCTOS_PREFIX:-$HOME/.ra/bin}"
 DATA_DIR="${OCTOS_HOME:-$HOME/.ra}"
 FRPC_VERSION="0.65.0"
+
+# The script's own path — used to locate the source tree (and ra-doctor.sh)
+# when the default source-build path runs, and in the --doctor hint.
+SCRIPT_SELF="${BASH_SOURCE[0]:-$0}"
+
+# Binaries a release bundle ships (scripts/bundle-release.sh is the SSOT for
+# that list: the bundle's `tar tzf` output is exactly these names plus
+# model_catalog.json) — a source build must produce the same set so an
+# installed tree is identical either way.
+RA_BUILD_BINS=(
+    ra ra-sandbox news_fetch deep-search deep_crawl send_email
+    account_manager voice clock weather smart_home
+)
+# Feature set for the `ra` binary, matching scripts/milestone-ci.sh (the
+# canonical release build). `api` — already a default — is what `ra serve`
+# needs; the channel features are not defaults and would otherwise be missing
+# from a source build.
+RA_BUILD_FEATURES="${RA_BUILD_FEATURES:-api,telegram,discord,dingtalk,whatsapp,feishu,twilio,wecom,wecom-bot,audio_mp3}"
 
 TENANT_NAME=""
 FRPS_TOKEN="${FRPS_TOKEN:-}"
@@ -77,20 +97,35 @@ while [ $# -gt 0 ]; do
         --doctor)        RUN_DOCTOR=true; shift ;;
         --help|-h)
             cat << 'HELPEOF'
-install.sh — Install ra from pre-built binaries on a fresh machine.
-Self-contained: no repo clone, Rust, or Node.js needed.
+install.sh — Install ra on a fresh machine from this source tree.
+Default path: builds the release binaries locally with cargo and installs
+them. Set OCTOS_DOWNLOAD_URL (or drop a ra-bundle-<triple>.tar.gz next to
+this script) to install an already-built bundle instead.
 
 Usage:
-  curl -fsSL https://github.com/octos-org/octos/releases/latest/download/install.sh | bash
-  curl -fsSL ... | bash -s -- --tunnel --tenant-name alice --frps-token <token>
+  ./scripts/install.sh
+  ./scripts/install.sh --tunnel --tenant-name alice --frps-token <token>
 
 Options:
-  --version TAG            Release version to install (default: latest)
+  --version TAG            Bundle version label (accepted for compatibility;
+                           a source build ignores it)
   --prefix DIR             Install prefix (default: ~/.ra/bin)
   --port PORT              ra serve port (default: 8080)
   --auth-token TOKEN       Dashboard auth token (default: auto-generated)
   --uninstall              Remove ra and frpc services and binaries
   --doctor                 Diagnose installation and service health
+
+Environment:
+  OCTOS_DOWNLOAD_URL       Install a pre-built bundle from this directory or
+                           file:// URL (ra-bundle-<triple>.tar.gz [+ .sha256])
+                           instead of building from source
+  OCTOS_SOURCE_DIR         Source tree to build from (default: the checkout
+                           this script lives in, then $PWD)
+  OCTOS_PREFIX             Install prefix (same as --prefix)
+  OCTOS_HOME               Data directory (default: ~/.ra)
+  RA_BUILD_FEATURES        cargo features for `ra` in a source build
+                           (default: api,telegram,discord,dingtalk,whatsapp,
+                           feishu,twilio,wecom,wecom-bot,audio_mp3)
 
 Optional features:
   --install-deps           Auto-install missing runtime dependencies
@@ -232,7 +267,7 @@ validate_inputs() {
     [ -n "$FRPS_SERVER" ]   && validate "frps-server" "$FRPS_SERVER" '[a-zA-Z0-9.:-]+'
     [ -n "$SSH_PORT" ]      && validate "ssh-port"    "$SSH_PORT"    '[0-9]+'
     [ -n "$PORT" ]          && validate "port"        "$PORT"        '[0-9]+'
-    [ -n "$VERSION" ] && [ "$VERSION" != "latest" ] && validate "version" "$VERSION" '[a-zA-Z0-9._-]+'
+    [ -n "$VERSION" ] && validate "version" "$VERSION" '[a-zA-Z0-9._-]+'
     [ -n "$PREFIX" ]        && validate "prefix"      "$PREFIX"      '/[a-zA-Z0-9/._~-]*'
     [ -n "$DATA_DIR" ]      && validate "data-dir"    "$DATA_DIR"    '/[a-zA-Z0-9/._~-]*'
     # CONFIG_HOME may legitimately contain a space (macOS XDG default is
@@ -850,11 +885,12 @@ detect_installed_port() {
     fi
 }
 
-# Verify the downloaded bundle against the `.sha256` sidecar that
-# bundle-release.sh publishes next to it (#2514). A mismatch aborts the
-# install; a missing or unparseable sidecar (releases older than rc.12,
-# air-gapped mirrors, mirrors that answer 200 with an error page) only
-# warns — there is nothing published we could verify against.
+# Verify a downloaded bundle against the `.sha256` sidecar that
+# scripts/bundle-release.sh publishes next to it (#2514). A mismatch aborts
+# the install; a missing or unparseable sidecar (bundles from
+# scripts/build-local-bundle.sh, air-gapped mirrors, mirrors that answer 200
+# with an error page) only warns — there is nothing published to verify
+# against. A source build is verified by cargo, not by a sidecar.
 # Uses globals: INSTALL_TMP, TARBALL
 verify_bundle_checksum() {
     local sidecar="${INSTALL_TMP}/${TARBALL}.sha256"
@@ -894,7 +930,7 @@ if [ "$RUN_DOCTOR" = true ]; then
     DOCTOR_ISSUES=0
     err() { echo "    FAIL: $1"; DOCTOR_ISSUES=$((DOCTOR_ISSUES + 1)); }
 else
-    err() { echo "    ERROR: $1"; echo ""; echo "    Run with --doctor to diagnose:"; echo "      curl -fsSL https://github.com/octos-org/octos/releases/latest/download/install.sh | bash -s -- --doctor"; exit 1; }
+    err() { echo "    ERROR: $1"; echo ""; echo "    Run with --doctor to diagnose:"; echo "      $SCRIPT_SELF --doctor"; exit 1; }
 fi
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1471,19 +1507,9 @@ case "$ARCH" in
     *)             err "Unsupported architecture: $ARCH" ;;
 esac
 
-# Pre-built binaries are only available for these combinations.
-# Fail early instead of downloading a 404.
-case "$TRIPLE" in
-    aarch64-apple-darwin|x86_64-unknown-linux-gnu|aarch64-unknown-linux-gnu) ;; # published in release workflow
-    x86_64-apple-darwin)
-        err "macOS x86_64 does not have pre-built binaries yet."
-        hint "Build from source with the canonical feature set:"
-        hint "  cargo install --path crates/ra-cli \\"
-        hint "      --features \"api,telegram,discord,dingtalk,whatsapp,feishu,twilio,wecom,wecom-bot,audio_mp3\""
-        hint "(matches scripts/milestone-ci.sh; \`api\` is required for \`ra serve\`.)"
-        ;;
-esac
-
+# Bundles are only published for the triples below; the download escape hatch
+# checks that list where it resolves the tarball. The default source build has
+# no such limit — TRIPLE only names the bundle artifact there.
 ok "$OS $ARCH ($TRIPLE)"
 
 # ── Check / install runtime dependencies ─────────────────────────────
@@ -1572,15 +1598,99 @@ else
     echo "      $(pkg_hint ffmpeg)"
 fi
 
-# ── Resolve download source ──────────────────────────────────────────
-section "Resolving release"
+# ── Source tree discovery (default install path) ─────────────────────
+# This fork has no release channel: without an explicit bundle URL the
+# installer builds the binaries from the source tree it was run from.
+# Usage: is_ra_source_root DIR
+is_ra_source_root() {
+    [ -f "$1/Cargo.toml" ] && [ -f "$1/crates/ra-cli/Cargo.toml" ]
+}
+
+# Print the source tree to build from, or return 1 when none can be found.
+# Order: $OCTOS_SOURCE_DIR, the tree this script lives in, $PWD, the enclosing
+# git work tree.
+resolve_source_root() {
+    local candidate
+    for candidate in "${OCTOS_SOURCE_DIR:-}" "$(dirname "$SCRIPT_SELF")/.." "$PWD"; do
+        [ -n "$candidate" ] || continue
+        if is_ra_source_root "$candidate"; then
+            (cd "$candidate" && pwd)
+            return 0
+        fi
+    done
+    if command -v git >/dev/null 2>&1; then
+        candidate="$(git -C "$(dirname "$SCRIPT_SELF")" rev-parse --show-toplevel 2>/dev/null || true)"
+        if [ -n "$candidate" ] && is_ra_source_root "$candidate"; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Build the release binaries from $SOURCE_ROOT and stage them in $INSTALL_TMP
+# as the flat payload a bundle would have extracted to, so the shared copy
+# loop below installs both paths identically. The binary list matches
+# scripts/bundle-release.sh (the SSOT for what a bundle ships).
+# Uses globals: SOURCE_ROOT, INSTALL_TMP
+build_from_source() {
+    local bin target_dir missing=0
+
+    if ! command -v cargo >/dev/null 2>&1; then
+        err "cargo not found — building from source needs the Rust toolchain."
+        hint "Install Rust:        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+        hint "Or install a bundle: OCTOS_DOWNLOAD_URL=<dir|file://path> $SCRIPT_SELF"
+        return 1
+    fi
+
+    # Where cargo drops artifacts. A relative $CARGO_TARGET_DIR resolves
+    # against cargo's working directory, which is $SOURCE_ROOT below.
+    case "${CARGO_TARGET_DIR:-}" in
+        "") target_dir="$SOURCE_ROOT/target" ;;
+        /*) target_dir="$CARGO_TARGET_DIR" ;;
+        *)  target_dir="$SOURCE_ROOT/$CARGO_TARGET_DIR" ;;
+    esac
+
+    echo "    Building release binaries from $SOURCE_ROOT..."
+    if ! ( cd "$SOURCE_ROOT" \
+        && cargo build --release -p ra-cli --bin ra --features "$RA_BUILD_FEATURES" \
+        && cargo build --release -p ra-sandbox -p news_fetch -p deep-search -p deep-crawl \
+               -p send-email -p account-manager -p voice -p clock -p weather -p smart-home ); then
+        err "cargo build failed (see the output above)."
+        return 1
+    fi
+
+    # The admin SPA is embedded at compile time; a tree without a built
+    # dashboard still compiles, but /admin/ then serves 503.
+    [ -f "$SOURCE_ROOT/crates/ra-cli/static/admin/index.html" ] \
+        || warn "dashboard SPA not built — /admin/ is unavailable until scripts/build-dashboard.sh runs (needs npm)"
+
+    mkdir -p "$INSTALL_TMP"
+    for bin in "${RA_BUILD_BINS[@]}"; do
+        if [ -f "$target_dir/release/$bin" ]; then
+            cp "$target_dir/release/$bin" "$INSTALL_TMP/"
+        else
+            err "missing build output: $target_dir/release/$bin"
+            missing=1
+        fi
+    done
+    [ "$missing" = 0 ] || return 1
+    # The model-provisioning SSOT ships beside the binary in a bundle; `ra`
+    # resolves it next to its own executable.
+    [ -f "$SOURCE_ROOT/model_catalog.json" ] && cp "$SOURCE_ROOT/model_catalog.json" "$INSTALL_TMP/"
+    return 0
+}
+
+# ── Resolve install source ───────────────────────────────────────────
+section "Resolving install source"
 
 TARBALL="ra-bundle-${TRIPLE}.tar.gz"
 DOWNLOAD_BASE="${OCTOS_DOWNLOAD_URL:-}"
 
-# Auto-detect: check if tarball is next to the script or in the current directory
+# Auto-detect: a bundle tarball next to the script or in the current directory
+# (scripts/build-local-bundle.sh writes it there).
 if [ -z "$DOWNLOAD_BASE" ]; then
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+    SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SELF")" && pwd)"
     if [ -f "$SCRIPT_DIR/$TARBALL" ]; then
         DOWNLOAD_BASE="file://$SCRIPT_DIR"
     elif [ -f "./$TARBALL" ]; then
@@ -1588,50 +1698,59 @@ if [ -z "$DOWNLOAD_BASE" ]; then
     fi
 fi
 
+INSTALL_FROM_SOURCE=false
 if [ -n "$DOWNLOAD_BASE" ]; then
-    # Local file or self-hosted server
+    # Bundles are only published for these triples; fail early instead of
+    # downloading a 404.
+    case "$TRIPLE" in
+        aarch64-apple-darwin|x86_64-unknown-linux-gnu|aarch64-unknown-linux-gnu) ;;
+        *) err "No bundle is published for $TRIPLE. Re-run without OCTOS_DOWNLOAD_URL to build from source." ;;
+    esac
     DOWNLOAD_URL="${DOWNLOAD_BASE}/${TARBALL}"
-    ok "source: $DOWNLOAD_URL"
+    ok "bundle: $DOWNLOAD_URL"
 else
-    # Default: GitHub Releases
-    if [ "$VERSION" = "latest" ]; then
-        VERSION=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" \
-            | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
-        if [ -z "$VERSION" ]; then
-            err "Could not determine latest release. Specify --version explicitly."
-        fi
+    # Default: build from the source tree.
+    INSTALL_FROM_SOURCE=true
+    if ! SOURCE_ROOT="$(resolve_source_root)"; then
+        err "Could not find the ra source tree to build from."
+        hint "Run this script from the checkout (scripts/install.sh), set"
+        hint "OCTOS_SOURCE_DIR, or point OCTOS_DOWNLOAD_URL at a bundle."
+        exit 1
     fi
-    DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}/${TARBALL}"
-    ok "version: $VERSION"
+    ok "source tree: $SOURCE_ROOT"
 fi
 
-# ── Download and install ra ────────────────────────────────────────
+# ── Obtain and install ra ──────────────────────────────────────────
 section "Installing ra"
 
 INSTALL_TMP=$(mktemp -d /tmp/ra-install.XXXXXX)
 trap 'rm -rf "$INSTALL_TMP"' EXIT
 
-if [[ "$DOWNLOAD_URL" == file://* ]]; then
-    LOCAL_PATH="${DOWNLOAD_URL#file://}"
-    echo "    Copying from $LOCAL_PATH..."
-    if ! cp "$LOCAL_PATH" "${INSTALL_TMP}/${TARBALL}"; then
-        err "File not found: $LOCAL_PATH"
-    fi
-    cp "${LOCAL_PATH}.sha256" "${INSTALL_TMP}/${TARBALL}.sha256" 2>/dev/null || true
+if [ "$INSTALL_FROM_SOURCE" = true ]; then
+    build_from_source
 else
-    echo "    Downloading $TARBALL..."
-    if ! curl -fsSL -o "${INSTALL_TMP}/${TARBALL}" "$DOWNLOAD_URL"; then
-        err "Download failed. Check that release $VERSION has a binary for $TRIPLE."
+    if [[ "$DOWNLOAD_URL" == file://* ]]; then
+        LOCAL_PATH="${DOWNLOAD_URL#file://}"
+        echo "    Copying from $LOCAL_PATH..."
+        if ! cp "$LOCAL_PATH" "${INSTALL_TMP}/${TARBALL}"; then
+            err "File not found: $LOCAL_PATH"
+        fi
+        cp "${LOCAL_PATH}.sha256" "${INSTALL_TMP}/${TARBALL}.sha256" 2>/dev/null || true
+    else
+        echo "    Downloading $TARBALL..."
+        if ! curl -fsSL -o "${INSTALL_TMP}/${TARBALL}" "$DOWNLOAD_URL"; then
+            err "Download failed: $DOWNLOAD_URL"
+        fi
+        # -f keeps a 404 from writing an error page that would fail
+        # verification below.
+        curl -fsSL -o "${INSTALL_TMP}/${TARBALL}.sha256" "${DOWNLOAD_URL}.sha256" 2>/dev/null \
+            || rm -f "${INSTALL_TMP}/${TARBALL}.sha256"
     fi
-    # -f keeps a 404 (pre-rc.12 release) from writing an error page that
-    # would fail verification below.
-    curl -fsSL -o "${INSTALL_TMP}/${TARBALL}.sha256" "${DOWNLOAD_URL}.sha256" 2>/dev/null \
-        || rm -f "${INSTALL_TMP}/${TARBALL}.sha256"
+
+    verify_bundle_checksum
+
+    tar -xzf "${INSTALL_TMP}/${TARBALL}" -C "$INSTALL_TMP"
 fi
-
-verify_bundle_checksum
-
-tar -xzf "${INSTALL_TMP}/${TARBALL}" -C "$INSTALL_TMP"
 
 mkdir -p "$PREFIX"
 for bin in "$INSTALL_TMP"/*; do
@@ -1646,19 +1765,20 @@ done
 ok "binaries installed to $PREFIX"
 
 # Save install and doctor scripts for later use.
-# Try copying the running script first; fall back to downloading from the release.
-SCRIPT_SELF="${BASH_SOURCE[0]:-$0}"
-RELEASE_BASE="https://github.com/${GITHUB_REPO}/releases/latest/download"
+# Both ship beside this script in the source tree; there is no release to
+# fetch them from, so a miss only warns.
 if [ -f "$SCRIPT_SELF" ] && [ "$(wc -l < "$SCRIPT_SELF" 2>/dev/null)" -gt 10 ]; then
-    cp "$SCRIPT_SELF" "$PREFIX/install.sh"
+    cp "$SCRIPT_SELF" "$PREFIX/install.sh" || warn "could not copy $SCRIPT_SELF to $PREFIX"
 else
-    curl -fsSL -o "$PREFIX/install.sh" "${RELEASE_BASE}/install.sh" 2>/dev/null || true
+    warn "could not save install.sh to $PREFIX (run the installer from a file)"
 fi
 [ -f "$PREFIX/install.sh" ] && chmod +x "$PREFIX/install.sh"
-if [[ "$SCRIPT_SELF" == /* ]] && [ -f "$(dirname "$SCRIPT_SELF")/ra-doctor.sh" ]; then
-    cp "$(dirname "$SCRIPT_SELF")/ra-doctor.sh" "$PREFIX/ra-doctor.sh"
-else
-    curl -fsSL -o "$PREFIX/ra-doctor.sh" "${RELEASE_BASE}/ra-doctor.sh" 2>/dev/null || true
+RA_DOCTOR_SRC="$(dirname "$SCRIPT_SELF")/ra-doctor.sh"
+if [ ! -f "$RA_DOCTOR_SRC" ] && [ -n "${SOURCE_ROOT:-}" ]; then
+    RA_DOCTOR_SRC="$SOURCE_ROOT/scripts/ra-doctor.sh"
+fi
+if [ -f "$RA_DOCTOR_SRC" ]; then
+    cp "$RA_DOCTOR_SRC" "$PREFIX/ra-doctor.sh" || warn "could not copy $RA_DOCTOR_SRC to $PREFIX"
 fi
 [ -f "$PREFIX/ra-doctor.sh" ] && chmod +x "$PREFIX/ra-doctor.sh"
 if [ -f "$PREFIX/install.sh" ]; then
@@ -2146,7 +2266,7 @@ if [ -f "$PREFIX/install.sh" ]; then
     [ "$ENABLE_TUNNEL" != true ] && echo "    Enable tunnel:  $PREFIX/install.sh --tunnel"
     echo "    Diagnose:       $PREFIX/install.sh --doctor"
 else
-    [ "$ENABLE_TUNNEL" != true ] && echo "    Enable tunnel:  curl -fsSL ${RELEASE_BASE}/install.sh | bash -s -- --tunnel"
-    echo "    Diagnose:       curl -fsSL ${RELEASE_BASE}/install.sh | bash -s -- --doctor"
+    [ "$ENABLE_TUNNEL" != true ] && echo "    Enable tunnel:  $SCRIPT_SELF --tunnel"
+    echo "    Diagnose:       $SCRIPT_SELF --doctor"
 fi
 echo ""
