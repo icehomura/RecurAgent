@@ -1,10 +1,16 @@
 # ra — build and run recipes.
 #
-# Feature note: `ra-cli`'s default features include `embed-llama`, which compiles
-# llama.cpp from source and therefore needs LLVM's libclang (`LIBCLANG_PATH`).
-# The default recipes here pass `--no-default-features --features api,impersonate`
-# so they build on a machine without LLVM; the `*-full` recipes use the real
-# default set once LLVM is installed.
+# `build` is a RELEASE build; `build-debug` is the debug one. Both use
+# `--no-default-features --features api,impersonate` because `ra-cli`'s default
+# features include `embed-llama`, which compiles llama.cpp and therefore needs
+# LLVM's libclang (`LIBCLANG_PATH`); the `*-full` recipes use that default set
+# once LLVM is installed.
+
+# `just` cannot find a shell on Windows when Git Bash is not on PATH (its own
+# default is `sh`). Git Bash is the shell this repo is developed and tested with
+# here; unix hosts keep the plain `bash` default.
+set shell := ["bash", "-cu"]
+set windows-shell := ["C:/Program Files/Git/bin/bash.exe", "-cu"]
 
 kernel   := "ra-cli"
 bin      := "ra"
@@ -16,41 +22,71 @@ tui_bin  := "ra-tui"
 default:
     @just --list
 
-# build the ra binary (no llama.cpp embedder — see the header note)
+# build the ra binary (release)
 build:
+    cargo build --release -p {{kernel}} --bin {{bin}} --no-default-features --features {{features}}
+
+# build the ra binary (debug)
+build-debug:
     cargo build -p {{kernel}} --bin {{bin}} --no-default-features --features {{features}}
 
-# build the ra binary with the real default features (needs libclang)
+# build the ra binary (release, default features — needs libclang)
 build-full:
+    cargo build --release -p {{kernel}} --bin {{bin}}
+
+# build the ra binary (debug, default features — needs libclang)
+build-debug-full:
     cargo build -p {{kernel}} --bin {{bin}}
 
-# build release binaries for the kernel and the terminal client
-release:
-    cargo build --release -p {{kernel}} --bin {{bin}} --no-default-features --features {{features}}
+# build the terminal client (release)
+tui-build:
     cargo build --release --manifest-path {{tui_dir}}/Cargo.toml --bin {{tui_bin}}
+
+# build the terminal client (debug)
+tui-build-debug:
+    cargo build --manifest-path {{tui_dir}}/Cargo.toml --bin {{tui_bin}}
+
+# build both binaries (release)
+release: build tui-build
 
 # run ra with arguments: `just run --help`
 run *args:
+    cargo run --release -p {{kernel}} --bin {{bin}} --no-default-features --features {{features}} -- {{args}}
+
+# run ra (debug)
+run-debug *args:
     cargo run -p {{kernel}} --bin {{bin}} --no-default-features --features {{features}} -- {{args}}
 
 # start the local server in solo mode: `just serve --port 50080`
 serve *args:
+    cargo run --release -p {{kernel}} --bin {{bin}} --no-default-features --features {{features}} -- serve --solo {{args}}
+
+# start the local server (debug)
+serve-debug *args:
     cargo run -p {{kernel}} --bin {{bin}} --no-default-features --features {{features}} -- serve --solo {{args}}
 
 # environment / backend / protocol diagnosis
 doctor:
+    cargo run --release -p {{kernel}} --bin {{bin}} --no-default-features --features {{features}} -- doctor
+
+# environment / backend / protocol diagnosis (debug)
+doctor-debug:
     cargo run -p {{kernel}} --bin {{bin}} --no-default-features --features {{features}} -- doctor
 
 # print the version
 version:
-    cargo run -p {{kernel}} --bin {{bin}} --no-default-features --features {{features}} -- --version
+    cargo run --release -p {{kernel}} --bin {{bin}} --no-default-features --features {{features}} -- --version
 
-# build the terminal client
-tui-build:
-    cargo build --manifest-path {{tui_dir}}/Cargo.toml --bin {{tui_bin}}
+# print the version (debug)
+version-debug:
+    cargo run -p {{kernel}} --bin {{bin}} --no-default-features --features {{features}} -- --version
 
 # run the terminal client (spawns `ra serve --stdio` by default)
 tui-run *args:
+    cargo run --release --manifest-path {{tui_dir}}/Cargo.toml --bin {{tui_bin}} -- {{args}}
+
+# run the terminal client (debug)
+tui-run-debug *args:
     cargo run --manifest-path {{tui_dir}}/Cargo.toml --bin {{tui_bin}} -- {{args}}
 
 # type-check the kernel closure, tests included
