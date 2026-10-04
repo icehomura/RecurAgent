@@ -122,11 +122,11 @@ async fn serve_with<A: AssetStore>(assets: &A, state: &AppState, request_path: &
     }
 
     // octos-web SPA: under /app/* with its own asset tree (built by
-    // scripts/build-web-app.sh into static/web/ with BASE_URL=/app/). Same
+    // a web client into static/web/ with BASE_URL=/app/). Same
     // pattern as the swarm branch: segment-match so `/application` etc. fall
     // through to admin; serve the embedded asset, else the SPA index for
-    // client-side routes, else a 503 naming the build script when the bundle
-    // wasn't embedded. The app is same-origin (`API_BASE=""`) so it talks to
+    // client-side routes, else a 503 saying no web bundle is embedded.
+    // The app is same-origin (`API_BASE=""`) so it talks to
     // this server's API/WS with no CORS.
     if path == "app" || path.starts_with("app/") {
         // Bare `/app` (no trailing slash) must redirect to `/app/`: the SPA's
@@ -150,7 +150,7 @@ async fn serve_with<A: AssetStore>(assets: &A, state: &AppState, request_path: &
         let body = serde_json::json!({
             "error": "web_bundle_missing",
             "message":
-                "Run ./scripts/build-web-app.sh + rebuild ra-cli to include the octos-web app.",
+                "Build a web client into crates/ra-cli/static/web/ and rebuild ra-cli to serve one at /app.",
         });
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -207,7 +207,7 @@ async fn serve_with<A: AssetStore>(assets: &A, state: &AppState, request_path: &
 
 /// Redirect to the default UI: prefer the octos-web app (`/app/`) when its
 /// bundle is embedded, fall back to the admin dashboard otherwise. The
-/// fallback keeps binaries built without `scripts/build-web-app.sh` (older
+/// fallback keeps binaries built without a bundled web client (older
 /// checkouts, dashboard-only builds) on the previous `/admin/` behavior,
 /// including all of its missing-bundle 503 diagnostics.
 fn redirect_to_default_ui_or_503<A: AssetStore>(assets: &A) -> Response {

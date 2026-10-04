@@ -45,7 +45,7 @@ crates/ra-cli/static/admin/
 # Swarm-app build output
 crates/ra-cli/static/swarm/
 
-# ra-web build output (scripts/build-web-app.sh; embedded at /app)
+# Web-client build output (embedded at /app; no client ships with this fork)
 crates/ra-cli/static/web/
 
 # Environment
