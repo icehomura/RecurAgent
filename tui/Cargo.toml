@@ -12,15 +12,17 @@ path = "src/main.rs"
 
 # The shared protocol crate lives in this repo now: the ra kernel is the sibling
 # workspace at `../`, so the TUI builds against the working tree instead of a
-# pinned git rev. Upstream octoscode pinned
-# `ra-core = { git = "https://github.com/octos-org/octos", rev = "f4a31d9a0ef2228e919c3d516b78a9d82ad6f470" }`;
-# that pin is the protocol revision this client was validated against.
+# pinned git rev. The upstream revision this client was validated against is
+# still recorded as a literal below — `rev = "f4a31d9a0ef2228e919c3d516b78a9d82ad6f470"`
+# — because `backend_ensure::REQUIRED_OCTOS_CORE_REV` and its test read the
+# first `rev = "` in this file back and require the pair to match. Bump the two
+# together; nothing resolves that rev over the network any more.
 [dependencies]
 ra-core = { path = "../crates/ra-core" }
-# Startup splash animation engine (specs/task-startup-splash.spec). Git dep +
-# optional local patch, same pattern as ra-core above. ttfx itself only
-# depends on clap + terminal_size.
-ttfx = { git = "https://github.com/omacom-io/ttfx", rev = "6e24dac78e3011d89bd7ff24d1ad91dd89e11d8a" }
+# Startup splash animation engine (specs/task-startup-splash.spec), vendored in
+# tree so the build needs no network (source, rev and license in
+# vendor/ttfx/PROVENANCE.md). ttfx itself only depends on clap + terminal_size.
+ttfx = { path = "vendor/ttfx" }
 clap = { version = "4", features = ["derive"] }
 eyre = "0.6"
 fs2 = "0.4"
@@ -81,6 +83,12 @@ unsafe_code = "deny"
 
 [workspace]
 resolver = "3"
+# The vendored ttfx drop (vendor/ttfx/PROVENANCE.md) stays its own package: a
+# path dependency inside the workspace root would otherwise be adopted as a
+# member, pulling its upstream profiles into this workspace and dragging it
+# through our lints/formatting. As an excluded path dep it resolves from disk
+# but is built exactly as its own manifest declares.
+exclude = ["vendor/ttfx"]
 
 # The profile that 'dist' will build with
 [profile.dist]

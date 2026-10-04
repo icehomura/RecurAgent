@@ -1,21 +1,24 @@
 # Local development override (optional).
 #
-# Cargo.toml pins octos-core to a git revision so clean checkouts
-# (`cargo install --git`, release CI) build without a sibling `../octos`.
-# For day-to-day development against a *local* octos checkout — including
-# uncommitted protocol changes — copy this file to `.cargo/config.toml`
-# (which is gitignored) so Cargo builds against the sibling path instead:
+# Nothing the TUI depends on is fetched over the network any more: `ra-core` is
+# the sibling kernel workspace at `../crates/ra-core`, and the splash animation
+# engine is vendored in-tree at `vendor/ttfx`. Both are plain path
+# dependencies, so a clean checkout builds offline and there is no git pin to
+# work around.
+#
+# This override is still useful to build against a *second* `ra-core` checkout
+# — a kernel worktree or clone you are hacking on — while running the TUI from
+# here. Copy this file to `.cargo/config.toml` (gitignored) and point it at
+# that checkout's package directory:
 #
 #     cp .cargo/config.toml.example .cargo/config.toml
 #
-# Adjust the path if your `octos` clone lives somewhere other than `../octos`.
-# `paths` overrides any source (git or registry) when the package name matches,
-# so edits to ../octos/crates/octos-core are picked up on the next build — the
-# same live-sibling loop as the old path dependency.
+# `paths` overrides any source (path, git or registry) when the package name
+# matches, so edits in the listed checkout are picked up on the next build.
+# The default below is the in-tree kernel, i.e. the same package the manifest
+# already names.
 
-paths = ["../octos/crates/octos-core"]
+paths = ["../crates/ra-core"]
 
-# Live-develop the splash animation engine against a local ttfx checkout by
-# adding its path to the list above, e.g.:
-#
-#     paths = ["../octos/crates/octos-core", "../../consult/ttfx"]
+# The splash engine needs no entry here: its live checkout *is* `vendor/ttfx`,
+# so edit that directory directly (see vendor/ttfx/PROVENANCE.md).

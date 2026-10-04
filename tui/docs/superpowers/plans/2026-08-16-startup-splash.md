@@ -6,7 +6,7 @@
 
 **Architecture:** New `src/splash.rs` module drives ttfx's public engine primitives (`Effect::build`/`next_frame` + `EngineCtx`) with a custom raw-mode-safe frame printer (ttfx frames join rows with bare `\n`, which staircases under raw mode — we reposition with `\r\n` + cursor-up ourselves). Effect configs are obtained the same way ttfx's own `--random-effect` does: `clap try_parse_from(["ttfx", name])`. Gating, effect picking, and the frame loop are pure/injectable (Vec writer + virtual clock + frame_rate 0) so tests never sleep or touch a TTY; only `play()` touches crossterm raw mode and is verified manually.
 
-**Tech Stack:** Rust 2024, ttfx (git dep, engine primitives), crossterm 0.28 (raw mode + key/resize poll), clap 4, eyre.
+**Tech Stack:** Rust 2024, ttfx (engine primitives; vendored at `vendor/ttfx` since 2026-10-05 — a git dep when this plan ran), crossterm 0.28 (raw mode + key/resize poll), clap 4, eyre.
 
 **Spec:** `specs/task-startup-splash.spec` (committed, lint 100%). Test names below are bound by the spec — do not rename.
 
@@ -21,7 +21,7 @@
 
 ---
 
-### Task 1: ttfx git dependency
+### Task 1: ttfx dependency
 
 **Files:**
 - Modify: `Cargo.toml` (dependencies section)
@@ -36,23 +36,26 @@
 In `Cargo.toml`, after the `ra-core` dependency block, add:
 
 ```toml
-# Startup splash animation engine (specs/task-startup-splash.spec). Git dep +
-# optional local patch, same pattern as ra-core above. ttfx itself only
-# depends on clap + terminal_size.
-ttfx = { git = "https://github.com/omacom-io/ttfx", rev = "6e24dac78e3011d89bd7ff24d1ad91dd89e11d8a" }
+# Startup splash animation engine (specs/task-startup-splash.spec), vendored in
+# tree so the build needs no network (source, rev and license in
+# vendor/ttfx/PROVENANCE.md). ttfx itself only depends on clap + terminal_size.
+ttfx = { path = "vendor/ttfx" }
 ```
+
+> **Superseded 2026-10-05:** this step originally added the engine as a git pin
+> (`omacom-io/ttfx` at rev `6e24dac`) plus an optional local `[patch]` override.
+> The no-third-party-git-dependency pass vendored that same revision into
+> `tui/vendor/ttfx/` (see its `PROVENANCE.md`), so the dependency is now the
+> path above.
 
 - [ ] **Step 2: Add the local-dev patch example**
 
 Read `.cargo/config.toml.example` first, then append (matching its existing comment style):
 
-```toml
-# Live-develop the splash engine against a local ttfx checkout:
-# [patch."https://github.com/omacom-io/ttfx"]
-# ttfx = { path = "../consult/ttfx" }
-```
-
-(Keep it commented out — it is an example file.)
+> **Superseded 2026-10-05:** the appended snippet was a commented
+> `[patch."…/ttfx"] ttfx = { path = "../consult/ttfx" }` override. With the
+> engine vendored in-tree that override is obsolete and was removed from the
+> example file — local development means editing `vendor/ttfx/` directly.
 
 - [ ] **Step 3: Verify it builds**
 
