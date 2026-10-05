@@ -42,7 +42,7 @@ pub struct AnthropicProvider {
     /// round. The official endpoint defaults ON, while custom compatible
     /// endpoints require an explicit opt-in. The `RA_PROMPT_CACHING` env
     /// kill-switch can force the official default off at startup (the legacy
-    /// `ra_PROMPT_CACHING` spelling is still honoured) — see
+    /// `RA_PROMPT_CACHING` spelling is still honoured) — see
     /// [`Self::with_prompt_caching`] and [`prompt_caching_default`].
     prompt_caching: bool,
     /// Whether a builder call explicitly selected the prompt-caching mode.
@@ -83,7 +83,7 @@ fn prompt_caching_default_from(env_value: Option<&str>) -> bool {
 }
 
 /// Default prompt-caching state, honoring the `RA_PROMPT_CACHING`
-/// kill-switch (legacy `ra_PROMPT_CACHING` still honoured). See
+/// kill-switch (legacy `RA_PROMPT_CACHING` still honoured). See
 /// [`prompt_caching_default_from`].
 fn prompt_caching_default() -> bool {
     prompt_caching_default_for_base_url(OFFICIAL_ANTHROPIC_BASE_URL)
@@ -157,7 +157,7 @@ impl AnthropicProvider {
     /// wire shape (plain-string `system`, verbatim tools).
     ///
     /// Operators can flip the default OFF at startup without a rebuild via
-    /// `RA_PROMPT_CACHING=0` (legacy `ra_PROMPT_CACHING` still honoured;
+    /// `RA_PROMPT_CACHING=0` (legacy `RA_PROMPT_CACHING` still honoured;
     /// see [`prompt_caching_default`]); this explicit builder still wins over
     /// the env default when called.
     pub fn with_prompt_caching(mut self, enabled: bool) -> Self {

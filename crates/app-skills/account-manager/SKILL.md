@@ -106,4 +106,4 @@ Supported fields: `telegram_token`, `telegram_senders`, `whatsapp` (bool), `feis
 
 ## Environment Variables
 
-This tool reads `RA_HOME` and `RA_PROFILE_ID` from the environment (set automatically by the gateway; the legacy `ra_HOME`/`ra_PROFILE_ID` spellings are still honoured). No manual configuration is needed.
+This tool reads `RA_HOME` and `RA_PROFILE_ID` from the environment (set automatically by the gateway; the legacy `RA_HOME`/`RA_PROFILE_ID` spellings are still honoured). No manual configuration is needed.

@@ -33,7 +33,7 @@ const FALLBACK_PIPELINE_NAME: &str = "deep_research";
 
 /// S1-5 opt-out: whether the typed-IR ([`crate::ir`]) authoring path is exposed
 /// to the LLM by default. ON unless the operator sets `RA_PIPELINE_IR=0`
-/// (or `false`; the legacy `ra_PIPELINE_IR` is still honoured) in the daemon
+/// (or `false`; the legacy `RA_PIPELINE_IR` is still honoured) in the daemon
 /// environment (e.g. the launchd plist). The typed-IR
 /// palette is capability-locked — the LLM names kinds and prompts but cannot
 /// widen tools or select handlers — so it is safe to expose by default.

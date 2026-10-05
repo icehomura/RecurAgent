@@ -15,7 +15,7 @@ const TOKEN =
 const PROFILE = process.env.RA_PROFILE || 'admin';
 
 // The default profile above is a LOCAL-HARNESS default, not something CI has.
-// `e2e-live-nightly` sets no ra_PROFILE and its serve configures no
+// `e2e-live-nightly` sets no RA_PROFILE and its serve configures no
 // `admin` profile, so every nightly run failed at session/open with
 // `-32602 profile 'admin' is not configured for this AppUI session` — before
 // reaching a single assertion. Require the profile to be named explicitly so
@@ -23,7 +23,7 @@ const PROFILE = process.env.RA_PROFILE || 'admin';
 // pipeline. See #2073.
 test.skip(
   !process.env.RA_PROFILE,
-  'set ra_PROFILE to a profile the target server actually has ' +
+  'set RA_PROFILE to a profile the target server actually has ' +
     "(the 'admin' default is a local-harness convention, not a CI fixture)",
 );
 

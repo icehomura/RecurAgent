@@ -39,7 +39,7 @@ const CURRENT_TASK_LEDGER_SCHEMA: u32 = 1;
 /// poisoned state and stop submitting.
 ///
 /// Override at process start by setting the `RA_MAX_CHILDREN_PER_PARENT` env
-/// var (legacy `ra_MAX_CHILDREN_PER_PARENT` still honoured) to a positive
+/// var (legacy `RA_MAX_CHILDREN_PER_PARENT` still honoured) to a positive
 /// integer; the value is parsed once and cached.
 pub const MAX_CHILDREN_PER_PARENT: usize = 200;
 

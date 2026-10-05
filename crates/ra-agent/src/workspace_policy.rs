@@ -986,7 +986,7 @@ impl WorkspacePolicy {
         // `${RA_VOICE_DIR:-${RA_DATA_DIR}/voice_profiles}/<name>.wav`,
         // which under the default session workspace resolves relative to
         // the workspace root via `voice_profiles/<name>.wav`. Operators
-        // who pin a non-default `ra_VOICE_DIR` can override the path
+        // who pin a non-default `RA_VOICE_DIR` can override the path
         // in their workspace policy.
         let fm_voice_save_contract = WorkspaceSpawnTaskPolicy {
             artifact: None,

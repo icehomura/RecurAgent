@@ -32,7 +32,7 @@ const COMPLETE_VAR: &str = "RA_COMPLETE";
 const LEGACY_COMPLETE_VAR: &str = "RA_COMPLETE";
 
 /// Name of the shell-completion request variable: `RA_COMPLETE`, falling back to
-/// the legacy `ra_COMPLETE` when only that one is set (the new name wins when
+/// the legacy `RA_COMPLETE` when only that one is set (the new name wins when
 /// both are). `clap_complete` reads the variable itself and wants a
 /// `&'static str`, so the two candidate names are consts.
 fn complete_env_var() -> &'static str {
@@ -110,7 +110,7 @@ fn run_cli() -> Result<()> {
     // Answer shell completion requests before argument parsing (#2413): with
     // `RA_COMPLETE=<shell>` set the shell sources the registration script and
     // calls back into this binary on every tab; without it this is a no-op. The
-    // legacy `ra_COMPLETE` keeps shells registered before the rename working
+    // legacy `RA_COMPLETE` keeps shells registered before the rename working
     // (new name wins when both are set). The var is namespaced — a generic
     // `COMPLETE` exported for some other tool must not brick every RecurAgent
     // invocation. Must precede parsing — mid-edit arguments don't parse cleanly.

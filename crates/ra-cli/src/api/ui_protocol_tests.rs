@@ -39781,7 +39781,7 @@ fn run_zai_real_call(provider: &Arc<dyn ra_llm::LlmProvider>) -> (String, ra_llm
         .build()
         .expect("tokio runtime for the real zai call");
     rt.block_on(async {
-        let messages = vec![Message::user("Reply with exactly: ra_S3_ZAI_OK")];
+        let messages = vec![Message::user("Reply with exactly: RA_S3_ZAI_OK")];
         let config = ChatConfig {
             max_tokens: Some(32),
             ..Default::default()

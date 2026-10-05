@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install.sh — Install ra on a fresh machine from this source tree.
 # Default path: builds the release binaries locally with cargo and installs
-# them. Set ra_DOWNLOAD_URL (or drop a ra-bundle-<triple>.tar.gz next to
+# them. Set RA_DOWNLOAD_URL (or drop a ra-bundle-<triple>.tar.gz next to
 # this script) to install an already-built bundle instead.
 #
 # Usage:
@@ -99,7 +99,7 @@ while [ $# -gt 0 ]; do
             cat << 'HELPEOF'
 install.sh — Install ra on a fresh machine from this source tree.
 Default path: builds the release binaries locally with cargo and installs
-them. Set ra_DOWNLOAD_URL (or drop a ra-bundle-<triple>.tar.gz next to
+them. Set RA_DOWNLOAD_URL (or drop a ra-bundle-<triple>.tar.gz next to
 this script) to install an already-built bundle instead.
 
 Usage:
@@ -116,13 +116,13 @@ Options:
   --doctor                 Diagnose installation and service health
 
 Environment:
-  ra_DOWNLOAD_URL       Install a pre-built bundle from this directory or
+  RA_DOWNLOAD_URL       Install a pre-built bundle from this directory or
                            file:// URL (ra-bundle-<triple>.tar.gz [+ .sha256])
                            instead of building from source
-  ra_SOURCE_DIR         Source tree to build from (default: the checkout
+  RA_SOURCE_DIR         Source tree to build from (default: the checkout
                            this script lives in, then $PWD)
-  ra_PREFIX             Install prefix (same as --prefix)
-  ra_HOME               Data directory (default: ~/.ra)
+  RA_PREFIX             Install prefix (same as --prefix)
+  RA_HOME               Data directory (default: ~/.ra)
   RA_BUILD_FEATURES        cargo features for `ra` in a source build
                            (default: api,telegram,discord,dingtalk,whatsapp,
                            feishu,twilio,wecom,wecom-bot,audio_mp3)
@@ -178,7 +178,7 @@ DATA_DIR="$(normalize_path "$DATA_DIR")"
 #
 #   config_home = $RA_CONFIG_DIR                       (if set, non-empty)
 #               | $DATA_DIR                               (if explicit: an
-#                                                          ra_HOME override
+#                                                          RA_HOME override
 #                                                          != $HOME/.ra)
 #               | XDG default                             (otherwise)
 #
@@ -201,7 +201,7 @@ xdg_config_home() {
     fi
 }
 
-# Resolve symlinks/. /.. best-effort so the ra_HOME-vs-default comparison
+# Resolve symlinks/. /.. best-effort so the RA_HOME-vs-default comparison
 # matches Rust's canonicalize() (which resolves symlinks when the path exists).
 # Prefer python3's os.path.realpath (consistent across macOS/Linux, handles
 # non-existent paths), then GNU `realpath -m`, then BSD `realpath`, finally the
@@ -228,7 +228,7 @@ compute_config_home() {
         normalize_path "$RA_CONFIG_DIR"
         return 0
     fi
-    # Explicit when DATA_DIR (from ra_HOME) is a non-default override.
+    # Explicit when DATA_DIR (from RA_HOME) is a non-default override.
     # Compare CANONICALIZED paths so symlinked / trailing-slash variants of
     # ~/.ra still resolve to the default (mirrors normalize_for_compare).
     if [ "$(canonicalize_path "$DATA_DIR")" != "$(canonicalize_path "$HOME/.ra")" ]; then
@@ -663,7 +663,7 @@ UNIT_EOF
 }
 
 # Write and load the ra serve system service (plist on Darwin, systemd on Linux).
-# Uses globals: ra_BIN, AUTH_TOKEN, DATA_DIR, PREFIX, HOME
+# Uses globals: RA_BIN, AUTH_TOKEN, DATA_DIR, PREFIX, HOME
 write_ra_service() {
     # Persist the SMTP password in `$DATA_DIR/smtp_secret.json` (0600) before
     # loading the service so the fresh process can read it. The password is
@@ -705,7 +705,7 @@ write_ra_service() {
         <string>--host</string>
         <string>0.0.0.0</string>
     </array>
-    <!-- #2371: the token travels via ra_AUTH_TOKEN below, never argv —
+    <!-- #2371: the token travels via RA_AUTH_TOKEN below, never argv —
          ProgramArguments are readable by any local process via ps. #2388:
          the plist holds secrets, so it is installed 0600 root:wheel —
          launchd reads it as root, no other local user can. -->
@@ -733,11 +733,11 @@ write_ra_service() {
         <string>$PREFIX:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
         <key>HOME</key>
         <string>$HOME</string>
-        <key>ra_DATA_DIR</key>
+        <key>RA_DATA_DIR</key>
         <string>$DATA_DIR</string>
-        <key>ra_HOME</key>
+        <key>RA_HOME</key>
         <string>$DATA_DIR</string>
-    <key>ra_AUTH_TOKEN</key>
+    <key>RA_AUTH_TOKEN</key>
     <string>$AUTH_TOKEN</string>
 $(launchd_env_var_xml "XDG_CONFIG_HOME" "${XDG_CONFIG_HOME:-}")
 $(launchd_env_var_xml "RA_CONFIG_DIR" "${RA_CONFIG_DIR:+$CONFIG_HOME}")
@@ -965,7 +965,7 @@ if [ "$RUN_DOCTOR" = true ]; then
         if command -v ra &>/dev/null; then
             FOUND="$(command -v ra)"
             warn "not found at $RA_BIN, but found at $FOUND"
-            hint "Set ra_PREFIX or add $PREFIX to PATH"
+            hint "Set RA_PREFIX or add $PREFIX to PATH"
         else
             err "ra binary not found"
             hint "Run install.sh to install"
@@ -1704,7 +1704,7 @@ if [ -n "$DOWNLOAD_BASE" ]; then
     # downloading a 404.
     case "$TRIPLE" in
         aarch64-apple-darwin|x86_64-unknown-linux-gnu|aarch64-unknown-linux-gnu) ;;
-        *) err "No bundle is published for $TRIPLE. Re-run without ra_DOWNLOAD_URL to build from source." ;;
+        *) err "No bundle is published for $TRIPLE. Re-run without RA_DOWNLOAD_URL to build from source." ;;
     esac
     DOWNLOAD_URL="${DOWNLOAD_BASE}/${TARBALL}"
     ok "bundle: $DOWNLOAD_URL"
@@ -1714,7 +1714,7 @@ else
     if ! SOURCE_ROOT="$(resolve_source_root)"; then
         err "Could not find the ra source tree to build from."
         hint "Run this script from the checkout (scripts/install.sh), set"
-        hint "RA_SOURCE_DIR, or point ra_DOWNLOAD_URL at a bundle."
+        hint "RA_SOURCE_DIR, or point RA_DOWNLOAD_URL at a bundle."
         exit 1
     fi
     ok "source tree: $SOURCE_ROOT"
@@ -1831,7 +1831,7 @@ fi
 # Runtime STATE (profiles/sessions/skills/...) lives under $DATA_DIR. The
 # starter config.json is written to $CONFIG_HOME — the bash mirror of the Rust
 # resolver (XDG for a default install; the state dir for an explicit
-# ra_HOME; ra_CONFIG_DIR when set).
+# RA_HOME; RA_CONFIG_DIR when set).
 mkdir -p "$DATA_DIR"/{profiles,memory,sessions,skills,logs,research,history}
 
 # Legacy config for the default case: never shadow an existing legacy config.

@@ -129,7 +129,7 @@ pub fn embedding_model_status(data_dir: String) -> Result<String, RaError> {
 /// Blocks for the whole transfer, so call it from a plain thread before
 /// [`Runtime::new`] when the host wants to own the timing. Raises
 /// [`RaError::Embed`] when the file is absent and `download` is false (or
-/// `RA_NO_MODEL_DOWNLOAD`, legacy `ra_NO_MODEL_DOWNLOAD`, is set), or the
+/// `RA_NO_MODEL_DOWNLOAD`, legacy `RA_NO_MODEL_DOWNLOAD`, is set), or the
 /// download fails to verify.
 #[uniffi::export]
 pub fn embedding_model_ensure(data_dir: String, download: bool) -> Result<String, RaError> {
@@ -693,7 +693,7 @@ mod tests {
     }
 
     /// Real end-to-end run. Ignored: needs a live provider + network. Configure
-    /// via env `RA_UNIFFI_TEST_KEY_ENV` (legacy `ra_UNIFFI_TEST_KEY_ENV`
+    /// via env `RA_UNIFFI_TEST_KEY_ENV` (legacy `RA_UNIFFI_TEST_KEY_ENV`
     /// still honoured; default `OPENAI_API_KEY`). Run with:
     ///   cargo test -p ra-uniffi -- --ignored real_run_task
     #[test]

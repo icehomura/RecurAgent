@@ -19,7 +19,7 @@
  *   npx playwright test tests/skill-compat-gate.spec.ts
  *
  * The canary host must have the fixture directory reachable at the
- * `ra_COMPAT_SKILL_SOURCE` path. For a default canary deploy the tree
+ * `RA_COMPAT_SKILL_SOURCE` path. For a default canary deploy the tree
  * is checked into the repo at `e2e/fixtures/compat-test-skill/`.
  */
 import { expect, test, type Page } from '@playwright/test';

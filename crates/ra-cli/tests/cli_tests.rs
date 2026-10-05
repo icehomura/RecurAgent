@@ -240,7 +240,7 @@ fn test_completions_env_channel_wiring() {
         "the binary must answer the completion channel with the registration script"
     );
 
-    // The legacy `ra_COMPLETE` name keeps shells registered before the
+    // The legacy `RA_COMPLETE` name keeps shells registered before the
     // rename working, so it must still answer the channel.
     let legacy = Command::new(ra_binary())
         .env_remove("RA_COMPLETE")
@@ -252,7 +252,7 @@ fn test_completions_env_channel_wiring() {
     let stdout = String::from_utf8_lossy(&legacy.stdout);
     assert!(
         stdout.contains("_clap_complete_RA"),
-        "the legacy ra_COMPLETE name must still answer the completion channel"
+        "the legacy RA_COMPLETE name must still answer the completion channel"
     );
 
     // The channel is namespaced: a generic COMPLETE exported for some other

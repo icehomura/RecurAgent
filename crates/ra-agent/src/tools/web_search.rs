@@ -282,7 +282,7 @@ pub(crate) fn serp_scrape_opted_in(lookup: impl Fn(&str) -> Option<String>) -> b
 }
 
 /// Whether the RecurAgent metasearch is on (`RA_METASEARCH`, default on; legacy
-/// `ra_METASEARCH` is still honoured).
+/// `RA_METASEARCH` is still honoured).
 fn metasearch_on() -> bool {
     ra_research::metasearch::enabled(compat_env_lookup)
 }

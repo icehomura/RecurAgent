@@ -29,7 +29,7 @@ pointing the swarm at it, and verifying against the contract.
 - Branch convention: `robotics/<yyyy-mm-dd>-<issue-slug>`
 - Commit scope tag: `robotics(R0N):`
 - Phase prefix: `Phase ra`, `Phase RB`, `Phase RC`, `Phase RD`
-- Release-contract filename: `docs/ra_ROBOTICS_RELEASE_<yyyy-mm-dd>.md`
+- Release-contract filename: `docs/RA_ROBOTICS_RELEASE_<yyyy-mm-dd>.md`
 
 These names are mandatory. They exist so the swarm can dispatch work by
 string match, and so out-of-family drift is rejected at review time.
@@ -38,7 +38,7 @@ string match, and so out-of-family drift is rejected at review time.
 
 The robotics family does not start until
 `release/2026-04-17-harness-gate-local` lands with its three blocking fixes
-from `ra_RUNTIME_PHASE3_REVIEW.md` applied. The mission contract in
+from `RA_RUNTIME_PHASE3_REVIEW.md` applied. The mission contract in
 Phase RB is an extension of the workspace contract landed by that branch.
 
 ## Phase Ordering
@@ -124,7 +124,7 @@ Phase RD is explicitly deferred until RC canary soak passes.
 ## Release Contracts
 
 Each phase produces one or more release contracts named
-`ra_ROBOTICS_RELEASE_<yyyy-mm-dd>.md`. The contract is modeled after the
+`RA_ROBOTICS_RELEASE_<yyyy-mm-dd>.md`. The contract is modeled after the
 `## Release Contract — 2026-04-17` section of
 `ra_HARNESS_MASTER_PLAN.md`.
 
@@ -197,7 +197,7 @@ name. Workers may rotate. Roles may not.
 A slice is driven by a four-step loop.
 
 1. **Author the release contract.** The architect writes
-   `ra_ROBOTICS_RELEASE_<date>.md` by copying the template from the
+   `RA_ROBOTICS_RELEASE_<date>.md` by copying the template from the
    harness master plan and filling in the slice fields. The PM reviews
    scope and sequencing before the slice opens.
 2. **Dispatch by contract, not by chat.** The PM hands workers the
@@ -294,6 +294,6 @@ This family doc is the canonical program record.
 Per-issue contracts live in
 [ra_ROBOTICS_CONTRACTS.md](./ra_ROBOTICS_CONTRACTS.md). Release
 contracts are per-date files named
-`docs/ra_ROBOTICS_RELEASE_<yyyy-mm-dd>.md`. Architecture targets and
+`docs/RA_ROBOTICS_RELEASE_<yyyy-mm-dd>.md`. Architecture targets and
 required invariants live in
 [ra_ROBOTICS_ARCHITECTURE.md](./ra_ROBOTICS_ARCHITECTURE.md).

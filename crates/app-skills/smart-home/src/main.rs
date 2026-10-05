@@ -149,7 +149,7 @@ fn resolve_bridge_from_profile() -> Result<BridgeConfig, String> {
         Some(v) => v,
         None => {
             return Err(
-                "RA_PROFILE_ID (legacy ra_PROFILE_ID) is not set — run from a gateway, or set \
+                "RA_PROFILE_ID (legacy RA_PROFILE_ID) is not set — run from a gateway, or set \
                  SMART_HOME_BRIDGE_URL (and SMART_HOME_BRIDGE_TOKEN) directly"
                     .to_string(),
             )

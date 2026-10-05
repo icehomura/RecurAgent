@@ -32,7 +32,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Resolve data directory: --data-dir flag > ra_HOME env var > ~/.ra
+# Resolve data directory: --data-dir flag > RA_HOME env var > ~/.ra
 if [[ -n "$DATA_DIR_OVERRIDE" ]]; then
   DATA_DIR="$DATA_DIR_OVERRIDE"
 elif [[ -n "${RA_HOME:-}" ]]; then

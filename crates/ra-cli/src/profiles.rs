@@ -17,7 +17,7 @@ pub const MAX_SUB_ACCOUNTS_PER_PARENT: usize = 10;
 pub(crate) const HOST_ASR_LANGUAGE_ENV: &str = "RA_HOST_ASR_LANGUAGE";
 /// New-name spelling of [`HOST_ASR_LANGUAGE_ENV`]; spawned children get both so
 /// readers on either side of the rename agree.
-pub(crate) const ra_HOST_ASR_LANGUAGE_ENV: &str = "RA_HOST_ASR_LANGUAGE";
+pub(crate) const RA_HOST_ASR_LANGUAGE_ENV: &str = "RA_HOST_ASR_LANGUAGE";
 
 pub const SUPPORTED_ASR_LANGUAGES: &[&str] = &[
     "Chinese",

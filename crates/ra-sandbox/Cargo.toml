@@ -38,7 +38,7 @@ seccompiler = "0.5.0"
 
 [dev-dependencies]
 # Test-only: the manual smoke knob is read through the shared brand helper
-# (`RA_HOST_MANAGED_BINARY` first, legacy `ra_HOST_MANAGED_BINARY` still
+# (`RA_HOST_MANAGED_BINARY` first, legacy `RA_HOST_MANAGED_BINARY` still
 # honoured). The shipped helper itself stays dependency-free.
 ra-core = { workspace = true }
 tempfile = "3"

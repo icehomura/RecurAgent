@@ -196,7 +196,7 @@ Runtime behavior:
 - the server launches backend-owned specialists and surfaces lifecycle through
   `agent/updated`, `agent/output/delta`, and `agent/artifact/updated`
 - the native specialist list is server-resolved, not hard-coded into AppUI:
-  `ra_REVIEW_NATIVE_SPECIALISTS_JSON` may override it for test/operator
+  `RA_REVIEW_NATIVE_SPECIALISTS_JSON` may override it for test/operator
   runs; otherwise the active profile's `review.native_specialists` list is
   used; otherwise the server falls back to its built-in default review
   template

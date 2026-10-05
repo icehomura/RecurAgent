@@ -28,13 +28,13 @@ by itself.
 | External token | stdin, second line (empty: none) | user `_main`, role user | `GET /api/ui-protocol/ws`, and there only the allowlist below |
 
 - Only these two tokens authenticate. There is no solo login (not even with
-  `ra_SOLO_LOGIN`), no trusted-proxy `X-Profile-Id`, no hashed admin-token
-  store, no `ra_TEST_TOKEN` and no OTP session.
+  `RA_SOLO_LOGIN`), no trusted-proxy `X-Profile-Id`, no hashed admin-token
+  store, no `RA_TEST_TOKEN` and no OTP session.
 - The host writes both tokens as the first two lines of the server's stdin,
   then keeps stdin open (the lifeline, below). Tokens never go in the
   environment: any process of the same user can read `/proc/<pid>/environ`,
-  and on Android that includes this app's own tools. `ra_AUTH_TOKEN` and
-  `ra_HOST_EXTERNAL_TOKEN` in the environment, `--auth-token` and the
+  and on Android that includes this app's own tools. `RA_AUTH_TOKEN` and
+  `RA_HOST_EXTERNAL_TOKEN` in the environment, `--auth-token` and the
   config file's `auth_token` are all refused. Tokens must be at least 32
   characters of RFC 7230 `tchar`, and the two must differ.
 - Neither token is printed, logged or returned by a route. The only exception
@@ -149,7 +149,7 @@ re-checked, and DNS answers are pinned.
   answered 421 before routing. This blocks DNS rebinding. A tunnel into the
   device must preserve the port number (for example `adb forward tcp:P tcp:P`).
 - **Origin.** CORS and the WebSocket upgrade trust only the configured origins
-  (`appui.allowed_origins` or `ra_APPUI_ALLOWED_ORIGINS`), without the
+  (`appui.allowed_origins` or `RA_APPUI_ALLOWED_ORIGINS`), without the
   built-in development, ominix or per-tenant origins, and without the
   listener's own loopback origins. A WebSocket upgrade that carries the
   browser-only `Sec-Fetch-*` headers but no `Origin` is refused. A client that

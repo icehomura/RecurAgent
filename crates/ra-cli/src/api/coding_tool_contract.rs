@@ -95,7 +95,7 @@ pub(crate) const CODING_P0_REQUIRED_TOOL_NAMES: &[&str] = &[
     "close_agent",
 ];
 
-pub(crate) const ra_KNOWN_MODEL_VISIBLE_TOOLS: &[&str] = &[
+pub(crate) const RA_KNOWN_MODEL_VISIBLE_TOOLS: &[&str] = &[
     "apply_patch",
     "exec_command",
     "write_stdin",
@@ -186,7 +186,7 @@ impl<'a> ToolStatusListContext<'a> {
             profile_id: None,
             session_id,
             policy: ToolPolicyView::default(),
-            available_model_tools: ra_KNOWN_MODEL_VISIBLE_TOOLS,
+            available_model_tools: RA_KNOWN_MODEL_VISIBLE_TOOLS,
             disabled_model_tools: &[],
             deferred_model_tools: &[],
             include_coding_tool_contract: true,
@@ -328,7 +328,7 @@ const REQUIRED_CODING_TOOLS: &[RequiredToolSpec] = &[
     },
 ];
 
-const ra_TOOL_SPECS: &[RaToolSpec] = &[
+const RA_TOOL_SPECS: &[RaToolSpec] = &[
     RaToolSpec {
         name: "apply_patch",
         category: "edit",
@@ -842,7 +842,7 @@ fn ra_tool_status_entries(
     available_model_tools: &HashSet<&str>,
     disabled_model_tools: &HashSet<&str>,
 ) -> Vec<Value> {
-    let mut entries: Vec<Value> = ra_TOOL_SPECS
+    let mut entries: Vec<Value> = RA_TOOL_SPECS
         .iter()
         .filter(|spec| {
             available_model_tools.contains(spec.name) || disabled_model_tools.contains(spec.name)
@@ -851,7 +851,7 @@ fn ra_tool_status_entries(
         .collect();
 
     for name in available_model_tools {
-        if ra_TOOL_SPECS.iter().any(|spec| spec.name == *name) {
+        if RA_TOOL_SPECS.iter().any(|spec| spec.name == *name) {
             continue;
         }
         entries.push(json!({
@@ -1295,7 +1295,7 @@ mod tests {
     }
 
     /// #972 / M14-B P1 — sibling guard for the optional Codex parity surface.
-    /// Once these tools land, the ra_KNOWN_MODEL_VISIBLE_TOOLS / RaToolSpec
+    /// Once these tools land, the RA_KNOWN_MODEL_VISIBLE_TOOLS / RaToolSpec
     /// arrays and the `with_builtins` registration must all stay in lockstep
     /// so the contract's tools array surfaces them as `available` whenever
     /// the live registry registers them.
@@ -1391,7 +1391,7 @@ mod tests {
 
     /// #1149 / M14-B P2 — when the runtime reports `image_generation` as
     /// available, the contract's `tools` array must surface it through the
-    /// ra_TOOL_SPECS entry (status `available`, category `media`).
+    /// RA_TOOL_SPECS entry (status `available`, category `media`).
     #[test]
     fn p2_image_generation_appears_in_contract_tools_array() {
         let available = &["image_generation"];
@@ -1410,7 +1410,7 @@ mod tests {
     }
 
     /// #972 / M14-B P1 — the contract's `tools` array (driven by
-    /// ra_TOOL_SPECS) must surface every P1 tool when the runtime
+    /// RA_TOOL_SPECS) must surface every P1 tool when the runtime
     /// reports it as available. Otherwise the AppUI inspection flow can't
     /// see the new entries even though the live registry has them.
     #[test]

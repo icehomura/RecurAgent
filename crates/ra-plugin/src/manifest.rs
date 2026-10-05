@@ -50,7 +50,7 @@ pub struct ToolDefinition {
     /// Optional entrypoint override (legacy field).
     #[serde(default)]
     pub entrypoint: Option<String>,
-    /// Item 6 of ra_M8_FIX_FIRST_CHECKLIST_2026-04-24:
+    /// Item 6 of RA_M8_FIX_FIRST_CHECKLIST_2026-04-24:
     /// optional concurrency class. When set to `"exclusive"` the M8.8
     /// scheduler serialises this tool against any other tool in the
     /// same batch instead of fanning out in parallel. Defaults to

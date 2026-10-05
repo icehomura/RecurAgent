@@ -108,12 +108,12 @@ The rollout selector is:
 | `shadow` | Legacy projection remains model-visible while the semantic candidate is calculated and compared through redacted hashes/counts. |
 | `off` | Legacy item-boundary compaction remains available as an operational rollback. |
 
-Set it with `ra_OUP_SEMANTIC_CONTEXT_MODE`. Automatic compaction defaults
+Set it with `RA_OUP_SEMANTIC_CONTEXT_MODE`. Automatic compaction defaults
 to 70% of the provider context window and targets two thirds of that threshold
 (about 46.7% of the window, before summary-budget reservation). Tests and
 operators can override those values with
-`ra_CONTEXT_COMPACT_THRESHOLD_TOKENS` and
-`ra_CONTEXT_COMPACT_TARGET_TOKENS`.
+`RA_CONTEXT_COMPACT_THRESHOLD_TOKENS` and
+`RA_CONTEXT_COMPACT_TARGET_TOKENS`.
 
 ### Delivered work by phase
 
@@ -597,7 +597,7 @@ Reviewed and left as documented limitations (not fixed in this pass):
   and can log a lane change; no production caller today.
 - `ledger_rebuilt` is an in-memory flag: a rebuild performed by a
   hydrate/inspection read persists a covering snapshot, and the next turn
-  reports `initialized`. The in-loop `ra_CONTEXT_COMPACT_THRESHOLD_TOKENS`
+  reports `initialized`. The in-loop `RA_CONTEXT_COMPACT_THRESHOLD_TOKENS`
   path applies no clamp/warning.
 - Sub-agent affinity keys: spawn/delegate workers hash `"anonymous"`, so all
   sub-agents in a process share one `prompt_cache_key` (routing efficiency
@@ -2192,7 +2192,7 @@ against the same AppState; it is not described as a cold-process restart test.
 
 New pinned-binary proof directory:
 `/tmp/ra-terminal-integrity-final-20260904.XEjkc9`. Unlike the earlier harness,
-this run also isolates `ra_HOME` and the profile registry so model switching
+this run also isolates `RA_HOME` and the profile registry so model switching
 does not modify the operator's active profile. The operator's design window has
 not been terminated or restarted, and no installed binary has been replaced.
 
@@ -2309,7 +2309,7 @@ grounds to discard work. The pre-existing crash window between in-memory fleet
 synthesis enqueue and durable synthesized marks is also not claimed repaired.
 
 The next live run, `/tmp/ra-peer-wake-final-20260904.uvgEr7`, used an isolated
-`ra_HOME`, a new store, and newly built pinned backend/client binaries. It ran
+`RA_HOME`, a new store, and newly built pinned backend/client binaries. It ran
 20:30–20:39 PDT through all 30 scenarios, five compactions, client restart, three
 daemon restarts and K3 → GLM-5.3 → K3. The driver again reported `FAILS=0`, but
 the unchanged independent gate **failed T14=2**, with every other expected reply

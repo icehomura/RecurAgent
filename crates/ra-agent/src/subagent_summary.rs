@@ -322,7 +322,7 @@ async fn run_watcher_loop(
     session_id: String,
     task_id: String,
 ) {
-    // Item 4 of ra_M8_FIX_FIRST_CHECKLIST_2026-04-24:
+    // Item 4 of RA_M8_FIX_FIRST_CHECKLIST_2026-04-24:
     // honour `min_runtime` before producing the first summary. Short
     // tasks that complete inside the warm-up window never trigger a
     // cheap-lane LLM call. We poll terminal status during the wait so

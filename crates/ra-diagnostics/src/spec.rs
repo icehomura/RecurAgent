@@ -51,7 +51,7 @@ pub struct ProductSpec {
     /// `owner/repo` on GitHub, e.g. `icehomura/RecurAgent`.
     pub github_repo: String,
     /// Env var holding an optional GitHub token to dodge the unauthenticated
-    /// rate limit, e.g. `ra_GITHUB_TOKEN`. Optional auth — the GitHub client
+    /// rate limit, e.g. `RA_GITHUB_TOKEN`. Optional auth — the GitHub client
     /// (Stage 2, `github` feature) reads it only when this is `Some` and the var
     /// is set & non-blank; a public repo never requires it.
     pub github_token_env: Option<String>,

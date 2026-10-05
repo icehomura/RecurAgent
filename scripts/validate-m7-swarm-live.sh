@@ -47,8 +47,8 @@ Optional arguments:
   --                      pass remaining arguments through to Playwright
 
 Environment overrides mirror the CLI flags:
-  ra_TEST_URL, ra_AUTH_TOKEN, ra_PROFILE, ra_TEST_EMAIL,
-  ra_M7_SWARM_OUTPUT_DIR
+  RA_TEST_URL, RA_AUTH_TOKEN, RA_PROFILE, RA_TEST_EMAIL,
+  RA_M7_SWARM_OUTPUT_DIR
 
 Exit codes:
   0   all assertions passed, or --list succeeded
@@ -114,11 +114,11 @@ NODE
 
 if [[ "$LIST_ONLY" == false ]]; then
   if [[ -z "$BASE_URL" ]]; then
-    fail "missing --base-url (or ra_TEST_URL)"
+    fail "missing --base-url (or RA_TEST_URL)"
     exit 2
   fi
   if [[ -z "$AUTH_TOKEN" ]]; then
-    fail "missing --auth-token (or ra_AUTH_TOKEN)"
+    fail "missing --auth-token (or RA_AUTH_TOKEN)"
     exit 2
   fi
 fi

@@ -16,7 +16,7 @@
 //! single-fact controls.
 //!
 //! Production deepseek runs with `RA_PIPELINE_IR` OFF (the legacy
-//! `ra_PIPELINE_IR` is still honoured), so this probes the
+//! `RA_PIPELINE_IR` is still honoured), so this probes the
 //! NON-IR (`with_ir_enabled(false)`) description branch — the one prod sees.
 //!
 //! Run:

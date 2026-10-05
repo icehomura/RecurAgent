@@ -84,7 +84,7 @@ Within a profile, each user (identified by `channel:chat_id`) gets a dedicated `
 
 Each session is an independent JSONL store (an active file plus sealed `<name>.segments/` segments) with the following protections:
 
-- Bounded memory without a size cliff: the active file seals into 8 MiB segments (`ra_SESSION_SEGMENT_BYTES`), and loads read at most `ra_SESSION_LOAD_BUDGET_BYTES` (32 MiB, 0 = unlimited) of newest-first history.
+- Bounded memory without a size cliff: the active file seals into 8 MiB segments (`RA_SESSION_SEGMENT_BYTES`), and loads read at most `RA_SESSION_LOAD_BUDGET_BYTES` (32 MiB, 0 = unlimited) of newest-first history.
 - Atomic write-then-rename for crash safety.
 - No cross-session file access — `SessionHandle` only reads/writes within its `sessions_dir`.
 
@@ -411,7 +411,7 @@ Shared resources such as deployment-scoped skills, platform skills, global confi
 
 **Issue**: `read_no_follow` reads the entire file into memory before any slicing or offset is applied. A large file (e.g., multi-GB log) can cause OOM.
 
-**Mitigation**: Session files roll into segments at `ra_SESSION_SEGMENT_BYTES` (8 MiB), so no single session file grows unbounded. For general file reads, the tool should implement streaming or size-check-before-read. Currently relies on the LLM not targeting excessively large files.
+**Mitigation**: Session files roll into segments at `RA_SESSION_SEGMENT_BYTES` (8 MiB), so no single session file grows unbounded. For general file reads, the tool should implement streaming or size-check-before-read. Currently relies on the LLM not targeting excessively large files.
 
 ### 4.7 Sandbox Enabled by Default
 

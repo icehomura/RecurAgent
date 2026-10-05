@@ -29,7 +29,7 @@ const SOLO_E2E = process.env.RA_SOLO_E2E === '1';
 test.skip(
   !SOLO_E2E,
   'needs `ra serve --solo` on a fresh data dir plus a vite dev server ' +
-    'proxying /api to it, with ra_TEST_URL pointed at vite. Set ' +
+    'proxying /api to it, with RA_TEST_URL pointed at vite. Set ' +
     'RA_SOLO_E2E=1 once both are running.',
 );
 

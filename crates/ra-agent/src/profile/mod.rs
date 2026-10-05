@@ -658,12 +658,12 @@ mod tests {
     }
 
     #[test]
-    fn should_not_read_profile_from_legacy_ra_user_dir() {
-        // No backward compatibility: a `profile.json` under
-        // `<home>/.ra/profiles/<name>/` is not consulted, so the lookup
+    fn should_not_read_profile_from_a_non_state_dir() {
+        // No backward compatibility: a `profile.json` outside the state dir
+        // (here `<home>/.old/profiles/<name>/`) is not consulted, so the lookup
         // falls through to the built-in registry and fails for an unknown id.
         let fake_home = tempfile::tempdir().expect("tempdir");
-        let profiles_dir = fake_home.path().join(".ra").join("profiles/alpha");
+        let profiles_dir = fake_home.path().join(".old").join("profiles/alpha");
         std::fs::create_dir_all(&profiles_dir).expect("mkdirs");
         std::fs::write(
             profiles_dir.join("profile.json"),
@@ -672,7 +672,7 @@ mod tests {
         .expect("write");
 
         let err = ProfileDefinition::load_with_home("alpha", Some(fake_home.path()))
-            .expect_err("the legacy ra profile dir must be ignored");
+            .expect_err("a non-state profile dir must be ignored");
         assert!(format!("{err:#}").contains("alpha"));
     }
 
@@ -696,40 +696,6 @@ mod tests {
             .expect("load from ra user dir");
         assert_eq!(def.name, "beta");
         assert_eq!(def.description.as_deref(), Some("new"));
-        assert_eq!(source, ProfileSource::UserDir);
-    }
-
-    #[test]
-    fn should_prefer_ra_user_dir_over_legacy_ra_dir() {
-        // No backward compatibility: the legacy `<home>/.ra/profiles` copy
-        // is never read; only `<home>/.ra/profiles` is.
-        let fake_home = tempfile::tempdir().expect("tempdir");
-        let new_dir = fake_home
-            .path()
-            .join(ra_core::brand::STATE_DIR)
-            .join("profiles/gamma");
-        std::fs::create_dir_all(&new_dir).expect("mkdirs ra");
-        std::fs::write(
-            new_dir.join("profile.json"),
-            r#"{"name": "gamma", "version": 1, "description": "new"}"#,
-        )
-        .expect("write ra");
-        let legacy_dir = fake_home.path().join(".ra").join("profiles/gamma");
-        std::fs::create_dir_all(&legacy_dir).expect("mkdirs legacy");
-        std::fs::write(
-            legacy_dir.join("profile.json"),
-            r#"{"name": "gamma", "version": 1, "description": "legacy"}"#,
-        )
-        .expect("write legacy");
-
-        let (def, source) = ProfileDefinition::load_with_home("gamma", Some(fake_home.path()))
-            .expect("load from ra user dir");
-        assert_eq!(def.name, "gamma");
-        assert_eq!(
-            def.description.as_deref(),
-            Some("new"),
-            "the new-slug profile must win over the legacy copy"
-        );
         assert_eq!(source, ProfileSource::UserDir);
     }
 
@@ -1102,7 +1068,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Item 5 of ra_M8_FIX_FIRST_CHECKLIST_2026-04-24:
+    // Item 5 of RA_M8_FIX_FIRST_CHECKLIST_2026-04-24:
     // Profiles and AgentDefinitions must be authoritative — fields that the
     // runtime does NOT enforce should be rejected/cleaned up so M9 clients
     // do not assume they are operational.

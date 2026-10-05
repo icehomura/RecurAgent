@@ -3074,7 +3074,7 @@ fn should_preserve_messages_when_worktree_missing() {
 }
 
 // ----------------------------------------------------------------------
-// Item 3 of ra_M8_FIX_FIRST_CHECKLIST_2026-04-24:
+// Item 3 of RA_M8_FIX_FIRST_CHECKLIST_2026-04-24:
 // worktree-missing must be a hard resume refusal. The session actor
 // calls `clear_messages_for_unsafe_resume()` on Err so the in-memory
 // transcript cannot be silently consumed by the first LLM call.

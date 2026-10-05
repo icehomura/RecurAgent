@@ -65,7 +65,7 @@ interface HostTrial {
   sshHost: string;
 }
 
-// SSH targets come from ra_FLEET_SSH_MAP (same format as in
+// SSH targets come from RA_FLEET_SSH_MAP (same format as in
 // m8-runtime-invariants-live.spec.ts). river uses key auth; the rest use
 // the project SSH config (~/.ssh/config) and ControlMaster.
 // SSH targets per fleet host come from the environment so no host

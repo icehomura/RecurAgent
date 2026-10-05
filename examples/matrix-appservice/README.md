@@ -99,7 +99,7 @@ cp examples/matrix-appservice/botfather.json ~/.ra/profiles/
 cd /path/to/palpo && cargo run --release
 
 # 4. Start ra gateway
-unset ra_SERVE_URL
+unset RA_SERVE_URL
 DEEPSEEK_API_KEY="your-key" \
   ra gateway --profile ~/.ra/profiles/botfather.json --data-dir ~/.ra
 ```

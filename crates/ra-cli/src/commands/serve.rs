@@ -54,7 +54,7 @@ const SESSION_CACHE_IDLE_TTL: std::time::Duration = std::time::Duration::from_se
 
 /// Idle lifetime of a cached per-session runtime.
 ///
-/// `RA_SESSION_CACHE_IDLE_TTL_SECS` (legacy `ra_SESSION_CACHE_IDLE_TTL_SECS`)
+/// `RA_SESSION_CACHE_IDLE_TTL_SECS` (legacy `RA_SESSION_CACHE_IDLE_TTL_SECS`)
 /// overrides it (minimum 1 s; a malformed
 /// or zero value keeps the default). Rebuilding an evicted runtime is correct
 /// but slow for a long session, so an operator on a big box may want it
@@ -404,7 +404,7 @@ pub struct ServeCommand {
 
     /// Auth token for API access (overrides config). Visible in the process
     /// list (`ps`) — prefer the RA_AUTH_TOKEN env var (legacy
-    /// ra_AUTH_TOKEN) or the config file.
+    /// RA_AUTH_TOKEN) or the config file.
     #[arg(long)]
     pub auth_token: Option<String>,
 
@@ -422,7 +422,7 @@ pub struct ServeCommand {
     /// local single-user install. OFF by default. Only honoured for direct
     /// loopback requests on a Local-mode host with profile/user stores, and
     /// never when the request carries reverse-proxy headers. Also settable
-    /// via `RA_SOLO_LOGIN=1` (legacy `ra_SOLO_LOGIN`). In Local mode profiles
+    /// via `RA_SOLO_LOGIN=1` (legacy `RA_SOLO_LOGIN`). In Local mode profiles
     /// run in this process;
     /// per-profile gateways are not auto-started. Do NOT set on a host fronted by a
     /// reverse proxy (e.g. the Caddy-fronted fleet) — see `api::solo_auth`.
@@ -436,7 +436,7 @@ pub struct ServeCommand {
     /// selecting Full Access from the `/permissions` menu). A session's
     /// explicit `/permissions` choice still overrides the default. Also
     /// settable via `RA_DANGER_FULL_ACCESS=1` (legacy
-    /// `ra_DANGER_FULL_ACCESS`).
+    /// `RA_DANGER_FULL_ACCESS`).
     #[arg(long)]
     pub danger_full_access: bool,
 
@@ -444,7 +444,7 @@ pub struct ServeCommand {
     /// no explicit `/permissions` choice runs Workspace-Write with network
     /// ALLOWED (filesystem still sandboxed) so `npm install` / git / fetch work
     /// out of the box. Pass `--no-network` (or `RA_NO_NETWORK=1`, legacy
-    /// `ra_NO_NETWORK`) to revert
+    /// `RA_NO_NETWORK`) to revert
     /// the default to network DENIED. Cloud/tenant deployments always default to
     /// network-denied regardless. An explicit `/permissions` choice still wins.
     #[arg(long)]
@@ -520,7 +520,7 @@ enum AuthTokenSource {
 }
 
 /// Resolve the operator-supplied auth token with the documented precedence
-/// `--auth-token` > `RA_AUTH_TOKEN` (legacy `ra_AUTH_TOKEN`) > config
+/// `--auth-token` > `RA_AUTH_TOKEN` (legacy `RA_AUTH_TOKEN`) > config
 /// `auth_token` (an empty config token counts as absent). `None` means no
 /// operator source produced a token — the caller then auto-generates one for
 /// non-loopback binds.
@@ -1090,7 +1090,7 @@ impl ServeCommand {
         let metrics_handle = Some(init_metrics());
 
         // Security: warn if binding to non-localhost without auth token
-        // Precedence: CLI arg, then ra_AUTH_TOKEN env var, then config
+        // Precedence: CLI arg, then RA_AUTH_TOKEN env var, then config
         // `--host-managed`: validate the mode before anything binds, spawns
         // or opens stores. The host token comes from the environment only.
         let host_managed_tokens = if self.host_managed {
@@ -1136,7 +1136,7 @@ impl ServeCommand {
                 // steer operators to the env var or the config file.
                 tracing::warn!(
                     "--auth-token exposes the bearer token in the process list (ps); \
-                     prefer the RA_AUTH_TOKEN env var (legacy ra_AUTH_TOKEN) or the config file"
+                     prefer the RA_AUTH_TOKEN env var (legacy RA_AUTH_TOKEN) or the config file"
                 );
             }
             Some(token)
@@ -1587,7 +1587,7 @@ impl ServeCommand {
         // already has no gateway auto-start; keep HTTP solo consistent.
         //
         // `--host-managed` never enables solo login (not even through
-        // `ra_SOLO_LOGIN`) but also runs its profiles in this process.
+        // `RA_SOLO_LOGIN`) but also runs its profiles in this process.
         let solo_login_enabled_flag = !self.host_managed
             && (self.solo
                 || ra_core::brand::env_compat_str("SOLO_LOGIN")
@@ -1866,7 +1866,7 @@ impl ServeCommand {
                 .tunnel_domain
                 .clone()
                 .or_else(|| std::env::var("TUNNEL_DOMAIN").ok()),
-            // `ra_BASE_DOMAIN` (env) takes precedence over config.json so
+            // `RA_BASE_DOMAIN` (env) takes precedence over config.json so
             // operators can override without touching the file. `None` falls
             // back to `crate::api::DEFAULT_BASE_DOMAIN` at read sites.
             base_domain: ra_core::brand::env_compat_str("BASE_DOMAIN")
@@ -1899,7 +1899,7 @@ impl ServeCommand {
             // `crates/ra-cli/src/api/swarm.rs`.
             swarm_state: swarm_state_init,
             // Harness JSONL event sink — wired from the
-            // `ra_HARNESS_EVENT_SINK` env var when the caller wants
+            // `RA_HARNESS_EVENT_SINK` env var when the caller wants
             // review decisions and swarm dispatch events persisted (see
             // `/api/events/harness`). `None` keeps the pre-M7.6
             // behaviour of broadcast-only.
@@ -2685,7 +2685,7 @@ mod tests {
 
     /// #2371 tripwire: the repo's own service generators must never place
     /// the dashboard bearer token in argv — it is readable by any local
-    /// process via ps / systemctl cat. The ra_AUTH_TOKEN env var carries
+    /// process via ps / systemctl cat. The RA_AUTH_TOKEN env var carries
     /// it instead (NSSM's AppEnvironmentExtra is the deploy.ps1 equivalent).
     #[test]
     fn service_templates_never_pass_auth_token_via_argv() {
@@ -2701,7 +2701,7 @@ mod tests {
                 .unwrap_or_else(|e| panic!("read {name}: {e}"));
             assert!(
                 body.contains("RA_AUTH_TOKEN"),
-                "{name} must still deliver the token via ra_AUTH_TOKEN"
+                "{name} must still deliver the token via RA_AUTH_TOKEN"
             );
             for line in body.lines() {
                 let service_argv_line = line.contains("ExecStart=")

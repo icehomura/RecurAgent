@@ -149,7 +149,7 @@ echo $!  # remember PID for cleanup
 ```
 
 The auth token can be anything; e2e specs read it from
-`ra_AUTH_TOKEN`. Use `127.0.0.1` (not `0.0.0.0`) unless you
+`RA_AUTH_TOKEN`. Use `127.0.0.1` (not `0.0.0.0`) unless you
 specifically want LAN exposure.
 
 Health check:

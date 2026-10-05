@@ -472,7 +472,7 @@ write_launchd_service() {
         <string>--host</string>
         <string>0.0.0.0</string>
     </array>
-    <!-- #2371: the token travels via ra_AUTH_TOKEN below, never argv —
+    <!-- #2371: the token travels via RA_AUTH_TOKEN below, never argv —
          ProgramArguments are readable by any local process via ps. -->
     <key>UserName</key>
     <string>$(whoami)</string>
@@ -490,9 +490,9 @@ write_launchd_service() {
         <string>$PREFIX:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
         <key>HOME</key>
         <string>$HOME</string>
-        <key>ra_DATA_DIR</key>
+        <key>RA_DATA_DIR</key>
         <string>$DATA_DIR</string>
-        <key>ra_AUTH_TOKEN</key>
+        <key>RA_AUTH_TOKEN</key>
         <string>$AUTH_TOKEN</string>
     </dict>
     <key>WorkingDirectory</key>

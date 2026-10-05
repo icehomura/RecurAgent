@@ -84,7 +84,7 @@ function resolveTag() {
     fail(
       "package version is the unmanaged placeholder (0.0.0-managed); " +
         "this build was not produced by the publish workflow. " +
-        "Set ra_BUNDLE_URL to install manually."
+        "Set RA_BUNDLE_URL to install manually."
     );
   }
   return version.startsWith("v") ? version : "v" + version;

@@ -109,7 +109,7 @@ EOF
 }
 
 # Mock curl so a network fetch fails the test loudly: the default arm
-# (no ra_DOWNLOAD_URL) must install from the auto-detected local bundle
+# (no RA_DOWNLOAD_URL) must install from the auto-detected local bundle
 # in the working directory, never over HTTP.
 create_mock_curl() {
     local mock_bin="$1"
@@ -246,7 +246,7 @@ main() {
     grep -q "checksum verified" "$test_root/crlf.out" \
         || fail "CRLF sidecar was not verified"
 
-    # ── The default arm: no ra_DOWNLOAD_URL, so the installer
+    # ── The default arm: no RA_DOWNLOAD_URL, so the installer
     # auto-detects a bundle tarball in the working directory and installs it
     # (no network, no source build) (#2514).
     local auto_dir="$test_root/auto-detect"

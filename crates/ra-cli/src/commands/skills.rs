@@ -29,7 +29,7 @@ fn validate_skill_manifest(skill_dir: &Path) -> Result<()> {
         return Ok(());
     }
     // `PluginManifest::from_file` runs both structural and schema
-    // validation, threading through `ra_MANIFEST_VALIDATION` for
+    // validation, threading through `RA_MANIFEST_VALIDATION` for
     // the strict-rule layer.
     ra_plugin::PluginManifest::from_file(&manifest_path)
         .map(|_| ())

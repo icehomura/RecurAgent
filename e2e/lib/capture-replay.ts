@@ -161,7 +161,7 @@ export function captureEnabled(force = false): boolean {
  *
  * Behaviour:
  *
- *  - If capture is disabled (`ra_CAPTURE_FIXTURE` unset and `force` not
+ *  - If capture is disabled (`RA_CAPTURE_FIXTURE` unset and `force` not
  *    passed) AND the test does not fail, the returned handle is a no-op
  *    skeleton: it records nothing, finalize returns null. This keeps the
  *    overhead of the helper trivial when capture isn't wanted.

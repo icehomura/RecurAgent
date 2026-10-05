@@ -28,11 +28,11 @@ TaskSupervisor task mirrored into the AppUI agent lifecycle over stdio.
 
 Environment:
   RA_TUI_REPO                         Path to ra-tui checkout. Default: an ra-tui checkout next to this repo.
-  ra_BIN                              ra binary. Default: ra/target/debug/ra.
+  RA_BIN                              ra binary. Default: ra/target/debug/ra.
   RA_TUI_BIN                          ra-tui binary. Default: ra-tui/target/debug/ra-tui.
-  ra_M15_TASK_MIRROR_BUILD            Set 0 to skip building ra. Default: 1.
-  ra_M15_TASK_MIRROR_BUILD_TUI        Set 1 to rebuild ra-tui. Default: build only if missing.
-  ra_M15_TASK_MIRROR_TMUX_KEEP_SESSION
+  RA_M15_TASK_MIRROR_BUILD            Set 0 to skip building ra. Default: 1.
+  RA_M15_TASK_MIRROR_BUILD_TUI        Set 1 to rebuild ra-tui. Default: build only if missing.
+  RA_M15_TASK_MIRROR_TMUX_KEEP_SESSION
                                          Set 1 to keep tmux session after the run.
 USAGE
 }

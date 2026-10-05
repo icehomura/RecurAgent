@@ -78,7 +78,7 @@ if (!providerKey) {
   const failure = {
     ok: false,
     error:
-      'Missing provider key. Set ra_M15_NATIVE_API_KEY or DEEPSEEK_API_KEY before running the native review/start soak.',
+      'Missing provider key. Set RA_M15_NATIVE_API_KEY or DEEPSEEK_API_KEY before running the native review/start soak.',
     runRoot,
   };
   writeJson(path.join(runRoot, 'm15-native-review-start-summary.json'), failure);
@@ -115,7 +115,7 @@ fs.writeFileSync(
     "import path from 'node:path';",
     "const artifactPath = process.env.RA_REVIEW_ARTIFACT_PATH;",
     "if (!artifactPath) {",
-    "  console.error('missing ra_REVIEW_ARTIFACT_PATH');",
+    "  console.error('missing RA_REVIEW_ARTIFACT_PATH');",
     '  process.exit(2);',
     '}',
     "const target = process.env.RA_REVIEW_TARGET || 'unknown-target';",

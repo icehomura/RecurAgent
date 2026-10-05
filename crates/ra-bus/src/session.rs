@@ -1481,7 +1481,7 @@ const DEFAULT_MAX_SESSIONS: usize = 1000;
 
 /// Size at which the ACTIVE session file is sealed and a fresh one started
 /// (see [`segments_dir`]). Overridable with `RA_SESSION_SEGMENT_BYTES`
-/// (legacy `ra_SESSION_SEGMENT_BYTES` still honoured; minimum 64 KiB, so
+/// (legacy `RA_SESSION_SEGMENT_BYTES` still honoured; minimum 64 KiB, so
 /// tests can roll on tiny files).
 ///
 /// This replaces the old 10 MB `MAX_SESSION_FILE_SIZE` cliff, at which a
@@ -1495,7 +1495,7 @@ const SESSION_SEGMENT_BYTES_DEFAULT: u64 = 8 * 1024 * 1024;
 /// plus as many sealed segments, newest first, as fit. Sealed segments beyond
 /// the budget stay on disk; `Session::base_seq` says how many visible messages
 /// they hold, so committed seqs stay global. `RA_SESSION_LOAD_BUDGET_BYTES`
-/// overrides it (legacy `ra_SESSION_LOAD_BUDGET_BYTES` still honoured);
+/// overrides it (legacy `RA_SESSION_LOAD_BUDGET_BYTES` still honoured);
 /// `0` means unlimited. Full-history callers use
 /// [`SessionManager::load_full`] / [`SessionHandle::open_full`].
 ///

@@ -9,7 +9,7 @@
 //! - `stdio` (default): JSON-RPC over stdin/stdout. Parent-trust auth.
 //! - `http`: MCP Streamable HTTP served by the rmcp SDK. Requires a bearer
 //!   token supplied via the `RA_MCP_SERVER_TOKEN` environment variable (the
-//!   legacy `ra_MCP_SERVER_TOKEN` is still honoured).
+//!   legacy `RA_MCP_SERVER_TOKEN` is still honoured).
 //!
 //! # Session dispatch (M7.2a)
 //!
@@ -76,7 +76,7 @@ pub enum McpTransport {
 }
 
 /// Bearer-token variable for the HTTP transport: `RA_MCP_SERVER_TOKEN`
-/// (legacy `ra_MCP_SERVER_TOKEN` still honoured).
+/// (legacy `RA_MCP_SERVER_TOKEN` still honoured).
 const MCP_SERVER_TOKEN_ENV: &str = "RA_MCP_SERVER_TOKEN";
 
 /// Run RecurAgent as an MCP server for outer orchestrators.
@@ -187,8 +187,8 @@ impl McpServeCommand {
                 server.serve_stdio().await
             }
             McpTransport::Http => {
-                // New name first; the legacy `ra_MCP_SERVER_TOKEN` (the name
-                // ra-agent's `ra_MCP_SERVER_TOKEN_ENV` const still spells)
+                // New name first; the legacy `RA_MCP_SERVER_TOKEN` (the name
+                // ra-agent's `RA_MCP_SERVER_TOKEN_ENV` const still spells)
                 // keeps existing deployments working.
                 let token =
                     ra_core::brand::env_compat_str("MCP_SERVER_TOKEN").ok_or_else(|| {

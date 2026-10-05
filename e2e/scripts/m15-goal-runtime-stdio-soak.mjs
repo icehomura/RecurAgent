@@ -165,7 +165,7 @@ if (!providerKey) {
   const failure = {
     ok: false,
     error:
-      'Missing provider key. Set DEEPSEEK_API_KEY (or ra_M15_GOAL_API_KEY / ra_M15_NATIVE_API_KEY) before running the goal runtime soak.',
+      'Missing provider key. Set DEEPSEEK_API_KEY (or RA_M15_GOAL_API_KEY / RA_M15_NATIVE_API_KEY) before running the goal runtime soak.',
     runRoot,
   };
   writeJson(summaryPath, failure);

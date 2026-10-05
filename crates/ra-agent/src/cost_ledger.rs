@@ -91,7 +91,7 @@ pub struct CostAttributionEvent {
     pub attribution_id: String,
     /// Supervising session that initiated the dispatch. Matches the
     /// `session_id` propagated through
-    /// [`crate::harness_events::ra_HARNESS_SESSION_ID_ENV`].
+    /// [`crate::harness_events::RA_HARNESS_SESSION_ID_ENV`].
     pub supervisor_session: String,
     /// Opaque contract identifier (typically the workspace contract
     /// artifact path or the workflow slug). Allows per-contract cost

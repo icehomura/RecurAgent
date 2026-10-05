@@ -90,7 +90,7 @@ Resolution at `ra_runtime_new`, when `embedding_model_path` is unset:
 
 1. the file is complete under the data dir → it is loaded;
 2. else, if `embedding_auto_download` is not `false` and
-   `RA_NO_MODEL_DOWNLOAD` (legacy `ra_NO_MODEL_DOWNLOAD`) is not set in
+   `RA_NO_MODEL_DOWNLOAD` (legacy `RA_NO_MODEL_DOWNLOAD`) is not set in
    the environment → it is
    downloaded **synchronously, blocking `ra_runtime_new`** for the whole
    transfer, then loaded; a failed download is logged (`tracing` warn) and
@@ -120,7 +120,7 @@ ra_string_free(s);
 
 char *p = ra_embedding_model_ensure("/data/ra", true);   /* blocks; {"path": "..."} */
 if (!p) { /* ra_last_error(): absent + download=false, download vetoed by
-             ra_NO_MODEL_DOWNLOAD, or a download that did not verify */ }
+             RA_NO_MODEL_DOWNLOAD, or a download that did not verify */ }
 ra_string_free(p);
 /* then ra_runtime_new with "data_dir": "/data/ra" finds the file and
    never downloads. Pass "embedding_auto_download": false to be certain. */
@@ -131,7 +131,7 @@ but not `complete`; `ensure` re-fetches it). Both functions exist in every
 build (they only inspect disk / fetch a file); the model is only *used* when
 the library was built with `embed-llama`. Opt-out summary: per runtime with
 `"embedding_auto_download": false`, or process-wide with
-`RA_NO_MODEL_DOWNLOAD=1` (legacy `ra_NO_MODEL_DOWNLOAD` still honoured;
+`RA_NO_MODEL_DOWNLOAD=1` (legacy `RA_NO_MODEL_DOWNLOAD` still honoured;
 it also vetoes an explicit
 `ra_embedding_model_ensure(dir, true)`).
 

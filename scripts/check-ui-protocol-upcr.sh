@@ -36,7 +36,7 @@ PROTOCOL_GLOBS=(
 )
 SPEC_GLOB="api/ra_UI_PROTOCOL_V1_SPEC_*.md"
 UPCR_GLOB="docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_*.md"
-UPCR_TEMPLATE="docs/ra_UI_PROTOCOL_CHANGE_REQUEST_TEMPLATE.md"
+UPCR_TEMPLATE="docs/RA_UI_PROTOCOL_CHANGE_REQUEST_TEMPLATE.md"
 
 # Resolve a base ref for the merge-base diff. Allow override via UPCR_BASE_REF.
 resolve_base_ref() {

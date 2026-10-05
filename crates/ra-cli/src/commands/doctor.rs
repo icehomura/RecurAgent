@@ -524,7 +524,7 @@ fn network_checks(spec: &ProductSpec, method: &InstallMethod) -> Vec<Check> {
                 CAT_NETWORK,
                 "latest release",
                 format!("could not check for a newer release: {err}"),
-                "retry when online, or set ra_GITHUB_TOKEN if rate-limited",
+                "retry when online, or set RA_GITHUB_TOKEN if rate-limited",
             )),
         }
     }
@@ -1852,7 +1852,7 @@ fn embedder_check(data_dir: &Path) -> Check {
             CAT_STORES,
             "embedding model",
             "absent and automatic download is disabled — memory search is keyword-only",
-            "run `ra memory embedder --fetch`, or unset ra_NO_MODEL_DOWNLOAD / embedding.auto_download",
+            "run `ra memory embedder --fetch`, or unset RA_NO_MODEL_DOWNLOAD / embedding.auto_download",
         )
     }
 }

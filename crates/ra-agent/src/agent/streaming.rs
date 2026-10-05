@@ -131,7 +131,7 @@ impl Agent {
     /// tokens are still flowing — Pi has no such cap, and the inter-chunk idle
     /// and TTFT guards still catch a genuinely dead provider. An operator who
     /// explicitly sets `RA_LLM_CALL_MAX_SECS` (legacy
-    /// `ra_LLM_CALL_MAX_SECS` still honoured) gets exactly that value even
+    /// `RA_LLM_CALL_MAX_SECS` still honoured) gets exactly that value even
     /// on local. Cloud keeps the `DEFAULT_LLM_CALL_MAX_SECS` (1200s) backstop.
     fn effective_llm_call_max_secs(&self) -> u64 {
         if self.is_local_provider() && ra_core::brand::env_compat("LLM_CALL_MAX_SECS").is_none() {

@@ -75,11 +75,11 @@ function printUsageAndExit(code) {
     '                    e2e/matrix/<pack>.toml relative to repo root.',
     '',
     'Environment:',
-    '  ra_BIN                  Override path to the ra binary.',
+    '  RA_BIN                  Override path to the ra binary.',
     '                             Defaults to <repo>/target/debug/ra.',
-    '  ra_MATRIX_DIR           Override run output root.',
+    '  RA_MATRIX_DIR           Override run output root.',
     '                             Defaults to e2e/test-results-matrix/<UTC>/.',
-    '  ra_MATRIX_RPC_TIMEOUT_MS  Per-RPC timeout. Default 10000.',
+    '  RA_MATRIX_RPC_TIMEOUT_MS  Per-RPC timeout. Default 10000.',
   ].join('\n');
   console.log(usage);
   process.exit(code);
@@ -723,7 +723,7 @@ export class StdioClient {
     this.rl = readline.createInterface({ input: this.child.stdout });
     this.rl.on('line', (line) => this._onLine(line));
     // Codex P2 follow-up: when the spawned `ra serve` crashes,
-    // panics, or the wrong binary is at ra_BIN, the child can
+    // panics, or the wrong binary is at RA_BIN, the child can
     // exit with pending RPCs still in flight. Track exit so we can
     // reject pending requests instead of waiting for them to time
     // out (or worse, propagating an unhandled EPIPE on stdin —
@@ -1072,7 +1072,7 @@ async function main() {
       pack: args.pack,
       tier: args.tier,
       run_root: runRoot,
-      error: `ra binary not found at ${raBin}. Build it (\`cargo build -p ra-cli --features api\`) or set ra_BIN.`,
+      error: `ra binary not found at ${raBin}. Build it (\`cargo build -p ra-cli --features api\`) or set RA_BIN.`,
     };
     writeJson(path.join(runRoot, 'summary.json'), failure);
     console.error(JSON.stringify(failure, null, 2));

@@ -5,7 +5,7 @@ const TOKEN = process.env.RA_USER_TOKEN!;
 const PROFILE = process.env.RA_PROFILE || "dspfac";
 
 if (!TOKEN) {
-  throw new Error("Set ra_USER_TOKEN");
+  throw new Error("Set RA_USER_TOKEN");
 }
 
 async function seed(page: Page) {

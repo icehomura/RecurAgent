@@ -927,7 +927,7 @@ pub(crate) fn resolve_provider_policy(
 /// the bundled in-process embedder is used: EmbeddingGemma-300M under
 /// `<data_dir>/models/`, fetched on first use unless downloads are disabled
 /// (`embedding.auto_download = false` / `RA_NO_MODEL_DOWNLOAD`, legacy
-/// `ra_NO_MODEL_DOWNLOAD`). Without
+/// `RA_NO_MODEL_DOWNLOAD`). Without
 /// the model the runtime stays keyword-only.
 pub(crate) fn create_embedder(config: &Config) -> Option<Arc<dyn EmbeddingProvider>> {
     let data_dir = ra_services::config_context::resolve_config_context(None).data_dir;

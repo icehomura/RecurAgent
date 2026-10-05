@@ -344,9 +344,9 @@ write_remote_services() {
         <string>${RBIN}:${REMOTE_HOME}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
         <key>HOME</key>
         <string>${REMOTE_HOME}</string>
-        <key>ra_DATA_DIR</key>
+        <key>RA_DATA_DIR</key>
         <string>${RDATA}</string>
-        <key>ra_AUTH_TOKEN</key>
+        <key>RA_AUTH_TOKEN</key>
         <string>${AUTH_TOKEN}</string>
     </dict>
     <key>WorkingDirectory</key>
@@ -354,7 +354,7 @@ write_remote_services() {
 </dict>
 </plist>
 EOF
-        # #2496: the plist carries ra_AUTH_TOKEN — install it 0600.
+        # #2496: the plist carries RA_AUTH_TOKEN — install it 0600.
         # The explicit chmod also fixes up re-runs, where cat > keeps the
         # previous file's mode.
         ssh_cmd "chmod 600 ~/Library/LaunchAgents/${PLIST_LABEL}.plist"

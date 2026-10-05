@@ -810,7 +810,7 @@ requires_env: MY_API_KEY,MY_SECRET
 ---
 ```
 
-The gateway auto-injects provider API keys (e.g., `DASHSCOPE_API_KEY`, `OPENAI_API_KEY`) plus `RA_DATA_DIR` and `ra_WORK_DIR`.
+The gateway auto-injects provider API keys (e.g., `DASHSCOPE_API_KEY`, `OPENAI_API_KEY`) plus `RA_DATA_DIR` and `RA_WORK_DIR`.
 
 ### Bundled Assets
 

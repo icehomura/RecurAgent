@@ -35,7 +35,7 @@ stop gateways, exit. It is idempotent.
 
 - **One call stops the whole server.** On a tokenless loopback solo serve, any
   local process — or any page served from an origin on the dev allowlist
-  (`ra_APPUI_ALLOWED_ORIGINS`) — can stop it with a single RPC. This is the
+  (`RA_APPUI_ALLOWED_ORIGINS`) — can stop it with a single RPC. This is the
   existing local-solo trust model (#2388), not a new exposure: the same
   principals can already drive turns and edit profiles. A DNS-rebinding page is
   refused at the WS Origin gate (403). Tightening the local trust model is

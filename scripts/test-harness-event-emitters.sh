@@ -69,8 +69,8 @@ main() {
         --message "Fetching source 3/12" \
         --progress 0.42 \
         >"$WORK_DIR/python-noop.stdout" 2>"$WORK_DIR/python-noop.stderr"
-    [ ! -s "$WORK_DIR/python-noop.stdout" ] || fail "python emitter should stay silent when ra_EVENT_SINK is missing"
-    [ ! -s "$WORK_DIR/python-noop.stderr" ] || fail "python emitter should not emit diagnostics when ra_EVENT_SINK is missing"
+    [ ! -s "$WORK_DIR/python-noop.stdout" ] || fail "python emitter should stay silent when RA_EVENT_SINK is missing"
+    [ ! -s "$WORK_DIR/python-noop.stderr" ] || fail "python emitter should not emit diagnostics when RA_EVENT_SINK is missing"
 
     RA_EVENT_SINK= node "$JS_HELPER" \
         --session-id sess-123 \
@@ -80,8 +80,8 @@ main() {
         --message "Fetching source 3/12" \
         --progress 0.42 \
         >"$WORK_DIR/node-noop.stdout" 2>"$WORK_DIR/node-noop.stderr"
-    [ ! -s "$WORK_DIR/node-noop.stdout" ] || fail "node emitter should stay silent when ra_EVENT_SINK is missing"
-    [ ! -s "$WORK_DIR/node-noop.stderr" ] || fail "node emitter should not emit diagnostics when ra_EVENT_SINK is missing"
+    [ ! -s "$WORK_DIR/node-noop.stdout" ] || fail "node emitter should stay silent when RA_EVENT_SINK is missing"
+    [ ! -s "$WORK_DIR/node-noop.stderr" ] || fail "node emitter should not emit diagnostics when RA_EVENT_SINK is missing"
 
     echo "harness event emitter tests passed"
 }

@@ -543,7 +543,7 @@ impl Agent {
         // model that actually answered, resolved from the provider (which
         // also handles verifier-side failover). `config.model_label` is a
         // DISPLAY label ("session-cheap-verifier" when no explicit
-        // RA_AGENT_VERIFIER_MODEL is set — legacy `ra_AGENT_VERIFIER_MODEL`
+        // RA_AGENT_VERIFIER_MODEL is set — legacy `RA_AGENT_VERIFIER_MODEL`
         // still honoured) and misses the catalog.
         let verifier_metadata = config
             .provider

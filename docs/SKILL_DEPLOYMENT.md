@@ -66,7 +66,7 @@ The result: every install goes through the same code path the runtime
 ```
 scripts/fleet-install-skills.sh [OPTIONS]
 
-  --host LIST          Comma/space hosts (required; or ra_FLEET_HOSTS)
+  --host LIST          Comma/space hosts (required; or RA_FLEET_HOSTS)
   --profile LIST       Comma-separated profile IDs (default: enumerate per host)
   --skill LIST         Comma-separated skill names (default: all mofa-* with
                        SKILL.md+manifest.json in MOFA_SKILLS_DIR)
@@ -79,8 +79,8 @@ scripts/fleet-install-skills.sh [OPTIONS]
   --help, -h           Show usage
 ```
 
-Environment overrides: `ra_FLEET_HOSTS`, `MOFA_SKILLS_DIR`,
-`ra_REMOTE_BIN`, `ra_REMOTE_USER`, `ra_REMOTE_STAGING`.
+Environment overrides: `RA_FLEET_HOSTS`, `MOFA_SKILLS_DIR`,
+`RA_REMOTE_BIN`, `RA_REMOTE_USER`, `RA_REMOTE_STAGING`.
 
 ## Migration: hosts that already have `~/.ra/skills/` populated
 

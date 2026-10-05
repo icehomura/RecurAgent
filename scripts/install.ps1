@@ -101,11 +101,11 @@ OPTIONAL TUNNEL (frpc)
   -TunnelDomain <domain> Tunnel domain (default: ra-cloud.org)
 
 ENVIRONMENT VARIABLES
-  ra_VERSION      Release version override
-  ra_PREFIX       Install prefix override
-  ra_HOME         Data directory override (default: ~\.ra)
-  ra_AUTH_TOKEN   Auth token override
-  ra_DOWNLOAD_URL Local/self-hosted download directory
+  RA_VERSION      Release version override
+  RA_PREFIX       Install prefix override
+  RA_HOME         Data directory override (default: ~\.ra)
+  RA_AUTH_TOKEN   Auth token override
+  RA_DOWNLOAD_URL Local/self-hosted download directory
   FRPS_SERVER        Tunnel relay (frps) server address (no default)
 "@
     exit 0
@@ -1339,8 +1339,8 @@ $settings = New-ScheduledTaskSettingsSet `
     -ExecutionTimeLimit ([TimeSpan]::Zero)
 
 # The bearer token must not be embedded in the wrapper (#2388): the
-# launcher lives in ra_HOME, which keeps profile ACLs when left at its
-# default but is world-readable the moment an operator points ra_HOME
+# launcher lives in RA_HOME, which keeps profile ACLs when left at its
+# default but is world-readable the moment an operator points RA_HOME
 # elsewhere. Keep the token in a sibling file restricted to the invoking
 # user + SYSTEM/Administrators (SIDs, not localized group names): lock
 # down the empty file FIRST, then write into it, so no world-readable
@@ -1370,7 +1370,7 @@ $wrapperContent = @"
 set "RA_HOME=$DataDir"
 set "RA_DATA_DIR=$DataDir"
 set /p RA_AUTH_TOKEN=<"$DataDir\serve-token"
-if not defined ra_AUTH_TOKEN (
+if not defined RA_AUTH_TOKEN (
     echo [ra] serve-token file missing or empty; re-run install.ps1 >> "$serveLog"
     exit /b 1
 )

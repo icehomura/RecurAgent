@@ -37,7 +37,7 @@ const includeLiveE2e =
  *
  * Prerequisites:
  *   cargo build --release -p ra-cli --features "ra-cli/api,ra-cli/telegram"
- *   # Start the server (tests assume it's running on ra_TEST_URL or localhost:3000)
+ *   # Start the server (tests assume it's running on RA_TEST_URL or localhost:3000)
  *
  * Run:
  *   npx playwright test

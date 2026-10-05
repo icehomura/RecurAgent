@@ -2,8 +2,8 @@
 # Register voice clones with ominix-api on each fleet host.
 #
 # Fleet addresses and passwords are intentionally not stored in this repository.
-# Set ra_MINI<N>_HOST (for example user@host) and, only when key auth is not
-# available, ra_MINI<N>_PASSWORD in the invoking environment or secret store.
+# Set RA_MINI<N>_HOST (for example user@host) and, only when key auth is not
+# available, RA_MINI<N>_PASSWORD in the invoking environment or secret store.
 #
 # Usage:
 #   ./scripts/register-fleet-voices.sh
@@ -118,7 +118,7 @@ exit 1
 run_one() {
     local label="$1" host="$2" pw="$3"
     if [[ -z "$host" ]]; then
-        echo "ERROR: $label host is unset; configure the matching ra_MINI<N>_HOST variable" >&2
+        echo "ERROR: $label host is unset; configure the matching RA_MINI<N>_HOST variable" >&2
         return 2
     fi
     echo

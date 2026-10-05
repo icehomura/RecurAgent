@@ -45,7 +45,7 @@ const tokenCacheByHost: Map<string, Promise<string>> = new Map();
  *
  *  2. **Wrong base URL**: the previous probe used the env-derived
  *     `BASE_URL` (default `http://localhost:3000`). When tests run against
- *     a remote mini without `ra_TEST_URL` set, the probe hit a
+ *     a remote mini without `RA_TEST_URL` set, the probe hit a
  *     non-existent local daemon and silently returned the bootstrap token
  *     unchanged — guaranteeing 401 against the actual target.
  *
@@ -96,7 +96,7 @@ export async function ensureAdminTokenRotated(
     // 1) Caller passed the right token directly (e.g. fresh local daemon
     //    where `currentToken` IS the bootstrap token AND no rotation has
     //    happened yet, OR the caller threaded a known-rotated token via
-    //    `ra_AUTH_TOKEN`).
+    //    `RA_AUTH_TOKEN`).
     if (await meProbe(currentToken)) return currentToken;
 
     // 2) Bootstrap mode — `/api/admin/token/status` says `rotated: false`,
@@ -141,7 +141,7 @@ export async function ensureAdminTokenRotated(
     // eslint-disable-next-line no-console
     console.warn(
       `[live-browser-helpers] no admin Bearer authenticates against ${host}/api/auth/me ` +
-        `(tried STRONG_ADMIN_TOKEN and ra_AUTH_TOKEN). Set ra_TEST_ADMIN_TOKEN ` +
+        `(tried STRONG_ADMIN_TOKEN and RA_AUTH_TOKEN). Set RA_TEST_ADMIN_TOKEN ` +
         `to the rotated admin secret for this host.`,
     );
     return STRONG_ADMIN_TOKEN;
@@ -187,10 +187,10 @@ function pageBaseUrl(page: Page): string {
  * The token consumers should use for `Authorization: Bearer ...` and for the
  * `ra_session_token` / `ra_auth_token` localStorage entries. Resolves
  * to the rotated strong token when the helper had to bootstrap the daemon,
- * otherwise to whatever `ra_AUTH_TOKEN` was passed in.
+ * otherwise to whatever `RA_AUTH_TOKEN` was passed in.
  *
  * Pass `baseUrl` when the caller targets a host that doesn't match
- * `ra_TEST_URL` (e.g. when a spec uses its own `BASE` constant or
+ * `RA_TEST_URL` (e.g. when a spec uses its own `BASE` constant or
  * threads the page baseURL through). Defaults preserve the previous
  * env-only behaviour so this call is backward compatible.
  */

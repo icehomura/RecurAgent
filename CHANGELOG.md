@@ -71,7 +71,7 @@ All notable changes to RecurAgent will be documented in this file.
 - Plugin loader returns MCP servers, hooks, and prompt fragments from skills
 - Version check on skill install, add update action
 - Pre-clone version check for skill updates — skip clone if already up to date
-- Deep-search saves to ra_WORK_DIR, agent sends report via send_file
+- Deep-search saves to RA_WORK_DIR, agent sends report via send_file
 - HTML boilerplate cleaning, adaptive stream timeout, GLM-5 provider
 - Voice cloning with x-vector profiles
 - Streaming support for WeCom bot channel

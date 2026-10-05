@@ -868,7 +868,7 @@ write_secret_runner() {
   cat >"$runner" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
-IFS= read -r ra_LIVE_API_KEY < "$fifo"
+IFS= read -r RA_LIVE_API_KEY < "$fifo"
 export "$api_key_env=\$RA_LIVE_API_KEY"
 rm -f "$fifo"
 exec bash -lc $(printf '%q' "$command")
@@ -1341,7 +1341,7 @@ write_codex_runner() {
   cat >"$runner" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
-IFS= read -r ra_LIVE_API_KEY < "$fifo"
+IFS= read -r RA_LIVE_API_KEY < "$fifo"
 export "$API_KEY_ENV=\$RA_LIVE_API_KEY"
 rm -f "$fifo"
 cd "$dir"

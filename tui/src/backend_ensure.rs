@@ -50,7 +50,7 @@ const OPT_OUT_ENV: &str = "RA_TUI_NO_AUTO_INSTALL";
 /// Pre-rename spelling of [`OPT_OUT_ENV`], still honoured.
 ///
 /// This is the ONLY environment variable the binary reads that was part of the
-/// documented `ra-tui` contract (the other ~157 `ra_TUI_*` names belong
+/// documented `ra-tui` contract (the other ~157 `RA_TUI_*` names belong
 /// to the soak harness, and the two `_BIN`/`_DIR` ones are read by our own
 /// scripts — all renamed in lockstep). Someone with
 /// `RA_TUI_NO_AUTO_INSTALL=1` in a CI job or shell profile would otherwise

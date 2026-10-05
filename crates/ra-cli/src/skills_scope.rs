@@ -122,7 +122,7 @@ pub fn build_account_plugin_dirs(data_dir: &Path) -> Vec<PathBuf> {
 /// installer.
 ///
 /// The OMiniX home resolution mirrors the runtime installer
-/// (`api::ominix_runtime`): `RA_OMINIX_HOME` (legacy `ra_OMINIX_HOME`)
+/// (`api::ominix_runtime`): `RA_OMINIX_HOME` (legacy `RA_OMINIX_HOME`)
 /// relocates the whole OMiniX home (including the discovery file), falling
 /// back to `HOME`
 /// and then the OS home directory.
@@ -462,8 +462,8 @@ mod tests {
     #[test]
     fn push_runtime_plugin_env_carries_voice_dir_and_profile_id() {
         // Validates the contract that `mofa-fm` / `fm_tts` depend on:
-        // `RA_PROFILE_ID` (legacy `ra_PROFILE_ID`) for per-profile state
-        // and `RA_VOICE_DIR` (legacy `ra_VOICE_DIR`) pointing at the
+        // `RA_PROFILE_ID` (legacy `RA_PROFILE_ID`) for per-profile state
+        // and `RA_VOICE_DIR` (legacy `RA_VOICE_DIR`) pointing at the
         // profile's `voice_profiles/` so yangmi.wav etc.
         // are findable. Also `OMINIX_API_URL` when provided so the
         // skill can reach the local TTS server.
@@ -558,7 +558,7 @@ mod tests {
         );
     }
 
-    /// A custom `ra_OMINIX_HOME` relocates the installer's discovery
+    /// A custom `RA_OMINIX_HOME` relocates the installer's discovery
     /// file; discovery must prefer it over the default `$HOME` copy.
     #[test]
     #[allow(unsafe_code)]
@@ -597,7 +597,7 @@ mod tests {
         assert_eq!(discovered.as_deref(), Some("http://127.0.0.1:8093"));
     }
 
-    /// Without `ra_OMINIX_HOME`, discovery falls back to `$HOME`
+    /// Without `RA_OMINIX_HOME`, discovery falls back to `$HOME`
     /// (the pre-custom-home behavior every default install relies on).
     #[test]
     #[allow(unsafe_code)]

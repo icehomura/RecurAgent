@@ -20,7 +20,7 @@ use tokio::sync::mpsc;
 use tokio::sync::{Mutex, RwLock, broadcast, watch};
 
 use crate::profiles::{
-    ChannelCredentials, HOST_ASR_LANGUAGE_ENV, ProfileStore, UserProfile, ra_HOST_ASR_LANGUAGE_ENV,
+    ChannelCredentials, HOST_ASR_LANGUAGE_ENV, ProfileStore, UserProfile, RA_HOST_ASR_LANGUAGE_ENV,
 };
 
 /// Base port for managed WhatsApp bridge WebSocket servers.
@@ -54,7 +54,7 @@ pub struct ProcessManager {
     /// Section B (codex review round-5 P1.2): host-level
     /// `plugins.require_signed` policy that spawned gateway processes
     /// must inherit. When `true`, every gateway gets
-    /// `RA_PLUGINS_REQUIRE_SIGNED=1` (legacy `ra_PLUGINS_REQUIRE_SIGNED`)
+    /// `RA_PLUGINS_REQUIRE_SIGNED=1` (legacy `RA_PLUGINS_REQUIRE_SIGNED`)
     /// in its env so its `Config::from_file`
     /// OR-merges the flag onto whatever the profile JSON declared.
     host_plugins_require_signed: bool,
@@ -273,7 +273,7 @@ impl ProcessManager {
 
     /// Section B (codex review round-5 P1.2): mirror the host's
     /// `plugins.require_signed` onto every spawned gateway via
-    /// `RA_PLUGINS_REQUIRE_SIGNED=1` (legacy `ra_PLUGINS_REQUIRE_SIGNED`).
+    /// `RA_PLUGINS_REQUIRE_SIGNED=1` (legacy `RA_PLUGINS_REQUIRE_SIGNED`).
     /// Default is `false` (legacy
     /// permissive path).
     pub fn with_host_plugins_require_signed(mut self, require_signed: bool) -> Self {
@@ -516,7 +516,7 @@ impl ProcessManager {
                             || key.eq_ignore_ascii_case("RA_MEMORY_MAX_INJECT_TOKENS")
                             || key.eq_ignore_ascii_case("RA_MEMORY_REFRESH_ENABLED")
                             || key.eq_ignore_ascii_case(HOST_ASR_LANGUAGE_ENV)
-                            || key.eq_ignore_ascii_case(ra_HOST_ASR_LANGUAGE_ENV)
+                            || key.eq_ignore_ascii_case(RA_HOST_ASR_LANGUAGE_ENV)
                         {
                             tracing::warn!(
                                 profile = %profile.id,
@@ -620,7 +620,7 @@ impl ProcessManager {
                 || key.eq_ignore_ascii_case("RA_MEMORY_MAX_INJECT_TOKENS")
                 || key.eq_ignore_ascii_case("RA_MEMORY_REFRESH_ENABLED")
                 || key.eq_ignore_ascii_case(HOST_ASR_LANGUAGE_ENV)
-                || key.eq_ignore_ascii_case(ra_HOST_ASR_LANGUAGE_ENV)
+                || key.eq_ignore_ascii_case(RA_HOST_ASR_LANGUAGE_ENV)
             {
                 tracing::warn!(
                     profile = %profile.id,
@@ -668,11 +668,11 @@ impl ProcessManager {
         }
         match self.host_asr_language.as_deref() {
             Some(language) => {
-                cmd.env(ra_HOST_ASR_LANGUAGE_ENV, language);
+                cmd.env(RA_HOST_ASR_LANGUAGE_ENV, language);
                 cmd.env(HOST_ASR_LANGUAGE_ENV, language);
             }
             None => {
-                cmd.env_remove(ra_HOST_ASR_LANGUAGE_ENV);
+                cmd.env_remove(RA_HOST_ASR_LANGUAGE_ENV);
                 cmd.env_remove(HOST_ASR_LANGUAGE_ENV);
             }
         }

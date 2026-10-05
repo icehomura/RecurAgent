@@ -139,7 +139,7 @@ pub struct Cli {
     /// Workspace cwd to request for this AppUi session. Defaults to the launch directory.
     pub cwd: Option<PathBuf>,
     /// Bearer token for UI Protocol authentication. Falls back to RA_AUTH_TOKEN
-    /// (legacy ra_AUTH_TOKEN).
+    /// (legacy RA_AUTH_TOKEN).
     pub auth_token: Option<String>,
     /// Disable turn/start sends and use the client as a read-only viewer.
     pub readonly: bool,
@@ -248,7 +248,7 @@ struct CliArgs {
     pub cwd: Option<PathBuf>,
 
     /// Bearer token for UI Protocol authentication. Falls back to RA_AUTH_TOKEN
-    /// (legacy ra_AUTH_TOKEN).
+    /// (legacy RA_AUTH_TOKEN).
     #[arg(long = "auth-token", value_name = "TOKEN")]
     pub auth_token: Option<String>,
 

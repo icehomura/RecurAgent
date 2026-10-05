@@ -221,7 +221,7 @@ selects these modes:
 
 | Platform or setting | Launch and transport |
 | --- | --- |
-| Desktop, Talk to RecurAgent off | Explicit program or `ra_APP_CORE_BIN`; `serve --stdio` with the shell's data directory and configuration. |
+| Desktop, Talk to RecurAgent off | Explicit program or `RA_APP_CORE_BIN`; `serve --stdio` with the shell's data directory and configuration. |
 | Android, Talk to RecurAgent off | Packaged `libra.so` executable; `serve --stdio` with the kernel home. |
 | Desktop or Android, Talk to RecurAgent on | The launcher replaces `--stdio` with `--host 127.0.0.1 --host-managed`. Native and permitted external clients share that child's WebSocket server. |
 | OpenHarmony | In-process `ra_cli::embedded::serve_io` over a duplex pipe. |

@@ -11496,7 +11496,7 @@ fn model_visible_tool_names(registry: Option<&ra_agent::ToolRegistry>) -> Vec<St
     let mut names: Vec<String> = registry
         .map(|registry| registry.specs().into_iter().map(|spec| spec.name).collect())
         .unwrap_or_else(|| {
-            super::coding_tool_contract::ra_KNOWN_MODEL_VISIBLE_TOOLS
+            super::coding_tool_contract::RA_KNOWN_MODEL_VISIBLE_TOOLS
                 .iter()
                 .map(|name| (*name).to_owned())
                 .collect()

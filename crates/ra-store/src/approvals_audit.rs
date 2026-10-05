@@ -65,7 +65,7 @@ impl Default for ApprovalsAuditConfig {
 
 impl ApprovalsAuditConfig {
     /// Read the `RA_APPROVALS_AUDIT_*` knobs; the legacy
-    /// `ra_APPROVALS_AUDIT_*` names are still honoured through
+    /// `RA_APPROVALS_AUDIT_*` names are still honoured through
     /// [`ra_core::brand::env_compat_str`].
     pub fn from_env() -> Self {
         let mut cfg = Self::default();

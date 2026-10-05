@@ -11,7 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Product identity: the skill directories resolve through the ra state home
-# (`RA_HOME`/`ra_HOME`, else `~/.ra`; no legacy directory is consulted).
+# (`RA_HOME`/`RA_HOME`, else `~/.ra`; no legacy directory is consulted).
 ra-core = { path = "../../ra-core" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

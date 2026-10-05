@@ -9,7 +9,7 @@
 # Environment:
 #   FRPS_DASHBOARD_PASSWORD  (optional) Dashboard password (default: random)
 #   FRPS_VERSION             (optional) frp version to install (default: 0.65.0)
-#   ra_SERVE_PORT         (optional) ra serve port for auth plugin (default: 8080)
+#   RA_SERVE_PORT         (optional) ra serve port for auth plugin (default: 8080)
 
 set -euo pipefail
 

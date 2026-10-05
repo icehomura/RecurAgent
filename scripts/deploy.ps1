@@ -255,7 +255,7 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     # #2496: no auth_token here — config.json is created with inherited
     # world-readable ACLs. The token lives in the ACL-restricted
     # serve-token file and reaches serve through the launcher's
-    # ra_AUTH_TOKEN env var.
+    # RA_AUTH_TOKEN env var.
     $config = [ordered]@{
         provider = "openai"
         model = "gpt-4.1-mini"
@@ -341,7 +341,7 @@ $wrapperPath = Join-Path $dataDir "serve-launcher.cmd"
 Write-Utf8NoBom $wrapperPath @"
 @echo off
 set /p RA_AUTH_TOKEN=<"$dataDir\serve-token"
-if not defined ra_AUTH_TOKEN (
+if not defined RA_AUTH_TOKEN (
     echo [ra] serve-token file missing or empty; re-run deploy.ps1
     exit /b 1
 )

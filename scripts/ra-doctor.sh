@@ -274,7 +274,7 @@ else
     if command -v ra &>/dev/null; then
         FOUND="$(command -v ra)"
         warn "not found at $RA_BIN, but found at $FOUND"
-        hint "Set ra_PREFIX or add $PREFIX to PATH"
+        hint "Set RA_PREFIX or add $PREFIX to PATH"
     else
         err "ra binary not found"
         hint "Run install.sh to install"

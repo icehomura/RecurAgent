@@ -1,7 +1,7 @@
 // Codex P2 follow-up on #1157 (M22 onboarding matrix):
 //
 // When the spawned `ra serve` process exits before / during an RPC
-// (startup crash, panic, wrong binary at ra_BIN), the original
+// (startup crash, panic, wrong binary at RA_BIN), the original
 // runner would emit `EPIPE` on `child.stdin` with no handler and
 // Node would terminate — leaving no scenario.json or summary.json
 // artifact behind. The StdioClient must instead:
@@ -33,7 +33,7 @@ test('rpc() on a backend that already exited resolves to a typed backend_exited 
 
   const client = new StdioClient({
     // node exits immediately — emulates a binary that crashes on
-    // startup or the wrong file at ra_BIN.
+    // startup or the wrong file at RA_BIN.
     raBin: process.execPath,
     dataDir: tmp,
     workspace: tmp,

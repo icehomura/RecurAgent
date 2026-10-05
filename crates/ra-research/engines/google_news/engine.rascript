@@ -2,7 +2,7 @@
 // parameters are the ones its own feed links use (q, hl, gl, ceid).
 // Headlines only: article links are news.google.com redirects, cited but
 // never fetched. robots.txt (which disallows /rss) applies only when the
-// operator sets RA_RESPECT_ROBOTS=1 (legacy ra_RESPECT_ROBOTS honoured).
+// operator sets RA_RESPECT_ROBOTS=1 (legacy RA_RESPECT_ROBOTS honoured).
 use mod.markup
 use mod.net
 use mod.std.math

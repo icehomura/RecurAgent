@@ -139,7 +139,7 @@ fn main() {
         Some(v) => v,
         None => {
             output_error(
-                "RA_PROFILE_ID (legacy ra_PROFILE_ID) is not set — this tool must be run \
+                "RA_PROFILE_ID (legacy RA_PROFILE_ID) is not set — this tool must be run \
                  from a gateway",
             );
             return;

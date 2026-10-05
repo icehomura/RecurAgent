@@ -10,7 +10,7 @@ Research building blocks for the RecurAgent search tools (`web_search`, `deep-se
 
 ## Metasearch
 
-A Rust core fans a query out to small search engines written as sandboxed [Rascript](https://github.com/icehomura/Rascript) scripts, then merges and ranks what they return. It is the first provider in the chain for every category. After it come a self-hosted SearXNG (if configured) and keyed APIs. Results-page search (DuckDuckGo, Bing via Chrome) follows as the last tier for general web results; it is on unless `RA_ALLOW_SERP_SCRAPE=0` (legacy `ra_ALLOW_SERP_SCRAPE` honoured).
+A Rust core fans a query out to small search engines written as sandboxed [Rascript](https://github.com/icehomura/Rascript) scripts, then merges and ranks what they return. It is the first provider in the chain for every category. After it come a self-hosted SearXNG (if configured) and keyed APIs. Results-page search (DuckDuckGo, Bing via Chrome) follows as the last tier for general web results; it is on unless `RA_ALLOW_SERP_SCRAPE=0` (legacy `RA_ALLOW_SERP_SCRAPE` honoured).
 
 ```
 ra-research (Rust, trusted)                      engines/<id>/ (sandboxed Rascript)
@@ -41,7 +41,7 @@ ra-research (Rust, trusted)                      engines/<id>/ (sandboxed Rascri
 
   A search skips an engine whose next slot would miss its deadline.
 - **Timeouts and slow engines.** Each request is bounded by its manifest's `timeout_secs` (GDELT: 5 s, because it answers a throttled client's request with a 429 only after about 10 s). Once one engine has answered with results and at most a quarter of the calls (at least one) are still running, those get `SearchRequest::straggler_grace` (default 2 s) more; then they are dropped and reported as `timeout` with the reason "dropped (soft deadline)". A dropped call counts as a timeout for the engine's health: three in a row suspend it for 30 s, doubling each time it happens again before the engine answers. An error suspends it at once (30 s, doubling, or `Retry-After` when longer).
-- **Discovery.** Built-in engines are compiled in. Extra engines are loaded from `RA_METASEARCH_ENGINES/<id>/`, and each must be pinned by the digest `sha256(manifest.json ‖ 0x00 ‖ engine.rascript)`. Pins come only from the host: a file named by `RA_METASEARCH_PINS`, which must live outside the engine directory, so write access to that directory is not enough to add or change an engine. A directory engine may not replace a built-in with the same id unless `RA_METASEARCH_ALLOW_OVERRIDE=1`. The legacy `ra_METASEARCH_*` spellings are still honoured.
+- **Discovery.** Built-in engines are compiled in. Extra engines are loaded from `RA_METASEARCH_ENGINES/<id>/`, and each must be pinned by the digest `sha256(manifest.json ‖ 0x00 ‖ engine.rascript)`. Pins come only from the host: a file named by `RA_METASEARCH_PINS`, which must live outside the engine directory, so write access to that directory is not enough to add or change an engine. A directory engine may not replace a built-in with the same id unless `RA_METASEARCH_ALLOW_OVERRIDE=1`. The legacy `RA_METASEARCH_*` spellings are still honoured.
 
 ### Engines
 
@@ -64,7 +64,7 @@ Notes:
 
 - **`general` without a key is thin.** Key-less general search is Wikipedia and Wikidata only, and results say so.
 - **Google News.** Headlines, publisher and date only; article redirect links are cited, never fetched. Google doesn't document the feed, and its text limits it to personal, non-commercial feed-reader use, which is how an RecurAgent agent acting for one person uses it.
-- **Mastodon.** Uses the public hashtag timeline, because full-text search needs a user token. Set another instance with `RA_METASEARCH_MASTODON_INSTANCE` (legacy `ra_METASEARCH_MASTODON_INSTANCE` honoured). Its results are posts (see [Articles and posts](#articles-and-posts)).
+- **Mastodon.** Uses the public hashtag timeline, because full-text search needs a user token. Set another instance with `RA_METASEARCH_MASTODON_INSTANCE` (legacy `RA_METASEARCH_MASTODON_INSTANCE` honoured). Its results are posts (see [Articles and posts](#articles-and-posts)).
 - **Publisher feeds.** Feeds can't be searched, so the engine reads the feeds for the requested languages (one request per feed, each cached 15 minutes) and keeps the entries whose headline or summary is about the query: the query as a phrase, or every significant term of it. Stop-words ("the", "of", "news", "的", "最新"…) and one-letter terms are not significant, and some terms are never enough, so "EU AI Act" does not match a "terrorist act" or "AI in schools". Words match whole words ("ai" is not in "said"; a plural "s" is allowed); CJK terms match anywhere in the CJK text, ignoring punctuation between characters. The manifest's `query_match: true` makes the core apply the same test again and report anything else as skipped (`query_mismatch`). Headline, source, date and link only. Publishers whose terms forbid AI or automated use (BBC, The Guardian, Al Jazeera, DW, NYT 中文网) are not included.
 - **Small key-less quotas.** OpenAlex allows about 100 searches a day per IP without a key. Stack Exchange allows 300 requests a day.
 
@@ -81,7 +81,7 @@ In category `news`, posts rank after every article. They stay in the results as 
 
 ## Reading pages
 
-The shared reader (`reader::Reader`, used by `deep-search`, the built-in `deep_search` tool and the toolbox's `web_read`) reads a page over plain HTTP first and asks a browser renderer when that finds no article (as with Google News links, which reach the publisher only through a script) or when plain HTTP was blocked (a bot challenge, 401 or 403): a real browser, and especially a phone's WebView, is often let through where a plain client is not. This is the maintainer's decision recorded in RecurAgent ADR 0002 §6 (amended 2026-09-29): RecurAgent searches and reads the way SearXNG does, with no person in the loop; a real browser may read a page a plain client was refused; nothing is solved, clicked or imitated. It changes RecurAgent#2590's behaviour, where a challenge over plain HTTP was never retried in the browser: `RA_READ_BLOCKED_IN_BROWSER=0` (legacy `ra_READ_BLOCKED_IN_BROWSER` honoured; any value but 1/true/yes/on) keeps the old behaviour (`ReaderConfig::render_blocked`). A browser read that fails keeps the original block as the reason, with what the browser met. The RecurAgent browser renderer, `deep_crawl`, `site_crawl` and the `deep_search` tool's renderer wait out a check that clears itself ("Just a moment…", "正在进行安全检测…", `access::is_interstitial`) for up to ~10 s; a challenge that asks a person, or one the browser meets too, is final. Crawls do not follow sign-in, sign-up and sign-out links (`urls::is_account_link`) and list the ones they skipped; a crawl given a `path_prefix` follows them under it.
+The shared reader (`reader::Reader`, used by `deep-search`, the built-in `deep_search` tool and the toolbox's `web_read`) reads a page over plain HTTP first and asks a browser renderer when that finds no article (as with Google News links, which reach the publisher only through a script) or when plain HTTP was blocked (a bot challenge, 401 or 403): a real browser, and especially a phone's WebView, is often let through where a plain client is not. This is the maintainer's decision recorded in RecurAgent ADR 0002 §6 (amended 2026-09-29): RecurAgent searches and reads the way SearXNG does, with no person in the loop; a real browser may read a page a plain client was refused; nothing is solved, clicked or imitated. It changes RecurAgent#2590's behaviour, where a challenge over plain HTTP was never retried in the browser: `RA_READ_BLOCKED_IN_BROWSER=0` (legacy `RA_READ_BLOCKED_IN_BROWSER` honoured; any value but 1/true/yes/on) keeps the old behaviour (`ReaderConfig::render_blocked`). A browser read that fails keeps the original block as the reason, with what the browser met. The RecurAgent browser renderer, `deep_crawl`, `site_crawl` and the `deep_search` tool's renderer wait out a check that clears itself ("Just a moment…", "正在进行安全检测…", `access::is_interstitial`) for up to ~10 s; a challenge that asks a person, or one the browser meets too, is final. Crawls do not follow sign-in, sign-up and sign-out links (`urls::is_account_link`) and list the ones they skipped; a crawl given a `path_prefix` follows them under it.
 
 ### Failure reasons
 
@@ -120,19 +120,19 @@ The results-page engines (`results_page`: DuckDuckGo, Bing, Bing News, Brave web
 
 | Variable | Effect |
 |---|---|
-| `RA_RESPECT_ROBOTS=1` | Operator opt-in: check robots.txt for engines whose manifest sets `robots` (off by default; RecurAgent agents act for one person). The legacy `ra_RESPECT_ROBOTS` is still honoured. |
-| `RA_METASEARCH=0` | Turn the metasearch off; news falls back to direct GDELT and Google News RSS calls. Legacy `ra_METASEARCH` honoured. |
-| `RA_ALLOW_SERP_SCRAPE=0` | Turn the results-page engines off (on by default). Legacy `ra_ALLOW_SERP_SCRAPE` (and the `…_BROWSER_SERP` alias, under both prefixes) honoured. |
-| `RA_BROWSER` | `off` (default), `auto`, `window` or `headless`: load pages of engines that render (`google_cse`) in the RecurAgent browser profile (`ra_research::browser`). Any other value, `1` and `true` included, means `off`, so a typo never opens windows. Legacy `ra_BROWSER` honoured. |
-| `RA_METASEARCH_ENGINES` | Directory of extra engines. Legacy `ra_METASEARCH_ENGINES` honoured. |
-| `RA_METASEARCH_PINS` | Pins file for those engines (`{"id": "sha256:…"}`), kept outside the engine directory. Legacy `ra_METASEARCH_PINS` honoured. |
-| `RA_METASEARCH_ALLOW_OVERRIDE=1` | Let a pinned directory engine replace a built-in with the same id. Legacy `ra_METASEARCH_ALLOW_OVERRIDE` honoured. |
-| `RA_METASEARCH_<ENGINE>_<SETTING>` | Engine setting, e.g. `RA_METASEARCH_MASTODON_INSTANCE=fosstodon.org`. The legacy `ra_METASEARCH_<ENGINE>_<SETTING>` is still honoured. |
-| `RA_GOOGLE_CSE_CX` | The person's Programmable Search Engine id (the `key_env` of the `google_cse` engine). Legacy `ra_GOOGLE_CSE_CX` honoured. |
+| `RA_RESPECT_ROBOTS=1` | Operator opt-in: check robots.txt for engines whose manifest sets `robots` (off by default; RecurAgent agents act for one person). The legacy `RA_RESPECT_ROBOTS` is still honoured. |
+| `RA_METASEARCH=0` | Turn the metasearch off; news falls back to direct GDELT and Google News RSS calls. Legacy `RA_METASEARCH` honoured. |
+| `RA_ALLOW_SERP_SCRAPE=0` | Turn the results-page engines off (on by default). Legacy `RA_ALLOW_SERP_SCRAPE` (and the `…_BROWSER_SERP` alias, under both prefixes) honoured. |
+| `RA_BROWSER` | `off` (default), `auto`, `window` or `headless`: load pages of engines that render (`google_cse`) in the RecurAgent browser profile (`ra_research::browser`). Any other value, `1` and `true` included, means `off`, so a typo never opens windows. Legacy `RA_BROWSER` honoured. |
+| `RA_METASEARCH_ENGINES` | Directory of extra engines. Legacy `RA_METASEARCH_ENGINES` honoured. |
+| `RA_METASEARCH_PINS` | Pins file for those engines (`{"id": "sha256:…"}`), kept outside the engine directory. Legacy `RA_METASEARCH_PINS` honoured. |
+| `RA_METASEARCH_ALLOW_OVERRIDE=1` | Let a pinned directory engine replace a built-in with the same id. Legacy `RA_METASEARCH_ALLOW_OVERRIDE` honoured. |
+| `RA_METASEARCH_<ENGINE>_<SETTING>` | Engine setting, e.g. `RA_METASEARCH_MASTODON_INSTANCE=fosstodon.org`. The legacy `RA_METASEARCH_<ENGINE>_<SETTING>` is still honoured. |
+| `RA_GOOGLE_CSE_CX` | The person's Programmable Search Engine id (the `key_env` of the `google_cse` engine). Legacy `RA_GOOGLE_CSE_CX` honoured. |
 | `<key_env>` from each manifest | Keys: `BRAVE_API_KEY`, `GITHUB_TOKEN`, `OPENALEX_API_KEY`, `STACKEXCHANGE_KEY`. Profile provider keys win. |
-| `RA_BROWSER_PROFILE` | Profile directory override (default `~/.ra/browser-profile`). Legacy `ra_BROWSER_PROFILE` honoured. |
-| `RA_READ_BLOCKED_IN_BROWSER` | Operator opt-out (`0`) for reading a page blocked over plain HTTP once in the browser. Legacy `ra_READ_BLOCKED_IN_BROWSER` honoured. |
-| `RA_RESEARCH_CONTACT` | Contact address for polite pools (OpenAlex `mailto`). Legacy `ra_RESEARCH_CONTACT` honoured. |
+| `RA_BROWSER_PROFILE` | Profile directory override (default `~/.ra/browser-profile`). Legacy `RA_BROWSER_PROFILE` honoured. |
+| `RA_READ_BLOCKED_IN_BROWSER` | Operator opt-out (`0`) for reading a page blocked over plain HTTP once in the browser. Legacy `RA_READ_BLOCKED_IN_BROWSER` honoured. |
+| `RA_RESEARCH_CONTACT` | Contact address for polite pools (OpenAlex `mailto`). Legacy `RA_RESEARCH_CONTACT` honoured. |
 
 ### Tests
 

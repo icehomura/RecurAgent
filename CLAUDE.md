@@ -115,7 +115,7 @@ Splits long messages into channel-safe chunks (paragraph > newline > sentence > 
 
 ### Session Management (`ra-bus/src/session.rs`)
 
-JSONL persistence with LRU in-memory cache. Session forking (`/new` command) with parent_key tracking. Percent-encoded filenames with hash suffix on truncation (prevents collisions). Files roll into `<name>.segments/NNNNNN.jsonl` at `ra_SESSION_SEGMENT_BYTES` (8 MiB); loads read the newest segments up to `ra_SESSION_LOAD_BUDGET_BYTES` (32 MiB, 0 = all). Atomic write-then-rename for crash safety.
+JSONL persistence with LRU in-memory cache. Session forking (`/new` command) with parent_key tracking. Percent-encoded filenames with hash suffix on truncation (prevents collisions). Files roll into `<name>.segments/NNNNNN.jsonl` at `RA_SESSION_SEGMENT_BYTES` (8 MiB); loads read the newest segments up to `RA_SESSION_LOAD_BUDGET_BYTES` (32 MiB, 0 = all). Atomic write-then-rename for crash safety.
 
 ### Hooks (`ra-agent/src/hooks.rs`)
 

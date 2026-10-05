@@ -40,12 +40,12 @@ ra/e2e/test-results-m16-tmux-ux/<run-id>.
 
 Key environment:
   RA_TUI_REPO              Path to ra-tui checkout. Default: an ra-tui checkout next to this repo.
-  ra_BIN                   ra binary. Default: ra/target/debug/ra.
+  RA_BIN                   ra binary. Default: ra/target/debug/ra.
   RA_TUI_BIN               ra-tui binary. Default: ra-tui/target/debug/ra-tui.
-  ra_M16_BUILD             Set 0 to skip building ra with api. Default: 1.
-  ra_M16_BUILD_TUI         Set 1 to rebuild ra-tui. Default: build only if missing.
-  ra_M16_UX_KEEP_SESSION   Set 1 to keep tmux session after the run.
-  ra_M16_UX_OUT_DIR        Override evidence output directory.
+  RA_M16_BUILD             Set 0 to skip building ra with api. Default: 1.
+  RA_M16_BUILD_TUI         Set 1 to rebuild ra-tui. Default: build only if missing.
+  RA_M16_UX_KEEP_SESSION   Set 1 to keep tmux session after the run.
+  RA_M16_UX_OUT_DIR        Override evidence output directory.
 USAGE
 }
 
@@ -210,7 +210,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 const artifactPath = process.env.RA_REVIEW_ARTIFACT_PATH;
 if (!artifactPath) {
-  console.error('missing ra_REVIEW_ARTIFACT_PATH');
+  console.error('missing RA_REVIEW_ARTIFACT_PATH');
   process.exit(2);
 }
 const target = process.env.RA_REVIEW_TARGET || 'unknown-target';
@@ -477,7 +477,7 @@ run_soak() {
   if [[ -z "$provider_key" || "$provider_key" == "<redacted>" ]]; then
     provider_key="$(deepseek_key_from_source)"
   fi
-  [[ -n "$provider_key" && "$provider_key" != "<redacted>" ]] || die "missing provider key; set ra_M16_NATIVE_API_KEY, ra_M15_NATIVE_API_KEY, DEEPSEEK_API_KEY, or ra_M16_NATIVE_PROVIDER_KEY_SOURCE"
+  [[ -n "$provider_key" && "$provider_key" != "<redacted>" ]] || die "missing provider key; set RA_M16_NATIVE_API_KEY, RA_M15_NATIVE_API_KEY, DEEPSEEK_API_KEY, or RA_M16_NATIVE_PROVIDER_KEY_SOURCE"
   write_profile_config
   export DEEPSEEK_API_KEY="$provider_key"
   if [[ "${RA_M16_UX_INJECT_FAIL_AFTER_PROFILE_WRITE:-0}" == "1" ]]; then

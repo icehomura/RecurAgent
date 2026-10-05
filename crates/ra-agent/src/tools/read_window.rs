@@ -1,6 +1,6 @@
 //! Flag-gated windowed `read_file` enforcement (#1638). **Off by default.**
 //!
-//! Armed via `RA_READ_WINDOW=1` (legacy `ra_READ_WINDOW` is still
+//! Armed via `RA_READ_WINDOW=1` (legacy `RA_READ_WINDOW` is still
 //! honoured). When armed, `read_file` returns at most
 //! [`WINDOW_MAX_LINES`] lines and at most [`WINDOW_MAX_BYTES`] bytes of
 //! formatted output — whichever limit is hit first — with a footer naming the

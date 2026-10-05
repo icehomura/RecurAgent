@@ -36,9 +36,9 @@ npm --prefix e2e run test:milestone:ocean
 ```
 
 The E2E milestone runner installs Playwright dependencies on first use. Set
-`ra_TEST_URL` for a shared base URL, or override `ra_CREW_URL`,
-`ra_BOT_URL`, and `ra_OCEAN_URL` per suite. The `test:milestone:ocean`
-umbrella still runs `coding-hardcases.spec.ts` against `ra_CREW_URL`,
+`RA_TEST_URL` for a shared base URL, or override `RA_CREW_URL`,
+`RA_BOT_URL`, and `RA_OCEAN_URL` per suite. The `test:milestone:ocean`
+umbrella still runs `coding-hardcases.spec.ts` against `RA_CREW_URL`,
 because those coding acceptance checks target the general chat/coding surface
 rather than the ocean deliverables host.
 
@@ -122,8 +122,8 @@ KIMI_API_KEY=... DEEPSEEK_API_KEY=... ./scripts/ux-test.sh adaptive
 KIMI_API_KEY=... DEEPSEEK_API_KEY=... ./scripts/ux-test.sh session
 ```
 
-The M9 Playwright harness reads `ra_LIVE_URL`, `ra_LIVE_TOKEN` (or
-`ra_AUTH_TOKEN`), and optional `ra_LIVE_PROFILE`. The fixture flags keep
+The M9 Playwright harness reads `RA_LIVE_URL`, `RA_LIVE_TOKEN` (or
+`RA_AUTH_TOKEN`), and optional `RA_LIVE_PROFILE`. The fixture flags keep
 approval/replay cases deterministic for the protocol gate.
 
 ### M12 Solo AppUI Soak
@@ -131,7 +131,7 @@ approval/replay cases deterministic for the protocol gate.
 Use this gate for M12 solo-mode runtime evidence. The runner records AppUI
 stdio/WebSocket transcripts and policy artifacts without requiring a model
 provider. Live transports require an API-enabled `ra` binary with the
-`serve` subcommand; set `ra_BIN` if it is not `target/debug/ra`:
+`serve` subcommand; set `RA_BIN` if it is not `target/debug/ra`:
 
 ```bash
 # Offline artifact schema and no-OTP assertion.
@@ -300,7 +300,7 @@ Session actor tests always run single-threaded (`--test-threads=1`) because they
 | `live-cost-tracking.spec.ts`, `live-restart.spec.ts` | Cost rollup; restart preserves committed state |
 | `live-mofa-skills.spec.ts`, `live-slides-site.spec.ts` | Live skill flows for MOFA and slides |
 | `session-list-regression.spec.ts`, `tool-use-regression.spec.ts` | Regression suites |
-| `coding-hardcases.spec.ts` | Coding-acceptance hardcases (still targeted at `ra_CREW_URL`) |
+| `coding-hardcases.spec.ts` | Coding-acceptance hardcases (still targeted at `RA_CREW_URL`) |
 
 ---
 
@@ -498,8 +498,8 @@ Tests JSONL-backed session storage with LRU caching.
 
 | Test | What It Verifies |
 |------|-----------------|
-| `should_seal_the_active_file_into_a_segment_at_the_segment_size` | Active file seals into a segment at `ra_SESSION_SEGMENT_BYTES` (8 MiB) |
-| `should_load_only_the_newest_segments_within_the_budget` | A plain load reads the active file plus as many newest-first sealed segments as fit within `ra_SESSION_LOAD_BUDGET_BYTES` (32 MiB) |
+| `should_seal_the_active_file_into_a_segment_at_the_segment_size` | Active file seals into a segment at `RA_SESSION_SEGMENT_BYTES` (8 MiB) |
+| `should_load_only_the_newest_segments_within_the_budget` | A plain load reads the active file plus as many newest-first sealed segments as fit within `RA_SESSION_LOAD_BUDGET_BYTES` (32 MiB) |
 | `test_load_rejects_future_schema_version` | Rejects unknown schema versions |
 | `test_purge_stale_sessions` | Deletes sessions older than N days |
 

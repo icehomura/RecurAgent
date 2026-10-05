@@ -19,7 +19,7 @@
 //! * **stdio** — parent-trust auth. The parent process spawned us, so
 //!   no token is required.
 //! * **http** — bearer token required (via
-//!   `ra_MCP_SERVER_TOKEN`). Missing or wrong → synchronous 401.
+//!   `RA_MCP_SERVER_TOKEN`). Missing or wrong → synchronous 401.
 //!
 //! # Invariants
 //!
@@ -66,7 +66,7 @@ pub const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
 pub const RUN_ra_SESSION_TOOL: &str = "run_ra_session";
 
 /// Environment variable name that the HTTP transport reads for its bearer token.
-pub const ra_MCP_SERVER_TOKEN_ENV: &str = "RA_MCP_SERVER_TOKEN";
+pub const RA_MCP_SERVER_TOKEN_ENV: &str = "RA_MCP_SERVER_TOKEN";
 
 /// Idle keep-alive for HTTP Streamable sessions. rmcp's 300s default reaps a
 /// session mid-call for a long synchronous `run_ra_session` (which emits no
@@ -743,7 +743,7 @@ fn extract_outcome_from_result(result: &Value) -> (String, Option<String>, Optio
 fn caller_id_for_transport(transport: &str) -> String {
     match transport {
         // Caller label injected by the parent: `RA_MCP_CALLER_LABEL` wins, the
-        // legacy `ra_MCP_CALLER_LABEL` is still honoured.
+        // legacy `RA_MCP_CALLER_LABEL` is still honoured.
         "stdio" => ra_core::brand::env_compat_str("MCP_CALLER_LABEL")
             .unwrap_or_else(|| "parent-process".into()),
         "http" => "http-bearer".into(),

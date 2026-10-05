@@ -468,7 +468,7 @@ impl Updater {
 
     /// Clean skill dirs so bootstrap recreates them on next start.
     fn clean_skills(&self) {
-        // Production: the brand state home's `skills/` (`RA_HOME`/`ra_HOME`,
+        // Production: the brand state home's `skills/` (`RA_HOME`/`RA_HOME`,
         // else `~/.ra`). Tests override the *skills dir* itself via
         // `with_skills_root`.
         let skills_dir = match &self.skills_root {

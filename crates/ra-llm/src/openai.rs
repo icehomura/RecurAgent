@@ -266,7 +266,7 @@ pub struct OpenAIProvider {
     provider_label: String,
     /// OpenAI-only request affinity. Defaults to official-endpoint-only so
     /// Kimi/DeepSeek/vLLM never see a reserved field they may reject; the
-    /// operator kill-switch (`RA_PROMPT_CACHING`, legacy `ra_PROMPT_CACHING`
+    /// operator kill-switch (`RA_PROMPT_CACHING`, legacy `RA_PROMPT_CACHING`
     /// still honoured) is evaluated per request.
     prompt_cache_affinity: bool,
     /// Whether a builder call explicitly selected the affinity mode. An

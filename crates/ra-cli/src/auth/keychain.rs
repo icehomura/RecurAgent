@@ -927,7 +927,7 @@ mod tests {
     fn should_keep_owner_read_write_permissions_under_restrictive_umask() {
         use std::os::unix::fs::PermissionsExt;
         // Manual knob: `RA_TEST_SECRET_UMASK_ROOT=<dir>` (legacy
-        // `ra_TEST_SECRET_UMASK_ROOT`) points this test at a real directory.
+        // `RA_TEST_SECRET_UMASK_ROOT`) points this test at a real directory.
         if let Some(root) = ra_core::brand::env_compat("TEST_SECRET_UMASK_ROOT") {
             let root = std::path::PathBuf::from(root);
             let _root = test_override_secrets_root(root.clone());

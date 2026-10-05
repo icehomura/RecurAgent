@@ -570,7 +570,7 @@ mod tests {
     }
 
     /// Real end-to-end run. Ignored: needs a live provider + network. Configure
-    /// via env `RA_PYO3_TEST_KEY_ENV` (legacy `ra_PYO3_TEST_KEY_ENV` still
+    /// via env `RA_PYO3_TEST_KEY_ENV` (legacy `RA_PYO3_TEST_KEY_ENV` still
     /// honoured; default `OPENAI_API_KEY`). Run with:
     ///   cargo test -p ra-pyo3 --features python -- --ignored real_run_task
     #[test]

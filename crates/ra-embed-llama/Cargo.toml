@@ -43,7 +43,7 @@ self_cell = { version = "1", optional = true }
 [dev-dependencies]
 ra-memory.workspace = true
 # Dual-read the ignored GGUF-path test knob (`RA_EMBED_GGUF` first, legacy
-# `ra_EMBED_GGUF` honoured).
+# `RA_EMBED_GGUF` honoured).
 ra-core.workspace = true
 # Parses tests/golden/golden_mlx.json, the frozen reference embeddings.
 serde_json.workspace = true

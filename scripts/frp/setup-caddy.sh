@@ -9,7 +9,7 @@
 #
 # Environment:
 #   TUNNEL_DOMAIN         (optional) Base domain (default: ra-cloud.org)
-#   ra_SERVE_PORT      (optional) ra serve port for apex site (default: 8080)
+#   RA_SERVE_PORT      (optional) ra serve port for apex site (default: 8080)
 #   FRPS_VHOST_HTTP_PORT  (optional) frps HTTP vhost port for tenant subdomains (default: 8081)
 #   CF_API_TOKEN          (required for --dns-provider cloudflare)
 #

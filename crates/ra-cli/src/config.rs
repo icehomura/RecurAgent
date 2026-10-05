@@ -97,7 +97,7 @@ pub struct Config {
     pub api_type: Option<String>,
 
     /// Admin auth token (for dashboard login). Also settable via --auth-token CLI arg
-    /// or `RA_AUTH_TOKEN` env var (legacy `ra_AUTH_TOKEN`).
+    /// or `RA_AUTH_TOKEN` env var (legacy `RA_AUTH_TOKEN`).
     #[serde(default)]
     pub auth_token: Option<String>,
 
@@ -225,7 +225,7 @@ pub struct Config {
     /// Used to compose CORS allowlist entries and surface preview URLs
     /// in the admin dashboard. When `None` the server defaults to
     /// `"crew.ominix.io"` for backward compatibility. Also read from
-    /// `RA_BASE_DOMAIN` env var (legacy `ra_BASE_DOMAIN`), which takes
+    /// `RA_BASE_DOMAIN` env var (legacy `RA_BASE_DOMAIN`), which takes
     /// precedence over the
     /// value in `config.json` when both are set.
     #[serde(default)]
@@ -354,7 +354,7 @@ pub struct AppUiConfig {
     /// Every entry must be an exact `http://` or `https://` origin (scheme,
     /// host, and optional port only). `ra serve` validates and normalizes the
     /// list at startup. `RA_APPUI_ALLOWED_ORIGINS` (legacy
-    /// `ra_APPUI_ALLOWED_ORIGINS`), when non-empty,
+    /// `RA_APPUI_ALLOWED_ORIGINS`), when non-empty,
     /// replaces this list with a comma-separated deployment override.
     #[serde(default)]
     pub allowed_origins: Vec<String>,
@@ -1356,7 +1356,7 @@ impl Config {
     /// Directories to scan for plugins and skill packages with tools.
     ///
     /// Scans deployment-scoped dirs under `project_dir` (typically the state
-    /// home) plus dirs added via `RA_SKILLS_PATH` (legacy `ra_SKILLS_PATH`).
+    /// home) plus dirs added via `RA_SKILLS_PATH` (legacy `RA_SKILLS_PATH`).
     /// Installs are per-profile only under `<data_dir>/skills/`. The bundled
     /// platform skills (`<state home>/platform-skills/`, admin-only) are loaded
     /// explicitly in serve.rs.
@@ -1381,7 +1381,7 @@ impl Config {
             dirs.push(bundled);
         }
         // Note: platform-skills/ (voice, etc.) are admin-only — loaded explicitly in serve.rs
-        // Extra dirs from RA_SKILLS_PATH env var (legacy ra_SKILLS_PATH;
+        // Extra dirs from RA_SKILLS_PATH env var (legacy RA_SKILLS_PATH;
         // colon-separated)
         if let Some(extra) = ra_core::brand::env_compat_str("SKILLS_PATH") {
             for p in extra.split(':') {
@@ -1400,7 +1400,7 @@ impl Config {
 }
 
 /// Section B (codex review round-5 P1.2): OR-merge
-/// `RA_PLUGINS_REQUIRE_SIGNED` (legacy `ra_PLUGINS_REQUIRE_SIGNED`; set by
+/// `RA_PLUGINS_REQUIRE_SIGNED` (legacy `RA_PLUGINS_REQUIRE_SIGNED`; set by
 /// `ProcessManager` when the parent
 /// serve enabled strict signing) onto the loaded Config. Spawned gateway
 /// processes pick up the policy via env, even when the profile JSON they
@@ -1411,7 +1411,7 @@ pub(crate) fn merge_env_plugin_policy_pub(config: &mut Config) {
 }
 
 /// Fill `memory.max_inject_tokens` from `RA_MEMORY_MAX_INJECT_TOKENS`
-/// (legacy `ra_MEMORY_MAX_INJECT_TOKENS`)
+/// (legacy `RA_MEMORY_MAX_INJECT_TOKENS`)
 /// (set by `ProcessManager` from the host config.json) when the loaded
 /// config leaves it unset. Field-level merge: an explicit value in the
 /// loaded config always wins; the env var only fills the gap, so spawned
@@ -1805,7 +1805,7 @@ impl Config {
         }
 
         // 4. No config found, use defaults. Even on the no-file path, honour
-        // `ra_PLUGINS_REQUIRE_SIGNED` so spawned gateways without a
+        // `RA_PLUGINS_REQUIRE_SIGNED` so spawned gateways without a
         // config.json still inherit the host's strict-signing policy.
         tracing::info!("no config.json found, using defaults");
         let mut config = Self::default();
@@ -1835,12 +1835,12 @@ impl Config {
         // Section B (codex review round-5 P1.2): the host's
         // `plugins.require_signed` policy must reach spawned gateway
         // processes too. `ProcessManager` sets `RA_PLUGINS_REQUIRE_SIGNED=1`
-        // (legacy `ra_PLUGINS_REQUIRE_SIGNED`)
+        // (legacy `RA_PLUGINS_REQUIRE_SIGNED`)
         // when the parent serve was launched with strict signing; we
         // OR-merge that into every Config so a profile JSON that omits
         // the new block still inherits the strict policy. The host memory
         // budget rides the same mechanism via
-        // `RA_MEMORY_MAX_INJECT_TOKENS` (legacy `ra_MEMORY_MAX_INJECT_TOKENS`).
+        // `RA_MEMORY_MAX_INJECT_TOKENS` (legacy `RA_MEMORY_MAX_INJECT_TOKENS`).
         merge_env_plugin_policy(&mut config);
         merge_env_memory_policy(&mut config);
 
@@ -2241,7 +2241,7 @@ mod tests {
     use super::*;
 
     /// Crate-wide lock for EVERY test that pivots the global `HOME` /
-    /// `RA_HOME` / `ra_HOME` / `RA_CONFIG_DIR` / `ra_CONFIG_DIR` env vars.
+    /// `RA_HOME` / `RA_HOME` / `RA_CONFIG_DIR` / `RA_CONFIG_DIR` env vars.
     /// These are process-global, so all such tests (here and in
     /// `config_context`) must serialize against the SAME mutex — per-module
     /// locks would let env-mutating tests race across modules (a
@@ -2811,7 +2811,7 @@ mod tests {
     /// `get_api_key` resolves the GLOBAL auth store (`auth_home`), NOT a
     /// per-profile `data_dir/auth.json`. We seed a credential at the global
     /// location and prove the API-key lookup finds it. `RA_CONFIG_DIR` /
-    /// `ra_CONFIG_DIR` must be unset for the default case, so this
+    /// `RA_CONFIG_DIR` must be unset for the default case, so this
     /// test serializes on the shared env lock and clears both name generations
     /// of every override.
     #[test]
@@ -3708,7 +3708,7 @@ mod tests {
     #[allow(unsafe_code)]
     fn should_let_env_disable_refresh_when_config_silent() {
         // Host mirroring: RA_MEMORY_REFRESH_ENABLED=0 (legacy
-        // ra_MEMORY_REFRESH_ENABLED still honoured) must beat the child's
+        // RA_MEMORY_REFRESH_ENABLED still honoured) must beat the child's
         // default-on when the config file says nothing.
         // Serialized: process-env mutation races every parallel test that
         // loads a Config (same rule as the HOME-mutating tests).

@@ -127,7 +127,7 @@ def check_install_sh(text: str) -> list[str]:
 
     if "Environment=RA_AUTH_TOKEN=" in writer:
         problems.append(
-            "systemd unit template inlines ra_AUTH_TOKEN — the unit is "
+            "systemd unit template inlines RA_AUTH_TOKEN — the unit is "
             "installed world-readable (0644); secrets must load from "
             "{DATA_DIR}/serve.env via EnvironmentFile (#2388)"
         )
@@ -161,7 +161,7 @@ def check_install_sh(text: str) -> list[str]:
     if 'chmod 600 "$target"' not in env_writer:
         problems.append("write_serve_env_file does not chmod 600 the env file")
     if "RA_AUTH_TOKEN=" not in env_writer:
-        problems.append("write_serve_env_file does not write ra_AUTH_TOKEN")
+        problems.append("write_serve_env_file does not write RA_AUTH_TOKEN")
     return problems
 
 
@@ -175,7 +175,7 @@ def check_install_ps1(text: str) -> list[str]:
         )
     if "set /p RA_AUTH_TOKEN=<" not in text:
         problems.append(
-            "serve-launcher.cmd does not read ra_AUTH_TOKEN from the "
+            "serve-launcher.cmd does not read RA_AUTH_TOKEN from the "
             "restricted serve-token file"
         )
     if "icacls $tokenTmp /inheritance:r" not in text:
@@ -198,7 +198,7 @@ def check_serve_env_writer(text: str, where: str) -> list[str]:
     if "chmod 600" not in env_writer:
         problems.append(f"{where}: write_serve_env_file does not chmod 600 the env file")
     if "RA_AUTH_TOKEN=" not in env_writer:
-        problems.append(f"{where}: write_serve_env_file does not write ra_AUTH_TOKEN")
+        problems.append(f"{where}: write_serve_env_file does not write RA_AUTH_TOKEN")
     return problems
 
 
@@ -206,7 +206,7 @@ def check_tenant_deploy_sh(text: str) -> list[str]:
     problems: list[str] = []
     if "Environment=RA_AUTH_TOKEN=" in text:
         problems.append(
-            "systemd unit template inlines ra_AUTH_TOKEN — the unit is "
+            "systemd unit template inlines RA_AUTH_TOKEN — the unit is "
             "world-readable; secrets must load from {DATA_DIR}/serve.env "
             "via EnvironmentFile (#2496)"
         )
@@ -229,7 +229,7 @@ def check_bootstrap_tenant_sh(text: str) -> list[str]:
     problems: list[str] = []
     if "Environment=RA_AUTH_TOKEN=" in text:
         problems.append(
-            "systemd unit template inlines ra_AUTH_TOKEN — the unit lands "
+            "systemd unit template inlines RA_AUTH_TOKEN — the unit lands "
             "world-readable via sudo tee; secrets must load from serve.env "
             "via EnvironmentFile (#2496)"
         )
@@ -260,13 +260,13 @@ def check_deploy_ps1(text: str) -> list[str]:
         )
     if "set /p RA_AUTH_TOKEN=<" not in text:
         problems.append(
-            "serve-launcher.cmd does not read ra_AUTH_TOKEN from the "
+            "serve-launcher.cmd does not read RA_AUTH_TOKEN from the "
             "restricted serve-token file"
         )
     if "auth_token = $authToken" in text:
         problems.append(
             "deploy.ps1 writes the token into config.json — created with "
-            "inherited world-readable ACLs; the launcher's ra_AUTH_TOKEN "
+            "inherited world-readable ACLs; the launcher's RA_AUTH_TOKEN "
             "env var is the only channel (#2496)"
         )
     return problems
@@ -714,7 +714,7 @@ def self_test() -> int:
         "            sudo chmod 644 \"$plist\"\n"
         "}\n"
     )
-    expect_problems("bad unit", check_install_sh(bad_unit), "inlines ra_AUTH_TOKEN")
+    expect_problems("bad unit", check_install_sh(bad_unit), "inlines RA_AUTH_TOKEN")
     expect_problems("bad unit", check_install_sh(bad_unit), "0644")
 
     good_unit = (
@@ -747,7 +747,7 @@ def self_test() -> int:
         "Environment=RA_AUTH_TOKEN=$AUTH_TOKEN\n"
         "sudo chmod 644 \"$PLIST_FILE\"\n"
     )
-    expect_problems("bad tenant deploy", check_tenant_deploy_sh(bad_tenant), "inlines ra_AUTH_TOKEN")
+    expect_problems("bad tenant deploy", check_tenant_deploy_sh(bad_tenant), "inlines RA_AUTH_TOKEN")
     expect_problems("bad tenant deploy", check_tenant_deploy_sh(bad_tenant), "0644")
     good_tenant = (
         "write_serve_env_file() {\n"
@@ -768,7 +768,7 @@ def self_test() -> int:
         "}\n"
         "EnvironmentFile=${RDATA}/serve.env\n"
     )
-    expect_problems("bad bootstrap", check_bootstrap_tenant_sh(bad_bootstrap), "inlines ra_AUTH_TOKEN")
+    expect_problems("bad bootstrap", check_bootstrap_tenant_sh(bad_bootstrap), "inlines RA_AUTH_TOKEN")
     expect_problems("bad bootstrap", check_bootstrap_tenant_sh(bad_bootstrap), "0600 (chmod 600 over SSH)")
     good_bootstrap = bad_bootstrap.replace(
         "Environment=RA_AUTH_TOKEN=${AUTH_TOKEN}\n",

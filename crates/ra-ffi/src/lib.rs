@@ -293,7 +293,7 @@ pub struct RuntimeConfig {
     /// model (334 MB, once, into `<data_dir>/models/`) when
     /// `embedding_model_path` is unset and the file is not already complete.
     /// Default `true`; `RA_NO_MODEL_DOWNLOAD=1` in the process environment
-    /// (legacy `ra_NO_MODEL_DOWNLOAD` still honoured) overrides it to
+    /// (legacy `RA_NO_MODEL_DOWNLOAD` still honoured) overrides it to
     /// `false`. When the download is not allowed (or fails)
     /// the runtime starts WITHOUT an embedder: memory search is keyword-only
     /// and `embed` reports "no embedder configured". The download blocks
@@ -1296,7 +1296,7 @@ pub fn embedding_model_status(data_dir: &Path) -> Result<String, CoreError> {
 /// a plain thread BEFORE building a runtime so the runtime constructor finds
 /// the file and does not download itself. Fails with [`CoreError::Embed`] when
 /// the file is absent and `download` is false — or `RA_NO_MODEL_DOWNLOAD`
-/// (legacy `ra_NO_MODEL_DOWNLOAD`) is set in the environment, which vetoes
+/// (legacy `RA_NO_MODEL_DOWNLOAD`) is set in the environment, which vetoes
 /// even an explicit `true` — or the
 /// download does not verify (the partial file is discarded).
 pub fn embedding_model_ensure(data_dir: &Path, download: bool) -> Result<String, CoreError> {
@@ -1535,7 +1535,7 @@ pub extern "C" fn ra_embedding_model_status(data_dir: *const c_char) -> *mut c_c
 /// not `false`. Returns owned JSON `{"path"}` that the caller must free,
 /// UNMODIFIED, with [`ra_string_free`] — or NULL on error: the file is
 /// absent and `download` is false (or `RA_NO_MODEL_DOWNLOAD`, legacy
-/// `ra_NO_MODEL_DOWNLOAD`, is set in the
+/// `RA_NO_MODEL_DOWNLOAD`, is set in the
 /// environment, which vetoes even an explicit `true`), or the download failed
 /// or did not verify (the partial file is discarded).
 #[unsafe(no_mangle)]

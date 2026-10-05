@@ -417,7 +417,7 @@ impl GatewayRuntime {
             // In the `--profile` managed path `config` is derived from the
             // profile JSON, so `config.plugins.require_signed` mirrors
             // whatever the profile declared. The host-level policy
-            // reaches this branch via `ra_PLUGINS_REQUIRE_SIGNED`
+            // reaches this branch via `RA_PLUGINS_REQUIRE_SIGNED`
             // (set by `ProcessManager` in `ra serve`), which
             // `Config::from_file` already OR-merges onto `config.plugins`
             // for the `--config` path. We forward `config.plugins` here

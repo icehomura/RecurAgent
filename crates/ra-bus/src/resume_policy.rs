@@ -883,7 +883,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Item 2 of ra_M8_FIX_FIRST_CHECKLIST_2026-04-24: per-call filtering
+    // Item 2 of RA_M8_FIX_FIRST_CHECKLIST_2026-04-24: per-call filtering
     // for partial resolution. The legacy `all_resolved` branch dropped or
     // stripped the entire `tool_calls` vector if any sibling was unresolved,
     // orphaning matching tool results. The fix keeps resolved/pinned calls

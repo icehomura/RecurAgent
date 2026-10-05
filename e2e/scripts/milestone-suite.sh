@@ -27,14 +27,14 @@ Canonical milestone E2E suites:
   all                 run every milestone live suite in sequence
 
 Environment overrides:
-  ra_AUTH_TOKEN        auth token for live browser runs
-  ra_PROFILE           profile id (default: dspfac)
-  ra_TEST_EMAIL        login email used by helpers
-  ra_CREW_URL          base URL for crew suite
-  ra_BOT_URL           base URL for bot suite
-  ra_OCEAN_URL         base URL for ocean suite
-  ra_E2E_OUTPUT_ROOT   output root for Playwright results
-  ra_PLAYWRIGHT_ARGS   extra args appended to every playwright invocation
+  RA_AUTH_TOKEN        auth token for live browser runs
+  RA_PROFILE           profile id (default: dspfac)
+  RA_TEST_EMAIL        login email used by helpers
+  RA_CREW_URL          base URL for crew suite
+  RA_BOT_URL           base URL for bot suite
+  RA_OCEAN_URL         base URL for ocean suite
+  RA_E2E_OUTPUT_ROOT   output root for Playwright results
+  RA_PLAYWRIGHT_ARGS   extra args appended to every playwright invocation
 EOF
 }
 

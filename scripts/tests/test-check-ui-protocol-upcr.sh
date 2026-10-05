@@ -83,7 +83,7 @@ make_repo() {
     printf 'pub fn old() {}\n' > crates/ra-cli/src/api/ui_protocol_alpha.rs
     printf '# spec baseline\n' > api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md
     printf '# UPCR-2026-001 seed baseline\n' \
-      > docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_001_SEED.md
+      > docs/RA_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_001_SEED.md
     printf '# placeholder\n' > docs/.keep
 
     git add -A
@@ -127,7 +127,7 @@ scenario_protocol_plus_upcr() {
     printf '// added v2 field\nstruct Foo { bar: u32 }\n' \
       > crates/ra-core/src/ui_protocol.rs
     printf '# UPCR-2026-099 Test\n\nChange description.\n' \
-      > docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_099_TEST.md
+      > docs/RA_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_099_TEST.md
     git add -A
     git commit --quiet -m "feat: extend protocol + upcr"
   )
@@ -243,7 +243,7 @@ scenario_uncommitted_upcr() {
     cd "$dir"
     printf '// staged change\n' > crates/ra-core/src/ui_protocol.rs
     printf '# UPCR-2026-100 Untracked\n' \
-      > docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_100_UNTRACKED.md
+      > docs/RA_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_100_UNTRACKED.md
     git add crates/ra-core/src/ui_protocol.rs
     # UPCR doc stays untracked on purpose.
   )
@@ -411,7 +411,7 @@ scenario_deleted_upcr_is_not_coverage() {
   (
     cd "$dir"
     printf '// extend\n' > crates/ra-core/src/ui_protocol.rs
-    git rm --quiet docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_001_SEED.md
+    git rm --quiet docs/RA_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_001_SEED.md
     git add -A
     git commit --quiet -m "feat: extend + drop old upcr"
   )
@@ -470,7 +470,7 @@ scenario_missing_base_with_untracked_template_fails() {
     git commit --quiet -m "feat: extend"
     # Drop a stray untracked UPCR template into the working tree.
     printf '# template stub\n' \
-      > docs/ra_UI_PROTOCOL_CHANGE_REQUEST_TEMPLATE.md
+      > docs/RA_UI_PROTOCOL_CHANGE_REQUEST_TEMPLATE.md
   )
   local out status=0
   out="$(run_gate "$dir" 2>&1)" || status=$?
@@ -526,11 +526,11 @@ scenario_staged_upcr_deletion_invalidates_coverage() {
     cd "$dir"
     printf '// changed\n' > crates/ra-core/src/ui_protocol.rs
     printf '# UPCR-2026-099 added\n' \
-      > docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_099_TEST.md
+      > docs/RA_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_099_TEST.md
     git add -A
     git commit --quiet -m "feat: protocol + new upcr"
     # Now stage the deletion of the UPCR that was just added.
-    git rm --quiet docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_099_TEST.md
+    git rm --quiet docs/RA_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_099_TEST.md
   )
   local out status=0
   out="$(run_gate "$dir" 2>&1)" || status=$?
@@ -576,7 +576,7 @@ scenario_freshly_created_branch_pre_commit_ok() {
     # both fine — uncommitted_names covers both).
     printf '// extend\n' > crates/ra-core/src/ui_protocol.rs
     printf '# UPCR-2026-099 Pre-commit\n' \
-      > docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_099_PRE.md
+      > docs/RA_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_099_PRE.md
     git add crates/ra-core/src/ui_protocol.rs
   )
   local out status=0

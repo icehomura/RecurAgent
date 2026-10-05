@@ -17,7 +17,7 @@ pub struct ReadFileTool {
     /// Effective filesystem scope.
     filesystem_scope: FilesystemScope,
     /// Windowed-read enforcement (#1638). `None` = the `RA_READ_WINDOW`
-    /// env flag decides (production; legacy `ra_READ_WINDOW` is still
+    /// env flag decides (production; legacy `RA_READ_WINDOW` is still
     /// honoured); `Some` = explicit, for tests — arming
     /// changes output, so tests must not arm process-globally (see
     /// `read_window::armed_from_env`).

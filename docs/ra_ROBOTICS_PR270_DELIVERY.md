@@ -670,7 +670,7 @@ Feature gate off = bridge not registered. Safe default.
 This doc is the canonical record for the RP family. Individual issues
 live on GitHub under `robotics-rp/<issue-slug>` branches with titles
 `RP0N — <title>`. Release contracts per slice follow the format of
-`docs/ra_ROBOTICS_RELEASE_<yyyy-mm-dd>.md`.
+`docs/RA_ROBOTICS_RELEASE_<yyyy-mm-dd>.md`.
 
 The family is complete when all of RP01–RP06 are merged to `main` and
 the following hold on canary:

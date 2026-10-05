@@ -32,7 +32,7 @@ Commands:
   self-test  Exercise repeat-report accounting with synthetic child commands only.
 
 Environment:
-  ra_BIN                                  Backend binary. Default: ../ra/target/debug/ra.
+  RA_BIN                                  Backend binary. Default: ../ra/target/debug/ra.
   RA_TUI_BIN                              TUI binary. Default: target/debug/ra-tui.
   RA_TUI_M18_STDIO_REPEAT_COUNT           Repeat count for repeat. Default: 1.
   RA_TUI_M18_STDIO_FAILURE_BUDGET         Allowed failed runs before repeat exits nonzero. Default: 0.
@@ -132,7 +132,7 @@ EOF
 
 run_once() {
   command -v tmux >/dev/null 2>&1 || die "tmux is required for run-once"
-  require_executable ra_BIN "$ra_bin"
+  require_executable RA_BIN "$ra_bin"
   require_executable RA_TUI_BIN "$ra_tui_bin"
   if ! "$ra_bin" serve --help >/dev/null 2>&1; then
     die 'RA_BIN does not expose 'serve': $ra_bin"

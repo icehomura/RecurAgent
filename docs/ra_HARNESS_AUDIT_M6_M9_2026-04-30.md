@@ -155,5 +155,5 @@ P0 + P1 in flight as parallel fix PRs (this session).
 
 - [Requirements](./ra_HARNESS_ENGINEERING_REQUIREMENTS_M6_M9.md)
 - [M9 Ledger Durability ADR](./M9-LEDGER-DURABILITY-ADR.md)
-- `ra_M9_ISSUE_STACK_2026-04-24.md` (not in this tree)
-- `ra_M8_FIX_FIRST_CHECKLIST_2026-04-24.md` (not in this tree)
+- `RA_M9_ISSUE_STACK_2026-04-24.md` (not in this tree)
+- `RA_M8_FIX_FIRST_CHECKLIST_2026-04-24.md` (not in this tree)

@@ -752,7 +752,7 @@ const SECRET_PATTERNS = [
   /\b(?:OPENAI|ANTHROPIC|GOOGLE|OPENROUTER|DEEPSEEK|KIMI|AUTODL)_API_KEY\s*=\s*sk-[A-Za-z0-9_-]{8,}/,
   /\bBearer\s+sk-[A-Za-z0-9_-]{8,}/,
   /"api[_-]?key"\s*:\s*"sk-[A-Za-z0-9_-]{8,}"/i,
-  /ra_UX_SECRET_SHOULD_BE_REDACTED/,
+  /RA_UX_SECRET_SHOULD_BE_REDACTED/,
 ];
 
 function shouldScanForSecrets(name) {
@@ -1395,7 +1395,7 @@ function checkTaskSubagentTreeScenario(artifactDir) {
     }
   }
   const fixtureEnv = isPlainObject(scenario.value.fixture_env) ? scenario.value.fixture_env : {};
-  if (fixtureEnv.ra_M15_LIVE_SUBAGENT_FIXTURE !== '1') {
+  if (fixtureEnv.RA_M15_LIVE_SUBAGENT_FIXTURE !== '1') {
     problems.push('scenario fixture_env missing RA_M15_LIVE_SUBAGENT_FIXTURE=1');
   }
   for (const expected of [

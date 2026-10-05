@@ -3139,7 +3139,7 @@ async fn plugin_uses_scope_workspace_when_present() {
     // Phase 2-B contract: when a `SessionScope` is threaded via the
     // `ToolContext` AND `self.work_dir` is `None` (no registry
     // rebind happened, so the scope is the source of truth), the
-    // plugin spawns with `ra_WORK_DIR = scope.workspace()`. The
+    // plugin spawns with `RA_WORK_DIR = scope.workspace()`. The
     // workspace dir is created on the fly so
     // `SessionScope::multi_tenant`'s no-create-on-construction
     // promise still holds and the spawner takes care of it.

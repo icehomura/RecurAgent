@@ -2915,7 +2915,7 @@ impl Tool for SpawnTool {
     }
 
     fn concurrency_class(&self) -> super::ConcurrencyClass {
-        // Item 6 of ra_M8_FIX_FIRST_CHECKLIST_2026-04-24:
+        // Item 6 of RA_M8_FIX_FIRST_CHECKLIST_2026-04-24:
         // spawn() registers a background task with the supervisor,
         // mutates the spawn_only_invoked atomic, and may share the
         // backing memory store with peers in the same batch. Treat it

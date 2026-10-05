@@ -2,7 +2,7 @@
 //!
 //! Acceptance bullets:
 //! A) preflight → init → ready_check run in order (critical failure aborts)
-//! B) ra_SKILL_DIR env available to lifecycle steps
+//! B) RA_SKILL_DIR env available to lifecycle steps
 //! C) tool_discovery=Http registers HttpTools via GET /tools
 //! D) tool_discovery=Static preserves binary-protocol path (backward compat)
 //! E) uninstall (deactivate) runs shutdown phase
@@ -35,10 +35,10 @@ fn write_script(dir: &Path, name: &str, content: &str) {
     std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
 }
 
-// ─── A + B: lifecycle phases run in order; ra_SKILL_DIR is injected ──────
+// ─── A + B: lifecycle phases run in order; RA_SKILL_DIR is injected ──────
 
 /// Each lifecycle phase (preflight → init → ready_check) runs in order and
-/// the `ra_SKILL_DIR` environment variable is available to each step.
+/// the `RA_SKILL_DIR` environment variable is available to each step.
 ///
 /// The manifest has no tools (empty array) so PluginLoader's binary search
 /// is skipped — this isolates the lifecycle logic.
@@ -51,7 +51,7 @@ async fn install_runs_preflight_init_ready_check_in_order_with_skill_dir_env() {
     // Each phase touches a sentinel file. We use append so we can verify order.
     let log = skill_dir.join("phases.log");
     let log_str = log.to_string_lossy().to_string();
-    // Also capture ra_SKILL_DIR via the init step.
+    // Also capture RA_SKILL_DIR via the init step.
     let env_file = skill_dir.join("skill_dir.txt");
     let env_str = env_file.to_string_lossy().to_string();
 
@@ -64,7 +64,7 @@ async fn install_runs_preflight_init_ready_check_in_order_with_skill_dir_env() {
     #[cfg(windows)]
     let (pre_cmd, init_cmd, ready_cmd) = (
         format!("echo preflight>>{log_str}"),
-        format!("echo init>>{log_str} & echo %ra_SKILL_DIR% >{env_str}"),
+        format!("echo init>>{log_str} & echo %RA_SKILL_DIR% >{env_str}"),
         format!("echo ready_check>>{log_str}"),
     );
     #[cfg(not(windows))]
@@ -104,7 +104,7 @@ async fn install_runs_preflight_init_ready_check_in_order_with_skill_dir_env() {
         "wrong order: {log_content}"
     );
 
-    // Verify ra_SKILL_DIR was injected.
+    // Verify RA_SKILL_DIR was injected.
     let captured_dir = std::fs::read_to_string(&env_file).expect("skill_dir.txt should exist");
     assert_eq!(
         captured_dir.trim(),

@@ -158,8 +158,8 @@ Required event shape:
 Deliverables:
 
 - typed progress event ABI with schema versioning and field limits
-- runtime-provided `ra_EVENT_SINK` for child tools/workflows
-- transport abstraction for `ra_EVENT_SINK`:
+- runtime-provided `RA_EVENT_SINK` for child tools/workflows
+- transport abstraction for `RA_EVENT_SINK`:
   - required: local file/JSONL or Unix-domain socket transport
   - optional: stdio/fd transport for sandboxed children
 - language-neutral event emitter helpers:
@@ -202,7 +202,7 @@ node examples/harness-event/node/emit_progress.mjs \
   --progress 0.42
 ```
 
-Missing `ra_EVENT_SINK` is a no-op. The emitters only format and deliver the
+Missing `RA_EVENT_SINK` is a no-op. The emitters only format and deliver the
 record; runtime validation, size checks, and rejection handling stay on the
 consumer side.
 

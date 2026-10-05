@@ -28,10 +28,10 @@
  *   RA_PROFILE=dspfac
  *
  * Optional env:
- *   ra_MOFA_INSTALL_SOURCE  default: mofa-org/mofa-skills/mofa-cli
- *   ra_MOFA_SKILL_NAME      default: mofa-cli
- *   ra_MOFA_BUILTIN_VOICE   default: vivian
- *   ra_MOFA_CLONED_VOICE    default: yangmi
+ *   RA_MOFA_INSTALL_SOURCE  default: mofa-org/mofa-skills/mofa-cli
+ *   RA_MOFA_SKILL_NAME      default: mofa-cli
+ *   RA_MOFA_BUILTIN_VOICE   default: vivian
+ *   RA_MOFA_CLONED_VOICE    default: yangmi
  *   RA_MOFA_SKIP_INSTALL=1  reuse an already-installed skill
  *   RA_MOFA_SKIP_REMOVE=1   leave skill installed for later runs
  *

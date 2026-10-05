@@ -34,13 +34,13 @@ usage() {
 Usage: scripts/m12-solo-appui-soak.sh <run|self-test|help>
 
 Environment:
-  ra_M12_SOAK_TRANSPORT     ws, stdio, both, or fixture. Default: both.
-  ra_M12_SOAK_ARTIFACT_DIR  Artifact directory. Default: e2e/test-results-m12-solo-soak/<run-id>.
-  ra_M12_SOAK_RUNTIME_ROOT  Runtime root. Default: /tmp/ra-m12-solo-<run-id>.
-  ra_M12_SOAK_WORKSPACE     Workspace cwd requested through session/open.cwd.
-  ra_M12_SOAK_DATA_DIR      Backend data dir.
-  ra_BIN                    ra binary. Default: target/debug/ra.
-  ra_M12_SOAK_SERVE_ARGS    Extra args for `ra serve`.
+  RA_M12_SOAK_TRANSPORT     ws, stdio, both, or fixture. Default: both.
+  RA_M12_SOAK_ARTIFACT_DIR  Artifact directory. Default: e2e/test-results-m12-solo-soak/<run-id>.
+  RA_M12_SOAK_RUNTIME_ROOT  Runtime root. Default: /tmp/ra-m12-solo-<run-id>.
+  RA_M12_SOAK_WORKSPACE     Workspace cwd requested through session/open.cwd.
+  RA_M12_SOAK_DATA_DIR      Backend data dir.
+  RA_BIN                    ra binary. Default: target/debug/ra.
+  RA_M12_SOAK_SERVE_ARGS    Extra args for `ra serve`.
   RA_M12_SOAK_STRICT=1      Fail when M12-A/C methods are blocked instead of recording blockers.
   RA_M12_SOAK_TENANT_NEGATIVE=1
                               Also run the tenant/cloud dangerous-mode negative probe. Default 0
@@ -177,7 +177,7 @@ require_node() {
 require_ra() {
   [ -x "$ra_bin" ] || die "RA_BIN is not executable: $ra_bin"
   if ! "$ra_bin" serve --help >/dev/null 2>&1; then
-    die 'RA_BIN does not expose 'serve'; build ra-cli with the api feature or set ra_BIN to an API-enabled binary"
+    die 'RA_BIN does not expose 'serve'; build ra-cli with the api feature or set RA_BIN to an API-enabled binary"
   fi
 }
 

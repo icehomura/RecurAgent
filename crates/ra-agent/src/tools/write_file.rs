@@ -24,7 +24,7 @@ pub struct WriteFileTool {
     write_grant: Option<WritePathGrant>,
     /// Partial-view overwrite guard (#1638), armed with windowed reads.
     /// `None` = the `RA_READ_WINDOW` env flag decides (production; legacy
-    /// `ra_READ_WINDOW` is still honoured); `Some` = explicit, for tests.
+    /// `RA_READ_WINDOW` is still honoured); `Some` = explicit, for tests.
     window_enforcement: Option<bool>,
 }
 

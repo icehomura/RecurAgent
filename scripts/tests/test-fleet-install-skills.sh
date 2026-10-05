@@ -151,7 +151,7 @@ else
     fail "default did not emit --force"
 fi
 
-# ─── 10. ra_FLEET_HOSTS env override ──────────────────────────────────
+# ─── 10. RA_FLEET_HOSTS env override ──────────────────────────────────
 out=$(MOFA_SKILLS_DIR="$fixture" RA_FLEET_HOSTS="env-host-1,env-host-2" \
         bash "$TARGET" --dry-run --profile p1 --skill mofa-foo 2>&1)
 if echo "$out" | grep -q "env-host-1" && echo "$out" | grep -q "env-host-2"; then

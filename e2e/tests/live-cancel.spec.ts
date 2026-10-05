@@ -12,7 +12,7 @@
  *   RA_PROFILE=dspfac \
  *   npx playwright test e2e/tests/live-cancel.spec.ts
  *
- * Skips automatically when ra_TEST_URL is unset so unit / CI runs
+ * Skips automatically when RA_TEST_URL is unset so unit / CI runs
  * don't pay the live-network cost.
  */
 import { expect, test } from '@playwright/test';

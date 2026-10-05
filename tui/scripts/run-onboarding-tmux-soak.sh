@@ -49,8 +49,8 @@ usage() {
 Usage: scripts/run-onboarding-tmux-soak.sh <preflight-live|start|restart-server|drive-onboard|drive-solo|drive-permissions|drive-provider-missing|drive-approval-denial|drive-multiline-composer|drive-runtime-menus|drive-task-subagent-tree|drive-task-subagent-reconnect|drive-task-subagent-old-server-fallback|drive-autonomy-live|drive-autonomy-reconnect|drive-dropped-completion-backpressure|drive-interrupt-reconnect|drive-validator-cycle|drive-long-output|drive-narrow-terminal|drive-diff-artifact|drive-tool-denial|drive-tool-success|capture|send-turn|verify|verify-onboard|verify-solo|verify-solo-closure|verify-solo-transport-closure|verify-first-launch|verify-provider-missing|verify-permissions|verify-approval-denial|verify-multiline-composer|verify-runtime-menus|verify-task-subagent-tree|verify-task-subagent-reconnect|verify-task-subagent-old-server-fallback|verify-task-subagent-closure|verify-backpressure|verify-interrupt-reconnect|verify-validator-cycle|verify-long-output|verify-narrow-terminal|verify-diff-artifact|verify-tool-denial|verify-tool-success|verify-autonomy-live|verify-autonomy-reconnect|verify-autonomy-closure|verify-transport-parity|verify-ux-run|api-parity|self-test|solo-self-test|stop|help>
 
 Environment:
-  ra_REPO                     Path to sibling ra checkout.
-  ra_BIN                      ra backend binary.
+  RA_REPO                     Path to sibling ra checkout.
+  RA_BIN                      ra backend binary.
   RA_TUI_BIN                  ra-tui binary.
   RA_TUI_SOAK_TRANSPORT       ws or stdio, default ws.
   RA_TUI_SOAK_RUN_ID          Stable run id for repeated capture/verify.
@@ -159,9 +159,9 @@ require_bin() {
 }
 
 require_ra_serve() {
-  require_bin ra_BIN "$ra_bin"
+  require_bin RA_BIN "$ra_bin"
   if ! "$ra_bin" serve --help >/dev/null 2>&1; then
-    die 'RA_BIN does not expose 'serve'; build ra-cli with the api feature or set ra_BIN to an API-enabled binary"
+    die 'RA_BIN does not expose 'serve'; build ra-cli with the api feature or set RA_BIN to an API-enabled binary"
   fi
 }
 
@@ -308,7 +308,7 @@ preflight_live() {
     ra_check="missing serve"
     ra_version_status="missing serve"
     status="failed"
-    [ -n "$failure" ] || failure='RA_BIN does not expose 'serve'; build ra-cli with the api feature or set ra_BIN to an API-enabled binary"
+    [ -n "$failure" ] || failure='RA_BIN does not expose 'serve'; build ra-cli with the api feature or set RA_BIN to an API-enabled binary"
   elif ra_version="$("$ra_bin" --version 2>/dev/null)"; then
     ra_version_status="passed"
   else
@@ -1108,7 +1108,7 @@ json_scalar_value() {
 
 start() {
   command -v tmux >/dev/null 2>&1 || die "tmux is required for start"
-  require_bin ra_BIN "$ra_bin"
+  require_bin RA_BIN "$ra_bin"
   require_bin RA_TUI_BIN "$ra_tui_bin"
   mkdir -p "$workspace" "$data_dir" "$logs_dir"
   write_summary
@@ -1214,7 +1214,7 @@ EOF
 
 restart_server() {
   command -v tmux >/dev/null 2>&1 || die "tmux is required for restart-server"
-  require_bin ra_BIN "$ra_bin"
+  require_bin RA_BIN "$ra_bin"
   if [ "$transport" != "ws" ]; then
     die "restart-server is only supported for WebSocket transport"
   fi
@@ -1290,7 +1290,7 @@ stdio_backend_pids() {
 
 restart_stdio_child() {
   command -v tmux >/dev/null 2>&1 || die "tmux is required for stdio restart"
-  require_bin ra_BIN "$ra_bin"
+  require_bin RA_BIN "$ra_bin"
   if [ "$transport" != "stdio" ]; then
     die "restart_stdio_child is only supported for stdio transport"
   fi

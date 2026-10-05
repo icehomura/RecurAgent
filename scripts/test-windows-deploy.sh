@@ -63,7 +63,7 @@ if command -v pwsh >/dev/null 2>&1; then
     grep -q 'AppEnvironmentExtra' <<<"$out" \
         || fail "dry run should deliver the token via AppEnvironmentExtra"
     grep -q 'RA_AUTH_TOKEN=' <<<"$out" \
-        || fail "dry run should deliver the token via ra_AUTH_TOKEN"
+        || fail "dry run should deliver the token via RA_AUTH_TOKEN"
     grep -q 'test-token' <<<"$out" \
         || fail "dry run should include the requested auth token"
     grep -q 'ssh -p 2222' <<<"$out" \

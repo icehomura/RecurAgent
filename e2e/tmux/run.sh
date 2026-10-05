@@ -69,7 +69,7 @@ else
 
   tmux_register_session() {
     local session="$1"
-    ra_TMUX_SESSIONS+=("$session")
+    RA_TMUX_SESSIONS+=("$session")
   }
 
   tmux_unregister_session() {
@@ -126,7 +126,7 @@ else
   tmux_redact() {
     perl -0pe '
       BEGIN {
-        @tokens = grep { defined && length } ($ENV{ra_AUTH_TOKEN}, $ENV{ra_TMUX_AUTH_TOKEN});
+        @tokens = grep { defined && length } ($ENV{RA_AUTH_TOKEN}, $ENV{RA_TMUX_AUTH_TOKEN});
       }
       for my $token (@tokens) {
         s/\Q$token\E/[REDACTED]/g;
@@ -160,7 +160,7 @@ else
     local label="${2:-capture}"
 
     tmux_init_artifacts
-    RA_TMUX_CAPTURE_SEQ=$((ra_TMUX_CAPTURE_SEQ + 1))
+    RA_TMUX_CAPTURE_SEQ=$((RA_TMUX_CAPTURE_SEQ + 1))
 
     local raw_path
     raw_path="$(tmux_artifact_path "$session" "$label" "raw")"
@@ -181,7 +181,7 @@ else
     local label="${2:-capture}"
 
     tmux_init_artifacts
-    RA_TMUX_CAPTURE_SEQ=$((ra_TMUX_CAPTURE_SEQ + 1))
+    RA_TMUX_CAPTURE_SEQ=$((RA_TMUX_CAPTURE_SEQ + 1))
 
     local raw_path
     local clean_path
@@ -267,7 +267,7 @@ else
     local session
     if [ "${RA_TMUX_KEEP:-0}" = "1" ]; then
       set +u
-      if [ "${#ra_TMUX_SESSIONS[@]}" -gt 0 ]; then
+      if [ "${#RA_TMUX_SESSIONS[@]}" -gt 0 ]; then
         tmux_log "RA_TMUX_KEEP=1; keeping sessions: ${RA_TMUX_SESSIONS[*]}"
       fi
       set -u
@@ -360,7 +360,7 @@ elif [ -x "$ROOT_DIR/target/debug/ra" ]; then
 elif [ -f "$ROOT_DIR/Cargo.toml" ]; then
   RA_BIN_CMD="cargo run --manifest-path $(printf '%q' "$ROOT_DIR/Cargo.toml") -p ra-cli --features api --bin ra --"
 else
-  echo "Unable to locate ra CLI. Set ra_BIN." >&2
+  echo "Unable to locate ra CLI. Set RA_BIN." >&2
   exit 2
 fi
 

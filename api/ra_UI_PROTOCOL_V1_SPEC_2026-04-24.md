@@ -12,9 +12,9 @@ Code sketch:
 
 Related planning:
 
-- [ra_M9_ISSUE_STACK_2026-04-24.md](../docs/ra_M9_ISSUE_STACK_2026-04-24.md)
+- [RA_M9_ISSUE_STACK_2026-04-24.md](../docs/RA_M9_ISSUE_STACK_2026-04-24.md)
 - [RA_TUI_ARCHITECTURE_2026-04-24.md](../docs/RA_TUI_ARCHITECTURE_2026-04-24.md)
-- [ra_M8_FIX_FIRST_CHECKLIST_2026-04-24.md](../docs/ra_M8_FIX_FIRST_CHECKLIST_2026-04-24.md)
+- [RA_M8_FIX_FIRST_CHECKLIST_2026-04-24.md](../docs/RA_M8_FIX_FIRST_CHECKLIST_2026-04-24.md)
 
 ## 1. Goals
 
@@ -175,7 +175,7 @@ Formal change request required:
 Process:
 
 1. Create a change request from
-   [ra_UI_PROTOCOL_CHANGE_REQUEST_TEMPLATE.md](../docs/ra_UI_PROTOCOL_CHANGE_REQUEST_TEMPLATE.md).
+   [RA_UI_PROTOCOL_CHANGE_REQUEST_TEMPLATE.md](../docs/RA_UI_PROTOCOL_CHANGE_REQUEST_TEMPLATE.md).
 2. Mark it `proposed` and link the related M issue.
 3. Review compatibility, capability negotiation, tests, and rollout plan.
 4. Mark it `accepted` before code changes land.
@@ -312,7 +312,7 @@ Current M9 sandbox-parity decision:
   legacy REST-bridge `session/status.get`, AppUI `session/status/read`,
   `turn/state/get`, and context lifecycle notifications) is governed by the
   M16 context-manager workstream
-  [ra_CONTEXT_MANAGER_GAP_CONTRACT](../docs/ra_CONTEXT_MANAGER_GAP_CONTRACT.md).
+  [RA_CONTEXT_MANAGER_GAP_CONTRACT](../docs/RA_CONTEXT_MANAGER_GAP_CONTRACT.md).
   It lets AppUI clients inspect the server-owned prompt context generation,
   transcript hash, checkpoint, compaction, and recovery state without
   reconstructing it from chat rows.
@@ -1158,7 +1158,7 @@ Behavior:
 - server emits `task/updated` and `task/output/delta` for the review swarm
 - server resolves native specialists from server configuration, not from a
   hard-coded AppUI client contract. Resolution order is:
-  `ra_REVIEW_NATIVE_SPECIALISTS_JSON`, profile
+  `RA_REVIEW_NATIVE_SPECIALISTS_JSON`, profile
   `review.native_specialists`, built-in default template. Optional CLI/MCP
   specialists are added when their backend configuration is available, so
   `agent_count` is dynamic.
@@ -2944,7 +2944,7 @@ Before productionizing protocol features that depend on runtime truth, the follo
 - profile/manifest authority
 - concurrency classification for mutating/task-spawning tools
 
-See [ra_M8_FIX_FIRST_CHECKLIST_2026-04-24.md](../docs/ra_M8_FIX_FIRST_CHECKLIST_2026-04-24.md).
+See [RA_M8_FIX_FIRST_CHECKLIST_2026-04-24.md](../docs/RA_M8_FIX_FIRST_CHECKLIST_2026-04-24.md).
 
 ## 13. Immediate Next Steps
 

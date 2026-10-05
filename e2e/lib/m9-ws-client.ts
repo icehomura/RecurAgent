@@ -510,10 +510,10 @@ export async function waitForTurnTerminal(
 /**
  * Read live-server URL + token from the standard env vars.
  *
- * The URL falls back to `ra_TEST_URL` the same way the token already fell
- * back to `ra_AUTH_TOKEN`, and hard-errors when neither is set. It used to
+ * The URL falls back to `RA_TEST_URL` the same way the token already fell
+ * back to `RA_AUTH_TOKEN`, and hard-errors when neither is set. It used to
  * default to a hardcoded `http://127.0.0.1:56831`, which nothing in CI ever
- * listens on: `ra_LIVE_URL` is set only by `e2e/tmux/run.sh`, so every
+ * listens on: `RA_LIVE_URL` is set only by `e2e/tmux/run.sh`, so every
  * m9-protocol spec in `e2e-live-nightly` dialled a dead port and failed with
  * ECONNREFUSED. Because the token fallback DID resolve, the harness reached
  * the connect attempt instead of reporting a missing precondition, and the
@@ -530,12 +530,12 @@ export function liveServerEnv(): { url: string; token: string; profileId?: strin
     "";
   if (!url) {
     throw new Error(
-      "m9-ws: ra_LIVE_URL (or ra_TEST_URL) must be set to run the protocol harness.",
+      "m9-ws: RA_LIVE_URL (or RA_TEST_URL) must be set to run the protocol harness.",
     );
   }
   if (!token) {
     throw new Error(
-      "m9-ws: ra_LIVE_TOKEN (or ra_AUTH_TOKEN) must be set to run the protocol harness.",
+      "m9-ws: RA_LIVE_TOKEN (or RA_AUTH_TOKEN) must be set to run the protocol harness.",
     );
   }
   return { url, token, profileId: process.env.RA_LIVE_PROFILE };

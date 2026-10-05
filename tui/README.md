@@ -428,7 +428,7 @@ ra-tui \
 ```
 
 Use the **same** token for `--auth-token` on both sides (or set
-`ra_AUTH_TOKEN`). Add `--profile-id <id>` to open an existing profile and
+`RA_AUTH_TOKEN`). Add `--profile-id <id>` to open an existing profile and
 skip onboarding; add `--readonly` for a view-only session that never sends
 turns.
 
@@ -535,7 +535,7 @@ produced confusing sessions:
 
 - **No pairing link.** The TUI is token-only. `ra serve --web-url` prints a
   link for the *browser*; the TUI has no `/pair/claim` support, so give it
-  `--auth-token` or `ra_AUTH_TOKEN`. The token rides an
+  `--auth-token` or `RA_AUTH_TOKEN`. The token rides an
   `Authorization: Bearer` header on the WebSocket upgrade, not a query
   parameter.
 - **No local profile discovery.** Attached launches skip the profiles data dir,
@@ -583,10 +583,10 @@ so plain `ra-tui` is the real thing, not the mock.
 --session <session-id>   session to open first
 --profile-id <id>        existing profile to use (skips onboarding)
 --cwd <dir>              workspace cwd to request; defaults to the launch dir
---auth-token <token>     bearer token; falls back to ra_AUTH_TOKEN
+--auth-token <token>     bearer token; falls back to RA_AUTH_TOKEN
 --readonly / --no-readonly   open as a view-only session, or force read-write
 --theme <name>           codex | claude | slate | solarized | terminal
---lang en|zh             UI language; falls back to ra_LANG / LANG. Default: en
+--lang en|zh             UI language; falls back to RA_LANG / LANG. Default: en
 --scroll-mode <mode>     native (terminal scrollback, default) | pinned (composer pinned)
 --vim-mode               enable Vim modal editing in the composer (default off)
 --steer-mid-turn         inject a prompt typed mid-turn into the RUNNING turn
@@ -805,7 +805,7 @@ replaces it when the answer starts. Control the effort with `/thinking`.
 
 The UI is fully localized in **English** and **Simplified Chinese (中文)** — menus,
 the command palette, the onboarding wizard, transcript/status surfaces. Pick the
-language at launch with `--lang {en,zh}` (or `ra_LANG` / `LANG`), or switch at
+language at launch with `--lang {en,zh}` (or `RA_LANG` / `LANG`), or switch at
 runtime with `/lang` (a `*`-marked menu) — no restart needed. English is the
 source/fallback locale, so any untranslated string falls back to English.
 
@@ -813,8 +813,8 @@ source/fallback locale, so any untranslated string falls back to English.
 
 | Variable | Purpose |
 |---|---|
-| `ra_AUTH_TOKEN` | Fallback bearer token for the UI Protocol WebSocket. |
-| `ra_LANG` / `LANG` | UI language fallback when `--lang` is unset. |
+| `RA_AUTH_TOKEN` | Fallback bearer token for the UI Protocol WebSocket. |
+| `RA_LANG` / `LANG` | UI language fallback when `--lang` is unset. |
 | `RUST_LOG=off` | Keeps terminal output clean for live visual runs. |
 | `TERM=xterm-256color` | Avoids missing terminfo/color issues on remote hosts. |
 | `RA_TUI_BIN` | Forces a specific built `ra-tui` binary for harnesses. |
@@ -823,9 +823,9 @@ source/fallback locale, so any untranslated string falls back to English.
 | `RA_TUI_NO_SPLASH` | Disables the startup logo animation (same as `--no-splash`). |
 | `RA_TUI_SPLASH_EFFECT` | Pins the splash to one curated effect, e.g. `matrix`. |
 
-> **Renamed from `ra-tui`.** Every `ra_TUI_*` variable is now
+> **Renamed from `ra-tui`.** Every `RA_TUI_*` variable is now
 > `RA_TUI_*`. The one exception that still works is
-> `ra_TUI_NO_AUTO_INSTALL` — it is honoured with a one-time deprecation
+> `RA_TUI_NO_AUTO_INSTALL` — it is honoured with a one-time deprecation
 > notice so an existing CI job or shell profile does not silently get
 > auto-install switched back on. Rename it; the fallback goes away a release or
 > two after the rename settles.
@@ -1087,7 +1087,7 @@ auto-delivered to the chat.
 
 `ra serve` scans, in order: the project-local `plugins/` and `skills/`
 directories, the bundled system skills, per-profile installs under
-`<data-dir>/skills/`, and any colon-separated paths in `ra_SKILLS_PATH`. Drop
+`<data-dir>/skills/`, and any colon-separated paths in `RA_SKILLS_PATH`. Drop
 the `greeter/` directory into your project's `skills/` (or the profile's
 `<data-dir>/skills/`) and restart the server. The legacy global
 `~/.ra/skills` and `~/.ra/plugins` directories are **deprecated** and no
@@ -1171,7 +1171,7 @@ one — so a profile can re-enable a skill the global defaults disabled:
 | `ra-core` dependency not found | Keep `ra` and `ra-tui` as sibling directories. |
 | Welcome screen never appears | Use a fresh empty `--data-dir` and omit `--profile-id`. |
 | Endpoint rejected | Use a `ws://` or `wss://` URL; HTTP URLs are rejected. |
-| Auth failure | Use the same token on `ra serve --auth-token` and the TUI (`--auth-token` or `ra_AUTH_TOKEN`). |
+| Auth failure | Use the same token on `ra serve --auth-token` and the TUI (`--auth-token` or `RA_AUTH_TOKEN`). |
 | TUI opens but no live answer | Confirm the server has a provider/model/key and restart it after config changes. |
 | Wrong workspace | Start `ra serve` with the desired `--cwd`. |
 | `can't find terminfo database` | Set `TERM=xterm-256color` or install terminfo on the host. |

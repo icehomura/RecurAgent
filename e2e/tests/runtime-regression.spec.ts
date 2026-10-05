@@ -9,7 +9,7 @@
  * 5. Cross-session isolation — concurrent sessions don't leak state
  *
  * These are API-level tests (no browser needed). They run against any deployed
- * host via ra_TEST_URL.
+ * host via RA_TEST_URL.
  *
  * Related issues:
  * - #386: reload enqueues empty turn

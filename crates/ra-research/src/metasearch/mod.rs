@@ -104,7 +104,7 @@ pub const LEGACY_ALLOW_OVERRIDE_ENV: &str = "RA_METASEARCH_ALLOW_OVERRIDE";
 pub const DEFAULT_STRAGGLER_GRACE: Duration = Duration::from_secs(2);
 
 /// Whether the metasearch is enabled (default on). `RA_METASEARCH` wins over
-/// the legacy `ra_METASEARCH`.
+/// the legacy `RA_METASEARCH`.
 pub fn enabled(lookup: impl Fn(&str) -> Option<String>) -> bool {
     !crate::resolve_env(&lookup, METASEARCH_ENV).is_some_and(|v| {
         matches!(
@@ -162,7 +162,7 @@ impl Default for Config {
 
 /// The value of an engine's `key_env`. Engine key names are plain
 /// (`BRAVE_API_KEY`); an ra-owned knob such as `RA_GOOGLE_CSE_CX` (legacy
-/// `ra_GOOGLE_CSE_CX`) follows the brand fallback.
+/// `RA_GOOGLE_CSE_CX`) follows the brand fallback.
 fn engine_key_env(lookup: &impl Fn(&str) -> Option<String>, name: &str) -> Option<String> {
     let owned = name.starts_with(ra_core::brand::ENV_PREFIX)
         || name.starts_with(ra_core::brand::ENV_PREFIX);
@@ -177,7 +177,7 @@ fn engine_key_env(lookup: &impl Fn(&str) -> Option<String>, name: &str) -> Optio
 impl Config {
     /// Keys from each engine's `key_env`, settings from
     /// `RA_METASEARCH_<ENGINE>_<SETTING>` (the legacy
-    /// `ra_METASEARCH_<ENGINE>_<SETTING>` is still honoured), contact from
+    /// `RA_METASEARCH_<ENGINE>_<SETTING>` is still honoured), contact from
     /// [`CONTACT_ENV`]. `extra_keys` (engine id → key, e.g. a profile's
     /// provider keys) win over the environment.
     pub fn from_env(

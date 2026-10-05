@@ -1,6 +1,6 @@
 //! `ra-server` — the HTTP/WebSocket API server and session runtime for ra.
 //!
-//! Extracted from `ra-cli` (see `docs/ra_SERVER_EXTRACTION_PLAN.md`). The
+//! Extracted from `ra-cli` (see `docs/RA_SERVER_EXTRACTION_PLAN.md`). The
 //! server-core (session actor, gateway runtime) is **ungated**; the HTTP/WS layer
 //! lives behind the **`api`** feature so non-API `ra gateway` still builds
 //! without pulling in axum/tower/rustls/etc.

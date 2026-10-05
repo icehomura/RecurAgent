@@ -171,10 +171,10 @@ Scenarios:
   ${[...scenarios.keys()].join(', ')}
 
 Environment:
-  ra_UX_TMUX_RUN_ID       Override run id.
-  ra_UX_TMUX_OUT_ROOT     Override output root. Default: e2e/test-results-ux.
-  ra_UX_TMUX_OUT_DIR      Override scenario output directory.
-  ra_UX_TMUX_TUI_RUNNER   Override ra-tui tmux runner script.
+  RA_UX_TMUX_RUN_ID       Override run id.
+  RA_UX_TMUX_OUT_ROOT     Override output root. Default: e2e/test-results-ux.
+  RA_UX_TMUX_OUT_DIR      Override scenario output directory.
+  RA_UX_TMUX_TUI_RUNNER   Override ra-tui tmux runner script.
   RA_TUI_REPO             Override ra-tui checkout. Default: ../ra-tui next to this repo.
 `;
 }
@@ -268,7 +268,7 @@ function taskSubagentFixtureEnv(scenario, workdir) {
     RA_M15_LIVE_SUBAGENT_FIXTURE: '1',
     RA_TUI_M15_UX_OUTPUT_DIR: path.join(workdir, '.ra-m15-evidence'),
     RA_TUI_M15_UX_WORKDIR: workdir,
-    ra_M15_LIVE_SUBAGENT_DELAY_SCALE:
+    RA_M15_LIVE_SUBAGENT_DELAY_SCALE:
       process.env.RA_M15_LIVE_SUBAGENT_DELAY_SCALE || '0.25',
   };
 }
@@ -831,7 +831,7 @@ function runBackpressureReplayProbe(ctx, env) {
       RA_M19_BACKPRESSURE_PROFILE_ID: ctx.profileId,
       RA_M19_BACKPRESSURE_SESSION_ID: ctx.sessionId,
       RA_M19_BACKPRESSURE_WORKSPACE: ctx.workdir,
-      ra_M19_BACKPRESSURE_PROMPT:
+      RA_M19_BACKPRESSURE_PROMPT:
         'M9 replay-lossy fixture for post-drop protocol probe after TUI recovery.',
     },
     stdio: 'inherit',

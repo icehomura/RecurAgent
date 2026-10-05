@@ -139,7 +139,7 @@ test_a2.md
 # UI Protocol change requests (UPCR) — required by check-ui-protocol-upcr.sh
 # whenever protocol-visible code changes; listed in
 # api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md.
-!docs/ra_UI_PROTOCOL_CHANGE_REQUEST_TEMPLATE.md
+!docs/RA_UI_PROTOCOL_CHANGE_REQUEST_TEMPLATE.md
 !docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_*.md
 # `ra serve --host-managed` operator/host contract (UPCR-2026-036), cited
 # from the CLI help and crates/ra-cli/src/api/host_managed.rs.

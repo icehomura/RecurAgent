@@ -627,7 +627,7 @@ fn handle_synthesize(input_json: &str) {
     }
 
     // Always save to RA_WORK_DIR (inside profile data_dir; the legacy
-    // ra_WORK_DIR is still honoured) so send_file
+    // RA_WORK_DIR is still honoured) so send_file
     // can access the file. Ignore LLM's output_path to avoid sandbox violations.
     let filename = input
         .output_path

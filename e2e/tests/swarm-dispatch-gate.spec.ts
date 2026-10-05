@@ -3,7 +3,7 @@
  *
  * This spec is intentionally gated out of default e2e runs. It only talks to
  * a real canary when RA_M7_SWARM_LIVE=1 is present and the supervisor has
- * supplied ra_TEST_URL plus ra_AUTH_TOKEN. The companion script
+ * supplied RA_TEST_URL plus RA_AUTH_TOKEN. The companion script
  * `scripts/validate-m7-swarm-live.sh` sets those variables.
  */
 import fs from 'node:fs';

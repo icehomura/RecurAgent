@@ -73,7 +73,7 @@ pub struct DoctorArgs {
     pub stdio_command: Option<String>,
     /// WS endpoint, if configured.
     pub endpoint: Option<String>,
-    /// Bearer token for UI Protocol authentication. Falls back to ra_AUTH_TOKEN.
+    /// Bearer token for UI Protocol authentication. Falls back to RA_AUTH_TOKEN.
     pub auth_token: Option<String>,
     /// Data dir override (defaults to `~/.ra`).
     pub data_dir: Option<PathBuf>,

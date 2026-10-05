@@ -10,7 +10,7 @@ name = "voice"
 path = "src/main.rs"
 
 [dependencies]
-# Product identity: `RA_WORK_DIR` wins over the legacy `ra_WORK_DIR`.
+# Product identity: `RA_WORK_DIR` wins over the legacy `RA_WORK_DIR`.
 ra-core = { path = "../../ra-core" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

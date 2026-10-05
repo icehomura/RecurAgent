@@ -38,7 +38,7 @@
           },
           "output_path": {
             "type": "string",
-            "description": "Path to save the audio file. Default: auto-generated in RA_WORK_DIR (legacy ra_WORK_DIR honoured)"
+            "description": "Path to save the audio file. Default: auto-generated in RA_WORK_DIR (legacy RA_WORK_DIR honoured)"
           },
           "language": {
             "type": "string",

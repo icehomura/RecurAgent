@@ -213,7 +213,7 @@ scripts/run-onboarding-tmux-soak.sh verify-solo-transport-closure
 
 `verify-solo-transport-closure` runs the strict solo closure bundle, verifies
 both retained transport artifacts, and compares their AppUI method sequence.
-Live transports also require `ra_BIN` to point at an API-enabled `ra`
+Live transports also require `RA_BIN` to point at an API-enabled `ra`
 binary that exposes `serve`.
 
 Provider-free stdio dry-run:

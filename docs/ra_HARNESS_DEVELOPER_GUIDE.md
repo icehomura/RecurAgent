@@ -212,7 +212,7 @@ move, rename, or disappear without notice.
   runtime-private.
 - The exact file format of `~/.ra/` (profile, auth, episode, session
   storage). Config hot-reload and format migrations are runtime concerns.
-- The `progress event sink` (`ra_EVENT_SINK` and
+- The `progress event sink` (`RA_EVENT_SINK` and
   `ra.harness.event.v1`) is **forthcoming in M4.1A**. Until M4.1A
   lands, treat progress events as best-effort stderr. Structured progress
   event schemas are promised to land, but the exact transport URI shape is
@@ -674,11 +674,11 @@ session. Make hooks robust and fast. Target < 1 second.
 ## Part 7: Progress Events
 
 The runtime exposes a local structured progress sink to long-running child
-workflows through `ra_EVENT_SINK`. The value is a transport URI; M4.1A
+workflows through `RA_EVENT_SINK`. The value is a transport URI; M4.1A
 requires local `file://...` JSONL sinks and the runtime also accepts bare file
 paths for older helpers.
 
-Missing `ra_EVENT_SINK` is a no-op for emitters. Stderr remains diagnostic
+Missing `RA_EVENT_SINK` is a no-op for emitters. Stderr remains diagnostic
 text only; durable parent-visible progress must be emitted as structured
 `ra.harness.event.v1` records:
 
@@ -888,7 +888,7 @@ This guide captures M4.2's contract. Future workstreams tighten the
 surface further:
 
 - **M4.1A** (`#464`) — structured progress event ABI and the
-  `ra_EVENT_SINK` transport. Once landed, this guide gains a full
+  `RA_EVENT_SINK` transport. Once landed, this guide gains a full
   Part 7 with emitter examples.
 - **M4.3** (`#466`) — typed validator runner with per-validator status,
   duration, reason, and replayable evidence path. Today's validators are

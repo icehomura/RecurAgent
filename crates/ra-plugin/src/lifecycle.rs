@@ -498,7 +498,7 @@ impl LifecycleExecutor {
         // Export RA_SKILL_DIR so SKILL.md `init:`/`shutdown:` commands can
         // reference paths relative to the skill's installed location, e.g.
         //   cd "$RA_SKILL_DIR" && dora up && dora start dataflows/foo.yaml
-        // The legacy ra_SKILL_DIR is still exported alongside it: skill
+        // The legacy RA_SKILL_DIR is still exported alongside it: skill
         // bundles written before the rename (and hosts that only forward the
         // old name) reference it.
         cmd.env("RA_SKILL_DIR", &self.cwd);
@@ -718,7 +718,7 @@ mod tests {
         // `echo <var> >file` appends a trailing space + CRLF, so both sides are
         // trimmed before comparison.
         #[cfg(windows)]
-        let command = format!("echo %RA_SKILL_DIR% >{ra_str} & echo %ra_SKILL_DIR% >{legacy_str}");
+        let command = format!("echo %RA_SKILL_DIR% >{ra_str} & echo %RA_SKILL_DIR% >{legacy_str}");
         #[cfg(not(windows))]
         let command = format!(
             r#"printf '%s' "$RA_SKILL_DIR" > "{ra_str}" && printf '%s' "$RA_SKILL_DIR" > "{legacy_str}""#

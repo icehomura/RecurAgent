@@ -72,7 +72,7 @@ No subagents/Task tool, no permission system or sandbox (bash runs raw; isolatio
 ## Config knobs available today (no code changes)
 
 - `tool_policy` allow/deny (+ `tools.byProvider`) — cutting 48→~10 tools saves ~7–8 K tok/round now.
-- `memory.max_inject_tokens` / `ra_MEMORY_MAX_INJECT_TOKENS`; `memory.refresh.enabled=false` drops the capture-policy rider + `memory_note` schema.
+- `memory.max_inject_tokens` / `RA_MEMORY_MAX_INJECT_TOKENS`; `memory.refresh.enabled=false` drops the capture-policy rider + `memory_note` schema.
 - Keep `.ra/AGENTS.md`/`SOUL.md` small — they are uncapped.
-- Leave `ra_PIPELINE_IR` unset (−2,366 B on `run_pipeline`'s schema); no embedder ⇒ no episodic-recall injection.
+- Leave `RA_PIPELINE_IR` unset (−2,366 B on `run_pipeline`'s schema); no embedder ⇒ no episodic-recall injection.
 - `--max-iterations` caps rounds per message.

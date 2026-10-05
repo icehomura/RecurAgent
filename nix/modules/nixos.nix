@@ -20,8 +20,8 @@ in
       '';
 
       environment = {
-        ra_DATA_DIR = serviceCfg.dataDir;
-        ra_AUTH_TOKEN = serviceCfg.authToken;
+        RA_DATA_DIR = serviceCfg.dataDir;
+        RA_AUTH_TOKEN = serviceCfg.authToken;
       };
 
       serviceConfig = {

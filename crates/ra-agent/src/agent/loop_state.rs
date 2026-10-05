@@ -39,7 +39,7 @@ use crate::harness_events::{
 
 /// Prometheus counter name for loop-level retry decisions. Labels:
 /// `{variant, decision}` — both are stable snake_case identifiers.
-pub const ra_LOOP_RETRY_TOTAL: &str = "ra_loop_retry_total";
+pub const RA_LOOP_RETRY_TOTAL: &str = "ra_loop_retry_total";
 
 // ── Default per-bucket limits ───────────────────────────────────────────────
 //
@@ -539,7 +539,7 @@ impl LoopRetryState {
 
     fn record_metric(variant: &str, decision: LoopDecision) {
         counter!(
-            ra_LOOP_RETRY_TOTAL,
+            RA_LOOP_RETRY_TOTAL,
             "variant" => variant.to_string(),
             "decision" => decision.as_str().to_string(),
         )

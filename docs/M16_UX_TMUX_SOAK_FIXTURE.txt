@@ -15,7 +15,7 @@ It launches:
   harness.
 - A typed AppUI review/start request that asks for supervised specialist
   agents. Native specialists are resolved from
-  ra_REVIEW_NATIVE_SPECIALISTS_JSON, then profile
+  RA_REVIEW_NATIVE_SPECIALISTS_JSON, then profile
   review.native_specialists, then the built-in default template. Optional
   reviewer-cli and reviewer-mcp specialists are added when their backends are
   configured.

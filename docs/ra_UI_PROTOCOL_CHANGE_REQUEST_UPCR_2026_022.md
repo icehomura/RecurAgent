@@ -50,7 +50,7 @@ docs-only — the field set documented below is exactly what
   backpressure-diverge signal that companions the durable ledger.
 - UPCR-2026-019 referenced `turn/spawn_complete` as part of the M10 spawn-only
   completion contract.
-- The M16 context-manager workstream (`ra_CONTEXT_MANAGER_GAP_CONTRACT`)
+- The M16 context-manager workstream (`RA_CONTEXT_MANAGER_GAP_CONTRACT`)
   introduced the two `context/*` lifecycle notifications.
 
 This UPCR does not modify any of those decisions. It backfills the wire
@@ -393,7 +393,7 @@ and no decoder behavior changes.
 - UPCR-2026-014 — `protocol/replay_lossy` companion to the durable ledger.
 - UPCR-2026-019 — `turn/spawn_complete` passing reference in the M10
   spawn-only completion path.
-- `docs/ra_CONTEXT_MANAGER_GAP_CONTRACT.md` — M16 context-manager
+- `docs/RA_CONTEXT_MANAGER_GAP_CONTRACT.md` — M16 context-manager
   workstream that introduced the two `context/*` notifications.
 
 ## Explicit Non-Goals

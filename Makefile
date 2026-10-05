@@ -2,7 +2,7 @@
 
 CARGO ?= cargo
 FEATURES ?= api
-ra_DIR ?= $(CURDIR)/.ra
+RA_DIR ?= $(CURDIR)/.ra
 HOST ?= 127.0.0.1
 PORT ?= 50080
 SERVE_FLAGS ?= --solo
@@ -16,7 +16,7 @@ init: ## Interactively create project-local .ra/config.json.
 	$(CARGO) run -p ra-cli -- init --cwd "$(CURDIR)"
 
 serve: ## Start the local API server (default: password-free local login).
-	$(CARGO) run -p ra-cli --features "$(FEATURES)" -- serve --cwd "$(CURDIR)" --data-dir "$(ra_DIR)" --host "$(HOST)" --port "$(PORT)" $(SERVE_FLAGS)
+	$(CARGO) run -p ra-cli --features "$(FEATURES)" -- serve --cwd "$(CURDIR)" --data-dir "$(RA_DIR)" --host "$(HOST)" --port "$(PORT)" $(SERVE_FLAGS)
 
 dashboard-build: ## Build the embedded /admin/ dashboard.
 	./scripts/build-dashboard.sh

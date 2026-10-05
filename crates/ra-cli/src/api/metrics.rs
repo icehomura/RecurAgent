@@ -352,11 +352,11 @@ fn build_totals(samples: &[ParsedMetricSample]) -> BTreeMap<String, u64> {
         ),
         (
             "loop_errors".to_string(),
-            total_for_metric(samples, ra_agent::ra_LOOP_ERROR_TOTAL),
+            total_for_metric(samples, ra_agent::RA_LOOP_ERROR_TOTAL),
         ),
         (
             "loop_retries".to_string(),
-            total_for_metric(samples, ra_agent::ra_LOOP_RETRY_TOTAL),
+            total_for_metric(samples, ra_agent::RA_LOOP_RETRY_TOTAL),
         ),
     ])
 }
@@ -475,7 +475,7 @@ fn build_breakdowns(samples: &[ParsedMetricSample]) -> BTreeMap<String, Vec<Valu
             "loop_errors".to_string(),
             breakdown(
                 samples,
-                ra_agent::ra_LOOP_ERROR_TOTAL,
+                ra_agent::RA_LOOP_ERROR_TOTAL,
                 &["variant", "recovery"],
             ),
         ),
@@ -483,7 +483,7 @@ fn build_breakdowns(samples: &[ParsedMetricSample]) -> BTreeMap<String, Vec<Valu
             "loop_retries".to_string(),
             breakdown(
                 samples,
-                ra_agent::ra_LOOP_RETRY_TOTAL,
+                ra_agent::RA_LOOP_RETRY_TOTAL,
                 &["variant", "decision"],
             ),
         ),

@@ -4,7 +4,7 @@ See also:
 
 - [ra_ROBOTICS_FAMILY.md](./ra_ROBOTICS_FAMILY.md)
 - [ra_ROBOTICS_CONTRACTS.md](./ra_ROBOTICS_CONTRACTS.md)
-- `ra_HARNESS_MIGRATION_GUARDRAILS.md` (not in this tree)
+- `RA_HARNESS_MIGRATION_GUARDRAILS.md` (not in this tree)
 - `ra_HARNESS_ENGINEERING.md` (not in this tree)
 
 ## Purpose
@@ -57,7 +57,7 @@ RecurAgent keeps working.
 ## Stable Surfaces — Do Not Rebuild
 
 These surfaces are stable for the robotics program, per
-`ra_HARNESS_MIGRATION_GUARDRAILS.md`.
+`RA_HARNESS_MIGRATION_GUARDRAILS.md`.
 
 They may be extended. They must not be replaced.
 

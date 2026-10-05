@@ -7610,7 +7610,7 @@ async fn user_prompt_submit_hook_injects_stdout_as_turn_context() {
     // into the model's input for this turn.
     let hooks = Arc::new(HookExecutor::new(vec![HookConfig {
         event: HookEvent::UserPromptSubmit,
-        command: vec!["sh".into(), "-c".into(), "echo ra_CTX_MARKER_42".into()],
+        command: vec!["sh".into(), "-c".into(), "echo RA_CTX_MARKER_42".into()],
         timeout_ms: 5000,
         tool_filter: vec![],
         path_filter: vec![],

@@ -6,7 +6,7 @@
 //! cargo test -p ra-embed-llama --features embed-llama,metal --test embed -- --ignored --nocapture
 //! ```
 //! The model auto-resolves from the HuggingFace cache, or set
-//! `RA_EMBED_GGUF` (legacy `ra_EMBED_GGUF`) to a file path.
+//! `RA_EMBED_GGUF` (legacy `RA_EMBED_GGUF`) to a file path.
 #![cfg(feature = "embed-llama")]
 
 use std::path::PathBuf;

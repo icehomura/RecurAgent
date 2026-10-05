@@ -1932,7 +1932,7 @@ def embedding_model_ensure(data_dir: "str",download: "bool") -> "str":
     Blocks for the whole transfer, so call it from a plain thread before
     [`Runtime::new`] when the host wants to own the timing. Raises
     [`RaError::Embed`] when the file is absent and `download` is false (or
-    `ra_NO_MODEL_DOWNLOAD` is set), or the download fails to verify.
+    `RA_NO_MODEL_DOWNLOAD` is set), or the download fails to verify.
     """
 
     _UniffiConverterString.check_lower(data_dir)

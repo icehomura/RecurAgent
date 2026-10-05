@@ -70,7 +70,7 @@ pub fn env_lookup(name: &str) -> Option<String> {
     ra_core::brand::env_compat_str(env_suffix(name))
 }
 
-/// `RA_FOO`/`ra_FOO`/`FOO` → `FOO`.
+/// `RA_FOO`/`RA_FOO`/`FOO` → `FOO`.
 fn env_suffix(name: &str) -> &str {
     name.strip_prefix(ra_core::brand::ENV_PREFIX)
         .or_else(|| name.strip_prefix(ra_core::brand::ENV_PREFIX))
@@ -126,7 +126,7 @@ pub const RESPECT_ROBOTS_ENV: &str = "RA_RESPECT_ROBOTS";
 pub const LEGACY_RESPECT_ROBOTS_ENV: &str = "RA_RESPECT_ROBOTS";
 
 /// Whether robots.txt checks are enabled (env lookup injected for tests).
-/// `RA_RESPECT_ROBOTS` wins over the legacy `ra_RESPECT_ROBOTS`.
+/// `RA_RESPECT_ROBOTS` wins over the legacy `RA_RESPECT_ROBOTS`.
 pub fn respect_robots(lookup: impl Fn(&str) -> Option<String>) -> bool {
     resolve_env(&lookup, RESPECT_ROBOTS_ENV)
         .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))

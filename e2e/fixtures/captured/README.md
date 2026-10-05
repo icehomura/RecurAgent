@@ -192,7 +192,7 @@ usually mean the spec ran for many minutes; consider trimming.
   `streamingPaths` if a custom streaming endpoint should be
   intercepted.
 * **Buffer cap**: 10 000 frames per capture (override via
-  `ra_CAPTURE_MAX_FRAMES`). Beyond that, frames are dropped and a
+  `RA_CAPTURE_MAX_FRAMES`). Beyond that, frames are dropped and a
   single `capture_truncated` marker is appended.
 * **Wall-clock impact on soak runs**: under 2% in practice. Captures
   only flush on test end; in-flight tests pay only the tee.

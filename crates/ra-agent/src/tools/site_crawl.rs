@@ -290,7 +290,7 @@ fn challenged(url: &str) -> CrawledPage {
 }
 
 /// robots.txt verdict for `url` when the operator turned robots checks on
-/// (`RA_RESPECT_ROBOTS`; legacy `ra_RESPECT_ROBOTS` is still honoured);
+/// (`RA_RESPECT_ROBOTS`; legacy `RA_RESPECT_ROBOTS` is still honoured);
 /// `None` = allowed or checks off.
 async fn robots_refusal(cache: &ra_research::RobotsCache, url: &str) -> Option<String> {
     if !ra_research::respect_robots(super::web_search::compat_env_lookup) {

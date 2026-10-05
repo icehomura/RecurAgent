@@ -15,11 +15,11 @@
 #   scripts/fleet-install-skills.sh --dry-run
 #
 # Environment:
-#   ra_FLEET_HOSTS         Space-or-comma-separated host override (same as --host)
+#   RA_FLEET_HOSTS         Space-or-comma-separated host override (same as --host)
 #   MOFA_SKILLS_DIR           Path to mofa-skills checkout (default: ~/home/mofa-skills)
-#   ra_REMOTE_BIN          Path to ra binary on remote (default:
+#   RA_REMOTE_BIN          Path to ra binary on remote (default:
 #                             /Users/cloud/.ra/bin/ra)
-#   ra_REMOTE_USER         SSH user on remote hosts (default: cloud)
+#   RA_REMOTE_USER         SSH user on remote hosts (default: cloud)
 #
 # Per host, per profile, per skill:
 #   1. rsync the local skill directory to a remote staging path
@@ -64,7 +64,7 @@ Usage:
 
 Options:
   --host LIST          Comma-or-space separated hosts (default: mini1-5 IPs)
-                       Overrides ra_FLEET_HOSTS
+                       Overrides RA_FLEET_HOSTS
   --profile LIST       Comma-separated profile IDs (default: every profile
                        enumerated from ~/.ra/profiles/*/data on each host)
   --skill LIST         Comma-separated skill names (default: every dir under
@@ -80,11 +80,11 @@ Options:
   --help, -h           Show this help
 
 Environment overrides:
-  ra_FLEET_HOSTS         Same as --host
+  RA_FLEET_HOSTS         Same as --host
   MOFA_SKILLS_DIR           Same as --mofa-dir
-  ra_REMOTE_BIN          Same as --remote-bin
-  ra_REMOTE_USER         Same as --remote-user
-  ra_REMOTE_STAGING      Remote staging path (default: /tmp/ra-fleet-install-staging)
+  RA_REMOTE_BIN          Same as --remote-bin
+  RA_REMOTE_USER         Same as --remote-user
+  RA_REMOTE_STAGING      Remote staging path (default: /tmp/ra-fleet-install-staging)
 
 Examples:
   # Dry-run against the full fleet

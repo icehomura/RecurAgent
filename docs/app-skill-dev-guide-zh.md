@@ -342,7 +342,7 @@ ra skills --profile alice install your-user/your-repo/skill-a
 - 主提供商的 API 密钥（如 `DASHSCOPE_API_KEY`）
 - 备用提供商密钥（如 `GEMINI_API_KEY`、`OPENAI_API_KEY`）
 - 非标准端点的 Base URL
-- `ra_DATA_DIR` 和 `ra_WORK_DIR`
+- `RA_DATA_DIR` 和 `RA_WORK_DIR`
 
 密钥在网关启动时从 macOS 钥匙串解析。技能二进制通过环境变量接收 — 无需手动导出。
 

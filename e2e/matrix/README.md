@@ -51,9 +51,9 @@ Environment knobs:
 
 | Variable                       | Meaning                                                                 |
 | ------------------------------ | ----------------------------------------------------------------------- |
-| `ra_BIN`                    | Path to the `ra` binary. Defaults to `<repo>/target/debug/ra`.    |
-| `ra_MATRIX_DIR`             | Override the output root for this run.                                  |
-| `ra_MATRIX_RPC_TIMEOUT_MS`  | Per-RPC timeout in ms. Defaults to `10000`.                             |
+| `RA_BIN`                    | Path to the `ra` binary. Defaults to `<repo>/target/debug/ra`.    |
+| `RA_MATRIX_DIR`             | Override the output root for this run.                                  |
+| `RA_MATRIX_RPC_TIMEOUT_MS`  | Per-RPC timeout in ms. Defaults to `10000`.                             |
 
 ## Tiering rules
 

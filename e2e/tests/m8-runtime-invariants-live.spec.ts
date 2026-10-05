@@ -16,7 +16,7 @@
  *   RA_TEST_EMAIL=dspfac@gmail.com \
  *     npx playwright test tests/m8-runtime-invariants-live.spec.ts --workers=1
  *
- * Mini5 SSH: set ra_FLEET_SSH_MAP or ra_TEST_SSH_HOST (key auth assumed).
+ * Mini5 SSH: set RA_FLEET_SSH_MAP or RA_TEST_SSH_HOST (key auth assumed).
  *   Profile data dir: ~/.ra/profiles/dspfac/data
  *   Workspace dirs:   <data>/users/<percent-encoded session key>/workspace
  *   Subagent outputs: <data>/subagent-outputs/<session_id>/<task_id>.out
@@ -39,7 +39,7 @@ test.setTimeout(180_000);
 // even though the workspace is intact on the API host).
 //
 // Map known production domains to SSH targets. Override via env var
-// ra_TEST_SSH_HOST when running against an unmapped target.
+// RA_TEST_SSH_HOST when running against an unmapped target.
 // SSH targets per fleet host come from the environment so no host
 // addresses live in the repo, e.g.
 //   RA_FLEET_SSH_MAP='dspfac.crew.ominix.io=cloud@<host>,dspfac.bot.ominix.io=cloud@<host>'
@@ -264,7 +264,7 @@ test.describe('M8.6 Resume sanitizer worktree-missing refusal', () => {
     if (!SSH_HOST) {
       test.skip(
         true,
-        `M8.6: cannot resolve SSH host for ${BASE}. Set ra_TEST_SSH_HOST ` +
+        `M8.6: cannot resolve SSH host for ${BASE}. Set RA_TEST_SSH_HOST ` +
           `or extend HOST_MAP. Without a host that matches the API target, ` +
           `the deletion-verification step cannot reliably distinguish a true ` +
           `delete from "ssh failed because the dir lives on a different host".`,

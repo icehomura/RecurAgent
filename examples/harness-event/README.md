@@ -1,7 +1,7 @@
 # RecurAgent Harness Event Emitters
 
 These copyable helpers emit `ra.harness.event.v1` JSON records for non-Rust
-tools. They write to `ra_EVENT_SINK` when it is set and do nothing when the
+tools. They write to `RA_EVENT_SINK` when it is set and do nothing when the
 sink is missing.
 
 The contract is:

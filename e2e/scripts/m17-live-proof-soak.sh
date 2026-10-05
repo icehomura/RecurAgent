@@ -24,10 +24,10 @@ validate  Run only the M17 validator over supplied evidence directories.
 self-test Syntax-check scripts and exercise the validator with synthetic evidence.
 
 Live key inputs:
-  DEEPSEEK_API_KEY or ra_M15_NATIVE_API_KEY     Required for run.
-  ra_BIN                                       Default: target/debug/ra.
-  ra_M17_SPAWN_DIR                             Optional direct spawn_agent evidence dir.
-  ra_M17_BUDGET_GRACE_DIR                      Optional explicit budget grace evidence dir.
+  DEEPSEEK_API_KEY or RA_M15_NATIVE_API_KEY     Required for run.
+  RA_BIN                                       Default: target/debug/ra.
+  RA_M17_SPAWN_DIR                             Optional direct spawn_agent evidence dir.
+  RA_M17_BUDGET_GRACE_DIR                      Optional explicit budget grace evidence dir.
   RA_M17_SKIP_TUI=1                            Skip m16 tmux run when ra-tui/tmux are unavailable.
 USAGE
 }
@@ -75,7 +75,7 @@ run_validator() {
 run_live() {
   require_cmd node
   require_cmd python3
-  has_provider_key || die "missing DeepSeek key; set DEEPSEEK_API_KEY or ra_M15_NATIVE_API_KEY before live run"
+  has_provider_key || die "missing DeepSeek key; set DEEPSEEK_API_KEY or RA_M15_NATIVE_API_KEY before live run"
   mkdir -p "$out_dir"
   build_ra
 

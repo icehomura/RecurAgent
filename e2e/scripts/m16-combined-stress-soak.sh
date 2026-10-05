@@ -18,7 +18,7 @@ Runs the M16 combined stress evidence suite:
   3. pressure restart/reconnect visual TUI context soak
 
 The native fanout phase requires a real provider key. Set one of:
-  ra_M16_NATIVE_API_KEY, ra_M15_NATIVE_API_KEY, or DEEPSEEK_API_KEY.
+  RA_M16_NATIVE_API_KEY, RA_M15_NATIVE_API_KEY, or DEEPSEEK_API_KEY.
 
 For local contract iteration without a provider key:
   RA_M16_COMBINED_SKIP_NATIVE=1 e2e/scripts/m16-combined-stress-soak.sh run

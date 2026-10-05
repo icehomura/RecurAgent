@@ -41,7 +41,7 @@
 //! Tuning
 //! ------
 //! The strict layer is gated behind `RA_MANIFEST_VALIDATION` (the legacy
-//! `ra_MANIFEST_VALIDATION` spelling is still honoured):
+//! `RA_MANIFEST_VALIDATION` spelling is still honoured):
 //!
 //! - `strict` (default) — all rules above are enforced.
 //! - `lenient` — Draft 07 sanity only; the RecurAgent rules are skipped.
@@ -121,7 +121,7 @@ pub enum ValidationProfile {
 
 impl ValidationProfile {
     /// Resolve the profile from the `RA_MANIFEST_VALIDATION`
-    /// environment variable (the legacy `ra_MANIFEST_VALIDATION`
+    /// environment variable (the legacy `RA_MANIFEST_VALIDATION`
     /// spelling is still honoured). Unknown values fall back to `Strict`
     /// (fail-closed) and a single `warn!` is emitted via `tracing`.
     pub fn from_env() -> Self {

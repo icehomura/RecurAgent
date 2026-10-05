@@ -17,7 +17,7 @@
  *   RA_PROFILE=dspfac \
  *   npx playwright test e2e/tests/live-restart.spec.ts
  *
- * Skips when ra_TEST_URL is unset.
+ * Skips when RA_TEST_URL is unset.
  */
 import { expect, test } from '@playwright/test';
 import { createNewSession, login, sendAndWait } from './live-browser-helpers';
