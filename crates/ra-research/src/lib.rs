@@ -73,13 +73,13 @@ pub fn env_lookup(name: &str) -> Option<String> {
 /// `RA_FOO`/`ra_FOO`/`FOO` → `FOO`.
 fn env_suffix(name: &str) -> &str {
     name.strip_prefix(ra_core::brand::ENV_PREFIX)
-        .or_else(|| name.strip_prefix(ra_core::brand::LEGACY_ENV_PREFIX))
+        .or_else(|| name.strip_prefix(ra_core::brand::ENV_PREFIX))
         .unwrap_or(name)
 }
 
 /// The legacy `RA_` spelling of `name`.
 pub fn legacy_env_name(name: &str) -> String {
-    format!("{}{}", ra_core::brand::LEGACY_ENV_PREFIX, env_suffix(name))
+    format!("{}{}", ra_core::brand::ENV_PREFIX, env_suffix(name))
 }
 
 /// Resolve `name` through an injected lookup: the new spelling first, the
@@ -104,14 +104,14 @@ pub const SERP_SCRAPE_ENV: &str = "RA_ALLOW_SERP_SCRAPE";
 
 /// The spelling the previous build used for [`SERP_SCRAPE_ENV`]; still
 /// honoured as a fallback.
-pub const LEGACY_SERP_SCRAPE_ENV: &str = "ra_ALLOW_SERP_SCRAPE";
+pub const LEGACY_SERP_SCRAPE_ENV: &str = "RA_ALLOW_SERP_SCRAPE";
 
 /// Earlier name of [`SERP_SCRAPE_ENV`], still honoured as an alias.
 pub const BROWSER_SERP_ENV: &str = "RA_ALLOW_BROWSER_SERP";
 
 /// The spelling the previous build used for [`BROWSER_SERP_ENV`]; still
 /// honoured as a fallback.
-pub const LEGACY_BROWSER_SERP_ENV: &str = "ra_ALLOW_BROWSER_SERP";
+pub const LEGACY_BROWSER_SERP_ENV: &str = "RA_ALLOW_BROWSER_SERP";
 
 /// Operator setting that turns robots.txt checks **on** for the research
 /// tools (`1`/`true`/`yes`). Default off: RecurAgent agents are personal
@@ -123,7 +123,7 @@ pub const RESPECT_ROBOTS_ENV: &str = "RA_RESPECT_ROBOTS";
 
 /// The spelling the previous build used for [`RESPECT_ROBOTS_ENV`]; still
 /// honoured as a fallback.
-pub const LEGACY_RESPECT_ROBOTS_ENV: &str = "ra_RESPECT_ROBOTS";
+pub const LEGACY_RESPECT_ROBOTS_ENV: &str = "RA_RESPECT_ROBOTS";
 
 /// Whether robots.txt checks are enabled (env lookup injected for tests).
 /// `RA_RESPECT_ROBOTS` wins over the legacy `ra_RESPECT_ROBOTS`.
@@ -140,7 +140,7 @@ pub const BROWSER_ENV: &str = "RA_BROWSER";
 
 /// The spelling the previous build used for [`BROWSER_ENV`]; still honoured
 /// as a fallback.
-pub const LEGACY_BROWSER_ENV: &str = "ra_BROWSER";
+pub const LEGACY_BROWSER_ENV: &str = "RA_BROWSER";
 
 /// Shown with results whenever a search used the person's browser (and
 /// logged once when the browser starts): what that means for their account
@@ -165,7 +165,7 @@ pub const READ_BLOCKED_IN_BROWSER_ENV: &str = "RA_READ_BLOCKED_IN_BROWSER";
 
 /// The spelling the previous build used for
 /// [`READ_BLOCKED_IN_BROWSER_ENV`]; still honoured as a fallback.
-pub const LEGACY_READ_BLOCKED_IN_BROWSER_ENV: &str = "ra_READ_BLOCKED_IN_BROWSER";
+pub const LEGACY_READ_BLOCKED_IN_BROWSER_ENV: &str = "RA_READ_BLOCKED_IN_BROWSER";
 
 /// Whether a page blocked over plain HTTP may be read once in the browser
 /// ([`READ_BLOCKED_IN_BROWSER_ENV`]; env lookup injected for tests).
@@ -353,7 +353,7 @@ mod tests {
         // the helper must not invent a value (no process env is touched).
         assert_eq!(env_lookup("NOT_SET_XYZ"), None);
         assert_eq!(env_lookup("RA_NOT_SET_XYZ"), None);
-        assert_eq!(env_lookup("ra_NOT_SET_XYZ"), None);
+        assert_eq!(env_lookup("RA_NOT_SET_XYZ"), None);
         assert_eq!(legacy_env_name("RA_RESPECT_ROBOTS"), LEGACY_RESPECT_ROBOTS_ENV);
         assert_eq!(legacy_env_name("RESPECT_ROBOTS"), LEGACY_RESPECT_ROBOTS_ENV);
         assert_eq!(

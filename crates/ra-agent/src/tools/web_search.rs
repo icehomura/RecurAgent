@@ -90,7 +90,7 @@ pub(crate) fn is_quota_or_rate_limit_error(result: &ToolResult) -> bool {
 /// cannot end up double-prefixing.
 pub(crate) fn compat_env_lookup(name: &str) -> Option<String> {
     let suffix = name
-        .strip_prefix(ra_core::brand::LEGACY_ENV_PREFIX)
+        .strip_prefix(ra_core::brand::ENV_PREFIX)
         .or_else(|| name.strip_prefix(ra_core::brand::ENV_PREFIX))
         .unwrap_or(name);
     ra_core::brand::env_compat_str(suffix)
@@ -2480,7 +2480,7 @@ mod tests {
         // Pure: neither the `RA_` nor the legacy `RA_` spelling is set,
         // so the helper must not invent a value (no process env is touched).
         assert_eq!(compat_env_lookup("NOT_SET_XYZ"), None);
-        assert_eq!(compat_env_lookup("ra_NOT_SET_XYZ"), None);
+        assert_eq!(compat_env_lookup("RA_NOT_SET_XYZ"), None);
         assert_eq!(compat_env_lookup("RA_NOT_SET_XYZ"), None);
     }
 

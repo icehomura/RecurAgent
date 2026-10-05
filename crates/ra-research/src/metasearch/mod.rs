@@ -68,21 +68,21 @@ pub const METASEARCH_ENV: &str = "RA_METASEARCH";
 
 /// The spelling the previous build used for [`METASEARCH_ENV`]; still
 /// honoured as a fallback.
-pub const LEGACY_METASEARCH_ENV: &str = "ra_METASEARCH";
+pub const LEGACY_METASEARCH_ENV: &str = "RA_METASEARCH";
 
 /// Contact address for polite pools (OpenAlex `mailto`). Optional.
 pub const CONTACT_ENV: &str = "RA_RESEARCH_CONTACT";
 
 /// The spelling the previous build used for [`CONTACT_ENV`]; still honoured
 /// as a fallback.
-pub const LEGACY_CONTACT_ENV: &str = "ra_RESEARCH_CONTACT";
+pub const LEGACY_CONTACT_ENV: &str = "RA_RESEARCH_CONTACT";
 
 /// Directory with extra engines (see [`Registry::load_dir`]).
 pub const ENGINES_DIR_ENV: &str = "RA_METASEARCH_ENGINES";
 
 /// The spelling the previous build used for [`ENGINES_DIR_ENV`]; still
 /// honoured as a fallback.
-pub const LEGACY_ENGINES_DIR_ENV: &str = "ra_METASEARCH_ENGINES";
+pub const LEGACY_ENGINES_DIR_ENV: &str = "RA_METASEARCH_ENGINES";
 
 /// Pins file for [`ENGINES_DIR_ENV`] engines (`{"id": "sha256:..."}`); must
 /// live outside that directory.
@@ -90,7 +90,7 @@ pub const PINS_ENV: &str = "RA_METASEARCH_PINS";
 
 /// The spelling the previous build used for [`PINS_ENV`]; still honoured as
 /// a fallback.
-pub const LEGACY_PINS_ENV: &str = "ra_METASEARCH_PINS";
+pub const LEGACY_PINS_ENV: &str = "RA_METASEARCH_PINS";
 
 /// Lets a pinned directory engine replace a built-in with the same id
 /// (`1`/`true`/`yes`; off by default).
@@ -98,7 +98,7 @@ pub const ALLOW_OVERRIDE_ENV: &str = "RA_METASEARCH_ALLOW_OVERRIDE";
 
 /// The spelling the previous build used for [`ALLOW_OVERRIDE_ENV`]; still
 /// honoured as a fallback.
-pub const LEGACY_ALLOW_OVERRIDE_ENV: &str = "ra_METASEARCH_ALLOW_OVERRIDE";
+pub const LEGACY_ALLOW_OVERRIDE_ENV: &str = "RA_METASEARCH_ALLOW_OVERRIDE";
 
 /// Default [`SearchRequest::straggler_grace`].
 pub const DEFAULT_STRAGGLER_GRACE: Duration = Duration::from_secs(2);
@@ -165,7 +165,7 @@ impl Default for Config {
 /// `ra_GOOGLE_CSE_CX`) follows the brand fallback.
 fn engine_key_env(lookup: &impl Fn(&str) -> Option<String>, name: &str) -> Option<String> {
     let owned = name.starts_with(ra_core::brand::ENV_PREFIX)
-        || name.starts_with(ra_core::brand::LEGACY_ENV_PREFIX);
+        || name.starts_with(ra_core::brand::ENV_PREFIX);
     let value = if owned {
         crate::resolve_env(lookup, name)
     } else {

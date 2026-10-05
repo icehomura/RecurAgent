@@ -29,7 +29,7 @@ const COMPLETE_VAR: &str = "RA_COMPLETE";
 /// `clap_complete` is handed the *name*, not a value;
 /// [`complete_var_names_follow_the_brand_prefixes`] pins both spellings to the
 /// brand prefixes.
-const LEGACY_COMPLETE_VAR: &str = "ra_COMPLETE";
+const LEGACY_COMPLETE_VAR: &str = "RA_COMPLETE";
 
 /// Name of the shell-completion request variable: `RA_COMPLETE`, falling back to
 /// the legacy `ra_COMPLETE` when only that one is set (the new name wins when
@@ -99,7 +99,7 @@ fn run_cli() -> Result<()> {
     install_error_hooks()?;
 
     // Hidden chaos-test switch (outer-loop blueprint step ②): when
-    // ra_TEST_PANIC_AFTER_BOOT=1, panic immediately AFTER the production
+    // RA_TEST_PANIC_AFTER_BOOT=1, panic immediately AFTER the production
     // hooks are installed. Integration tests use this to drive the REAL
     // production panic-hook path under a broken-pipe stderr and assert no
     // second panic / no SIGABRT. Never set in normal operation.
@@ -329,7 +329,7 @@ mod tests {
         );
         assert_eq!(
             LEGACY_COMPLETE_VAR,
-            format!("{}COMPLETE", ra_core::brand::LEGACY_ENV_PREFIX)
+            format!("{}COMPLETE", ra_core::brand::ENV_PREFIX)
         );
     }
 }

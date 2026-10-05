@@ -1,14 +1,12 @@
-//! Product identity: name, environment-variable compatibility and state/config locations.
+//! Product identity: name, environment variables and state/config locations.
 //!
-//! The product is RecurAgent; the code-level slug is `ra`. Two rules apply here:
+//! The product is RecurAgent; the code-level slug is `ra`. One rule applies here:
 //!
-//! * **environment variables are aliased** — the canonical `RA_<NAME>` wins and the
-//!   lowercase `ra_<NAME>` form older scripts and CI still export is honoured
-//!   ([`env_compat`]);
-//! * **state and configuration are not** — [`state_home`] and [`config_home`] resolve to the
-//!   `ra` locations only. No legacy directory is read, migrated or cleared, and no legacy
-//!   credentials, payloads or databases are interpreted: an install that used an old name
-//!   starts fresh with the new one.
+//! * **environment variables** are read as `RA_<NAME>` ([`env_compat`]); an empty value
+//!   counts as unset;
+//! * **state and configuration** resolve to the `ra` locations only — nothing is read from,
+//!   migrated out of, or cleared from an older install, so a machine that used a previous
+//!   name starts fresh under the current one.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -17,36 +15,22 @@ use std::path::{Path, PathBuf};
 pub const APP_SLUG: &str = "ra";
 /// Uppercase product name used in user-visible text.
 pub const APP_NAME: &str = "ra";
-/// Prefix of every environment variable the product introduces.
+/// Prefix of every environment variable the product reads.
 pub const ENV_PREFIX: &str = "RA_";
-/// Lowercase prefix older scripts and CI still export (`ra_<NAME>`).
-pub const LEGACY_ENV_PREFIX: &str = "ra_";
-/// Legacy product slug (no longer consulted for paths).
-pub const LEGACY_SLUG: &str = "ra";
 /// State-home directory inside the user's home: `~/.ra`.
 pub const STATE_DIR: &str = ".ra";
-/// Legacy state-home directory (no longer consulted).
-pub const LEGACY_STATE_DIR: &str = ".ra";
 
-/// Read `RA_<name>` and fall back to `ra_<name>`.
+/// Read `RA_<name>`.
 ///
-/// `name` is the suffix without either prefix: `env_compat("HOME")` reads `RA_HOME` then
-/// `ra_HOME`. An empty value counts as unset.
+/// `name` is the suffix without the prefix: `env_compat("HOME")` reads `RA_HOME`.
+/// An empty value counts as unset.
 pub fn env_compat(name: &str) -> Option<OsString> {
-    env_compat_of(
-        std::env::var_os(format!("{ENV_PREFIX}{name}")),
-        std::env::var_os(format!("{LEGACY_ENV_PREFIX}{name}")),
-    )
+    non_empty(std::env::var_os(format!("{ENV_PREFIX}{name}")))
 }
 
 /// [`env_compat`] for callers that want a `String` (lossy for non-UTF-8 values).
 pub fn env_compat_str(name: &str) -> Option<String> {
     env_compat(name).map(|value| value.to_string_lossy().into_owned())
-}
-
-/// Pure form of [`env_compat`]: new wins, legacy is the fallback, empty means unset.
-pub fn env_compat_of(new: Option<OsString>, legacy: Option<OsString>) -> Option<OsString> {
-    non_empty(new).or_else(|| non_empty(legacy))
 }
 
 fn non_empty(value: Option<OsString>) -> Option<OsString> {
@@ -113,20 +97,11 @@ mod tests {
     }
 
     #[test]
-    fn env_compat_prefers_the_new_name_and_ignores_empty() {
-        assert_eq!(
-            env_compat_of(Some("new".into()), Some("legacy".into())),
-            Some(OsString::from("new"))
-        );
-        assert_eq!(env_compat_of(None, Some("legacy".into())), Some(OsString::from("legacy")));
-        assert_eq!(
-            env_compat_of(Some(OsString::from("")), Some("legacy".into())),
-            Some(OsString::from("legacy"))
-        );
-        assert_eq!(
-            env_compat_of(Some(OsString::from("")), Some(OsString::from(""))),
-            None
-        );
+    fn env_compat_reads_only_the_ra_prefix() {
+        // A name that cannot be set in the environment must resolve to `None`
+        // (setting one would need `unsafe` under edition 2024's `set_var`).
+        assert_eq!(env_compat("BRAND_TEST_MISSING"), None);
+        assert_eq!(env_compat_str("BRAND_TEST_MISSING"), None);
     }
 
     #[test]
@@ -134,10 +109,7 @@ mod tests {
         assert_eq!(APP_SLUG, "ra");
         assert_eq!(APP_NAME, "ra");
         assert_eq!(ENV_PREFIX, "RA_");
-        assert_eq!(LEGACY_ENV_PREFIX, "ra_");
-        assert_eq!(LEGACY_SLUG, "ra");   // legacy spelling, no longer consulted for paths
-        // the state dir is a dot-directory in $HOME, the config dir is plain
+        // the state dir is a dot-directory in $HOME
         assert_eq!(STATE_DIR, ".ra");
-        assert_eq!(LEGACY_STATE_DIR, ".ra");
     }
 }
