@@ -17,8 +17,8 @@ use ra_llm::vertex_auth::TokenSource;
 
 use crate::harness_errors::HarnessError;
 use crate::harness_events::{
-    lookup_event_sink_context, RA_EVENT_SINK_ENV, RA_HARNESS_SESSION_ID_ENV,
-    RA_HARNESS_TASK_ID_ENV, RA_SESSION_ID_ENV, RA_TASK_ID_ENV, write_event_to_sink,
+    RA_EVENT_SINK_ENV, RA_HARNESS_SESSION_ID_ENV, RA_HARNESS_TASK_ID_ENV, RA_SESSION_ID_ENV,
+    RA_TASK_ID_ENV, lookup_event_sink_context, write_event_to_sink,
 };
 use crate::policy::ApprovalPolicy;
 use crate::progress::ProgressEvent;

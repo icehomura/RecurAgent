@@ -20,7 +20,7 @@ use tokio::sync::mpsc;
 use tokio::sync::{Mutex, RwLock, broadcast, watch};
 
 use crate::profiles::{
-    ChannelCredentials, HOST_ASR_LANGUAGE_ENV, ProfileStore, UserProfile, RA_HOST_ASR_LANGUAGE_ENV,
+    ChannelCredentials, HOST_ASR_LANGUAGE_ENV, ProfileStore, RA_HOST_ASR_LANGUAGE_ENV, UserProfile,
 };
 
 /// Base port for managed WhatsApp bridge WebSocket servers.
