@@ -83,16 +83,28 @@ fn main() -> Result<()> {
     // unix gives 8 MB, and the serve/agent call chains recurse past 1 MB: `serve
     // --stdio` died with "thread 'main' has overflowed its stack" before it could
     // answer its first JSON-RPC frame, which broke the terminal client's default
-    // local launch (it spawns exactly that command). Run the real entry point on a
-    // thread with a generous stack so every platform behaves like unix.
-    const MAIN_STACK_BYTES: usize = 32 * 1024 * 1024;
-    std::thread::Builder::new()
-        .name("ra-main".to_owned())
-        .stack_size(MAIN_STACK_BYTES)
-        .spawn(run_cli)
-        .map_err(|error| eyre::eyre!("failed to start the main worker thread: {error}"))?
-        .join()
-        .unwrap_or_else(|_panic| std::process::exit(101))
+    // local launch (it spawns exactly that command). Windows therefore runs the
+    // real entry point on a thread with a generous stack.
+    //
+    // unix must NOT: `ra acp --host-managed` has to call
+    // `ra_sandbox::confine_host_managed` from the process's INITIAL thread (the
+    // sandbox rejects a spawned caller), and unix already gives the main thread
+    // 8 MB — the same budget the Windows fix exists to match.
+    #[cfg(windows)]
+    {
+        const MAIN_STACK_BYTES: usize = 32 * 1024 * 1024;
+        std::thread::Builder::new()
+            .name("ra-main".to_owned())
+            .stack_size(MAIN_STACK_BYTES)
+            .spawn(run_cli)
+            .map_err(|error| eyre::eyre!("failed to start the main worker thread: {error}"))?
+            .join()
+            .unwrap_or_else(|_panic| std::process::exit(101))
+    }
+    #[cfg(not(windows))]
+    {
+        run_cli()
+    }
 }
 
 fn run_cli() -> Result<()> {
