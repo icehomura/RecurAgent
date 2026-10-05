@@ -10,8 +10,8 @@
 //! `--instance-data-dir <ra_home>/instances/<cwd-hash>` to serve):
 //!
 //! ```text
-//! <RecurAgent_home>/instances/<cwd-hash>/          ← per-instance RUNTIME root
-//! <RecurAgent_home>/instances/<cwd-hash>/profiles/<profile>/data/
+//! <ra_home>/instances/<cwd-hash>/          ← per-instance RUNTIME root
+//! <ra_home>/instances/<cwd-hash>/profiles/<profile>/data/
 //!     {goal-ledgers, peers, inbox, …}         ← per-profile data
 //! ```
 //!

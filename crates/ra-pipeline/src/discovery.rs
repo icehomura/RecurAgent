@@ -449,7 +449,7 @@ mod tests {
     }
 
     /// Installed-wins must hold regardless of builder call order: even if
-    /// the bundled dir is registered FIRST, then an RecurAgent_home/skills path
+    /// the bundled dir is registered FIRST, then an ra_home/skills path
     /// is added later, the bundled dir stays lowest-precedence.
     #[tokio::test]
     async fn bundled_dir_stays_lowest_precedence_regardless_of_call_order() {

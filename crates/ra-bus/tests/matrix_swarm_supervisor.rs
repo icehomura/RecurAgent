@@ -413,7 +413,7 @@ async fn should_route_typed_harness_event_to_correct_puppet_message() {
         .split('&')
         .find_map(|pair| pair.strip_prefix("user_id="))
         .unwrap_or("");
-    // percent-decoded prefix should start with "@RecurAgent_swarm_s3f1_claude-code"
+    // percent-decoded prefix should start with "@ra_swarm_s3f1_claude-code"
     assert!(
         encoded_puppet.contains("ra_swarm_s3f1_claude-code"),
         "send should use puppet identity, got query={query}, puppet={puppet}"

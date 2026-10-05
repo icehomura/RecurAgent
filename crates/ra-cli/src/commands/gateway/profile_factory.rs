@@ -1788,7 +1788,7 @@ mod tests {
             host_memory: None,
         };
 
-        // The child-profile pipeline root MUST be effective_RecurAgent_home — the
+        // The child-profile pipeline root MUST be effective_ra_home — the
         // dir the gateway bootstraps bundled pipelines into — so bootstrap-dir
         // == search-dir and an installed global pipeline wins over the bundle.
         assert_eq!(

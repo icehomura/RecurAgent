@@ -156,7 +156,7 @@ async fn pipeline_enum_includes_ra_home_pipelines() {
     let data = tempfile::tempdir().unwrap();
     let ra_home = tempfile::tempdir().unwrap();
 
-    // Operator-installed user pipeline lands in <RecurAgent_home>/pipelines.
+    // Operator-installed user pipeline lands in <ra_home>/pipelines.
     // Use a NON-baseline name so a hard-coded fallback can't satisfy this.
     let home_pipelines = ra_home.path().join("pipelines");
     std::fs::create_dir_all(&home_pipelines).unwrap();
@@ -442,7 +442,7 @@ async fn bare_name_obeys_installed_wins_and_dot_path_is_rejected() {
 #[tokio::test]
 async fn standalone_gateway_child_profile_roots_pipeline_at_bootstrap_dir() {
     // Standalone layout: cwd/.ra (project_dir) and data_dir
-    // (effective_RecurAgent_home) are DISTINCT dirs.
+    // (effective_ra_home) are DISTINCT dirs.
     let cwd = tempfile::tempdir().unwrap();
     let project_dir = cwd.path().join(".ra");
     std::fs::create_dir_all(&project_dir).unwrap();
@@ -453,10 +453,10 @@ async fn standalone_gateway_child_profile_roots_pipeline_at_bootstrap_dir() {
     let session_data_correct = tempfile::tempdir().unwrap();
     let session_data_wrong = tempfile::tempdir().unwrap();
 
-    // Gateway bootstraps the bundled pipelines into effective_RecurAgent_home.
+    // Gateway bootstraps the bundled pipelines into effective_ra_home.
     ra_agent::bootstrap::bootstrap_bundled_pipelines(effective_ra_home);
 
-    // Operator installs a GLOBAL deep_research under effective_RecurAgent_home/skills.
+    // Operator installs a GLOBAL deep_research under effective_ra_home/skills.
     let global_skill = effective_ra_home.join("skills").join("mofa-research");
     std::fs::create_dir_all(&global_skill).unwrap();
     std::fs::write(
@@ -465,7 +465,7 @@ async fn standalone_gateway_child_profile_roots_pipeline_at_bootstrap_dir() {
     )
     .unwrap();
 
-    // (1) CORRECT root = effective_RecurAgent_home (bootstrap-dir == search-dir):
+    // (1) CORRECT root = effective_ra_home (bootstrap-dir == search-dir):
     // the installed GLOBAL copy must win over the bundled fallback.
     let correct = make_tool_with_data(cwd.path(), session_data_correct.path())
         .await

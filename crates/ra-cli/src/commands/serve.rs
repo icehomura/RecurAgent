@@ -1185,7 +1185,7 @@ impl ServeCommand {
 
         // M11-F regression fix REG-4: bootstrap bundled app-skills
         // (`crates/app-skills/`) and platform-skills (`crates/platform-
-        // skills/`) into `<RecurAgent_home>/{bundled-app-skills,platform-
+        // skills/`) into `<ra_home>/{bundled-app-skills,platform-
         // skills}/` so every `ProfileRuntime` we build below can scan
         // them via `Config::plugin_dirs_from_project`. Pre-M11-F
         // `serve.rs::try_create_agent` did this unconditionally per

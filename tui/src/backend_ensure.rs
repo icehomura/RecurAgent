@@ -531,7 +531,7 @@ fn rewrite_program(command: &str, ra_path: &Path) -> Option<String> {
     while tokens.get(idx).is_some_and(|t| is_env_assignment(t)) {
         idx += 1;
     }
-    *tokens.get_mut(idx)? = RecurAgent_path.to_string_lossy().into_owned();
+    *tokens.get_mut(idx)? = ra_path.to_string_lossy().into_owned();
     // A DIRECT `VAR=value` prefix (no leading `env`) is fine as typed, but
     // `try_join` re-quotes it (`'VAR=value'`), and `sh -c` then treats the
     // quoted token as the *command name* rather than an assignment — so the

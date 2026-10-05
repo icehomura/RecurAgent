@@ -340,7 +340,7 @@ impl GatewayRuntime {
         println!("{}: {}", "Provider".green(), provider_name);
 
         // Open ProfileStore for /account commands and bot management.
-        // Derive RecurAgent_home from: --ra-home flag > data_dir (which already
+        // Derive ra_home from: --ra-home flag > data_dir (which already
         // resolves --data-dir > $RA_HOME > ~/.ra).
         let effective_ra_home = cmd.ra_home.clone().unwrap_or_else(|| data_dir.clone());
         let profile_store: Option<Arc<crate::profiles::ProfileStore>> =
@@ -575,7 +575,7 @@ impl GatewayRuntime {
             .wrap_err("failed to open recall store")?
         };
 
-        // Derive project_dir from RecurAgent_home (when launched by process_manager)
+        // Derive project_dir from ra_home (when launched by process_manager)
         // or fall back to cwd/.ra (standalone RecurAgent gateway / RecurAgent chat mode).
         // This is decoupled from cwd so that narrowing cwd to data_dir for
         // per-profile file isolation doesn't break access to shared skills/configs.
@@ -595,7 +595,7 @@ impl GatewayRuntime {
             info!(count = n, "bootstrapped platform skills");
         }
         // Gap 4.1 BLOCKER 2: bundle generic pipelines (deep_research) into
-        // <effective_RecurAgent_home>/bundled-pipelines so `run_pipeline` always
+        // <effective_ra_home>/bundled-pipelines so `run_pipeline` always
         // discovers them even when the per-profile `mofa-research` skill has
         // drifted. The invariant is bootstrap-dir == search-dir: the
         // non-profile pipeline factory below calls
@@ -1158,8 +1158,8 @@ impl GatewayRuntime {
                         // by the actor factory.
                         .with_sandbox(sandbox.clone())
                         // BLOCKER 2: unconditional — registers
-                        // <RecurAgent_home>/{skills,pipelines} (installed) and
-                        // <RecurAgent_home>/bundled-pipelines (bundled, last).
+                        // <ra_home>/{skills,pipelines} (installed) and
+                        // <ra_home>/bundled-pipelines (bundled, last).
                         .with_ra_home(self.ra_home.clone());
                         if let Some(ref router) = self.router {
                             pt = pt.with_provider_router(router.clone());

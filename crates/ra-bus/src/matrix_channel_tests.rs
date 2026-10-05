@@ -2685,7 +2685,7 @@ async fn test_matrix_send_rejects_unregistered_sender() {
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
-    // Do NOT register @RecurAgent_unknown:localhost
+    // Do NOT register @ra_unknown:localhost
 
     let msg = OutboundMessage {
         channel: "matrix".to_string(),
@@ -4319,7 +4319,7 @@ async fn should_skip_stale_bindings_when_allbots_fans_out() {
         )
         .with_state(state);
 
-    // "@RecurAgent_alex:localhost" has no router entry — a stale binding.
+    // "@ra_alex:localhost" has no router entry — a stale binding.
     let body = serde_json::json!({
         "events": [{
             "type": "m.room.message",

@@ -4508,7 +4508,7 @@ mod tests {
         );
         assert!(resolved.ends_with("alice/data"));
 
-        // RecurAgent_home_dir points at the REGISTRY root (shared, config-like).
+        // ra_home_dir points at the REGISTRY root (shared, config-like).
         assert_eq!(store.ra_home_dir(), registry_root.path());
 
         // Regression guard: open_unified(x) collapses both roots under x.
