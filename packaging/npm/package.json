@@ -1,5 +1,5 @@
 {
-  "name": "@icehomura/RecurAgent",
+  "name": "@icehomura/ra",
   "version": "0.0.0-managed",
   "description": "Rust-native, API-first Agentic OS server (ra serve + bundled skills). Installs the prebuilt release bundle.",
   "homepage": "https://github.com/icehomura/RecurAgent",

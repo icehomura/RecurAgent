@@ -117,7 +117,7 @@ else
     echo "  Building app-skills (release)"
     if cargo build --release \
         -p news_fetch -p deep-search -p deep-crawl -p send-email \
-        -p account-manager -p asr -p clock -p weather 2>&1 | tail -3; then
+        -p account-manager -p clock -p weather 2>&1 | tail -3; then
         pass "app-skills build"
     else
         fail "app-skills build"
@@ -235,7 +235,7 @@ else
         popd > /dev/null
 
         # 5m. App-skill binaries exist and respond to --help or --version
-        for skill_bin in news_fetch deep-search deep_crawl send_email account_manager asr clock weather; do
+        for skill_bin in news_fetch deep-search deep_crawl send_email account_manager clock weather; do
             SKILL_PATH="$ROOT/target/release/$skill_bin"
             if [ -f "$SKILL_PATH" ]; then
                 # Just check it launches (--help or timeout after 2s)

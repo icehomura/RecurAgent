@@ -39,7 +39,7 @@ const EXPECTED_BINS = [
 ];
 
 function fail(msg) {
-  console.error("\n[@icehomura/RecurAgent] install failed: " + msg + "\n");
+  console.error("\n[@icehomura/ra] install failed: " + msg + "\n");
   process.exit(1);
 }
 
@@ -237,14 +237,14 @@ function finalizeAndVerify() {
 function main() {
   if (process.env.ra_SKIP_DOWNLOAD === "1") {
     console.log(
-      "[@icehomura/RecurAgent] ra_SKIP_DOWNLOAD=1 set; skipping bundle download."
+      "[@icehomura/ra] ra_SKIP_DOWNLOAD=1 set; skipping bundle download."
     );
     return;
   }
 
   const target = resolveTarget();
   const url = bundleUrl(target);
-  console.log("[@icehomura/RecurAgent] downloading " + url);
+  console.log("[@icehomura/ra] downloading " + url);
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ra-npm-"));
   const archiveFile = path.join(tmpDir, "bundle." + target.ext);
@@ -261,7 +261,7 @@ function main() {
       // non-fatal cleanup failure
     }
     console.log(
-      "[@icehomura/RecurAgent] installed ra + " +
+      "[@icehomura/ra] installed ra + " +
         (EXPECTED_BINS.length - 1) +
         " bundled skills into vendor/"
     );

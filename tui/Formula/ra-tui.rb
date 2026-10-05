@@ -1,4 +1,4 @@
-class ra-tui < Formula
+class RaTui < Formula
   desc "Terminal UI client for the ra UI Protocol"
   homepage "https://github.com/icehomura/RecurAgent-tui"
   version "0.1.0"

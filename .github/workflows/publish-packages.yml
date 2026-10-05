@@ -170,7 +170,7 @@ jobs:
           set -euo pipefail
           version="${TAG#v}"
           npm version "$version" --no-git-tag-version --allow-same-version
-          echo "Publishing @icehomura/RecurAgent@${version}"
+          echo "Publishing @icehomura/ra@${version}"
 
       - name: Publish to npm
         working-directory: packaging/npm
@@ -184,14 +184,14 @@ jobs:
           fi
           version="${TAG#v}"
           # Prerelease versions (1.1.0-alpha.1, -rc.2, …) MUST NOT publish under
-          # the `latest` dist-tag, or `npm i -g @icehomura/RecurAgent` would install a
+          # the `latest` dist-tag, or `npm i -g @icehomura/ra` would install a
           # prerelease. Derive the dist-tag from the prerelease label; stable →
           # latest.
           case "$version" in
             *-*) dist_tag="${version#*-}"; dist_tag="${dist_tag%%.*}" ;;
             *)   dist_tag="latest" ;;
           esac
-          echo "npm publish @icehomura/RecurAgent@${version} --tag ${dist_tag}"
+          echo "npm publish @icehomura/ra@${version} --tag ${dist_tag}"
           npm publish --access public --tag "$dist_tag"
 
       - name: Verify npm publication
@@ -200,13 +200,13 @@ jobs:
           set -euo pipefail
           version="${TAG#v}"
           for attempt in $(seq 1 18); do
-            published=$(npm view "@icehomura/RecurAgent@${version}" version 2>/dev/null || true)
+            published=$(npm view "@icehomura/ra@${version}" version 2>/dev/null || true)
             if [ "$published" = "$version" ]; then
-              echo "Verified @icehomura/RecurAgent@${version} on npm."
+              echo "Verified @icehomura/ra@${version} on npm."
               exit 0
             fi
             echo "attempt $attempt/18: waiting for npm registry visibility"
             sleep 10
           done
-          echo "::error::@icehomura/RecurAgent@${version} is not visible on npm"
+          echo "::error::@icehomura/ra@${version} is not visible on npm"
           exit 1

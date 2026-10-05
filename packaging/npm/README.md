@@ -1,10 +1,10 @@
-# @icehomura/RecurAgent
+# @icehomura/ra
 
 One-line installer for the [RecurAgent](https://github.com/icehomura/RecurAgent) server — a
 Rust-native, API-first Agentic OS.
 
 ```bash
-npm install -g @icehomura/RecurAgent
+npm install -g @icehomura/ra
 ra serve
 ```
 

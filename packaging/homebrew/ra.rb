@@ -1,4 +1,4 @@
-class ra < Formula
+class Ra < Formula
   desc "Rust-native, API-first Agentic OS server (ra serve + bundled skills)"
   homepage "https://github.com/icehomura/RecurAgent"
   version "__VERSION__"

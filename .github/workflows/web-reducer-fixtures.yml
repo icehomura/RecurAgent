@@ -6,7 +6,8 @@ name: Web reducer fixtures (Layer 1)
 # for the contract.
 #
 # Triggers on every PR touching ra-web or the UI protocol surface
-# (ra-core/src/ui_protocol.rs). Total runtime target: <1s.
+# (ra-core/src/ui_protocol.rs, crates/ra-cli/src/api/ui_protocol_transport.rs).
+# Total runtime target: <1s.
 
 on:
   pull_request:
@@ -17,7 +18,7 @@ on:
       # If any of these change, replay this layer to catch event-shape
       # regressions before they reach the SPA.
       - 'crates/ra-bus/src/api_channel.rs'
-      - 'crates/ra-cli/src/api/ui_protocol.rs'
+      - 'crates/ra-cli/src/api/ui_protocol_transport.rs'
       - 'crates/ra-cli/src/stream_reporter.rs'
       - '.github/workflows/web-reducer-fixtures.yml'
   push:
@@ -26,7 +27,7 @@ on:
       - 'crates/ra-web/**'
       - 'crates/ra-core/src/ui_protocol.rs'
       - 'crates/ra-bus/src/api_channel.rs'
-      - 'crates/ra-cli/src/api/ui_protocol.rs'
+      - 'crates/ra-cli/src/api/ui_protocol_transport.rs'
       - 'crates/ra-cli/src/stream_reporter.rs'
       - '.github/workflows/web-reducer-fixtures.yml'
   workflow_dispatch:

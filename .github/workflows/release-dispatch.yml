@@ -49,6 +49,12 @@ jobs:
       - name: Install cargo-release
         run: cargo install cargo-release --locked
 
+      # cargo-release's pre-release hook regenerates CHANGELOG.md via git-cliff
+      # (see [workspace.metadata.release] in Cargo.toml). Install it, or the
+      # `cargo release` bump fails with "No such file or directory: git-cliff".
+      - name: Install git-cliff
+        run: cargo install git-cliff --locked
+
       # Bumps the version, commits, tags, and pushes BOTH the main commit and
       # the tag. If main rejects the push (branch protection), either allow
       # github-actions[bot] a bypass for version-bump commits or switch this
