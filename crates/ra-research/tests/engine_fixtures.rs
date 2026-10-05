@@ -203,7 +203,7 @@ async fn replay(engine: &str, case: &Path) {
             v
         })
         .collect();
-    // RA_FIXTURE_BLESS=1 (legacy OCTOS_FIXTURE_BLESS) writes the parsed items
+    // RA_FIXTURE_BLESS=1 (legacy ra_FIXTURE_BLESS) writes the parsed items
     // into the fixture
     // (review the diff before committing it).
     if ra_core::brand::env_compat("FIXTURE_BLESS").is_some()

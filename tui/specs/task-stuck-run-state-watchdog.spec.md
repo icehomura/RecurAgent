@@ -139,4 +139,4 @@ tick 驱动的看门狗：只在**服务端终态证据**成立时把幻影态�
 
 - Esc/Ctrl+C 在幻影态下的显式出口（task-esc-reconciles-phantom-turn）。
 - steer 文本保留与终态 re-stage（task-steer-retained-until-echo）。
-- 服务端返还未消费 steer（ra F4）。
+- 服务端返还未消费 steer（RecurAgent F4）。

@@ -1,6 +1,6 @@
-# Contributing to octoscode
+# Contributing to ra-tui
 
-Thank you for helping improve octoscode. Contributions of code, tests,
+Thank you for helping improve ra-tui. Contributions of code, tests,
 documentation, design feedback, and reproducible bug reports are welcome.
 
 By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
@@ -13,7 +13,7 @@ bug-report workflow.
 - Use an issue to discuss substantial behavior, protocol, architecture, or UX
   changes before investing in an implementation.
 - Keep changes focused. Unrelated cleanup makes review and rollback harder.
-- Protocol changes belong in the shared `octos-core` contract first; octoscode
+- Protocol changes belong in the shared `ra-core` contract first; ra-tui
   must not invent client-only wire fields. See
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -39,15 +39,15 @@ brew install coreutils flock
 Then fork the repository, clone it, and verify your fork:
 
 ```bash
-git clone https://github.com/YOUR-USER/octoscode.git
-cd octoscode
-git remote add upstream https://github.com/your-org/ra-tui.git
+git clone https://github.com/YOUR-USER/ra-tui.git
+cd ra-tui
+git remote add upstream https://github.com/icehomura/ra-tui.git
 scripts/verify.sh -- cargo test --all-targets
 ```
 
 The wrapper configures the subprocess environment, including locating
 Homebrew's GNU coreutils on macOS, but does not install these prerequisites.
-The normal test suite is mock-backed and does not need an ra server. A few
+The normal test suite is mock-backed and does not need an RecurAgent server. A few
 operational OLP tests execute Unix-only tooling; those targets are intentionally
 not run on native Windows. Portable Rust tests must continue to compile and
 pass on Windows.

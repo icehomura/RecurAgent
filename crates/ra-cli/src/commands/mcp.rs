@@ -18,7 +18,7 @@ pub struct McpCommand {
 
 #[derive(Debug, Subcommand)]
 pub enum McpAction {
-    /// Authorize ra against an OAuth-gated MCP server (browser consent).
+    /// Authorize RecurAgent against an OAuth-gated MCP server (browser consent).
     Login {
         /// The MCP server URL (e.g. https://host/mcp).
         url: String,

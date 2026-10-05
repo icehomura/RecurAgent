@@ -86,7 +86,7 @@ pub struct AgentConfig {
     /// keep `tool_timeout_secs` / `MAX_TOOL_TIMEOUT_SECS` instead.
     ///
     /// Default 120s; env override `RA_INTERACTIVE_TOOL_TIMEOUT_SECS` (legacy
-    /// `OCTOS_INTERACTIVE_TOOL_TIMEOUT_SECS` still honoured)
+    /// `ra_INTERACTIVE_TOOL_TIMEOUT_SECS` still honoured)
     /// (clamped [1, 1800]). mini5 soak motivation: a read-only `glob`/
     /// `list_dir` over an unscoped home dir must not inherit the 1800s
     /// ceiling and hang the whole turn.
@@ -115,17 +115,17 @@ pub struct AgentConfig {
     /// Reasoning models (e.g. `deepseek-v4-pro`) can legitimately take minutes
     /// before the first token, so this is generous. Default 180s; env override
     /// `RA_LLM_FIRST_TOKEN_GRACE_SECS` (legacy
-    /// `OCTOS_LLM_FIRST_TOKEN_GRACE_SECS` still honoured).
+    /// `ra_LLM_FIRST_TOKEN_GRACE_SECS` still honoured).
     pub llm_first_token_grace: std::time::Duration,
     /// Inter-chunk idle timeout once streaming has begun. A stalled provider
     /// that stops yielding tokens trips this and aborts the call (retryable).
     /// Default 90s; env override `RA_LLM_STREAM_IDLE_SECS` (legacy
-    /// `OCTOS_LLM_STREAM_IDLE_SECS` still honoured).
+    /// `ra_LLM_STREAM_IDLE_SECS` still honoured).
     pub llm_stream_idle: std::time::Duration,
     /// Overall wall-clock cap on a single streaming LLM call, measured from
     /// call start. Final backstop so a stream that keeps trickling a token
     /// every <idle> seconds forever still terminates. Default 1200s (20 min);
-    /// env override `RA_LLM_CALL_MAX_SECS` (legacy `OCTOS_LLM_CALL_MAX_SECS`
+    /// env override `RA_LLM_CALL_MAX_SECS` (legacy `ra_LLM_CALL_MAX_SECS`
     /// still honoured).
     pub llm_call_max: std::time::Duration,
     /// Config-driven human-approval rules for the suspend-and-resume flow
@@ -142,7 +142,7 @@ pub struct AgentConfig {
     /// otherwise inherit the long production request timeout. Only applied
     /// under [`ra_llm::LlmCallPolicy::FailFast`] (voice turns). Default 30s;
     /// env override `RA_VOICE_LLM_DEADLINE_SECS` (legacy
-    /// `OCTOS_VOICE_LLM_DEADLINE_SECS` still honoured).
+    /// `ra_VOICE_LLM_DEADLINE_SECS` still honoured).
     pub voice_overall_deadline: std::time::Duration,
     /// Post-edit formatting (issue #1774): when true, a successful
     /// `edit_file` / `write_file` / `diff_edit` runs the file's language
@@ -180,7 +180,7 @@ fn clamp_env_secs(parsed: Option<u64>, default_secs: u64, min: u64) -> u64 {
 /// `ra-cli/src/session_actor.rs` (`parse()` with a clamp so a misconfigured
 /// value cannot disable the guard entirely). `suffix` is resolved through
 /// [`ra_core::brand::env_compat_str`], i.e. `RA_<suffix>` first and the legacy
-/// `OCTOS_<suffix>` second. A parsed `0` is clamped up to `1` so the timeout is
+/// `RA_<suffix>` second. A parsed `0` is clamped up to `1` so the timeout is
 /// always live. Use [`env_secs_allow_zero_or`] for knobs whose contract makes
 /// `0` mean "disabled".
 fn env_secs_or(suffix: &str, default_secs: u64) -> std::time::Duration {
@@ -189,7 +189,7 @@ fn env_secs_or(suffix: &str, default_secs: u64) -> std::time::Duration {
 }
 
 /// Like [`env_secs_or`] but honors `0` as a disable sentinel (floor is `0`,
-/// not `1`). Used for `RA_LLM_CALL_MAX_SECS` (legacy `OCTOS_LLM_CALL_MAX_SECS`
+/// not `1`). Used for `RA_LLM_CALL_MAX_SECS` (legacy `ra_LLM_CALL_MAX_SECS`
 /// still honoured), whose `0` value disables the overall wall-clock backstop
 /// (see `streaming.rs`; the idle/TTFT guards stay live). Clamping `0` up to `1`
 /// here would instead abort every stream after 1s (#2228).
@@ -452,7 +452,7 @@ pub struct Agent {
     /// [`crate::compaction_tiered::FullCompactor`].
     pub(super) tiered_compaction: Option<Arc<crate::compaction_tiered::TieredCompactionRunner>>,
     /// Measurement only (`RA_APPEND_ONLY_AUDIT=1`; legacy
-    /// `OCTOS_APPEND_ONLY_AUDIT` still honoured). Held here rather than
+    /// `ra_APPEND_ONLY_AUDIT` still honoured). Held here rather than
     /// on the per-turn state because the rewrite path we know about —
     /// `truncate_old_tool_results` — only collapses tool results BEFORE the
     /// last user message, so it fires ACROSS turns and a per-turn auditor
@@ -495,7 +495,7 @@ pub struct Agent {
     /// Test seam: explicit convergence-checkpoint thresholds
     /// `(llm_call_interval, active_token_interval, elapsed_interval)`.
     /// `None` reads the `RA_CONVERGENCE_*` environment defaults (legacy
-    /// `OCTOS_CONVERGENCE_*` still honoured).
+    /// `ra_CONVERGENCE_*` still honoured).
     pub(super) convergence_intervals: Option<(u32, u64, std::time::Duration)>,
     /// Guard C (issue #607): nesting depth this agent's tool calls
     /// inherit via `ToolContext.spawn_depth`. The session-actor's
@@ -1071,7 +1071,7 @@ impl Agent {
     }
 
     /// Test seam: pin the convergence-checkpoint thresholds instead of reading
-    /// the `RA_CONVERGENCE_*` environment (legacy `OCTOS_CONVERGENCE_*` still
+    /// the `RA_CONVERGENCE_*` environment (legacy `ra_CONVERGENCE_*` still
     /// honoured; process-global, so tests must
     /// not set it). Values are used as given; the env path clamps its own.
     #[cfg(test)]

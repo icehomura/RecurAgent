@@ -7,7 +7,7 @@ turn: 5
 
 互审收尾轮完成，产物已落盘：
 
-- **交叉复核报告**：`/private/tmp/octoloop-glm-k3-20260909/pr-628/.octos/cross-glm.md`（frontmatter：reviewer=pr628-glm-primary, model_lane=primary(glm-5.3), cross_of=independent-k3.md, head=0c22365, base=fbb59c3, verification=static+tests-read, protocol=olp/v2）
+- **交叉复核报告**：`/private/tmp/octoloop-glm-k3-20260909/pr-628/.ra/cross-glm.md`（frontmatter：reviewer=pr628-glm-primary, model_lane=primary(glm-5.3), cross_of=independent-k3.md, head=0c22365, base=fbb59c3, verification=static+tests-read, protocol=olp/v2）
 - **native result.md + `.result-owner`（peer）**：已更新，含报告路径与一句话结论
 
 裁决要点：

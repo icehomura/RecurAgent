@@ -213,7 +213,7 @@ pub async fn enforce_spawn_task_contract_with_args_and_output(
         ValidatorPhase::Completion,
         input_args.cloned(),
         tool_named_outputs.cloned(),
-        // ra #1034: forward the plugin's `files_to_send` so the
+        // RecurAgent #1034: forward the plugin's `files_to_send` so the
         // file-list-driven validators (`MagicBytes`, `AudioNonSilent`,
         // `PerFileNonSilent`) declaring `source = "spawn_only_files"`
         // can consume the authoritative path set the skill emitted.
@@ -601,7 +601,7 @@ pub async fn run_declared_validators(
 /// `spawn_only_files` is the plugin-reported `files_to_send` list from the
 /// originating spawn_only tool. Consumed by file-list-driven validators
 /// (`MagicBytes`, `AudioNonSilent`, `PerFileNonSilent`) when their spec
-/// declares `source = "spawn_only_files"` (ra #1034). Pass `None` for
+/// declares `source = "spawn_only_files"` (RecurAgent #1034). Pass `None` for
 /// callers that have no plugin output to forward (turn-end validators,
 /// non-spawn contexts).
 #[allow(clippy::too_many_arguments)]
@@ -675,7 +675,7 @@ pub async fn run_declared_validators_with_output(
     Ok(outcomes)
 }
 
-/// ra #997 (round-2 fix): aggregated result for project-root validator runs.
+/// RecurAgent #997 (round-2 fix): aggregated result for project-root validator runs.
 ///
 /// `run_project_root_validators` iterates every policy-managed
 /// slides/sites project beneath the session's `working_dir` and runs each
@@ -706,7 +706,7 @@ impl ProjectRootValidatorReport {
     }
 }
 
-/// ra #997 (round-2 fix): run each managed project's declared
+/// RecurAgent #997 (round-2 fix): run each managed project's declared
 /// completion-phase validators AT THE PROJECT ROOT.
 ///
 /// The session-scope spawn-task contract calls
@@ -716,7 +716,7 @@ impl ProjectRootValidatorReport {
 /// project-scope contract gate — `inspect_workspace_contract` —
 /// reads `<session>/slides/<slug>/.ra/validator_outcomes.jsonl`. If
 /// nobody writes to that path, a real valid deck whose declared validator
-/// is hard-required (ra #997: `slides.mofa_slides.pptx_magic_bytes`)
+/// is hard-required (RecurAgent #997: `slides.mofa_slides.pptx_magic_bytes`)
 /// shows `ready = false` because the persisted outcome is missing — even
 /// though the artifact is genuinely on disk.
 ///
@@ -1010,7 +1010,7 @@ mod tests {
         }
     }
 
-    /// ra #1035 P1 follow-up: a `mofa-podcast` payload that carries only
+    /// RecurAgent #1035 P1 follow-up: a `mofa-podcast` payload that carries only
     /// the final audio (no `seg_*.wav` segment scratch files) MUST satisfy
     /// the default `podcast_generate` contract end-to-end through the
     /// validator runner. This pins the regression where a `PerFileNonSilent`
@@ -1027,7 +1027,7 @@ mod tests {
     /// `files_to_send` passes both whole-file checks with no per-segment
     /// gate failing — is identical for MP3 once the feature is enabled.
     #[tokio::test]
-    async fn podcast_contract_satisfied_by_final_audio_only_payload_for_octos_1035() {
+    async fn podcast_contract_satisfied_by_final_audio_only_payload_for_ra_1035() {
         use crate::workspace_policy::{MagicByteKind, SpawnTaskValidatorSpec, ValidatorSpec};
 
         let temp = tempfile::tempdir().unwrap();
@@ -1447,7 +1447,7 @@ mod tests {
         // P1-4: the default session policy for `mofa_slides` should
         // verify a PPTX with a valid ZIP signature is present.
         //
-        // ra #1036: the contract now consumes the plugin's
+        // RecurAgent #1036: the contract now consumes the plugin's
         // `files_to_send` directly (the spawn_only_files source). Mirror
         // the live call path by passing the reported PPTX in the slice.
         let temp = tempfile::tempdir().unwrap();
@@ -1483,7 +1483,7 @@ mod tests {
         // Catches the silent-failure path: tool wrote an HTML error page
         // in place of the PPTX. MagicBytes (Pptx) rejects it.
         //
-        // ra #1036: the contract now consumes the plugin's
+        // RecurAgent #1036: the contract now consumes the plugin's
         // `files_to_send` directly. Pass the HTML-shaped "PPTX" via the
         // file list so the magic-bytes check inspects the exact path
         // the skill reported.
@@ -1518,8 +1518,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mofa_cards_contract_satisfies_reported_pngs_at_arbitrary_depth_octos_1041() {
-        // ra #1041: mofa_cards emits PNGs under a caller-supplied
+    async fn mofa_cards_contract_satisfies_reported_pngs_at_arbitrary_depth_ra_1041() {
+        // RecurAgent #1041: mofa_cards emits PNGs under a caller-supplied
         // card_dir and reports every generated image via files_to_send.
         // The contract must accept those exact reported paths even when
         // they live under an arbitrary nested card_dir.
@@ -1554,8 +1554,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mofa_cards_contract_does_not_pass_on_stale_unrelated_png_octos_1041() {
-        // ra #1041: mofa_cards must consume files_to_send, not a
+    async fn mofa_cards_contract_does_not_pass_on_stale_unrelated_png_ra_1041() {
+        // RecurAgent #1041: mofa_cards must consume files_to_send, not a
         // workspace `**/*.png` glob. A stale valid PNG in the workspace
         // must not satisfy a run where the plugin reported no files.
         let temp = tempfile::tempdir().unwrap();
@@ -1592,7 +1592,7 @@ mod tests {
     async fn mofa_comic_contract_uses_args_out_for_file_exists_and_magic_bytes() {
         // P1-5: mofa_comic has a required `out` arg pointing at a single
         // PNG file. FileExists interpolates `${args.out}` to assert the
-        // path the LLM declared exists; MagicBytes (ra #1040 sweep)
+        // path the LLM declared exists; MagicBytes (RecurAgent #1040 sweep)
         // now consumes the plugin's `files_to_send` list so it inspects
         // the exact path the skill reported instead of any `**/*.png`
         // match in the workspace.
@@ -1623,8 +1623,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mofa_comic_contract_does_not_pass_on_stale_unrelated_png_octos_1040() {
-        // ra #1040: with `MagicBytes { source: SpawnOnlyFiles }`, the
+    async fn mofa_comic_contract_does_not_pass_on_stale_unrelated_png_ra_1040() {
+        // RecurAgent #1040: with `MagicBytes { source: SpawnOnlyFiles }`, the
         // validator must consume the plugin's reported PNG path, NOT
         // any `**/*.png` match in the session workspace. Lay down a
         // stale HTML-shaped `aaa-stale.png` to prove that an empty
@@ -1667,8 +1667,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mofa_frame_contract_rejects_stale_png_without_files_to_send_octos_1040() {
-        // ra #1040: `mofa_frame` flips to MagicBytes(SpawnOnlyFiles)
+    async fn mofa_frame_contract_rejects_stale_png_without_files_to_send_ra_1040() {
+        // RecurAgent #1040: `mofa_frame` flips to MagicBytes(SpawnOnlyFiles)
         // preemptively (the manifest is not `spawn_only: true` today —
         // contract is dormant — but the script at
         // `mofa-skills/mofa-frame/main` already emits `files_to_send`).
@@ -1728,7 +1728,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         write_workspace_policy(temp.path(), &WorkspacePolicy::for_session()).unwrap();
         // Note: the file `comic.png` is never created — the LLM-declared
-        // path doesn't exist. The contract should fail; with ra
+        // path doesn't exist. The contract should fail; with RecurAgent
         // #1040 the failure surfaces earlier at the artifact-resolution
         // step (no `**/*.png` matches in the workspace), before the
         // FileExists `${args.out}` validator runs. The outcome is the

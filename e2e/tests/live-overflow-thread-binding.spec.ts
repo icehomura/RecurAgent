@@ -31,9 +31,9 @@
  *  - Assert NO bubble is empty / orphaned.
  *
  * Required env:
- *   OCTOS_TEST_URL=https://dspfac.ra.ominix.io
- *   OCTOS_AUTH_TOKEN=ra-admin-2026
- *   OCTOS_PROFILE=dspfac
+ *   ra_TEST_URL=https://dspfac.ra.ominix.io
+ *   ra_AUTH_TOKEN=ra-admin-2026
+ *   ra_PROFILE=dspfac
  *
  * NEVER point at mini5 — that host is reserved for coding-green tests.
  */
@@ -54,21 +54,21 @@ import {
 // prompt so the agent hands the work off to a background subagent —
 // that's the path #649 fixes.
 const Q1_PROMPT =
-  process.env.OCTOS_OVERFLOW_Q1_PROMPT ||
+  process.env.ra_OVERFLOW_Q1_PROMPT ||
   '深度搜索一下中国的探月工程 CLEP，给我一份简短的研究报告。直接执行流程，不要确认。';
 
 // Q2 fires DURING Q1's processing window. A fast factual question —
 // triggers the speculative-overflow path on the session actor.
 const Q2_PROMPT =
-  process.env.OCTOS_OVERFLOW_Q2_PROMPT || '今日股市如何？只需一句概要。';
+  process.env.ra_OVERFLOW_Q2_PROMPT || '今日股市如何？只需一句概要。';
 
 // Q3 fires immediately after Q2. Another fast factual — drives the
 // sticky map to rotate to a third value before Q1's background result
 // finalises.
 const Q3_PROMPT =
-  process.env.OCTOS_OVERFLOW_Q3_PROMPT || '你有哪些内置语音？只列出名称。';
+  process.env.ra_OVERFLOW_Q3_PROMPT || '你有哪些内置语音？只列出名称。';
 
-const FLAG_KEY = 'octos_thread_store_v2';
+const FLAG_KEY = 'ra_thread_store_v2';
 
 const Q_GAP_MS = 1_500; // ≤5s total window: 1.5s × 2 ≈ 3s
 const SLOW_MAX_WAIT_MS = 8 * 60 * 1000; // 8 minutes — deep_research can be slow

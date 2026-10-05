@@ -57,7 +57,7 @@ pub use acp::{AcpCommand, NotifyIfBusy, NotifyRequest, NotifyResponse};
 // from docs; not part of the stable surface.
 #[doc(hidden)]
 #[cfg(feature = "api")]
-pub use acp::{OctosAcpAgentTransport, TestAgentFactory};
+pub use acp::{RaAcpAgentTransport, TestAgentFactory};
 pub use admin::AdminCommand;
 pub use auth::AuthCommand;
 pub use cache::CacheCommand;
@@ -93,7 +93,7 @@ pub use status::StatusCommand;
 pub use steer::SteerCommand;
 pub use update::UpdateCommand;
 
-/// ra: Rust-native coding agent orchestration.
+/// RecurAgent: Rust-native coding agent orchestration.
 #[derive(Debug, Parser)]
 #[command(name = "ra")]
 #[command(author, about, long_about = None)]
@@ -149,7 +149,7 @@ pub enum Command {
     Doctor(DoctorCommand),
     /// Generate documentation for tools and providers.
     Docs(DocsCommand),
-    /// Initialize a new ra configuration.
+    /// Initialize a new RecurAgent configuration.
     Init(InitCommand),
     /// Query inbox notes file paths (read-only; OLP observability).
     Inbox(InboxCommand),
@@ -159,7 +159,7 @@ pub enum Command {
     Memory(MemoryCommand),
     /// Portable profile export (QR) and payload inspection.
     Profile(ProfileCommand),
-    /// Run as an MCP server so outer orchestrators can invoke ra as a sub-agent.
+    /// Run as an MCP server so outer orchestrators can invoke RecurAgent as a sub-agent.
     McpServe(McpServeCommand),
     /// Start the REST API server (requires --features api).
     #[cfg(feature = "api")]
@@ -170,7 +170,7 @@ pub enum Command {
     Status(StatusCommand),
     /// Queue an external-reviewer steer into a session (OLP control).
     Steer(SteerCommand),
-    /// Check for a newer ra release (`--check`); self-update is Stage 3.
+    /// Check for a newer RecurAgent release (`--check`); self-update is Stage 3.
     Update(UpdateCommand),
     /// Run as a persistent messaging gateway.
     Gateway(GatewayCommand),
@@ -250,8 +250,7 @@ pub fn profile_not_found_message(profiles: &[crate::profiles::UserProfile], id: 
 }
 
 /// Resolve the canonical [`ConfigContext`](crate::config_context::ConfigContext)
-/// for a command, create the data dir, and run the (idempotent, best-effort)
-/// config + auth migrations exactly once.
+/// for a command and create the data dir.
 ///
 /// Every command that loads config should go through this so the resolver runs
 /// at a single shared entrypoint per invocation.
@@ -260,7 +259,6 @@ pub fn resolve_command_context(
 ) -> eyre::Result<crate::config_context::ConfigContext> {
     let ctx = crate::config_context::resolve_config_context(cli_override.as_deref());
     std::fs::create_dir_all(&ctx.data_dir).ok();
-    crate::config_context::run_migrations(&ctx);
     Ok(ctx)
 }
 

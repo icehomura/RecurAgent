@@ -71,9 +71,9 @@ const KNOWN_CAPTURE_BUG_PATTERNS = [
     detail: 'tmux capture shows the real TUI pane was missing',
   },
   {
-    id: 'octoscode_exited',
-    regex: /octoscode exited with status/,
-    detail: 'tmux capture shows the real octoscode process exited before validation',
+    id: 'ra_tui_exited',
+    regex: /ra-tui exited with status/,
+    detail: 'tmux capture shows the real ra-tui process exited before validation',
   },
   {
     id: 'ui_protocol_connect_failed',
@@ -752,7 +752,7 @@ const SECRET_PATTERNS = [
   /\b(?:OPENAI|ANTHROPIC|GOOGLE|OPENROUTER|DEEPSEEK|KIMI|AUTODL)_API_KEY\s*=\s*sk-[A-Za-z0-9_-]{8,}/,
   /\bBearer\s+sk-[A-Za-z0-9_-]{8,}/,
   /"api[_-]?key"\s*:\s*"sk-[A-Za-z0-9_-]{8,}"/i,
-  /OCTOS_UX_SECRET_SHOULD_BE_REDACTED/,
+  /ra_UX_SECRET_SHOULD_BE_REDACTED/,
 ];
 
 function shouldScanForSecrets(name) {
@@ -1384,10 +1384,10 @@ function checkTaskSubagentTreeScenario(artifactDir) {
     problems.push(`launch-command.txt could not be read: ${launchCommand.error}`);
   } else {
     for (const expected of [
-      'OCTOS_M15_LIVE_SUBAGENT_FIXTURE=',
-      'OCTOSCODE_M15_UX_OUTPUT_DIR=',
-      'OCTOSCODE_M15_UX_WORKDIR=',
-      'OCTOS_M15_LIVE_SUBAGENT_DELAY_SCALE=',
+      'ra_M15_LIVE_SUBAGENT_FIXTURE=',
+      'RA_TUI_M15_UX_OUTPUT_DIR=',
+      'RA_TUI_M15_UX_WORKDIR=',
+      'ra_M15_LIVE_SUBAGENT_DELAY_SCALE=',
     ]) {
       if (!launchCommand.text.includes(expected)) {
         problems.push(`launch-command.txt is missing ${expected}`);
@@ -1395,13 +1395,13 @@ function checkTaskSubagentTreeScenario(artifactDir) {
     }
   }
   const fixtureEnv = isPlainObject(scenario.value.fixture_env) ? scenario.value.fixture_env : {};
-  if (fixtureEnv.OCTOS_M15_LIVE_SUBAGENT_FIXTURE !== '1') {
-    problems.push('scenario fixture_env missing OCTOS_M15_LIVE_SUBAGENT_FIXTURE=1');
+  if (fixtureEnv.ra_M15_LIVE_SUBAGENT_FIXTURE !== '1') {
+    problems.push('scenario fixture_env missing ra_M15_LIVE_SUBAGENT_FIXTURE=1');
   }
   for (const expected of [
-    'OCTOSCODE_M15_UX_OUTPUT_DIR',
-    'OCTOSCODE_M15_UX_WORKDIR',
-    'OCTOS_M15_LIVE_SUBAGENT_DELAY_SCALE',
+    'RA_TUI_M15_UX_OUTPUT_DIR',
+    'RA_TUI_M15_UX_WORKDIR',
+    'ra_M15_LIVE_SUBAGENT_DELAY_SCALE',
   ]) {
     if (typeof fixtureEnv[expected] !== 'string' || fixtureEnv[expected].length === 0) {
       problems.push(`scenario fixture_env missing ${expected}`);

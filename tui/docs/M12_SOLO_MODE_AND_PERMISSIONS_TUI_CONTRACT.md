@@ -5,7 +5,7 @@ Date: 2026-05-13
 
 ## Goal
 
-Support Octos solo coding sessions in `octoscode` without making the TUI a
+Support RecurAgent solo coding sessions in `ra-tui` without making the TUI a
 runtime-policy authority.
 
 The TUI must render server truth from AppUI. It may request a project cwd or a
@@ -23,7 +23,7 @@ is metadata only in solo mode; the TUI must not require `auth/send_code`,
 - Solo mode is for local single-user coding workflows.
 - Multi-tenant/dashboard profile behavior stays backend-owned.
 - The local solo owner maps to the current OS user conceptually: one local
-  user/profile in the local ra data dir, with project cwd chosen per
+  user/profile in the local RecurAgent data dir, with project cwd chosen per
   session.
 - Email is shown and persisted as metadata only until a future authenticated
   cloud sync mode is introduced.
@@ -124,8 +124,8 @@ TUI requirements:
 
 ### M12-E: Solo Launch And Project Cwd UX
 
-Repository: `octoscode`
-Issue: https://github.com/your-org/ra-tui/issues/29
+Repository: `ra-tui`
+Issue: https://github.com/icehomura/ra-tui/issues/29
 
 Deliverables:
 
@@ -153,8 +153,8 @@ Acceptance:
 
 ### M12-F: Permission Profile UX
 
-Repository: `octoscode`
-Issue: https://github.com/your-org/ra-tui/issues/30
+Repository: `ra-tui`
+Issue: https://github.com/icehomura/ra-tui/issues/30
 
 Deliverables:
 
@@ -178,8 +178,8 @@ Acceptance:
 
 ### M12-G: Interactive Tmux Soak
 
-Repository: `octoscode`
-Issue: https://github.com/your-org/ra-tui/issues/31
+Repository: `ra-tui`
+Issue: https://github.com/icehomura/ra-tui/issues/31
 
 Deliverables:
 

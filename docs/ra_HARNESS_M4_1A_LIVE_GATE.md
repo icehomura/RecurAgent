@@ -1,7 +1,7 @@
-# ra Harness M4.1A Live Release Gate
+# RecurAgent Harness M4.1A Live Release Gate
 
 Date: 2026-04-21
-Issue: [`#474`](https://github.com/your-org/ra/issues/474)
+Issue: [`#474`](https://github.com/icehomura/ra/issues/474)
 Milestone: `M4.1A` (Structured Progress Contract)
 
 This document is the release gate for every M4.1A pull request. No M4.1A PR
@@ -49,7 +49,7 @@ any M4.1A PR to main:
 ```bash
 ./scripts/validate-m4-1a-live.sh \
     --base-url https://dspfac.crew.ominix.io \
-    --auth-token "$OCTOS_ADMIN_TOKEN" \
+    --auth-token "$ra_ADMIN_TOKEN" \
     --profile dspfac \
     --output-dir /tmp/m4-1a-live-$(date -u +%Y%m%d-%H%M%S)
 ```
@@ -144,13 +144,13 @@ cargo build --workspace
 # 3) Point the gate at a canary (mini1 example):
 ./scripts/validate-m4-1a-live.sh \
     --base-url https://dspfac.crew.ominix.io \
-    --auth-token "$OCTOS_ADMIN_TOKEN" \
+    --auth-token "$ra_ADMIN_TOKEN" \
     --output-dir /tmp/m4-1a-live-mini1
 
 # 4) Repeat for mini3:
 ./scripts/validate-m4-1a-live.sh \
     --base-url https://dspfac-mini3.crew.ominix.io \
-    --auth-token "$OCTOS_ADMIN_TOKEN" \
+    --auth-token "$ra_ADMIN_TOKEN" \
     --output-dir /tmp/m4-1a-live-mini3
 ```
 

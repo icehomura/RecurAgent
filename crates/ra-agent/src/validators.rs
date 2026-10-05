@@ -180,7 +180,7 @@ pub struct ValidatorInvocation {
     /// stdout envelope (the plugin protocol's authoritative list of files
     /// the skill just produced). Consumed by file-list-driven validators
     /// (`MagicBytes`, `AudioNonSilent`, `PerFileNonSilent`) when their spec
-    /// declares `source = "spawn_only_files"` — see issue ra #1034.
+    /// declares `source = "spawn_only_files"` — see issue RecurAgent #1034.
     ///
     /// Absent (defaulted to an empty `Vec`) for non-spawn contexts and for
     /// spawn_only tools that emit no files. Validators that consult this
@@ -219,7 +219,7 @@ impl ValidatorInvocation {
     }
 
     /// Attach the plugin-reported `files_to_send` list so file-list-driven
-    /// validators with `source = "spawn_only_files"` (issue ra #1034)
+    /// validators with `source = "spawn_only_files"` (issue RecurAgent #1034)
     /// can consume the authoritative path set the spawn_only tool emitted.
     pub fn with_spawn_only_files(mut self, files: Vec<PathBuf>) -> Self {
         self.spawn_only_files = files;
@@ -1255,7 +1255,7 @@ impl ValidatorRunner {
         // Resolve the candidate file list. For `source = "glob"` (legacy
         // default) the validator interpolates the glob and matches it
         // against the workspace root. For `source = "spawn_only_files"`
-        // (issue ra #1034) the validator consumes the plugin-reported
+        // (issue RecurAgent #1034) the validator consumes the plugin-reported
         // `files_to_send` list verbatim, optionally narrowed by extension —
         // see [`resolve_validator_files`] for the shared resolution rules.
         let (matches, pattern_for_diagnostics) = match resolve_validator_files(
@@ -1347,7 +1347,7 @@ impl ValidatorRunner {
         // values). `${output.X}` is intentionally not supported in glob mode
         // here — callers wanting tool-output-driven globs should use the
         // whole-file `AudioNonSilent` variant. `spawn_only_files` mode
-        // (ra #1034) bypasses interpolation entirely and consumes the
+        // (RecurAgent #1034) bypasses interpolation entirely and consumes the
         // plugin-reported file list verbatim.
         let (matches, _resolved_pattern) = match resolve_validator_files(
             invocation,
@@ -1443,7 +1443,7 @@ impl ValidatorRunner {
     ) -> ValidatorOutcome {
         // Resolve the candidate file list. Glob mode interpolates
         // `${args.X}` / `${output.X}` so policies can pin the glob to a
-        // tool-emitted output path. `spawn_only_files` mode (ra #1034)
+        // tool-emitted output path. `spawn_only_files` mode (RecurAgent #1034)
         // bypasses interpolation and consumes the plugin-reported file list
         // verbatim.
         let (matches, pattern_for_diagnostics) = match resolve_validator_files(
@@ -2128,7 +2128,7 @@ async fn fetch_ominix_voices(url: &str, timeout_ms: u64) -> Result<Vec<String>, 
 
 /// Template-interpolation flavour used by [`resolve_validator_files`].
 ///
-/// Mirrors the per-variant interpolation rules already in place before ra
+/// Mirrors the per-variant interpolation rules already in place before RecurAgent
 /// #1034: `MagicBytes` / `AudioNonSilent` substitute both `${args.X}` and
 /// `${output.X}`, while `PerFileNonSilent` substitutes `${args.X}` only via
 /// the path-traversal-safe [`interpolate_args_path`] helper.
@@ -2158,7 +2158,7 @@ struct FileResolutionError {
 ///   `pattern` per `mode` and matches the resolved glob against
 ///   `invocation.workspace_root` via [`glob_files`]. Returns the matched
 ///   path list and the resolved pattern (for diagnostics).
-/// * `ValidatorFileSource::SpawnOnlyFiles` (ra #1034) — bypasses the glob
+/// * `ValidatorFileSource::SpawnOnlyFiles` (RecurAgent #1034) — bypasses the glob
 ///   entirely and consumes `invocation.spawn_only_files` verbatim. If
 ///   `extension` is set, only files whose extension matches (case-
 ///   insensitive, no leading dot) are returned. The diagnostic pattern is

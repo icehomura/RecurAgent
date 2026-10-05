@@ -1,6 +1,6 @@
 //! Host-routed app tools of a host-owned app peer (UPCR-2026-035).
 //!
-//! A host (an OctoSense shell) declares, per app peer, the app's own tools
+//! A host (an RecurAgent shell) declares, per app peer, the app's own tools
 //! (`news.list`, `mail.send`, …) with `peer/tools/register`. The kernel offers
 //! the model exactly those tools plus the generic kernel tools the host names,
 //! and each call to an app tool is routed back to the HOST, which implements

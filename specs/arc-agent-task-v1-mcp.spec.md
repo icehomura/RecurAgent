@@ -6,30 +6,30 @@ estimate: 1d
 
 ## Intent
 
-ra 的 `run_ra_session` 当前只把 `input.prompt` 当作普通用户文本。ARC
-虽然可以把编译任务序列化进 prompt，但 ra 无法识别任务版本、无法把
+RecurAgent 的 `run_ra_session` 当前只把 `input.prompt` 当作普通用户文本。ARC
+虽然可以把编译任务序列化进 prompt，但 RecurAgent 无法识别任务版本、无法把
 `system_prompt` 映射为真实 system message，也无法在返回前验证阶段 JSON
 交付物。
 
-本任务让 ra 原生接受 `input.arc_task` 中的 `arc.agent-task.v1`，把它编译为
-ra 的 system prompt、结构化 custom task 和 workspace artifact contract。
+本任务让 RecurAgent 原生接受 `input.arc_task` 中的 `arc.agent-task.v1`，把它编译为
+RecurAgent 的 system prompt、结构化 custom task 和 workspace artifact contract。
 旧的 `input.prompt` 调用保持兼容。
 
 ## Decisions
 
 - MCP 工具保持只有 `run_ra_session` 一个，不新增 ARC 专用工具，避免破坏
   现有 outer orchestrator 的工具发现假设。
-- `contract` 继续表示 ra workspace contract（ARC 默认使用 `coding`）；
+- `contract` 继续表示 RecurAgent workspace contract（ARC 默认使用 `coding`）；
   ARC 执行包放在 `input.arc_task`，其 `schema` 必须精确等于
   `arc.agent-task.v1`。
-- `arc_task.system_prompt` 必须通过 ra Agent 的 system-prompt API 注入，
+- `arc_task.system_prompt` 必须通过 RecurAgent Agent 的 system-prompt API 注入，
   不得复制进普通 user prompt。
 - `arc_task.message`、`inputs`、`acceptance`、`response_schema` 和任务标识编译为
   `TaskKind::Custom` 的结构化参数；`expected_artifact` 作为明确的 delivery
   参数传入。
 - 原生 ARC 模式要求 `expected_artifact` 是 workspace 内的相对路径，拒绝绝对
   路径、`..` 穿越以及与 `mcp-serve --cwd` 不一致的 `workspace_root`。
-- 当 `response_schema` 存在时，ra 在返回 Ready 前读取 JSON artifact 并验证
+- 当 `response_schema` 存在时，RecurAgent 在返回 Ready 前读取 JSON artifact 并验证
   ARC 当前使用的 JSON Schema 子集：`$ref/$defs`、`type`、`required`、
   `properties`、`items`、`anyOf`、`oneOf`、`enum`、`const` 和
   `additionalProperties: false`。
@@ -52,7 +52,7 @@ ra 的 system prompt、结构化 custom task 和 workspace artifact contract。
 
 ### Forbidden
 
-- 不修改 `octos-tui` 或 UI protocol。
+- 不修改 `ra-tui` 或 UI protocol。
 - 不新增第二个 MCP tool。
 - 不移除或重命名 `input.prompt`、`expected_artifact`、`artifact_name`。
 - 不允许 ARC task 中的 workspace 路径扩大 `mcp-serve --cwd` 的权限边界。
@@ -64,8 +64,8 @@ ra 的 system prompt、结构化 custom task 和 workspace artifact contract。
 
 - MCP 内部 tool-call/progress 流式事件。
 - ARC task 的远程队列、resume 或多 workspace 进程池。
-- 把 ARC `skills` 路径自动安装为 ra skills。
-- 更改 ra workspace-policy 格式。
+- 把 ARC `skills` 路径自动安装为 RecurAgent skills。
+- 更改 RecurAgent workspace-policy 格式。
 - 使用真实付费模型的效果评估。
 
 ## Completion Criteria
@@ -75,11 +75,11 @@ ra 的 system prompt、结构化 custom task 和 workspace artifact contract。
 Scenario: MCP tool advertises the native ARC task input
   Test:
     Package: ra-agent
-    Filter: run_octos_session_schema_advertises_arc_agent_task_v1
+    Filter: run_ra_session_schema_advertises_arc_agent_task_v1
   Level: integration
   Targets: crates/ra-agent/src/mcp_server.rs, crates/ra-agent/tests/mcp_server.rs
   Given an MCP client calls `tools/list`
-  When ra describes `run_ra_session`
+  When RecurAgent describes `run_ra_session`
   Then the `input` schema documents optional `arc_task`
   And the nested task schema requires `schema`, task identity, workspace, prompts, inputs and acceptance
   And legacy `contract` plus `input` remain the only top-level required arguments
@@ -91,8 +91,8 @@ Scenario: Valid ARC task v1 parses as a typed contract
   Level: unit
   Targets: crates/ra-agent/src/arc_task.rs parser
   Given `input.arc_task` contains every required `arc.agent-task.v1` field
-  When ra parses it for a matching workspace
-  Then ra returns a typed ARC task
+  When RecurAgent parses it for a matching workspace
+  Then RecurAgent returns a typed ARC task
   And inputs, acceptance, response schema and requested skills are preserved
 
 Scenario: Invalid ARC task fails closed before execution
@@ -104,13 +104,13 @@ Scenario: Invalid ARC task fails closed before execution
   Targets: ARC task parser and workspace boundary validation
   Given an ARC task has an unsupported schema, mismatched workspace, escaping artifact path,
   or `acceptance.response_schema_required=true` with a null response schema
-  When ra validates the MCP input
+  When RecurAgent validates the MCP input
   Then validation returns a typed `arc_task_invalid` error
   And no legacy prompt fallback is selected
 
-### Rule: native-mapping — ARC fields map to ra execution semantics
+### Rule: native-mapping — ARC fields map to RecurAgent execution semantics
 
-Scenario: ARC role is mapped to the real ra system prompt
+Scenario: ARC role is mapped to the real RecurAgent system prompt
   Test:
     Package: ra-cli
     Filter: arc_agent_task_uses_native_system_prompt_and_structured_task
@@ -130,7 +130,7 @@ Scenario: Valid ARC JSON artifact reaches Ready
     Filter: arc_agent_task_accepts_artifact_matching_response_schema
   Given a valid ARC task declares an object response schema
   And the expected artifact contains matching JSON
-  When the ra session completes
+  When the RecurAgent session completes
   Then the outcome is Ready
   And `artifact_content` contains the validated JSON
 
@@ -140,7 +140,7 @@ Scenario: Invalid ARC JSON artifact fails schema verification
     Filter: arc_agent_task_rejects_artifact_violating_response_schema
   Given a valid ARC task declares required nested response fields
   And the expected artifact contains invalid JSON or a schema mismatch
-  When ra verifies the artifact
+  When RecurAgent verifies the artifact
   Then the outcome is Failed
   And the error starts with `artifact_schema_invalid:`
 
@@ -153,7 +153,7 @@ Scenario: An unsuccessful agent attempt cannot reuse a stale artifact
   Targets: crates/ra-cli/src/commands/mcp_serve.rs terminal outcome handling
   Given an artifact from an older attempt already exists
   And the current Agent run returns `TaskResult { success: false }`
-  When ra handles the ARC session outcome
+  When RecurAgent handles the ARC session outcome
   Then the outcome is Failed without entering Verifying
   And no stale artifact path or content is returned
 

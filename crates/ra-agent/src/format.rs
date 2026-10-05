@@ -77,7 +77,7 @@ pub const FORMAT_TIMEOUT: Duration = Duration::from_secs(30);
 /// `read_file` for the rest.
 const MAX_FORMATTED_ECHO_BYTES: usize = 16 * 1024;
 
-/// A language formatter ra knows how to invoke.
+/// A language formatter RecurAgent knows how to invoke.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FormatterKind {
     /// Rust — `rustfmt --edition 2024 <file>`.

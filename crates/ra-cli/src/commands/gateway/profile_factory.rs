@@ -48,9 +48,9 @@ const FIRST_PARTY_SKILL_ENV_VARS: &[&str] = &[
     // search-results scrape opt-in (default off).
     "SEARXNG_URL",
     "RA_RESPECT_ROBOTS",
-    "OCTOS_RESPECT_ROBOTS",
+    "ra_RESPECT_ROBOTS",
     "RA_ALLOW_SERP_SCRAPE",
-    "OCTOS_ALLOW_SERP_SCRAPE",
+    "ra_ALLOW_SERP_SCRAPE",
 ];
 
 /// Google / Vertex credential material: the raw service-account JSON, the
@@ -156,25 +156,25 @@ pub(crate) fn apply_resolved_profile_llm_env(
 ) {
     let values = [
         (
-            "OCTOS_PROFILE_LLM_PROVIDER",
+            "ra_PROFILE_LLM_PROVIDER",
             crate::runtime::profile::configured_provider_name(config),
         ),
-        ("OCTOS_PROFILE_LLM_MODEL", config.model.clone()),
-        ("OCTOS_PROFILE_LLM_BASE_URL", config.base_url.clone()),
-        ("OCTOS_PROFILE_LLM_API_TYPE", config.api_type.clone()),
+        ("ra_PROFILE_LLM_MODEL", config.model.clone()),
+        ("ra_PROFILE_LLM_BASE_URL", config.base_url.clone()),
+        ("ra_PROFILE_LLM_API_TYPE", config.api_type.clone()),
         (
-            "OCTOS_PROFILE_LLM_CONFIG_REVISION",
+            "ra_PROFILE_LLM_CONFIG_REVISION",
             Some(config_revision.to_string()),
         ),
     ];
     // Both spellings are always replaced: a value that is now absent (e.g. a
     // cleared `base_url`) must be REMOVED in both spellings, not left behind as
-    // a stale legacy key. New brand names come first, legacy `OCTOS_*` second so
+    // a stale legacy key. New brand names come first, legacy `RA_*` second so
     // readers that have not migrated still find the same values.
     let mut all_keys: Vec<String> = Vec::with_capacity(values.len() * 2);
     let mut all_values: Vec<(String, String)> = Vec::with_capacity(values.len() * 2);
     for (name, value) in values {
-        let new_name = format!("RA_{}", name.strip_prefix("OCTOS_").unwrap_or(name));
+        let new_name = format!("RA_{}", name.strip_prefix("RA_").unwrap_or(name));
         all_keys.push(new_name.clone());
         all_keys.push(name.to_string());
         let Some(value) = value.filter(|value| !value.trim().is_empty()) else {
@@ -208,12 +208,12 @@ pub(crate) fn profile_plugin_env(profile: &crate::profiles::UserProfile) -> Vec<
             // Forward the new brand spelling too, so a skill that reads `RA_*`
             // sees the same setting; the legacy name stays for un-migrated
             // readers. New name first.
-            if let Some(suffix) = key.strip_prefix("OCTOS_") {
+            if let Some(suffix) = key.strip_prefix("RA_") {
                 push_env_once(&mut env, format!("RA_{suffix}"), value.clone());
             }
             push_env_once(&mut env, *key, value.clone());
             if let Some(suffix) = key.strip_prefix("RA_") {
-                push_env_once(&mut env, format!("OCTOS_{suffix}"), value);
+                push_env_once(&mut env, format!("RA_{suffix}"), value);
             }
         }
     }
@@ -236,11 +236,11 @@ pub(crate) fn profile_plugin_env(profile: &crate::profiles::UserProfile) -> Vec<
             .or_else(|| primary.model_id.as_deref().and_then(detect_provider))
         {
             push_env_once(&mut env, "RA_PROFILE_LLM_PROVIDER", provider.to_string());
-            push_env_once(&mut env, "OCTOS_PROFILE_LLM_PROVIDER", provider.to_string());
+            push_env_once(&mut env, "ra_PROFILE_LLM_PROVIDER", provider.to_string());
         }
         if let Some(model) = primary.model_id.as_deref() {
             push_env_once(&mut env, "RA_PROFILE_LLM_MODEL", model.to_string());
-            push_env_once(&mut env, "OCTOS_PROFILE_LLM_MODEL", model.to_string());
+            push_env_once(&mut env, "ra_PROFILE_LLM_MODEL", model.to_string());
         }
     }
 
@@ -297,7 +297,7 @@ pub(crate) fn profile_plugin_env(profile: &crate::profiles::UserProfile) -> Vec<
 fn push_runtime_plugin_env(
     plugin_env: &mut Vec<(String, String)>,
     data_dir: &std::path::Path,
-    octos_home: &std::path::Path,
+    ra_home: &std::path::Path,
     profile_id: &str,
     ominix_url: Option<&str>,
 ) {
@@ -306,19 +306,19 @@ fn push_runtime_plugin_env(
         data_dir.to_string_lossy().to_string(),
     ));
     plugin_env.push((
-        "OCTOS_DATA_DIR".to_string(),
+        "ra_DATA_DIR".to_string(),
         data_dir.to_string_lossy().to_string(),
     ));
     plugin_env.push((
         "RA_HOME".to_string(),
-        octos_home.to_string_lossy().to_string(),
+        ra_home.to_string_lossy().to_string(),
     ));
     plugin_env.push((
-        "OCTOS_HOME".to_string(),
-        octos_home.to_string_lossy().to_string(),
+        "ra_HOME".to_string(),
+        ra_home.to_string_lossy().to_string(),
     ));
     plugin_env.push(("RA_PROFILE_ID".to_string(), profile_id.to_string()));
-    plugin_env.push(("OCTOS_PROFILE_ID".to_string(), profile_id.to_string()));
+    plugin_env.push(("ra_PROFILE_ID".to_string(), profile_id.to_string()));
     plugin_env.push((
         "RA_VOICE_DIR".to_string(),
         data_dir
@@ -327,7 +327,7 @@ fn push_runtime_plugin_env(
             .to_string(),
     ));
     plugin_env.push((
-        "OCTOS_VOICE_DIR".to_string(),
+        "ra_VOICE_DIR".to_string(),
         data_dir
             .join("voice_profiles")
             .to_string_lossy()
@@ -674,18 +674,18 @@ pub(crate) fn build_synthesis_config(
 pub(super) struct ProfileActorFactoryBuilder {
     pub(super) profile_store: Arc<crate::profiles::ProfileStore>,
     pub(super) project_dir: PathBuf,
-    /// Gap 4.1 BLOCKER 1: the effective ra root the gateway bootstraps
+    /// Gap 4.1 BLOCKER 1: the effective RecurAgent root the gateway bootstraps
     /// bundled pipelines into (`--ra-home` > `data_dir`). The child-profile
-    /// `run_pipeline` tool is built `with_octos_home(effective_octos_home)` so
+    /// `run_pipeline` tool is built `with_ra_home(effective_ra_home)` so
     /// its discovery searches the EXACT dir bootstrap wrote into
     /// (bootstrap-dir == search-dir). Previously the child factory reused
     /// `project_dir` (= `cwd/.ra` on the standalone path where
     /// `--ra-home` is absent), so discovery searched a dir bootstrap never
     /// wrote — letting the embedded fallback beat an installed global
     /// pipeline. In production `--ra-home` is always passed so
-    /// `effective_octos_home == project_dir`, but the standalone/default path
+    /// `effective_ra_home == project_dir`, but the standalone/default path
     /// must also be correct.
-    pub(super) effective_octos_home: PathBuf,
+    pub(super) effective_ra_home: PathBuf,
     pub(super) tool_config: Arc<ra_agent::ToolConfigStore>,
     pub(super) memory: Arc<EpisodeStore>,
     pub(super) memory_store: Arc<MemoryStore>,
@@ -729,14 +729,14 @@ pub(super) struct ProfileActorFactoryBuilder {
 }
 
 impl ProfileActorFactoryBuilder {
-    /// Gap 4.1 BLOCKER 1: the ra root a child-profile `run_pipeline` tool
-    /// must search. It is the effective ra home (`--ra-home` > data_dir)
+    /// Gap 4.1 BLOCKER 1: the RecurAgent root a child-profile `run_pipeline` tool
+    /// must search. It is the effective RecurAgent home (`--ra-home` > data_dir)
     /// the gateway bootstrapped the bundled pipelines into — NOT `project_dir`
     /// (= `cwd/.ra` on the standalone path), which bootstrap never wrote.
     /// Keeping these identical preserves bootstrap-dir == search-dir, so an
     /// installed global pipeline always wins over the bundled fallback.
-    pub(super) fn child_pipeline_octos_home(&self) -> &Path {
-        &self.effective_octos_home
+    pub(super) fn child_pipeline_ra_home(&self) -> &Path {
+        &self.effective_ra_home
     }
 
     pub(super) async fn build(&self, profile_id: &str) -> Result<ActorFactory> {
@@ -820,7 +820,7 @@ impl ProfileActorFactoryBuilder {
         // under its data dir); the gateway's store is only right when both
         // are the same directory.
         let profile_recall: Arc<ra_memory::RecallStore> = if profile_data_dir
-            == self.effective_octos_home
+            == self.effective_ra_home
         {
             self.recall.clone()
         } else {
@@ -1069,7 +1069,7 @@ impl ProfileActorFactoryBuilder {
                 policy: Option<ra_agent::ToolPolicy>,
                 plugin_dirs: Vec<PathBuf>,
                 router: Option<Arc<ProviderRouter>>,
-                octos_home: PathBuf,
+                ra_home: PathBuf,
                 plugin_require_signed: bool,
                 /// NEW-06 fix: forwarded to every worker `Agent` via
                 /// `RunPipelineTool::with_embedder` so pipeline-spawned
@@ -1096,7 +1096,7 @@ impl ProfileActorFactoryBuilder {
                     // to the SESSION-effective sandbox handed in by the actor
                     // factory.
                     .with_sandbox(sandbox.clone())
-                    .with_octos_home(self.octos_home.clone());
+                    .with_ra_home(self.ra_home.clone());
                     if let Some(ref router) = self.router {
                         pt = pt.with_provider_router(router.clone());
                     }
@@ -1121,12 +1121,12 @@ impl ProfileActorFactoryBuilder {
                 plugin_dirs: plugin_dirs.clone(),
                 router: provider_router.clone(),
                 // Gap 4.1 BLOCKER 1: the child-profile pipeline root MUST be
-                // the same `effective_octos_home` the gateway bootstrapped the
+                // the same `effective_ra_home` the gateway bootstrapped the
                 // bundled pipelines into — NOT `project_dir` (= `cwd/.ra`
                 // on the standalone path). bootstrap-dir == search-dir, so an
                 // installed global pipeline wins over the bundled fallback on
                 // every path, including standalone `ra gateway`.
-                octos_home: self.child_pipeline_octos_home().to_path_buf(),
+                ra_home: self.child_pipeline_ra_home().to_path_buf(),
                 // Section B (codex review follow-up): propagate the
                 // profile's strict-signing policy.
                 plugin_require_signed: profile_config.plugins.require_signed,
@@ -1251,23 +1251,23 @@ mod tests {
             ..Default::default()
         };
         let mut env = vec![
-            ("OCTOS_PROFILE_LLM_MODEL".into(), "stale".into()),
-            ("OCTOS_PROFILE_LLM_MODEL".into(), "duplicate".into()),
+            ("ra_PROFILE_LLM_MODEL".into(), "stale".into()),
+            ("ra_PROFILE_LLM_MODEL".into(), "duplicate".into()),
             ("UNRELATED".into(), "retained".into()),
         ];
         apply_resolved_profile_llm_env(&mut env, &config, "revision-1");
         let map: HashMap<_, _> = env.iter().cloned().collect();
         assert_eq!(env.len(), map.len());
-        assert_eq!(map["OCTOS_PROFILE_LLM_PROVIDER"], "google");
+        assert_eq!(map["ra_PROFILE_LLM_PROVIDER"], "google");
         assert_eq!(map["RA_PROFILE_LLM_PROVIDER"], "google");
-        assert_eq!(map["OCTOS_PROFILE_LLM_MODEL"], "resolved-model");
+        assert_eq!(map["ra_PROFILE_LLM_MODEL"], "resolved-model");
         assert_eq!(map["RA_PROFILE_LLM_MODEL"], "resolved-model");
         assert_eq!(
-            map["OCTOS_PROFILE_LLM_BASE_URL"],
+            map["ra_PROFILE_LLM_BASE_URL"],
             "https://example.invalid/v1beta"
         );
-        assert_eq!(map["OCTOS_PROFILE_LLM_API_TYPE"], "gemini");
-        assert_eq!(map["OCTOS_PROFILE_LLM_CONFIG_REVISION"], "revision-1");
+        assert_eq!(map["ra_PROFILE_LLM_API_TYPE"], "gemini");
+        assert_eq!(map["ra_PROFILE_LLM_CONFIG_REVISION"], "revision-1");
         assert_eq!(map["UNRELATED"], "retained");
         config.provider = None;
         config.model = Some("gemini-3.6-flash".into());
@@ -1275,13 +1275,13 @@ mod tests {
         config.api_type = None;
         apply_resolved_profile_llm_env(&mut env, &config, "revision-2");
         let map: HashMap<_, _> = env.into_iter().collect();
-        assert_eq!(map["OCTOS_PROFILE_LLM_PROVIDER"], "gemini");
+        assert_eq!(map["ra_PROFILE_LLM_PROVIDER"], "gemini");
         assert_eq!(map["RA_PROFILE_LLM_PROVIDER"], "gemini");
-        assert!(!map.contains_key("OCTOS_PROFILE_LLM_BASE_URL"));
+        assert!(!map.contains_key("ra_PROFILE_LLM_BASE_URL"));
         assert!(!map.contains_key("RA_PROFILE_LLM_BASE_URL"));
-        assert!(!map.contains_key("OCTOS_PROFILE_LLM_API_TYPE"));
+        assert!(!map.contains_key("ra_PROFILE_LLM_API_TYPE"));
         assert!(!map.contains_key("RA_PROFILE_LLM_API_TYPE"));
-        assert_eq!(map["OCTOS_PROFILE_LLM_CONFIG_REVISION"], "revision-2");
+        assert_eq!(map["ra_PROFILE_LLM_CONFIG_REVISION"], "revision-2");
     }
 
     #[test]
@@ -1368,7 +1368,7 @@ mod tests {
         let env = profile_plugin_env(&profile);
 
         assert!(env.contains(&(
-            "OCTOS_PROFILE_LLM_PROVIDER".to_string(),
+            "ra_PROFILE_LLM_PROVIDER".to_string(),
             "google".to_string()
         )));
         assert!(env.contains(&(
@@ -1376,7 +1376,7 @@ mod tests {
             "google".to_string()
         )));
         assert!(env.contains(&(
-            "OCTOS_PROFILE_LLM_MODEL".to_string(),
+            "ra_PROFILE_LLM_MODEL".to_string(),
             "gemini-3.6-flash".to_string()
         )));
         assert!(env.contains(&(
@@ -1697,50 +1697,50 @@ mod tests {
 
     /// Gap 4.1 BLOCKER 1 (standalone gateway child-profile uses the wrong
     /// pipeline root) — on the standalone path `project_dir` (= `cwd/.ra`)
-    /// and `effective_octos_home` (= `data_dir`) DIFFER, and the gateway
-    /// bootstraps bundled pipelines into `effective_octos_home`. The
+    /// and `effective_ra_home` (= `data_dir`) DIFFER, and the gateway
+    /// bootstraps bundled pipelines into `effective_ra_home`. The
     /// child-profile `run_pipeline` factory MUST be rooted at
-    /// `effective_octos_home` (bootstrap-dir == search-dir), NOT `project_dir`.
+    /// `effective_ra_home` (bootstrap-dir == search-dir), NOT `project_dir`.
     ///
-    /// RED on 344d0df1: the builder had no `effective_octos_home` field and the
+    /// RED on 344d0df1: the builder had no `effective_ra_home` field and the
     /// child factory was rooted at `self.project_dir` — so this test could not
     /// even be written (the field/helper did not exist), and a global pipeline
-    /// installed under `effective_octos_home` was invisible to child sessions.
+    /// installed under `effective_ra_home` was invisible to child sessions.
     #[tokio::test]
-    async fn child_pipeline_root_is_effective_octos_home_not_project_dir() {
+    async fn child_pipeline_root_is_effective_ra_home_not_project_dir() {
         use std::sync::atomic::{AtomicBool, AtomicUsize};
 
         let tmp = tempfile::tempdir().unwrap();
         // Standalone layout: these two dirs are DISTINCT.
         let project_dir = tmp.path().join("cwd").join(".ra");
         std::fs::create_dir_all(&project_dir).unwrap();
-        let effective_octos_home = tmp.path().join("data");
-        std::fs::create_dir_all(&effective_octos_home).unwrap();
+        let effective_ra_home = tmp.path().join("data");
+        std::fs::create_dir_all(&effective_ra_home).unwrap();
         assert_ne!(
-            project_dir, effective_octos_home,
+            project_dir, effective_ra_home,
             "test precondition: standalone roots must differ"
         );
 
         let store = Arc::new(crate::profiles::ProfileStore::open_unified(tmp.path()).unwrap());
         let tool_config = Arc::new(
-            ra_agent::ToolConfigStore::open(&effective_octos_home)
+            ra_agent::ToolConfigStore::open(&effective_ra_home)
                 .await
                 .unwrap(),
         );
-        let memory = Arc::new(EpisodeStore::open(&effective_octos_home).await.unwrap());
-        let memory_store = Arc::new(MemoryStore::open(&effective_octos_home).await.unwrap());
+        let memory = Arc::new(EpisodeStore::open(&effective_ra_home).await.unwrap());
+        let memory_store = Arc::new(MemoryStore::open(&effective_ra_home).await.unwrap());
         let recall = Arc::new(
             ra_memory::RecallStore::open(
-                &effective_octos_home,
+                &effective_ra_home,
                 ra_memory::RecallConfig::default(),
             )
             .unwrap(),
         );
         let session_mgr = Arc::new(Mutex::new(
-            SessionManager::open(&effective_octos_home).unwrap(),
+            SessionManager::open(&effective_ra_home).unwrap(),
         ));
         let active_sessions = Arc::new(RwLock::new(
-            ActiveSessionStore::open(&effective_octos_home).unwrap(),
+            ActiveSessionStore::open(&effective_ra_home).unwrap(),
         ));
         let pending_messages: crate::session_actor::PendingMessages =
             Arc::new(Mutex::new(HashMap::new()));
@@ -1748,14 +1748,14 @@ mod tests {
         let (spawn_inbound_tx, _spawn_inbound_rx) = mpsc::channel(4);
         let (cron_in_tx, _cron_in_rx) = mpsc::channel(1);
         let cron_service = Arc::new(CronService::new(
-            effective_octos_home.join("cron"),
+            effective_ra_home.join("cron"),
             cron_in_tx,
         ));
 
         let builder = ProfileActorFactoryBuilder {
             profile_store: store,
             project_dir: project_dir.clone(),
-            effective_octos_home: effective_octos_home.clone(),
+            effective_ra_home: effective_ra_home.clone(),
             tool_config,
             memory,
             memory_store,
@@ -1782,22 +1782,22 @@ mod tests {
             sandbox_config: ra_agent::SandboxConfig::default(),
             task_query_store: crate::session_actor::SessionTaskQueryStore::default(),
             subagent_output_router: Arc::new(ra_agent::SubAgentOutputRouter::new(
-                effective_octos_home.join("subagent-out"),
+                effective_ra_home.join("subagent-out"),
             )),
             host_plugins: Default::default(),
             host_memory: None,
         };
 
-        // The child-profile pipeline root MUST be effective_octos_home — the
+        // The child-profile pipeline root MUST be effective_RecurAgent_home — the
         // dir the gateway bootstraps bundled pipelines into — so bootstrap-dir
         // == search-dir and an installed global pipeline wins over the bundle.
         assert_eq!(
-            builder.child_pipeline_octos_home(),
-            effective_octos_home.as_path(),
-            "child-profile pipeline root must be effective_octos_home (bootstrap dir)"
+            builder.child_pipeline_ra_home(),
+            effective_ra_home.as_path(),
+            "child-profile pipeline root must be effective_ra_home (bootstrap dir)"
         );
         assert_ne!(
-            builder.child_pipeline_octos_home(),
+            builder.child_pipeline_ra_home(),
             project_dir.as_path(),
             "child-profile pipeline root must NOT be project_dir (cwd/.ra), which \
              bootstrap never wrote — the 344d0df1 defect"

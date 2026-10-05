@@ -543,7 +543,7 @@ impl Agent {
         // model that actually answered, resolved from the provider (which
         // also handles verifier-side failover). `config.model_label` is a
         // DISPLAY label ("session-cheap-verifier" when no explicit
-        // RA_AGENT_VERIFIER_MODEL is set — legacy `OCTOS_AGENT_VERIFIER_MODEL`
+        // RA_AGENT_VERIFIER_MODEL is set — legacy `ra_AGENT_VERIFIER_MODEL`
         // still honoured) and misses the catalog.
         let verifier_metadata = config
             .provider
@@ -585,7 +585,7 @@ fn verifier_chat_config() -> ChatConfig {
         temperature: Some(0.0),
         tool_choice: ToolChoice::None,
         response_format: Some(ResponseFormat::JsonSchema {
-            name: "octos_verifier_verdict".to_string(),
+            name: "ra_verifier_verdict".to_string(),
             schema: verifier_schema(),
             strict: true,
         }),
@@ -760,7 +760,7 @@ mod tests {
             Some(ResponseFormat::JsonSchema {
                 ref name, strict, ..
             }) => {
-                assert_eq!(name, "octos_verifier_verdict");
+                assert_eq!(name, "ra_verifier_verdict");
                 assert!(strict);
             }
             other => panic!("verifier must keep its JSON-schema contract, got {other:?}"),

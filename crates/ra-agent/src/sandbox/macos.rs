@@ -531,7 +531,7 @@ impl Sandbox for MacosSandbox {
         // profile cannot suppress it (deny-wins would otherwise leave a
         // fenced peer unable to compile at all). `file-read*` is emitted
         // alongside `file-write*` because the pool may live outside the
-        // ra state home (`~/.ra`, or an existing `~/.ra`) when `data_dir`
+        // ra state home (`~/.ra`) when `data_dir`
         // is overridden, and a restricted-read
         // profile would otherwise grant the write but deny the read. The
         // path is canonicalized (SBPL subpath rules match real paths) and

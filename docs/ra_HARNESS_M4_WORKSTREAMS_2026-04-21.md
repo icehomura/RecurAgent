@@ -1,4 +1,4 @@
-# ra Harness M4 Workstreams
+# RecurAgent Harness M4 Workstreams
 
 Date: 2026-04-21
 
@@ -118,7 +118,7 @@ Acceptance:
 #### M4.1A: Structured Progress Contract
 
 GitHub milestone:
-<https://github.com/your-org/ra/milestone/1>
+<https://github.com/icehomura/ra/milestone/1>
 
 Trigger:
 
@@ -158,8 +158,8 @@ Required event shape:
 Deliverables:
 
 - typed progress event ABI with schema versioning and field limits
-- runtime-provided `OCTOS_EVENT_SINK` for child tools/workflows
-- transport abstraction for `OCTOS_EVENT_SINK`:
+- runtime-provided `ra_EVENT_SINK` for child tools/workflows
+- transport abstraction for `ra_EVENT_SINK`:
   - required: local file/JSONL or Unix-domain socket transport
   - optional: stdio/fd transport for sandboxed children
 - language-neutral event emitter helpers:
@@ -184,7 +184,7 @@ Deliverables:
 Exact usage:
 
 ```bash
-export OCTOS_EVENT_SINK="file:///tmp/ra-events.jsonl"
+export ra_EVENT_SINK="file:///tmp/ra-events.jsonl"
 python3 examples/harness-event/python/emit_progress.py \
   --session-id sess-123 \
   --task-id task-456 \
@@ -202,7 +202,7 @@ node examples/harness-event/node/emit_progress.mjs \
   --progress 0.42
 ```
 
-Missing `OCTOS_EVENT_SINK` is a no-op. The emitters only format and deliver the
+Missing `ra_EVENT_SINK` is a no-op. The emitters only format and deliver the
 record; runtime validation, size checks, and rejection handling stay on the
 consumer side.
 
@@ -309,7 +309,7 @@ Deliverables:
 
 Goal:
 
-- custom skills installed from Git or ra Hub can prove harness compatibility
+- custom skills installed from Git or RecurAgent Hub can prove harness compatibility
   without runtime-specific code branches
 
 Acceptance:
@@ -373,7 +373,7 @@ These are the published GitHub issues for M4.
 ### H4.1: Generalize Parent-Visible Progress ABI
 
 GitHub issue: `#464`
-<https://github.com/your-org/ra/issues/464>
+<https://github.com/icehomura/ra/issues/464>
 
 Scope:
 
@@ -396,7 +396,7 @@ Acceptance:
 ### H4.2: Publish Harness Developer Contract And Starter Apps
 
 GitHub issue: `#465`
-<https://github.com/your-org/ra/issues/465>
+<https://github.com/icehomura/ra/issues/465>
 
 Scope:
 
@@ -415,7 +415,7 @@ Acceptance:
 ### H4.3: Build Declarative Validator Runner
 
 GitHub issue: `#466`
-<https://github.com/your-org/ra/issues/466>
+<https://github.com/icehomura/ra/issues/466>
 
 Scope:
 
@@ -433,11 +433,11 @@ Acceptance:
 ### H4.4: Add Third-Party Skill Compatibility Gate
 
 GitHub issue: `#467`
-<https://github.com/your-org/ra/issues/467>
+<https://github.com/icehomura/ra/issues/467>
 
 Scope:
 
-- add live test for Git or ra Hub skill install, run, reload, removal
+- add live test for Git or RecurAgent Hub skill install, run, reload, removal
 - verify declared binaries and artifacts under a profile directory
 - assert no skill state remains after removal
 - cover one non-slides custom app path
@@ -451,7 +451,7 @@ Acceptance:
 ### H4.5: Build Operator Harness Dashboard
 
 GitHub issue: `#468`
-<https://github.com/your-org/ra/issues/468>
+<https://github.com/icehomura/ra/issues/468>
 
 Scope:
 
@@ -469,7 +469,7 @@ Acceptance:
 ### H4.6: Version Harness ABI Schemas
 
 GitHub issue: `#469`
-<https://github.com/your-org/ra/issues/469>
+<https://github.com/icehomura/ra/issues/469>
 
 Scope:
 

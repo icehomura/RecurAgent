@@ -30,7 +30,7 @@
 //!    `required` field that isn't an array of strings). This is the
 //!    cheap subset of meta-schema validation that catches today's bug
 //!    class without pulling in a full meta-schema runtime.
-//! 2. **Strict ra rules** — defensive rules tuned to LLM provider
+//! 2. **Strict RecurAgent rules** — defensive rules tuned to LLM provider
 //!    validators. Every `anyOf`/`oneOf`/`allOf` branch must declare a
 //!    `type`, every `properties.X` must declare a `type`, `$ref` and
 //!    `$dynamicAnchor`/`$dynamicRef` are rejected unless the schema
@@ -41,10 +41,10 @@
 //! Tuning
 //! ------
 //! The strict layer is gated behind `RA_MANIFEST_VALIDATION` (the legacy
-//! `OCTOS_MANIFEST_VALIDATION` spelling is still honoured):
+//! `ra_MANIFEST_VALIDATION` spelling is still honoured):
 //!
 //! - `strict` (default) — all rules above are enforced.
-//! - `lenient` — Draft 07 sanity only; the ra rules are skipped.
+//! - `lenient` — Draft 07 sanity only; the RecurAgent rules are skipped.
 //! - `off` — validator returns Ok unconditionally. Reserved for
 //!   incident-response unblocks; never set this in production by
 //!   default.
@@ -111,9 +111,9 @@ impl fmt::Display for ManifestSchemaError {
 /// Profile selecting how strict the validator should be.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ValidationProfile {
-    /// All Draft 07 sanity rules + all strict ra rules.
+    /// All Draft 07 sanity rules + all strict RecurAgent rules.
     Strict,
-    /// Draft 07 sanity rules only; strict ra rules are skipped.
+    /// Draft 07 sanity rules only; strict RecurAgent rules are skipped.
     Lenient,
     /// Validator returns Ok unconditionally.
     Off,
@@ -121,7 +121,7 @@ pub enum ValidationProfile {
 
 impl ValidationProfile {
     /// Resolve the profile from the `RA_MANIFEST_VALIDATION`
-    /// environment variable (the legacy `OCTOS_MANIFEST_VALIDATION`
+    /// environment variable (the legacy `ra_MANIFEST_VALIDATION`
     /// spelling is still honoured). Unknown values fall back to `Strict`
     /// (fail-closed) and a single `warn!` is emitted via `tracing`.
     pub fn from_env() -> Self {
@@ -230,9 +230,9 @@ fn validate_one_schema(
     // Layer 1: Draft 07 sanity — always run.
     walk_draft07(tool_name, schema_kind, schema, "", errors);
 
-    // Layer 2: strict ra rules — run unless explicitly relaxed.
+    // Layer 2: strict RecurAgent rules — run unless explicitly relaxed.
     if matches!(profile, ValidationProfile::Strict) {
-        // The empty-schema rule belongs to the strict ra profile —
+        // The empty-schema rule belongs to the strict RecurAgent profile —
         // `{}` is a valid Draft 07 schema, so accepting it in lenient
         // mode matches the documented "Draft 07 sanity only" contract
         // (codex P2 review, 2026-05-25). Operators who genuinely want
@@ -388,7 +388,7 @@ fn walk_draft07(
     });
 }
 
-// ── Layer 2: strict ra rules ─────────────────────────────────────────
+// ── Layer 2: strict RecurAgent rules ─────────────────────────────────────────
 
 fn check_root(
     tool_name: &str,
@@ -1026,7 +1026,7 @@ mod tests {
 
     /// Codex P2 #2: `{}` is a valid Draft 07 schema, so lenient mode
     /// must accept it. The empty-schema rule is part of the strict
-    /// ra profile only.
+    /// RecurAgent profile only.
     #[test]
     fn lenient_profile_accepts_empty_schema() {
         let schema = schema_of(json!({}));

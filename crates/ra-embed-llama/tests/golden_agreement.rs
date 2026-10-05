@@ -1,7 +1,7 @@
 //! Agreement against frozen golden embeddings.
 //!
 //! The vectors in `tests/golden/golden_mlx.json` were produced by the
-//! `octos-embed-mlx` port, which was itself verified against a Python oracle:
+//! `ra-embed-mlx` port, which was itself verified against a Python oracle:
 //! golden per-stage activations, worst end-to-end cosine 0.999997, NDCG@10
 //! 1.0000 at every MRL dim. That crate has since been removed — this fixture is
 //! what survives of it, and it is the only check here that can catch a

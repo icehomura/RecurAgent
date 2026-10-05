@@ -23,8 +23,8 @@
 //!   blocks the runtime on disk I/O.
 //! - One record per dispatch, keyed by the event's UUIDv7 ID so
 //!   insertions are lock-free and ordering on read reflects dispatch time.
-//! - Default on-disk path: `<state home>/cost_ledger.redb` (`~/.ra`, or an
-//!   existing `~/.ra`). Tests use [`PersistentCostLedger::open`] with a
+//! - Default on-disk path: `<state home>/cost_ledger.redb` (`~/.ra`).
+//!   Tests use [`PersistentCostLedger::open`] with a
 //!   tempdir path.
 //!
 //! # Budget enforcement
@@ -66,7 +66,7 @@ pub const COST_ATTRIBUTION_COUNTER: &str = "ra_cost_attribution_total";
 
 /// Histogram capturing the USD projection of every committed
 /// attribution. Bucket widths are chosen by the Prometheus recorder.
-pub const COST_USD_HISTOGRAM: &str = "octos_cost_usd";
+pub const COST_USD_HISTOGRAM: &str = "ra_cost_usd";
 
 /// Durable filename inside the data directory. Exposed so callers can
 /// stitch the path together if they want to use a custom data dir.
@@ -91,7 +91,7 @@ pub struct CostAttributionEvent {
     pub attribution_id: String,
     /// Supervising session that initiated the dispatch. Matches the
     /// `session_id` propagated through
-    /// [`crate::harness_events::OCTOS_HARNESS_SESSION_ID_ENV`].
+    /// [`crate::harness_events::ra_HARNESS_SESSION_ID_ENV`].
     pub supervisor_session: String,
     /// Opaque contract identifier (typically the workspace contract
     /// artifact path or the workflow slug). Allows per-contract cost
@@ -253,8 +253,8 @@ pub struct PersistentCostLedger {
 }
 
 impl PersistentCostLedger {
-    /// Default storage path in the product state home (`~/.ra`, or an
-    /// existing `~/.ra`). Matches the state-home convention used by the
+    /// Default storage path in the product state home (`~/.ra`). Matches the
+    /// state-home convention used by the
     /// auth store and episode database.
     ///
     /// Kept returning an `Option` for API compatibility; the state path
@@ -289,8 +289,8 @@ impl PersistentCostLedger {
         Ok(Self { db: Arc::new(db) })
     }
 
-    /// Open the default ledger from the product state home (`~/.ra`, or an
-    /// existing `~/.ra`). Fails cleanly if the state path cannot be
+    /// Open the default ledger from the product state home (`~/.ra`). Fails
+    /// cleanly if the state path cannot be
     /// resolved.
     pub async fn open_default() -> Result<Self> {
         let path = Self::home_default_path()

@@ -8,17 +8,17 @@
  * Old (broken) flat-list rendering would interleave: e.g. user1, user2,
  * assistant1's progress events split across both bubbles, then assistant2,
  * then assistant1's final text — pairing breaks. The new thread-by-cmid
- * renderer (octos-web PR #4 / octos-org/octos#627) anchors each response
+ * renderer (ra-web PR #4 / icehomura/ra#627) anchors each response
  * to its origin user message via `responseToClientMessageId`.
  *
  * The new renderer is BEHIND the feature flag
- * `localStorage.octos_thread_store_v2 = '1'`. This spec sets that flag
+ * `localStorage.ra_thread_store_v2 = '1'`. This spec sets that flag
  * before any messages are sent.
  *
  * Required env:
- *   OCTOS_TEST_URL=https://dspfac.bot.ominix.io
- *   OCTOS_AUTH_TOKEN=ra-admin-2026
- *   OCTOS_PROFILE=dspfac
+ *   ra_TEST_URL=https://dspfac.bot.ominix.io
+ *   ra_AUTH_TOKEN=ra-admin-2026
+ *   ra_PROFILE=dspfac
  *
  * NEVER point at mini5 — that host is reserved for coding-green tests.
  */
@@ -36,11 +36,11 @@ import {
 } from './live-browser-helpers';
 
 const SLOW_PROMPT =
-  process.env.OCTOS_INTERLEAVE_SLOW_PROMPT ||
+  process.env.ra_INTERLEAVE_SLOW_PROMPT ||
   'Use deep research to find the latest news about Rust language. ' +
     "Run the pipeline directly, don't ask. One paragraph.";
 const FAST_PROMPT =
-  process.env.OCTOS_INTERLEAVE_FAST_PROMPT || '1+1 等于几？只回答数字。';
+  process.env.ra_INTERLEAVE_FAST_PROMPT || '1+1 等于几？只回答数字。';
 
 // Marker used to detect the actual deep_research RESULT (not the
 // spawn-ack). The slow prompt asks for "latest news about Rust
@@ -57,7 +57,7 @@ const FAST_PROMPT =
 const SLOW_HINT_RE = /\brust\b/i;
 const FAST_HINT_RE = /\b2\b|二|两/;
 
-const FLAG_KEY = 'octos_thread_store_v2';
+const FLAG_KEY = 'ra_thread_store_v2';
 
 const SLOW_MAX_WAIT_MS = 6 * 60 * 1000; // 6 minutes
 const FAST_MAX_WAIT_MS = 90 * 1000; // 90s

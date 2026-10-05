@@ -6,9 +6,9 @@
 //! and asserts the streamed `session/update` sequence plus the final stop
 //! reason.
 //!
-//! No network, no subprocess, no OS pipes: the ACP client and the ra ACP
-//! agent are wired together **in-process**. [`OctosAcpAgentTransport`] exposes
-//! the ra agent as a `ConnectTo<Client>` transport; the client's
+//! No network, no subprocess, no OS pipes: the ACP client and the RecurAgent ACP
+//! agent are wired together **in-process**. [`RaAcpAgentTransport`] exposes
+//! the RecurAgent agent as a `ConnectTo<Client>` transport; the client's
 //! `connect_with` closure drives the protocol while the agent's handlers run in
 //! the background — all on one tokio runtime, exchanging typed JSON-RPC messages
 //! directly.
@@ -25,7 +25,7 @@ use agent_client_protocol::schema::v1::{
 use agent_client_protocol::{Client, ConnectionTo};
 
 use async_trait::async_trait;
-use ra_cli::commands::{OctosAcpAgentTransport, TestAgentFactory};
+use ra_cli::commands::{RaAcpAgentTransport, TestAgentFactory};
 use tokio::sync::Mutex;
 
 /// A canned LLM that always returns the same assistant text and ends the turn —
@@ -146,7 +146,7 @@ fn spawn_owned_acp_transport(
 ) {
     let (client, server) = agent_client_protocol::Channel::duplex();
     let task = tokio::spawn(agent_client_protocol::ConnectTo::<Client>::connect_to(
-        OctosAcpAgentTransport::new(factory),
+        RaAcpAgentTransport::new(factory),
         server,
     ));
     (client, task)
@@ -165,7 +165,7 @@ async fn should_stream_assistant_message_and_end_turn_when_driven_through_acp_in
         reply: reply.to_string(),
     });
     let factory = TestAgentFactory::new(llm, memory_dir, cwd.clone());
-    let transport = OctosAcpAgentTransport::new(factory);
+    let transport = RaAcpAgentTransport::new(factory);
 
     // Records every `session/update` the agent streams to the client.
     let updates: Arc<Mutex<Vec<SessionUpdate>>> = Arc::new(Mutex::new(Vec::new()));
@@ -178,7 +178,7 @@ async fn should_stream_assistant_message_and_end_turn_when_driven_through_acp_in
     let prompt_cwd = cwd.clone();
 
     // Build the in-process ACP CLIENT and drive the protocol from its
-    // `connect_with` closure. The ra ACP agent is the transport.
+    // `connect_with` closure. The RecurAgent ACP agent is the transport.
     let client_result = Client
         .builder()
         .name("ra-acp-test-client")
@@ -199,7 +199,7 @@ async fn should_stream_assistant_message_and_end_turn_when_driven_through_acp_in
                     .block_task()
                     .await?;
                 assert_eq!(init.protocol_version, ProtocolVersion::V1);
-                // ra advertises text-only prompt capabilities.
+                // RecurAgent advertises text-only prompt capabilities.
                 assert!(!init.agent_capabilities.prompt_capabilities.image);
 
                 // 2) session/new
@@ -277,7 +277,7 @@ async fn should_accumulate_conversation_history_across_multiple_prompts() {
         calls: std::sync::atomic::AtomicUsize::new(0),
     });
     let factory = TestAgentFactory::new(llm, memory_dir, cwd.clone());
-    let transport = OctosAcpAgentTransport::new(factory);
+    let transport = RaAcpAgentTransport::new(factory);
 
     let prompt_cwd = cwd.clone();
 
@@ -383,7 +383,7 @@ async fn should_accumulate_conversation_history_across_multiple_prompts() {
 
 /// Regression: `ra acp` speaks ACP JSON-RPC on stdout, so NOTHING else may be
 /// written there — a single stray log line makes strict clients (Zed) reject the
-/// whole stream with a `-32700` parse error. ra's tracing previously defaulted
+/// whole stream with a `-32700` parse error. RecurAgent's tracing previously defaulted
 /// to stdout for no-log-dir commands; this drives the REAL binary through
 /// `initialize` + `session/new` (which loads config → emits startup logs) and
 /// asserts every stdout line is valid JSON.
@@ -761,7 +761,7 @@ async fn should_not_evict_a_live_session_on_reload() {
             agent_client_protocol::on_receive_notification!(),
         )
         .connect_with(
-            OctosAcpAgentTransport::new(factory),
+            RaAcpAgentTransport::new(factory),
             |connection: ConnectionTo<agent_client_protocol::Agent>| async move {
                 connection
                     .send_request(InitializeRequest::new(ProtocolVersion::V1))
@@ -896,7 +896,7 @@ async fn should_sanitize_stored_history_when_loading_a_session() {
             agent_client_protocol::on_receive_notification!(),
         )
         .connect_with(
-            OctosAcpAgentTransport::new(factory),
+            RaAcpAgentTransport::new(factory),
             |connection: ConnectionTo<agent_client_protocol::Agent>| async move {
                 connection
                     .send_request(InitializeRequest::new(ProtocolVersion::V1))

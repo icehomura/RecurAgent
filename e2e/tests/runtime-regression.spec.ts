@@ -9,7 +9,7 @@
  * 5. Cross-session isolation — concurrent sessions don't leak state
  *
  * These are API-level tests (no browser needed). They run against any deployed
- * host via OCTOS_TEST_URL.
+ * host via ra_TEST_URL.
  *
  * Related issues:
  * - #386: reload enqueues empty turn
@@ -31,9 +31,9 @@ import {
   type ChatWsEvent,
 } from '../lib/m9-ws-client';
 
-const BASE = process.env.OCTOS_TEST_URL || 'https://dspfac.crew.ominix.io';
-const TOKEN = process.env.OCTOS_AUTH_TOKEN || 'e2e-test-2026';
-const PROFILE = process.env.OCTOS_PROFILE || 'dspfac';
+const BASE = process.env.ra_TEST_URL || 'https://dspfac.crew.ominix.io';
+const TOKEN = process.env.ra_AUTH_TOKEN || 'e2e-test-2026';
+const PROFILE = process.env.ra_PROFILE || 'dspfac';
 
 test.setTimeout(120_000);
 

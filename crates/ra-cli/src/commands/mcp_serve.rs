@@ -1,6 +1,6 @@
 //! M7.2 — `ra mcp-serve` subcommand.
 //!
-//! Exposes ra as an MCP server so outer orchestrators can invoke it
+//! Exposes RecurAgent as an MCP server so outer orchestrators can invoke it
 //! as a sub-agent. See [`ra_agent::mcp_server`] for the transport and
 //! session-level tool semantics.
 //!
@@ -9,7 +9,7 @@
 //! - `stdio` (default): JSON-RPC over stdin/stdout. Parent-trust auth.
 //! - `http`: MCP Streamable HTTP served by the rmcp SDK. Requires a bearer
 //!   token supplied via the `RA_MCP_SERVER_TOKEN` environment variable (the
-//!   legacy `OCTOS_MCP_SERVER_TOKEN` is still honoured).
+//!   legacy `ra_MCP_SERVER_TOKEN` is still honoured).
 //!
 //! # Session dispatch (M7.2a)
 //!
@@ -76,10 +76,10 @@ pub enum McpTransport {
 }
 
 /// Bearer-token variable for the HTTP transport: `RA_MCP_SERVER_TOKEN`
-/// (legacy `OCTOS_MCP_SERVER_TOKEN` still honoured).
+/// (legacy `ra_MCP_SERVER_TOKEN` still honoured).
 const MCP_SERVER_TOKEN_ENV: &str = "RA_MCP_SERVER_TOKEN";
 
-/// Run ra as an MCP server for outer orchestrators.
+/// Run RecurAgent as an MCP server for outer orchestrators.
 #[derive(Debug, Args)]
 pub struct McpServeCommand {
     /// Transport to bind. `stdio` (default) uses parent-trust auth; `http`
@@ -187,8 +187,8 @@ impl McpServeCommand {
                 server.serve_stdio().await
             }
             McpTransport::Http => {
-                // New name first; the legacy `OCTOS_MCP_SERVER_TOKEN` (the name
-                // ra-agent's `OCTOS_MCP_SERVER_TOKEN_ENV` const still spells)
+                // New name first; the legacy `ra_MCP_SERVER_TOKEN` (the name
+                // ra-agent's `ra_MCP_SERVER_TOKEN_ENV` const still spells)
                 // keeps existing deployments working.
                 let token = ra_core::brand::env_compat_str("MCP_SERVER_TOKEN").ok_or_else(|| {
                     eyre::eyre!("{MCP_SERVER_TOKEN_ENV} must be set for the http transport")
@@ -469,7 +469,7 @@ impl AgentLlmFactory {
 /// `shell`/`exec_command`/`bash` and the file tools to the workspace `cwd`,
 /// exactly as `ra chat`/`ra gateway` do. Without it the outer MCP caller
 /// — which is only parent-trusted (stdio) or bearer-authenticated (http) — can
-/// drive `run_ra_session` to read, write, and execute anywhere the ra
+/// drive `run_ra_session` to read, write, and execute anywhere the RecurAgent
 /// process can reach.
 pub struct RealSessionDispatch {
     config: SessionDispatchConfig,
@@ -541,7 +541,7 @@ impl McpSessionDispatch for RealSessionDispatch {
         );
         // Confine shell/exec/file tools to the workspace. `with_builtins`
         // alone installs `NoSandbox`, which let an outer MCP caller drive
-        // `shell`/`exec_command` to read, write, or execute anywhere the ra
+        // `shell`/`exec_command` to read, write, or execute anywhere the RecurAgent
         // process could (the M7.2 session-dispatch RCE). The OS sandbox
         // restricts writes to `cwd`.
         let permissions = self.config.permissions();

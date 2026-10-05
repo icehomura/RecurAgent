@@ -1,16 +1,16 @@
-# ra Robotics Architecture
+# RecurAgent Robotics Architecture
 
 See also:
 
-- [OCTOS_ROBOTICS_FAMILY.md](./OCTOS_ROBOTICS_FAMILY.md)
-- [OCTOS_ROBOTICS_CONTRACTS.md](./OCTOS_ROBOTICS_CONTRACTS.md)
-- [OCTOS_HARNESS_MIGRATION_GUARDRAILS.md](./OCTOS_HARNESS_MIGRATION_GUARDRAILS.md)
-- [OCTOS_HARNESS_ENGINEERING.md](./OCTOS_HARNESS_ENGINEERING.md)
+- [ra_ROBOTICS_FAMILY.md](./ra_ROBOTICS_FAMILY.md)
+- [ra_ROBOTICS_CONTRACTS.md](./ra_ROBOTICS_CONTRACTS.md)
+- `ra_HARNESS_MIGRATION_GUARDRAILS.md` (not in this tree)
+- `ra_HARNESS_ENGINEERING.md` (not in this tree)
 
 ## Purpose
 
 This document defines the architectural target for supporting robotics use cases
-on top of the existing ra harness layer.
+on top of the existing RecurAgent harness layer.
 
 It answers two questions:
 
@@ -26,7 +26,7 @@ non-architectural proposals that have previously been pitched as architecture.
 
 ## Working Definition
 
-For ra, robotics support means:
+For RecurAgent, robotics support means:
 
 - a two-cadence runtime — a deterministic fast loop owning hardware, and the
   existing LLM-driven slow loop owning task-level planning
@@ -52,12 +52,12 @@ The existing harness layer assumes:
 
 Every one of those assumptions breaks on a physical robot. This document
 records what we change to fix that, and what we refuse to change so the rest of
-ra keeps working.
+RecurAgent keeps working.
 
 ## Stable Surfaces — Do Not Rebuild
 
 These surfaces are stable for the robotics program, per
-[OCTOS_HARNESS_MIGRATION_GUARDRAILS.md](./OCTOS_HARNESS_MIGRATION_GUARDRAILS.md).
+`ra_HARNESS_MIGRATION_GUARDRAILS.md`.
 
 They may be extended. They must not be replaced.
 
@@ -210,7 +210,7 @@ breaks one of these is outside scope and is rejected.
   mission-contract grammar are in place.
 - Landing safety-tier trait declarations without enforcement.
 - Landing new `HookEvent` variants without firing sites in the loop.
-- Vendoring a Python reimplementation of any ra runtime component into
+- Vendoring a Python reimplementation of any RecurAgent runtime component into
   the monorepo.
 - Adding a stub bridge crate to the workspace. Bridges land only when they
   forward real traffic.
@@ -262,7 +262,7 @@ The program is judged a failure if any of these instead appear:
 This note is the canonical architecture record for the robotics program.
 
 The program plan — phases, roles, release contracts, PM driver rubric — is
-in [OCTOS_ROBOTICS_FAMILY.md](./OCTOS_ROBOTICS_FAMILY.md).
+in [ra_ROBOTICS_FAMILY.md](./ra_ROBOTICS_FAMILY.md).
 
 The per-issue contracts — R01 through R10 — are in
-[OCTOS_ROBOTICS_CONTRACTS.md](./OCTOS_ROBOTICS_CONTRACTS.md).
+[ra_ROBOTICS_CONTRACTS.md](./ra_ROBOTICS_CONTRACTS.md).

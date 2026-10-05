@@ -1,4 +1,4 @@
-# ra Harness Audit: M6-M9 vs requirements at `origin/main` 119bf782
+# RecurAgent Harness Audit: M6-M9 vs requirements at `origin/main` 119bf782
 
 Date: 2026-04-30
 Baseline: `origin/main` at `119bf782` (post PR #687/#688/#691/#692/#695/#696)
@@ -8,7 +8,7 @@ Source reports: `/tmp/m{6,7,8,9}-audit.md` per agent
 ## Purpose
 
 Formal score-based check of M6-M9 implementation against the requirements at
-[`OCTOS_HARNESS_ENGINEERING_REQUIREMENTS_M6_M9.md`](./OCTOS_HARNESS_ENGINEERING_REQUIREMENTS_M6_M9.md).
+[`ra_HARNESS_ENGINEERING_REQUIREMENTS_M6_M9.md`](./ra_HARNESS_ENGINEERING_REQUIREMENTS_M6_M9.md).
 
 The user's hypothesis going in: *"most web UX bugs trace to incomplete or
 ad-hoc harness engineering across M6-M9."* The audit confirms the hypothesis
@@ -153,7 +153,7 @@ P0 + P1 in flight as parallel fix PRs (this session).
 
 ## Related documents
 
-- [Requirements](./OCTOS_HARNESS_ENGINEERING_REQUIREMENTS_M6_M9.md)
+- [Requirements](./ra_HARNESS_ENGINEERING_REQUIREMENTS_M6_M9.md)
 - [M9 Ledger Durability ADR](./M9-LEDGER-DURABILITY-ADR.md)
-- [M9 Issue Stack](./OCTOS_M9_ISSUE_STACK_2026-04-24.md)
-- [M8 Fix-First Checklist](./OCTOS_M8_FIX_FIRST_CHECKLIST_2026-04-24.md)
+- `ra_M9_ISSUE_STACK_2026-04-24.md` (not in this tree)
+- `ra_M8_FIX_FIRST_CHECKLIST_2026-04-24.md` (not in this tree)

@@ -4,7 +4,7 @@ Audience: another agent (or human) running on a different machine, cold,
 to compile `ra` and run the e2e soaking suite against either a local
 build or the deployed fleet.
 
-Repo: `https://github.com/your-org/ra`
+Repo: `https://github.com/icehomura/ra`
 Reference commit: `e256e6b5` (current `main` at handoff time)
 
 ---
@@ -50,7 +50,7 @@ System deps (if missing): `cmake`, `pkg-config`, OpenSSL is **not** required (th
 ## 2. Clone and orient
 
 ```bash
-git clone https://github.com/your-org/ra.git
+git clone https://github.com/icehomura/ra.git
 cd ra
 git checkout e256e6b5   # or current main
 ```
@@ -149,7 +149,7 @@ echo $!  # remember PID for cleanup
 ```
 
 The auth token can be anything; e2e specs read it from
-`OCTOS_AUTH_TOKEN`. Use `127.0.0.1` (not `0.0.0.0`) unless you
+`ra_AUTH_TOKEN`. Use `127.0.0.1` (not `0.0.0.0`) unless you
 specifically want LAN exposure.
 
 Health check:
@@ -212,8 +212,8 @@ plus `live-overflow-stress`:
 
 ```bash
 # Single canonical run
-OCTOS_TEST_URL=http://127.0.0.1:56831 \
-OCTOS_AUTH_TOKEN=test-token-please-change \
+ra_TEST_URL=http://127.0.0.1:56831 \
+ra_AUTH_TOKEN=test-token-please-change \
   npx playwright test \
     live-overflow-thread-binding.spec.ts \
     live-thread-interleave.spec.ts \
@@ -252,7 +252,7 @@ out-of-band; they are not committed to the repo.
 | mini3 | `<mini3-ip>` | `dspfac.ra.ominix.io` | **USER agent** at `~/Library/LaunchAgents/io.ominix.ra-serve.plist` on port 50080 — root daemon `io.ra.serve` is in pre-existing crash-loop on port 8080, leave it alone | yellow | ✅ safe |
 | mini4 | `<mini4-ip>` | `dspfac.river.ominix.io` | root LaunchDaemon | blue (intentional baseline / rollback target) | ✅ safe |
 | mini5 | `<mini5-ip>` | `dspfac.ocean.ominix.io` | root LaunchDaemon | yellow | ❌ **DO NOT SOAK** — reserved for active sprint work; active deploys will break your run |
-| mini6 | `<mini6-ip>` | (varies — check `~/octos-web` symlink target) | check both root + user daemon | (newer host, profile TBD) | check with maintainer |
+| mini6 | `<mini6-ip>` | (varies — check `~/ra-web` symlink target) | check both root + user daemon | (newer host, profile TBD) | check with maintainer |
 
 **Excluded — do NOT touch**: `cloud@<excluded-host-ip>` (`macmini-31.ra.bot`).
 Earlier deploy scripts had it as "mini4"; the river.ominix.io box
@@ -277,8 +277,8 @@ report and ask the maintainer about a redeploy.
 ```bash
 # Pick mini1, mini3, or mini4 — these are the safe-to-soak targets
 
-OCTOS_TEST_URL=https://dspfac.ra.ominix.io \
-OCTOS_AUTH_TOKEN='<production-token-from-maintainer>' \
+ra_TEST_URL=https://dspfac.ra.ominix.io \
+ra_AUTH_TOKEN='<production-token-from-maintainer>' \
   npx playwright test \
     live-overflow-thread-binding.spec.ts \
     live-thread-interleave.spec.ts \
@@ -295,14 +295,14 @@ Each mini runs a local TTS/ASR companion service. Voice TTS won't work
 on a mini if its `OMINIX_API_URL` env var (in the launchd plist)
 points to an unreachable endpoint OR if the local ominix-api isn't
 running. If voice-related specs (e.g. fm_tts, mofa-podcast) fail with
-network errors, suspect this companion service rather than the ra
+network errors, suspect this companion service rather than the RecurAgent
 daemon itself.
 
 ### 8.5 Web bundle
 
-octos-web has only ONE release branch (`release/coding-blue`). Same web
-bundle deploys to all minis at `~/octos-web/`. **mini4 has no
-`~/octos-web/`** — its admin/chat assets are embedded in the ra
+ra-web has only ONE release branch (`release/coding-blue`). Same web
+bundle deploys to all minis at `~/ra-web/`. **mini4 has no
+`~/ra-web/`** — its admin/chat assets are embedded in the RecurAgent
 binary directly (this is by design — `./scripts/build-dashboard.sh`
 embeds them; same step you ran in §3).
 

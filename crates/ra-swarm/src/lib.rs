@@ -1,7 +1,7 @@
-//! Swarm orchestration primitive for ra (harness M7.5).
+//! Swarm orchestration primitive for RecurAgent (harness M7.5).
 //!
 //! `ra-swarm` formalises the PM + swarm supervisor pattern the
-//! ra harness has been running manually: a supervisor writes a
+//! RecurAgent harness has been running manually: a supervisor writes a
 //! contract, fans it out to N sub-agents, aggregates their artifacts,
 //! gates the aggregate through an M4.3 validator, rolls up cost via
 //! the M7.4 ledger (stubbed here until that work lands), and emits a

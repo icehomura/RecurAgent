@@ -5,7 +5,7 @@
 //! with "Library not loaded".
 //!
 //! It is a strict NO-OP unless the `python` feature is on, so the default
-//! `cargo build/test/clippy --workspace` (including ra CI's Python-less
+//! `cargo build/test/clippy --workspace` (including RecurAgent CI's Python-less
 //! Windows lane) does ZERO Python probing and pulls no libpython.
 //!
 //! ## Interpreter resolution (review item C.1)

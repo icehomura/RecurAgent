@@ -13,7 +13,7 @@ export default function App() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
           <div>
             <h1 className="text-lg font-bold tracking-tight">
-              <span className="text-accent">octos</span> swarm
+              <span className="text-accent">ra</span> swarm
             </h1>
             <p className="mt-0.5 text-xs text-gray-500">
               PM + supervisor orchestrator — author contracts, dispatch

@@ -3,7 +3,7 @@
 ## Scope
 
 `ra-tui` is a standalone terminal client for the ra UI Protocol.
-In protocol mode it does not run the ra agent, execute tools, approve
+In protocol mode it does not run the RecurAgent agent, execute tools, approve
 commands, maintain the durable ledger, or own provider/model configuration.
 Those responsibilities belong to the `ra serve` process.
 
@@ -68,12 +68,12 @@ The AppUI endpoint is:
 /api/ui-protocol/ws
 ```
 
-That route is implemented in the ra repo under
+That route is implemented in the RecurAgent repo under
 `crates/ra-cli/src/api/ui_protocol.rs`. It accepts JSON-RPC messages over a
 WebSocket and translates protocol commands into runtime actions.
 
 WebSocket is the current deployed transport, not the ra UI Protocol itself. The
-transport refactor milestone is documented in the parent ra repo at
+transport refactor milestone is documented in the parent RecurAgent repo at
 `api/APPUI_TRANSPORT_PROTOCOL_REFACTOR_MILESTONE.md`. The intended long-term
 shape is that the same `AppUiCommand` and `AppUiEvent` contract can run over
 WebSocket, stdio, Unix sockets, local TCP streams, named pipes, or in-process
@@ -90,7 +90,7 @@ is the legacy web chat/gateway WebSocket. It is not the AppUI contract used by
 
 ## Shared API Types
 
-The client consumes shared Rust types from the sibling ra repo:
+The client consumes shared Rust types from the sibling RecurAgent repo:
 
 ```text
 ../ra/crates/ra-core/src/app_ui.rs
@@ -482,7 +482,7 @@ added without a row here.
 
 | File | Lines | Responsibility |
 |---|---:|---|
-| `src/cli.rs` | 1053 | `--config` JSON launch defaults plus CLI overrides. Must not own provider/model settings; those stay in ra server config. |
+| `src/cli.rs` | 1053 | `--config` JSON launch defaults plus CLI overrides. Must not own provider/model settings; those stay in RecurAgent server config. |
 | `src/cmd/config.rs` | 152 | `ra-tui config`: read-only inspection of the client's startup config |
 | `src/cmd/doctor.rs` | 2460 | `ra-tui doctor` — flutter-doctor-style diagnostics (design §B). |
 | `src/cmd/mod.rs` | 273 | `ra-tui` subcommands: `update` and `doctor` (design doc). |
@@ -524,7 +524,7 @@ added without a row here.
 | `src/highlight.rs` | 172 | Fenced-code-block syntax highlighting for the transcript renderer |
 | `src/insert_history.rs` | 1603 | Insert finalized history lines into the terminal's **normal scrollback**, |
 | `src/sanitize.rs` | 160 | Terminal control-sequence sanitisation for server-supplied text. |
-| `src/splash.rs` | 292 | Startup splash: a ttfx-rendered OCTOS logo animation played on the main screen before the event loop claims the terminal. |
+| `src/splash.rs` | 292 | Startup splash: a ttfx-rendered RA logo animation played on the main screen before the event loop claims the terminal. |
 | `src/terminal_probe.rs` | 243 | Terminal detection and color adaptation for ra-tui. |
 | `src/theme.rs` | 204 | Terminal-aware palettes and theme-specific colors. |
 | `src/tui_terminal.rs` | 1171 | Inline-viewport terminal — ported and trimmed from codex-rs `tui/src/custom_terminal.rs`. |
@@ -551,7 +551,7 @@ added without a row here.
 |---|---:|---|
 | `src/autonomy.rs` | 1097 | M15-E autonomy command parsing for `/agents`, `/goal`, and `/loop`. |
 | `src/clipboard.rs` | 378 | Clipboard copy support for the TUI. |
-| `src/env.rs` | 120 | ra/legacy env-var + home-path compatibility (`RA_TUI_*`→`OCTOSCODE_*`, `~/.ra`→`~/.ra`). |
+| `src/env.rs` | 120 | ra/legacy env-var compatibility (`RA_TUI_*`→`RA_TUI_*`, `RA_*`→`RA_*`); state paths are new-only (`~/.ra`, `~/.config/ra-tui`). |
 | `src/file_picker.rs` | 254 | `@` composer file picker (#363, v1: path insert only). |
 | `src/history.rs` | 743 | Composer command-history navigation (codex / claude-code style). |
 | `src/keymap.rs` | 1 | The status-bar key-hint string. |
@@ -652,7 +652,7 @@ Client replay requirements:
 ## Mock Mode
 
 `--mode mock` is a deterministic local fixture backend for rendering,
-keyboard, and harness tests. It does not represent the live ra runtime and
+keyboard, and harness tests. It does not represent the live RecurAgent runtime and
 must not be used to validate server policy, sandboxing, provider setup, ledger
 durability, or tool execution behavior.
 
@@ -696,22 +696,22 @@ Codex CLI executes approved local tools and updates the transcript
 
 The important product difference is where the runtime lives:
 
-| Area | Codex-style local CLI | ra AppUI architecture |
+| Area | Codex-style local CLI | RecurAgent AppUI architecture |
 |---|---|---|
 | UI | Local CLI/TUI process. | `ra-tui` or `ra-app`. |
 | Runtime owner | Mostly the local CLI process, with model service calls. | `ra serve`. |
-| Tool execution | Local CLI sandbox/tool runner. | Server-side ra runtime/tool system. |
+| Tool execution | Local CLI sandbox/tool runner. | Server-side RecurAgent runtime/tool system. |
 | Approval policy | Local CLI approval flow. | Server-owned approval requests plus client rendering/response. |
 | Durable replay | Local CLI/session behavior. | Server ledger and replay cursors. |
 | Client/server contract | CLI implementation boundary. | Stable ra UI Protocol boundary. |
 
-For ra, the product goal is to keep Codex-quality coding UX while preserving
+For RecurAgent, the product goal is to keep Codex-quality coding UX while preserving
 a cleaner split: the terminal app is replaceable, and all clients speak the
-same AppUI API to the ra server.
+same AppUI API to the RecurAgent server.
 
 ## Architectural Invariants
 
-- `ra-tui` must not call ra runtime internals directly.
+- `ra-tui` must not call RecurAgent runtime internals directly.
 - `ra-tui` must not rely on M9-specific server internals outside AppUI.
 - `ra-tui` must treat the server as authoritative for tasks, approvals,
   diffs, tool results, cwd policy, sandbox policy, and replay.

@@ -66,9 +66,9 @@
  *
  * Run from ~/home/ra/e2e:
  *
- *   OCTOS_TEST_URL=https://dspfac.bot.ominix.io \
- *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
- *   OCTOS_PROFILE=dspfac \
+ *   ra_TEST_URL=https://dspfac.bot.ominix.io \
+ *   ra_AUTH_TOKEN=ra-admin-2026 \
+ *   ra_PROFILE=dspfac \
  *     npx playwright test tests/live-realtime-status.spec.ts --workers=1
  */
 
@@ -84,8 +84,8 @@ import {
   login,
 } from './live-browser-helpers';
 
-const BASE = process.env.OCTOS_TEST_URL || 'https://dspfac.bot.ominix.io';
-const PROFILE = process.env.OCTOS_PROFILE || 'dspfac';
+const BASE = process.env.ra_TEST_URL || 'https://dspfac.bot.ominix.io';
+const PROFILE = process.env.ra_PROFILE || 'dspfac';
 
 if (BASE.includes('dspfac.ocean.ominix.io')) {
   throw new Error('live-realtime-status refuses to run against mini5; pick mini1/2/3/4 instead.');
@@ -226,9 +226,9 @@ test.describe(`Realtime status surface (${BASE})`, () => {
     await createNewSession(page);
 
     const sessionIdBefore = await page.evaluate(() =>
-      localStorage.getItem('octos_current_session'),
+      localStorage.getItem('ra_current_session'),
     );
-    expect(sessionIdBefore, 'expected octos_current_session after createNewSession').toBeTruthy();
+    expect(sessionIdBefore, 'expected ra_current_session after createNewSession').toBeTruthy();
 
     const userBefore = await countUserBubbles(page);
     const assistantBefore = await countAssistantBubbles(page);
@@ -388,9 +388,9 @@ test.describe(`Realtime status surface (${BASE})`, () => {
     //    proved the streaming pipeline + timeline rendering work; this step keeps
     //    the freshness/anti-stale anchor and rejects unrelated bg tools.
     const sessionIdNow = await page.evaluate(() =>
-      localStorage.getItem('octos_current_session'),
+      localStorage.getItem('ra_current_session'),
     );
-    expect(sessionIdNow, 'octos_current_session should still be set').toBeTruthy();
+    expect(sessionIdNow, 'ra_current_session should still be set').toBeTruthy();
     expect(sessionIdNow).toBe(sessionIdBefore);
 
     let matchedTask: BackgroundTaskRow | undefined;

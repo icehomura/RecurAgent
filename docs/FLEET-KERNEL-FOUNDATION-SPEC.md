@@ -20,7 +20,7 @@ the work so the goal win does not wait on the hard part.
 > **You cannot persist and "resume" a live agentic turn.** After a restart the
 > parked-question oneshot and the awaiting future are gone. Recovery is not
 > *snapshot-and-resume*; it is **interrupt the old attempt and start a fresh,
-> checkpointed one** — which ra already does correctly today (restored children
+> checkpointed one** — which RecurAgent already does correctly today (restored children
 > come back `interrupted`, not resumed; see `agent_orchestrator.rs` restore path).
 
 Every structural correction below follows from this.

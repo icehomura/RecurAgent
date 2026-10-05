@@ -7,8 +7,8 @@
 
 use std::path::Path;
 
-const BYTES_PREFIX: &str = "\0octos-workspace-bytes-v1:";
-const STAMP_PREFIX: &str = "\0octos-workspace-stamp-v1:";
+const BYTES_PREFIX: &str = "\0ra-workspace-bytes-v1:";
+const STAMP_PREFIX: &str = "\0ra-workspace-stamp-v1:";
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct WorkspaceScope(String);

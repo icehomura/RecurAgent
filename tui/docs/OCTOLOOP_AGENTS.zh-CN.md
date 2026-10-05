@@ -3,7 +3,7 @@
 > protocol: olp/v2 — 读本文件的 agent 即在 OLP v2 下作业(R6 版本协商)。
 >
 > **OctoLoop** 是产品名;**OLP**(Outer-Loop Protocol)是协议名。
-> English: [OCTOLOOP_AGENTS.md](https://github.com/your-org/ra-tui/blob/main/docs/OCTOLOOP_AGENTS.md)
+> English: [OCTOLOOP_AGENTS.md](https://github.com/icehomura/ra-tui/blob/main/docs/OCTOLOOP_AGENTS.md)
 
 **本卡自包含**:读完即可上岗,不必再开别的文档。深入文档列在末尾。卡内
 一切路径与标识**全部发现式取得**,绝不硬编码——窗格号、实例哈希、会话键
@@ -19,7 +19,7 @@
 │         ▲                                          │
 │    .ra/OUTER_LOOP_REVIEW.md(黑板)               │  herdr prompt / ra steer
 │         │                                          ▼
-└─ 内环(便宜模型:octoscode TUI + octos serve,如 kimi / glm)
+└─ 内环(便宜模型:ra-tui TUI + ra serve,如 kimi / glm)
      读黑板 → 执行 → commit(绝不 push)→ ACK(done|wontdo|blocked)
 ```
 
@@ -96,7 +96,7 @@ ACK(done|wontdo|blocked): <说明>
 ### 3.0 先取权限
 
 ```bash
-octoscode outer-duty hold --project <项目> --signature <署名> \
+ra-tui outer-duty hold --project <项目> --signature <署名> \
   --duties <职责> -- <你的 agent 启动命令>
 ```
 
@@ -113,7 +113,7 @@ NFS 不适用)。macOS 上锁不可用——多外环退回值班簿纪律层 + 
 ### 3.1 发现现场
 
 ```bash
-herdr agent list                  # 内环窗格:octoscode | <pane> | idle
+herdr agent list                  # 内环窗格:ra-tui | <pane> | idle
 ls -t ~/.ra/instances/         # 按 mtime 对号(哈希 = 项目 cwd 的 DefaultHasher)
 ```
 
@@ -131,7 +131,7 @@ ls -t ~/.ra/instances/         # 按 mtime 对号(哈希 = 项目 cwd 的 Defaul
 grep -oE '^### [0-9]+' <板> | tail -1
 ```
 
-写入必须走原子追加助手(flock 互斥,正文从 stdin 喂)。助手在 octoscode
+写入必须走原子追加助手(flock 互斥,正文从 stdin 喂)。助手在 ra-tui
 仓库内是 `scripts/olp-board-append.sh`;`olp-init.sh` 会为其他项目在
 `~/.ra/outer/board-append.sh` 装一份:
 
@@ -223,7 +223,7 @@ git worktree remove --force ~/.ra/outer/verify/<名>    # 验后即清
 内环标准启动命令:
 
 ```bash
-octoscode --stdio-command 'octos serve --stdio --solo --danger-full-access'
+ra-tui --stdio-command 'ra serve --stdio --solo --danger-full-access'
 ```
 
 - `--solo` 是单人本地盒子的安全门。漏掉则 serve 拒启:
@@ -262,9 +262,9 @@ octoscode --stdio-command 'octos serve --stdio --solo --danger-full-access'
 
 ## 7. 深入阅读
 
-- [`OUTER_LOOP_PROTOCOL.md`](https://github.com/your-org/ra-tui/blob/main/docs/OUTER_LOOP_PROTOCOL.md) — 协议全文:R1–R7、
+- [`OUTER_LOOP_PROTOCOL.md`](https://github.com/icehomura/ra-tui/blob/main/docs/OUTER_LOOP_PROTOCOL.md) — 协议全文:R1–R7、
   `result.md` schema、多外环规则、预算治理、实战沉淀
-- [`OLP_OUTER_BOOT.md`](https://github.com/your-org/ra-tui/blob/main/docs/OLP_OUTER_BOOT.md) — 外环操作面与战术手册
-- [`OLP_QUICKSTART.md`](https://github.com/your-org/ra-tui/blob/main/docs/OLP_QUICKSTART.md) — 新项目从零到跑通
-- [`OCTOLOOP_GUIDE.md`](https://github.com/your-org/ra-tui/blob/main/docs/OCTOLOOP_GUIDE.md) — 完整指南、机制篇、平台矩阵
-- [`OCTOLOOP_FEATURES.md`](https://github.com/your-org/ra-tui/blob/main/docs/OCTOLOOP_FEATURES.md) — 一页能力全景
+- [`OLP_OUTER_BOOT.md`](https://github.com/icehomura/ra-tui/blob/main/docs/OLP_OUTER_BOOT.md) — 外环操作面与战术手册
+- [`OLP_QUICKSTART.md`](https://github.com/icehomura/ra-tui/blob/main/docs/OLP_QUICKSTART.md) — 新项目从零到跑通
+- [`OCTOLOOP_GUIDE.md`](https://github.com/icehomura/ra-tui/blob/main/docs/OCTOLOOP_GUIDE.md) — 完整指南、机制篇、平台矩阵
+- [`OCTOLOOP_FEATURES.md`](https://github.com/icehomura/ra-tui/blob/main/docs/OCTOLOOP_FEATURES.md) — 一页能力全景

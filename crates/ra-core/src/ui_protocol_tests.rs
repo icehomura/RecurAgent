@@ -3197,7 +3197,7 @@ fn peer_staged_notification_roundtrips_and_keeps_peer_topic() {
 /// only wake the model. The routing key is the session that OWNS the emitter,
 /// and it must survive the wire boundary intact: an event that loses (or never
 /// carries) `session_id` renders in whichever session happens to be focused
-/// (octos-tui#461/#466/#483). Attribution and the visible drop marker must
+/// (ra-tui#461/#466/#483). Attribution and the visible drop marker must
 /// survive too.
 #[test]
 fn should_route_on_owning_session_when_background_activity_crosses_the_wire() {

@@ -1,4 +1,4 @@
-//! Provider order. ra's own metasearch first (key-less engines over
+//! Provider order. RecurAgent's own metasearch first (key-less engines over
 //! official APIs and feeds, see [`crate::metasearch`]), then a configured
 //! SearXNG, then search APIs the person added keys for. When the metasearch
 //! is turned off, GDELT and Google News RSS are called directly for news.
@@ -13,7 +13,7 @@ use crate::date::Since;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Provider {
-    /// ra metasearch (sandboxed OctoScript engines).
+    /// RecurAgent metasearch (sandboxed Rascript engines).
     Metasearch,
     Gdelt,
     GoogleNewsRss,

@@ -7,7 +7,7 @@ turn: 2
 
 互审完成。
 
-**产出**：`/private/tmp/octoloop-glm-k3-20260909/pr-627/.octos/cross-k3.md`
+**产出**：`/private/tmp/octoloop-glm-k3-20260909/pr-627/.ra/cross-k3.md`
 
 **逐项裁定摘要**
 

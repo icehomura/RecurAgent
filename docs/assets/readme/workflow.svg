@@ -4,7 +4,7 @@
 <defs><linearGradient id="paper" x2="1" y2="1"><stop stop-color="#f5f9ff"/><stop offset="1" stop-color="#f7fbf9"/></linearGradient><linearGradient id="kernel" x2="1" y2="1"><stop stop-color="#173f73"/><stop offset="1" stop-color="#1e3156"/></linearGradient><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="context-stroke" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
 <style>text{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif} .code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}</style>
 <rect x="0" y="0" width="1200" height="920" rx="28" fill="url(#paper)" stroke="none"/>
-<text x="48" y="53" font-size="14" font-weight="650" fill="#3468ce" text-anchor="start">OCTOS / WORKFLOW</text>
+<text x="48" y="53" font-size="14" font-weight="650" fill="#3468ce" text-anchor="start">RA / WORKFLOW</text>
 <text x="48" y="101" font-size="34" font-weight="650" fill="#182b45" text-anchor="start">From a request to a recorded result</text>
 <text x="48" y="135" font-size="19" font-weight="400" fill="#5c6f86" text-anchor="start">Your controller directs the work. The kernel runs it.</text>
 <rect x="48" y="174" width="252" height="142" rx="16" fill="#ffffff" stroke="#dce5ef"/>
@@ -53,7 +53,7 @@
 <path d="M464 651H356" fill="none" stroke="#168575" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="5 7"/>
 <text x="410" y="633" font-size="15" font-weight="500" fill="#168575" text-anchor="middle">Events</text>
 <rect x="470" y="416" width="650" height="288" rx="18" fill="url(#kernel)" stroke="none"/>
-<text x="496" y="461" font-size="25" font-weight="650" fill="#ffffff" text-anchor="start">Octos kernel</text>
+<text x="496" y="461" font-size="25" font-weight="650" fill="#ffffff" text-anchor="start">Ra kernel</text>
 <rect x="939" y="436" width="153" height="31" rx="15" fill="#2b5280" stroke="none"/>
 <text x="1015" y="457" font-size="16" font-weight="500" fill="#b9f2e1" text-anchor="middle">Turn running</text>
 <rect x="496" y="507" width="180" height="91" rx="12" fill="#2b4c77" stroke="#49678e"/>

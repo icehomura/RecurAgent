@@ -37,7 +37,7 @@ use crate::harness_events::{HARNESS_EVENT_SCHEMA_V1, HarnessEvent, HarnessEventP
 const MAX_HARNESS_ERROR_MESSAGE_BYTES: usize = 1024;
 /// Prometheus counter name for loop-level harness errors. Labels:
 /// `{variant, recovery}` — both are stable snake_case identifiers.
-pub const OCTOS_LOOP_ERROR_TOTAL: &str = "ra_loop_error_total";
+pub const ra_LOOP_ERROR_TOTAL: &str = "ra_loop_error_total";
 
 /// Recommended recovery action for a `HarnessError`. Each variant maps to
 /// exactly one hint — we surface it to the dashboard and the retry layer can
@@ -332,7 +332,7 @@ impl HarnessError {
     pub fn record_metric(&self) {
         let (variant, recovery) = self.metric_labels();
         counter!(
-            OCTOS_LOOP_ERROR_TOTAL,
+            ra_LOOP_ERROR_TOTAL,
             "variant" => variant,
             "recovery" => recovery,
         )

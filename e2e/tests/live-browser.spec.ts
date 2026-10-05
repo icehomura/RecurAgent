@@ -7,17 +7,17 @@
  * - user prompt remains ordered before the final assistant artifact
  *
  * Run against a live browser host:
- *   OCTOS_TEST_URL=https://dspfac.crew.ominix.io \
- *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
- *   OCTOS_PROFILE=dspfac \
- *   OCTOS_TEST_EMAIL=dspfac@gmail.com \
+ *   ra_TEST_URL=https://dspfac.crew.ominix.io \
+ *   ra_AUTH_TOKEN=ra-admin-2026 \
+ *   ra_PROFILE=dspfac \
+ *   ra_TEST_EMAIL=dspfac@gmail.com \
  *   npx playwright test tests/live-browser.spec.ts
  */
 import { expect, test, type Page } from '@playwright/test';
 
-const AUTH_TOKEN = process.env.OCTOS_AUTH_TOKEN || 'ra-admin-2026';
-const PROFILE_ID = process.env.OCTOS_PROFILE || 'dspfac';
-const TEST_EMAIL = process.env.OCTOS_TEST_EMAIL || 'dspfac@gmail.com';
+const AUTH_TOKEN = process.env.ra_AUTH_TOKEN || 'ra-admin-2026';
+const PROFILE_ID = process.env.ra_PROFILE || 'dspfac';
+const TEST_EMAIL = process.env.ra_TEST_EMAIL || 'dspfac@gmail.com';
 
 const SEL = {
   chatInput: "[data-testid='chat-input']",
@@ -45,8 +45,8 @@ interface RenderedThreadBubble {
 async function login(page: Page) {
   await page.addInitScript(
     ({ token, profile }) => {
-      localStorage.setItem('octos_session_token', token);
-      localStorage.setItem('octos_auth_token', token);
+      localStorage.setItem('ra_session_token', token);
+      localStorage.setItem('ra_auth_token', token);
       localStorage.setItem('selected_profile', profile);
     },
     { token: AUTH_TOKEN, profile: PROFILE_ID },
@@ -90,7 +90,7 @@ async function login(page: Page) {
         if (!resp.ok) return null;
         const data = await resp.json();
         if (!data.ok || !data.token) return null;
-        localStorage.setItem('octos_session_token', data.token);
+        localStorage.setItem('ra_session_token', data.token);
         return data.token as string;
       },
       { email: TEST_EMAIL, code: AUTH_TOKEN },

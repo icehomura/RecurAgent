@@ -5,7 +5,7 @@ updated_unix: 1788923589
 turn: 4
 ---
 
-**Cross 报告路径**：`/private/tmp/octoloop-glm-k3-20260909/pr-627/.octos/cross-glm.md`（初审文件保持原样；未写其他报告文件）
+**Cross 报告路径**：`/private/tmp/octoloop-glm-k3-20260909/pr-627/.ra/cross-glm.md`（初审文件保持原样；未写其他报告文件）
 
 ## 逐项裁定摘要
 

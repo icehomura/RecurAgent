@@ -827,7 +827,7 @@ mod tests {
 
     /// r9s picks its wire protocol by model name (`claude-*` → Anthropic
     /// Messages at `{base}/anthropic`); the discovery route must follow the
-    /// selected model, not the family-wide OpenAI declaration (octos#2185).
+    /// selected model, not the family-wide OpenAI declaration (RecurAgent#2185).
     #[test]
     fn should_resolve_r9s_discovery_per_model() {
         // claude-* → Anthropic strategy against the rewritten root, derived
@@ -901,7 +901,7 @@ mod tests {
 
     /// The r9s claude probe must hit the Anthropic listing at the rewritten
     /// root with Anthropic header semantics — never `{base}/models` with a
-    /// Bearer header (octos#2185).
+    /// Bearer header (RecurAgent#2185).
     #[tokio::test]
     async fn should_probe_anthropic_root_for_r9s_claude_selection_without_bearer() {
         let (root, captured) =

@@ -13,7 +13,7 @@ decisions, what's done vs. what remains — erodes as tasks prolong. The objecti
 survives (a 300-char, `active`-only system-prompt pin via `#1697`); the *progress*
 rots. That is the concrete "the goal vanishes as tasks prolong" failure.
 
-Separately, ra already has **three** would-be orchestration stacks that do not
+Separately, RecurAgent already has **three** would-be orchestration stacks that do not
 know about each other:
 
 - **peers** — durable, interactive agent *sessions* (`SessionKey`,

@@ -1,6 +1,6 @@
 //! PATH resolution + shadow detection, product-agnostic.
 //!
-//! Ported from octoscode's `doctor.rs` locate/on_path/shadow logic, with the
+//! Ported from ra-tui's `doctor.rs` locate/on_path/shadow logic, with the
 //! binary name driven by [`ProductSpec`]. Carries the #189 npm fix: when the
 //! method is [`InstallMethod::Npm`] and nothing is located, both the on-PATH
 //! and shadow checks PASS (the real binary lives under `node_modules/.bin_real`
@@ -186,7 +186,7 @@ mod tests {
     use crate::report::CheckStatus;
 
     fn spec() -> ProductSpec {
-        ProductSpec::new("octos", "octos", "1.0.0", "your-org/ra", "octos-bundle")
+        ProductSpec::new("ra", "ra", "1.0.0", "icehomura/ra", "ra-bundle")
     }
 
     #[test]
@@ -234,7 +234,7 @@ mod tests {
         // checks must PASS, not warn, and on-PATH must not suggest a fix.
         let located = LocatedBinaries::default();
         let exe = PathBuf::from(
-            "C:/Users/u/AppData/Roaming/npm/node_modules/@your-org/ra/node_modules/.bin_real/octos.exe",
+            "C:/Users/u/AppData/Roaming/npm/node_modules/@icehomura/ra/node_modules/.bin_real/ra.exe",
         );
         let on_path = on_path_check(&located, Some(exe.as_path()), &InstallMethod::Npm, &spec());
         assert_eq!(on_path.status, CheckStatus::Pass);

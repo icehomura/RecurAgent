@@ -7,7 +7,7 @@ Date: 2026-05-27
 
 Document the wire contract for eight AppUI notification kinds that reach
 production WebSocket / stdio clients but were never described in
-`OCTOS_UI_PROTOCOL_V1_SPEC_2026-04-24.md` § 8 ("Event Semantics"). The events
+`ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md` § 8 ("Event Semantics"). The events
 ship in `ra-cli` today; this UPCR backfills their typed payload shape so
 clients can rely on a stable field set without reading server code.
 
@@ -50,7 +50,7 @@ docs-only — the field set documented below is exactly what
   backpressure-diverge signal that companions the durable ledger.
 - UPCR-2026-019 referenced `turn/spawn_complete` as part of the M10 spawn-only
   completion contract.
-- The M16 context-manager workstream (`OCTOS_CONTEXT_MANAGER_GAP_CONTRACT`)
+- The M16 context-manager workstream (`ra_CONTEXT_MANAGER_GAP_CONTRACT`)
   introduced the two `context/*` lifecycle notifications.
 
 This UPCR does not modify any of those decisions. It backfills the wire

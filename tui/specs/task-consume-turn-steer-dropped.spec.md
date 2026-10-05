@@ -8,7 +8,7 @@ estimate: 1d
 
 ## 意图
 
-ra F4 已让服务端在 turn 退出时把受理但未消费的 steer 输入以
+RecurAgent F4 已让服务端在 turn 退出时把受理但未消费的 steer 输入以
 `turn/steer_dropped` 通知按顺序返还（含 `reason`）。本任务把 ra-core 重新 pin
 到含该事件的 rev，并在客户端消费它，与 F5 的终态兜底组成端到端闭环：谁先消费到对应
 的 retained steer，谁负责重新入队；另一方必须 no-op。这样无论
@@ -21,15 +21,15 @@ ra F4 已让服务端在 turn 退出时把受理但未消费的 steer 输入以
 <!-- lint-ack: verification-metadata-suggestion — 解码与不注入两个场景均为进程内纯函数/reducer 测试，无外部 I/O -->
 
 - 依赖：`Cargo.toml` 中 `ra-core` 的 `rev` 更新到 `f6d5ef550f49189850646e7421cf21063b771895`
-  （ra 分支 `fix/return-unconsumed-steer-inputs`），`Cargo.lock` 同步；该 rev 新增的
+  （RecurAgent 分支 `fix/return-unconsumed-steer-inputs`），`Cargo.lock` 同步；该 rev 新增的
   `MonitorUpdated`/`MonitorFired`/`MonitorExpired`/`BackgroundActivity` 通知本任务不消费，
   reducer 里显式 `=> None`。
-- 版本配对：`backend_ensure::REQUIRED_OCTOS_CORE_REV` 同步更新为该 rev 以通过
-  `octos_release_pin_matches_cargo_core_rev`；`REQUIRED_OCTOS_RELEASE` 暂保持
-  `v2.0.3-rc.2`——尚无 ra release 包含 `1ff2e3d8`。本次协议变更是纯新增通知，
+- 版本配对：`backend_ensure::REQUIRED_ra_CORE_REV` 同步更新为该 rev 以通过
+  `ra_release_pin_matches_cargo_core_rev`；`REQUIRED_ra_RELEASE` 暂保持
+  `v2.0.3-rc.2`——尚无 RecurAgent release 包含 `1ff2e3d8`。本次协议变更是纯新增通知，
   老服务端只是不会发送 `turn/steer_dropped`（客户端退化为 F5 终态兜底），因此
-  rev 领先 tag 是可接受的过渡态；ra 打出包含该 rev 的 release 后必须把
-  `REQUIRED_OCTOS_RELEASE` 提到该 tag。
+  rev 领先 tag 是可接受的过渡态；RecurAgent 打出包含该 rev 的 release 后必须把
+  `REQUIRED_ra_RELEASE` 提到该 tag。
 - 匹配即消费（原子竞态协议）：`UiNotification::TurnSteerDropped` 只在成功按
   `(session_id, turn_id, 文本)` 从 `retained_steers` reap 到对应条目时才执行
   re-stage（`withdraw_steered_user_prompt` + `restage_staged_prompt_front`，保持
@@ -188,9 +188,9 @@ ra F4 已让服务端在 turn 退出时把受理但未消费的 steer 输入以
   那么 `docs/ARCHITECTURE.md` 的 Protocol Notifications 清单包含 `TurnSteerDropped`、`MonitorUpdated`、`MonitorFired`、`MonitorExpired`、`BackgroundActivity`
 
 场景: rev 与 release 配对常量同步
-  测试: octos_release_pin_matches_cargo_core_rev
+  测试: ra_release_pin_matches_cargo_core_rev
   当 读取 `Cargo.toml` 的 ra-core rev
-  那么 与 `REQUIRED_OCTOS_CORE_REV` 一致
+  那么 与 `REQUIRED_ra_CORE_REV` 一致
 
 场景: 客户端在能力协商中请求该 feature
   测试: feature_header_requests_turn_steer_dropped
@@ -204,6 +204,6 @@ ra F4 已让服务端在 turn 退出时把受理但未消费的 steer 输入以
 
 ## 排除范围
 
-- 服务端发送逻辑（ra F4，已完成）。
+- 服务端发送逻辑（RecurAgent F4，已完成）。
 - Monitor/BackgroundActivity 通知的实际 UI 消费。
 - interrupt/steer 关联日志（F7）、fd 累积（F8）。

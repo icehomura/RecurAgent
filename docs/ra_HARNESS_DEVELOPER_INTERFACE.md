@@ -1,18 +1,18 @@
-# ra Harness Developer Interface
+# RecurAgent Harness Developer Interface
 
 This document defines the developer-facing harness interface that Phase 3
 should expose for customer skills and apps.
 
 For the concrete "how to ship" companion with copy-paste policy examples,
 stable vs internal field lists, and four runnable starter apps, see
-[OCTOS_HARNESS_DEVELOPER_GUIDE.md](./OCTOS_HARNESS_DEVELOPER_GUIDE.md).
+[ra_HARNESS_DEVELOPER_GUIDE.md](./ra_HARNESS_DEVELOPER_GUIDE.md).
 
-The goal is not to make ra feel "open" in the vague sense. The goal is to
-make ra feel safely programmable.
+The goal is not to make RecurAgent feel "open" in the vague sense. The goal is to
+make RecurAgent feel safely programmable.
 
 That is a product position:
 
-- ra is an execution OS for customer skills/apps
+- RecurAgent is an execution OS for customer skills/apps
 - not a loose agent playground
 - not a prompt-only integration surface
 - not a system where developers guess which file, tool, or background result
@@ -34,7 +34,7 @@ The failure mode was:
 That kind of openness is dangerous. It shifts correctness onto prompt wording
 and developer luck.
 
-ra should instead offer:
+RecurAgent should instead offer:
 
 - a small abstract harness API
 - runtime-owned enforcement
@@ -43,7 +43,7 @@ ra should instead offer:
 
 ## Product Promise
 
-A customer who builds a skill/app on ra should be able to answer these
+A customer who builds a skill/app on RecurAgent should be able to answer these
 questions without reading the runtime internals:
 
 1. What output does my app declare as final?
@@ -84,7 +84,7 @@ The app declares:
 - preview artifacts
 - source artifacts
 
-This tells ra:
+This tells RecurAgent:
 
 - what to deliver
 - what to preserve on reload
@@ -265,9 +265,9 @@ Task APIs expose both a low-level `status` and a user-facing
 Clients should drive progress UI from `lifecycle_state` and treat `status` as
 the lower-level supervisor record.
 
-## Guarantees ra Should Make
+## Guarantees RecurAgent Should Make
 
-For customer skills/apps, ra should guarantee:
+For customer skills/apps, RecurAgent should guarantee:
 
 1. Durable contract state
 - the harness contract survives context compaction, reload, crash, and restart
@@ -300,7 +300,7 @@ depend on:
 - transient browser-only state
 - free-form lifecycle names without runtime semantics
 
-If a developer must "just know" how ra behaves, the contract is too weak.
+If a developer must "just know" how RecurAgent behaves, the contract is too weak.
 
 ## UX Value For Developers
 
@@ -310,11 +310,11 @@ This harness interface should make custom skills/apps feel:
 - safer to ship
 - easier to debug
 - more portable across workflows
-- more native to ra
+- more native to RecurAgent
 
 The developer should feel:
 
-- "I declare outputs and checks, ra enforces them"
+- "I declare outputs and checks, RecurAgent enforces them"
 
 not:
 
@@ -353,7 +353,7 @@ This developer interface maps onto the still-open Phase 3 issues:
 
 ### D1. Internal Contract Completeness
 
-ra internal first-party workflows must prove the interface on:
+RecurAgent internal first-party workflows must prove the interface on:
 
 - slides
 - sites
@@ -365,7 +365,7 @@ Acceptance:
 
 ### D2. Developer Beta Surface
 
-ra should expose a customer-safe beta interface for custom skills/apps:
+RecurAgent should expose a customer-safe beta interface for custom skills/apps:
 
 - documented policy file
 - documented lifecycle model
@@ -378,7 +378,7 @@ Acceptance:
 
 ### D3. Productized Harness Position
 
-ra should be able to present the harness in product language as:
+RecurAgent should be able to present the harness in product language as:
 
 - a clear runtime contract for customer apps
 - a safer alternative to loosely-defined agent tooling products

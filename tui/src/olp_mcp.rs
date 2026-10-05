@@ -32,14 +32,13 @@ const QUOTA_REFUSAL: &str = "拒绝:本切片 ask_outer 问询已达 3 次上限
 const TRIED_REFUSAL: &str =
     "拒绝:tried 字段为空。防思考外包纪律要求先自行尝试——把已试过的路径写进 tried 再问。";
 
-/// Mailbox root — overridable for tests; runtime default `~/.ra/outer` (or a
-/// legacy `~/.ra/outer` that already holds a mailbox).
+/// Mailbox root — overridable for tests; runtime default `~/.ra/outer`.
 pub fn outer_root() -> PathBuf {
     if let Ok(override_root) = std::env::var("OLP_MCP_OUTER_ROOT") {
         return PathBuf::from(override_root);
     }
     let home = crate::env::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    crate::env::pick_home_entry(&home, ".ra", ".ra").join("outer")
+    crate::env::home_entry(&home, ".ra").join("outer")
 }
 
 /// Serve newline-delimited JSON-RPC over the given reader/writer. Returns the

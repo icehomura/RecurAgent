@@ -28,7 +28,7 @@ fn run_sandboxed(profile: &str, cmd: &str) -> (i32, String, String) {
 }
 
 /// Helper: build a ra-style SBPL profile for a workspace.
-fn octos_sbpl(workspace: &str, allow_network: bool) -> String {
+fn ra_sbpl(workspace: &str, allow_network: bool) -> String {
     let network = if allow_network {
         "(allow network*)"
     } else {
@@ -77,7 +77,7 @@ fn should_allow_write_inside_workspace() {
         .to_string_lossy()
         .to_string();
 
-    let profile = octos_sbpl(&real_workspace, false);
+    let profile = ra_sbpl(&real_workspace, false);
     let (code, stdout, _stderr) = run_sandboxed(
         &profile,
         &format!("echo 'hello' > {workspace}/test.txt && cat {workspace}/test.txt"),
@@ -98,7 +98,7 @@ fn should_block_write_outside_workspace() {
         .to_string_lossy()
         .to_string();
 
-    let profile = octos_sbpl(&real_workspace, false);
+    let profile = ra_sbpl(&real_workspace, false);
     // Try to write to a temp file outside workspace
     let (code, _stdout, stderr) = run_sandboxed(
         &profile,
@@ -123,7 +123,7 @@ fn should_block_write_to_etc() {
         .to_string_lossy()
         .to_string();
 
-    let profile = octos_sbpl(&real_workspace, false);
+    let profile = ra_sbpl(&real_workspace, false);
     let (code, _stdout, stderr) =
         run_sandboxed(&profile, "echo 'pwned' > /etc/ra-security-test.txt");
     assert_ne!(code, 0, "should block write to /etc");
@@ -145,7 +145,7 @@ fn should_block_write_to_home() {
         .to_string_lossy()
         .to_string();
 
-    let profile = octos_sbpl(&real_workspace, false);
+    let profile = ra_sbpl(&real_workspace, false);
     let (code, _stdout, _stderr) = run_sandboxed(
         &profile,
         "echo 'escape' > ~/ra-security-test-escape.txt 2>&1 || echo BLOCKED",
@@ -175,8 +175,8 @@ fn should_block_tmp_write_without_tmp_allowance() {
         .to_string_lossy()
         .to_string();
 
-    // ra SBPL without /private/tmp allowance (the fix)
-    let profile = octos_sbpl(&real_workspace, false);
+    // RecurAgent SBPL without /private/tmp allowance (the fix)
+    let profile = ra_sbpl(&real_workspace, false);
     let (code, _stdout, stderr) = run_sandboxed(
         &profile,
         "mkdir -p /tmp/ra-security-test-tmp && echo 'escape' > /tmp/ra-security-test-tmp/evil.txt",
@@ -249,7 +249,7 @@ fn should_block_python_write_outside_workspace() {
         .to_string_lossy()
         .to_string();
 
-    let profile = octos_sbpl(&real_workspace, false);
+    let profile = ra_sbpl(&real_workspace, false);
     let (code, stdout, _stderr) = run_sandboxed(
         &profile,
         r#"python3 -c "
@@ -291,7 +291,7 @@ fn should_allow_python_write_inside_workspace() {
         .to_string_lossy()
         .to_string();
 
-    let profile = octos_sbpl(&real_workspace, false);
+    let profile = ra_sbpl(&real_workspace, false);
     let (code, stdout, _stderr) = run_sandboxed(
         &profile,
         &format!(
@@ -330,7 +330,7 @@ fn should_redirect_python_tempfile_via_tmpdir() {
     // Create per-user tmp inside workspace
     std::fs::create_dir_all(dir.path().join("tmp")).unwrap();
 
-    let profile = octos_sbpl(&real_workspace, false);
+    let profile = ra_sbpl(&real_workspace, false);
     let (code, stdout, _stderr) = run_sandboxed(
         &profile,
         &format!(
@@ -368,7 +368,7 @@ fn should_block_cross_user_write() {
     let user_b_path = user_b_dir.path().to_str().unwrap();
 
     // User A's sandbox
-    let profile = octos_sbpl(&real_a, false);
+    let profile = ra_sbpl(&real_a, false);
     // Try to write to user B's workspace
     let (code, _stdout, stderr) = run_sandboxed(
         &profile,
@@ -401,7 +401,7 @@ fn should_isolate_two_users_simultaneously() {
     let workspace_b = user_b_dir.path().to_str().unwrap();
 
     // User A writes to own workspace
-    let profile_a = octos_sbpl(&real_a, false);
+    let profile_a = ra_sbpl(&real_a, false);
     let (code_a, _, _) = run_sandboxed(
         &profile_a,
         &format!("echo 'user_a_data' > {workspace_a}/data.txt"),
@@ -409,7 +409,7 @@ fn should_isolate_two_users_simultaneously() {
     assert_eq!(code_a, 0, "user A should write to own workspace");
 
     // User B writes to own workspace
-    let profile_b = octos_sbpl(&real_b, false);
+    let profile_b = ra_sbpl(&real_b, false);
     let (code_b, _, _) = run_sandboxed(
         &profile_b,
         &format!("echo 'user_b_data' > {workspace_b}/data.txt"),
@@ -509,7 +509,7 @@ fn should_block_network_when_denied() {
         .to_string_lossy()
         .to_string();
 
-    let profile = octos_sbpl(&real_workspace, false);
+    let profile = ra_sbpl(&real_workspace, false);
     // Try to make a network connection
     let (code, _stdout, _stderr) = run_sandboxed(
         &profile,

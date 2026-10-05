@@ -1,16 +1,16 @@
-# ra Harness Engineering Requirements: M6-M9
+# RecurAgent Harness Engineering Requirements: M6-M9
 
 Date: 2026-04-30
 Review baseline: `origin/main` at `119bf782`
 
 ## Purpose
 
-This document defines the product and engineering requirements for ra
+This document defines the product and engineering requirements for RecurAgent
 Harness milestones M6, M7, M8, and M9. It is intended to be used by critical
 reviewers, product owners, and engineering leads to judge implementation
 quality consistently.
 
-ra Harness must provide a durable, observable, policy-governed execution
+RecurAgent Harness must provide a durable, observable, policy-governed execution
 layer for coding agents, swarm agents, CLI tools, MCP agents, and AppUI
 clients. A feature is not complete when the type exists; it is complete only
 when it is wired through runtime execution, persistence, recovery,
@@ -32,7 +32,7 @@ Every milestone feature must satisfy these gates.
 
 ## M6: Harness Contract Foundation
 
-M6 owns the formal contract between apps, skills, tools, and the ra runtime.
+M6 owns the formal contract between apps, skills, tools, and the RecurAgent runtime.
 
 ### Requirements
 

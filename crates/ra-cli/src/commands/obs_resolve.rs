@@ -5,13 +5,13 @@
 //! root serve actually uses, via ONE shared helper — never a
 //! re-implementation of the cwd-hash / profile / data-root assembly.
 //!
-//! Layout (produced by the launcher, e.g. octoscode
+//! Layout (produced by the launcher, e.g. ra-tui
 //! `instance_data_dir_for_launch`, which passes
-//! `--instance-data-dir <octos_home>/instances/<cwd-hash>` to serve):
+//! `--instance-data-dir <ra_home>/instances/<cwd-hash>` to serve):
 //!
 //! ```text
-//! <octos_home>/instances/<cwd-hash>/          ← per-instance RUNTIME root
-//! <octos_home>/instances/<cwd-hash>/profiles/<profile>/data/
+//! <RecurAgent_home>/instances/<cwd-hash>/          ← per-instance RUNTIME root
+//! <RecurAgent_home>/instances/<cwd-hash>/profiles/<profile>/data/
 //!     {goal-ledgers, peers, inbox, …}         ← per-profile data
 //! ```
 //!
@@ -26,7 +26,7 @@
 use std::path::{Path, PathBuf};
 
 /// Stable, filesystem-safe 16-hex hash of a directory — mirrors the
-/// launcher's `cwd_hash` (octoscode profiles.rs) byte-for-byte:
+/// launcher's `cwd_hash` (ra-tui profiles.rs) byte-for-byte:
 /// `DefaultHasher` over the CANONICALIZED path. Deterministic across
 /// processes (fixed SipHash keys).
 pub(crate) fn cwd_instance_hash(cwd: &Path) -> String {
@@ -99,7 +99,7 @@ mod tests {
     #[test]
     fn resolver_finds_real_instance_layout() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let state_home = temp.path().join("octos_home");
+        let state_home = temp.path().join("ra_home");
         let project = temp.path().join("project-a");
         std::fs::create_dir_all(&project).expect("project dir");
 

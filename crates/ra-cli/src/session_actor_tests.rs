@@ -900,12 +900,12 @@ fn completion_meta_carries_node_costs_when_tool_results_have_metadata() {
 #[test]
 fn test_resolve_builtin_slides_styles_dir_falls_back_to_root_profile() {
     let dir = tempfile::TempDir::new().unwrap();
-    let octos_home = dir.path().join(".ra");
-    let current_data = octos_home
+    let ra_home = dir.path().join(".ra");
+    let current_data = ra_home
         .join("profiles")
         .join("dspfac--newsbot")
         .join("data");
-    let root_styles = octos_home
+    let root_styles = ra_home
         .join("profiles")
         .join("dspfac")
         .join("data")
@@ -925,12 +925,12 @@ fn test_resolve_builtin_slides_styles_dir_falls_back_to_root_profile() {
 #[test]
 fn test_resolve_builtin_slides_styles_dir_does_not_use_unrelated_profile() {
     let dir = tempfile::TempDir::new().unwrap();
-    let octos_home = dir.path().join(".ra");
-    let current_data = octos_home
+    let ra_home = dir.path().join(".ra");
+    let current_data = ra_home
         .join("profiles")
         .join("dspfac--newsbot")
         .join("data");
-    let unrelated_styles = octos_home
+    let unrelated_styles = ra_home
         .join("profiles")
         .join("someone-else")
         .join("data")
@@ -5075,7 +5075,7 @@ async fn dispatch_background_result_carries_task_id_and_terminal_status() {
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
-async fn background_result_ack_timeout_still_counts_as_actor_accepted_for_octos_889() {
+async fn background_result_ack_timeout_still_counts_as_actor_accepted_for_ra_889() {
     let (tx, mut rx) = mpsc::channel(1);
     let dispatch = tokio::spawn(dispatch_background_result_to_actor(
         tx,
@@ -6424,7 +6424,7 @@ async fn test_dispatch_routes_by_profile_id() {
             profile_id: Some("weather"),
             tenant_id: Some("weather"),
             system_prompt_override: Some("You are a weather bot".to_string()),
-            sender_user_id: Some("@octos_weather:localhost".to_string()),
+            sender_user_id: Some("@ra_weather:localhost".to_string()),
         })
         .await;
 
@@ -6684,7 +6684,7 @@ async fn test_cancel_matches_profile_scoped_actor_by_session_key() {
             profile_id: Some("weather"),
             tenant_id: Some("weather"),
             system_prompt_override: None,
-            sender_user_id: Some("@octos_weather:localhost".to_string()),
+            sender_user_id: Some("@ra_weather:localhost".to_string()),
         })
         .await;
 
@@ -6712,13 +6712,13 @@ async fn test_cancel_matches_profile_scoped_actor_by_session_key() {
 
 #[test]
 fn test_sender_metadata_for_system_notice_includes_virtual_user() {
-    let metadata = system_notice_metadata(Some("@octos_weather:localhost"));
+    let metadata = system_notice_metadata(Some("@ra_weather:localhost"));
 
     assert_eq!(
         metadata
             .get(METADATA_SENDER_USER_ID)
             .and_then(|v| v.as_str()),
-        Some("@octos_weather:localhost")
+        Some("@ra_weather:localhost")
     );
 }
 

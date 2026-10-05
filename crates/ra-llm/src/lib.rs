@@ -41,6 +41,7 @@ pub mod host;
 pub mod middleware;
 
 pub mod anthropic;
+pub mod attribution;
 pub mod gemini;
 pub mod ominix;
 pub mod openai;

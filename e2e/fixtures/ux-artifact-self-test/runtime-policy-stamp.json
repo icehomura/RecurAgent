@@ -1,5 +1,5 @@
 {
-  "schema": "octos.runtime_policy_stamp.v1",
+  "schema": "ra.runtime_policy_stamp.v1",
   "transport": "stdio",
   "session_id": "ux-artifact-self-test",
   "profile_id": "local",

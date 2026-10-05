@@ -120,7 +120,7 @@ fn parse_episode_ids_with_salvage(raw: &str) -> Vec<String> {
 /// `ra gateway` run as separate processes that bootstrap
 /// `ProfileRuntime` independently per profile, and both call
 /// `EpisodeStore::open` against the same path. The first opener (the
-/// long-lived `ra serve` daemon) wins; the second opener (`ra
+/// long-lived `ra serve` daemon) wins; the second opener (`RecurAgent
 /// gateway` subprocesses) previously crashed with
 /// `redb::DatabaseError::DatabaseAlreadyOpen` ("Database already
 /// open. Cannot acquire lock."), launchd restarted it, and the cycle

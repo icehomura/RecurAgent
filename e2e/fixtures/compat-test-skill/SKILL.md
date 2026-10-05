@@ -2,7 +2,7 @@
 name: compat-test-skill
 description: Summarizes a text file into a compact report. Used as a third-party compatibility harness. Triggers: summarize, summary, compat-test, harness check.
 version: 1.0.0
-author: octos-harness-compat
+author: ra-harness-compat
 always: false
 requires_env: COMPAT_SUMMARY_TOKEN
 ---

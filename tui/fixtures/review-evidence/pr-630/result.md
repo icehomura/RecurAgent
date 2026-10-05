@@ -17,11 +17,11 @@ protocol: olp/v2
 
 | Peer slug | 模型/车道 | 阶段 | 报告 | 初审结论 | 互审终态 |
 |---|---|---|---|---|---|
-| pr630-k3 | moonshot/k3-256k (strong) | 首审+互审 | `.octos/independent-k3.md` / `.octos/cross-k3.md` | pass-with-minor-observations | **fail**（turn 3 自我推翻 turn 2 的 pass） |
-| pr630-glm-primary | glm-5.3 (primary) | 首审+互审 | `.octos/independent-glm.md` / `.octos/cross-glm.md` | pass-with-observations | pass-with-observations → 修订（新增 2 条中级缺陷，request-changes 方向） |
+| pr630-k3 | moonshot/k3-256k (strong) | 首审+互审 | `.ra/independent-k3.md` / `.ra/cross-k3.md` | pass-with-minor-observations | **fail**（turn 3 自我推翻 turn 2 的 pass） |
+| pr630-glm-primary | glm-5.3 (primary) | 首审+互审 | `.ra/independent-glm.md` / `.ra/cross-glm.md` | pass-with-observations | pass-with-observations → 修订（新增 2 条中级缺陷，request-changes 方向） |
 | pr630-glm | zai-coding/glm-5.3 (review 车道) | 首审（失败） | 无（native result=errored: "failed to send streaming request to Anthropic"，已关闭） | — | — |
 
-首审阶段两 peer 相互盲审独立完成；互审阶段按外层指令追加"外层新增反例裁决"（`.octos/outer-evidence.md` / `.octos/outer-repros.rs`）。GLM 车道 review lane 网络故障一次，按外层 R2 纠偏换 primary 车道重派，未假称双模型同轮成功。
+首审阶段两 peer 相互盲审独立完成；互审阶段按外层指令追加"外层新增反例裁决"（`.ra/outer-evidence.md` / `.ra/outer-repros.rs`）。GLM 车道 review lane 网络故障一次，按外层 R2 纠偏换 primary 车道重派，未假称双模型同轮成功。
 
 ## 双车道一致的裁决（互审收敛点）
 
@@ -62,7 +62,7 @@ protocol: olp/v2
 
 ## 运行注记
 
-- 全程只读：源码零修改，无 commit/push；产出仅本目录 `.octos/` 报告。
+- 全程只读：源码零修改，无 commit/push；产出仅本目录 `.ra/` 报告。
 - 失败重派链：review 车道 errored → primary 车道重派（外层 R2 纠偏），最终四份有效报告齐备。
 
 ## 外层验收回执与最终校正（turn 2 追加）

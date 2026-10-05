@@ -96,7 +96,7 @@ estimate: 1.5d
 
 - retro 入口与 skill 卡改动(阶段 1,operator-tier)。
 - events.jsonl 实例自动发现(阶段 2)。
-- ra 侧新增事件 producer(阶段 2,REQ-OLP-OBS 修订)。
+- RecurAgent 侧新增事件 producer(阶段 2,REQ-OLP-OBS 修订)。
 - 指标脚本 `olp-evo-metrics.sh`、回放夹具制作、`docs/OCTOLOOP_FEATURES.md` 产品条目。
 - 改判与 R2 打回的固定行形(规程改动,operator-tier);阶段 0 不作为触发器。
 
@@ -224,7 +224,7 @@ estimate: 1.5d
   那么 .gitignore 中 .ra/EVOLUTION.md 恰出现一次
 
 场景: olp-init 对整目录已忽略的项目不追加
-  测试: olp_evo_init_skips_when_octos_dir_ignored
+  测试: olp_evo_init_skips_when_ra_dir_ignored
   假设 一个临时 git 仓库,其 .gitignore 含 .ra
   当 运行 scripts/olp-init.sh
   那么 .gitignore 不含 .ra/EVOLUTION.md

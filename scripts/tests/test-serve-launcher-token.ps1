@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 # Regression test for the #2388 serve-launcher token handoff: the
-# serve-launcher.cmd wrapper must read OCTOS_AUTH_TOKEN from the
+# serve-launcher.cmd wrapper must read ra_AUTH_TOKEN from the
 # ACL-restricted sibling serve-token file, never embed it inline, and
 # refuse to start when the token file is missing. Runs the actual
 # template from scripts/install.ps1 under a real cmd.exe, so it is
@@ -42,10 +42,10 @@ try {
 
     # A stand-in serve binary: dump the env the launcher handed over.
     $fakeBin = Join-Path $dir "ra.cmd"
-    Set-Content -Path $fakeBin -Value '@echo TOKEN=%OCTOS_AUTH_TOKEN% DATADIR=%OCTOS_DATA_DIR%' -Encoding ascii
+    Set-Content -Path $fakeBin -Value '@echo TOKEN=%ra_AUTH_TOKEN% DATADIR=%ra_DATA_DIR%' -Encoding ascii
 
     $DataDir = $dir
-    $octosBin = $fakeBin
+    $raBin = $fakeBin
     $Port = 8080
     $serveLog = Join-Path $dir "serve.log"
 
@@ -66,10 +66,10 @@ try {
     $log = Get-Content $serveLog -Raw
     Write-Host $log
     if ($log -notmatch "TOKEN=check-token-123") {
-        throw "launcher did not hand OCTOS_AUTH_TOKEN to the serve process"
+        throw "launcher did not hand ra_AUTH_TOKEN to the serve process"
     }
     if ($log -notmatch [regex]::Escape("DATADIR=$dir")) {
-        throw "launcher lost OCTOS_DATA_DIR"
+        throw "launcher lost ra_DATA_DIR"
     }
 
     # Negative arm: no token file -> refuse with a diagnostic, never start
@@ -103,9 +103,9 @@ try {
     # already exercised by the #2388 section above; these arms pin the
     # deploy wrapper's read-and-refuse behavior.
     [System.IO.File]::WriteAllText($tokenPath, "check-token-123", [System.Text.UTF8Encoding]::new($false))
-    $env:OCTOS_HOME = $dir
-    $env:OCTOS_DATA_DIR = $dir
-    $octosExe = $fakeBin
+    $env:ra_HOME = $dir
+    $env:ra_DATA_DIR = $dir
+    $raExe = $fakeBin
     $servePort = 8080
     $deployContent = $ExecutionContext.InvokeCommand.ExpandString($deployTemplate)
     $deployWrapperPath = Join-Path $dir "deploy-serve-launcher.cmd"
@@ -117,7 +117,7 @@ try {
         throw "deploy launcher exited $LASTEXITCODE with the token file present"
     }
     if ($happy -notmatch "TOKEN=check-token-123") {
-        throw "deploy launcher did not hand OCTOS_AUTH_TOKEN to the serve process"
+        throw "deploy launcher did not hand ra_AUTH_TOKEN to the serve process"
     }
     if ($happy -notmatch [regex]::Escape("DATADIR=$dir")) {
         throw "deploy launcher lost the service environment"
@@ -132,8 +132,8 @@ try {
     if ($refusal -notmatch "serve-token file missing or empty") {
         throw "deploy launcher did not report the missing serve-token file"
     }
-    Remove-Item Env:OCTOS_HOME -ErrorAction SilentlyContinue
-    Remove-Item Env:OCTOS_DATA_DIR -ErrorAction SilentlyContinue
+    Remove-Item Env:ra_HOME -ErrorAction SilentlyContinue
+    Remove-Item Env:ra_DATA_DIR -ErrorAction SilentlyContinue
 
     Write-Host "ok: serve-launcher token handoff"
 } finally {

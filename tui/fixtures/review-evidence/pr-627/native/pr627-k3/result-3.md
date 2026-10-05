@@ -7,7 +7,7 @@ turn: 3
 
 互审 v2 完成。
 
-**产出**：`/private/tmp/octoloop-glm-k3-20260909/pr-627/.octos/cross-k3.md`（初审文件未动）
+**产出**：`/private/tmp/octoloop-glm-k3-20260909/pr-627/.ra/cross-k3.md`（初审文件未动）
 
 **GLM 逐项裁定**：F1-F9 全部**采纳**（F7 仅第 5 项措辞修正——complete 是 archive 合法源状态，无 abort 场景可测，不计缺口）。F1（archived chip 同 active 字形）是 GLM 最有价值的补充，k3 初审漏掉了渲染层。上游契约六项与 k3 独立判断全部一致，含我补验的通知 generation=0 不推水位细节。
 

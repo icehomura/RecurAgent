@@ -1,7 +1,7 @@
-//! ra-ffi: a C-ABI surface for embedding ra in non-Rust hosts.
+//! ra-ffi: a C-ABI surface for embedding RecurAgent in non-Rust hosts.
 //!
 //! This crate builds a `cdylib`/`staticlib` so Python (ctypes/cffi), Node
-//! (ffi-napi/koffi), Go (cgo), or plain C can drive an ra [`Agent`] without
+//! (ffi-napi/koffi), Go (cgo), or plain C can drive an RecurAgent [`Agent`] without
 //! linking Rust. It wraps the same provider-construction and agent loop the
 //! `ra` CLI uses (see `ra-cli/src/commands/chat.rs`), trimmed to a
 //! one-shot task runner plus an optional embedder, and exposes the Recall
@@ -226,9 +226,9 @@ const PINNED_KEY_ENV: &str = "RA_FFI_RESOLVED_KEY";
 ///   resolution and provider construction is thus never picked up while
 ///   `secret` stays `None`; `runtime_new` fails cleanly if a key was required.
 ///
-/// NOTE: the key is served through ra's normal `env_vars` value resolution,
+/// NOTE: the key is served through RecurAgent's normal `env_vars` value resolution,
 /// so a literal value beginning with `keychain:` is interpreted as a keychain
-/// reference (ra's secret-indirection convention), not used verbatim — see
+/// reference (RecurAgent's secret-indirection convention), not used verbatim — see
 /// the credentials note in README.md. Don't pass a raw key starting with
 /// `keychain:`.
 fn pin_resolved_key(cli_cfg: &mut Config, resolved: Option<&str>) {
@@ -259,7 +259,7 @@ fn pin_resolved_key(cli_cfg: &mut Config, resolved: Option<&str>) {
 pub struct RuntimeConfig {
     pub provider: String,
     pub model: String,
-    /// Raw API key. Injected into the reused ra `Config` key resolution.
+    /// Raw API key. Injected into the reused RecurAgent `Config` key resolution.
     #[serde(default)]
     pub api_key: Option<String>,
     /// Name of a process env var holding the API key (alternative to `api_key`).
@@ -293,7 +293,7 @@ pub struct RuntimeConfig {
     /// model (334 MB, once, into `<data_dir>/models/`) when
     /// `embedding_model_path` is unset and the file is not already complete.
     /// Default `true`; `RA_NO_MODEL_DOWNLOAD=1` in the process environment
-    /// (legacy `OCTOS_NO_MODEL_DOWNLOAD` still honoured) overrides it to
+    /// (legacy `ra_NO_MODEL_DOWNLOAD` still honoured) overrides it to
     /// `false`. When the download is not allowed (or fails)
     /// the runtime starts WITHOUT an embedder: memory search is keyword-only
     /// and `embed` reports "no embedder configured". The download blocks
@@ -1299,7 +1299,7 @@ pub fn embedding_model_status(data_dir: &Path) -> Result<String, CoreError> {
 /// a plain thread BEFORE building a runtime so the runtime constructor finds
 /// the file and does not download itself. Fails with [`CoreError::Embed`] when
 /// the file is absent and `download` is false — or `RA_NO_MODEL_DOWNLOAD`
-/// (legacy `OCTOS_NO_MODEL_DOWNLOAD`) is set in the environment, which vetoes
+/// (legacy `ra_NO_MODEL_DOWNLOAD`) is set in the environment, which vetoes
 /// even an explicit `true` — or the
 /// download does not verify (the partial file is discarded).
 pub fn embedding_model_ensure(data_dir: &Path, download: bool) -> Result<String, CoreError> {
@@ -1541,7 +1541,7 @@ pub extern "C" fn ra_embedding_model_status(data_dir: *const c_char) -> *mut c_c
 /// not `false`. Returns owned JSON `{"path"}` that the caller must free,
 /// UNMODIFIED, with [`ra_string_free`] — or NULL on error: the file is
 /// absent and `download` is false (or `RA_NO_MODEL_DOWNLOAD`, legacy
-/// `OCTOS_NO_MODEL_DOWNLOAD`, is set in the
+/// `ra_NO_MODEL_DOWNLOAD`, is set in the
 /// environment, which vetoes even an explicit `true`), or the download failed
 /// or did not verify (the partial file is discarded).
 #[unsafe(no_mangle)]

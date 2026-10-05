@@ -4,9 +4,9 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 
-run_id="${OCTOS_M16_COMBINED_RUN_ID:-m16-combined-stress-$(date -u +%Y%m%dT%H%M%SZ)}"
-out_root="${OCTOS_M16_COMBINED_OUT_ROOT:-$repo_root/e2e/test-results-m16-combined-stress}"
-out_dir="${OCTOS_M16_COMBINED_OUT_DIR:-$out_root/$run_id}"
+run_id="${ra_M16_COMBINED_RUN_ID:-m16-combined-stress-$(date -u +%Y%m%dT%H%M%SZ)}"
+out_root="${ra_M16_COMBINED_OUT_ROOT:-$repo_root/e2e/test-results-m16-combined-stress}"
+out_dir="${ra_M16_COMBINED_OUT_DIR:-$out_root/$run_id}"
 
 usage() {
   cat <<'USAGE'
@@ -18,10 +18,10 @@ Runs the M16 combined stress evidence suite:
   3. pressure restart/reconnect visual TUI context soak
 
 The native fanout phase requires a real provider key. Set one of:
-  OCTOS_M16_NATIVE_API_KEY, OCTOS_M15_NATIVE_API_KEY, or DEEPSEEK_API_KEY.
+  ra_M16_NATIVE_API_KEY, ra_M15_NATIVE_API_KEY, or DEEPSEEK_API_KEY.
 
 For local contract iteration without a provider key:
-  OCTOS_M16_COMBINED_SKIP_NATIVE=1 e2e/scripts/m16-combined-stress-soak.sh run
+  ra_M16_COMBINED_SKIP_NATIVE=1 e2e/scripts/m16-combined-stress-soak.sh run
 USAGE
 }
 
@@ -85,7 +85,7 @@ run_soak() {
   mkdir -p "$out_dir"
 
   local skip_native
-  skip_native="$(json_bool "${OCTOS_M16_COMBINED_SKIP_NATIVE:-0}")"
+  skip_native="$(json_bool "${ra_M16_COMBINED_SKIP_NATIVE:-0}")"
   local fanout_status="skipped"
   local crash_status="pending"
   local pressure_status="pending"
@@ -94,10 +94,10 @@ run_soak() {
   if [[ "$skip_native" == "false" ]]; then
     if run_phase "M16 visual native/CLI/MCP fanout" \
       env \
-        OCTOS_M16_UX_OUT_DIR="$out_dir/fanout-tmux" \
-        OCTOS_M16_UX_RUN_ID="$run_id-fanout" \
-        OCTOS_M16_BUILD="${OCTOS_M16_BUILD:-0}" \
-        OCTOS_M16_BUILD_TUI="${OCTOS_M16_BUILD_TUI:-0}" \
+        ra_M16_UX_OUT_DIR="$out_dir/fanout-tmux" \
+        ra_M16_UX_RUN_ID="$run_id-fanout" \
+        ra_M16_BUILD="${ra_M16_BUILD:-0}" \
+        ra_M16_BUILD_TUI="${ra_M16_BUILD_TUI:-0}" \
         "$script_dir/m16-live-tui-tmux-soak.sh" run; then
       fanout_status="passed"
     else
@@ -107,10 +107,10 @@ run_soak() {
 
   if run_phase "M16 mid-turn crash/restart context recovery" \
     env \
-      OCTOS_M16_CONTEXT_CRASH_DIR="$out_dir/crash-stdio" \
-      OCTOS_M16_CONTEXT_CRASH_POST_TURNS="${OCTOS_M16_CONTEXT_CRASH_POST_TURNS:-1}" \
-      OCTOS_M16_CONTEXT_CRASH_PRESSURE_REPEAT="${OCTOS_M16_CONTEXT_CRASH_PRESSURE_REPEAT:-240}" \
-      OCTOS_M16_CONTEXT_CRASH_RESPONSE_DELAY_MS="${OCTOS_M16_CONTEXT_CRASH_RESPONSE_DELAY_MS:-8000}" \
+      ra_M16_CONTEXT_CRASH_DIR="$out_dir/crash-stdio" \
+      ra_M16_CONTEXT_CRASH_POST_TURNS="${ra_M16_CONTEXT_CRASH_POST_TURNS:-1}" \
+      ra_M16_CONTEXT_CRASH_PRESSURE_REPEAT="${ra_M16_CONTEXT_CRASH_PRESSURE_REPEAT:-240}" \
+      ra_M16_CONTEXT_CRASH_RESPONSE_DELAY_MS="${ra_M16_CONTEXT_CRASH_RESPONSE_DELAY_MS:-8000}" \
       "$script_dir/m16-context-crash-stdio-soak.mjs"; then
     crash_status="passed"
   else
@@ -119,13 +119,13 @@ run_soak() {
 
   if run_phase "M16 pressure restart/reconnect visual context status" \
     env \
-      OCTOS_M16_CONTEXT_TMUX_OUT_DIR="$out_dir/context-pressure-tmux" \
-      OCTOS_M16_CONTEXT_TMUX_RUN_ID="$run_id-pressure" \
-      OCTOS_M16_CONTEXT_BUILD="${OCTOS_M16_CONTEXT_BUILD:-0}" \
-      OCTOS_M16_CONTEXT_BUILD_TUI="${OCTOS_M16_CONTEXT_BUILD_TUI:-0}" \
-      OCTOS_M16_CONTEXT_RESTART_PRE_TURNS="${OCTOS_M16_CONTEXT_RESTART_PRE_TURNS:-3}" \
-      OCTOS_M16_CONTEXT_RESTART_POST_TURNS="${OCTOS_M16_CONTEXT_RESTART_POST_TURNS:-2}" \
-      OCTOS_M16_CONTEXT_RESTART_PRESSURE_REPEAT="${OCTOS_M16_CONTEXT_RESTART_PRESSURE_REPEAT:-240}" \
+      ra_M16_CONTEXT_TMUX_OUT_DIR="$out_dir/context-pressure-tmux" \
+      ra_M16_CONTEXT_TMUX_RUN_ID="$run_id-pressure" \
+      ra_M16_CONTEXT_BUILD="${ra_M16_CONTEXT_BUILD:-0}" \
+      ra_M16_CONTEXT_BUILD_TUI="${ra_M16_CONTEXT_BUILD_TUI:-0}" \
+      ra_M16_CONTEXT_RESTART_PRE_TURNS="${ra_M16_CONTEXT_RESTART_PRE_TURNS:-3}" \
+      ra_M16_CONTEXT_RESTART_POST_TURNS="${ra_M16_CONTEXT_RESTART_POST_TURNS:-2}" \
+      ra_M16_CONTEXT_RESTART_PRESSURE_REPEAT="${ra_M16_CONTEXT_RESTART_PRESSURE_REPEAT:-240}" \
       "$script_dir/m16-context-restart-tmux-soak.sh" run; then
     pressure_status="passed"
   else

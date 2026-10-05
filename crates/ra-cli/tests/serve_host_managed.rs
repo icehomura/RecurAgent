@@ -21,7 +21,7 @@ mod serve_host_managed {
     const HOST: &str = "host-managed-e2e-host-token-0123456789abcdef";
     const EXTERNAL: &str = "host-managed-e2e-external-token-0123456789ab";
 
-    fn octos_binary() -> std::path::PathBuf {
+    fn ra_binary() -> std::path::PathBuf {
         if cfg!(feature = "api") {
             return env!("CARGO_BIN_EXE_ra").into();
         }
@@ -42,7 +42,7 @@ mod serve_host_managed {
     }
 
     fn command(data_dir: &std::path::Path, extra: &[&str]) -> Command {
-        let mut cmd = Command::new(octos_binary());
+        let mut cmd = Command::new(ra_binary());
         cmd.args([
             "serve",
             "--host-managed",
@@ -57,16 +57,16 @@ mod serve_host_managed {
         .stderr(Stdio::null())
         .env("NO_COLOR", "1")
         .env_remove("RA_AUTH_TOKEN")
-        .env_remove("OCTOS_AUTH_TOKEN")
+        .env_remove("ra_AUTH_TOKEN")
         .env_remove("RA_HOST_EXTERNAL_TOKEN")
-        .env_remove("OCTOS_HOST_EXTERNAL_TOKEN")
+        .env_remove("ra_HOST_EXTERNAL_TOKEN")
         .env_remove("RA_INSTANCE_DATA_DIR")
         .env_remove("RA_HOME")
-        .env_remove("OCTOS_HOME")
+        .env_remove("ra_HOME")
         .env_remove("RA_DATA_DIR")
-        .env_remove("OCTOS_DATA_DIR")
+        .env_remove("ra_DATA_DIR")
         .env_remove("RA_SOLO_LOGIN")
-        .env_remove("OCTOS_SOLO_LOGIN");
+        .env_remove("ra_SOLO_LOGIN");
         cmd
     }
 
@@ -240,7 +240,7 @@ mod serve_host_managed {
     #[test]
     fn serve_host_managed_refuses_tokens_in_the_environment() {
         let dir = tempfile::tempdir().unwrap();
-        let output = Command::new(octos_binary())
+        let output = Command::new(ra_binary())
             .args(["serve", "--host-managed", "--port", "0", "--data-dir"])
             .arg(dir.path())
             .arg("--instance-data-dir")
@@ -251,7 +251,7 @@ mod serve_host_managed {
             )
             .env_remove("RA_INSTANCE_DATA_DIR")
             .env_remove("RA_HOME")
-            .env_remove("OCTOS_HOME")
+            .env_remove("ra_HOME")
             .stdin(std::process::Stdio::null())
             .output()
             .unwrap();
@@ -424,7 +424,7 @@ mod serve_host_managed {
             .build()
             .unwrap();
         runtime.block_on(async {
-            let system = "_main:api:octosense#system";
+            let system = "_main:api:recuragent#system";
             let other = "_main:api:web#mine";
             let host_turn = uuid::Uuid::now_v7().to_string();
             let mut host = connect(port, HOST).await;
@@ -479,7 +479,7 @@ mod serve_host_managed {
             let mut request = format!("ws://127.0.0.1:{port}/api/ui-protocol/ws").into_client_request().unwrap();
             request.headers_mut().insert("authorization", format!("Bearer {token}").parse().unwrap());
             let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
-            let session = "_main:api:octosense#system";
+            let session = "_main:api:recuragent#system";
             for (id, method, params) in [
                 ("open", "session/open", serde_json::json!({"session_id": session, "profile_id": "_main"})),
                 ("turn", "turn/start", serde_json::json!({"session_id": session, "turn_id": uuid::Uuid::now_v7().to_string(), "input": [{"kind": "text", "text": "hello"}]})),

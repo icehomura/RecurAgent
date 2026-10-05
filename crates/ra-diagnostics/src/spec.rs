@@ -1,6 +1,6 @@
 //! [`ProductSpec`] — the product-agnostic seam.
 //!
-//! Shared diagnostics code must never hardcode `octoscode` vs `octos`. Callers
+//! Shared diagnostics code must never hardcode `ra-tui` vs `ra`. Callers
 //! describe their product once via a `ProductSpec`; everything else
 //! (install-method labels/upgrade hints, PATH/shadow locating, asset selection)
 //! reads from it.
@@ -13,7 +13,7 @@
 /// How to build the per-OS release asset name for a product. Stage 1 only needs
 /// the *shape* (Stage 2 will consume it when the GitHub client lands); we model
 /// it as a template prefix joined to the platform triple, e.g.
-/// `octos-bundle-<triple>` or `octoscode-<triple>`.
+/// `ra-bundle-<triple>` or `ra-tui-<triple>`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AssetSelector {
     /// Prefix prepended to the target triple (no trailing dash), e.g.
@@ -37,27 +37,27 @@ impl AssetSelector {
 }
 
 /// Product description threaded into every shared diagnostic. Constructed by the
-/// binary (ra-cli / octoscode), never inferred from this crate.
+/// binary (ra-cli / ra-tui), never inferred from this crate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProductSpec {
     /// Bare binary name as run on PATH (no extension; `.exe` is appended on
-    /// Windows by the locator), e.g. `octos` or `octoscode`.
+    /// Windows by the locator), e.g. `ra` or `ra-tui`.
     pub binary_name: String,
     /// Package / display name, e.g. `ra`.
     pub package_name: String,
     /// The caller's own version — passed IN (its `env!("CARGO_PKG_VERSION")`).
     /// NEVER this crate's `CARGO_PKG_VERSION`.
     pub current_version: String,
-    /// `owner/repo` on GitHub, e.g. `your-org/ra`.
+    /// `owner/repo` on GitHub, e.g. `icehomura/ra`.
     pub github_repo: String,
     /// Env var holding an optional GitHub token to dodge the unauthenticated
-    /// rate limit, e.g. `OCTOS_GITHUB_TOKEN`. Optional auth — the GitHub client
+    /// rate limit, e.g. `ra_GITHUB_TOKEN`. Optional auth — the GitHub client
     /// (Stage 2, `github` feature) reads it only when this is `Some` and the var
     /// is set & non-blank; a public repo never requires it.
     pub github_token_env: Option<String>,
-    /// Homebrew formula (tap-qualified), e.g. `your-org/ra/octos`.
+    /// Homebrew formula (tap-qualified), e.g. `icehomura/ra/ra`.
     pub brew_formula: Option<String>,
-    /// npm package name, e.g. `@your-org/ra`.
+    /// npm package name, e.g. `@icehomura/ra`.
     pub npm_package: Option<String>,
     /// `cargo install` crate name (registry), e.g. `ra-cli`.
     pub cargo_install: Option<String>,
@@ -147,17 +147,17 @@ mod tests {
 
     #[test]
     fn builder_sets_optional_fields() {
-        let spec = ProductSpec::new("octos", "octos", "1.2.3", "your-org/ra", "octos-bundle")
-            .with_brew_formula("your-org/ra/octos")
-            .with_npm_package("@your-org/ra")
+        let spec = ProductSpec::new("ra", "ra", "1.2.3", "icehomura/ra", "ra-bundle")
+            .with_brew_formula("icehomura/ra/ra")
+            .with_npm_package("@icehomura/ra")
             .with_cargo_install("ra-cli")
             .with_cargo_dist_app("ra");
         assert_eq!(spec.current_version, "1.2.3");
-        assert_eq!(spec.brew_formula.as_deref(), Some("your-org/ra/octos"));
-        assert_eq!(spec.npm_package.as_deref(), Some("@your-org/ra"));
+        assert_eq!(spec.brew_formula.as_deref(), Some("icehomura/ra/ra"));
+        assert_eq!(spec.npm_package.as_deref(), Some("@icehomura/ra"));
         assert_eq!(spec.cargo_install.as_deref(), Some("ra-cli"));
         assert_eq!(spec.cargo_dist_app.as_deref(), Some("ra"));
-        assert_eq!(spec.github_url(), "https://github.com/your-org/ra");
+        assert_eq!(spec.github_url(), "https://github.com/icehomura/ra");
         assert_eq!(
             spec.asset_selector.asset_name("x86_64-unknown-linux-gnu"),
             "ra-bundle-x86_64-unknown-linux-gnu"
@@ -167,7 +167,7 @@ mod tests {
     #[cfg(not(windows))]
     #[test]
     fn binary_file_name_is_bare_on_unix() {
-        let spec = ProductSpec::new("octos", "octos", "0.1.0", "your-org/ra", "octos-bundle");
+        let spec = ProductSpec::new("ra", "ra", "0.1.0", "icehomura/ra", "ra-bundle");
         assert_eq!(spec.binary_file_name(), "ra");
     }
 }

@@ -6,7 +6,7 @@
 
 ## 工具
 
-ra 在**每一轮**都把**完整的已启用工具集**作为可调用的工具规格发送给 LLM。不存在基于使用时近性的延迟加载：工具是否可用由[工具策略](#工具策略)（allow/deny 列表、命名组）与逐供应商策略控制，而非取决于工具最近是否被使用。
+RecurAgent 在**每一轮**都把**完整的已启用工具集**作为可调用的工具规格发送给 LLM。不存在基于使用时近性的延迟加载：工具是否可用由[工具策略](#工具策略)（allow/deny 列表、命名组）与逐供应商策略控制，而非取决于工具最近是否被使用。
 
 有两类工具会被有意排除在每轮的工具列表之外：
 
@@ -496,7 +496,7 @@ Shell 命令在沙箱中运行以实现隔离。支持三种后端：
 
 ## 自主运行与会话控制
 
-除一次性对话外，图形客户端（octos-web、octoscode）还通过 [UI Protocol](./architecture.md) 驱动一些更长时运行的行为。其中自主运行与任务产物组由协商的能力标志门控（见[能力协商](#能力协商)）；核心的轮次/会话控制（`turn/start`、`turn/interrupt`、`session/rollback`、`task/output/read`）始终可用。
+除一次性对话外，图形客户端（ra-web、ra-tui）还通过 [UI Protocol](./architecture.md) 驱动一些更长时运行的行为。其中自主运行与任务产物组由协商的能力标志门控（见[能力协商](#能力协商)）；核心的轮次/会话控制（`turn/start`、`turn/interrupt`、`session/rollback`、`task/output/read`）始终可用。
 
 ### 目标（Goals）
 
@@ -684,5 +684,5 @@ ra serve --host 0.0.0.0 --port 50080  # 接受外部连接
 
 `/metrics` 端点提供 Prometheus 格式的指标：
 - `ra_tool_calls_total`
-- `octos_tool_call_duration_seconds`
+- `ra_tool_call_duration_seconds`
 - `ra_llm_tokens_total`

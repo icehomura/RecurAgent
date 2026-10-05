@@ -97,8 +97,8 @@ mod tests {
     use super::*;
 
     fn spec() -> ProductSpec {
-        ProductSpec::new("octos", "octos", "1.0.0", "your-org/ra", "octos-bundle")
-            .with_brew_formula("your-org/ra/octos")
+        ProductSpec::new("ra", "ra", "1.0.0", "icehomura/ra", "ra-bundle")
+            .with_brew_formula("icehomura/ra/ra")
     }
 
     #[test]
@@ -170,7 +170,7 @@ mod tests {
     fn plan_defers_to_package_manager_for_brew() {
         match plan("1.0.0", "1.1.0", &InstallMethod::Homebrew, &spec()) {
             UpdatePlan::DeferToPackageManager { cmd } => {
-                assert!(cmd.contains("brew upgrade your-org/ra/octos"));
+                assert!(cmd.contains("brew upgrade icehomura/ra/ra"));
             }
             other => panic!("expected DeferToPackageManager, got {other:?}"),
         }

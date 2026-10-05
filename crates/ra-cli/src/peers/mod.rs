@@ -844,7 +844,7 @@ pub(crate) fn staged_peer_dir(peers_root: &Path, slug: &str) -> Option<PathBuf> 
 }
 
 /// fd-anchored, symlink/FIFO/DoS-safe I/O for the per-session peer files under
-/// `peers/<slug>/` (octos#1824). [`staged_peer_dir`] validates the `<slug>`
+/// `peers/<slug>/` (RecurAgent#1824). [`staged_peer_dir`] validates the `<slug>`
 /// directory by PATH; a subsequent path-based `std::fs` read/write then races a
 /// parent swap — an attacker who can write under `peers/` replaces `<slug>` (or
 /// a leaf) with a symlink between the check and the I/O, and the plain read/
@@ -1565,7 +1565,7 @@ pub(crate) mod build_cache_peer {
 
     /// The pool root for a profile data dir (§1.1): beside `peers/`, so slot
     /// and peer metadata share a lifecycle root and (by default, with the
-    /// pool inside the ra home) peer sandboxes can read it without an
+    /// pool inside the RecurAgent home) peer sandboxes can read it without an
     /// extra read grant.
     pub(crate) fn pool_root(data_dir: &Path) -> PathBuf {
         data_dir.join("build-cache")
@@ -2333,7 +2333,7 @@ mod peer_io_tests {
         ));
     }
 
-    // octos#1824: a symlinked leaf must NOT be followed — the anchored openat
+    // RecurAgent#1824: a symlinked leaf must NOT be followed — the anchored openat
     // is O_NOFOLLOW, so a `model`/`brief.md` symlink pointing at a real file
     // reads as absent instead of leaking the target's content.
     #[test]
@@ -2351,7 +2351,7 @@ mod peer_io_tests {
         }
     }
 
-    // octos#1824: a FIFO leaf must be rejected PROMPTLY (NONBLOCK open +
+    // RecurAgent#1824: a FIFO leaf must be rejected PROMPTLY (NONBLOCK open +
     // regular-file reject) — never block the caller on the missing writer.
     #[test]
     fn fifo_leaf_reads_none_without_hanging() {
@@ -2481,7 +2481,7 @@ mod peer_io_tests {
         assert_eq!(std::fs::read_to_string(&other).unwrap(), "untouched");
     }
 
-    // octos#1824 status probes: the anchored existence/mtime gate counts only
+    // RecurAgent#1824 status probes: the anchored existence/mtime gate counts only
     // REGULAR files — a symlinked or FIFO leaf (or absent) is not "present".
     #[test]
     fn peer_regular_file_exists_gates_on_regular_files() {
@@ -2517,7 +2517,7 @@ mod peer_io_tests {
         assert!(!got, "a FIFO leaf must not count as a regular file");
     }
 
-    // octos#1824 `.notified` freshness stamp: round-trips through the anchored
+    // RecurAgent#1824 `.notified` freshness stamp: round-trips through the anchored
     // helpers, and neither read nor write follows a symlinked leaf.
     #[test]
     fn notified_stamp_round_trips_and_refuses_symlinked_leaf() {
@@ -2565,7 +2565,7 @@ mod peer_io_tests {
         );
     }
 
-    // octos#1824: `result-*` version enumeration is fd-anchored and counts only
+    // RecurAgent#1824: `result-*` version enumeration is fd-anchored and counts only
     // REGULAR prefixed files — a symlinked or non-prefixed entry can't inflate
     // the count, and a symlinked peer dir yields 0 (no follow).
     #[test]
@@ -6949,7 +6949,7 @@ mod peer_turn_status_tests {
         let temp = tempfile::tempdir().unwrap();
         let dir = staged(temp.path(), "fc", None);
         terminal(&dir, "fc", 1, "errored");
-        lifetime(&dir, "octosfix", "fc", "failed", 1, Some("t1"), None);
+        lifetime(&dir, "rafix", "fc", "failed", 1, Some("t1"), None);
         peer_io::write_peer_file_atomic(&dir, "closed", "x").unwrap();
         let f = facet(temp.path(), "fc"); // facet() reads with profile "ra"
         assert_eq!(f.execution, "closed");

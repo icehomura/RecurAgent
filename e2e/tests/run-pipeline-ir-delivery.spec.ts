@@ -6,24 +6,24 @@ import {
   type UiNotification,
 } from '../lib/m9-ws-client';
 
-const BASE = process.env.OCTOS_TEST_URL || 'http://127.0.0.1:50123';
+const BASE = process.env.ra_TEST_URL || 'http://127.0.0.1:50123';
 const TOKEN =
-  process.env.OCTOS_AUTH_TOKEN ||
-  process.env.OCTOS_LIVE_TOKEN ||
-  process.env.OCTOS_TEST_TOKEN ||
+  process.env.ra_AUTH_TOKEN ||
+  process.env.ra_LIVE_TOKEN ||
+  process.env.ra_TEST_TOKEN ||
   '';
-const PROFILE = process.env.OCTOS_PROFILE || 'admin';
+const PROFILE = process.env.ra_PROFILE || 'admin';
 
 // The default profile above is a LOCAL-HARNESS default, not something CI has.
-// `e2e-live-nightly` sets no OCTOS_PROFILE and its serve configures no
+// `e2e-live-nightly` sets no ra_PROFILE and its serve configures no
 // `admin` profile, so every nightly run failed at session/open with
 // `-32602 profile 'admin' is not configured for this AppUI session` — before
 // reaching a single assertion. Require the profile to be named explicitly so
 // the missing prerequisite reads as skipped rather than as a failing
 // pipeline. See #2073.
 test.skip(
-  !process.env.OCTOS_PROFILE,
-  'set OCTOS_PROFILE to a profile the target server actually has ' +
+  !process.env.ra_PROFILE,
+  'set ra_PROFILE to a profile the target server actually has ' +
     "(the 'admin' default is a local-harness convention, not a CI fixture)",
 );
 
@@ -52,7 +52,7 @@ function waitForMatchingNotification(
 }
 
 test('text-only IR run_pipeline reaches the user as a background completion', async () => {
-  expect(TOKEN, 'OCTOS_AUTH_TOKEN must be set for live e2e').not.toEqual('');
+  expect(TOKEN, 'ra_AUTH_TOKEN must be set for live e2e').not.toEqual('');
 
   const client = new M9WsClient({
     url: BASE,

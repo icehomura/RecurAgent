@@ -1,6 +1,6 @@
 # Skill Development
 
-This guide covers the full lifecycle of an ra skill — from development to publication to end-user installation — similar to building an app, submitting it to an app store, and distributing it to users.
+This guide covers the full lifecycle of an RecurAgent skill — from development to publication to end-user installation — similar to building an app, submitting it to an app store, and distributing it to users.
 
 ---
 
@@ -14,11 +14,11 @@ This guide covers the full lifecycle of an ra skill — from development to publ
                                                             7. Update
 ```
 
-| Concept | App Store Analogy | ra Equivalent |
+| Concept | App Store Analogy | RecurAgent Equivalent |
 |---------|-------------------|------------------|
 | **App** | iOS/Android app | Skill (binary + manifest + docs) |
 | **SDK** | Xcode / Android Studio | Rust + `manifest.json` + `SKILL.md` |
-| **App Store** | Apple App Store | [octos-hub](https://github.com/your-org/ra-hub) registry |
+| **App Store** | Apple App Store | [ra-hub](https://github.com/icehomura/ra-hub) registry |
 | **Distribution** | App Store binary delivery | Pre-built binaries in GitHub Releases |
 | **Install** | Tap "Get" | `ra skills install user/repo` |
 | **Sideload** | Ad-hoc / TestFlight | `ra skills --profile <profile> install ./my-skill` |
@@ -252,7 +252,7 @@ fi
 
 ### Step 4: For Bundled Skills (Rust Crate)
 
-If contributing a skill to the core ra distribution:
+If contributing a skill to the core RecurAgent distribution:
 
 ```bash
 mkdir -p crates/app-skills/my-skill/src
@@ -358,7 +358,7 @@ ra gateway
 
 ## Part 3: Publish
 
-Publishing makes your skill discoverable to all ra users — like submitting an app to the App Store.
+Publishing makes your skill discoverable to all RecurAgent users — like submitting an app to the App Store.
 
 ### Push to GitHub
 
@@ -392,7 +392,7 @@ my-skills/                   ← repo root
 
 ### Submit to the Registry
 
-The [octos-hub](https://github.com/your-org/ra-hub) registry is the central catalog for discoverable skills. Submit a PR to add your entry to `registry.json`:
+The [ra-hub](https://github.com/icehomura/ra-hub) registry is the central catalog for discoverable skills. Submit a PR to add your entry to `registry.json`:
 
 ```json
 {
@@ -694,7 +694,7 @@ A skill that produces an artifact — a slide deck, a podcast MP3, a deployed UR
 
 As of 2026-05-13 the harness owns every post-condition through the **workspace_policy / workspace_contract** layer. Skills emit artifacts and structured outputs; the harness asserts the contract. Skill authors should **not** write their own validators.
 
-> See [`docs/audits/HARNESS_CONTRACT_AUDIT_2026-05-13.md`](./audits/HARNESS_CONTRACT_AUDIT_2026-05-13.md) for the full audit of the previous skill-internal contracts and the canonical replacements. The five-layer model below is the architecture the audit prescribes.
+> See `docs/audits/HARNESS_CONTRACT_AUDIT_2026-05-13.md` (not in this tree) for the full audit of the previous skill-internal contracts and the canonical replacements. The five-layer model below is the architecture the audit prescribes.
 
 ### The five-layer model
 
@@ -962,7 +962,7 @@ For skill authors with existing skills, here's what to align with as of 2026-05-
 
 ## Part 10: Reference
 
-- **Audit:** [`docs/audits/HARNESS_CONTRACT_AUDIT_2026-05-13.md`](./audits/HARNESS_CONTRACT_AUDIT_2026-05-13.md) — full per-tool table, ad-hoc patterns inventory, framework gaps.
+- **Audit:** `docs/audits/HARNESS_CONTRACT_AUDIT_2026-05-13.md` (not in this tree) — full per-tool table, ad-hoc patterns inventory, framework gaps.
 - **Workspace policy source:** `crates/ra-agent/src/workspace_policy.rs` — `Validator`, `ValidatorSpec`, `MagicByteKind`, `Required`, `WorkspacePolicy::for_session()`.
 - **Validator runner:** `crates/ra-agent/src/validators.rs` — `ValidatorRunner`, interpolation, HTTP probe wiring (with the shared SSRF gate from `tools/ssrf.rs`).
 - **Workspace contract enforcement:** `crates/ra-agent/src/workspace_contract.rs` — `enforce_spawn_task_contract`, `run_declared_validators`, `bind_explicit_files_to_artifacts`.
@@ -970,7 +970,7 @@ For skill authors with existing skills, here's what to align with as of 2026-05-
 - **EndTurn auto-fire:** `crates/ra-agent/src/agent/loop_runner.rs:42-80, 1435-1480`.
 - **Hook config:** `crates/ra-agent/src/hooks.rs:46-78` (HookConfig), `crates/ra-agent/src/workspace_policy.rs:1142-1212` (Coding detection + defaults).
 - **Plugin SDK protocol:** [`crates/ra-plugin/docs/protocol-v2.md`](../crates/ra-plugin/docs/protocol-v2.md).
-- **Compatibility contract:** [`docs/ra_HARNESS_SKILL_COMPAT.md`](./OCTOS_HARNESS_SKILL_COMPAT.md) — the productization boundary every third-party skill must uphold.
+- **Compatibility contract:** [`docs/ra_HARNESS_SKILL_COMPAT.md`](./ra_HARNESS_SKILL_COMPAT.md) — the productization boundary every third-party skill must uphold.
 - **Fleet deploy runbook:** [`docs/SKILL_DEPLOYMENT.md`](./SKILL_DEPLOYMENT.md).
 - **Worked examples that already conform:** the four `crates/app-skills/harness-starter-*/` templates (audio / coding / generic / report). Their manifests demonstrate `spawn_only` + `concurrency_class` and they intentionally ship without skill-internal validators.
 - **Real spawn-only contracts in production:** see `WorkspacePolicy::for_session()` entries for `fm_tts`, `podcast_generate`, `voice_synthesize`, `fm_voice_save`, `mofa_slides`, `mofa_cards`, `mofa_comic`, `mofa_infographic`, `mofa_publish`, `manage_skills`, `synthesize_research`, `deep_search` (`workspace_policy.rs:692-1087`).
@@ -1059,7 +1059,7 @@ requires_env: MY_API_KEY,MY_SECRET
 ---
 ```
 
-The gateway auto-injects provider API keys (e.g., `DASHSCOPE_API_KEY`, `OPENAI_API_KEY`) plus `OCTOS_DATA_DIR` and `OCTOS_WORK_DIR`.
+The gateway auto-injects provider API keys (e.g., `DASHSCOPE_API_KEY`, `OPENAI_API_KEY`) plus `ra_DATA_DIR` and `ra_WORK_DIR`.
 
 ### Bundled Assets
 
@@ -1275,7 +1275,7 @@ Their `SKILL.md` says "Replace with a real ... when adapting the starter." Use t
 ### Publishing
 
 - [ ] Repo pushed to GitHub with `manifest.json` and `SKILL.md` at expected paths
-- [ ] Registry PR submitted to [octos-hub](https://github.com/your-org/ra-hub)
+- [ ] Registry PR submitted to [ra-hub](https://github.com/icehomura/ra-hub)
 - [ ] (Optional) Pre-built binaries for `darwin-aarch64`, `linux-x86_64`
 - [ ] (Optional) SHA-256 hashes in `manifest.json` `binaries` section
 - [ ] (Optional) GitHub Actions workflow for automated binary builds on release tags

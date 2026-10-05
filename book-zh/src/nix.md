@@ -1,6 +1,6 @@
 # Nix
 
-ra 提供一流的 Nix Flake 支持，用于可重现构建、开发环境和系统级集成（NixOS 与 macOS / nix-darwin）。
+RecurAgent 提供一流的 Nix Flake 支持，用于可重现构建、开发环境和系统级集成（NixOS 与 macOS / nix-darwin）。
 
 ## 支持的系统
 
@@ -32,9 +32,9 @@ ra 提供一流的 Nix Flake 支持，用于可重现构建、开发环境和系
 ### 不安装直接运行
 
 ```bash
-nix run github:your-org/ra#octos -- --version
-nix run github:your-org/ra#octos -- status
-nix run github:your-org/ra#octos-full -- chat --message "Hello"
+nix run github:icehomura/ra#ra -- --version
+nix run github:icehomura/ra#ra -- status
+nix run github:icehomura/ra#ra-full -- chat --message "Hello"
 ```
 
 ### 构建软件包
@@ -60,7 +60,7 @@ nix build .#ra --override-input features '["api" "telegram"]'
 
 # 或者在你自己的 flake 中：
 let
-  myOctos = ra.packages.${system}.ra.override {
+  myRa = ra.packages.${system}.ra.override {
     features = [ "api" "telegram" "discord" ];
     enableAppSkills = true;
   };
@@ -76,7 +76,7 @@ in
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    octos.url = "github:your-org/ra";
+    ra.url = "github:icehomura/ra";
   };
 }
 ```
@@ -154,8 +154,8 @@ programs.ra = {
 
 | 选项                                 | 类型         | 默认值             | 说明                                                      |
 | ------------------------------------ | ------------ | ------------------ | --------------------------------------------------------- |
-| `programs.ra.enable`              | bool         | `false`            | 启用 ra 模块                                           |
-| `programs.ra.package`             | package      | `ra`            | 要使用的基础 ra 软件包                                 |
+| `programs.ra.enable`              | bool         | `false`            | 启用 RecurAgent 模块                                           |
+| `programs.ra.package`             | package      | `ra`            | 要使用的基础 RecurAgent 软件包                                 |
 | `programs.ra.finalPackage`        | package      | （自动计算）       | 只读；应用覆盖后的最终软件包                              |
 | `programs.ra.channels`            | enum 列表    | `null`             | 要启用的频道。`null` 保留软件包的默认功能                 |
 | `programs.ra.enableAllChannels`   | bool         | `false`            | 启用所有支持的频道                                        |
@@ -224,7 +224,7 @@ nix build .#checks.x86_64-linux.nixos-module-vm --print-build-logs
 
 运行一个完整的 NixOS 虚拟机，它会：
 
-- 安装带有 Telegram + Discord 频道和 app-skills 的 ra
+- 安装带有 Telegram + Discord 频道和 app-skills 的 RecurAgent
 - 启动 `ra-serve` systemd 服务
 - 验证服务在配置的端口上可访问
 - 检查所有 app-skill 二进制文件是否在 PATH 中

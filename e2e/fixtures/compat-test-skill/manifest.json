@@ -1,7 +1,7 @@
 {
   "name": "compat-test-skill",
   "version": "1.0.0",
-  "author": "octos-harness-compat",
+  "author": "ra-harness-compat",
   "description": "Summarize a text file into a compact report artifact (third-party compatibility fixture)",
   "timeout_secs": 15,
   "requires_network": false,

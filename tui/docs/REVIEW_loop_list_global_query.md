@@ -46,7 +46,7 @@ pub fn app_ui_read(required_methods: &'static [&'static str]) -> Self {
 
 ### 服务端的"查询全部"契约
 
-`crates/ra-cli/src/api/agent_orchestrator.rs:5198`(ra 仓库):
+`crates/ra-cli/src/api/agent_orchestrator.rs:5198`(RecurAgent 仓库):
 
 ```rust
 fn list_loops(&self, request: LoopListRequest) -> Result<Value, RpcError> {
@@ -295,7 +295,7 @@ pub struct LoopListResult {
     #[serde(default)]
     pub session_id: Option<SessionKey>,
     #[serde(default)]
-    pub loops: Vec<octos_core::ui_protocol::UiLoopRecord>,
+    pub loops: Vec<ra_core::ui_protocol::UiLoopRecord>,
 }
 ```
 

@@ -168,7 +168,7 @@ pub(crate) async fn run_supervised_cli_specialist(
             workspace_scope,
         )
         .map_err(|error| error.message)?;
-    // #1021 / M17-C — CLI specialists are spawned as external subprocesses that never consume the ra prompt context manager, so the dispatch contract is `external_context_unmanaged` with `risk: "medium"`. Stamping it here surfaces `context_mode` / `context_refs` on every subsequent `agent/updated` event so AppUI clients can audit context regime per child without polling the MCP path.
+    // #1021 / M17-C — CLI specialists are spawned as external subprocesses that never consume the RecurAgent prompt context manager, so the dispatch contract is `external_context_unmanaged` with `risk: "medium"`. Stamping it here surfaces `context_mode` / `context_refs` on every subsequent `agent/updated` event so AppUI clients can audit context regime per child without polling the MCP path.
     let cli_contract = DispatchContextContract::external_unmanaged(
         "cli_specialist_does_not_consume_managed_payload",
     )

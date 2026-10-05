@@ -349,7 +349,7 @@ export default function HarnessPage() {
               Structured errors (last hour)
             </h2>
             <p className="text-[11px] text-gray-500">
-              Counter <code>octos_loop_error_total</code> by{' '}
+              Counter <code>ra_loop_error_total</code> by{' '}
               <code>variant</code> and <code>recovery</code> hint. Variant names
               match <code>HarnessError::variant_name()</code>.
             </p>

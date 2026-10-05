@@ -2,7 +2,7 @@
 //!
 //! Each profile is a named configuration bundle that defines an LLM provider,
 //! channel credentials, and gateway settings. Profiles are stored as individual
-//! JSON files in `~/.ra/profiles/` (legacy `~/.ra/profiles/`).
+//! JSON files in `~/.ra/profiles/`.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -14,7 +14,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::config::{ChannelEntry, CloudTtsConfig, Config, FallbackModel, GatewayConfig};
 
 pub const MAX_SUB_ACCOUNTS_PER_PARENT: usize = 10;
-pub(crate) const HOST_ASR_LANGUAGE_ENV: &str = "OCTOS_HOST_ASR_LANGUAGE";
+pub(crate) const HOST_ASR_LANGUAGE_ENV: &str = "ra_HOST_ASR_LANGUAGE";
 /// New-name spelling of [`HOST_ASR_LANGUAGE_ENV`]; spawned children get both so
 /// readers on either side of the rename agree.
 pub(crate) const RA_HOST_ASR_LANGUAGE_ENV: &str = "RA_HOST_ASR_LANGUAGE";
@@ -247,7 +247,7 @@ pub struct ProfileConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub apps: Option<AppsConfig>,
     /// Home dashboard UI configuration. The backend stores this as opaque JSON
-    /// because Home is a web-owned surface; typed validation lives in octos-web.
+    /// because Home is a web-owned surface; typed validation lives in ra-web.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub home: Option<serde_json::Value>,
     /// Robotics runtime configuration (heartbeat + sensor context injection).
@@ -1937,21 +1937,21 @@ impl ProfileStore {
         !matches!(self.get(id), Ok(Some(_)))
     }
 
-    /// Return the parent directory of the registry profiles dir (i.e. the ra
+    /// Return the parent directory of the registry profiles dir (i.e. the RecurAgent
     /// home dir). This is the REGISTRY root — the config-like siblings that live
     /// beside the profiles tree (the `default-profile` pointer, the platform-
     /// model allowlist, and the `--ra-home` a spawned gateway opens its own
     /// `ProfileStore` from) all resolve from here, so they stay shared across
     /// per-instance runtime dirs. With a unified store this is the data dir,
     /// exactly as before.
-    pub fn octos_home_dir(&self) -> &Path {
+    pub fn ra_home_dir(&self) -> &Path {
         self.registry_dir.parent().unwrap_or(&self.registry_dir)
     }
 
     /// Path to the persisted global default-profile pointer
     /// (`<ra-home>/default-profile`).
     fn default_profile_pointer_path(&self) -> PathBuf {
-        self.octos_home_dir().join("default-profile")
+        self.ra_home_dir().join("default-profile")
     }
 
     /// The explicitly-chosen global default profile id, if one was set with
@@ -1966,7 +1966,7 @@ impl ProfileStore {
     }
 
     /// Persist `id` as the machine's global default profile, replacing any prior
-    /// pointer. Atomic write-then-rename within the ra home dir so a crash
+    /// pointer. Atomic write-then-rename within the RecurAgent home dir so a crash
     /// mid-write cannot leave a torn pointer.
     pub fn set_default_profile(&self, id: &str) -> Result<()> {
         let path = self.default_profile_pointer_path();
@@ -2843,7 +2843,7 @@ pub(crate) fn config_from_profile(
             browser_timeout_secs: profile.config.gateway.browser_timeout_secs,
             max_output_tokens: profile.config.gateway.max_output_tokens,
             // #2172: surface the profile's temperature override to serve /
-            // octoscode sessions (which run via a profile), so a local model
+            // ra-tui sessions (which run via a profile), so a local model
             // can escape forced greedy decoding.
             llm_temperature: profile.config.gateway.llm_temperature,
             // #2172: same for the sampler passthrough (repeat_penalty, …).
@@ -2928,7 +2928,7 @@ pub(crate) fn config_from_profile(
     }
 }
 
-/// Convert a `ChannelCredentials` to an ra `ChannelEntry` JSON value.
+/// Convert a `ChannelCredentials` to an RecurAgent `ChannelEntry` JSON value.
 fn channel_to_entry(cred: &ChannelCredentials) -> serde_json::Value {
     match cred {
         ChannelCredentials::Telegram {
@@ -4508,8 +4508,8 @@ mod tests {
         );
         assert!(resolved.ends_with("alice/data"));
 
-        // octos_home_dir points at the REGISTRY root (shared, config-like).
-        assert_eq!(store.octos_home_dir(), registry_root.path());
+        // RecurAgent_home_dir points at the REGISTRY root (shared, config-like).
+        assert_eq!(store.ra_home_dir(), registry_root.path());
 
         // Regression guard: open_unified(x) collapses both roots under x.
         let unified_dir = tempfile::tempdir().unwrap();
@@ -4562,7 +4562,7 @@ mod tests {
                         hs_token: "hs-token-secret".into(),
                         server_name: "example.org".into(),
                         sender_localpart: "ra".into(),
-                        user_prefix: "octos_".into(),
+                        user_prefix: "ra_".into(),
                         port: 8009,
                         allowed_senders: Vec::new(),
                         mention_only: true,
@@ -4872,7 +4872,7 @@ mod tests {
                         hs_token: "hs-real-token".into(),
                         server_name: "old.example.org".into(),
                         sender_localpart: "ra".into(),
-                        user_prefix: "octos_".into(),
+                        user_prefix: "ra_".into(),
                         port: 8009,
                         allowed_senders: Vec::new(),
                         mention_only: true,
@@ -4964,7 +4964,7 @@ mod tests {
                     hs_token: String::new(),
                     server_name: String::new(),
                     sender_localpart: "ra".into(),
-                    user_prefix: "octos_".into(),
+                    user_prefix: "ra_".into(),
                     port: 8009,
                     allowed_senders: Vec::new(),
                     mention_only: true,
@@ -5023,7 +5023,7 @@ mod tests {
             hs_token: String::new(),
             server_name: String::new(),
             sender_localpart: "ra".into(),
-            user_prefix: "octos_".into(),
+            user_prefix: "ra_".into(),
             port: 8009,
             allowed_senders: Vec::new(),
             mention_only: true,

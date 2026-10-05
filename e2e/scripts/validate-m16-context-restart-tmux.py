@@ -144,7 +144,7 @@ class Validator:
         launch = read_text(self.out_dir / "launch-command.txt").replace("\\ ", " ")
         passed = "serve --stdio" in launch and "m15-fixture-appui-backend.py" not in launch
         self.add(
-            "real_restarted_octos_backend",
+            "real_restarted_ra_backend",
             passed,
             "TUI launched against restarted ra serve --stdio"
             if passed

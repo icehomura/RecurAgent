@@ -1,6 +1,6 @@
 # M18 AppUI Conformance Fixtures
 
-These fixtures support octos#1030 and octos#1032.
+These fixtures support RecurAgent#1030 and RecurAgent#1032.
 
 - `m18-route-inventory.json` lists the AppUI route surface that the M18
   parity runner checks against negotiated capabilities.

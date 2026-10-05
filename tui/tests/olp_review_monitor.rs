@@ -715,7 +715,7 @@ fn olp_review_monitor_lifetime_strict_validation() {
     let d = t.path().to_path_buf();
     std::fs::create_dir_all(&d).unwrap();
     std::fs::write(d.join("runtime-evidence.json"), r#"{"peers":[]}"#).unwrap();
-    let profile = "octosfix";
+    let profile = "rafix";
     let peers_root = d
         .join("runtime")
         .join("profiles")
@@ -875,7 +875,7 @@ fn olp_review_monitor_cross_runtime_binding_and_closed() {
     let t = TmpDir::new("crossrt");
     let d = t.path().to_path_buf();
     std::fs::create_dir_all(&d).unwrap();
-    let profile = "octosfix";
+    let profile = "rafix";
     // runtime A: session-A 的 peer s 有 Running lifetime
     let pa = d
         .join("runtimeA")
@@ -1113,7 +1113,7 @@ fn olp_review_monitor_negative_events_attributed() {
     let ours_dir = d
         .join("runtime")
         .join("profiles")
-        .join("octosfix")
+        .join("rafix")
         .join("data");
     std::fs::create_dir_all(&ours_dir).unwrap();
     let mut f = std::fs::File::create(ours_dir.join("events.jsonl")).unwrap();
@@ -1129,7 +1129,7 @@ fn olp_review_monitor_negative_events_attributed() {
     let other_dir = d
         .join("other-runtime")
         .join("profiles")
-        .join("octosfix")
+        .join("rafix")
         .join("data");
     std::fs::create_dir_all(&other_dir).unwrap();
     std::fs::write(
@@ -1138,8 +1138,8 @@ fn olp_review_monitor_negative_events_attributed() {
     )
     .unwrap();
 
-    // 事件在 octosfix profile;profile 精确归属(裁决 #2),传 --profile octosfix。
-    let (ok, out) = monitor_with_profile(&d, Some(&d.join("runtime")), None, "octosfix");
+    // 事件在 rafix profile;profile 精确归属(裁决 #2),传 --profile rafix。
+    let (ok, out) = monitor_with_profile(&d, Some(&d.join("runtime")), None, "rafix");
     assert!(ok, "render failed: {out}");
     assert!(
         out.contains("blocked"),
@@ -1179,10 +1179,10 @@ fn olp_review_monitor_v3_pending_followup_keeps_previous_turn() {
     let d = t.path().to_path_buf();
     std::fs::create_dir_all(&d).unwrap();
     std::fs::write(d.join("runtime-evidence.json"), r#"{"peers":[]}"#).unwrap();
-    let profile = "octosfix";
+    let profile = "rafix";
     // 真实 originator/master wire 形状(v3 probe):
-    // 'octosfix:local:tui#coding\x00~cwd-abc'
-    let master = "octosfix:local:tui#coding\u{0}~cwd-abc";
+    // 'rafix:local:tui#coding\x00~cwd-abc'
+    let master = "rafix:local:tui#coding\u{0}~cwd-abc";
     let peer = d
         .join("runtime")
         .join("profiles")
@@ -1369,13 +1369,13 @@ fn olp_review_monitor_v3_real_wire_thread_recognition() {
     std::fs::create_dir_all(&d).unwrap();
     // 真实形状: master originator 带 cwd 后缀(与 peer 共享同一 originator+cwd)。
     // 收紧(裁决 #3): 绑定精确到 originator session + cwd,同 channel 不同 cwd 不绑定。
-    let master = "octosfix:local:tui#coding\u{0}~cwd-abc";
+    let master = "rafix:local:tui#coding\u{0}~cwd-abc";
     std::fs::write(
         d.join("review-state.json"),
-        r#"{"runtime":"/tmp/rt-wire","session":"octosfix:local:tui#coding\u0000~cwd-abc","goal":"goal_01"}"#,
+        r#"{"runtime":"/tmp/rt-wire","session":"rafix:local:tui#coding\u0000~cwd-abc","goal":"goal_01"}"#,
     )
     .unwrap();
-    let profile = "octosfix";
+    let profile = "rafix";
     let peers_root = d
         .join("runtime")
         .join("profiles")
@@ -1414,16 +1414,16 @@ fn olp_review_monitor_v3_real_wire_thread_recognition() {
         );
     };
     // live: 本 session 的 peer-live 未完流 → running(精确 originator/session 绑定)
-    let live_sid = "octosfix:local:tui#peer-live\u{0}~cwd-abc";
+    let live_sid = "rafix:local:tui#peer-live\u{0}~cwd-abc";
     put_thread(live_sid, "t1", false, 10);
     // done: 本 session 的 peer-done 已完流 → 非 running
-    let done_sid = "octosfix:local:tui#peer-done\u{0}~cwd-abc";
+    let done_sid = "rafix:local:tui#peer-done\u{0}~cwd-abc";
     put_thread(done_sid, "t2", true, 99);
     // stale: 别的 session 的未完流(同 slug 形状)→ 保守 unknown,不归属本 session
-    let stale_sid = "octosfix:local:other#peer-stale\u{0}~cwd-abc";
+    let stale_sid = "rafix:local:other#peer-stale\u{0}~cwd-abc";
     put_thread(stale_sid, "t3", false, 5);
     // diffcwd: 同 channel 同 originator 主干但 cwd 哈希不同 → 不绑定(裁决 #3)
-    let diffcwd_sid = "octosfix:local:tui#peer-diffcwd\u{0}~cwd-zzz";
+    let diffcwd_sid = "rafix:local:tui#peer-diffcwd\u{0}~cwd-zzz";
     put_thread(diffcwd_sid, "t4", false, 7);
 
     // NUL 字节不能进 argv: session 由 review-state.json 提供(文件可含 NUL),
@@ -1488,7 +1488,7 @@ fn olp_review_monitor_v3_negative_events_profile_goal_filtered() {
     .unwrap();
     let data = d.join("runtime").join("profiles");
     // 本 profile 本 goal: blocked → 可见
-    let ours = data.join("octosfix").join("data");
+    let ours = data.join("rafix").join("data");
     std::fs::create_dir_all(&ours).unwrap();
     let mut f = std::fs::File::create(ours.join("events.jsonl")).unwrap();
     writeln!(f, r#"{{"ts":"2026-09-09T01:00:00Z","kind":"goal_transition","goal_id":"goal_01","detail":"goal transitioned to `blocked`"}}"#).unwrap();
@@ -1505,8 +1505,8 @@ fn olp_review_monitor_v3_negative_events_profile_goal_filtered() {
     )
     .unwrap();
 
-    // profile 精确归属(裁决 #2): 只读 octosfix,otherprof 的同 goal blocked 不混入。
-    let (ok, out) = monitor_with_profile(&d, Some(&d.join("runtime")), None, "octosfix");
+    // profile 精确归属(裁决 #2): 只读 rafix,otherprof 的同 goal blocked 不混入。
+    let (ok, out) = monitor_with_profile(&d, Some(&d.join("runtime")), None, "rafix");
     assert!(ok, "render failed: {out}");
     let ev_lines: Vec<&str> = out.lines().filter(|l| l.contains("[event]")).collect();
     assert!(!ev_lines.is_empty(), "本 goal 负向事件可见: {out}");
@@ -1590,7 +1590,7 @@ fn olp_review_monitor_v3_negative_events_no_profile_no_fallback() {
         r#"{"runtime":"/tmp/rt-np","session":"sess-np","goal":"goal_01"}"#,
     )
     .unwrap();
-    // 只有 otherprof 有事件;默认 profile(ra)无事件文件。
+    // 只有 otherprof 有事件;默认 profile(RecurAgent)无事件文件。
     let other = d
         .join("runtime")
         .join("profiles")
@@ -1603,7 +1603,7 @@ fn olp_review_monitor_v3_negative_events_no_profile_no_fallback() {
     )
     .unwrap();
 
-    // 用默认 profile(ra,不存在)→ 不得 fallback 到 otherprof。
+    // 用默认 profile(RecurAgent,不存在)→ 不得 fallback 到 otherprof。
     let (ok, out) = monitor(&d, Some(&d.join("runtime")), None);
     assert!(ok, "render failed: {out}");
     let ev_lines: Vec<&str> = out.lines().filter(|l| l.contains("[event]")).collect();
@@ -1669,7 +1669,7 @@ fn olp_review_monitor_v3_complete_snapshot_wrong_goal_profile_unknown() {
     std::fs::create_dir_all(&d).unwrap();
     let rt = d.join("runtime");
     std::fs::create_dir_all(&rt).unwrap();
-    // 当前视角: goal_01 + profile octosfix + session sess-ours
+    // 当前视角: goal_01 + profile rafix + session sess-ours
     std::fs::write(
         d.join("review-state.json"),
         r#"{"runtime":"/tmp/rt-wgp","session":"sess-ours","goal":"goal_01"}"#,
@@ -1689,7 +1689,7 @@ fn olp_review_monitor_v3_complete_snapshot_wrong_goal_profile_unknown() {
         }]}),
     );
 
-    let (ok, out) = monitor_with_profile(&d, Some(&rt), None, "octosfix");
+    let (ok, out) = monitor_with_profile(&d, Some(&rt), None, "rafix");
     assert!(ok, "render failed: {out}");
     let line = out
         .lines()
@@ -1723,7 +1723,7 @@ fn hex_encode(bytes: &[u8]) -> String {
 /// 反例 1: 同 profile/channel/cwd,但 peer 的 originator 文件指向别的
 /// wire master(`#other-master`),无 lifetime,存在看似本 session 的未完
 /// native thread → 不得 running,只能 unknown。
-/// 真实 native originator 通常无 cwd 后缀(wire master `octosfix:local:tui#coding`),
+/// 真实 native originator 通常无 cwd 后缀(wire master `rafix:local:tui#coding`),
 /// 真实 thread session 带实际 NUL+~cwd-hash(见 ../native-observation-shapes.json)。
 #[test]
 fn olp_review_monitor_v3_foreign_originator_thread_not_running() {
@@ -1733,10 +1733,10 @@ fn olp_review_monitor_v3_foreign_originator_thread_not_running() {
     // 当前视角: master wire 带 NUL+cwd(不能进 argv,由 review-state.json 提供)
     std::fs::write(
         d.join("review-state.json"),
-        r#"{"runtime":"/tmp/rt-forgo","session":"octosfix:local:tui#coding\u0000~cwd-abc","goal":"goal_01"}"#,
+        r#"{"runtime":"/tmp/rt-forgo","session":"rafix:local:tui#coding\u0000~cwd-abc","goal":"goal_01"}"#,
     )
     .unwrap();
-    let profile = "octosfix";
+    let profile = "rafix";
     let peers_root = d
         .join("runtime")
         .join("profiles")
@@ -1749,12 +1749,12 @@ fn olp_review_monitor_v3_foreign_originator_thread_not_running() {
     std::fs::create_dir_all(&foreign).unwrap();
     std::fs::write(
         foreign.join("originator"),
-        "octosfix:local:tui#other-master\n",
+        "rafix:local:tui#other-master\n",
     )
     .unwrap();
     std::fs::write(foreign.join("goal"), "goal_01\n").unwrap();
     // 无 lifetime.json(fallback 链): 未完 native thread 形似本 session(cwd 相同)
-    let sid = "octosfix:local:tui#peer-worker\u{0}~cwd-abc";
+    let sid = "rafix:local:tui#peer-worker\u{0}~cwd-abc";
     let tdir = d
         .join("runtime")
         .join("ui-protocol")
@@ -1805,10 +1805,10 @@ fn olp_review_monitor_v3_peer_goal_file_mismatch_not_running() {
     std::fs::create_dir_all(&d).unwrap();
     std::fs::write(
         d.join("review-state.json"),
-        r#"{"runtime":"/tmp/rt-pgoal","session":"octosfix:local:tui#coding\u0000~cwd-abc","goal":"goal_01"}"#,
+        r#"{"runtime":"/tmp/rt-pgoal","session":"rafix:local:tui#coding\u0000~cwd-abc","goal":"goal_01"}"#,
     )
     .unwrap();
-    let profile = "octosfix";
+    let profile = "rafix";
     let peers_root = d
         .join("runtime")
         .join("profiles")
@@ -1820,10 +1820,10 @@ fn olp_review_monitor_v3_peer_goal_file_mismatch_not_running() {
     // 但 goal 文件是别的 goal。
     let peer = peers_root.join("worker");
     std::fs::create_dir_all(&peer).unwrap();
-    std::fs::write(peer.join("originator"), "octosfix:local:tui#coding\n").unwrap();
+    std::fs::write(peer.join("originator"), "rafix:local:tui#coding\n").unwrap();
     std::fs::write(peer.join("goal"), "goal_99\n").unwrap();
     // 无 lifetime.json: 未完 native thread 绑定当前 master session+cwd
-    let sid = "octosfix:local:tui#peer-worker\u{0}~cwd-abc";
+    let sid = "rafix:local:tui#peer-worker\u{0}~cwd-abc";
     let tdir = d
         .join("runtime")
         .join("ui-protocol")
@@ -1934,10 +1934,10 @@ fn olp_review_monitor_v3_matching_originator_goal_thread_still_running() {
     std::fs::create_dir_all(&d).unwrap();
     std::fs::write(
         d.join("review-state.json"),
-        r#"{"runtime":"/tmp/rt-posgo","session":"octosfix:local:tui#coding\u0000~cwd-abc","goal":"goal_01"}"#,
+        r#"{"runtime":"/tmp/rt-posgo","session":"rafix:local:tui#coding\u0000~cwd-abc","goal":"goal_01"}"#,
     )
     .unwrap();
-    let profile = "octosfix";
+    let profile = "rafix";
     let peers_root = d
         .join("runtime")
         .join("profiles")
@@ -1948,10 +1948,10 @@ fn olp_review_monitor_v3_matching_originator_goal_thread_still_running() {
     // 真实形状: originator 无 cwd 后缀的 wire master;goal 文件与当前一致
     let peer = peers_root.join("worker");
     std::fs::create_dir_all(&peer).unwrap();
-    std::fs::write(peer.join("originator"), "octosfix:local:tui#coding\n").unwrap();
+    std::fs::write(peer.join("originator"), "rafix:local:tui#coding\n").unwrap();
     std::fs::write(peer.join("goal"), "goal_01\n").unwrap();
     // 无 lifetime.json: 精确绑定的未完 native thread(NUL+~cwd-hash 与 master 一致)
-    let sid = "octosfix:local:tui#peer-worker\u{0}~cwd-abc";
+    let sid = "rafix:local:tui#peer-worker\u{0}~cwd-abc";
     let tdir = d
         .join("runtime")
         .join("ui-protocol")
@@ -1998,14 +1998,14 @@ fn olp_review_monitor_v3_missing_originator_thread_not_running() {
     let t = TmpDir::new("v3morig");
     let d = t.path().to_path_buf();
     std::fs::create_dir_all(&d).unwrap();
-    let master = "octosfix:local:tui#coding\u{0}~cwd-abc";
+    let master = "rafix:local:tui#coding\u{0}~cwd-abc";
     std::fs::write(
         d.join("review-state.json"),
         format!(r#"{{"runtime":"/tmp/rt-morig","session":"{master}","goal":"goal_01"}}"#)
             .replace('\u{0}', "\\u0000"),
     )
     .unwrap();
-    let profile = "octosfix";
+    let profile = "rafix";
     let peer = d
         .join("runtime")
         .join("profiles")
@@ -2016,7 +2016,7 @@ fn olp_review_monitor_v3_missing_originator_thread_not_running() {
     std::fs::create_dir_all(&peer).unwrap();
     // 有 goal、缺 originator: 精确 cwd 绑定的未完 thread 不足以证明归属
     std::fs::write(peer.join("goal"), "goal_01\n").unwrap();
-    let sid = "octosfix:local:tui#peer-worker\u{0}~cwd-abc";
+    let sid = "rafix:local:tui#peer-worker\u{0}~cwd-abc";
     let tdir = d
         .join("runtime")
         .join("ui-protocol")
@@ -2062,14 +2062,14 @@ fn olp_review_monitor_v3_missing_goal_thread_not_running() {
     let t = TmpDir::new("v3mgoal");
     let d = t.path().to_path_buf();
     std::fs::create_dir_all(&d).unwrap();
-    let master = "octosfix:local:tui#coding\u{0}~cwd-abc";
+    let master = "rafix:local:tui#coding\u{0}~cwd-abc";
     std::fs::write(
         d.join("review-state.json"),
         format!(r#"{{"runtime":"/tmp/rt-mgoal","session":"{master}","goal":"goal_01"}}"#)
             .replace('\u{0}', "\\u0000"),
     )
     .unwrap();
-    let profile = "octosfix";
+    let profile = "rafix";
     let peer = d
         .join("runtime")
         .join("profiles")
@@ -2078,9 +2078,9 @@ fn olp_review_monitor_v3_missing_goal_thread_not_running() {
         .join("peers")
         .join("worker");
     std::fs::create_dir_all(&peer).unwrap();
-    std::fs::write(peer.join("originator"), "octosfix:local:tui#coding\n").unwrap();
+    std::fs::write(peer.join("originator"), "rafix:local:tui#coding\n").unwrap();
     // 缺 goal 文件: originator 正确也不足以证明归属当前 goal
-    let sid = "octosfix:local:tui#peer-worker\u{0}~cwd-abc";
+    let sid = "rafix:local:tui#peer-worker\u{0}~cwd-abc";
     let tdir = d
         .join("runtime")
         .join("ui-protocol")
@@ -2126,7 +2126,7 @@ fn olp_review_monitor_valid_lifetime_cross_goal_not_promoted() {
     let t = TmpDir::new("p2a-crossgoal");
     let d = t.path().to_path_buf();
     std::fs::create_dir_all(&d).unwrap();
-    let profile = "octosfix";
+    let profile = "rafix";
     let peers_root = d
         .join("runtime")
         .join("profiles")
@@ -2228,7 +2228,7 @@ fn olp_review_monitor_closed_keeps_identity_on_trusted_lifetime() {
         r#"{"runtime":"/tmp/rt-cid","session":"master-sess-1","goal":"goal_01"}"#,
     )
     .unwrap();
-    let profile = "octosfix";
+    let profile = "rafix";
     let peers_root = d
         .join("runtime")
         .join("profiles")

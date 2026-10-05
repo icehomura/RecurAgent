@@ -7,7 +7,7 @@ import {
   type ValidationIssue,
 } from '../../api/swarm'
 
-const DRAFT_KEY = 'octos_swarm_contract_draft'
+const DRAFT_KEY = 'ra_swarm_contract_draft'
 
 interface Props {
   value: string

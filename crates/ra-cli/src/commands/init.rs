@@ -1,4 +1,4 @@
-//! Init command: create config.json interactively in the resolved ra home.
+//! Init command: create config.json interactively in the resolved RecurAgent home.
 
 use std::collections::BTreeMap;
 use std::io::{self, Write};
@@ -138,7 +138,7 @@ const PROVIDERS: &[ProviderInfo] = &[
     },
     // Region variant of the `minimax` preset: MiniMax Token-plan keys are
     // issued by the China platform and 401 against the international site
-    // (octos#2125). Appended last so every existing preset index keeps its
+    // (RecurAgent#2125). Appended last so every existing preset index keeps its
     // number; only the trailing Custom entry (always `PROVIDERS.len() + 1`)
     // moves.
     ProviderInfo {
@@ -617,7 +617,7 @@ fn offer_api_key_capture(provider: &str, api_key_env: &str, interactive: bool) {
     }
 }
 
-/// produce an identical, fully-bootstrapped ra home.
+/// produce an identical, fully-bootstrapped RecurAgent home.
 fn write_init_files(
     config_dir: PathBuf,
     config_path: PathBuf,
@@ -837,7 +837,7 @@ fn detect_from_env() -> Option<usize> {
     None
 }
 
-/// Initialize a new ra configuration.
+/// Initialize a new RecurAgent configuration.
 #[derive(Debug, Args)]
 pub struct InitCommand {
     /// Project working directory. When set, init writes to `<cwd>/.ra/`.
@@ -1207,7 +1207,7 @@ mod tests {
     // embedded as a compile-time fallback, manual entry requires an explicit
     // model name, and --defaults errors instead of silently writing "auto".
 
-    // octos#2125: the MiniMax China preset is a first-class region variant —
+    // RecurAgent#2125: the MiniMax China preset is a first-class region variant —
     // the Token-plan flow (preset -> protocol -> model -> config) must write
     // the api.minimaxi.com endpoint with no manual base_url override.
 

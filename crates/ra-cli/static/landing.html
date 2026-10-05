@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Octos Cloud - Your Own AI Agent, Running at Home</title>
+    <title>RecurAgent Cloud - Your Own AI Agent, Running at Home</title>
     <meta name="description" content="Self-host a powerful AI coding agent on your Mac Mini. Private, always-on, accessible from anywhere via secure tunnel.">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1F419;</text></svg>">
     <style>
@@ -309,7 +309,7 @@
     <div class="nav-inner">
         <a href="/" class="logo">
             <span class="logo-icon">&#x1F419;</span>
-            <span>Octos Cloud</span>
+            <span>RecurAgent Cloud</span>
         </a>
         <div class="nav-links">
             <a href="#features" class="hide-mobile">
@@ -337,12 +337,12 @@
     <h1 data-lang="en">Adopt a Little Octopus,<br><span class="gradient">Safe, Smart &amp; Yours Alone</span></h1>
     <h1 data-lang="zh">送你一只小章鱼<br><span class="gradient">安全、智慧、只属于你</span></h1>
     <p class="hero-sub" data-lang="en">
-        Octos is a Rust-native AI agent that lives on your Mac Mini.
+        RecurAgent is a Rust-native AI agent that lives on your Mac Mini.
         Private, always-on, accessible from anywhere through Telegram, Feishu,
         WhatsApp, or the web&mdash;no cloud subscription required.
     </p>
     <p class="hero-sub" data-lang="zh">
-        Octos 是一个 Rust 原生 AI 智能体，住在你自己的 Mac Mini 里。
+        RecurAgent 是一个 Rust 原生 AI 智能体，住在你自己的 Mac Mini 里。
         数据私有、全天候在线，通过 Telegram、飞书、WhatsApp 或网页随时随地访问，无需云端订阅。
     </p>
     <div class="hero-actions">
@@ -350,7 +350,7 @@
             <span data-lang="en">Get Started Free</span>
             <span data-lang="zh">免费注册</span>
         </a>
-        <a href="https://github.com/octos-org/octos" class="btn btn-ghost" target="_blank">GitHub</a>
+        <a href="https://github.com/icehomura/ra" class="btn btn-ghost" target="_blank">GitHub</a>
     </div>
 </section>
 
@@ -454,14 +454,14 @@
             <div class="step">
                 <h3 data-lang="en">Name Your Node</h3>
                 <h3 data-lang="zh">命名节点</h3>
-                <p data-lang="en">Choose a subdomain for your Octos node (e.g. <b>alice</b>.<span data-configured-domain>your-cloud.example</span>). We generate the auth token, SSH tunnel port, public address, and one-line setup command for this registered machine.</p>
-                <p data-lang="zh">为你的 Octos 节点选择子域名（如 <b>alice</b>.<span data-configured-domain>your-cloud.example</span>），系统会为这台已注册机器生成认证令牌、SSH 隧道端口、公网地址和一行安装命令。</p>
+                <p data-lang="en">Choose a subdomain for your RecurAgent node (e.g. <b>alice</b>.<span data-configured-domain>your-cloud.example</span>). We generate the auth token, SSH tunnel port, public address, and one-line setup command for this registered machine.</p>
+                <p data-lang="zh">为你的 RecurAgent 节点选择子域名（如 <b>alice</b>.<span data-configured-domain>your-cloud.example</span>），系统会为这台已注册机器生成认证令牌、SSH 隧道端口、公网地址和一行安装命令。</p>
             </div>
             <div class="step">
                 <h3 data-lang="en">Setup Your Machine</h3>
                 <h3 data-lang="zh">配置你的机器</h3>
-                <p data-lang="en">Run the one-line setup command on your Mac, Linux server, or Windows PC. It installs octos, configures the tunnel, and brings your public node online.</p>
-                <p data-lang="zh">在你的 Mac、Linux 服务器或 Windows 电脑上运行一行安装命令，自动安装 octos、配置隧道，并让你的公网节点上线。</p>
+                <p data-lang="en">Run the one-line setup command on your Mac, Linux server, or Windows PC. It installs RecurAgent, configures the tunnel, and brings your public node online.</p>
+                <p data-lang="zh">在你的 Mac、Linux 服务器或 Windows 电脑上运行一行安装命令，自动安装 RecurAgent、配置隧道，并让你的公网节点上线。</p>
             </div>
             <div class="step">
                 <h3 data-lang="en">Go Live</h3>
@@ -473,8 +473,8 @@
 
         <!-- Registration Form -->
         <div class="register-box center" id="registerBox">
-            <h3 data-lang="en">Create Your Octos Cloud Account</h3>
-            <h3 data-lang="zh">创建 Octos Cloud 账号</h3>
+            <h3 data-lang="en">Create Your RecurAgent Cloud Account</h3>
+            <h3 data-lang="zh">创建 RecurAgent Cloud 账号</h3>
             <p class="subtitle" data-lang="en">Free registration. One email, one node, your own AI.</p>
             <p class="subtitle" data-lang="zh">免费注册。一个邮箱，一个节点，你自己的 AI。</p>
 
@@ -502,8 +502,8 @@
                             <span data-lang="zh">节点名称</span>
                             <span class="field-help" tabindex="0" data-lang="en" title="Node Name becomes your public subdomain and tenant id. Use 1 to 64 lowercase letters, numbers, or hyphens. Choose something stable and easy to remember, because reinstall and support flows may refer to the same name.">?</span>
                             <span class="field-help" tabindex="0" data-lang="zh" title="节点名称会成为你的公网子域名和租户标识。请使用 1 到 64 位小写字母、数字或连字符。建议选择稳定、容易记住的名字，因为重装和排障时都会引用它。">?</span>
-                            <a class="doc-link" data-lang="en" href="https://octos-org.github.io/octos/installation.html#node-name-guidelines" target="_blank" rel="noreferrer">Naming guide</a>
-                            <a class="doc-link" data-lang="zh" href="https://octos-org.github.io/octos/zh/installation.html#node-name-guidelines" target="_blank" rel="noreferrer">命名说明</a>
+                            <a class="doc-link" data-lang="en" href="https://icehomura.github.io/ra/installation.html#node-name-guidelines" target="_blank" rel="noreferrer">Naming guide</a>
+                            <a class="doc-link" data-lang="zh" href="https://icehomura.github.io/ra/zh/installation.html#node-name-guidelines" target="_blank" rel="noreferrer">命名说明</a>
                         </label>
                         <input type="text" class="form-input" id="regNode" placeholder="alice" pattern="[a-z0-9\-]+" required>
                         <p class="form-hint">
@@ -534,8 +534,8 @@
             <!-- Result -->
             <div class="register-result" id="registerResult">
                 <p style="margin-bottom: 12px;">
-                    <span data-lang="en">Your Octos Cloud account is ready!</span>
-                    <span data-lang="zh">你的 Octos Cloud 账号已创建！</span>
+                    <span data-lang="en">Your RecurAgent Cloud account is ready!</span>
+                    <span data-lang="zh">你的 RecurAgent Cloud 账号已创建！</span>
                 </p>
                 <p style="margin-bottom: 4px; font-size: 13px; color: var(--text-dim);">
                     <span data-lang="en">Reserved Public URL</span><span data-lang="zh">预留公网地址</span>
@@ -550,8 +550,8 @@
                 </p>
                 <p class="token" id="resultSshPort"></p>
                 <p style="margin-top: 16px; font-size: 13px; color: var(--text-dim);">
-                    <span data-lang="en">Run this on your machine to install octos and activate the tunnel:</span>
-                    <span data-lang="zh">在你的机器上运行以下命令安装 octos 并启用隧道：</span>
+                    <span data-lang="en">Run this on your machine to install RecurAgent and activate the tunnel:</span>
+                    <span data-lang="zh">在你的机器上运行以下命令安装 RecurAgent 并启用隧道：</span>
                 </p>
                 <div style="margin-top: 8px;">
                     <div style="display: flex; gap: 8px; margin-bottom: 4px; align-items: center;">
@@ -580,17 +580,17 @@
         <div class="code-block">
             <pre><span class="comment" data-lang="en"># After registration, run the tenant setup script on your machine:</span><span class="comment" data-lang="zh"># 注册完成后，在你的机器上运行租户安装脚本：</span>
 
-<span class="cmd">curl -fsSL</span> https://octos.bot/api/register/setup-script/&lt;tenant&gt;/&lt;auth-token&gt; <span class="cmd">| bash</span>
+<span class="cmd">curl -fsSL</span> https://ra.bot/api/register/setup-script/&lt;tenant&gt;/&lt;auth-token&gt; <span class="cmd">| bash</span>
 
 <span class="output">  ==> Detecting platform
       OK: Darwin arm64 (aarch64-apple-darwin)
   ==> Checking runtime dependencies
       OK: git 2.50.1
       OK: Node.js v25.5.0
-  ==> Installing octos
-      OK: binaries installed to ~/.octos/bin
-  ==> Setting up octos serve
-      OK: octos serve started via launchd
+  ==> Installing RecurAgent
+      OK: binaries installed to ~/.RecurAgent/bin
+  ==> Setting up RecurAgent serve
+      OK: RecurAgent serve started via launchd
   ==> Tunnel setup
       OK: frpc installed
       OK: frpc config written to /etc/frp/frpc.toml
@@ -601,7 +601,7 @@
 <span class="cmd">open</span> https://alice.<span data-configured-domain>your-cloud.example</span>
 
 <span class="comment" data-lang="en"># Troubleshoot anytime:</span><span class="comment" data-lang="zh"># 随时诊断问题：</span>
-<span class="cmd">curl</span> -fsSL https://github.com/octos-org/octos/releases/latest/download/install.sh | <span class="cmd">bash</span> -s -- <span class="flag">--doctor</span></pre>
+<span class="cmd">curl</span> -fsSL https://github.com/icehomura/ra/releases/latest/download/install.sh | <span class="cmd">bash</span> -s -- <span class="flag">--doctor</span></pre>
         </div>
     </div>
 </section>
@@ -669,21 +669,21 @@
 
 <!-- CTA -->
 <section class="cta">
-    <h2 data-lang="en">Ready to adopt your own Octos?</h2>
-    <h2 data-lang="zh">准备好拥有你自己的 Octos 了吗？</h2>
+    <h2 data-lang="en">Ready to adopt your own RecurAgent?</h2>
+    <h2 data-lang="zh">准备好拥有你自己的 RecurAgent 了吗？</h2>
     <p data-lang="en">Private AI agent on your Mac Mini, accessible from anywhere.</p>
     <p data-lang="zh">运行在你 Mac Mini 上的私有 AI 智能体，随时随地可达。</p>
     <div class="hero-actions">
         <a href="#get-started" class="btn btn-primary">
             <span data-lang="en">Register Now</span><span data-lang="zh">立即注册</span>
         </a>
-        <a href="https://github.com/octos-org/octos" class="btn btn-ghost" target="_blank">GitHub</a>
+        <a href="https://github.com/icehomura/ra" class="btn btn-ghost" target="_blank">GitHub</a>
     </div>
 </section>
 
 <!-- Footer -->
 <footer>
-    <p>&copy; 2026 Octos Cloud &middot; Built with Rust &middot; <a href="https://github.com/octos-org/octos">Open Source</a></p>
+    <p>&copy; 2026 RecurAgent Cloud &middot; Built with Rust &middot; <a href="https://github.com/icehomura/ra">Open Source</a></p>
 </footer>
 
 <script>

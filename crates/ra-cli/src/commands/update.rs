@@ -32,7 +32,7 @@ const EXIT_NO_CHANNEL: i32 = 3;
 /// Exit code emitted by `--check` on a network/API error (non-10 nonzero).
 const EXIT_CHECK_ERROR: i32 = 2;
 
-/// Check for (and, in a future Stage 3, apply) ra updates.
+/// Check for (and, in a future Stage 3, apply) RecurAgent updates.
 #[derive(Debug, Args)]
 pub struct UpdateCommand {
     /// Only check for a newer release and print the plan — never mutate. Exits
@@ -44,7 +44,7 @@ pub struct UpdateCommand {
     pub json: bool,
 }
 
-/// Build the ra server [`ProductSpec`]. `current_version` is the CLI's OWN
+/// Build the RecurAgent server [`ProductSpec`]. `current_version` is the CLI's OWN
 /// `CARGO_PKG_VERSION`, passed IN here — never the diagnostics crate's.
 ///
 /// No published release channel exists for this fork (it ships from the source
@@ -218,11 +218,13 @@ mod tests {
     }
 
     #[test]
-    fn spec_carries_cli_version_and_token_env() {
+    fn spec_carries_cli_version_and_no_release_channel() {
         let s = spec();
         assert_eq!(s.current_version, env!("CARGO_PKG_VERSION"));
-        assert_eq!(s.github_repo, "octos-org/octos");
-        assert_eq!(s.github_token_env.as_deref(), Some("OCTOS_GITHUB_TOKEN"));
+        // This fork ships from the source tree: no upstream repo and therefore
+        // no GitHub token env is advertised (see `ra_server_spec`).
+        assert_eq!(s.github_repo, "");
+        assert_eq!(s.github_token_env, None);
     }
 
     #[test]
@@ -250,11 +252,11 @@ mod tests {
     #[test]
     fn defer_to_package_manager_exits_ten_and_prints_cmd() {
         let plan = UpdatePlan::DeferToPackageManager {
-            cmd: "brew upgrade octos-org/octos/octos".into(),
+            cmd: "brew upgrade icehomura/ra/ra".into(),
         };
         let (text, _json, code) = render_check(&plan, &InstallMethod::Homebrew, &spec());
         assert_eq!(code, EXIT_UPDATE_AVAILABLE);
-        assert!(text.contains("brew upgrade octos-org/octos/octos"));
+        assert!(text.contains("brew upgrade icehomura/ra/ra"));
     }
 
     #[test]

@@ -63,7 +63,7 @@ fn main() -> ExitCode {
 /// Validate one manifest file. We use `PluginManifest::from_file()`
 /// which runs structural validation (`id`, `version`, tool names,
 /// `type: "tool"` requires `tools`, `type: "hook"` requires `hooks`),
-/// schema validation (Draft 07 sanity + the strict ra profile),
+/// schema validation (Draft 07 sanity + the strict RecurAgent profile),
 /// and honours `RA_MANIFEST_VALIDATION`. Re-using this entrypoint
 /// means CI cannot drift from runtime — codex review (2026-05-25, P3)
 /// flagged a hand-rolled structural copy that omitted the type/tools

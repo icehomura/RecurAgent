@@ -16,7 +16,7 @@ and field lessons live in the protocol doc.
 │         ▲                                     │
 │    .ra/OUTER_LOOP_REVIEW.md (the board)     │ steer / prompt
 │         │                                     ▼
-└─ INNER loop (octoscode TUI + octos serve, running a cheap model such as kimi)
+└─ INNER loop (ra-tui TUI + ra serve, running a cheap model such as kimi)
      read board → execute → commit (no push) → ACK(done|wontdo|blocked)
 ```
 
@@ -38,26 +38,26 @@ onboarding card instead of this page:
 | Dependency | Required? | Notes |
 |---|---|---|
 | Linux / macOS | yes | Windows can run the TUI; serve's sandbox tiers (bwrap) are a Linux feature |
-| Network | first run only | First start downloads the ra server to `~/.ra/bin`; offline, see the README failure table |
+| Network | first run only | First start downloads the RecurAgent server to `~/.ra/bin`; offline, see the README failure table |
 | Node **or** Homebrew **or** shell installer | pick one | Only to install binaries. **Rust is not needed** — only a source build needs Rust 1.85+ |
 | Inner-loop model API key | yes | The cheap tier, e.g. Moonshot (kimi). Paste it in the onboarding wizard |
 | Outer-loop agent CLI | yes | Claude Code or Codex, on the subscription you already have |
-| herdr (terminal workspace manager) | no, recommended | Lets the outer loop drive the inner pane programmatically via `herdr agent prompt`; without it, fall back to tmux `send-keys`. **Source**: <https://github.com/hagency-org/herdr>. octoscode pane detection (`--kind octoscode`) currently lives on the `feat/octoscode-agent` branch — build from there; follow master once it merges |
+| herdr (terminal workspace manager) | no, recommended | Lets the outer loop drive the inner pane programmatically via `herdr agent prompt`; without it, fall back to tmux `send-keys`. **Source**: <https://github.com/hagency-org/herdr>. ra-tui pane detection (`--kind ra-tui`) currently lives on the `feat/ra-tui-agent` branch — build from there; follow master once it merges |
 | bwrap (bubblewrap) | usually preinstalled on Linux | The filesystem sandbox behind permission tiers 1–4; semantics in §0b |
 
 ## 2. The one-command path
 
 ```bash
 # ① install the TUI (the server is pulled on first start; no resident background service)
-npm install -g @your-org/ra-tui
+npm install -g @icehomura/ra-tui
 
 # ② lay the OLP scaffolding in your project (idempotent; never overwrites an existing file)
 cd your-project/
-curl -fsSL https://raw.githubusercontent.com/your-org/ra-tui/main/scripts/olp-init.sh | bash
+curl -fsSL https://raw.githubusercontent.com/icehomura/ra-tui/main/scripts/olp-init.sh | bash
 #   (or clone this repo and run scripts/olp-init.sh)
 
 # ③ start the inner loop
-octoscode --stdio-command 'octos serve --stdio --solo'
+ra-tui --stdio-command 'ra serve --stdio --solo'
 ```
 
 `olp-init.sh` does six things: a dependency check (what is missing and how to
@@ -90,10 +90,10 @@ a toolchain such as cargo or npm, you must either:
 
 - pick tier **5, Full Access** (no sandbox) in the permission menu, or
 - start serve with `--danger-full-access` (equivalent to
-  `OCTOS_DANGER_FULL_ACCESS=1`). The standard command:
+  `ra_DANGER_FULL_ACCESS=1`). The standard command:
 
 ```bash
-octoscode --stdio-command 'octos serve --stdio --solo --danger-full-access'
+ra-tui --stdio-command 'ra serve --stdio --solo --danger-full-access'
 ```
 
 `--solo` is the safety gate for a single-person local box: a permissive
@@ -106,7 +106,7 @@ not let any agent press it for you.
 
 ## 3. Inner-loop lane configuration (optional; the key to saving money)
 
-ra's `sub_providers` splits models into lanes so mechanical work runs on the
+RecurAgent's `sub_providers` splits models into lanes so mechanical work runs on the
 cheap tier (templates and the selection matrix are in appendix B of the protocol
 doc):
 
@@ -184,7 +184,7 @@ herdr users get a second injection channel: `herdr agent list` to see the panes,
 1. Say hello in the TUI and confirm the main-tier model answers.
 2. Have the inner loop ACK the first board entry (the "board enabled" entry that
    `olp-init.sh` generates) — that closes the read/write loop.
-3. With herdr: `herdr agent list` should show `octoscode | <pane> | idle`.
+3. With herdr: `herdr agent list` should show `ra-tui | <pane> | idle`.
 
 ## 6. Failure quick-reference
 
@@ -193,7 +193,7 @@ herdr users get a second injection channel: `herdr agent list` to see the panes,
 | `ra: 'serve' is not a subcommand` | A source build missed a feature: `cargo build --release --features api` (release binaries are unaffected) |
 | inner loop says "there is no cargo on this machine" | The bwrap sandbox of tiers 1–4 — see §0b: tier 5 or `--danger-full-access` |
 | `permission profile is not allowed outside local solo mode` | serve is missing `--solo` |
-| first-run server download fails | Offline or behind a proxy: install by hand with `npm i -g @your-org/ra`; `OCTOSCODE_NO_AUTO_INSTALL=1` disables auto-install |
+| first-run server download fails | Offline or behind a proxy: install by hand with `npm i -g @icehomura/ra`; `RA_TUI_NO_AUTO_INSTALL=1` disables auto-install |
 | linker SIGBUS / EDQUOT when building a large project on Linux | `/tmp` is tmpfs and may carry a quota, and rust-lld's temporary files are large: `export TMPDIR=$HOME/.local/tmp` (create it, then put this in your shell profile) |
 | herdr injection silently lost | A double gate: the named-agent list **and** a pane foreground process-name match. Miss either and it is dropped. Fall back to tmux `send-keys` (text starting with `-` needs a `--` separator) |
 

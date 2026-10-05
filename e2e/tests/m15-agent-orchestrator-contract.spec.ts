@@ -7,7 +7,7 @@ const workstreamPath = path.join(repoRoot, 'workstreams', 'M15-agent-goal-loop-a
 const upcrPath = path.join(
   repoRoot,
   'docs',
-  'OCTOS_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_021_AGENT_GOAL_LOOP_AUTONOMY.md',
+  'ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_021_AGENT_GOAL_LOOP_AUTONOMY.md',
 );
 
 function readContractDocs(): string {

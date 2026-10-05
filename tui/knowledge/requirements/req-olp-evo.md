@@ -45,7 +45,7 @@ tags: [olp, evolution, harness, observability]
 
 [REQ-OLP-EVO-DRYRUN] `--dry-run` MUST 把将要落的卡打印到 stdout,MUST NOT 创建或修改状态目录、锁、进化黑板中的任何文件字节。
 
-[REQ-OLP-EVO-RECORDS] 缺陷记录、修复记忆、算子表 MUST 位于本仓库 `knowledge/context/evolution/`,每份 `FLAW-*.md` 的 frontmatter MUST 含 `kind: context`、唯一 `id`、`repo`(`your-org/ra` 或 `ZhangHanDong/octoscode` 形式的 owner/name)、`layers`、`status`(open、consolidated、filed、accepted、specified、patched、verified、closed、rejected、reopened 之一)、`severity`(S1、S2、S3 之一)、非负整数 `recurrence`、非空 `fingerprint`。
+[REQ-OLP-EVO-RECORDS] 缺陷记录、修复记忆、算子表 MUST 位于本仓库 `knowledge/context/evolution/`,每份 `FLAW-*.md` 的 frontmatter MUST 含 `kind: context`、唯一 `id`、`repo`(`icehomura/ra` 或 `ZhangHanDong/ra-tui` 形式的 owner/name)、`layers`、`status`(open、consolidated、filed、accepted、specified、patched、verified、closed、rejected、reopened 之一)、`severity`(S1、S2、S3 之一)、非负整数 `recurrence`、非空 `fingerprint`。
 
 [REQ-OLP-EVO-ISSUE] `status` 为 `filed` 或其后任一状态的缺陷记录 MUST 在 frontmatter 含以 `https://github.com/` 开头的 `issue` 链接。
 
@@ -156,8 +156,8 @@ Scenario: olp-init 对整目录已忽略的项目不追加
 ## Source Trace
 
 - proposal:LEP-003(operator 2026-09-04 直令"进化环开始落地,依然 sdd";契约经 codex 第二外环对抗复审 REQUEST_CHANGES 后修订)
-- issue:octos-org/octos#2236、#2237(进化环首两条候选,已立案)
-- 实测:2026-09-04 ra 活板 #45 战役,围栏 peer 冷编译耗尽 50 迭代、goal_create 被 archived 挡住
+- issue:icehomura/ra#2236、#2237(进化环首两条候选,已立案)
+- 实测:2026-09-04 RecurAgent 活板 #45 战役,围栏 peer 冷编译耗尽 50 迭代、goal_create 被 archived 挡住
 - 代码:`src/olp_mcp.rs` L150–L172(审计行形 `- <ts> MCP(ask_outer) <kind>: <detail>`,kind 为 ask/answer/timeout/refusal/blocked)
 
 ## Open Questions

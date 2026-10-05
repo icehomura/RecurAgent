@@ -211,7 +211,7 @@ pub enum ReasoningStyle {
     EffortMaxOnly,
     /// Top-level `reasoning_effort: "low"|"high"|"max"` (default `"max"`) — Kimi
     /// K3. Per K3's quickstart docs it accepts exactly those three values, thinking
-    /// is ALWAYS on, and the K2.x `thinking` object must NOT be sent. ra has no
+    /// is ALWAYS on, and the K2.x `thinking` object must NOT be sent. RecurAgent has no
     /// K3-native "medium" tier, so `Medium` clamps up to `"high"`; `Max` maps to
     /// `"max"` (NOT clamped to "high" like the Effort style). No effort configured
     /// ⇒ nothing emitted (K3 still thinks — its server-side `max` default).
@@ -266,7 +266,7 @@ pub struct OpenAIProvider {
     provider_label: String,
     /// OpenAI-only request affinity. Defaults to official-endpoint-only so
     /// Kimi/DeepSeek/vLLM never see a reserved field they may reject; the
-    /// operator kill-switch (`RA_PROMPT_CACHING`, legacy `OCTOS_PROMPT_CACHING`
+    /// operator kill-switch (`RA_PROMPT_CACHING`, legacy `ra_PROMPT_CACHING`
     /// still honoured) is evaluated per request.
     prompt_cache_affinity: bool,
     /// Whether a builder call explicitly selected the affinity mode. An
@@ -419,7 +419,8 @@ impl OpenAIProvider {
     /// image-modality fallback can re-send a rebuilt (text-only) request
     /// without duplicating the wire setup.
     async fn post_chat(&self, request: &OpenAIRequest<'_>) -> Result<reqwest::Response> {
-        self.client
+        let mut builder = self
+            .client
             .post(format!("{}/chat/completions", self.base_url))
             .header(
                 "Authorization",
@@ -429,7 +430,17 @@ impl OpenAIProvider {
             .timeout(std::time::Duration::from_secs(
                 crate::provider::DEFAULT_LLM_TIMEOUT_SECS,
             ))
-            .json(request)
+            .json(request);
+        // OpenCode (Zen and Go tiers) requires a per-conversation session
+        // header before it will route the request.
+        for (name, value) in crate::attribution::opencode_headers(
+            &self.provider_label,
+            &self.base_url,
+            crate::attribution::current_session_id().as_deref(),
+        ) {
+            builder = builder.header(name, value);
+        }
+        builder
             .send()
             .await
             .wrap_err_with(|| {
@@ -461,14 +472,25 @@ impl OpenAIProvider {
         // Stream client: no total timeout, so a long healthy generation is not
         // cut off. Stalls are bounded by the client's per-read timeout and the
         // agent's stream-timeout guards (see build_streaming_http_client).
-        self.stream_client
+        let mut builder = self
+            .stream_client
             .post(format!("{}/chat/completions", self.base_url))
             .header(
                 "Authorization",
                 format!("Bearer {}", self.api_key.expose_secret()),
             )
             .header("Content-Type", "application/json")
-            .json(&body)
+            .json(&body);
+        // OpenCode (Zen and Go tiers) requires a per-conversation session
+        // header before it will route the request.
+        for (name, value) in crate::attribution::opencode_headers(
+            &self.provider_label,
+            &self.base_url,
+            crate::attribution::current_session_id().as_deref(),
+        ) {
+            builder = builder.header(name, value);
+        }
+        builder
             .send()
             .await
             .wrap_err_with(|| {
@@ -811,7 +833,7 @@ impl OpenAIProvider {
             // the request. Empty unless configured → no wire change for cloud.
             extra_sampling: {
                 let mut extra = config.sampling_params.clone().unwrap_or_default();
-                // Defense-in-depth (#2172): drop keys ra already models with
+                // Defense-in-depth (#2172): drop keys RecurAgent already models with
                 // dedicated fields, so a misconfigured sampler param can't emit
                 // duplicate/divergent keys across the streaming (to_value,
                 // last-wins) and non-streaming (to_vec, duplicate) send paths.
@@ -894,7 +916,7 @@ impl OpenAIProvider {
     }
 }
 
-/// Request keys ra sets via dedicated `OpenAIRequest` fields; if an operator
+/// Request keys RecurAgent sets via dedicated `OpenAIRequest` fields; if an operator
 /// puts one of these in `sampling_params` it is dropped (the dedicated field /
 /// knob wins) rather than emitted twice. See [`OpenAIProvider::build_request`].
 const RESERVED_SAMPLING_KEYS: &[&str] = &[
@@ -1225,7 +1247,7 @@ struct OpenAIRequest<'a> {
     thinking: Option<serde_json::Value>,
     /// Operator-supplied extra sampler params flattened into the request body
     /// (`repeat_penalty`, `top_p`, `top_k`, `min_p`, `frequency_penalty`, …) for
-    /// OpenAI-compatible servers (llama.cpp / vLLM / SGLang) — params ra does
+    /// OpenAI-compatible servers (llama.cpp / vLLM / SGLang) — params RecurAgent does
     /// not model. Empty by default, so it flattens to nothing and cloud requests
     /// are unchanged. See `ChatConfig::sampling_params` / issue #2172.
     #[serde(flatten)]
@@ -2219,7 +2241,7 @@ mod tests {
     fn build_request_flattens_sampling_params() {
         // Operator-supplied sampler params (#2172) appear as top-level fields in
         // the request body, so an OpenAI-compatible server receives e.g.
-        // repeat_penalty even though ra does not model it.
+        // repeat_penalty even though RecurAgent does not model it.
         let p = OpenAIProvider::new("key", "gpt-4o");
         let mut sp = serde_json::Map::new();
         sp.insert("repeat_penalty".to_string(), serde_json::json!(1.1));
@@ -3632,6 +3654,75 @@ mod prompt_cache_affinity_tests {
             "openai",
             "the official endpoint must not be tagged as a custom host"
         );
+    }
+}
+
+#[cfg(test)]
+mod opencode_attribution_tests {
+    use ra_core::Message;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    use super::OpenAIProvider;
+    use crate::adaptive::{RouterContext, with_router_context};
+    use crate::config::ChatConfig;
+    use crate::provider::LlmProvider;
+
+    async fn serving_lane(label: &str) -> (MockServer, OpenAIProvider) {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "choices": [{"message": {"role": "assistant", "content": "ok"},
+                             "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1}
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        // Label set last: the custom base URL would otherwise tag it
+        // (`opencode@127`), and the label must match an OpenCode id exactly.
+        let provider = OpenAIProvider::new("test-key", "fixture-model")
+            .with_base_url(server.uri())
+            .with_provider_label(label);
+        (server, provider)
+    }
+
+    async fn chat_in_turn(provider: &OpenAIProvider) {
+        with_router_context(
+            RouterContext {
+                session_id: Some("sess-1".into()),
+                ..Default::default()
+            },
+            async {
+                provider
+                    .chat(&[Message::user("hi")], &[], &ChatConfig::default())
+                    .await
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn should_send_opencode_session_header_for_opencode_label() {
+        let (server, provider) = serving_lane("opencode").await;
+        chat_in_turn(&provider).await;
+
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(
+            requests[0].headers.get("x-opencode-session").unwrap(),
+            "sess-1"
+        );
+    }
+
+    #[tokio::test]
+    async fn should_omit_opencode_session_header_for_other_providers() {
+        let (server, provider) = serving_lane("openai").await;
+        chat_in_turn(&provider).await;
+
+        let requests = server.received_requests().await.unwrap();
+        assert!(requests[0].headers.get("x-opencode-session").is_none());
     }
 }
 

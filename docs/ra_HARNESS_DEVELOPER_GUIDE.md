@@ -1,15 +1,15 @@
-# ra Harness Developer Guide
+# RecurAgent Harness Developer Guide
 
 Date: 2026-04-19
 Status: developer contract, M4.2 publication
 
-This guide teaches you how to build a custom app that plugs into the ra
+This guide teaches you how to build a custom app that plugs into the RecurAgent
 harness without reading runtime internals. It pairs with
-[OCTOS_HARNESS_DEVELOPER_INTERFACE.md](./OCTOS_HARNESS_DEVELOPER_INTERFACE.md),
+[ra_HARNESS_DEVELOPER_INTERFACE.md](./ra_HARNESS_DEVELOPER_INTERFACE.md),
 which defines the product position. This document is the concrete "how to
 ship" companion.
 
-If the developer interface tells you **why** ra has a harness, this guide
+If the developer interface tells you **why** RecurAgent has a harness, this guide
 tells you **exactly what files to write, what fields to use, what fields not
 to touch, and how to prove your app is harness-compliant**.
 
@@ -163,7 +163,7 @@ them via the runtime hook config:
 #### `before_spawn_verify` semantics
 
 The blocking pre-delivery hook contract (see
-[developer interface](./OCTOS_HARNESS_DEVELOPER_INTERFACE.md#beforespawnverify-semantics)):
+[developer interface](./ra_HARNESS_DEVELOPER_INTERFACE.md#beforespawnverify-semantics)):
 
 - **allow** — return success with no body: runtime keeps its selected
   `output_files`.
@@ -212,7 +212,7 @@ move, rename, or disappear without notice.
   runtime-private.
 - The exact file format of `~/.ra/` (profile, auth, episode, session
   storage). Config hot-reload and format migrations are runtime concerns.
-- The `progress event sink` (`OCTOS_EVENT_SINK` and
+- The `progress event sink` (`ra_EVENT_SINK` and
   `ra.harness.event.v1`) is **forthcoming in M4.1A**. Until M4.1A
   lands, treat progress events as best-effort stderr. Structured progress
   event schemas are promised to land, but the exact transport URI shape is
@@ -674,11 +674,11 @@ session. Make hooks robust and fast. Target < 1 second.
 ## Part 7: Progress Events
 
 The runtime exposes a local structured progress sink to long-running child
-workflows through `OCTOS_EVENT_SINK`. The value is a transport URI; M4.1A
+workflows through `ra_EVENT_SINK`. The value is a transport URI; M4.1A
 requires local `file://...` JSONL sinks and the runtime also accepts bare file
 paths for older helpers.
 
-Missing `OCTOS_EVENT_SINK` is a no-op for emitters. Stderr remains diagnostic
+Missing `ra_EVENT_SINK` is a no-op for emitters. Stderr remains diagnostic
 text only; durable parent-visible progress must be emitted as structured
 `ra.harness.event.v1` records:
 
@@ -888,7 +888,7 @@ This guide captures M4.2's contract. Future workstreams tighten the
 surface further:
 
 - **M4.1A** (`#464`) — structured progress event ABI and the
-  `OCTOS_EVENT_SINK` transport. Once landed, this guide gains a full
+  `ra_EVENT_SINK` transport. Once landed, this guide gains a full
   Part 7 with emitter examples.
 - **M4.3** (`#466`) — typed validator runner with per-validator status,
   duration, reason, and replayable evidence path. Today's validators are
@@ -910,9 +910,9 @@ your app is portable across future runtime revisions.
 
 ## Cross References
 
-- [ra Harness Developer Interface](./OCTOS_HARNESS_DEVELOPER_INTERFACE.md)
+- [RecurAgent Harness Developer Interface](./ra_HARNESS_DEVELOPER_INTERFACE.md)
   — product position and conceptual overview.
-- [ra Harness M4 Workstreams](./OCTOS_HARNESS_M4_WORKSTREAMS_2026-04-21.md)
+- [RecurAgent Harness M4 Workstreams](./ra_HARNESS_M4_WORKSTREAMS_2026-04-21.md)
   — roadmap that this guide implements for M4.2.
 - [App Skill Dev Guide (English)](./app-skill-dev-guide.md) — general app
   skill plugin authoring guide (non-harnessed).
@@ -927,7 +927,7 @@ runtime revisions until M4.6 introduces explicit schema versions. At that
 point, this guide will document the compatibility and deprecation rules.
 
 Until M4.6, if you build against only the stable fields here, your custom
-app should continue to work across every ra runtime release.
+app should continue to work across every RecurAgent runtime release.
 
 If you need to depend on something in Part 1's **INTERNAL** list, open an
 issue on the repo asking for that field to be promoted to stable. Do not

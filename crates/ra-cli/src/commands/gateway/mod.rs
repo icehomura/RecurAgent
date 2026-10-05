@@ -99,9 +99,9 @@ pub struct GatewayCommand {
     #[arg(long, hide = true)]
     pub parent_profile: Option<PathBuf>,
 
-    /// ra home directory for ProfileStore access (used by managed gateways).
+    /// RecurAgent home directory for ProfileStore access (used by managed gateways).
     #[arg(long, hide = true)]
-    pub octos_home: Option<PathBuf>,
+    pub ra_home: Option<PathBuf>,
 }
 
 fn resolve_dispatch_profile_id(
@@ -280,7 +280,7 @@ mod tests {
             project_dir: project_dir.clone(),
             // Gap 4.1 BLOCKER 1: in this admin-parent test `--ra-home` is
             // effectively the same dir, so mirror `project_dir`.
-            effective_octos_home: project_dir.clone(),
+            effective_ra_home: project_dir.clone(),
             tool_config,
             memory,
             recall: Arc::new(

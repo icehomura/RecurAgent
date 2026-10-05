@@ -1,7 +1,7 @@
 //! Native ARC compiled-task contract for the MCP session boundary.
 //!
 //! ARC owns requirement compilation and sends a versioned execution package.
-//! ra validates that package before constructing an agent task, so malformed
+//! RecurAgent validates that package before constructing an agent task, so malformed
 //! or workspace-escaping inputs never fall back to the legacy prompt path.
 
 use std::fmt;

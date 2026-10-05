@@ -1,7 +1,7 @@
 # Captured live-soak fixtures
 
 This directory holds JSON fixtures that the live e2e harness auto-saves
-when running with `OCTOS_CAPTURE_FIXTURE=1` or when a soak test fails.
+when running with `ra_CAPTURE_FIXTURE=1` or when a soak test fails.
 Each fixture is a snapshot of the SSE event stream + final DOM state from
 ONE live spec run, suitable for promoting to the Layer 1 SPA reducer
 test corpus.
@@ -9,7 +9,7 @@ test corpus.
 The capture-and-replay flag is **PR I** in the chat-lifecycle hardening
 plan. It feeds the regression corpus that **PR H** consumes (Layer 1
 SPA reducer fixtures under
-`crates/octos-web/src/state/__tests__/fixtures/`). Together with PR H
+`crates/ra-web/src/state/__tests__/fixtures/`). Together with PR H
 it forms the 3-tier promotion workflow:
 
 ```
@@ -22,13 +22,13 @@ it forms the 3-tier promotion workflow:
 
 Two trigger paths:
 
-1. **Operator-driven**: set `OCTOS_CAPTURE_FIXTURE=1` (or `=true`/`=yes`)
+1. **Operator-driven**: set `ra_CAPTURE_FIXTURE=1` (or `=true`/`=yes`)
    when invoking Playwright. The harness writes a fixture for every spec
    that calls `attachCapture(page, testInfo)`, regardless of pass/fail.
 2. **On failure**: even without the env flag, if a spec fails AND the
    spec called `attachCapture()`, the harness writes the fixture. To
    suppress capture entirely (e.g. constrained CI shards) set
-   `OCTOS_CAPTURE_DISABLE=1`.
+   `ra_CAPTURE_DISABLE=1`.
 
 Both paths write to `e2e/fixtures/captured/<sanitized-test-title>-<iso-timestamp>.json`.
 The file is also added as a Playwright attachment to the failing test
@@ -58,7 +58,7 @@ test('reproduces overflow-stress thread binding', async ({ page }, testInfo) => 
 });
 ```
 
-`attachCapture` is a no-op on `OCTOS_CAPTURE_DISABLE=1`; otherwise it
+`attachCapture` is a no-op on `ra_CAPTURE_DISABLE=1`; otherwise it
 installs a fetch + EventSource tee via `addInitScript` BEFORE
 `page.goto()`. Calling `attachCapture` after navigation will not capture
 the streams that were opened pre-attach.
@@ -86,7 +86,7 @@ message embedded in the fixture's `assertionFailure` field.
 ## Fixture format
 
 The on-disk shape is a SUPERSET of PR H's `SseFixture`
-(`crates/octos-web/src/state/__tests__/lib/fixture-types.ts`):
+(`crates/ra-web/src/state/__tests__/lib/fixture-types.ts`):
 
 ```jsonc
 {
@@ -94,7 +94,7 @@ The on-disk shape is a SUPERSET of PR H's `SseFixture`
   "description": "<human description>",
   "captured_at": "2026-04-30T19:12:03.456Z",
   "spec": "live-overflow-stress.spec.ts",
-  "base_url": "https://dspfac.octos.ominix.io",
+  "base_url": "https://dspfac.ra.ominix.io",
   "session_id": "01HX...",            // best-effort from localStorage
   "events": [                          // PR H-compatible normalized
     { "t": 12, "type": "user_sent", "text": "..." },
@@ -143,7 +143,7 @@ H without manual editing.
 ./e2e/scripts/promote-captured-fixture.sh \
     e2e/fixtures/captured/live-overflow-stress-2026-04-30_19-12-03-456.json \
     overflow-stress-thread-binding
-# -> crates/octos-web/src/state/__tests__/fixtures/captured/overflow-stress-thread-binding.fixture.json
+# -> crates/ra-web/src/state/__tests__/fixtures/captured/overflow-stress-thread-binding.fixture.json
 ```
 
 The script:
@@ -192,7 +192,7 @@ usually mean the spec ran for many minutes; consider trimming.
   `streamingPaths` if a custom streaming endpoint should be
   intercepted.
 * **Buffer cap**: 10 000 frames per capture (override via
-  `OCTOS_CAPTURE_MAX_FRAMES`). Beyond that, frames are dropped and a
+  `ra_CAPTURE_MAX_FRAMES`). Beyond that, frames are dropped and a
   single `capture_truncated` marker is appended.
 * **Wall-clock impact on soak runs**: under 2% in practice. Captures
   only flush on test end; in-flight tests pay only the tee.
@@ -201,7 +201,7 @@ usually mean the spec ran for many minutes; consider trimming.
   PR I demo run produced 8.9KB / 9 events).
 
 If a long-running spec produces oversize captures, set
-`OCTOS_CAPTURE_DISABLE=1` for that shard or trim `raw_events` at
+`ra_CAPTURE_DISABLE=1` for that shard or trim `raw_events` at
 promotion time.
 
 ### Replace vs. delta semantics

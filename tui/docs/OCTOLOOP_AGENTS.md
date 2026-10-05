@@ -3,7 +3,7 @@
 > protocol: olp/v2 — any agent reading this file operates under OLP v2 (R6 version negotiation).
 >
 > **OctoLoop** is the product name; **OLP** (Outer-Loop Protocol) is the protocol name.
-> 中文版:[OCTOLOOP_AGENTS.zh-CN.md](https://github.com/your-org/ra-tui/blob/main/docs/OCTOLOOP_AGENTS.zh-CN.md)
+> 中文版:[OCTOLOOP_AGENTS.zh-CN.md](https://github.com/icehomura/ra-tui/blob/main/docs/OCTOLOOP_AGENTS.zh-CN.md)
 
 **This card is self-contained.** Read it and you can take a role without opening
 another document. Deeper references are linked at the end, and every path and
@@ -20,7 +20,7 @@ hashes and session keys drift.
 │         ▲                                          │
 │    .ra/OUTER_LOOP_REVIEW.md  (the blackboard)    │  herdr prompt / ra steer
 │         │                                          ▼
-└─ INNER loop (cheap model: octoscode TUI + octos serve, e.g. kimi / glm)
+└─ INNER loop (cheap model: ra-tui TUI + ra serve, e.g. kimi / glm)
      read board → execute → commit (never push) → ACK(done|wontdo|blocked)
 ```
 
@@ -110,7 +110,7 @@ grinding. If the MCP fifth channel is mounted, call
 ### 3.0 Claim authority first
 
 ```bash
-octoscode outer-duty hold --project <project> --signature <sig> \
+ra-tui outer-duty hold --project <project> --signature <sig> \
   --duties <duties> -- <your agent start command>
 ```
 
@@ -129,7 +129,7 @@ like `外环(claude)` / `外环(codex)` and sign every board write.
 ### 3.1 Discover the scene
 
 ```bash
-herdr agent list                  # inner panes:  octoscode | <pane> | idle
+herdr agent list                  # inner panes:  ra-tui | <pane> | idle
 ls -t ~/.ra/instances/         # instances by recency (hash = DefaultHasher of project cwd)
 ```
 
@@ -150,7 +150,7 @@ grep -oE '^### [0-9]+' <board> | tail -1
 ```
 
 Write through the atomic helper (flock-mutexed; body from stdin). It is at
-`scripts/olp-board-append.sh` inside the octoscode repo, and `olp-init.sh`
+`scripts/olp-board-append.sh` inside the ra-tui repo, and `olp-init.sh`
 installs a copy at `~/.ra/outer/board-append.sh` for every other project:
 
 ```bash
@@ -254,7 +254,7 @@ permission (`--danger-full-access` / permission tier 5), taking over a live
 Standard inner-loop start command:
 
 ```bash
-octoscode --stdio-command 'octos serve --stdio --solo --danger-full-access'
+ra-tui --stdio-command 'ra serve --stdio --solo --danger-full-access'
 ```
 
 - `--solo` is the safety gate for a single-person local box. Without it serve
@@ -296,9 +296,9 @@ editing config without a new session is paper insurance).
 
 ## 7. Going deeper
 
-- [`OUTER_LOOP_PROTOCOL.md`](https://github.com/your-org/ra-tui/blob/main/docs/OUTER_LOOP_PROTOCOL.md) — the protocol in full: R1–R7,
+- [`OUTER_LOOP_PROTOCOL.md`](https://github.com/icehomura/ra-tui/blob/main/docs/OUTER_LOOP_PROTOCOL.md) — the protocol in full: R1–R7,
   `result.md` schema, multi-outer rules, budget governance, field lessons
-- [`OLP_OUTER_BOOT.md`](https://github.com/your-org/ra-tui/blob/main/docs/OLP_OUTER_BOOT.md) — the outer operator card and tactics handbook
-- [`OLP_QUICKSTART.en.md`](https://github.com/your-org/ra-tui/blob/main/docs/OLP_QUICKSTART.en.md) — zero-to-running for a new project (中文: `OLP_QUICKSTART.md`)
-- [`OCTOLOOP_GUIDE.md`](https://github.com/your-org/ra-tui/blob/main/docs/OCTOLOOP_GUIDE.md) — full guide, mechanisms, platform matrix
-- [`OCTOLOOP_FEATURES.md`](https://github.com/your-org/ra-tui/blob/main/docs/OCTOLOOP_FEATURES.md) — one-page capability panorama
+- [`OLP_OUTER_BOOT.md`](https://github.com/icehomura/ra-tui/blob/main/docs/OLP_OUTER_BOOT.md) — the outer operator card and tactics handbook
+- [`OLP_QUICKSTART.en.md`](https://github.com/icehomura/ra-tui/blob/main/docs/OLP_QUICKSTART.en.md) — zero-to-running for a new project (中文: `OLP_QUICKSTART.md`)
+- [`OCTOLOOP_GUIDE.md`](https://github.com/icehomura/ra-tui/blob/main/docs/OCTOLOOP_GUIDE.md) — full guide, mechanisms, platform matrix
+- [`OCTOLOOP_FEATURES.md`](https://github.com/icehomura/ra-tui/blob/main/docs/OCTOLOOP_FEATURES.md) — one-page capability panorama

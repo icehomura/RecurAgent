@@ -318,7 +318,7 @@ _CWD_SUFFIX_RE = re.compile(r"(?:\x00|\\x00)~cwd-[0-9A-Za-z]+\Z")
 def _wire_trunk(session_id: str) -> str:
     """wire session → 剥 cwd 后缀的主干(channel+leaf),归一比较用。
 
-    真实 native originator 文件通常无 cwd 后缀(`octosfix:local:tui#coding`),
+    真实 native originator 文件通常无 cwd 后缀(`rafix:local:tui#coding`),
     而 thread/快照 session 带 `NUL~cwd-hash`;身份比较须按主干归一
     (与 monitor `_wire_session_same_origin` 同语义),否则真实 wire 形状
     会因字节不精确被误拒(fail-closed 假阴性)。

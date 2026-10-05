@@ -141,13 +141,13 @@ ra serve --stdio                       # AppUI JSON-RPC 走 stdin/stdout（不�
 | `--port <N>` | 监听端口（默认 `50080`，位于 IANA 动态端口范围） |
 | `--host <ADDR>` | 绑定地址（默认 `127.0.0.1`；外部访问用 `0.0.0.0`） |
 | `--stdio` | 通过 stdin/stdout 运行 AppUI JSON-RPC 协议，而非 HTTP |
-| `--solo` | 启用仅回环的免密码 solo 登录（`POST /api/auth/solo*`）；也可用 `OCTOS_SOLO_LOGIN=1`。切勿在反向代理之后启用 |
-| `--data-dir <P>` | episodes/记忆/会话的数据目录（默认 `$OCTOS_HOME` 或 `~/.ra`） |
+| `--solo` | 启用仅回环的免密码 solo 登录（`POST /api/auth/solo*`）；也可用 `RA_SOLO_LOGIN=1`。切勿在反向代理之后启用 |
+| `--data-dir <P>` | episodes/记忆/会话的数据目录（默认 `$RA_HOME` 或 `~/.ra`） |
 | `--auth-token <T>` | API 访问的管理员 Bearer 令牌 |
 | `--config <P>` | 配置文件路径 |
 | `--swarm-backend <stdio\|http>` | 启用 `/api/swarm/*` 契约创作端点（配合 `--swarm-backend-cmd` / `--swarm-backend-url`） |
 
-在 `/app/`（聊天/studio）和 `/admin/`（运维仪表盘）提供内嵌 SPA，并在 `/api/ui-protocol/ws` 提供 WS UI Protocol。`/metrics` 端点提供 Prometheus 格式的指标（`ra_tool_calls_total`、`octos_tool_call_duration_seconds`、`ra_llm_tokens_total`）。使用不同的 `--data-dir` + `--port` 可并行运行多个实例。
+在 `/app/`（聊天/studio）和 `/admin/`（运维仪表盘）提供内嵌 SPA，并在 `/api/ui-protocol/ws` 提供 WS UI Protocol。`/metrics` 端点提供 Prometheus 格式的指标（`ra_tool_calls_total`、`ra_tool_call_duration_seconds`、`ra_llm_tokens_total`）。使用不同的 `--data-dir` + `--port` 可并行运行多个实例。
 
 ---
 
@@ -286,7 +286,7 @@ ra skills remove skill-name               # 移除技能
 
 ## `ra doctor`
 
-运行本地环境诊断并打印 ra 服务器的健康报告。
+运行本地环境诊断并打印 RecurAgent 服务器的健康报告。
 
 ```bash
 ra doctor [OPTIONS]
@@ -332,7 +332,7 @@ ra memory forget  --id ^m4k2abq               # 硬删除某条精确的 MEMORY.
 
 ## `ra update`
 
-检查是否有更新的 ra 版本。
+检查是否有更新的 RecurAgent 版本。
 
 ```bash
 ra update --check         # 打印更新方案；有更新可用时退出 10，已是最新时退出 0
@@ -345,7 +345,7 @@ ra update --check --json  # 同上，机器可读
 
 ## `ra mcp-serve`
 
-将 ra 自身暴露为 MCP 服务器，供外层编排器将其作为子 agent 调用。
+将 RecurAgent 自身暴露为 MCP 服务器，供外层编排器将其作为子 agent 调用。
 
 ```bash
 ra mcp-serve [OPTIONS]
@@ -356,7 +356,7 @@ ra mcp-serve [OPTIONS]
   -c, --cwd <PATH>              工作目录
 ```
 
-`stdio` 使用父进程信任认证（JSON-RPC 走 stdin/stdout）。`http` 是最小的 HTTP/1.1 JSON-RPC 端点，**必须**通过环境变量 `OCTOS_MCP_SERVER_TOKEN` 提供 Bearer 令牌。
+`stdio` 使用父进程信任认证（JSON-RPC 走 stdin/stdout）。`http` 是最小的 HTTP/1.1 JSON-RPC 端点，**必须**通过环境变量 `RA_MCP_SERVER_TOKEN` 提供 Bearer 令牌。
 
 ---
 

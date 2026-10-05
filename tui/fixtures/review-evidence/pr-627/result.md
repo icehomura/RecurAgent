@@ -21,10 +21,10 @@ protocol: olp/v2
 
 | 文件 | 车道 | 字节 | SHA256（前16） |
 |---|---|---|---|
-| .octos/independent-glm.md | GLM 首审 | 20908 | 640fc49fff425b46 |
-| .octos/independent-k3.md | k3 首审 | 16051 | 5bad206aba0e2660 |
-| .octos/cross-glm.md | GLM 互审（含外层反例裁决） | 13358 | 30e53763f4e0780f |
-| .octos/cross-k3.md | k3 互审（含外层反例裁决） | 14854 | 3dc533e4e65baaf8 |
+| .RecurAgent/independent-glm.md | GLM 首审 | 20908 | 640fc49fff425b46 |
+| .RecurAgent/independent-k3.md | k3 首审 | 16051 | 5bad206aba0e2660 |
+| .RecurAgent/cross-glm.md | GLM 互审（含外层反例裁决） | 13358 | 30e53763f4e0780f |
+| .RecurAgent/cross-k3.md | k3 互审（含外层反例裁决） | 14854 | 3dc533e4e65baaf8 |
 
 四份报告独立落盘、互不覆盖；两份初审在互审阶段冻结原文未改；动态证据归属外层（adversarial.log）的标注在两份 cross 中均保留。
 
@@ -72,5 +72,5 @@ staged transition（PendingGoalTransition）断线/relaunch 后永驻 slot 的�
 
 - 本任务全程静态审查（两车道独立 + 互审 + master 汇总），未运行 cargo 编译/测试（按约束留给外层统一 --all-targets + clippy + fmt）。
 - 动态证据仅两条外层反例（adversarial.log），由外层在独立合成树执行；两车道与 master 均未冒称执行。
-- 上游对照锁定 d51601df（与 Cargo.lock octos-core rev 一致）。
+- 上游对照锁定 d51601df（与 Cargo.lock ra-core rev 一致）。
 - **整体验证级别：partially-verified。**

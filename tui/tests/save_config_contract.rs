@@ -161,14 +161,10 @@ fn default_config_path_resolves_under_config_dir() {
     // The fallback used when launched without --config: a pure, non-destructive
     // resolution (the dispatch path feeds this into the same merge writer).
     let path = ra_tui::cli::default_config_path().expect("HOME is set in test env");
-    let new_suffix: std::path::PathBuf = [".config", "ra-tui", "config.json"].iter().collect();
-    let legacy_suffix: std::path::PathBuf =
-        [".config", "octoscode", "config.json"].iter().collect();
-    // Host-dependent: the new dir wins when present; a legacy-only home keeps
-    // being used. Either way it resolves under the config dir with this file.
+    let suffix: std::path::PathBuf = [".config", "ra-tui", "config.json"].iter().collect();
     assert!(
-        path.ends_with(&new_suffix) || path.ends_with(&legacy_suffix),
-        "default path {path:?} must end with {new_suffix:?} (or legacy {legacy_suffix:?})"
+        path.ends_with(&suffix),
+        "default path {path:?} must end with {suffix:?}"
     );
 }
 

@@ -29,14 +29,14 @@ EXIT_STATUS=1
 KEEP_LOGS="${KEEP_LOGS:-0}"
 trap 'cleanup' EXIT
 
-OCTOS_PID=""
+ra_PID=""
 FRPS_PID=""
 FRPC_PID=""
 
 cleanup() {
     [ -n "$FRPC_PID" ] && kill "$FRPC_PID" 2>/dev/null || true
     [ -n "$FRPS_PID" ] && kill "$FRPS_PID" 2>/dev/null || true
-    [ -n "$OCTOS_PID" ] && kill "$OCTOS_PID" 2>/dev/null || true
+    [ -n "$ra_PID" ] && kill "$ra_PID" 2>/dev/null || true
     wait 2>/dev/null || true
     if [ "$EXIT_STATUS" -ne 0 ] || [ "$KEEP_LOGS" = "1" ]; then
         echo "(logs preserved in $WORK)" >&2
@@ -50,7 +50,7 @@ pick_port() {
     python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()'
 }
 
-OCTOS_PORT=$(pick_port)
+ra_PORT=$(pick_port)
 FRPS_BIND_PORT=$(pick_port)
 FRPS_VHOST_HTTP=$(pick_port)
 FRPS_VHOST_HTTPS=$(pick_port)
@@ -59,22 +59,22 @@ LOCAL_APP_PORT=$(pick_port)
 SSH_REMOTE_PORT=$(pick_port)
 
 info "working dir: $WORK"
-info "ra:$OCTOS_PORT  frps:$FRPS_BIND_PORT  local app:$LOCAL_APP_PORT  ssh remote:$SSH_REMOTE_PORT"
+info "ra:$ra_PORT  frps:$FRPS_BIND_PORT  local app:$LOCAL_APP_PORT  ssh remote:$SSH_REMOTE_PORT"
 
 # ── 1. Build ra CLI with the api feature ─────────────────────────
 info "building ra-cli with api feature"
 (cd "$ROOT_DIR" && cargo build -q -p ra-cli --features api) \
     || fail "cargo build failed"
 
-OCTOS_BIN="$ROOT_DIR/target/debug/ra"
-[ -x "$OCTOS_BIN" ] || fail "ra binary not found at $OCTOS_BIN"
+ra_BIN="$ROOT_DIR/target/debug/ra"
+[ -x "$ra_BIN" ] || fail "ra binary not found at $ra_BIN"
 
 # ── 2. Start ra serve with an isolated data dir ─────────────────
 AUTH_TOKEN=$(python3 -c 'import secrets; print(secrets.token_hex(16))')
-export OCTOS_HOME="$WORK/ra-home"
-mkdir -p "$OCTOS_HOME"
+export ra_HOME="$WORK/ra-home"
+mkdir -p "$ra_HOME"
 
-cat > "$OCTOS_HOME/config.json" <<EOF
+cat > "$ra_HOME/config.json" <<EOF
 {
   "mode": "cloud",
   "tunnel_domain": "ra-cloud.test",
@@ -84,18 +84,18 @@ cat > "$OCTOS_HOME/config.json" <<EOF
 }
 EOF
 
-info "starting ra serve on :$OCTOS_PORT"
-"$OCTOS_BIN" serve --port "$OCTOS_PORT" --host 127.0.0.1 --auth-token "$AUTH_TOKEN" \
+info "starting ra serve on :$ra_PORT"
+"$ra_BIN" serve --port "$ra_PORT" --host 127.0.0.1 --auth-token "$AUTH_TOKEN" \
     > "$WORK/ra.log" 2>&1 &
-OCTOS_PID=$!
+ra_PID=$!
 
 # Wait for ra to accept connections.
 for i in $(seq 1 40); do
-    if curl -sf -o /dev/null "http://127.0.0.1:$OCTOS_PORT/api/health" 2>/dev/null; then
+    if curl -sf -o /dev/null "http://127.0.0.1:$ra_PORT/api/health" 2>/dev/null; then
         break
     fi
     sleep 0.25
-    if ! kill -0 "$OCTOS_PID" 2>/dev/null; then
+    if ! kill -0 "$ra_PID" 2>/dev/null; then
         tail -40 "$WORK/ra.log" >&2
         fail "ra serve crashed during startup"
     fi
@@ -107,7 +107,7 @@ info "creating tenant 'alice' via admin API"
 CREATE_RESP=$(curl -sf -H "Authorization: Bearer $AUTH_TOKEN" \
     -H "Content-Type: application/json" \
     -d '{"name":"alice","local_port":'"$LOCAL_APP_PORT"'}' \
-    "http://127.0.0.1:$OCTOS_PORT/api/admin/tenants") \
+    "http://127.0.0.1:$ra_PORT/api/admin/tenants") \
     || { tail -40 "$WORK/ra.log" >&2; fail "tenant create returned error"; }
 
 TUNNEL_TOKEN=$(python3 -c 'import sys,json; d=json.loads(sys.argv[1]); print(d["tunnel_token"])' "$CREATE_RESP")
@@ -137,7 +137,7 @@ auth.token = ""
 
 [[httpPlugins]]
 name = "ra-auth"
-addr = "127.0.0.1:$OCTOS_PORT"
+addr = "127.0.0.1:$ra_PORT"
 path = "/api/internal/frps-auth"
 ops = ["Login", "NewProxy"]
 EOF

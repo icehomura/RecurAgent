@@ -6,7 +6,7 @@ estimate: 0.5d
 
 ## Intent
 
-ra 的 agent loop 目前在回合中途做两类"重写前缀"的操作,导致前缀缓存
+RecurAgent 的 agent loop 目前在回合中途做两类"重写前缀"的操作,导致前缀缓存
 (KV cache)提供商(Kimi k3、DeepSeek)在每轮迭代重新 prefill 全量上下文:
 (1) LRU 工具驱逐每轮迭代都可能改变请求最前部的 tools 数组(2026-08-02 实测:
 kimi k3 回合第 5 轮 tools 47→32,之后每轮重刷约 36k token 输入);(2) Tier-1

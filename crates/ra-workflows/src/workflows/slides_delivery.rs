@@ -122,7 +122,7 @@ pub fn workspace_policy() -> WorkspacePolicy {
             // below now consumes the plugin's `files_to_send` list via
             // the SpawnOnlyFiles source.
             on_completion: Vec::new(),
-            // ra #997: gate the slides project on the PPTX
+            // RecurAgent #997: gate the slides project on the PPTX
             // magic-bytes signature so an HTML "success" deck trips
             // the contract. Uses `SpawnOnlyFiles` source — the spawn
             // loop wires `files_to_send` through to

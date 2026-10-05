@@ -8,7 +8,7 @@ turn: 2
 报告已收口完成。
 
 ## 报告路径
-`/private/tmp/octoloop-glm-k3-20260909/pr-627/.octos/independent-glm.md`（约 210 行，盲审全程未读取 `.octos/` 下其他报告）
+`/private/tmp/octoloop-glm-k3-20260909/pr-627/.ra/independent-glm.md`（约 210 行，盲审全程未读取 `.ra/` 下其他报告）
 
 ## 发现摘要
 

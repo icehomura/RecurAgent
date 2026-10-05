@@ -730,7 +730,7 @@ pub fn core_command_specs() -> Vec<CommandSpec> {
             inline_args: InlineArgMode::None,
             entry: CommandEntry::LocalAction(LocalAction::Custom("undo")),
         },
-        // `/peer` (#395, octos#1800 peer agents v1) — spin off a peer agent
+        // `/peer` (#395, RecurAgent#1800 peer agents v1) — spin off a peer agent
         // session seeded with a durable brief. Gated on `peer/prepare` (same
         // treatment as `/undo` on `snapshot/list`) so old servers hide it;
         // `app_ui_mutating` because `peer/prepare` mutates server state, so
@@ -748,7 +748,7 @@ pub fn core_command_specs() -> Vec<CommandSpec> {
             inline_args: InlineArgMode::Optional,
             entry: CommandEntry::LocalAction(LocalAction::Custom("peer")),
         },
-        // `/gather` (octos#1801 v2) — fan the peer blackboard (briefs +
+        // `/gather` (RecurAgent#1801 v2) — fan the peer blackboard (briefs +
         // results) back into the current session as a synthesis prompt. Gated
         // on `peer/gather` (same treatment as `/undo` on `snapshot/list`);
         // `app_ui_read` because the RPC only READS the blackboard — the
@@ -1338,7 +1338,7 @@ mod tests {
         );
     }
 
-    /// octos#1801 v2: `/gather` is gated on `peer/gather` (hidden on old
+    /// RecurAgent#1801 v2: `/gather` is gated on `peer/gather` (hidden on old
     /// servers) but — unlike `/peer` — stays VISIBLE in read-only mode: the
     /// RPC only reads the blackboard (the transport blocks the follow-up
     /// prompt submit there, like any prompt).

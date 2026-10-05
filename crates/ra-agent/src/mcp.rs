@@ -113,11 +113,11 @@ impl McpServerConfig {
     }
 }
 
-/// Build the ra client identity sent in the MCP `initialize` request.
+/// Build the RecurAgent client identity sent in the MCP `initialize` request.
 /// (`ClientInfo`/`Implementation` are `#[non_exhaustive]`, so they can't be
 /// built with a struct literal — hence default-then-assign.)
 #[allow(clippy::field_reassign_with_default)]
-fn octos_client_info() -> ClientInfo {
+fn ra_client_info() -> ClientInfo {
     let mut info = ClientInfo::default();
     info.client_info = Implementation::new(ra_core::brand::APP_NAME, env!("CARGO_PKG_VERSION"));
     info
@@ -463,7 +463,7 @@ impl McpClient {
 
     /// Spawn a stdio MCP server as a child process. Environment is sanitized
     /// (BLOCKED_ENV_VARS stripped, only explicitly-configured names forwarded)
-    /// exactly as for every other ra subprocess.
+    /// exactly as for every other RecurAgent subprocess.
     async fn connect_stdio(config: &McpServerConfig) -> Result<McpService> {
         let command = config
             .command
@@ -501,7 +501,7 @@ impl McpClient {
 
         let service = timeout(
             HANDSHAKE_TIMEOUT,
-            serve_client(octos_client_info(), transport),
+            serve_client(ra_client_info(), transport),
         )
         .await
         .map_err(|_| eyre::eyre!("MCP handshake timed out after {HANDSHAKE_TIMEOUT:?}"))?
@@ -518,7 +518,7 @@ impl McpClient {
             .ok_or_else(|| eyre::eyre!("MCP http server requires a 'url' field"))?;
 
         if config.oauth {
-            return crate::mcp_auth::connect_oauth(config, url, octos_client_info()).await;
+            return crate::mcp_auth::connect_oauth(config, url, ra_client_info()).await;
         }
 
         // SSRF-filtered + no-redirect client carrying the configured headers
@@ -533,7 +533,7 @@ impl McpClient {
 
         let service = timeout(
             HANDSHAKE_TIMEOUT,
-            serve_client(octos_client_info(), transport),
+            serve_client(ra_client_info(), transport),
         )
         .await
         .map_err(|_| eyre::eyre!("MCP handshake timed out after {HANDSHAKE_TIMEOUT:?}"))?
@@ -654,7 +654,7 @@ mod tests {
 
     #[test]
     fn client_info_identifies_as_ra() {
-        let info = octos_client_info();
+        let info = ra_client_info();
         assert_eq!(info.client_info.name.as_str(), ra_core::brand::APP_NAME);
     }
 

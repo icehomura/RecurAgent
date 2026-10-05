@@ -17,8 +17,8 @@ use ra_llm::vertex_auth::TokenSource;
 
 use crate::harness_errors::HarnessError;
 use crate::harness_events::{
-    OCTOS_EVENT_SINK_ENV, OCTOS_HARNESS_SESSION_ID_ENV, OCTOS_HARNESS_TASK_ID_ENV,
-    OCTOS_SESSION_ID_ENV, OCTOS_TASK_ID_ENV, lookup_event_sink_context, write_event_to_sink,
+    ra_EVENT_SINK_ENV, ra_HARNESS_SESSION_ID_ENV, ra_HARNESS_TASK_ID_ENV,
+    ra_SESSION_ID_ENV, ra_TASK_ID_ENV, lookup_event_sink_context, write_event_to_sink,
 };
 use crate::policy::ApprovalPolicy;
 use crate::progress::ProgressEvent;
@@ -35,7 +35,7 @@ use super::manifest::{ManifestRiskGate, PluginToolDef};
 
 /// Synthesis LLM provider config injected into plugin args.
 ///
-/// S2 plumbing: ra passes this struct under `synthesis_config` in the JSON
+/// S2 plumbing: RecurAgent passes this struct under `synthesis_config` in the JSON
 /// args (alongside `query`, `depth`, etc.) when the plugin's manifest opts in
 /// via `x-ra-host-config-keys: ["synthesis_config"]`. Plugins that haven't
 /// declared the key never see this struct, so secrets stay scoped to the
@@ -287,7 +287,7 @@ impl PluginTool {
     ///
     /// Load-bearing for the chat/session cwd-rebind: a Host-scope ("yolo")
     /// session omits `session_scope`, so `execute` derives the plugin's
-    /// `current_dir`/`OCTOS_WORK_DIR` from `work_dir` alone — it MUST be
+    /// `current_dir`/`ra_WORK_DIR` from `work_dir` alone — it MUST be
     /// bound to the resolved `--cwd`, not left `None` (else plugins run in
     /// the process launch dir). Callers assert this to prove the binding.
     pub fn work_dir(&self) -> Option<&Path> {
@@ -1824,7 +1824,7 @@ fn resolve_plugin_input_path(
     // workspace ROOT but plugin work_dir is chrooted to
     // `<workspace>/skill-output/`, the script lives one level ABOVE the
     // chroot. The shared resolver doesn't probe `work_dir.parent()`, so
-    // a podcast script written to `<workspace>/octos_podcast_script.md`
+    // a podcast script written to `<workspace>/ra_podcast_script.md`
     // never resolves and the plugin spawn fails with `os error 2`.
     //
     // This rescue branch is bounded by FOUR safety constraints (see
@@ -2405,7 +2405,7 @@ impl Tool for PluginTool {
     }
 
     fn concurrency_class(&self) -> super::super::tools::ConcurrencyClass {
-        // Item 6 of OCTOS_M8_FIX_FIRST_CHECKLIST_2026-04-24:
+        // Item 6 of ra_M8_FIX_FIRST_CHECKLIST_2026-04-24:
         // honour the plugin manifest's optional `concurrency_class`
         // hint instead of inheriting the trait default `Safe`. When the
         // plugin author marks the tool as `"exclusive"` (e.g. it
@@ -2702,7 +2702,7 @@ impl Tool for PluginTool {
 
         // M6 req 4: when the manifest declares a non-empty `env` list, treat
         // it as a strict allowlist and strip every other env var (only the
-        // manifest's names + runtime essentials + harness-injected OCTOS_*
+        // manifest's names + runtime essentials + harness-injected RA_*
         // are retained). Empty list keeps the legacy "secret-only" gate so
         // existing skills that don't declare `env` continue working.
         let strict_env_gate = !env_allowlist.is_empty();
@@ -2792,19 +2792,19 @@ impl Tool for PluginTool {
             .as_ref()
             .and_then(|ctx| ctx.harness_event_sink.as_deref())
         {
-            cmd.env(OCTOS_EVENT_SINK_ENV, sink);
+            cmd.env(ra_EVENT_SINK_ENV, sink);
             if let Some(context) = lookup_event_sink_context(sink) {
-                cmd.env(OCTOS_SESSION_ID_ENV, &context.session_id);
-                cmd.env(OCTOS_TASK_ID_ENV, &context.task_id);
-                cmd.env(OCTOS_HARNESS_SESSION_ID_ENV, &context.session_id);
-                cmd.env(OCTOS_HARNESS_TASK_ID_ENV, &context.task_id);
+                cmd.env(ra_SESSION_ID_ENV, &context.session_id);
+                cmd.env(ra_TASK_ID_ENV, &context.task_id);
+                cmd.env(ra_HARNESS_SESSION_ID_ENV, &context.session_id);
+                cmd.env(ra_HARNESS_TASK_ID_ENV, &context.task_id);
             }
         }
 
         // Set working directory so relative paths in tool args (e.g.
         // input="slides/my-deck/script.js") resolve against the per-user
         // workspace — the same directory that write_file/read_file use.
-        // OCTOS_WORK_DIR is kept for backward compat with plugins that
+        // ra_WORK_DIR is kept for backward compat with plugins that
         // read it.
         //
         // Phase 2-B (SessionScope migration, PR #1198 follow-up): the
@@ -2828,7 +2828,7 @@ impl Tool for PluginTool {
                 );
             }
             cmd.current_dir(dir);
-            cmd.env("OCTOS_WORK_DIR", dir);
+            cmd.env("ra_WORK_DIR", dir);
         }
 
         // A plugin's output CWD is commonly `<session workspace>/skill-output`,
@@ -2840,12 +2840,12 @@ impl Tool for PluginTool {
             .tool_def
             .env
             .iter()
-            .any(|name| name == "OCTOS_SESSION_WORKSPACE")
+            .any(|name| name == "ra_SESSION_WORKSPACE")
         {
             if let Some(session_workspace) = self.workspace_root_for_host_injection(
                 ctx.as_ref().and_then(|ctx| ctx.session_scope.as_deref()),
             ) {
-                cmd.env("OCTOS_SESSION_WORKSPACE", session_workspace);
+                cmd.env("ra_SESSION_WORKSPACE", session_workspace);
             }
         }
 

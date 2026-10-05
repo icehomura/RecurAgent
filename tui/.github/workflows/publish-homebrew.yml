@@ -1,6 +1,6 @@
 name: Publish Homebrew Formula
-# The octoscode Homebrew formula lives IN THIS REPO at Formula/octoscode.rb
-# (this repo is its own tap -> `brew tap your-org/ra-tui https://github.com/your-org/ra-tui`).
+# The ra-tui Homebrew formula lives IN THIS REPO at Formula/ra-tui.rb
+# (this repo is its own tap -> `brew tap icehomura/ra-tui https://github.com/icehomura/ra-tui`).
 #
 # This is a STANDALONE workflow triggered by the same version tag push that
 # starts release.yml — NOT a dist custom publish job and NOT `release: published`:
@@ -17,14 +17,14 @@ name: Publish Homebrew Formula
 # (main is NOT branch-protected). GITHUB_TOKEN only.
 #
 # TWO-CHANNEL scheme (mirrors dist-workspace.toml + release.yml's npm publish):
-#   - STABLE tag (no '-'): render Formula/octoscode.rb (class Octoscode) from
-#     packaging/homebrew/octoscode.rb — the stable channel, unchanged.
+#   - STABLE tag (no '-'): render Formula/ra-tui.rb (class ra-tui) from
+#     packaging/homebrew/ra-tui.rb — the stable channel, unchanged.
 #   - PRERELEASE tag (has a '-', e.g. v0.2.2-rc.15): render the SEPARATE
-#     Formula/octoscode-dev.rb (class OctoscodeDev) from
-#     packaging/homebrew/octoscode-dev.rb, pointed at the prerelease assets.
-# A prerelease NEVER touches the stable Formula/octoscode.rb, so
-# `brew install your-org/ra-tui/octoscode` stays STABLE while
-# `brew install your-org/ra-tui/octoscode-dev` tracks the latest prerelease.
+#     Formula/ra-tui-dev.rb (class ra-tuiDev) from
+#     packaging/homebrew/ra-tui-dev.rb, pointed at the prerelease assets.
+# A prerelease NEVER touches the stable Formula/ra-tui.rb, so
+# `brew install icehomura/ra-tui/ra-tui` stays STABLE while
+# `brew install icehomura/ra-tui/ra-tui-dev` tracks the latest prerelease.
 
 on:
   push:
@@ -55,18 +55,18 @@ jobs:
           # SEPARATE dev formula; otherwise render the stable formula. Either
           # way we render + commit (no more skipping) so both channels stay live.
           if [[ "$TAG" == *-* ]]; then
-            echo "::notice::$TAG is a prerelease — rendering the dev formula (octoscode-dev); stable octoscode is untouched."
+            echo "::notice::$TAG is a prerelease — rendering the dev formula (ra-tui-dev); stable ra-tui is untouched."
             {
               echo "channel=prerelease"
-              echo "formula_file=Formula/octoscode-dev.rb"
-              echo "template_file=packaging/homebrew/octoscode-dev.rb"
+              echo "formula_file=Formula/ra-tui-dev.rb"
+              echo "template_file=packaging/homebrew/ra-tui-dev.rb"
             } >> "$GITHUB_OUTPUT"
           else
-            echo "::notice::$TAG is a stable release — rendering the stable formula (octoscode)."
+            echo "::notice::$TAG is a stable release — rendering the stable formula (ra-tui)."
             {
               echo "channel=stable"
-              echo "formula_file=Formula/octoscode.rb"
-              echo "template_file=packaging/homebrew/octoscode.rb"
+              echo "formula_file=Formula/ra-tui.rb"
+              echo "template_file=packaging/homebrew/ra-tui.rb"
             } >> "$GITHUB_OUTPUT"
           fi
 
@@ -85,7 +85,7 @@ jobs:
           for attempt in $(seq 1 60); do
             missing=0
             for triple in $triples; do
-              asset="octoscode-${triple}.tar.xz"
+              asset="ra-tui-${triple}.tar.xz"
               [ -f "artifacts/$asset" ] && continue
               gh release download "$TAG" --repo "${{ github.repository }}" \
                 --pattern "$asset" --dir artifacts 2>/dev/null || true
@@ -96,24 +96,24 @@ jobs:
             sleep 30
           done
           for triple in $triples; do
-            test -f "artifacts/octoscode-${triple}.tar.xz" \
-              || { echo "::error::missing octoscode-${triple}.tar.xz after wait (did release.yml fail?)"; exit 1; }
+            test -f "artifacts/ra-tui-${triple}.tar.xz" \
+              || { echo "::error::missing ra-tui-${triple}.tar.xz after wait (did release.yml fail?)"; exit 1; }
           done
           ls -la artifacts
 
       - name: Render formula and commit to main
         env:
           # The channel-specific source template and destination formula, chosen
-          # by the gate above (stable -> octoscode, prerelease -> octoscode-dev).
+          # by the gate above (stable -> ra-tui, prerelease -> ra-tui-dev).
           TEMPLATE_FILE: ${{ steps.gate.outputs.template_file }}
           FORMULA_FILE: ${{ steps.gate.outputs.formula_file }}
           CHANNEL: ${{ steps.gate.outputs.channel }}
         run: |
           set -euo pipefail
           version="${TAG#v}"
-          sha_darwin_arm=$(sha256sum artifacts/octoscode-aarch64-apple-darwin.tar.xz | awk '{print $1}')
-          sha_linux_arm=$(sha256sum artifacts/octoscode-aarch64-unknown-linux-gnu.tar.xz | awk '{print $1}')
-          sha_linux_x64=$(sha256sum artifacts/octoscode-x86_64-unknown-linux-gnu.tar.xz | awk '{print $1}')
+          sha_darwin_arm=$(sha256sum artifacts/ra-tui-aarch64-apple-darwin.tar.xz | awk '{print $1}')
+          sha_linux_arm=$(sha256sum artifacts/ra-tui-aarch64-unknown-linux-gnu.tar.xz | awk '{print $1}')
+          sha_linux_x64=$(sha256sum artifacts/ra-tui-x86_64-unknown-linux-gnu.tar.xz | awk '{print $1}')
 
           mkdir -p Formula
           cp "$TEMPLATE_FILE" "$FORMULA_FILE"
@@ -129,7 +129,7 @@ jobs:
           # `git diff` reports TRACKED files only, so a formula that has never
           # been committed reads as "unchanged" and this step silently no-ops
           # while still reporting success. That is exactly the prerelease
-          # channel: Formula/octoscode-dev.rb has never existed, so every RC
+          # channel: Formula/ra-tui-dev.rb has never existed, so every RC
           # tag since the two-channel scheme landed rendered it and threw it
           # away. Stage first and diff the INDEX, which sees an add as a change.
           git add -- "$FORMULA_FILE"
@@ -174,7 +174,7 @@ jobs:
           if git diff --cached --quiet -- "$FORMULA_FILE"; then
             echo "branch $BRANCH already carries this formula; skipping commit."
           else
-            git commit -m "octoscode ${TAG}: update Homebrew formula (${CHANNEL})"
+            git commit -m "ra-tui ${TAG}: update Homebrew formula (${CHANNEL})"
             git push origin "$BRANCH"
           fi
 
@@ -183,7 +183,7 @@ jobs:
           # a PR that already exists is exactly what we want.
           if [ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')" ]; then
             gh pr create --base main --head "$BRANCH" \
-              --title "octoscode ${TAG}: update Homebrew formula (${CHANNEL})" \
+              --title "ra-tui ${TAG}: update Homebrew formula (${CHANNEL})" \
               --body "Automated Homebrew formula bump for ${TAG} (${CHANNEL} channel)." \
               || echo "::warning::could not open the PR (see #474); branch $BRANCH is pushed and ready to merge by hand"
           fi

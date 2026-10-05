@@ -13,7 +13,7 @@ use super::Agent;
 /// tool-call ids.
 ///
 /// Models that emit tool calls as inline `<invoke name=...>` XML in assistant
-/// TEXT (rather than native structured `tool_calls`) carry no call id, so ra
+/// TEXT (rather than native structured `tool_calls`) carry no call id, so RecurAgent
 /// synthesizes one. Like the Gemini synthesizer (`call_gemini_`) and the
 /// agent's empty-id fallback (`call_synth_`), this id MUST be process-unique:
 /// it becomes `BackgroundTask::tool_call_id`, and the supervisor's synth-ack

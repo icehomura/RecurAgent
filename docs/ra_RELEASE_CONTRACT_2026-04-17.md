@@ -1,4 +1,4 @@
-# ra Release Contract — 2026-04-17
+# RecurAgent Release Contract — 2026-04-17
 
 This document is the durable record for the release slice completed on
 2026-04-17. It exists so the exact scope, proof, and ship state survive chat

@@ -54,7 +54,7 @@ const SESSION_CACHE_IDLE_TTL: std::time::Duration = std::time::Duration::from_se
 
 /// Idle lifetime of a cached per-session runtime.
 ///
-/// `RA_SESSION_CACHE_IDLE_TTL_SECS` (legacy `OCTOS_SESSION_CACHE_IDLE_TTL_SECS`)
+/// `RA_SESSION_CACHE_IDLE_TTL_SECS` (legacy `ra_SESSION_CACHE_IDLE_TTL_SECS`)
 /// overrides it (minimum 1 s; a malformed
 /// or zero value keeps the default). Rebuilding an evicted runtime is correct
 /// but slow for a long session, so an operator on a big box may want it
@@ -406,7 +406,7 @@ pub struct ServeCommand {
 
     /// Auth token for API access (overrides config). Visible in the process
     /// list (`ps`) — prefer the RA_AUTH_TOKEN env var (legacy
-    /// OCTOS_AUTH_TOKEN) or the config file.
+    /// ra_AUTH_TOKEN) or the config file.
     #[arg(long)]
     pub auth_token: Option<String>,
 
@@ -424,7 +424,7 @@ pub struct ServeCommand {
     /// local single-user install. OFF by default. Only honoured for direct
     /// loopback requests on a Local-mode host with profile/user stores, and
     /// never when the request carries reverse-proxy headers. Also settable
-    /// via `RA_SOLO_LOGIN=1` (legacy `OCTOS_SOLO_LOGIN`). In Local mode profiles
+    /// via `RA_SOLO_LOGIN=1` (legacy `ra_SOLO_LOGIN`). In Local mode profiles
     /// run in this process;
     /// per-profile gateways are not auto-started. Do NOT set on a host fronted by a
     /// reverse proxy (e.g. the Caddy-fronted fleet) — see `api::solo_auth`.
@@ -433,12 +433,12 @@ pub struct ServeCommand {
 
     /// Default every session to the dangerous FULL-ACCESS permission
     /// profile: sandbox disabled, network allowed, approvals never —
-    /// ra's analogue of Claude Code's `--dangerously-skip-permissions`.
+    /// RecurAgent's analogue of Claude Code's `--dangerously-skip-permissions`.
     /// Requires `--solo` (the same local-single-user keystone that gates
     /// selecting Full Access from the `/permissions` menu). A session's
     /// explicit `/permissions` choice still overrides the default. Also
     /// settable via `RA_DANGER_FULL_ACCESS=1` (legacy
-    /// `OCTOS_DANGER_FULL_ACCESS`).
+    /// `ra_DANGER_FULL_ACCESS`).
     #[arg(long)]
     pub danger_full_access: bool,
 
@@ -446,7 +446,7 @@ pub struct ServeCommand {
     /// no explicit `/permissions` choice runs Workspace-Write with network
     /// ALLOWED (filesystem still sandboxed) so `npm install` / git / fetch work
     /// out of the box. Pass `--no-network` (or `RA_NO_NETWORK=1`, legacy
-    /// `OCTOS_NO_NETWORK`) to revert
+    /// `ra_NO_NETWORK`) to revert
     /// the default to network DENIED. Cloud/tenant deployments always default to
     /// network-denied regardless. An explicit `/permissions` choice still wins.
     #[arg(long)]
@@ -522,7 +522,7 @@ enum AuthTokenSource {
 }
 
 /// Resolve the operator-supplied auth token with the documented precedence
-/// `--auth-token` > `RA_AUTH_TOKEN` (legacy `OCTOS_AUTH_TOKEN`) > config
+/// `--auth-token` > `RA_AUTH_TOKEN` (legacy `ra_AUTH_TOKEN`) > config
 /// `auth_token` (an empty config token counts as absent). `None` means no
 /// operator source produced a token — the caller then auto-generates one for
 /// non-loopback binds.
@@ -746,18 +746,18 @@ fn port_holder_hint(port: u16) -> String {
 }
 
 /// Stable, machine-greppable marker embedded in the "data directory is already
-/// owned by another serve" error. octoscode (a separate repo) spawns
+/// owned by another serve" error. ra-tui (a separate repo) spawns
 /// `ra serve --stdio` as a child and greps its stderr for this exact token
 /// on child-exit to recognize the single-writer conflict and STOP relaunching —
 /// instead of the silent ~5s crash-loop it used to hit when the second serve
 /// died mid-startup opening `admin_audit.redb`. MUST stay byte-stable: the
-/// client matches it verbatim (octoscode `transport.rs` DATA_DIR_LOCKED_MARKER).
+/// client matches it verbatim (ra-tui `transport.rs` DATA_DIR_LOCKED_MARKER).
 pub(crate) const DATA_DIR_LOCKED_MARKER: &str = "RA_DATA_DIR_LOCKED";
 
 /// Contention on the serve lock is not always a second long-lived serve: the
 /// goal operator CLI holds the same lock across an ms-scale offline append
 /// (#2181), and a serve (re)spawned inside that window must not be refused
-/// with the marker — octoscode STOPS relaunching on it, so a transient
+/// with the marker — ra-tui STOPS relaunching on it, so a transient
 /// conflict would permanently kill the session until manual intervention
 /// (#2357). Wait out transient holders on this bounded budget before emitting
 /// the marker. A genuinely running serve holds the lock for its whole
@@ -824,7 +824,7 @@ fn acquire_serve_data_dir_lock(data_dir: &std::path::Path) -> Result<ServeDataDi
                 if now >= deadline {
                     return Err(eyre::eyre!(
                         "{DATA_DIR_LOCKED_MARKER}: another ra server is already running for \
-                         this data directory ({}). Close the other octoscode (or `ra serve`), \
+                         this data directory ({}). Close the other ra-tui (or `ra serve`), \
                          or start this one against a different --data-dir.",
                         data_dir.display()
                     ));
@@ -916,7 +916,7 @@ impl ServeCommand {
         // `admin_audit.redb` (which a stdio client silently respawned in a
         // ~5s loop). Transient contention (the goal operator CLI's ms-scale
         // offline-append hold, #2181) is first waited out on a short budget
-        // (#2357): octoscode stops relaunching on the marker, so a transient
+        // (#2357): ra-tui stops relaunching on the marker, so a transient
         // conflict must never produce one. Held for the whole process via
         // `_data_dir_lock`; released on exit so a relaunch after the prior
         // serve quits still starts.
@@ -924,7 +924,7 @@ impl ServeCommand {
             Ok(guard) => guard,
             Err(error) => {
                 if error.to_string().contains(DATA_DIR_LOCKED_MARKER) {
-                    // A guaranteed clean, un-colored stderr line the octoscode
+                    // A guaranteed clean, un-colored stderr line the ra-tui
                     // client greps on child-exit (color-eyre's rendering of the
                     // returned error may interleave ANSI, so don't rely on it).
                     let _ = super::serve_console::print_stderr(&format!(
@@ -963,7 +963,7 @@ impl ServeCommand {
         {
             // Solo-boot loop safety: restored loops must not silently resume
             // firing model turns on a single-operator box. Park them paused;
-            // `/loop resume <id>` re-arms, OCTOS_SOLO_RESUME_LOOPS=1 opts out.
+            // `/loop resume <id>` re-arms, ra_SOLO_RESUME_LOOPS=1 opts out.
             for (loop_id, session_id) in
                 crate::autonomy::agent_orchestrator::default_agent_orchestrator()
                     .pause_restored_loops_for_solo_boot()
@@ -977,7 +977,7 @@ impl ServeCommand {
             // Same safety for GOALS (#1694): a goal restored `active`
             // resumes autonomous model turns nobody asked this process
             // for. Park paused; `/goal resume` re-arms,
-            // OCTOS_SOLO_RESUME_GOALS=1 opts out.
+            // ra_SOLO_RESUME_GOALS=1 opts out.
             if ra_core::brand::env_compat_str("SOLO_RESUME_GOALS").as_deref() != Some("1") {
                 // #1973 fix C — resolve each parked goal's PROFILE data dir so
                 // the park also flips the durable per-goal SQLite ledger row to
@@ -1091,7 +1091,7 @@ impl ServeCommand {
         let metrics_handle = Some(init_metrics());
 
         // Security: warn if binding to non-localhost without auth token
-        // Precedence: CLI arg, then OCTOS_AUTH_TOKEN env var, then config
+        // Precedence: CLI arg, then ra_AUTH_TOKEN env var, then config
         // `--host-managed`: validate the mode before anything binds, spawns
         // or opens stores. The host token comes from the environment only.
         let host_managed_tokens = if self.host_managed {
@@ -1137,7 +1137,7 @@ impl ServeCommand {
                 // steer operators to the env var or the config file.
                 tracing::warn!(
                     "--auth-token exposes the bearer token in the process list (ps); \
-                     prefer the RA_AUTH_TOKEN env var (legacy OCTOS_AUTH_TOKEN) or the config file"
+                     prefer the RA_AUTH_TOKEN env var (legacy ra_AUTH_TOKEN) or the config file"
                 );
             }
             Some(token)
@@ -1185,7 +1185,7 @@ impl ServeCommand {
 
         // M11-F regression fix REG-4: bootstrap bundled app-skills
         // (`crates/app-skills/`) and platform-skills (`crates/platform-
-        // skills/`) into `<octos_home>/{bundled-app-skills,platform-
+        // skills/`) into `<RecurAgent_home>/{bundled-app-skills,platform-
         // skills}/` so every `ProfileRuntime` we build below can scan
         // them via `Config::plugin_dirs_from_project`. Pre-M11-F
         // `serve.rs::try_create_agent` did this unconditionally per
@@ -1213,7 +1213,7 @@ impl ServeCommand {
         // always discovers them even when the `mofa-research` skill carrying
         // `deep_research.dot` has drifted off a profile. Per-profile
         // `RunPipelineTool`s register that dir as the LOWEST-precedence
-        // search path via `with_octos_home` (bootstrap-dir == search-dir).
+        // search path via `with_ra_home` (bootstrap-dir == search-dir).
         // Installed pipelines of the same name always win (no clobber).
         ra_agent::bootstrap::bootstrap_bundled_pipelines(&data_dir);
 
@@ -1477,7 +1477,7 @@ impl ServeCommand {
             }
         }
 
-        // Boot-resume — "a fleet survives an ra restart". The boot reconcile
+        // Boot-resume — "a fleet survives an RecurAgent restart". The boot reconcile
         // above flipped any restart-interrupted fleet's in-flight children back
         // to `Ready`, but emitted NO outbox event — so the outbox consumer never
         // wakes the keeper and an in-progress fleet would STALL forever after a
@@ -1587,7 +1587,7 @@ impl ServeCommand {
         // already has no gateway auto-start; keep HTTP solo consistent.
         //
         // `--host-managed` never enables solo login (not even through
-        // `OCTOS_SOLO_LOGIN`) but also runs its profiles in this process.
+        // `ra_SOLO_LOGIN`) but also runs its profiles in this process.
         let solo_login_enabled_flag = !self.host_managed
             && (self.solo
                 || ra_core::brand::env_compat_str("SOLO_LOGIN")
@@ -1866,7 +1866,7 @@ impl ServeCommand {
                 .tunnel_domain
                 .clone()
                 .or_else(|| std::env::var("TUNNEL_DOMAIN").ok()),
-            // `OCTOS_BASE_DOMAIN` (env) takes precedence over config.json so
+            // `ra_BASE_DOMAIN` (env) takes precedence over config.json so
             // operators can override without touching the file. `None` falls
             // back to `crate::api::DEFAULT_BASE_DOMAIN` at read sites.
             base_domain: ra_core::brand::env_compat_str("BASE_DOMAIN")
@@ -1899,7 +1899,7 @@ impl ServeCommand {
             // `crates/ra-cli/src/api/swarm.rs`.
             swarm_state: swarm_state_init,
             // Harness JSONL event sink — wired from the
-            // `OCTOS_HARNESS_EVENT_SINK` env var when the caller wants
+            // `ra_HARNESS_EVENT_SINK` env var when the caller wants
             // review decisions and swarm dispatch events persisted (see
             // `/api/events/harness`). `None` keeps the pre-M7.6
             // behaviour of broadcast-only.
@@ -2685,7 +2685,7 @@ mod tests {
 
     /// #2371 tripwire: the repo's own service generators must never place
     /// the dashboard bearer token in argv — it is readable by any local
-    /// process via ps / systemctl cat. The OCTOS_AUTH_TOKEN env var carries
+    /// process via ps / systemctl cat. The ra_AUTH_TOKEN env var carries
     /// it instead (NSSM's AppEnvironmentExtra is the deploy.ps1 equivalent).
     #[test]
     fn service_templates_never_pass_auth_token_via_argv() {
@@ -2700,12 +2700,12 @@ mod tests {
             let body = std::fs::read_to_string(scripts.join(name))
                 .unwrap_or_else(|e| panic!("read {name}: {e}"));
             assert!(
-                body.contains("OCTOS_AUTH_TOKEN"),
-                "{name} must still deliver the token via OCTOS_AUTH_TOKEN"
+                body.contains("ra_AUTH_TOKEN"),
+                "{name} must still deliver the token via ra_AUTH_TOKEN"
             );
             for line in body.lines() {
                 let service_argv_line = line.contains("ExecStart=")
-                    || line.contains("\"$octosBin\" serve")
+                    || line.contains("\"$raBin\" serve")
                     || line.contains("$nssmExe install")
                     || line.contains("AppParameters")
                     || line.trim() == "<string>--auth-token</string>";
@@ -2722,7 +2722,7 @@ mod tests {
         // `--stdio` runs session actors in-process with no gateway to
         // proxy `task/cancel` to, so the store must be present for the
         // per-turn supervisor to self-register into — otherwise AppUI
-        // task commands fail `runtime_unavailable` and octoscode Esc/`x`
+        // task commands fail `runtime_unavailable` and ra-tui Esc/`x`
         // cannot cancel a spawned background task (the reported bug).
         assert!(
             in_process_task_query_store(true).is_some(),
@@ -2976,7 +2976,7 @@ mod tests {
     /// #2357 — the lock is no longer held only by a long-lived serve: the goal
     /// operator CLI holds it across an ms-scale offline append (#2181). A serve
     /// spawned inside that window must WAIT OUT the transient holder instead of
-    /// emitting the one-shot marker refusal — octoscode stops relaunching on
+    /// emitting the one-shot marker refusal — ra-tui stops relaunching on
     /// the marker, so a transient conflict would permanently kill the session.
     /// The holder releases mid-budget; acquisition must retry past the first
     /// contention and succeed. The acquirer runs on its own thread behind a
@@ -3185,7 +3185,7 @@ mod tests {
     #[test]
     fn dashboard_smtp_password_prefers_matching_admin_profile_email_tool() {
         let _guard = dashboard_smtp_test_env_lock().lock().unwrap();
-        let _env = EnvVarGuard::remove("OCTOS_TEST_DASHBOARD_AUTH_ADMIN_SMTP_PASSWORD");
+        let _env = EnvVarGuard::remove("ra_TEST_DASHBOARD_AUTH_ADMIN_SMTP_PASSWORD");
         let dir = tempfile::tempdir().unwrap();
         let store = crate::profiles::ProfileStore::open_unified(dir.path()).unwrap();
         store
@@ -3223,7 +3223,7 @@ mod tests {
                 host: "smtp.example.com".into(),
                 port: 465,
                 username: "admin@example.com".into(),
-                password_env: "OCTOS_TEST_DASHBOARD_AUTH_ADMIN_SMTP_PASSWORD".into(),
+                password_env: "ra_TEST_DASHBOARD_AUTH_ADMIN_SMTP_PASSWORD".into(),
                 from_address: "admin@example.com".into(),
             }),
             session_expiry_hours: 24,
@@ -3309,7 +3309,7 @@ mod tests {
     #[test]
     fn dashboard_smtp_password_prefers_matching_non_admin_profile_email_tool() {
         let _guard = dashboard_smtp_test_env_lock().lock().unwrap();
-        let _env = EnvVarGuard::remove("OCTOS_TEST_DASHBOARD_AUTH_PROFILE_SMTP_PASSWORD");
+        let _env = EnvVarGuard::remove("ra_TEST_DASHBOARD_AUTH_PROFILE_SMTP_PASSWORD");
         let dir = tempfile::tempdir().unwrap();
         let store = crate::profiles::ProfileStore::open_unified(dir.path()).unwrap();
         store
@@ -3354,7 +3354,7 @@ mod tests {
                 host: "smtp.gmail.com".into(),
                 port: 465,
                 username: "dspfac@gmail.com".into(),
-                password_env: "OCTOS_TEST_DASHBOARD_AUTH_PROFILE_SMTP_PASSWORD".into(),
+                password_env: "ra_TEST_DASHBOARD_AUTH_PROFILE_SMTP_PASSWORD".into(),
                 from_address: "dspfac@gmail.com".into(),
             }),
             session_expiry_hours: 24,

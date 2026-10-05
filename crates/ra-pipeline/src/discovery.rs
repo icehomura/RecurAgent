@@ -72,7 +72,7 @@ impl std::fmt::Display for PipelineResolveError {
 
 impl std::error::Error for PipelineResolveError {}
 
-/// Subdirectory name (under an ra root) where the binary writes its
+/// Subdirectory name (under an RecurAgent root) where the binary writes its
 /// embedded generic pipelines. Mirrors `ra_agent::bootstrap::BUNDLED_PIPELINES_DIR`.
 ///
 /// Gap 4.1 BLOCKER 3: this is a DEDICATED dir, separate from the
@@ -88,7 +88,7 @@ pub struct PipelineDiscovery {
     search_paths: Vec<PathBuf>,
     /// Bundled-pipelines dirs (lowest precedence). Always appended AFTER
     /// every `search_paths` entry when resolving / listing, regardless of
-    /// the order `with_octos_home` / `add_bundled_pipelines_dir` are
+    /// the order `with_ra_home` / `add_bundled_pipelines_dir` are
     /// called — so an installed `deep_research.dot` always shadows the
     /// bundled copy (installed-wins, BLOCKER 3).
     bundled_dirs: Vec<PathBuf>,
@@ -132,7 +132,7 @@ impl PipelineDiscovery {
     }
 
     /// Add an installed-pipeline / installed-skill search path (e.g. global
-    /// `octos_home/skills/`). These are searched at HIGHER precedence than
+    /// `ra_home/skills/`). These are searched at HIGHER precedence than
     /// any bundled-pipelines dir.
     pub fn add_search_path(&mut self, path: PathBuf) {
         if !self.search_paths.contains(&path) {
@@ -449,13 +449,13 @@ mod tests {
     }
 
     /// Installed-wins must hold regardless of builder call order: even if
-    /// the bundled dir is registered FIRST, then an octos_home/skills path
+    /// the bundled dir is registered FIRST, then an RecurAgent_home/skills path
     /// is added later, the bundled dir stays lowest-precedence.
     #[tokio::test]
     async fn bundled_dir_stays_lowest_precedence_regardless_of_call_order() {
         let data = tempfile::tempdir().unwrap();
         let working = tempfile::tempdir().unwrap();
-        let octos_home = tempfile::tempdir().unwrap();
+        let ra_home = tempfile::tempdir().unwrap();
 
         let bundled_dir = data.path().join(BUNDLED_PIPELINES_DIR);
         std::fs::create_dir_all(&bundled_dir).unwrap();
@@ -465,7 +465,7 @@ mod tests {
         )
         .unwrap();
 
-        let home_skills = octos_home.path().join("skills").join("mofa-research");
+        let home_skills = ra_home.path().join("skills").join("mofa-research");
         std::fs::create_dir_all(&home_skills).unwrap();
         std::fs::write(
             home_skills.join("deep_research.dot"),
@@ -477,7 +477,7 @@ mod tests {
         // Bundled FIRST, installed search path SECOND — the bundled dir
         // must still lose.
         discovery.add_bundled_pipelines_dir(data.path());
-        discovery.add_search_path(octos_home.path().join("skills"));
+        discovery.add_search_path(ra_home.path().join("skills"));
 
         let resolved = discovery.resolve("deep_research").await.unwrap();
         assert!(

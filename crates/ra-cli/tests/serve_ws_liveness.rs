@@ -10,7 +10,7 @@
 //! The fix ships a protocol-level binary `Ping` on the keepalive tick and
 //! closes the connection once `WS_LIVENESS_MISSED_PINGS + 1` ping intervals
 //! pass with zero inbound frames (any frame counts: a conforming client's
-//! Pong alone proves the peer is alive). These tests drive the REAL ra
+//! Pong alone proves the peer is alive). These tests drive the REAL RecurAgent
 //! binary with the cadence shortened via `RA_WS_LIVENESS_PING_SECS=1`
 //! (deadline = 4 × 1 s = 4 s):
 //!
@@ -20,7 +20,7 @@
 //!   Pings and then a real Close frame within the deadline.
 //! - `serve_ws_liveness_keeps_ponging_client_open_past_deadline` — a client
 //!   that reads and answers every `Ping` with a `Pong` (what browsers do at
-//!   the protocol layer and octoscode's transport does explicitly) is still
+//!   the protocol layer and ra-tui's transport does explicitly) is still
 //!   receiving Pings well past the deadline: the deadline counts inbound
 //!   frames, not application traffic.
 //!
@@ -97,9 +97,9 @@ mod serve_ws_liveness {
             .env("RA_AUTH_TOKEN", AUTH_TOKEN)
             .env_remove("RA_INSTANCE_DATA_DIR")
             .env_remove("RA_HOME")
-            .env_remove("OCTOS_HOME")
+            .env_remove("ra_HOME")
             .env_remove("RA_DATA_DIR")
-            .env_remove("OCTOS_DATA_DIR")
+            .env_remove("ra_DATA_DIR")
             .spawn()
             .expect("failed to spawn ra serve");
         ServeProcess {
@@ -256,7 +256,7 @@ mod serve_ws_liveness {
     }
 
     /// #2447 — the healthy shape: a conforming client that Pongs every Ping
-    /// (browsers do it at the protocol layer, octoscode's transport
+    /// (browsers do it at the protocol layer, ra-tui's transport
     /// explicitly) keeps receiving Pings well past the deadline. Inbound
     /// frames are exactly what refreshes the liveness meter, so
     /// application-level idleness must NOT close the connection — that would

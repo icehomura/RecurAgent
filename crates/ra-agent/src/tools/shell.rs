@@ -776,14 +776,14 @@ fn apply_git_tool_env(cmd: &mut tokio::process::Command, command: &str) {
 
 fn apply_harness_event_sink_env(cmd: &mut tokio::process::Command, ctx: &ToolContext) {
     if let Some(sink) = ctx.harness_event_sink.as_deref() {
-        cmd.env("OCTOS_EVENT_SINK", sink);
+        cmd.env("ra_EVENT_SINK", sink);
         return;
     }
     // Legacy callers that route through `execute()` pass `ToolContext::zero()` —
     // the sink isn't on the typed context but may still live on the
     // task-local `TOOL_CTX` that older executor paths populate.
     if let Ok(Some(sink)) = TOOL_CTX.try_with(|inner| inner.harness_event_sink.clone()) {
-        cmd.env("OCTOS_EVENT_SINK", sink);
+        cmd.env("ra_EVENT_SINK", sink);
     }
 }
 
@@ -1519,21 +1519,6 @@ mod tests {
 
     #[test]
     fn bash_file_writes_escape_hatch_allows_explicit_write() {
-        assert!(command_allows_write_explicitly(
-            "sed -i s/a/b/ file # ra:allow-write"
-        ));
-        assert!(command_allows_write_explicitly(
-            "echo x > /tmp/f # ra:allow-write"
-        ));
-        // Only the LAST line's comment counts as the hatch.
-        assert!(!command_allows_write_explicitly(
-            "# ra:allow-write\nsed -i s/a/b/ file"
-        ));
-        assert!(!command_allows_write_explicitly("sed -i s/a/b/ file"));
-    }
-
-    #[test]
-    fn bash_file_writes_escape_hatch_accepts_the_new_marker() {
         assert!(command_allows_write_explicitly(
             "sed -i s/a/b/ file # ra:allow-write"
         ));
@@ -2542,13 +2527,9 @@ mod tests {
 
 /// #28b — escape hatch: a trailing `# ra:allow-write` comment on the
 /// command line explicitly authorizes a write-shaped command under `deny`.
-/// The legacy `# ra:allow-write` spelling is still accepted.
 pub(crate) fn command_allows_write_explicitly(command: &str) -> bool {
-    const MARKERS: [&str; 2] = ["# ra:allow-write", "# ra:allow-write"];
-    command
-        .lines()
-        .last()
-        .is_some_and(|last| MARKERS.iter().any(|marker| last.contains(*marker)))
+    const MARKER: &str = "# ra:allow-write";
+    command.lines().last().is_some_and(|last| last.contains(MARKER))
 }
 
 /// #28b — heuristic: does this command LOOK like it writes files? A

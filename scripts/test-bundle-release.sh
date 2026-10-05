@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Test scripts/bundle-release.sh: the bundle must ship with a checksum sidecar
 # (`<archive>.sha256`, standard `sha256sum -c` format) so downstream installers
-# (octoscode auto-provision) can verify the download instead of silently
+# (ra-tui auto-provision) can verify the download instead of silently
 # skipping verification (#1929).
 #
 # Runs against a fake target/release tree — no real build outputs needed.

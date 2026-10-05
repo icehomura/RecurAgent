@@ -12,8 +12,8 @@ fn make_channel() -> MatrixChannel {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         9880,
         Arc::new(AtomicBool::new(false)),
     )
@@ -21,15 +21,15 @@ fn make_channel() -> MatrixChannel {
 
 fn make_test_state(inbound_tx: mpsc::Sender<InboundMessage>) -> AppserviceState {
     let mut registered = HashSet::new();
-    registered.insert("@octos_bot:localhost".to_string());
+    registered.insert("@ra_bot:localhost".to_string());
     AppserviceState {
         inbound_tx,
         homeserver: "http://localhost:6167".to_string(),
         as_token: "test_as_token".to_string(),
         hs_token: "test_token".to_string(),
-        bot_user_id: "@octos_bot:localhost".to_string(),
+        bot_user_id: "@ra_bot:localhost".to_string(),
         server_name: "localhost".to_string(),
-        user_prefix: "octos_".to_string(),
+        user_prefix: "ra_".to_string(),
         http: reqwest::Client::new(),
         registered_users: Arc::new(RwLock::new(registered)),
         dedup: Arc::new(MessageDedup::new()),
@@ -117,14 +117,14 @@ fn mapped(child_bots: usize, botfather_mapped: bool) -> RoomBotComposition {
 fn count_room_members_splits_humans_child_bots_and_botfather() {
     let joined = json!({
         "joined": {
-            "@octos_bot:localhost": { "display_name": "ra" },
-            "@octos_alexbot:localhost": { "display_name": "AlexBot" },
+            "@ra_bot:localhost": { "display_name": "ra" },
+            "@ra_alexbot:localhost": { "display_name": "AlexBot" },
             "@alice:localhost": { "display_name": "Alice" },
             "@bob:localhost": { "display_name": "Bob" }
         }
     });
     assert_eq!(
-        count_room_members(&joined, "@octos_bot:localhost", ":localhost", "octos_"),
+        count_room_members(&joined, "@ra_bot:localhost", ":localhost", "ra_"),
         Some(membership(2, 1, true))
     );
 }
@@ -133,7 +133,7 @@ fn count_room_members_splits_humans_child_bots_and_botfather() {
 fn count_room_members_handles_missing_field() {
     // No `joined` object → membership unknown → merge fails closed.
     assert_eq!(
-        count_room_members(&json!({}), "@octos_bot:localhost", ":localhost", "octos_"),
+        count_room_members(&json!({}), "@ra_bot:localhost", ":localhost", "ra_"),
         None
     );
     assert_eq!(
@@ -208,11 +208,11 @@ fn merge_fails_closed_when_room_map_unavailable() {
 async fn room_bot_composition_distinguishes_botfather_from_children() {
     let router = BotRouter::new(None);
     router
-        .register("@octos_bot:localhost", "botfather")
+        .register("@ra_bot:localhost", "botfather")
         .await
         .unwrap();
     router
-        .register("@octos_weather:localhost", "profile-weather")
+        .register("@ra_weather:localhost", "profile-weather")
         .await
         .unwrap();
     router
@@ -226,7 +226,7 @@ async fn room_bot_composition_distinguishes_botfather_from_children() {
 
     assert_eq!(
         router
-            .room_bot_composition("!room:localhost", "@octos_bot:localhost")
+            .room_bot_composition("!room:localhost", "@ra_bot:localhost")
             .await,
         Some(mapped(1, true))
     );
@@ -234,7 +234,7 @@ async fn room_bot_composition_distinguishes_botfather_from_children() {
     // room the appservice was never bound to) — not a failure.
     assert_eq!(
         router
-            .room_bot_composition("!other:localhost", "@octos_bot:localhost")
+            .room_bot_composition("!other:localhost", "@ra_bot:localhost")
             .await,
         Some(mapped(0, false))
     );
@@ -242,31 +242,31 @@ async fn room_bot_composition_distinguishes_botfather_from_children() {
 
 #[test]
 fn mentions_user_detects_structured_and_text_mentions() {
-    let bot = "@octosbot:localhost";
+    let bot = "@rabot:localhost";
 
     // Structured m.mentions.user_ids
-    let structured = json!({ "m.mentions": { "user_ids": ["@octosbot:localhost"] } });
+    let structured = json!({ "m.mentions": { "user_ids": ["@rabot:localhost"] } });
     assert!(mentions_user(&structured, "hello", bot));
 
     // Plain-text MXID mention in the body
     let text = json!({});
     assert!(mentions_user(
         &text,
-        "hey @octosbot:localhost please help",
+        "hey @rabot:localhost please help",
         bot
     ));
 
     // MXID mention embedded in formatted_body markup.
-    let formatted = json!({ "formatted_body": "<b>@octosbot:localhost</b> hi" });
+    let formatted = json!({ "formatted_body": "<b>@rabot:localhost</b> hi" });
     assert!(mentions_user(&formatted, "hi", bot));
 
     // Standard matrix.to pill: the MXID is preceded by `/` in the href,
     // which must not defeat the left-boundary check.
     let pill = json!({
         "formatted_body":
-            "<a href=\"https://matrix.to/#/@octosbot:localhost\">octosbot</a> hi"
+            "<a href=\"https://matrix.to/#/@rabot:localhost\">rabot</a> hi"
     });
-    assert!(mentions_user(&pill, "octosbot hi", bot));
+    assert!(mentions_user(&pill, "rabot hi", bot));
 
     // No mention at all
     let none = json!({});
@@ -473,7 +473,7 @@ fn test_matrix_max_message_length() {
 #[test]
 fn test_matrix_bot_user_id() {
     let ch = make_channel();
-    assert_eq!(ch.bot_user_id(), "@octos_bot:localhost");
+    assert_eq!(ch.bot_user_id(), "@ra_bot:localhost");
 }
 
 #[test]
@@ -493,7 +493,7 @@ fn test_make_api_url_strips_trailing_slash() {
         "hs",
         "localhost",
         "bot",
-        "octos_",
+        "ra_",
         9880,
         Arc::new(AtomicBool::new(false)),
     );
@@ -511,20 +511,20 @@ fn test_default_appservice_bind_addr_uses_all_interfaces() {
 #[test]
 fn test_is_managed_user_bot() {
     assert!(is_managed_user(
-        "@octos_bot:localhost",
-        "@octos_bot:localhost",
+        "@ra_bot:localhost",
+        "@ra_bot:localhost",
         ":localhost",
-        "octos_",
+        "ra_",
     ));
 }
 
 #[test]
 fn test_is_managed_user_virtual_user() {
     assert!(is_managed_user(
-        "@octos_agent1:localhost",
-        "@octos_bot:localhost",
+        "@ra_agent1:localhost",
+        "@ra_bot:localhost",
         ":localhost",
-        "octos_",
+        "ra_",
     ));
 }
 
@@ -532,19 +532,19 @@ fn test_is_managed_user_virtual_user() {
 fn test_is_managed_user_regular_user() {
     assert!(!is_managed_user(
         "@alice:localhost",
-        "@octos_bot:localhost",
+        "@ra_bot:localhost",
         ":localhost",
-        "octos_",
+        "ra_",
     ));
 }
 
 #[test]
 fn test_is_managed_user_other_server() {
     assert!(!is_managed_user(
-        "@octos_bot:other.server",
-        "@octos_bot:localhost",
+        "@ra_bot:other.server",
+        "@ra_bot:localhost",
         ":localhost",
-        "octos_",
+        "ra_",
     ));
 }
 
@@ -625,10 +625,10 @@ async fn test_registered_users() {
     let ch = make_channel();
     {
         let mut users = ch.registered_users.write().await;
-        users.insert("@octos_bot:localhost".to_string());
+        users.insert("@ra_bot:localhost".to_string());
     }
     let users = ch.registered_users.read().await;
-    assert!(users.contains("@octos_bot:localhost"));
+    assert!(users.contains("@ra_bot:localhost"));
     assert!(!users.contains("@other:localhost"));
 }
 
@@ -738,7 +738,7 @@ async fn test_handle_transaction_ignores_bot_messages() {
     let body = json!({
         "events": [{
             "type": "m.room.message",
-            "sender": "@octos_bot:localhost",
+            "sender": "@ra_bot:localhost",
             "room_id": "!room:localhost",
             "event_id": "$ev_bot",
             "content": {
@@ -819,7 +819,7 @@ async fn test_handle_user_query_bot() {
         .registered_users
         .write()
         .await
-        .insert("@octos_agent1:localhost".to_string());
+        .insert("@ra_agent1:localhost".to_string());
 
     let app = Router::new()
         .route("/_matrix/app/v1/users/{user_id}", get(handle_user_query))
@@ -828,7 +828,7 @@ async fn test_handle_user_query_bot() {
     // Query for bot user — should return 200
     let req = Request::builder()
         .method("GET")
-        .uri("/_matrix/app/v1/users/@octos_bot:localhost?access_token=test_token")
+        .uri("/_matrix/app/v1/users/@ra_bot:localhost?access_token=test_token")
         .body(Body::empty())
         .unwrap();
 
@@ -838,7 +838,7 @@ async fn test_handle_user_query_bot() {
     // Query for virtual user — should return 200
     let req2 = Request::builder()
         .method("GET")
-        .uri("/_matrix/app/v1/users/@octos_agent1:localhost?access_token=test_token")
+        .uri("/_matrix/app/v1/users/@ra_agent1:localhost?access_token=test_token")
         .body(Body::empty())
         .unwrap();
 
@@ -874,7 +874,7 @@ async fn test_handle_user_query_unknown_managed_user_returns_404() {
 
     let req = Request::builder()
         .method("GET")
-        .uri("/_matrix/app/v1/users/@octos_unknown:localhost?access_token=test_token")
+        .uri("/_matrix/app/v1/users/@ra_unknown:localhost?access_token=test_token")
         .body(Body::empty())
         .unwrap();
 
@@ -900,8 +900,8 @@ async fn test_handle_room_query_requires_token() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         appservice_port,
         shutdown,
     ));
@@ -938,8 +938,8 @@ async fn test_handle_transaction_invite_joins_room() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         appservice_port,
         shutdown,
     ));
@@ -956,7 +956,7 @@ async fn test_handle_transaction_invite_joins_room() {
         "events": [{
             "type": "m.room.member",
             "room_id": "!room123:localhost",
-            "state_key": "@octos_agent1:localhost",
+            "state_key": "@ra_agent1:localhost",
             "content": {
                 "membership": "invite"
             }
@@ -985,7 +985,7 @@ async fn test_handle_transaction_invite_joins_room() {
             && req
                 .query
                 .as_deref()
-                .is_some_and(|q| q.contains("user_id=%40octos_agent1%3Alocalhost"))
+                .is_some_and(|q| q.contains("user_id=%40ra_agent1%3Alocalhost"))
     }));
 
     channel.stop().await.unwrap();
@@ -1003,7 +1003,7 @@ async fn test_private_bot_invite_rejected_for_non_owner() {
     let router = BotRouter::new(None);
     router
         .register_entry(
-            "@octos_private:localhost",
+            "@ra_private:localhost",
             "main--private",
             "@owner:localhost",
             BotVisibility::Private,
@@ -1024,7 +1024,7 @@ async fn test_private_bot_invite_rejected_for_non_owner() {
             "type": "m.room.member",
             "sender": "@mallory:localhost",
             "room_id": "!room123:localhost",
-            "state_key": "@octos_private:localhost",
+            "state_key": "@ra_private:localhost",
             "content": {
                 "membership": "invite"
             }
@@ -1065,8 +1065,8 @@ async fn test_health_check_includes_user_id() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         9880,
         Arc::new(AtomicBool::new(false)),
     );
@@ -1081,7 +1081,7 @@ async fn test_health_check_includes_user_id() {
             && req
                 .query
                 .as_deref()
-                .is_some_and(|q| q.contains("user_id=%40octos_bot%3Alocalhost"))
+                .is_some_and(|q| q.contains("user_id=%40ra_bot%3Alocalhost"))
     }));
 
     homeserver_handle.abort();
@@ -1239,7 +1239,7 @@ async fn test_matrix_user_query() {
         .registered_users
         .write()
         .await
-        .insert("@octos_agent1:localhost".to_string());
+        .insert("@ra_agent1:localhost".to_string());
 
     let app = Router::new()
         .route("/_matrix/app/v1/users/{user_id}", get(handle_user_query))
@@ -1247,7 +1247,7 @@ async fn test_matrix_user_query() {
 
     let bot_req = Request::builder()
         .method("GET")
-        .uri("/_matrix/app/v1/users/@octos_bot:localhost?access_token=test_token")
+        .uri("/_matrix/app/v1/users/@ra_bot:localhost?access_token=test_token")
         .body(Body::empty())
         .unwrap();
     assert_eq!(
@@ -1274,8 +1274,8 @@ async fn test_matrix_send_message() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
@@ -1310,8 +1310,8 @@ async fn test_matrix_send_with_id() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
@@ -1338,8 +1338,8 @@ async fn test_matrix_send_no_live() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
@@ -1371,8 +1371,8 @@ async fn test_matrix_send_projects_app_metadata_into_event_content() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
@@ -1434,8 +1434,8 @@ async fn should_upload_and_send_m_image_when_outbound_has_media() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
@@ -1495,8 +1495,8 @@ async fn should_caption_first_file_only_when_outbound_has_multiple_media() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
@@ -1665,8 +1665,8 @@ async fn test_matrix_edit_message() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
@@ -1697,8 +1697,8 @@ async fn test_matrix_live_lifecycle() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
@@ -1745,8 +1745,8 @@ async fn test_matrix_send_typing() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
@@ -1774,13 +1774,13 @@ async fn test_matrix_send_typing_as() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
 
-    ch.send_typing_as("!room:localhost", Some("@octos_weather:localhost"))
+    ch.send_typing_as("!room:localhost", Some("@ra_weather:localhost"))
         .await
         .unwrap();
 
@@ -1792,13 +1792,13 @@ async fn test_matrix_send_typing_as() {
         .expect("should have a typing request");
     assert_eq!(typing_req.method, Method::PUT);
     assert!(
-        typing_req.path.contains("%40octos_weather%3Alocalhost"),
+        typing_req.path.contains("%40ra_weather%3Alocalhost"),
         "typing path should use sender identity, got: {}",
         typing_req.path
     );
     let query = typing_req.query.as_deref().unwrap_or("");
     assert!(
-        query.contains("user_id=%40octos_weather%3Alocalhost"),
+        query.contains("user_id=%40ra_weather%3Alocalhost"),
         "typing query should use sender identity, got: {query}"
     );
 
@@ -1813,13 +1813,13 @@ async fn test_matrix_stop_typing_as() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
 
-    ch.stop_typing_as("!room:localhost", Some("@octos_weather:localhost"))
+    ch.stop_typing_as("!room:localhost", Some("@ra_weather:localhost"))
         .await
         .unwrap();
 
@@ -1832,13 +1832,13 @@ async fn test_matrix_stop_typing_as() {
     assert_eq!(typing_req.method, Method::PUT);
     assert_eq!(typing_req.body["typing"], false);
     assert!(
-        typing_req.path.contains("%40octos_weather%3Alocalhost"),
+        typing_req.path.contains("%40ra_weather%3Alocalhost"),
         "typing path should use sender identity, got: {}",
         typing_req.path
     );
     let query = typing_req.query.as_deref().unwrap_or("");
     assert!(
-        query.contains("user_id=%40octos_weather%3Alocalhost"),
+        query.contains("user_id=%40ra_weather%3Alocalhost"),
         "typing query should use sender identity, got: {query}"
     );
 
@@ -1853,8 +1853,8 @@ async fn test_matrix_health_check() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
@@ -1877,8 +1877,8 @@ async fn test_matrix_health_check_down() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
@@ -1897,8 +1897,8 @@ async fn test_matrix_send_html_format() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
@@ -1938,8 +1938,8 @@ async fn test_matrix_send_typing_failure_ignored() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
@@ -1957,8 +1957,8 @@ async fn test_matrix_send_then_edit_flow() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
@@ -2001,12 +2001,12 @@ async fn test_matrix_event_sender_cache_is_bounded() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
-    let sender = "@octos_weather:localhost";
+    let sender = "@ra_weather:localhost";
     ch.registered_users.write().await.insert(sender.to_string());
 
     let mut first_event_id = None;
@@ -2245,18 +2245,18 @@ async fn test_matrix_register_bot_registers_user_and_route() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         9880,
         Arc::new(AtomicBool::new(false)),
     );
 
-    ch.register_bot("@octos_weather:localhost", "profile-weather")
+    ch.register_bot("@ra_weather:localhost", "profile-weather")
         .await
         .unwrap();
 
     assert_eq!(
-        ch.bot_router().route("@octos_weather:localhost").await,
+        ch.bot_router().route("@ra_weather:localhost").await,
         Some("profile-weather".to_string())
     );
 
@@ -2275,14 +2275,14 @@ async fn test_matrix_register_bot_registers_user_and_route() {
 async fn test_matrix_unregister_bot_removes_route() {
     let ch = make_channel();
     ch.bot_router()
-        .register("@octos_weather:localhost", "profile-weather")
+        .register("@ra_weather:localhost", "profile-weather")
         .await
         .unwrap();
 
-    ch.unregister_bot("@octos_weather:localhost").await.unwrap();
+    ch.unregister_bot("@ra_weather:localhost").await.unwrap();
 
     assert_eq!(
-        ch.bot_router().route("@octos_weather:localhost").await,
+        ch.bot_router().route("@ra_weather:localhost").await,
         None
     );
 }
@@ -2292,18 +2292,18 @@ async fn test_matrix_unregister_bot_removes_registered_sender() {
     let ch = make_channel();
     {
         let mut users = ch.registered_users.write().await;
-        users.insert("@octos_weather:localhost".to_string());
+        users.insert("@ra_weather:localhost".to_string());
     }
     ch.bot_router()
-        .register("@octos_weather:localhost", "profile-weather")
+        .register("@ra_weather:localhost", "profile-weather")
         .await
         .unwrap();
 
-    ch.unregister_bot("@octos_weather:localhost").await.unwrap();
+    ch.unregister_bot("@ra_weather:localhost").await.unwrap();
 
     let users = ch.registered_users.read().await;
     assert!(
-        !users.contains("@octos_weather:localhost"),
+        !users.contains("@ra_weather:localhost"),
         "unregister_bot should remove sender authorization"
     );
 }
@@ -2318,28 +2318,28 @@ async fn test_matrix_register_bot_fails_when_route_persist_fails() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         9880,
         Arc::new(AtomicBool::new(false)),
     )
     .with_bot_router(&missing_data_dir);
 
     let result = ch
-        .register_bot("@octos_weather:localhost", "profile-weather")
+        .register_bot("@ra_weather:localhost", "profile-weather")
         .await;
     assert!(
         result.is_err(),
         "register_bot should fail when route persistence fails"
     );
     assert_eq!(
-        ch.bot_router().route("@octos_weather:localhost").await,
+        ch.bot_router().route("@ra_weather:localhost").await,
         None,
         "failed registration should not leave an in-memory route"
     );
     let users = ch.registered_users.read().await;
     assert!(
-        !users.contains("@octos_weather:localhost"),
+        !users.contains("@ra_weather:localhost"),
         "failed registration should not leave sender authorization"
     );
 
@@ -2357,7 +2357,7 @@ async fn test_startup_restores_registered_users_from_persisted_routes() {
     let routes_path = tmp.path().join("matrix-bot-routes.json");
     std::fs::write(
         &routes_path,
-        r#"{"@octos_weather:localhost":"profile-weather"}"#,
+        r#"{"@ra_weather:localhost":"profile-weather"}"#,
     )
     .unwrap();
 
@@ -2366,8 +2366,8 @@ async fn test_startup_restores_registered_users_from_persisted_routes() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     )
@@ -2378,7 +2378,7 @@ async fn test_startup_restores_registered_users_from_persisted_routes() {
         !ch.registered_users
             .read()
             .await
-            .contains("@octos_weather:localhost"),
+            .contains("@ra_weather:localhost"),
         "bot should not be in registered_users before start"
     );
 
@@ -2396,7 +2396,7 @@ async fn test_startup_restores_registered_users_from_persisted_routes() {
         ch.registered_users
             .read()
             .await
-            .contains("@octos_weather:localhost"),
+            .contains("@ra_weather:localhost"),
         "persisted bot must be restored into registered_users on startup"
     );
 
@@ -2407,7 +2407,7 @@ async fn test_startup_restores_registered_users_from_persisted_routes() {
         content: "Hello from restored bot".to_string(),
         reply_to: None,
         media: vec![],
-        metadata: json!({"sender_user_id": "@octos_weather:localhost"}),
+        metadata: json!({"sender_user_id": "@ra_weather:localhost"}),
     };
     ch.send_with_id(&msg)
         .await
@@ -2418,7 +2418,7 @@ async fn test_startup_restores_registered_users_from_persisted_routes() {
     let send_req = reqs.iter().find(|r| r.path.contains("/send/")).unwrap();
     let query = send_req.query.as_deref().unwrap_or("");
     assert!(
-        query.contains("user_id=%40octos_weather%3Alocalhost"),
+        query.contains("user_id=%40ra_weather%3Alocalhost"),
         "send should use the restored bot identity, got query: {query}"
     );
 
@@ -2594,8 +2594,8 @@ async fn test_matrix_send_with_sender_user_id() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
@@ -2603,7 +2603,7 @@ async fn test_matrix_send_with_sender_user_id() {
     ch.registered_users
         .write()
         .await
-        .insert("@octos_weather:localhost".to_string());
+        .insert("@ra_weather:localhost".to_string());
 
     let msg = OutboundMessage {
         channel: "matrix".to_string(),
@@ -2611,7 +2611,7 @@ async fn test_matrix_send_with_sender_user_id() {
         content: "Hello from weather bot".to_string(),
         reply_to: None,
         media: vec![],
-        metadata: json!({"sender_user_id": "@octos_weather:localhost"}),
+        metadata: json!({"sender_user_id": "@ra_weather:localhost"}),
     };
 
     ch.send_with_id(&msg).await.unwrap();
@@ -2624,7 +2624,7 @@ async fn test_matrix_send_with_sender_user_id() {
         .expect("should have a send request");
     let query = send_req.query.as_deref().unwrap_or("");
     assert!(
-        query.contains("user_id=%40octos_weather%3Alocalhost"),
+        query.contains("user_id=%40ra_weather%3Alocalhost"),
         "URL should use sender_user_id from metadata, got query: {query}"
     );
 
@@ -2639,8 +2639,8 @@ async fn test_matrix_send_default_sender() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
@@ -2665,7 +2665,7 @@ async fn test_matrix_send_default_sender() {
         .expect("should have a send request");
     let query = send_req.query.as_deref().unwrap_or("");
     assert!(
-        query.contains("user_id=%40octos_bot%3Alocalhost"),
+        query.contains("user_id=%40ra_bot%3Alocalhost"),
         "URL should use default bot_user_id when sender_user_id is absent, got query: {query}"
     );
 
@@ -2680,12 +2680,12 @@ async fn test_matrix_send_rejects_unregistered_sender() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );
-    // Do NOT register @octos_unknown:localhost
+    // Do NOT register @RecurAgent_unknown:localhost
 
     let msg = OutboundMessage {
         channel: "matrix".to_string(),
@@ -2693,7 +2693,7 @@ async fn test_matrix_send_rejects_unregistered_sender() {
         content: "Hello from unknown bot".to_string(),
         reply_to: None,
         media: vec![],
-        metadata: json!({"sender_user_id": "@octos_unknown:localhost"}),
+        metadata: json!({"sender_user_id": "@ra_unknown:localhost"}),
     };
 
     let result = ch.send_with_id(&msg).await;
@@ -2800,7 +2800,7 @@ async fn test_bot_router_room_map_persistence() {
 async fn test_unregister_bot_cleans_room_mappings() {
     let ch = make_channel();
     ch.bot_router()
-        .register("@octos_weather:localhost", "profile-weather")
+        .register("@ra_weather:localhost", "profile-weather")
         .await
         .unwrap();
     ch.bot_router()
@@ -2812,15 +2812,15 @@ async fn test_unregister_bot_cleans_room_mappings() {
     ch.registered_users
         .write()
         .await
-        .insert("@octos_weather:localhost".to_string());
+        .insert("@ra_weather:localhost".to_string());
 
-    ch.unregister_bot("@octos_weather:localhost").await.unwrap();
+    ch.unregister_bot("@ra_weather:localhost").await.unwrap();
 
     // Room mapping should be cleaned up
     assert_eq!(ch.bot_router().route_by_room("!dm1:localhost").await, None);
     // User route should also be gone
     assert_eq!(
-        ch.bot_router().route("@octos_weather:localhost").await,
+        ch.bot_router().route("@ra_weather:localhost").await,
         None
     );
 }
@@ -2896,8 +2896,8 @@ async fn test_handle_transaction_mention_gate_blocks_unaddressed_group_room_mapp
     let (homeserver, requests, homeserver_handle) =
         spawn_mock_homeserver_with_joined_members(json!({
             "joined": {
-                "@octos_bot:localhost": {},
-                "@octos_weather:localhost": {},
+                "@ra_bot:localhost": {},
+                "@ra_weather:localhost": {},
                 "@alice:localhost": {},
                 "@bob:localhost": {}
             }
@@ -2910,7 +2910,7 @@ async fn test_handle_transaction_mention_gate_blocks_unaddressed_group_room_mapp
 
     let router = BotRouter::new(None);
     router
-        .register("@octos_weather:localhost", "profile-weather")
+        .register("@ra_weather:localhost", "profile-weather")
         .await
         .unwrap();
     router
@@ -2972,7 +2972,7 @@ async fn test_handle_transaction_mention_gate_allows_unaddressed_one_to_one_dm()
     let (homeserver, _requests, homeserver_handle) =
         spawn_mock_homeserver_with_joined_members(json!({
             "joined": {
-                "@octos_weather:localhost": {},
+                "@ra_weather:localhost": {},
                 "@alice:localhost": {}
             }
         }))
@@ -2984,7 +2984,7 @@ async fn test_handle_transaction_mention_gate_allows_unaddressed_one_to_one_dm()
 
     let router = BotRouter::new(None);
     router
-        .register("@octos_weather:localhost", "profile-weather")
+        .register("@ra_weather:localhost", "profile-weather")
         .await
         .unwrap();
     router
@@ -3057,11 +3057,11 @@ async fn gate_blocks_unaddressed_when_room_map_has_multiple_bots() {
 
     let router = BotRouter::new(None);
     router
-        .register("@octos_weather:localhost", "profile-weather")
+        .register("@ra_weather:localhost", "profile-weather")
         .await
         .unwrap();
     router
-        .register("@octos_translator:localhost", "profile-translator")
+        .register("@ra_translator:localhost", "profile-translator")
         .await
         .unwrap();
     router
@@ -3133,7 +3133,7 @@ async fn gate_allows_unaddressed_dm_with_single_mapped_bot() {
 
     let router = BotRouter::new(None);
     router
-        .register("@octos_weather:localhost", "profile-weather")
+        .register("@ra_weather:localhost", "profile-weather")
         .await
         .unwrap();
     router
@@ -3208,7 +3208,7 @@ async fn test_handle_transaction_member_event_invalidates_dm_member_cache() {
         "events": [{
             "type": "m.room.member",
             "sender": "@alice:localhost",
-            "state_key": "@octos_translator:localhost",
+            "state_key": "@ra_translator:localhost",
             "room_id": "!room:localhost",
             "content": {
                 "membership": "join"
@@ -3245,7 +3245,7 @@ async fn test_private_bot_message_blocked_for_non_owner() {
     let router = BotRouter::new(None);
     router
         .register_entry(
-            "@octos_private:localhost",
+            "@ra_private:localhost",
             "main--private",
             "@owner:localhost",
             BotVisibility::Private,
@@ -3318,7 +3318,7 @@ async fn test_private_bot_rejection_sent_when_explicitly_addressed() {
     let router = BotRouter::new(None);
     router
         .register_entry(
-            "@octos_private:localhost",
+            "@ra_private:localhost",
             "main--private",
             "@owner:localhost",
             BotVisibility::Private,
@@ -3346,8 +3346,8 @@ async fn test_private_bot_rejection_sent_when_explicitly_addressed() {
             "event_id": "$private-addressed-1",
             "content": {
                 "msgtype": "m.text",
-                "body": "hey @octos_private:localhost help me",
-                "m.mentions": { "user_ids": ["@octos_private:localhost"] }
+                "body": "hey @ra_private:localhost help me",
+                "m.mentions": { "user_ids": ["@ra_private:localhost"] }
             }
         }]
     });
@@ -3375,7 +3375,7 @@ async fn test_private_bot_rejection_sent_when_explicitly_addressed() {
             && req
                 .query
                 .as_deref()
-                .is_some_and(|q| q.contains("user_id=%40octos_private%3Alocalhost"))
+                .is_some_and(|q| q.contains("user_id=%40ra_private%3Alocalhost"))
     }));
 
     homeserver_handle.abort();
@@ -3393,7 +3393,7 @@ async fn test_private_bot_message_allowed_for_owner() {
     let router = BotRouter::new(None);
     router
         .register_entry(
-            "@octos_private:localhost",
+            "@ra_private:localhost",
             "main--private",
             "@owner:localhost",
             BotVisibility::Private,
@@ -3524,7 +3524,7 @@ async fn test_handle_transaction_m_mentions_routes_to_target_bot() {
 
     let router = BotRouter::new(None);
     router
-        .register("@octos_mybot:localhost", "profile-mybot")
+        .register("@ra_mybot:localhost", "profile-mybot")
         .await
         .unwrap();
     state.bot_router = Arc::new(router);
@@ -3546,7 +3546,7 @@ async fn test_handle_transaction_m_mentions_routes_to_target_bot() {
                 "msgtype": "m.text",
                 "body": "mybot: 你又是谁",
                 "m.mentions": {
-                    "user_ids": ["@octos_mybot:localhost"]
+                    "user_ids": ["@ra_mybot:localhost"]
                 }
             }
         }]
@@ -4035,7 +4035,7 @@ async fn should_not_intercept_slash_command_when_aimed_at_child_bot() {
         "@alice:localhost",
         "!room:localhost",
         "/schedule 每天早上 9 点提醒我看天气",
-        Some("@octos_child:localhost"),
+        Some("@ra_child:localhost"),
         &json!({}),
         None,
     )
@@ -4058,7 +4058,7 @@ async fn should_intercept_schedule_command_when_aimed_at_primary_bot() {
         "@alice:localhost",
         "!room:localhost",
         "/schedule 每天早上 9 点提醒我看天气",
-        Some("@octos_bot:localhost"),
+        Some("@ra_bot:localhost"),
         &json!({}),
         None,
     )
@@ -4081,7 +4081,7 @@ async fn should_intercept_schedules_command_when_aimed_at_primary_bot() {
         "@alice:localhost",
         "!room:localhost",
         "/schedules",
-        Some("@octos_bot:localhost"),
+        Some("@ra_bot:localhost"),
         &json!({}),
         None,
     )
@@ -4104,7 +4104,7 @@ async fn should_intercept_unschedule_command_when_aimed_at_primary_bot() {
         "@alice:localhost",
         "!room:localhost",
         "/unschedule cron_deadbeef",
-        Some("@octos_bot:localhost"),
+        Some("@ra_bot:localhost"),
         &json!({}),
         None,
     )
@@ -4127,7 +4127,7 @@ async fn should_require_message_body_when_allbots_invoked() {
         "@alice:localhost",
         "!room:localhost",
         "/allbots",
-        Some("@octos_bot:localhost"),
+        Some("@ra_bot:localhost"),
         &json!({}),
         None,
     )
@@ -4147,7 +4147,7 @@ async fn should_reject_allbots_when_no_broadcast_targets() {
         "@alice:localhost",
         "!room:localhost",
         "/allbots summarize this issue",
-        Some("@octos_bot:localhost"),
+        Some("@ra_bot:localhost"),
         &json!({}),
         None,
     )
@@ -4166,7 +4166,7 @@ async fn should_enforce_target_cap_when_allbots_invoked() {
     state.bot_manager = Some(Arc::new(MockBotManager));
 
     let targets = (0..=MAX_ALLBOTS_TARGETS)
-        .map(|i| format!("@octos_child_{i}:localhost"))
+        .map(|i| format!("@ra_child_{i}:localhost"))
         .collect::<Vec<_>>();
 
     let result = handle_slash_command(
@@ -4174,7 +4174,7 @@ async fn should_enforce_target_cap_when_allbots_invoked() {
         "@alice:localhost",
         "!room:localhost",
         "/allbots summarize this issue",
-        Some("@octos_bot:localhost"),
+        Some("@ra_bot:localhost"),
         &json!({
             "org.ra.broadcast_targets": targets,
         }),
@@ -4202,15 +4202,15 @@ async fn should_fan_out_allbots_to_bound_child_bots() {
 
     let router = BotRouter::new(None);
     router
-        .register("@octos_bot:localhost", "profile-parent")
+        .register("@ra_bot:localhost", "profile-parent")
         .await
         .unwrap();
     router
-        .register("@octos_alex:localhost", "profile-alex")
+        .register("@ra_alex:localhost", "profile-alex")
         .await
         .unwrap();
     router
-        .register("@octos_bob:localhost", "profile-bob")
+        .register("@ra_bob:localhost", "profile-bob")
         .await
         .unwrap();
     router
@@ -4239,10 +4239,10 @@ async fn should_fan_out_allbots_to_bound_child_bots() {
             "content": {
                 "msgtype": "m.text",
                 "body": "/allbots summarize this issue",
-                "org.ra.target_user_id": "@octos_bot:localhost",
+                "org.ra.target_user_id": "@ra_bot:localhost",
                 "org.ra.broadcast_targets": [
-                    "@octos_alex:localhost",
-                    "@octos_bob:localhost"
+                    "@ra_alex:localhost",
+                    "@ra_bob:localhost"
                 ]
             }
         }]
@@ -4299,11 +4299,11 @@ async fn should_skip_stale_bindings_when_allbots_fans_out() {
 
     let router = BotRouter::new(None);
     router
-        .register("@octos_bot:localhost", "profile-parent")
+        .register("@ra_bot:localhost", "profile-parent")
         .await
         .unwrap();
     router
-        .register("@octos_alexbot:localhost", "profile-alex")
+        .register("@ra_alexbot:localhost", "profile-alex")
         .await
         .unwrap();
     router
@@ -4319,7 +4319,7 @@ async fn should_skip_stale_bindings_when_allbots_fans_out() {
         )
         .with_state(state);
 
-    // "@octos_alex:localhost" has no router entry — a stale binding.
+    // "@RecurAgent_alex:localhost" has no router entry — a stale binding.
     let body = serde_json::json!({
         "events": [{
             "type": "m.room.message",
@@ -4329,10 +4329,10 @@ async fn should_skip_stale_bindings_when_allbots_fans_out() {
             "content": {
                 "msgtype": "m.text",
                 "body": "/allbots summarize this issue",
-                "org.ra.target_user_id": "@octos_bot:localhost",
+                "org.ra.target_user_id": "@ra_bot:localhost",
                 "org.ra.broadcast_targets": [
-                    "@octos_alex:localhost",
-                    "@octos_alexbot:localhost"
+                    "@ra_alex:localhost",
+                    "@ra_alexbot:localhost"
                 ]
             }
         }]
@@ -4398,12 +4398,12 @@ async fn should_reject_allbots_targets_not_bound_to_this_room() {
 
     let router = BotRouter::new(None);
     router
-        .register("@octos_bot:localhost", "profile-parent")
+        .register("@ra_bot:localhost", "profile-parent")
         .await
         .unwrap();
     // A public bot that exists globally but is bound to a DIFFERENT room.
     router
-        .register("@octos_elsewhere:localhost", "profile-elsewhere")
+        .register("@ra_elsewhere:localhost", "profile-elsewhere")
         .await
         .unwrap();
     router
@@ -4430,8 +4430,8 @@ async fn should_reject_allbots_targets_not_bound_to_this_room() {
             "content": {
                 "msgtype": "m.text",
                 "body": "/allbots leak to other room",
-                "org.ra.target_user_id": "@octos_bot:localhost",
-                "org.ra.broadcast_targets": ["@octos_elsewhere:localhost"]
+                "org.ra.target_user_id": "@ra_bot:localhost",
+                "org.ra.broadcast_targets": ["@ra_elsewhere:localhost"]
             }
         }]
     });
@@ -4471,8 +4471,8 @@ async fn should_project_approval_request_into_event_content() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         unused_local_port(),
         Arc::new(AtomicBool::new(false)),
     );

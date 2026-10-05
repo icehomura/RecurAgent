@@ -2,7 +2,7 @@
 name: github
 description: GitHub CLI (gh) for issues, PRs, repos, releases, and actions. Triggers: github, issue, pull request, PR, repo, release, actions, workflow, gist, gh.
 version: 1.0.0
-author: ra
+author: RecurAgent
 always: false
 ---
 

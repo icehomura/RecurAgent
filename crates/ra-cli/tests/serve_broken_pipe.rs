@@ -1,4 +1,4 @@
-//! Integration tests for ra serve BrokenPipe-safe shutdown.
+//! Integration tests for RecurAgent serve BrokenPipe-safe shutdown.
 //!
 //! These tests verify the four integration selectors from
 //! `specs/task-s-broken-pipe-shutdown.spec.md`:
@@ -49,7 +49,7 @@ mod serve_broken_pipe {
         }
     }
 
-    /// Path to a real ra binary that includes the `serve` subcommand.
+    /// Path to a real RecurAgent binary that includes the `serve` subcommand.
     ///
     /// When this harness itself is compiled WITH the `api` feature, Cargo
     /// already built `CARGO_BIN_EXE_ra` with `serve` — reuse it directly.
@@ -57,8 +57,8 @@ mod serve_broken_pipe {
     /// `cargo test -p ra-cli --test serve_broken_pipe`), that binary has
     /// no `serve` subcommand, so we bootstrap one: `cargo build` an api
     /// binary into a dedicated target dir next to the manifest. Either way
-    /// the spawned process is the REAL ra binary with production code.
-    fn octos_binary() -> std::path::PathBuf {
+    /// the spawned process is the REAL RecurAgent binary with production code.
+    fn ra_binary() -> std::path::PathBuf {
         if cfg!(feature = "api") {
             return env!("CARGO_BIN_EXE_ra").into();
         }
@@ -85,10 +85,10 @@ mod serve_broken_pipe {
 
     /// Build a serve Command with a private instance data dir.
     /// `pre_exec(setsid)` detaches the child from the test runner's process
-    /// group so SIGINT reaches the real ra process (not suppressed by
-    /// shell job control). child.id() IS the real ra PID.
+    /// group so SIGINT reaches the real RecurAgent process (not suppressed by
+    /// shell job control). child.id() IS the real RecurAgent PID.
     fn serve_command(port: u16, data_dir: &std::path::Path) -> Command {
-        let mut cmd = Command::new(octos_binary());
+        let mut cmd = Command::new(ra_binary());
         cmd.args([
             "serve",
             "--instance-data-dir",
@@ -108,9 +108,9 @@ mod serve_broken_pipe {
         // lock). Remove it so the child uses ONLY our private --instance-data-dir.
         .env_remove("RA_INSTANCE_DATA_DIR")
         .env_remove("RA_HOME")
-        .env_remove("OCTOS_HOME")
+        .env_remove("ra_HOME")
         .env_remove("RA_DATA_DIR")
-        .env_remove("OCTOS_DATA_DIR");
+        .env_remove("ra_DATA_DIR");
         #[cfg(unix)]
         unsafe {
             use std::os::unix::process::CommandExt;
@@ -128,7 +128,7 @@ mod serve_broken_pipe {
 
     /// Test 1: subprocess_panic_stderr_broken_pipe_no_abort
     ///
-    /// Drive the REAL ra binary with RA_TEST_PANIC_AFTER_BOOT=1, which
+    /// Drive the REAL RecurAgent binary with RA_TEST_PANIC_AFTER_BOOT=1, which
     /// triggers a genuine Rust panic AFTER the production hooks are
     /// installed in `main`. stderr is a pipe whose read end is closed
     /// (EPIPE). The production hook (write_panic_report via install_error_hooks)
@@ -142,7 +142,7 @@ mod serve_broken_pipe {
             libc::close(fds[0]); // Close read end → writes get EPIPE
         }
 
-        let output = Command::new(octos_binary())
+        let output = Command::new(ra_binary())
             .env("RA_TEST_PANIC_AFTER_BOOT", "1")
             .stderr(unsafe { Stdio::from_raw_fd(fds[1]) })
             .stdout(Stdio::null())
@@ -174,7 +174,7 @@ mod serve_broken_pipe {
     fn serve_shutdown_broken_pipe_cleanup_marker_observed() {
         let _guard = serial_guard();
         let port = find_free_port();
-        let data_dir = std::env::temp_dir().join(format!("octos_bp_{}", std::process::id()));
+        let data_dir = std::env::temp_dir().join(format!("ra_bp_{}", std::process::id()));
         std::fs::create_dir_all(&data_dir).unwrap();
 
         // stdout = REAL pipe (read end held by this test); stderr = file for
@@ -285,7 +285,7 @@ mod serve_broken_pipe {
     fn serve_shutdown_order_preserved() {
         let _guard = serial_guard();
         let port = find_free_port();
-        let data_dir = std::env::temp_dir().join(format!("octos_ord_{}", std::process::id()));
+        let data_dir = std::env::temp_dir().join(format!("ra_ord_{}", std::process::id()));
         std::fs::create_dir_all(&data_dir).unwrap();
 
         let out_path = data_dir.join("stdout.log");
@@ -348,7 +348,7 @@ mod serve_broken_pipe {
     fn serve_startup_broken_pipe_no_panic() {
         let _guard = serial_guard();
         let port = find_free_port();
-        let data_dir = std::env::temp_dir().join(format!("octos_start_{}", std::process::id()));
+        let data_dir = std::env::temp_dir().join(format!("ra_start_{}", std::process::id()));
         std::fs::create_dir_all(&data_dir).unwrap();
 
         let mut fds: [i32; 2] = [0; 2];

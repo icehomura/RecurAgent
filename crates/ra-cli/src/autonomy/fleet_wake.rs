@@ -383,7 +383,7 @@ fn fleet_boot_resume_dedupe_key(controller: &SessionKey, fleet_id: &str) -> Stri
     format!("external/{FLEET_KEEPER_EXTERNAL_KIND}/{controller}/boot-resume/{fleet_id}")
 }
 
-/// Boot-resume — "a fleet survives an ra restart". After the boot reconcile
+/// Boot-resume — "a fleet survives an RecurAgent restart". After the boot reconcile
 /// flips a restart-interrupted fleet's in-flight children back to `Ready`,
 /// NOTHING re-dispatches them: reconcile emits no outbox event, so the outbox
 /// consumer (the only other keeper-wake driver) never fires and the fleet stalls
@@ -1343,7 +1343,7 @@ mod tests {
         );
     }
 
-    // ---- boot-resume (a fleet survives an ra restart) ------------------
+    // ---- boot-resume (a fleet survives an RecurAgent restart) ------------------
 
     use crate::autonomy::agent_orchestrator::InProcessAgentOrchestrator;
 

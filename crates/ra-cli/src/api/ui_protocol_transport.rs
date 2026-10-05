@@ -191,7 +191,7 @@ const WS_WRITER_CHANNEL_CAPACITY: usize = 1024;
 /// the same tick because they feed different meters — the text frame is what
 /// the SPA bridge's JS-land idle timer sees (control frames never reach
 /// `onmessage`), while the binary Ping is answered by every conforming client
-/// at the WebSocket layer (browsers auto-Pong; octoscode's transport replies
+/// at the WebSocket layer (browsers auto-Pong; ra-tui's transport replies
 /// with an explicit Pong). That Pong is the inbound evidence the read-side
 /// liveness deadline needs; a text-only heartbeat can never be answered by an
 /// idle client. `RA_WS_LIVENESS_PING_SECS` overrides the cadence in
@@ -515,7 +515,7 @@ const MAX_ACTIVE_SKILL_ACTION_BATCHES: usize = 8;
 /// candidate path, reports existence/writability, surfaces
 /// `workspace_policy.toml` presence + parse errors, and rejects roots that
 /// escape under banned system paths. Backend-owned runtime truth so the TUI
-/// (a separate `octoscode` repo) only stages user intent — the canonical
+/// (a separate `ra-tui` repo) only stages user intent — the canonical
 /// answer is the server's.
 const APPUI_FEATURE_ONBOARDING_WORKSPACE_PROBE_V1: &str = "onboarding.workspace_probe.v1";
 /// WEB-WORKSPACE-BROWSER-CONTRACT-5000 gate. Advertised next to
@@ -1102,7 +1102,7 @@ impl WsConnection {
                             // held client->server requests, so soak verifiers that
                             // require backend `task/updated` / `agent/updated`
                             // notifications could never pass over WS. The append
-                            // is a no-op unless OCTOSCODE_M15_UX_OUTPUT_DIR is set.
+                            // is a no-op unless RA_TUI_M15_UX_OUTPUT_DIR is set.
                             if let WsMessage::Text(text) = &msg {
                                 if let Ok(frame) = serde_json::from_str::<Value>(text.as_str()) {
                                     append_appui_transcript_frame("server_to_client", frame);
@@ -1158,7 +1158,7 @@ impl WsConnection {
 }
 
 // `UiProtocolContractStores` + `contract_stores()` moved VERBATIM to the
-// non-`api` `crate::contracts` (Phase 3 of goal-in-chat), so `ra chat
+// non-`api` `crate::contracts` (Phase 3 of goal-in-chat), so `RecurAgent chat
 // --peers` shares the identical process-global pending-prompt registry. Used
 // here through the `use` at the top of this file; no logic changed.
 
@@ -1816,7 +1816,7 @@ impl SessionPermissionProfileStore {
 }
 
 /// Session permission state honoring the serve-level dangerous default
-/// (`--danger-full-access`, ra's analogue of Claude Code's
+/// (`--danger-full-access`, RecurAgent's analogue of Claude Code's
 /// `--dangerously-skip-permissions`): a session with NO explicit
 /// `/permissions` selection falls back to the full-access profile —
 /// sandbox off, network allowed, approvals never — instead of the gated
@@ -3607,7 +3607,7 @@ fn appui_context_compact_threshold_tokens(llm_provider: &dyn ra_llm::LlmProvider
     )
 }
 
-/// Parse a `usize` from `RA_<name>` (legacy `OCTOS_<name>`; empty = unset).
+/// Parse a `usize` from `RA_<name>` (legacy `RA_<name>`; empty = unset).
 fn env_usize(name: &str) -> Option<usize> {
     ra_core::brand::env_compat_str(name).and_then(|raw| raw.trim().parse::<usize>().ok())
 }
@@ -5431,7 +5431,7 @@ async fn persist_assistant_with_media(
 /// merged them into a "phantom" empty assistant bubble that briefly
 /// flickered into the chat pane (the 2026-05-09 phantom-bubble bug).
 ///
-/// The defensive web-side fix in octos-web #92 hid those bubbles. The
+/// The defensive web-side fix in ra-web #92 hid those bubbles. The
 /// authoritative server-side fix is to suppress the v2 assistant-persisted
 /// emit for these intermediate metadata-only assistant rows so the wire
 /// surface emits exactly one canonical assistant-persisted envelope per turn for the final
@@ -6119,7 +6119,7 @@ impl ra_agent::ToolApprovalRequester for UiProtocolApprovalRequester {
         // UPCR-2026-035: a once-only approval (a host-routed app tool's exact
         // call) is never answered by a remembered scope.
         let once_only = request.once_only;
-        // UPCR-2026-036 (OctoSense ADR 0004 G1): an external client's
+        // UPCR-2026-036 (RecurAgent ADR 0004 G1): an external client's
         // approval belongs to that client. The host and every other
         // connection neither see it (live, on replay, in pending lists and
         // hydrate) nor answer it. Registered before anything about it
@@ -6613,7 +6613,7 @@ impl ra_agent::UserQuestionRequester for SessionUserQuestionRequester {
             return UserQuestionOutcome::Cancelled;
         }
 
-        // UPCR-2026-036 (OctoSense ADR 0004 G1): an external client's
+        // UPCR-2026-036 (RecurAgent ADR 0004 G1): an external client's
         // question belongs to that client, like its approvals: the host and
         // every other connection neither see it nor answer it. Registered
         // before the question is pending or reaches the ledger.
@@ -10111,7 +10111,7 @@ struct RawReviewStartParams {
 
 /// `turn/steer` params: `{session_id, expected_turn_id?, input}` —
 /// mirrors codex `TurnSteerParams { thread_id, expected_turn_id, input }`
-/// with ra's optional-precondition twist: an ABSENT `expected_turn_id`
+/// with RecurAgent's optional-precondition twist: an ABSENT `expected_turn_id`
 /// steers whatever turn is live (a mismatch when present is rejected, codex
 /// `ExpectedTurnMismatch`).
 #[derive(Debug, Clone, Deserialize)]
@@ -11509,7 +11509,7 @@ fn model_visible_tool_names(registry: Option<&ra_agent::ToolRegistry>) -> Vec<St
     let mut names: Vec<String> = registry
         .map(|registry| registry.specs().into_iter().map(|spec| spec.name).collect())
         .unwrap_or_else(|| {
-            super::coding_tool_contract::OCTOS_KNOWN_MODEL_VISIBLE_TOOLS
+            super::coding_tool_contract::ra_KNOWN_MODEL_VISIBLE_TOOLS
                 .iter()
                 .map(|name| (*name).to_owned())
                 .collect()
@@ -11883,7 +11883,7 @@ fn raw_catalog_result(_state: &AppState, _profile_id: Option<&str>) -> Result<Va
 /// Cumulative token usage for one session, for the `usage` field of
 /// `session/status/read`.
 ///
-/// This used to be a hardcoded `{}`, so every field of octoscode's
+/// This used to be a hardcoded `{}`, so every field of ra-tui's
 /// `SessionUsageStatus` decoded to `None` on every read — the whole usage
 /// readout was dead, and `cached_input_tokens` in particular meant operators
 /// had no way to tell whether prompt caching (the largest cost lever, on by
@@ -11932,12 +11932,12 @@ async fn session_usage_status(state: &Arc<AppState>, profile_id: &str, session_i
     usage_status_json(&totals)
 }
 
-/// Shape [`UsageTotals`] into the `usage` object octoscode's
+/// Shape [`UsageTotals`] into the `usage` object ra-tui's
 /// `SessionUsageStatus` decodes. Split out from [`session_usage_status`] so
 /// the field mapping is testable without standing up an `AppState`.
 fn usage_status_json(totals: &UsageTotals) -> Value {
     // A session with no recorded runs reports `{}` rather than a row of
-    // zeroes: octoscode renders each field only when present, and zeroes
+    // zeroes: ra-tui renders each field only when present, and zeroes
     // would claim "0 tokens used" for a session whose usage simply has not
     // been written yet.
     if totals.run_count == 0 {
@@ -11996,13 +11996,13 @@ async fn raw_session_status_result(
     };
     let (context, context_state) = context_snapshot_for_features(context, context_state, features);
     // Emit the `model` object only when the policy actually resolved a
-    // model AND provider. Clients (octoscode) decode it into a struct whose
+    // model AND provider. Clients (ra-tui) decode it into a struct whose
     // `model`/`provider` are non-optional strings, so
     // `{"model": null, "provider": null, "selected": true}` fails the whole
     // session/status/read decode and the composer footer degrades to a
     // placeholder. A missing key is handled fine by their
     // `Option<ModelStatus>` + `#[serde(default)]` — including in shipped
-    // octoscode 0.1.5 binaries.
+    // ra-tui 0.1.5 binaries.
     let resolved_model = policy.get("model").filter(|value| !value.is_null());
     let resolved_provider = policy.get("provider").filter(|value| !value.is_null());
     let model = match (resolved_model, resolved_provider) {
@@ -16298,7 +16298,7 @@ fn authorize_host_session_call(
         )
         .with_data(json!({ "kind": "peer_tools_invalid" })));
     }
-    // The host's own connection (OctoSense#146) needs no app peer's token.
+    // The host's own connection (RecurAgent#146) needs no app peer's token.
     if host_connection {
         return Ok(());
     }
@@ -17468,7 +17468,7 @@ mod peer_awaiting_wake_tests {
         let tmp = tempfile::tempdir().unwrap();
         let peers_root = tmp.path();
         let profile = "tenant-wake-host-appr";
-        let master = "tenant-wake-host-appr:api:octosense#system";
+        let master = "tenant-wake-host-appr:api:recuragent#system";
         stage_peer_with_originator(peers_root, "rinx", Some(master));
         crate::peers::app_binding::write_host_binding_in(
             &peers_root.join("rinx"),
@@ -18857,7 +18857,7 @@ fn build_peer_gather_callback_for_turn(
         });
         // task-evo-peer-turn-status — the gather tool reads under the
         // CALLER'S profile so non-default profiles' valid lifetimes are not
-        // demoted to unknown by an "ra" default (outer-loop review).
+        // demoted to unknown by an "RecurAgent" default (outer-loop review).
         let rows = read_peer_blackboard_with_profile(&peers_root, slugs.as_deref(), &profile_id);
         let (output, output_truncated) = compose_peer_gather_text_with_truncation(&rows);
         // A budget-capped gather is not proof the model saw every result.
@@ -21402,7 +21402,7 @@ fn handle_client_hello_rpc(
     // negotiated `projection.envelope.v1` mid-session would still
     // receive legacy frames on direct sends.
     // `ra serve --host-managed`: an external client never chooses a
-    // workspace; its sessions stay in the workspace ra bound them to.
+    // workspace; its sessions stay in the workspace RecurAgent bound them to.
     if ws.is_external() {
         features.session_workspace_cwd = false;
     }
@@ -23131,7 +23131,7 @@ async fn open_session_result(
     // We resolve Tier 2 here, in the UI Protocol entrypoint, rather
     // than threading it through `SessionRuntime::bootstrap`. Rationale:
     //  - The bootstrap signature stays stable across M11-F.
-    //  - Tier 2 is a serve-level operator setting (ra serve reads
+    //  - Tier 2 is a serve-level operator setting (RecurAgent serve reads
     //    `config.appui.default_session_cwd`) — the runtime layer
     //    doesn't otherwise see operator-level config, so leaving the
     //    resolution at the dispatcher keeps `ProfileRuntime` /
@@ -24523,7 +24523,7 @@ fn dynamic_profile_runtime_key(state: &AppState, profile_id: &str) -> Option<Str
     let store = state.profile_store.as_ref()?;
     Some(format!(
         "{}::{profile_id}",
-        store.octos_home_dir().to_string_lossy()
+        store.ra_home_dir().to_string_lossy()
     ))
 }
 
@@ -24659,7 +24659,7 @@ pub(crate) async fn ensure_session_profile_runtime(
         let bootstrap = Box::pin(crate::runtime::ProfileRuntime::bootstrap_replacing(
             &profile,
             &profile_data_dir,
-            Some(store.octos_home_dir()),
+            Some(store.ra_home_dir()),
             crate::runtime::BootstrapRole::Serve,
             None,
             None,
@@ -24683,7 +24683,7 @@ pub(crate) async fn ensure_session_profile_runtime(
             if ra_memory::is_episode_store_locked(&error) && had_retired {
                 // This process still holds the stores through the runtime a
                 // configuration change retired; it frees them when its
-                // in-flight work ends. Not a second ra process.
+                // in-flight work ends. Not a second RecurAgent process.
                 profile_runtime_switching_error(profile_id)
             } else if ra_memory::is_episode_store_locked(&error) {
                 data_dir_locked_error(profile_id, &error)
@@ -27233,7 +27233,7 @@ fn turn_in_progress_refusal(running_turn_id: Option<&TurnId>) -> RpcError {
 }
 
 /// `data.kind` of a `turn/start` refused because its client-chosen `turn_id`
-/// names a turn still running in another session (`ra serve
+/// names a turn still running in another session (`RecurAgent serve
 /// --host-managed`, UPCR-2026-036).
 pub(crate) const TURN_ID_IN_USE: &str = "turn_id_in_use";
 
@@ -27259,7 +27259,7 @@ impl TurnAdmissionRefusal {
 }
 
 /// Decide a turn admission under the active-turn registry lock. A session
-/// holds one live (non-`Terminal`) turn. With `unique_turn_ids` (`ra serve
+/// holds one live (non-`Terminal`) turn. With `unique_turn_ids` (`RecurAgent serve
 /// --host-managed`) a live turn id also may not be reused in ANY session:
 /// client-chosen ids are not unique, and a reused id must never make one
 /// client's turn look like another's.
@@ -27611,7 +27611,7 @@ pub(crate) fn spawn_global_master_continuation_drain(state: Arc<AppState>) {
             // target any profile's session, and gating on
             // `profiles.get(MAIN_PROFILE_ID)` was a dead door
             // (MAIN_PROFILE_ID is "_main" while the runtime profile is
-            // "ra", so the sweep was never invoked). An EMPTY profiles
+            // "RecurAgent", so the sweep was never invoked). An EMPTY profiles
             // table is itself a trace-worthy condition (throttled WARN) —
             // the r4 no-silence rule applies to the call gate too.
             if state.profiles.is_empty() {
@@ -28490,7 +28490,7 @@ async fn handle_approval_respond(
         }
         params.approval_scope = None;
     }
-    // UPCR-2026-036 (OctoSense ADR 0004 G1): an external client's approval
+    // UPCR-2026-036 (RecurAgent ADR 0004 G1): an external client's approval
     // is answered by that client only, never by the host (whose automation
     // must not decide for an external client) or any other connection.
     if !super::host_managed::external_prompt_visible(
@@ -28642,7 +28642,7 @@ async fn handle_user_question_respond(
             return;
         }
     }
-    // UPCR-2026-036 (OctoSense ADR 0004 G1): an external client's question
+    // UPCR-2026-036 (RecurAgent ADR 0004 G1): an external client's question
     // is answered by that client only, never by the host or any other
     // connection.
     if !super::host_managed::external_prompt_visible(
@@ -28888,7 +28888,7 @@ async fn handle_task_list(
         return;
     }
 
-    // octos#1380: gateway-mode mirrors task/cancel and
+    // RecurAgent#1380: gateway-mode mirrors task/cancel and
     // task/restart_from_node. In `ra serve`, the AppUI server has no local
     // task_query_store because supervisors live in per-profile gateway API
     // channels; proxy task/list to the owning gateway instead of advertising a
@@ -28965,7 +28965,7 @@ async fn handle_task_cancel(
 
     let task_id = params.task_id.clone();
 
-    // octos#1380: gateway-mode — the `ra serve` API server owns no task
+    // RecurAgent#1380: gateway-mode — the `ra serve` API server owns no task
     // supervisor (`task_query_store == None`); the supervisor lives in the
     // gateway process. Proxy the cancel to that process (mirroring the REST
     // `/api/tasks/{id}/cancel` handler) instead of failing `runtime_unavailable`.
@@ -29033,7 +29033,7 @@ async fn handle_task_cancel(
     }
 }
 
-/// octos#1380: resolve the gateway-process api port that owns the task
+/// RecurAgent#1380: resolve the gateway-process api port that owns the task
 /// supervisor for `profile_id`. Used when the API server has no local
 /// `task_query_store` (`ra serve` runs supervisors in gateway processes).
 async fn gateway_task_api_port(state: &AppState, profile_id: Option<&str>) -> Option<u16> {
@@ -29049,7 +29049,7 @@ async fn gateway_task_api_port(state: &AppState, profile_id: Option<&str>) -> Op
     pm.first_api_port().await.map(|(_, port)| port)
 }
 
-/// octos#1380: gateway-mode equivalent of [`ensure_task_in_session`] — confirm
+/// RecurAgent#1380: gateway-mode equivalent of [`ensure_task_in_session`] — confirm
 /// `task_id` belongs to `session_id` by proxying the gateway's session task
 /// list, so task-control stays session-scoped (not just profile-scoped) and a
 /// task id from another session in the same profile yields `unknown_task_id`.
@@ -29262,7 +29262,7 @@ async fn handle_task_restart_from_node(
     let task_id = params.task_id.clone();
     let from_node = params.node_id.clone();
 
-    // octos#1380: gateway-mode proxy (see handle_task_cancel) — forward the
+    // RecurAgent#1380: gateway-mode proxy (see handle_task_cancel) — forward the
     // relaunch to the gateway process that owns the supervisor when no local
     // store is wired, mirroring the REST `/api/tasks/{id}/restart-from-node`.
     if state.task_query_store.is_none() {
@@ -36626,17 +36626,17 @@ fn maybe_spawn_cli_review_specialist(
         .args(args.iter().cloned())
         .cwd(workspace_root)
         .env("RA_REVIEW_OBJECTIVE", objective)
-        .env("OCTOS_REVIEW_OBJECTIVE", objective)
+        .env("ra_REVIEW_OBJECTIVE", objective)
         .env("RA_REVIEW_TARGET", target)
-        .env("OCTOS_REVIEW_TARGET", target)
+        .env("ra_REVIEW_TARGET", target)
         .env("RA_REVIEW_AGENT_ID", agent_id.clone())
-        .env("OCTOS_REVIEW_AGENT_ID", agent_id.clone())
+        .env("ra_REVIEW_AGENT_ID", agent_id.clone())
         .env(
             "RA_REVIEW_ARTIFACT_PATH",
             artifact_path.to_string_lossy().into_owned(),
         )
         .env(
-            "OCTOS_REVIEW_ARTIFACT_PATH",
+            "ra_REVIEW_ARTIFACT_PATH",
             artifact_path.to_string_lossy().into_owned(),
         )
         .timeout(std::time::Duration::from_secs(90))
@@ -36941,13 +36941,13 @@ async fn run_m15_live_subagent_fixture_turn(
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| MAIN_PROFILE_ID.to_owned());
     let task_id = TaskId::new();
-    let workdir = std::env::var_os("OCTOSCODE_M15_UX_WORKDIR")
+    let workdir = std::env::var_os("RA_TUI_M15_UX_WORKDIR")
         .map(PathBuf::from)
         .or_else(|| appui_evidence_dir().map(|dir| dir.join("workspace")))
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
     // The supervised subagent processes are spawned with `cwd(workdir)`.
     // When the workdir is derived from the evidence dir (the default when
-    // OCTOSCODE_M15_UX_WORKDIR is unset) it does not exist yet, so the
+    // RA_TUI_M15_UX_WORKDIR is unset) it does not exist yet, so the
     // process spawn fails with "No such file or directory (os error 2)"
     // and every review agent reports `m15subagentfailed`. Materialize it
     // up front so the fixture's child processes have a valid cwd.
@@ -37677,7 +37677,7 @@ fn reasoning_effort_from_wire(
 ///   after active turn" TUI/web wedge. The background `spawn_only` task reports
 ///   its real progress via `task_*` / `tool_*` / `file_*` events (all still
 ///   forwarded), never via raw foreground tokens, so dropping these loses
-///   nothing user-facing. Pairs with the octoscode client guard that ignores
+///   nothing user-facing. Pairs with the ra-tui client guard that ignores
 ///   deltas for already-terminal turns (belt + suspenders).
 ///
 /// Chars of a background REPORT result inlined into the parent conversation.
@@ -40078,7 +40078,7 @@ async fn run_standalone_turn(
     // the profile-BOOTSTRAP policy, but these tools are added here at
     // turn-build time and would otherwise bypass an allow/deny list — so a
     // profile `tool_policy` only constrained the bootstrap roster, not the
-    // per-turn roster the model actually sees. Symptom: octoscode ran a turn
+    // per-turn roster the model actually sees. Symptom: ra-tui ran a turn
     // with `tools=31` despite an 8-tool allow-list, drowning small local
     // models. Mirrors `session_actor.rs:3748` (the gateway path already does
     // this). No-op when no policy is set, so cloud/default behavior is
@@ -44557,7 +44557,7 @@ fn workspace_not_writable_error(workspace: Option<&str>) -> RpcError {
     }))
 }
 
-/// Clear, actionable RPC error for "another ra process already owns this
+/// Clear, actionable RPC error for "another RecurAgent process already owns this
 /// profile's data directory" — redb is single-writer-single-process, so a
 /// second `ra serve` against the same data dir can never open the episode
 /// store.
@@ -45646,7 +45646,7 @@ fn set_field_at_path(value: &mut Value, path: &[PathSeg], new_value: Value) -> b
 }
 
 fn appui_evidence_dir() -> Option<PathBuf> {
-    std::env::var_os("OCTOSCODE_M15_UX_OUTPUT_DIR")
+    std::env::var_os("RA_TUI_M15_UX_OUTPUT_DIR")
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
 }
@@ -46432,7 +46432,7 @@ fn send_raw_notification_ephemeral(
     // M15-F5 (#44): mirror production child-agent lifecycle/output/artifact
     // notifications into `agent-ledger.jsonl` / `artifact-index.json` evidence
     // ledgers. NO-OP unless the live tmux soak set
-    // `OCTOSCODE_M15_UX_OUTPUT_DIR`, so this is free in normal production.
+    // `RA_TUI_M15_UX_OUTPUT_DIR`, so this is free in normal production.
     record_agent_evidence(method, &params);
     let notification = ra_core::ui_protocol::RpcNotification::new(method, params);
     let frame = frame_for(&notification).ok_or(SendError::BackpressureDrop)?;
@@ -47157,7 +47157,7 @@ fn send_notification_durable(
     }
     // M15-F5 (#44): mirror production supervised-task lifecycle updates into
     // the `task-ledger.jsonl` evidence ledger. NO-OP unless the live tmux soak
-    // set `OCTOSCODE_M15_UX_OUTPUT_DIR`, so this is free in normal production.
+    // set `RA_TUI_M15_UX_OUTPUT_DIR`, so this is free in normal production.
     record_task_evidence(&notification);
     let event = ledger.append_notification_from(notification, ws.connection_id);
     let cursor = event.cursor.clone();

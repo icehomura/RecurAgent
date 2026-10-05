@@ -54,15 +54,14 @@ impl DutyState {
 /// consumer of the same directory. STABLE protocol: never change it while a
 /// lock holder from an older build may still be alive (the digest would move
 /// to a different file and mutual exclusion would silently split).
-const LOCK_DOMAIN: &str = "octoscode/outer-duty/v1";
+const LOCK_DOMAIN: &str = "ra-tui/outer-duty/v1";
 
 /// How long acquire() retries past a contention that may be a transient
 /// check-probe collision (probes unlock in microseconds).
 const PROBE_COLLISION_RETRY_MS: u64 = 2_000;
 
 /// Canonicalize `--project` and derive the stable lock path:
-/// `~/.ra/outer/duty/<sha256(domain + "\0" + canonical)>.lock` (or a legacy
-/// `~/.ra/outer/duty` that already exists).
+/// `~/.ra/outer/duty/<sha256(domain + "\0" + canonical)>.lock`.
 pub fn lock_path(project: &Path) -> Result<PathBuf> {
     let home = std::env::var("HOME").map_err(|_| {
         eyre!("outer-duty: HOME is not set — fail-closed (refusing to guess a lock root)")
@@ -73,7 +72,7 @@ pub fn lock_path(project: &Path) -> Result<PathBuf> {
     let canonical = std::fs::canonicalize(project)
         .wrap_err_with(|| format!("cannot canonicalize project path: {}", project.display()))?;
     let digest = lock_digest(canonical.to_string_lossy().as_bytes());
-    Ok(crate::env::pick_home_entry(Path::new(&home), ".ra", ".ra")
+    Ok(crate::env::home_entry(Path::new(&home), ".ra")
         .join("outer")
         .join("duty")
         .join(format!("{digest}.lock")))

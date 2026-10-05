@@ -9,7 +9,7 @@ turn: 4
 
 **Session Summary**
 
-- **互审报告**：`/private/tmp/octoloop-glm-k3-20260909/pr-629/.octos/cross-glm.md`（已核实存在且完整）
+- **互审报告**：`/private/tmp/octoloop-glm-k3-20260909/pr-629/.ra/cross-glm.md`（已核实存在且完整）
   - **A 节**：k3 首审 22 项主张逐条裁决表（对方条目 | 裁决 | 我的源码定位 | 一句依据）
     - **22 采纳 / 0 驳回 / 0 待验证转投**
     - #3 附条件采纳：补充 k3 未展开的认证连接分支（`connection_profile_id` Some 时提前 return，不落 `_main`，上游 transport.rs:12976-12990）
@@ -20,4 +20,4 @@ turn: 4
 
 - **native result.md**：已重写，outcome: completed，指向 cross-glm.md 路径 + 一句话互审结论
 
-- **约束遵守**：只读仓库、无 cargo、未读 .octos/result.md 或外层综合、未覆盖 independent-*.md 或其他 cross 文件
+- **约束遵守**：只读仓库、无 cargo、未读 .RecurAgent/result.md 或外层综合、未覆盖 independent-*.md 或其他 cross 文件

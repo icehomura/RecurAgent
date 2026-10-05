@@ -1,8 +1,8 @@
-# Octoscode Login And LLM Provider UX PRD
+# ra-tui Login And LLM Provider UX PRD
 
 ## Purpose
 
-This document is the ground truth for octoscode onboarding, login, and LLM
+This document is the ground truth for ra-tui onboarding, login, and LLM
 provider configuration. Implementation must follow this document before changing
 TUI behavior or AppUI request shapes.
 
@@ -21,7 +21,7 @@ Claude Code uses first-run onboarding steps. Login is a focused auth step with a
 method picker and pending/error/success states. Model choice is separate and is
 available later through command UI, not blended into initial login.
 
-ra web currently supports email OTP login through:
+RecurAgent web currently supports email OTP login through:
 
 - `GET /api/auth/status`
 - `POST /api/auth/send-code`
@@ -31,7 +31,7 @@ ra web currently supports email OTP login through:
 
 After OTP verification, the web client stores the returned token, calls
 `/api/auth/me`, and persists the selected profile id from the server response.
-For octoscode, email OTP is the only supported login method for now. Admin token
+For ra-tui, email OTP is the only supported login method for now. Admin token
 or API-key login must not appear in the TUI unless a future protocol revision
 explicitly advertises and documents it.
 
@@ -44,7 +44,7 @@ action.
 ## UX Contract
 
 First launch while unauthenticated shows an empty login surface, not chat and
-not model configuration. The only login choice for ra today is:
+not model configuration. The only login choice for RecurAgent today is:
 
 - Sign in with Email OTP
 

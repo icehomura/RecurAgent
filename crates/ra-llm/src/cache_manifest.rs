@@ -15,7 +15,7 @@
 //! no manifest to enrich (TRACE disabled, or the manifest already evicted).
 //! `RA_PROMPT_CACHE_OBSERVER_CAPACITY` adjusts the retained in-process
 //! event/stream bound (default 1024, hard-capped at 16384). The legacy
-//! `OCTOS_*` spellings of both knobs are still honoured.
+//! `RA_*` spellings of both knobs are still honoured.
 
 use std::collections::{HashMap, VecDeque};
 use std::fs::{File, OpenOptions};

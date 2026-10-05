@@ -7,7 +7,7 @@ turn: 3
 
 互审已完成，两份交付物落盘：
 
-**互审报告** `.octos/cross-glm.md`（frontmatter: slug=pr630-glm-primary / outcome=pass-with-observations / turn=2 / verified=partially-verified）
+**互审报告** `.ra/cross-glm.md`（frontmatter: slug=pr630-glm-primary / outcome=pass-with-observations / turn=2 / verified=partially-verified）
 **Native result** 已更新为互审完成摘要（outcome=pass-with-observations，report 指向 cross-glm.md）
 
 **逐项裁决摘要**：

@@ -15,12 +15,12 @@ turn: 5
 
 | 文件 | 字节数 | SHA256 |
 |---|---|---|
-| .octos/result.md | 7083 | `[hex-redacted]` |
-| .octos/OUTER_LOOP_REVIEW.md | 3445 | `[hex-redacted]` |
-| .octos/independent-glm.md | 14080 | `[hex-redacted]` |
-| .octos/independent-k3.md | 10534 | `[hex-redacted]` |
-| .octos/cross-glm.md | 10420 | `[hex-redacted]` |
-| .octos/cross-k3.md | 11834 | `[hex-redacted]` |
+| .RecurAgent/result.md | 7083 | `[hex-redacted]` |
+| .RecurAgent/OUTER_LOOP_REVIEW.md | 3445 | `[hex-redacted]` |
+| .RecurAgent/independent-glm.md | 14080 | `[hex-redacted]` |
+| .RecurAgent/independent-k3.md | 10534 | `[hex-redacted]` |
+| .RecurAgent/cross-glm.md | 10420 | `[hex-redacted]` |
+| .RecurAgent/cross-k3.md | 11834 | `[hex-redacted]` |
 
 **3. result.md frontmatter 六字段**: `slug: pr629-master` ✅ / `outcome: completed` ✅ / `updated_unix: 1788921711` ✅ / `turn: 4` ✅ / `verified: partially-verified` ✅ / `protocol: olp/v2` ✅（另如实记录 `goal_terminal: blocked (verifier 连续空答复，非产物缺失)`）。结论段（result.md:30）：「**Approve（partially-verified）。双方独立盲审一致判定：本 PR 新增回归 = 没有。**」✅
 

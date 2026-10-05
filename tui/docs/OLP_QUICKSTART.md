@@ -15,7 +15,7 @@
 │         ▲                                  │
 │    .ra/OUTER_LOOP_REVIEW.md(黑板)      │ steer / prompt
 │         │                                  ▼
-└─ 内环(octoscode TUI + octos serve,跑便宜模型如 kimi)
+└─ 内环(ra-tui TUI + ra serve,跑便宜模型如 kimi)
      读黑板 → 执行 → commit(不 push)→ ACK(done|wontdo|blocked)
 ```
 
@@ -31,26 +31,26 @@
 | 依赖 | 必须? | 说明 |
 |---|---|---|
 | Linux / macOS | 是 | Windows 可跑 TUI;serve 的沙箱档位(bwrap)是 Linux 特性 |
-| 网络 | 首次必须 | 首启自动下载 ra server 到 `~/.ra/bin`;离线见 README 故障表 |
+| 网络 | 首次必须 | 首启自动下载 RecurAgent server 到 `~/.ra/bin`;离线见 README 故障表 |
 | Node **或** Homebrew **或** shell installer | 三选一 | 只为装二进制,**不需要 Rust**(源码构建才需 Rust 1.85+) |
 | 内环模型 API key | 是 | 便宜档,例:Moonshot(kimi)。onboarding 向导里粘贴 |
 | 外环 agent CLI | 是 | Claude Code / Codex 任一,用你已有的订阅 |
-| herdr(终端工作区管理器) | 否,推荐 | 外环用 `herdr agent prompt` 程序化驱动内环窗格;不装可用 tmux send-keys 降级。**来源**:<https://github.com/hagency-org/herdr>,octoscode 窗格识别(`--kind octoscode`)当前在 `feat/octoscode-agent` 分支——从该分支构建;合入 master 后跟 master |
+| herdr(终端工作区管理器) | 否,推荐 | 外环用 `herdr agent prompt` 程序化驱动内环窗格;不装可用 tmux send-keys 降级。**来源**:<https://github.com/hagency-org/herdr>,ra-tui 窗格识别(`--kind ra-tui`)当前在 `feat/ra-tui-agent` 分支——从该分支构建;合入 master 后跟 master |
 | bwrap(bubblewrap) | Linux 自带居多 | 权限档 1-4 的文件系统沙箱;见下文 0b 语义 |
 
 ## 2. 一键路径
 
 ```bash
 # ① 装 TUI(server 首启自动拉起,无后台常驻服务)
-npm install -g @your-org/ra-tui
+npm install -g @icehomura/ra-tui
 
 # ② 在你的项目目录铺 OLP 脚手架(幂等,绝不覆盖已有文件)
 cd your-project/
-curl -fsSL https://raw.githubusercontent.com/your-org/ra-tui/main/scripts/olp-init.sh | bash
+curl -fsSL https://raw.githubusercontent.com/icehomura/ra-tui/main/scripts/olp-init.sh | bash
 #   (或 clone 本仓库后运行 scripts/olp-init.sh)
 
 # ③ 启动内环
-octoscode --stdio-command 'octos serve --stdio --solo'
+ra-tui --stdio-command 'ra serve --stdio --solo'
 ```
 
 `olp-init.sh` 做六件事:依赖体检(缺什么、怎么装,一屏说清)、生成
@@ -76,11 +76,11 @@ agent **不可见**,任何构建命令都是 "command not found"。要让内环�
 cargo/npm 等工具链,必须:
 
 - 权限菜单选第 **5 档 Full Access**(免沙箱),或
-- serve 启动时带 `--danger-full-access`(等价 `OCTOS_DANGER_FULL_ACCESS=1`),
+- serve 启动时带 `--danger-full-access`(等价 `ra_DANGER_FULL_ACCESS=1`),
   标准命令:
 
 ```bash
-octoscode --stdio-command 'octos serve --stdio --solo --danger-full-access'
+ra-tui --stdio-command 'ra serve --stdio --solo --danger-full-access'
 ```
 
 `--solo` 是单人本地盒子的安全门:宽松 permission profile 只在显式 solo
@@ -90,7 +90,7 @@ agent 代按。
 
 ## 3. 内环车道配置(可选,省钱关键)
 
-ra 的 `sub_providers` 把模型分车道,机械活走便宜档(开箱模板与选道
+RecurAgent 的 `sub_providers` 把模型分车道,机械活走便宜档(开箱模板与选道
 矩阵见协议文档附录 B):
 
 ```toml
@@ -157,7 +157,7 @@ herdr 用户另有驾驶舱注入:`herdr agent list` 看窗格,
 
 1. TUI 里发个 hello,确认主档模型回话;
 2. 黑板首条(olp-init 生成的"黑板启用")让内环 ACK 掉——读写闭环即通;
-3. 有 herdr 的话:`herdr agent list` 应显示 `octoscode | <pane> | idle`。
+3. 有 herdr 的话:`herdr agent list` 应显示 `ra-tui | <pane> | idle`。
 
 ## 6. 故障速查
 
@@ -166,7 +166,7 @@ herdr 用户另有驾驶舱注入:`herdr agent list` 看窗格,
 | `ra: 'serve' 不是子命令 | 源码构建漏了 feature:`cargo build --release --features api`(发布二进制无此问题) |
 | 内环说"本机没有 cargo" | 权限档 1-4 的 bwrap 沙箱,见 0b 节——第 5 档或 `--danger-full-access` |
 | "permission profile is not allowed outside local solo mode" | serve 少了 `--solo` |
-| 首启下载 server 失败 | 离线/代理:手装 `npm i -g @your-org/ra`;`OCTOSCODE_NO_AUTO_INSTALL=1` 关自动装 |
+| 首启下载 server 失败 | 离线/代理:手装 `npm i -g @icehomura/ra`;`RA_TUI_NO_AUTO_INSTALL=1` 关自动装 |
 | Linux 上构建大项目时链接器 SIGBUS / EDQUOT | `/tmp` 是 tmpfs 且可能带配额,rust-lld 临时文件很大:`export TMPDIR=$HOME/.local/tmp`(建目录后写进 shell profile) |
 | herdr 注入静默丢失 | 双重门:named-agent 名单 + 窗格前台进程名匹配,缺一即丢;降级 tmux `send-keys`(首字符 `-` 的文本用 `--` 分隔) |
 

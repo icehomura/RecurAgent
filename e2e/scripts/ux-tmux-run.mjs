@@ -171,11 +171,11 @@ Scenarios:
   ${[...scenarios.keys()].join(', ')}
 
 Environment:
-  OCTOS_UX_TMUX_RUN_ID       Override run id.
-  OCTOS_UX_TMUX_OUT_ROOT     Override output root. Default: e2e/test-results-ux.
-  OCTOS_UX_TMUX_OUT_DIR      Override scenario output directory.
-  OCTOS_UX_TMUX_TUI_RUNNER   Override octoscode tmux runner script.
-  OCTOSCODE_REPO             Override octoscode checkout. Default: ../octoscode next to this repo.
+  ra_UX_TMUX_RUN_ID       Override run id.
+  ra_UX_TMUX_OUT_ROOT     Override output root. Default: e2e/test-results-ux.
+  ra_UX_TMUX_OUT_DIR      Override scenario output directory.
+  ra_UX_TMUX_TUI_RUNNER   Override ra-tui tmux runner script.
+  RA_TUI_REPO             Override ra-tui checkout. Default: ../ra-tui next to this repo.
 `;
 }
 
@@ -265,11 +265,11 @@ function stablePortForRunId(runId) {
 function taskSubagentFixtureEnv(scenario, workdir) {
   if (scenario.runner !== 'task-subagent-tree') return {};
   return {
-    OCTOS_M15_LIVE_SUBAGENT_FIXTURE: '1',
-    OCTOSCODE_M15_UX_OUTPUT_DIR: path.join(workdir, '.ra-m15-evidence'),
-    OCTOSCODE_M15_UX_WORKDIR: workdir,
-    OCTOS_M15_LIVE_SUBAGENT_DELAY_SCALE:
-      process.env.OCTOS_M15_LIVE_SUBAGENT_DELAY_SCALE || '0.25',
+    ra_M15_LIVE_SUBAGENT_FIXTURE: '1',
+    RA_TUI_M15_UX_OUTPUT_DIR: path.join(workdir, '.ra-m15-evidence'),
+    RA_TUI_M15_UX_WORKDIR: workdir,
+    ra_M15_LIVE_SUBAGENT_DELAY_SCALE:
+      process.env.ra_M15_LIVE_SUBAGENT_DELAY_SCALE || '0.25',
   };
 }
 
@@ -279,9 +279,9 @@ function scenarioRequiresSoloServe(scenario) {
 
 function backendFixtureEnv(scenario, workdir) {
   return {
-    OCTOS_M9_PROTOCOL_FIXTURES: '1',
+    ra_M9_PROTOCOL_FIXTURES: '1',
     DEEPSEEK_API_KEY: 'dummy-key-for-ux-tmux',
-    ...(scenarioRequiresSoloServe(scenario) ? { OCTOS_SOLO_LOGIN: '1' } : {}),
+    ...(scenarioRequiresSoloServe(scenario) ? { ra_SOLO_LOGIN: '1' } : {}),
     ...taskSubagentFixtureEnv(scenario, workdir),
   };
 }
@@ -298,7 +298,7 @@ function ensureServeArg(rawArgs, requiredArg) {
 }
 
 function lowerRunnerServeArgs(scenario) {
-  const existing = process.env.OCTOSCODE_SOAK_SERVE_ARGS || '';
+  const existing = process.env.RA_TUI_SOAK_SERVE_ARGS || '';
   if (!scenarioRequiresSoloServe(scenario)) return existing.trim();
   return ensureServeArg(existing, '--solo');
 }
@@ -352,49 +352,49 @@ function resolveContext({ scenarioId, selfTest }) {
 
   const stamp = compactTimestamp();
   const runId =
-    process.env.OCTOS_UX_TMUX_RUN_ID || `${selfTest ? 'ux-tmux-self-test' : 'ux-tmux'}-${stamp}`;
+    process.env.ra_UX_TMUX_RUN_ID || `${selfTest ? 'ux-tmux-self-test' : 'ux-tmux'}-${stamp}`;
   const runKey = `${runId}-${scenario.id}`;
   const outRoot = path.resolve(
-    process.env.OCTOS_UX_TMUX_OUT_ROOT || path.join(repoRoot, 'e2e', 'test-results-ux'),
+    process.env.ra_UX_TMUX_OUT_ROOT || path.join(repoRoot, 'e2e', 'test-results-ux'),
   );
   const scenarioDir = path.resolve(
-    process.env.OCTOS_UX_TMUX_OUT_DIR || path.join(outRoot, runId, scenario.id),
+    process.env.ra_UX_TMUX_OUT_DIR || path.join(outRoot, runId, scenario.id),
   );
   const runtimeRoot = path.resolve(
-    process.env.OCTOS_UX_TMUX_RUNTIME_ROOT || path.join(os.tmpdir(), `ra-ux-tmux-${runKey}`),
+    process.env.ra_UX_TMUX_RUNTIME_ROOT || path.join(os.tmpdir(), `ra-ux-tmux-${runKey}`),
   );
-  const dataDir = path.resolve(process.env.OCTOS_UX_TMUX_DATA_DIR || path.join(runtimeRoot, 'data'));
+  const dataDir = path.resolve(process.env.ra_UX_TMUX_DATA_DIR || path.join(runtimeRoot, 'data'));
   const workdir = path.resolve(
-    process.env.OCTOS_UX_TMUX_WORKDIR || path.join(runtimeRoot, 'workspace'),
+    process.env.ra_UX_TMUX_WORKDIR || path.join(runtimeRoot, 'workspace'),
   );
   const replayFile = path.resolve(
-    process.env.OCTOS_UX_TMUX_REPLAY || path.join(scenarioDir, 'input-replay.log'),
+    process.env.ra_UX_TMUX_REPLAY || path.join(scenarioDir, 'input-replay.log'),
   );
-  const tuiRepo = path.resolve(process.env.OCTOSCODE_REPO || path.join(repoRoot, '..', 'octoscode'));
+  const tuiRepo = path.resolve(process.env.RA_TUI_REPO || path.join(repoRoot, '..', 'ra-tui'));
   const lowerRunner = path.resolve(
-    process.env.OCTOS_UX_TMUX_TUI_RUNNER
-      || process.env.OCTOS_M19_UX_TUI_RUNNER
+    process.env.ra_UX_TMUX_TUI_RUNNER
+      || process.env.ra_M19_UX_TUI_RUNNER
       || path.join(tuiRepo, 'scripts', 'run-onboarding-tmux-soak.sh'),
   );
-  const octosBin = path.resolve(process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'ra'));
-  const tuiBin = path.resolve(process.env.OCTOSCODE_BIN || path.join(tuiRepo, 'target', 'debug', 'octoscode'));
-  const cols = positiveIntegerEnv('OCTOS_UX_TMUX_COLS', scenario.id === 'narrow-layout' ? 80 : 120);
-  const rows = positiveIntegerEnv('OCTOS_UX_TMUX_ROWS', scenario.id === 'narrow-layout' ? 24 : 40);
-  const port = positiveIntegerEnv('OCTOS_UX_TMUX_PORT', stablePortForRunId(runKey));
-  const profileId = process.env.OCTOS_UX_TMUX_PROFILE || 'coding';
+  const raBin = path.resolve(process.env.ra_BIN || path.join(repoRoot, 'target', 'debug', 'ra'));
+  const tuiBin = path.resolve(process.env.RA_TUI_BIN || path.join(tuiRepo, 'target', 'debug', 'ra-tui'));
+  const cols = positiveIntegerEnv('ra_UX_TMUX_COLS', scenario.id === 'narrow-layout' ? 80 : 120);
+  const rows = positiveIntegerEnv('ra_UX_TMUX_ROWS', scenario.id === 'narrow-layout' ? 24 : 40);
+  const port = positiveIntegerEnv('ra_UX_TMUX_PORT', stablePortForRunId(runKey));
+  const profileId = process.env.ra_UX_TMUX_PROFILE || 'coding';
   const sessionId =
-    process.env.OCTOS_UX_TMUX_SESSION_ID || `${profileId}:local:ux:${scenario.id}:${runId}`;
+    process.env.ra_UX_TMUX_SESSION_ID || `${profileId}:local:ux:${scenario.id}:${runId}`;
   const sessionName =
-    process.env.OCTOS_UX_TMUX_SESSION || `ra-ux-${safeSlug(runId)}-${safeSlug(scenario.id)}`;
+    process.env.ra_UX_TMUX_SESSION || `ra-ux-${safeSlug(runId)}-${safeSlug(scenario.id)}`;
   const fixtureEnv = taskSubagentFixtureEnv(scenario, workdir);
   const backendEnv = backendFixtureEnv(scenario, workdir);
   const backendServeArgs = scenarioRequiresSoloServe(scenario) ? ['--solo'] : [];
   const backendCommand =
-    process.env.OCTOS_UX_TMUX_BACKEND_COMMAND
+    process.env.ra_UX_TMUX_BACKEND_COMMAND
     || [
       'env',
       ...shellEnvAssignments(backendEnv),
-      shellQuote(octosBin),
+      shellQuote(raBin),
       'serve',
       '--stdio',
       ...backendServeArgs,
@@ -404,9 +404,9 @@ function resolveContext({ scenarioId, selfTest }) {
       shellQuote(workdir),
     ].join(' ');
   const websocketEndpoint = `ws://127.0.0.1:${port}/api/ui-protocol/ws`;
-  const authToken = process.env.OCTOS_UX_TMUX_AUTH_TOKEN || 'octoscode-onboarding-soak-token';
+  const authToken = process.env.ra_UX_TMUX_AUTH_TOKEN || 'ra-tui-onboarding-soak-token';
   const launchCommand =
-    process.env.OCTOS_UX_TMUX_LAUNCH_COMMAND
+    process.env.ra_UX_TMUX_LAUNCH_COMMAND
     || (scenario.transport === 'websocket'
       ? `${shellQuote(tuiBin)} --mode protocol --endpoint ${shellQuote(websocketEndpoint)} --auth-token ${shellQuote(authToken)}`
       : `${shellQuote(tuiBin)} --mode protocol --stdio-command ${shellQuote(backendCommand)}`);
@@ -423,7 +423,7 @@ function resolveContext({ scenarioId, selfTest }) {
     replayFile,
     tuiRepo,
     lowerRunner,
-    octosBin,
+    raBin,
     tuiBin,
     cols,
     rows,
@@ -480,9 +480,9 @@ function writeRuntimePolicyStamp(ctx, generatedAt, { force = false } = {}) {
     stamp: {
       profile_id: ctx.profileId,
       session_id: ctx.sessionId,
-      approval_policy: process.env.OCTOS_APPROVAL_POLICY || null,
-      sandbox_mode: process.env.OCTOS_SANDBOX || 'inherits harness environment',
-      network_access: process.env.OCTOS_NETWORK || 'inherits harness environment',
+      approval_policy: process.env.ra_APPROVAL_POLICY || null,
+      sandbox_mode: process.env.ra_SANDBOX || 'inherits harness environment',
+      network_access: process.env.ra_NETWORK || 'inherits harness environment',
     },
     terminal: {
       cols: ctx.cols,
@@ -698,10 +698,10 @@ function skipValidation(ctx) {
 
 function missingRunnerBlocker(ctx) {
   if (!fs.existsSync(ctx.lowerRunner)) {
-    return `octoscode tmux runner is missing: ${ctx.lowerRunner}`;
+    return `ra-tui tmux runner is missing: ${ctx.lowerRunner}`;
   }
   if (!isExecutable(ctx.lowerRunner)) {
-    return `octoscode tmux runner is not executable: ${ctx.lowerRunner}`;
+    return `ra-tui tmux runner is not executable: ${ctx.lowerRunner}`;
   }
   return null;
 }
@@ -713,8 +713,8 @@ function tmuxHasSession(sessionName) {
 
 function launchWebsocketTuiFallback(ctx, env) {
   const outputLog = path.join(ctx.scenarioDir, 'tui-process.log');
-  const apiKeyEnv = process.env.OCTOSCODE_SOAK_EXPECT_API_KEY_ENV || 'AUTODL_API_KEY';
-  const apiKey = env.OCTOSCODE_SOAK_API_KEY || 'ra-m19-placeholder-key';
+  const apiKeyEnv = process.env.RA_TUI_SOAK_EXPECT_API_KEY_ENV || 'AUTODL_API_KEY';
+  const apiKey = env.RA_TUI_SOAK_API_KEY || 'ra-m19-placeholder-key';
   const command = [
     'cd',
     shellQuote(ctx.workdir),
@@ -735,21 +735,21 @@ function launchWebsocketTuiFallback(ctx, env) {
     '--cwd',
     shellQuote(ctx.workdir),
     '--theme',
-    shellQuote(process.env.OCTOSCODE_SOAK_THEME || 'codex'),
+    shellQuote(process.env.RA_TUI_SOAK_THEME || 'codex'),
     ';',
     'exit_code=$?;',
     'echo',
-    shellQuote('octoscode exited with status'),
+    shellQuote('ra-tui exited with status'),
     '"$exit_code"',
     ';',
     'echo',
-    shellQuote('octoscode exited with status'),
+    shellQuote('ra-tui exited with status'),
     '"$exit_code"',
     '>>',
     shellQuote(outputLog),
     ';',
     'sleep',
-    shellQuote(process.env.OCTOSCODE_SOAK_EXIT_HOLD_SECS || '30'),
+    shellQuote(process.env.RA_TUI_SOAK_EXIT_HOLD_SECS || '30'),
   ].join(' ');
   writeText(path.join(ctx.scenarioDir, 'tui-fallback-command.txt'), `${command}\n`);
   const result = spawnSync('tmux', ['new-session', '-d', '-s', ctx.sessionName, command], {
@@ -804,13 +804,13 @@ function runRestartReconnectProbe(ctx, phase, env) {
     cwd: repoRoot,
     env: {
       ...env,
-      OCTOS_M19_RESTART_PHASE: phase,
-      OCTOS_M19_RESTART_ARTIFACT_DIR: ctx.scenarioDir,
-      OCTOS_M19_RESTART_WS_ENDPOINT: ctx.websocketEndpoint,
-      OCTOS_M19_RESTART_AUTH_TOKEN: ctx.authToken,
-      OCTOS_M19_RESTART_PROFILE_ID: ctx.profileId,
-      OCTOS_M19_RESTART_SESSION_ID: ctx.sessionId,
-      OCTOS_M19_RESTART_WORKSPACE: ctx.workdir,
+      ra_M19_RESTART_PHASE: phase,
+      ra_M19_RESTART_ARTIFACT_DIR: ctx.scenarioDir,
+      ra_M19_RESTART_WS_ENDPOINT: ctx.websocketEndpoint,
+      ra_M19_RESTART_AUTH_TOKEN: ctx.authToken,
+      ra_M19_RESTART_PROFILE_ID: ctx.profileId,
+      ra_M19_RESTART_SESSION_ID: ctx.sessionId,
+      ra_M19_RESTART_WORKSPACE: ctx.workdir,
     },
     stdio: 'inherit',
   });
@@ -825,13 +825,13 @@ function runBackpressureReplayProbe(ctx, env) {
     cwd: repoRoot,
     env: {
       ...env,
-      OCTOS_M19_BACKPRESSURE_ARTIFACT_DIR: ctx.scenarioDir,
-      OCTOS_M19_BACKPRESSURE_WS_ENDPOINT: ctx.websocketEndpoint,
-      OCTOS_M19_BACKPRESSURE_AUTH_TOKEN: ctx.authToken,
-      OCTOS_M19_BACKPRESSURE_PROFILE_ID: ctx.profileId,
-      OCTOS_M19_BACKPRESSURE_SESSION_ID: ctx.sessionId,
-      OCTOS_M19_BACKPRESSURE_WORKSPACE: ctx.workdir,
-      OCTOS_M19_BACKPRESSURE_PROMPT:
+      ra_M19_BACKPRESSURE_ARTIFACT_DIR: ctx.scenarioDir,
+      ra_M19_BACKPRESSURE_WS_ENDPOINT: ctx.websocketEndpoint,
+      ra_M19_BACKPRESSURE_AUTH_TOKEN: ctx.authToken,
+      ra_M19_BACKPRESSURE_PROFILE_ID: ctx.profileId,
+      ra_M19_BACKPRESSURE_SESSION_ID: ctx.sessionId,
+      ra_M19_BACKPRESSURE_WORKSPACE: ctx.workdir,
+      ra_M19_BACKPRESSURE_PROMPT:
         'M9 replay-lossy fixture for post-drop protocol probe after TUI recovery.',
     },
     stdio: 'inherit',
@@ -853,9 +853,9 @@ function runRestartReconnectScenario(ctx, action, env) {
   resizeTmuxWindow(ctx);
 
   const preTurn = action('send-turn', true, {
-    OCTOSCODE_SOAK_PROMPT:
+    RA_TUI_SOAK_PROMPT:
       'Before backend restart, answer briefly so the reconnect fixture has visible session state.',
-    OCTOSCODE_SOAK_TURN_WAIT_SECS: process.env.OCTOSCODE_SOAK_RESTART_PRE_TURN_WAIT_SECS || '10',
+    RA_TUI_SOAK_TURN_WAIT_SECS: process.env.RA_TUI_SOAK_RESTART_PRE_TURN_WAIT_SECS || '10',
   });
   if (preTurn.error) throw preTurn.error;
   if (preTurn.status !== 0) status = preTurn.status || 1;
@@ -864,8 +864,8 @@ function runRestartReconnectScenario(ctx, action, env) {
 
   if (status === 0) {
     const restart = action('restart-server', true, {
-      OCTOSCODE_SOAK_SERVER_WAIT_SECS:
-        process.env.OCTOSCODE_SOAK_RESTART_SERVER_WAIT_SECS || '20',
+      RA_TUI_SOAK_SERVER_WAIT_SECS:
+        process.env.RA_TUI_SOAK_RESTART_SERVER_WAIT_SECS || '20',
     });
     if (restart.error) throw restart.error;
     if (restart.status !== 0) status = restart.status || 1;
@@ -873,10 +873,10 @@ function runRestartReconnectScenario(ctx, action, env) {
 
   if (status === 0) {
     const postTurn = action('send-turn', true, {
-      OCTOSCODE_SOAK_PROMPT:
+      RA_TUI_SOAK_PROMPT:
         `After backend restart, confirm the TUI reconnected and finish with ${ctx.scenario.finalMarker}.`,
-      OCTOSCODE_SOAK_TURN_WAIT_SECS:
-        process.env.OCTOSCODE_SOAK_RESTART_POST_TURN_WAIT_SECS || '20',
+      RA_TUI_SOAK_TURN_WAIT_SECS:
+        process.env.RA_TUI_SOAK_RESTART_POST_TURN_WAIT_SECS || '20',
     });
     if (postTurn.error) throw postTurn.error;
     if (postTurn.status !== 0) status = postTurn.status || 1;
@@ -899,15 +899,15 @@ function runDroppedCompletionBackpressureScenario(ctx, action, env) {
   resizeTmuxWindow(ctx);
 
   const drive = action('drive-dropped-completion-backpressure', true, {
-    OCTOSCODE_SOAK_BACKPRESSURE_PROMPT: ctx.scenario.prompt,
+    RA_TUI_SOAK_BACKPRESSURE_PROMPT: ctx.scenario.prompt,
   });
   if (drive.error) throw drive.error;
   if (drive.status !== 0) status = drive.status || 1;
   captureTmuxPane(ctx.sessionName, path.join(ctx.scenarioDir, 'tui-capture-backpressure-final.txt'));
   if (status === 0) {
     const recovery = action('send-turn', true, {
-      OCTOSCODE_SOAK_PROMPT: 'After forced terminal-drop recovery, reply with exactly OK.',
-      OCTOSCODE_SOAK_TURN_WAIT_SECS: process.env.OCTOSCODE_SOAK_BACKPRESSURE_RECOVERY_WAIT_SECS || '8',
+      RA_TUI_SOAK_PROMPT: 'After forced terminal-drop recovery, reply with exactly OK.',
+      RA_TUI_SOAK_TURN_WAIT_SECS: process.env.RA_TUI_SOAK_BACKPRESSURE_RECOVERY_WAIT_SECS || '8',
     });
     if (recovery.error) throw recovery.error;
     if (recovery.status !== 0) status = recovery.status || 1;
@@ -946,37 +946,37 @@ function runLowerRunner(ctx, options = {}) {
   const shouldInitProfileLlm = ctx.scenario.runner === 'provider-missing' ? '0' : '1';
   const env = {
     ...process.env,
-    OCTOS_REPO: repoRoot,
-    OCTOS_BIN: ctx.octosBin,
-    OCTOSCODE_BIN: ctx.tuiBin,
-    OCTOSCODE_SOAK_RUN_ID: ctx.runId,
-    OCTOSCODE_SOAK_ARTIFACT_DIR: ctx.scenarioDir,
-    OCTOSCODE_SOAK_RUNTIME_ROOT: ctx.runtimeRoot,
-    OCTOSCODE_SOAK_WORKSPACE: ctx.workdir,
-    OCTOSCODE_SOAK_DATA_DIR: ctx.dataDir,
-    OCTOSCODE_SOAK_TRANSPORT: ctx.scenario.transport === 'websocket' ? 'ws' : ctx.scenario.transport,
-    OCTOSCODE_SOAK_PROFILE: ctx.profileId,
-    OCTOSCODE_SOAK_SESSION: ctx.sessionId,
-    OCTOSCODE_SOAK_SERVER_SESSION: `ra-onboard-server-${safeSlug(ctx.runKey)}`,
-    OCTOSCODE_SOAK_TUI_SESSION: ctx.sessionName,
-    OCTOSCODE_SOAK_LOCAL_NAME: process.env.OCTOSCODE_SOAK_LOCAL_NAME || ctx.profileId,
-    OCTOSCODE_SOAK_LOCAL_USERNAME: process.env.OCTOSCODE_SOAK_LOCAL_USERNAME || ctx.profileId,
-    OCTOSCODE_SOAK_LOCAL_EMAIL: process.env.OCTOSCODE_SOAK_LOCAL_EMAIL || `${ctx.profileId}@example.invalid`,
-    OCTOSCODE_SOAK_API_KEY: process.env.OCTOSCODE_SOAK_API_KEY || 'ra-m19-placeholder-key',
-    OCTOSCODE_SOAK_INIT_PROFILE_LLM:
-      process.env.OCTOSCODE_SOAK_INIT_PROFILE_LLM || shouldInitProfileLlm,
-    OCTOSCODE_SOAK_PORT: String(ctx.port),
-    OCTOSCODE_SOAK_AUTH_TOKEN: ctx.authToken,
-    OCTOSCODE_SOAK_OPEN_SESSION: 'auto',
-    OCTOSCODE_SOAK_REQUIRE_PROFILE: '0',
-    OCTOSCODE_SOAK_SOLO_STRICT: process.env.OCTOSCODE_SOAK_SOLO_STRICT || '0',
-    OCTOSCODE_SOAK_SERVE_ARGS: lowerRunnerServeArgs(ctx.scenario),
-    OCTOSCODE_SOAK_SERVER_WAIT_SECS:
-      process.env.OCTOSCODE_SOAK_SERVER_WAIT_SECS
+    ra_REPO: repoRoot,
+    ra_BIN: ctx.raBin,
+    RA_TUI_BIN: ctx.tuiBin,
+    RA_TUI_SOAK_RUN_ID: ctx.runId,
+    RA_TUI_SOAK_ARTIFACT_DIR: ctx.scenarioDir,
+    RA_TUI_SOAK_RUNTIME_ROOT: ctx.runtimeRoot,
+    RA_TUI_SOAK_WORKSPACE: ctx.workdir,
+    RA_TUI_SOAK_DATA_DIR: ctx.dataDir,
+    RA_TUI_SOAK_TRANSPORT: ctx.scenario.transport === 'websocket' ? 'ws' : ctx.scenario.transport,
+    RA_TUI_SOAK_PROFILE: ctx.profileId,
+    RA_TUI_SOAK_SESSION: ctx.sessionId,
+    RA_TUI_SOAK_SERVER_SESSION: `ra-onboard-server-${safeSlug(ctx.runKey)}`,
+    RA_TUI_SOAK_TUI_SESSION: ctx.sessionName,
+    RA_TUI_SOAK_LOCAL_NAME: process.env.RA_TUI_SOAK_LOCAL_NAME || ctx.profileId,
+    RA_TUI_SOAK_LOCAL_USERNAME: process.env.RA_TUI_SOAK_LOCAL_USERNAME || ctx.profileId,
+    RA_TUI_SOAK_LOCAL_EMAIL: process.env.RA_TUI_SOAK_LOCAL_EMAIL || `${ctx.profileId}@example.invalid`,
+    RA_TUI_SOAK_API_KEY: process.env.RA_TUI_SOAK_API_KEY || 'ra-m19-placeholder-key',
+    RA_TUI_SOAK_INIT_PROFILE_LLM:
+      process.env.RA_TUI_SOAK_INIT_PROFILE_LLM || shouldInitProfileLlm,
+    RA_TUI_SOAK_PORT: String(ctx.port),
+    RA_TUI_SOAK_AUTH_TOKEN: ctx.authToken,
+    RA_TUI_SOAK_OPEN_SESSION: 'auto',
+    RA_TUI_SOAK_REQUIRE_PROFILE: '0',
+    RA_TUI_SOAK_SOLO_STRICT: process.env.RA_TUI_SOAK_SOLO_STRICT || '0',
+    RA_TUI_SOAK_SERVE_ARGS: lowerRunnerServeArgs(ctx.scenario),
+    RA_TUI_SOAK_SERVER_WAIT_SECS:
+      process.env.RA_TUI_SOAK_SERVER_WAIT_SECS
       || (ctx.scenario.transport === 'websocket' ? '4' : '1'),
-    OCTOSCODE_SOAK_TUI_WAIT_SECS: process.env.OCTOSCODE_SOAK_TUI_WAIT_SECS || '2',
-    OCTOSCODE_SOAK_EXIT_HOLD_SECS: process.env.OCTOSCODE_SOAK_EXIT_HOLD_SECS || '30',
-    OCTOS_M9_PROTOCOL_FIXTURES: '1',
+    RA_TUI_SOAK_TUI_WAIT_SECS: process.env.RA_TUI_SOAK_TUI_WAIT_SECS || '2',
+    RA_TUI_SOAK_EXIT_HOLD_SECS: process.env.RA_TUI_SOAK_EXIT_HOLD_SECS || '30',
+    ra_M9_PROTOCOL_FIXTURES: '1',
     ...ctx.fixtureEnv,
   };
 
@@ -996,10 +996,10 @@ function runLowerRunner(ctx, options = {}) {
       if (status !== 0) break;
       const stepEnv = {};
       if (ctx.scenario.runner === 'provider-missing' && step === 'drive-solo') {
-        stepEnv.OCTOSCODE_SOAK_INIT_PROFILE_LLM = '1';
+        stepEnv.RA_TUI_SOAK_INIT_PROFILE_LLM = '1';
       }
       if (step === 'send-turn') {
-        stepEnv.OCTOSCODE_SOAK_PROMPT = ctx.scenario.prompt;
+        stepEnv.RA_TUI_SOAK_PROMPT = ctx.scenario.prompt;
       }
       const result = action(step, true, stepEnv);
       if (result.error) throw result.error;
@@ -1019,7 +1019,7 @@ function runLowerRunner(ctx, options = {}) {
   if (capture.error && status === 0) throw capture.error;
   if (capture.status !== 0 && status === 0) status = capture.status || 1;
 
-  if (!options.keepSession && process.env.OCTOS_UX_TMUX_KEEP_SESSION !== '1') {
+  if (!options.keepSession && process.env.ra_UX_TMUX_KEEP_SESSION !== '1') {
     action('stop', false);
   }
 

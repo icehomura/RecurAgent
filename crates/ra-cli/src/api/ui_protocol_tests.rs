@@ -182,7 +182,7 @@ fn should_release_voice_admission_claim_after_start_failure() {
 #[test]
 fn spawn_report_announcement_inlines_small_reports_in_full() {
     let body = "Status: SUCCESS\n\nshort review body";
-    let out = format_spawn_report_announcement("review-octos-web", body, Some("task-1"));
+    let out = format_spawn_report_announcement("review-ra-web", body, Some("task-1"));
     assert!(out.contains(body), "small report must be inlined verbatim");
     assert!(!out.contains("preview truncated"));
 }
@@ -193,7 +193,7 @@ fn spawn_report_announcement_previews_large_reports_with_recovery_pointer() {
     // pointer left the parent no way to recover a child's multi-KB
     // report; it concluded the result "was lost".
     let body = "x".repeat(SPAWN_REPORT_INLINE_CAP_CHARS + 500);
-    let out = format_spawn_report_announcement("review-octos-web", &body, Some("019f6e66-f94c"));
+    let out = format_spawn_report_announcement("review-ra-web", &body, Some("019f6e66-f94c"));
     assert!(out.contains("preview truncated"));
     assert!(
         out.contains("read_task_output(task_handle=\"019f6e66-f94c\")"),
@@ -777,7 +777,7 @@ async fn should_bootstrap_appui_runtime_when_gateway_autostart_is_disabled() {
             family_id: Some("openai".to_string()),
             model_id: Some("gpt-4o-mini".to_string()),
             route: Some(crate::profiles::LlmRouteConfig {
-                api_key_env: Some("OCTOS_TEST_APPUI_DISABLED_PROFILE_KEY".to_string()),
+                api_key_env: Some("ra_TEST_APPUI_DISABLED_PROFILE_KEY".to_string()),
                 ..Default::default()
             }),
             ..Default::default()
@@ -785,7 +785,7 @@ async fn should_bootstrap_appui_runtime_when_gateway_autostart_is_disabled() {
         fallbacks: Vec::new(),
     });
     profile.config.env_vars.insert(
-        "OCTOS_TEST_APPUI_DISABLED_PROFILE_KEY".to_string(),
+        "ra_TEST_APPUI_DISABLED_PROFILE_KEY".to_string(),
         "test-key".to_string(),
     );
     state
@@ -1128,7 +1128,7 @@ async fn llm_select_rejects_keyless_models_before_persisting() {
                     "route_id": "official",
                     // A test-scoped variable name so resolution can't
                     // fall through to a real key in the process env.
-                    "api_key_env": format!("OCTOS_TEST_{}_KEY", model.replace(['-', '.'], "_").to_uppercase()),
+                    "api_key_env": format!("ra_TEST_{}_KEY", model.replace(['-', '.'], "_").to_uppercase()),
                 },
             },
             "set_primary": set_primary,
@@ -1167,7 +1167,7 @@ async fn llm_select_rejects_keyless_models_before_persisting() {
         "got {error:?}"
     );
     assert!(
-        error.message.contains("OCTOS_TEST_GLM_5_3_KEY"),
+        error.message.contains("ra_TEST_GLM_5_3_KEY"),
         "message must name the missing variable: {}",
         error.message
     );
@@ -1909,7 +1909,7 @@ async fn llm_select_rejects_unactivatable_api_type_and_unknown_families() {
                 "selection": {
                     "family_id": "deepseek",
                     "model_id": "deepseek-chat",
-                    "route": { "route_id": "official", "api_key_env": "OCTOS_TEST_DS_KEY" },
+                    "route": { "route_id": "official", "api_key_env": "ra_TEST_DS_KEY" },
                 },
                 "api_key": "dk",
                 "set_primary": true,
@@ -1930,7 +1930,7 @@ async fn llm_select_rejects_unactivatable_api_type_and_unknown_families() {
             json!({
                 "route_id": "official",
                 "api_type": "anthropic",
-                "api_key_env": "OCTOS_TEST_OLLAMA_ANTHROPIC_KEY",
+                "api_key_env": "ra_TEST_OLLAMA_ANTHROPIC_KEY",
             }),
         ),
         None,
@@ -1996,7 +1996,7 @@ async fn llm_select_rejects_unactivatable_api_type_and_unknown_families() {
                     "route": {
                         "route_id": "official",
                         "api_type": "anthropic",
-                        "api_key_env": "OCTOS_TEST_FROB_KEY",
+                        "api_key_env": "ra_TEST_FROB_KEY",
                     },
                 },
                 "api_key": "fk",
@@ -2279,7 +2279,7 @@ fn llm_upsert_rpc(
                 "route_id": "official",
                 // A test-scoped variable name so resolution can't fall
                 // through to a real key in the process env.
-                "api_key_env": "OCTOS_TEST_LLM_RUNTIME_INVALIDATION_KEY",
+                "api_key_env": "ra_TEST_LLM_RUNTIME_INVALIDATION_KEY",
             },
         },
         "api_key": "test-invalidation-key",
@@ -2906,7 +2906,7 @@ async fn should_report_persisted_but_not_live_when_runtime_rebuild_fails() {
             family_id: Some("openai".to_string()),
             model_id: Some("gpt-4o-mini".to_string()),
             route: Some(crate::profiles::LlmRouteConfig {
-                api_key_env: Some("OCTOS_TEST_LLM_RUNTIME_INVALIDATION_KEY".to_string()),
+                api_key_env: Some("ra_TEST_LLM_RUNTIME_INVALIDATION_KEY".to_string()),
                 ..Default::default()
             }),
             ..Default::default()
@@ -2914,7 +2914,7 @@ async fn should_report_persisted_but_not_live_when_runtime_rebuild_fails() {
         fallbacks: Vec::new(),
     });
     profile.config.env_vars.insert(
-        "OCTOS_TEST_LLM_RUNTIME_INVALIDATION_KEY".to_string(),
+        "ra_TEST_LLM_RUNTIME_INVALIDATION_KEY".to_string(),
         "k".to_string(),
     );
     state
@@ -2967,7 +2967,7 @@ async fn should_reload_runtime_while_in_flight_turn_holds_episode_store() {
             family_id: Some("openai".to_string()),
             model_id: Some("gpt-4o-mini".to_string()),
             route: Some(crate::profiles::LlmRouteConfig {
-                api_key_env: Some("OCTOS_TEST_LLM_RUNTIME_INVALIDATION_KEY".to_string()),
+                api_key_env: Some("ra_TEST_LLM_RUNTIME_INVALIDATION_KEY".to_string()),
                 ..Default::default()
             }),
             ..Default::default()
@@ -2975,7 +2975,7 @@ async fn should_reload_runtime_while_in_flight_turn_holds_episode_store() {
         fallbacks: Vec::new(),
     });
     profile.config.env_vars.insert(
-        "OCTOS_TEST_LLM_RUNTIME_INVALIDATION_KEY".to_string(),
+        "ra_TEST_LLM_RUNTIME_INVALIDATION_KEY".to_string(),
         "k".to_string(),
     );
     state
@@ -3395,7 +3395,7 @@ async fn llm_select_enforces_scope_and_route_discrimination() {
 #[test]
 fn catalog_result_ignores_runtime_qos_not_in_canonical() {
     let dir = tempfile::tempdir().unwrap();
-    // `octos_home_dir()` resolves to `dir` for this store, so this file is
+    // `ra_home_dir()` resolves to `dir` for this store, so this file is
     // the seed QoS catalog the OLD union path would have read.
     std::fs::write(
         dir.path().join("model_catalog.json"),
@@ -7249,7 +7249,7 @@ fn capabilities_advertise_local_solo_profile_create_only_when_supported() {
 
 #[test]
 fn proxied_task_cancel_outcome_maps_gateway_status() {
-    // octos#1380: the WS task/cancel gateway-proxy fallback maps the REST
+    // RecurAgent#1380: the WS task/cancel gateway-proxy fallback maps the REST
     // gateway response onto the JSON-RPC outcome.
     use axum::http::StatusCode;
     let task_id = TaskId::new();
@@ -7267,7 +7267,7 @@ fn proxied_task_cancel_outcome_maps_gateway_status() {
 
 #[tokio::test]
 async fn proxied_task_restart_outcome_maps_gateway_status() {
-    // octos#1380: the WS task/restart_from_node gateway-proxy fallback reads
+    // RecurAgent#1380: the WS task/restart_from_node gateway-proxy fallback reads
     // the relaunched task id from the gateway body and maps statuses.
     use axum::http::StatusCode;
     let task_id = TaskId::new();
@@ -7308,7 +7308,7 @@ async fn proxied_task_restart_outcome_maps_gateway_status() {
 
 #[test]
 fn gateway_session_tasks_path_encodes_topic_query() {
-    // octos#1380: task/list gateway-mode proxy must address the API
+    // RecurAgent#1380: task/list gateway-mode proxy must address the API
     // channel's `/sessions/{id}/tasks` endpoint and preserve topic
     // scoping, matching `session/tasks.list`.
     let session_id = SessionKey("slides-123".into());
@@ -7320,7 +7320,7 @@ fn gateway_session_tasks_path_encodes_topic_query() {
 
 #[test]
 fn gateway_task_list_proxy_decodes_array_and_wrapped_shapes() {
-    // octos#1380: the API channel returns the same task projection used by
+    // RecurAgent#1380: the API channel returns the same task projection used by
     // session/tasks.list. The task/list gateway fallback accepts the bare
     // array shape and a defensive `{ tasks: [...] }` wrapper.
     let now = Utc::now();
@@ -7362,7 +7362,7 @@ fn gateway_task_list_proxy_rejects_non_array_snapshot() {
 
 #[test]
 fn json_task_list_contains_matches_array_and_wrapped_shapes() {
-    // octos#1380: gateway session-membership check accepts a bare array or a
+    // RecurAgent#1380: gateway session-membership check accepts a bare array or a
     // `{ "tasks": [...] }` wrapper, matching `id` or `task_id`.
     let id = "01950000-0000-7000-8000-0000000000a1";
     assert!(json_task_list_contains(
@@ -7830,7 +7830,7 @@ async fn launch_resolve_prefers_persisted_default_profile() {
     use ra_core::ui_protocol::{LaunchDecisionKind, LaunchResolveParams};
 
     let tmp = tempfile::tempdir().unwrap();
-    // The default-profile pointer lives in its own ra state home; each profile
+    // The default-profile pointer lives in its own RecurAgent state home; each profile
     // bootstraps in a separate data dir because the redb episode store takes
     // an exclusive lock and two profiles cannot share one.
     let home = tmp.path().join("home");
@@ -8326,7 +8326,7 @@ async fn raw_session_status_read_omits_model_object_when_no_model_resolved() {
     assert_eq!(status["runtime_policy_stamp"]["provider"], Value::Null);
     // The contract under test: no resolved model => NO `model` key at
     // all. Emitting `{"model": null, "provider": null, "selected": true}`
-    // breaks shipped octoscode decoders whose ModelStatus requires
+    // breaks shipped ra-tui decoders whose ModelStatus requires
     // non-null `model`/`provider` strings — the whole
     // session/status/read result fails to decode and the composer
     // footer degrades to the `<server authenticated profile>`
@@ -11159,7 +11159,7 @@ async fn profile_llm_fetch_models_r9s_claude_selection_probes_the_anthropic_root
     let state = Arc::new(AppState::empty_for_tests());
     // r9s serves claude-* over the Anthropic Messages protocol at a rewritten
     // `{base}/anthropic` root — the probe must follow the SELECTED model
-    // (octos#2185), not the family-wide OpenAI declaration.
+    // (RecurAgent#2185), not the family-wide OpenAI declaration.
     let request = RpcRequest::new(
         "1",
         APPUI_METHOD_PROFILE_LLM_FETCH_MODELS,
@@ -11228,7 +11228,7 @@ async fn profile_llm_fetch_models_r9s_non_claude_selection_keeps_the_openai_list
 
 /// The admin REST `/api/my/provider-models` surface shares the per-model
 /// resolution verbatim with the AppUI RPC — including passing the selected
-/// model through (octos#2185).
+/// model through (RecurAgent#2185).
 #[tokio::test]
 async fn admin_provider_models_r9s_claude_selection_probes_the_anthropic_root() {
     let (root, captured) =
@@ -12401,7 +12401,7 @@ fn ws_turn_handler_registers_supervisor_with_task_query_store() {
 /// tools (send_file, peer_*, spawn) onto the per-turn snapshot, then MUST
 /// re-apply the profile `tool_policy` so an allow/deny list actually
 /// constrains the roster the model sees. Before the fix the re-apply was
-/// missing on the UI-Protocol path, so octoscode ran turns at `tools=31`
+/// missing on the UI-Protocol path, so ra-tui ran turns at `tools=31`
 /// despite an 8-tool allow-list, drowning small local models. Mirrors the
 /// gateway re-apply at `session_actor.rs:3748`.
 #[test]
@@ -12713,7 +12713,7 @@ async fn peer_send_input_with_a_reused_tool_call_id_queues_on_each_turn() {
     let target = peer_wire_registry()
         .resolve(&peer_wire_key(profile_id, slug))
         .expect("opened peer resolves");
-    let system = format!("{profile_id}:api:octosense#system");
+    let system = format!("{profile_id}:api:recuragent#system");
     let (turn_1, turn_2) = (TurnId::new(), TurnId::new());
     let orchestrator = default_agent_orchestrator();
     let idle = crate::autonomy::master_continuation_scheduler::MasterContinuationRuntimeState::idle;
@@ -18617,7 +18617,7 @@ fn should_gate_background_activity_when_the_capability_was_not_negotiated() {
 /// append is the routing decision AND the disconnect-survival mechanism.
 /// Asserts ROUTING (the sibling session's stream stays empty), not merely that
 /// events were emitted — activity on the wrong stream renders in whichever
-/// session happens to be focused (octos-tui#461, #466, #483).
+/// session happens to be focused (ra-tui#461, #466, #483).
 #[tokio::test]
 async fn should_replay_background_activity_on_the_owning_session_when_a_client_reconnects() {
     let (ws, _rx) = ws_connection_for_test(64);
@@ -21824,7 +21824,7 @@ fn profile_runtime_switching_error_is_not_reported_as_a_second_process() {
 
 #[test]
 fn held_data_dir_lock_yields_a_clear_actionable_error() {
-    // A `session/open` bootstrap that fails because another ra process
+    // A `session/open` bootstrap that fails because another RecurAgent process
     // already owns the profile's redb must be recognized structurally
     // (through the eyre wrap chain that `ProfileRuntime::bootstrap` adds) and
     // rendered with both remedies. Previously this reached the client as
@@ -26773,7 +26773,7 @@ async fn hydrate_result_for_test(
 /// UPCR-2026-039: a tool-result row carries its call id and tool name, and
 /// the assistant row that made the calls carries each call's id and name, on
 /// every connection. The stdio defaults (no `projection.envelope.v2`, so no
-/// v2 tool envelopes) are what a host such as OctoSense negotiates; there the
+/// v2 tool envelopes) are what a host such as RecurAgent negotiates; there the
 /// rows are the only place a reloaded tool row's name can come from.
 #[tokio::test(flavor = "current_thread")]
 async fn session_hydrate_rows_carry_tool_call_identity() {
@@ -27532,7 +27532,7 @@ async fn check_spawn_only_sent_file_hydration(file_count: usize) {
         assert_eq!(completion.source.as_deref(), Some("background"));
         assert_eq!(completion.media, media);
         // The actual internal send_file invocation supplies no caption. Its
-        // empty per-file companion stays durable, but OctosCode's existing
+        // empty per-file companion stays durable, but RaCode's existing
         // hydrated_row_is_displayable contract excludes empty assistant rows.
         let companions = history
             .iter()
@@ -36327,7 +36327,7 @@ async fn peer_gather_entries_thread_caller_profile_for_lifetime() {
         .unwrap();
 
     // RAW entry under the caller's real profile: TRUSTED projection. (Under
-    // the pre-fix default-"ra" read this same disk degraded to unknown —
+    // the pre-fix default-"RecurAgent" read this same disk degraded to unknown —
     // the registry_key would not match — so this assertion discriminates.)
     let gathered = raw_peer_gather(
         &state,
@@ -38812,7 +38812,7 @@ fn bind_peer_to_host(peers_root: &std::path::Path, slug: &str) {
 fn peer_respond_refuses_a_host_owned_peers_approval() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let system = ra_core::SessionKey::with_profile_topic("dev", "api", "octosense", "system");
+    let system = ra_core::SessionKey::with_profile_topic("dev", "api", "recuragent", "system");
     let (slug, peer_key) = stage_and_open_peer(&peers_root, "prof-hostappr", "rinx", &system);
     bind_peer_to_host(&peers_root, &slug);
 
@@ -38885,7 +38885,7 @@ fn peer_respond_refuses_a_host_owned_peers_approval() {
 fn peer_respond_answers_a_host_owned_peers_question_beside_a_parked_approval() {
     let tmp = tempfile::tempdir().unwrap();
     let peers_root = tmp.path().join("data").join("peers");
-    let system = ra_core::SessionKey::with_profile_topic("dev", "api", "octosense", "system");
+    let system = ra_core::SessionKey::with_profile_topic("dev", "api", "recuragent", "system");
     let (slug, peer_key) = stage_and_open_peer(&peers_root, "prof-hostq", "rinx", &system);
     bind_peer_to_host(&peers_root, &slug);
 
@@ -39760,7 +39760,7 @@ fn s3_zai_lane_real_three_layer_probe() {
         usage.output_tokens
     );
     assert!(
-        reply.contains("OCTOS_S3_ZAI_OK"),
+        reply.contains("ra_S3_ZAI_OK"),
         "LAYER 2 FAIL: real GLM-5.2 reply must echo the marker, got: {reply}"
     );
     assert!(
@@ -39784,7 +39784,7 @@ fn s3_zai_lane_real_three_layer_probe() {
     .unwrap();
     let delivered = std::fs::read_to_string(&result_path).unwrap();
     assert!(
-        delivered.contains("model: glm-5.2") && delivered.contains("OCTOS_S3_ZAI_OK"),
+        delivered.contains("model: glm-5.2") && delivered.contains("ra_S3_ZAI_OK"),
         "LAYER 3 FAIL: result.md must carry the model id and the real reply"
     );
 }
@@ -39802,7 +39802,7 @@ fn run_zai_real_call(
         .build()
         .expect("tokio runtime for the real zai call");
     rt.block_on(async {
-        let messages = vec![Message::user("Reply with exactly: OCTOS_S3_ZAI_OK")];
+        let messages = vec![Message::user("Reply with exactly: ra_S3_ZAI_OK")];
         let config = ChatConfig {
             max_tokens: Some(32),
             ..Default::default()
@@ -42985,7 +42985,7 @@ async fn connection_close_settles_steers_before_connection_closed_terminal() {
 }
 
 /// `session/status/read` used to emit a hardcoded `"usage": {}`, so every
-/// field of octoscode's `SessionUsageStatus` decoded to `None` forever. These
+/// field of ra-tui's `SessionUsageStatus` decoded to `None` forever. These
 /// pin the field mapping that replaced it — in particular
 /// `cached_input_tokens`, without which an operator cannot tell whether prompt
 /// caching is working.
@@ -46844,7 +46844,7 @@ async fn should_treat_an_idle_stream_as_alive_and_a_closed_one_as_gone() {
 // ── UPCR-2026-036: `ra serve --host-managed` ─────────────────────────────
 
 fn host_managed_peer_session(topic: &str) -> SessionKey {
-    SessionKey::with_profile_topic(MAIN_PROFILE_ID, "api", "octosense", topic)
+    SessionKey::with_profile_topic(MAIN_PROFILE_ID, "api", "recuragent", topic)
 }
 
 async fn external_approval_respond(
@@ -47160,7 +47160,7 @@ async fn should_let_an_external_client_steer_and_interrupt_only_turns_it_owns() 
 }
 
 // ---------------------------------------------------------------------------
-// OctoSense ADR 0004 G1 (kernel half): an external client's approvals go only
+// RecurAgent ADR 0004 G1 (kernel half): an external client's approvals go only
 // to that client (UPCR-2026-036).
 // ---------------------------------------------------------------------------
 
@@ -47170,7 +47170,7 @@ fn g1_system_session() -> SessionKey {
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT: AtomicU64 = AtomicU64::new(0);
     SessionKey(format!(
-        "local:g1-octosense-{}#system",
+        "local:g1-recuragent-{}#system",
         NEXT.fetch_add(1, Ordering::Relaxed)
     ))
 }
@@ -48239,7 +48239,7 @@ async fn should_keep_external_prompts_from_the_host_when_the_side_table_forgets_
 
 #[tokio::test]
 async fn should_refuse_a_turn_id_live_in_another_session_on_a_host_managed_server() {
-    let first = SessionKey::with_profile_topic(MAIN_PROFILE_ID, "api", "octosense", "system");
+    let first = SessionKey::with_profile_topic(MAIN_PROFILE_ID, "api", "recuragent", "system");
     let second = SessionKey::with_profile_topic(MAIN_PROFILE_ID, "api", "web", "mine");
     let turn_id = TurnId::new();
     let (host_ws, _rx) = ws_connection_for_test(8);

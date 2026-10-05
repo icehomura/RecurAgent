@@ -2,8 +2,8 @@
 //!
 //! Each tenant represents a remote machine that connects to the VPS relay
 //! via frp tunnel. Tenants are stored as individual JSON files in the
-//! resolved state home's `tenants/` directory (`~/.ra`; a legacy install that
-//! already has `~/.ra` keeps using it — see [`ra_core::brand::state_home`]).
+//! resolved state home's `tenants/` directory (`~/.ra`; see
+//! [`ra_core::brand::state_home`]).
 
 use std::path::{Path, PathBuf};
 
@@ -34,10 +34,10 @@ pub struct TenantConfig {
     pub tunnel_token: String,
     /// Allocated SSH tunnel port on the VPS (6001–6999).
     pub ssh_port: u16,
-    /// Local ra serve port on the tenant machine.
+    /// Local RecurAgent serve port on the tenant machine.
     #[serde(default = "default_local_port")]
     pub local_port: u16,
-    /// Dashboard auth token for this tenant's ra serve instance.
+    /// Dashboard auth token for this tenant's RecurAgent serve instance.
     #[serde(default)]
     pub auth_token: String,
     /// User ID of the owner who registered this tenant (empty for admin-created).

@@ -293,7 +293,7 @@ pub fn build_goal_verifier_provider(config: &Config) -> Option<Arc<dyn LlmProvid
 ///
 /// One `ProfileRuntime` per `(host process, profile_id)`. The host
 /// process is `ra serve`, `ra gateway` (each subprocess), or
-/// `octoscode` — every entry point that today reads a [`UserProfile`]
+/// `ra-tui` — every entry point that today reads a [`UserProfile`]
 /// off disk and turns it into a running agent ends up holding an
 /// `Arc<ProfileRuntime>`.
 ///
@@ -681,8 +681,8 @@ pub struct ProfileRuntime {
 ///
 /// See the type-level docs on
 /// [`ra_memory::EpisodeStore`](EpisodeStore) for why the role
-/// split exists: redb is single-writer-single-process, and `ra
-/// serve` + `ra gateway` are separate OS processes that both
+/// split exists: redb is single-writer-single-process, and `RecurAgent
+/// serve` + `RecurAgent gateway` are separate OS processes that both
 /// bootstrap the same profile. Serve owns the canonical store;
 /// gateway is allowed to degrade so channel polling stays alive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1006,7 +1006,7 @@ impl ProfileRuntime {
     ///   store; drives the per-profile derivations.
     /// - `data_dir` — the resolved per-profile data dir, typically
     ///   `~/.ra/profiles/<id>/data`.
-    /// - `octos_home` — the host's `~/.ra` (or `--ra-home`
+    /// - `ra_home` — the host's `~/.ra` (or `--ra-home`
     ///   override). Used to seed `RA_HOME` in
     ///   `plugin_env_template`; defaults to `data_dir` when `None`.
     ///
@@ -1021,10 +1021,10 @@ impl ProfileRuntime {
     pub async fn bootstrap(
         profile: &UserProfile,
         data_dir: &Path,
-        octos_home: Option<&Path>,
+        ra_home: Option<&Path>,
         role: BootstrapRole,
     ) -> Result<Arc<Self>> {
-        Self::bootstrap_with_host_plugins(profile, data_dir, octos_home, role, None, None, None)
+        Self::bootstrap_with_host_plugins(profile, data_dir, ra_home, role, None, None, None)
             .await
     }
 
@@ -1038,7 +1038,7 @@ impl ProfileRuntime {
     pub async fn bootstrap_with_host_plugins(
         profile: &UserProfile,
         data_dir: &Path,
-        octos_home: Option<&Path>,
+        ra_home: Option<&Path>,
         role: BootstrapRole,
         host_plugins: Option<&crate::config::PluginsConfig>,
         host_voice: Option<&crate::config::VoiceConfig>,
@@ -1047,7 +1047,7 @@ impl ProfileRuntime {
         Self::bootstrap_replacing(
             profile,
             data_dir,
-            octos_home,
+            ra_home,
             role,
             host_plugins,
             host_voice,
@@ -1070,7 +1070,7 @@ impl ProfileRuntime {
     pub(crate) async fn bootstrap_replacing(
         profile: &UserProfile,
         data_dir: &Path,
-        octos_home: Option<&Path>,
+        ra_home: Option<&Path>,
         role: BootstrapRole,
         host_plugins: Option<&crate::config::PluginsConfig>,
         host_voice: Option<&crate::config::VoiceConfig>,
@@ -1102,7 +1102,7 @@ impl ProfileRuntime {
             }
         };
         Self::bootstrap_resolved_sharing(
-            profile, data_dir, octos_home, role, config, host_voice, false, None, shared,
+            profile, data_dir, ra_home, role, config, host_voice, false, None, shared,
         )
         .await
     }
@@ -1138,7 +1138,7 @@ impl ProfileRuntime {
     pub(crate) async fn bootstrap_resolved(
         profile: &UserProfile,
         data_dir: &Path,
-        octos_home: Option<&Path>,
+        ra_home: Option<&Path>,
         role: BootstrapRole,
         config: Config,
         host_voice: Option<&crate::config::VoiceConfig>,
@@ -1148,7 +1148,7 @@ impl ProfileRuntime {
         Self::bootstrap_resolved_sharing(
             profile,
             data_dir,
-            octos_home,
+            ra_home,
             role,
             config,
             host_voice,
@@ -1163,7 +1163,7 @@ impl ProfileRuntime {
     async fn bootstrap_resolved_sharing(
         profile: &UserProfile,
         data_dir: &Path,
-        octos_home: Option<&Path>,
+        ra_home: Option<&Path>,
         role: BootstrapRole,
         config: Config,
         host_voice: Option<&crate::config::VoiceConfig>,
@@ -1280,12 +1280,12 @@ impl ProfileRuntime {
 
         // Step 8: build the plugin env template — `RA_DATA_DIR`,
         // `RA_HOME`, `RA_PROFILE_ID`, `RA_VOICE_DIR` (each mirrored to its
-        // legacy `OCTOS_` spelling), and
+        // legacy `RA_` spelling), and
         // (when discoverable) `OMINIX_API_URL` — plus the profile's
         // search provider keys and any first-party skill env vars
         // (`OPENAI_API_KEY`, `GEMINI_API_KEY`, ...).
         let ominix_url = discover_ominix_url();
-        let effective_octos_home = octos_home
+        let effective_ra_home = ra_home
             .map(Path::to_path_buf)
             .unwrap_or_else(|| data_dir.to_path_buf());
         let mut plugin_env_template = profile_plugin_env(profile);
@@ -1297,7 +1297,7 @@ impl ProfileRuntime {
         push_runtime_plugin_env(
             &mut plugin_env_template,
             data_dir,
-            &effective_octos_home,
+            &effective_ra_home,
             Some(profile.id.as_str()),
             ominix_url.as_deref(),
         );
@@ -1305,14 +1305,14 @@ impl ProfileRuntime {
         // Step 9: build the base ToolRegistry.
         //
         // Sandbox config is profile-derived. We augment
-        // `read_allow_paths` with the ra home so the shell sandbox
+        // `read_allow_paths` with the RecurAgent home so the shell sandbox
         // can read shared skills/configs (mirrors gateway's existing
         // setup).
         let mut sandbox_config = config.sandbox.clone();
         if sandbox_config.read_allow_paths.is_empty() {
             sandbox_config
                 .read_allow_paths
-                .push(effective_octos_home.to_string_lossy().into_owned());
+                .push(effective_ra_home.to_string_lossy().into_owned());
         }
         let default_sandbox = sandbox_config.clone();
         let sandbox = create_sandbox(&sandbox_config);
@@ -1368,13 +1368,12 @@ impl ProfileRuntime {
         // the per-profile `data_dir/skills/` are layered on top so the
         // gateway behaviour is matched 1:1.
         //
-        // Legacy HOME-rooted globals (`~/.ra/plugins`, `~/.ra/skills`)
-        // are NO LONGER scanned — `Config::plugin_dirs_from_project` emits a
-        // one-shot migration warning on first detection.
+        // HOME-rooted globals (`~/.ra/plugins`, `~/.ra/skills`) are NOT
+        // scanned — installs live under `<data_dir>/skills/` per profile.
         let plugin_work_dir = data_dir.join("skill-output");
         let _ = std::fs::create_dir_all(&plugin_work_dir);
-        let mut plugin_dirs = Config::plugin_dirs_from_project(&effective_octos_home);
-        let platform_dir = effective_octos_home.join(ra_agent::bootstrap::PLATFORM_SKILLS_DIR);
+        let mut plugin_dirs = Config::plugin_dirs_from_project(&effective_ra_home);
+        let platform_dir = effective_ra_home.join(ra_agent::bootstrap::PLATFORM_SKILLS_DIR);
         if platform_dir.exists() && !plugin_dirs.contains(&platform_dir) {
             plugin_dirs.push(platform_dir);
         }
@@ -1413,7 +1412,7 @@ impl ProfileRuntime {
             work_dir: plugin_work_dir,
             synthesis_config: None,
             require_signed: config.plugins.require_signed,
-            verified_cache_dir: effective_octos_home.join("cache").join("verified"),
+            verified_cache_dir: effective_ra_home.join("cache").join("verified"),
             tool_policy: config.tool_policy.clone(),
             context_filter: config.context_filter.clone(),
             host_hooks: config.hooks.clone(),
@@ -1452,7 +1451,7 @@ impl ProfileRuntime {
         // it just like the gateway path does at
         // `crates/ra-cli/src/session_actor.rs:2283-2305`. The serve
         // path is the one `ra serve` mounts for web clients; prior
-        // to this, only the gateway (ra chat / bus channels)
+        // to this, only the gateway (RecurAgent chat / bus channels)
         // registered `run_pipeline`, so the LLM in serve mode received
         // `"No tools matched"` when it tried `activate_tools(["run_pipeline"])`
         // for `深度研究X` queries (per PR #930's ACT-DIRECTLY rule).
@@ -1517,7 +1516,7 @@ impl ProfileRuntime {
                 data_dir: PathBuf,
                 policy: Option<ToolPolicy>,
                 plugin_dirs: Vec<PathBuf>,
-                octos_home: PathBuf,
+                ra_home: PathBuf,
                 plugin_require_signed: bool,
                 /// NEW-06 fix: forwarded to every worker `Agent` via
                 /// `RunPipelineTool::with_embedder` so pipeline-spawned
@@ -1560,7 +1559,7 @@ impl ProfileRuntime {
                     // read-only session's validators must not regain removed
                     // writes/network.
                     .with_sandbox(sandbox.clone())
-                    .with_octos_home(self.octos_home.clone());
+                    .with_ra_home(self.ra_home.clone());
                     if let Some(ref embedder) = self.embedder {
                         pt = pt.with_embedder(embedder.clone());
                     }
@@ -1578,7 +1577,7 @@ impl ProfileRuntime {
                     data_dir: data_dir.to_path_buf(),
                     policy: config.tool_policy.clone(),
                     plugin_dirs: plugin_dirs.clone(),
-                    octos_home: effective_octos_home.clone(),
+                    ra_home: effective_ra_home.clone(),
                     plugin_require_signed: config.plugins.require_signed,
                     embedder: embedder.clone(),
                     provider_router: build_sub_provider_router(&config),
@@ -1620,7 +1619,7 @@ impl ProfileRuntime {
         // dropped when the receiver is dropped at the end of this
         // function. That preserves the pre-M11-F semantics — cron CRUD
         // (`add` / `list` / `remove` / `enable` / `disable`) works in
-        // serve mode but actual firing only happens under `ra
+        // serve mode but actual firing only happens under `RecurAgent
         // gateway`. We keep the `Arc<CronService>` alive by stashing it
         // on `ProfileRuntime::cron_service`; without that field the
         // tokio task `start()` spawned would be cancelled the moment
@@ -2441,7 +2440,7 @@ mod tests {
     #[allow(unsafe_code)]
     async fn profile_runtime_bootstrap_includes_skill_prompt_fragments() {
         // Uniquely-named env var to avoid contention with other tests.
-        const KEY_NAME: &str = "OCTOS_M11_891_TEST_API_KEY";
+        const KEY_NAME: &str = "ra_M11_891_TEST_API_KEY";
         // SAFETY: this env var name is unique to this test; nothing
         // else in the test suite reads or writes it. We also unset it
         // on the way out via the guard below.
@@ -2540,7 +2539,7 @@ mod tests {
     }
 
     /// Regression test for the M11-F production crashloop tracked in
-    /// `octos-org/octos#899`:
+    /// `icehomura/ra#899`:
     ///
     /// `ra serve` and `ra gateway` are separate OS processes,
     /// both calling `ProfileRuntime::bootstrap` against the same
@@ -2560,7 +2559,7 @@ mod tests {
     #[tokio::test]
     #[allow(unsafe_code)]
     async fn bootstrap_succeeds_when_redb_already_owned_by_sibling_process() {
-        const KEY_NAME: &str = "OCTOS_GH899_TEST_API_KEY";
+        const KEY_NAME: &str = "ra_GH899_TEST_API_KEY";
         // SAFETY: env var name is unique to this test.
         unsafe {
             std::env::set_var(KEY_NAME, "test-key-sk-fake");
@@ -2651,7 +2650,7 @@ mod tests {
     #[tokio::test]
     #[allow(unsafe_code)]
     async fn second_serve_role_bootstrap_fails_loudly_when_redb_already_owned() {
-        const KEY_NAME: &str = "OCTOS_GH899_SERVE_STRICT_TEST_API_KEY";
+        const KEY_NAME: &str = "ra_GH899_SERVE_STRICT_TEST_API_KEY";
         // SAFETY: env var name is unique to this test.
         unsafe {
             std::env::set_var(KEY_NAME, "test-key-sk-fake");
@@ -2802,12 +2801,12 @@ mod tests {
     /// not get dropped when bootstrap returns.
     #[tokio::test]
     async fn profile_runtime_bootstrap_registers_cron_tool() {
-        let _key = ScopedEnvKey::set("OCTOS_M11F_REG2_KEY");
+        let _key = ScopedEnvKey::set("ra_M11F_REG2_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let data_dir = tmp.path().join("profile-data");
         std::fs::create_dir_all(&data_dir).unwrap();
 
-        let profile = fixture_profile("reg2", "OCTOS_M11F_REG2_KEY");
+        let profile = fixture_profile("reg2", "ra_M11F_REG2_KEY");
         let rt = ProfileRuntime::bootstrap(&profile, &data_dir, None, BootstrapRole::Serve)
             .await
             .expect("bootstrap should succeed");
@@ -2824,33 +2823,32 @@ mod tests {
     }
 
     /// M11-F regression fix REG-5: bootstrap's plugin_dirs must include
-    /// the *global* `~/.ra/plugins` and `~/.ra/skills` (legacy
-    /// `~/.ra/plugins`, `~/.ra/skills`) (via
+    /// the *global* `~/.ra/plugins` and `~/.ra/skills` (via
     /// `Config::plugin_dirs_from_project`) so admin-installed skills
     /// are visible to every profile, matching the pre-M11-F serve
     /// behaviour at `serve.rs:1224`.
     ///
-    /// We construct an `octos_home` override and plant a fake skill
+    /// We construct an `ra_home` override and plant a fake skill
     /// under `<ra-home>/plugins/`, then assert the resulting
     /// `plugin_dirs` set includes that directory. We do not require
     /// the skill to load (loaders gate on a manifest); we only assert
     /// the dir was *scanned*.
     #[tokio::test]
     async fn profile_runtime_bootstrap_includes_global_plugin_dirs() {
-        let _key = ScopedEnvKey::set("OCTOS_M11F_REG5_KEY");
+        let _key = ScopedEnvKey::set("ra_M11F_REG5_KEY");
         let tmp = tempfile::tempdir().unwrap();
-        let octos_home = tmp.path().join("ra-home");
-        let data_dir = octos_home.join("profiles").join("reg5").join("data");
+        let ra_home = tmp.path().join("ra-home");
+        let data_dir = ra_home.join("profiles").join("reg5").join("data");
         std::fs::create_dir_all(&data_dir).unwrap();
 
         // Plant the global "<ra-home>/plugins" dir so
         // `Config::plugin_dirs_from_project` picks it up.
-        let global_plugins = octos_home.join("plugins");
+        let global_plugins = ra_home.join("plugins");
         std::fs::create_dir_all(&global_plugins).unwrap();
 
-        let profile = fixture_profile("reg5", "OCTOS_M11F_REG5_KEY");
+        let profile = fixture_profile("reg5", "ra_M11F_REG5_KEY");
         let rt =
-            ProfileRuntime::bootstrap(&profile, &data_dir, Some(&octos_home), BootstrapRole::Serve)
+            ProfileRuntime::bootstrap(&profile, &data_dir, Some(&ra_home), BootstrapRole::Serve)
                 .await
                 .expect("bootstrap should succeed");
 
@@ -2869,10 +2867,10 @@ mod tests {
     async fn subaccount_skill_loading_preserves_shell() {
         use std::os::unix::fs::PermissionsExt;
 
-        let _key = ScopedEnvKey::set("OCTOS_ISSUE_87_SUBACCOUNT_KEY");
+        let _key = ScopedEnvKey::set("ra_ISSUE_87_SUBACCOUNT_KEY");
         let tmp = tempfile::tempdir().unwrap();
-        let octos_home = tmp.path().join("ra-home");
-        let data_dir = octos_home.join("profiles").join("mofa-child").join("data");
+        let ra_home = tmp.path().join("ra-home");
+        let data_dir = ra_home.join("profiles").join("mofa-child").join("data");
         let skill_dir = data_dir.join("skills").join("issue-87-probe");
         std::fs::create_dir_all(&skill_dir).unwrap();
 
@@ -2899,12 +2897,12 @@ mod tests {
         .unwrap();
         std::fs::set_permissions(&exec_path, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-        let mut profile = fixture_profile("mofa-child", "OCTOS_ISSUE_87_SUBACCOUNT_KEY");
+        let mut profile = fixture_profile("mofa-child", "ra_ISSUE_87_SUBACCOUNT_KEY");
         profile.parent_id = Some("mofa-parent".to_string());
         profile.public_subdomain = Some("mofa-child-public".to_string());
 
         let rt =
-            ProfileRuntime::bootstrap(&profile, &data_dir, Some(&octos_home), BootstrapRole::Serve)
+            ProfileRuntime::bootstrap(&profile, &data_dir, Some(&ra_home), BootstrapRole::Serve)
                 .await
                 .expect("sub-account profile bootstrap should succeed");
 
@@ -2965,10 +2963,10 @@ mod tests {
     async fn profile_runtime_bootstrap_honours_host_require_signed() {
         use std::os::unix::fs::PermissionsExt;
 
-        let _key = ScopedEnvKey::set("OCTOS_HOST_SIGN_KEY");
+        let _key = ScopedEnvKey::set("ra_HOST_SIGN_KEY");
         let tmp = tempfile::tempdir().unwrap();
-        let octos_home = tmp.path().join("ra-home");
-        let data_dir = octos_home.join("profiles").join("sigtest").join("data");
+        let ra_home = tmp.path().join("ra-home");
+        let data_dir = ra_home.join("profiles").join("sigtest").join("data");
         let skills_dir = data_dir.join("skills");
         std::fs::create_dir_all(&skills_dir).unwrap();
 
@@ -2988,7 +2986,7 @@ mod tests {
         std::fs::write(&exec_path, b"#!/bin/sh\necho unsigned").unwrap();
         std::fs::set_permissions(&exec_path, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-        let profile = fixture_profile("sigtest", "OCTOS_HOST_SIGN_KEY");
+        let profile = fixture_profile("sigtest", "ra_HOST_SIGN_KEY");
         let host_plugins = crate::config::PluginsConfig {
             require_signed: true,
         };
@@ -2996,7 +2994,7 @@ mod tests {
         let rt = ProfileRuntime::bootstrap_with_host_plugins(
             &profile,
             &data_dir,
-            Some(&octos_home),
+            Some(&ra_home),
             BootstrapRole::Serve,
             Some(&host_plugins),
             None,
@@ -3019,13 +3017,13 @@ mod tests {
     async fn should_rebuild_plugin_layer_without_reopening_long_lived_stores() {
         use std::os::unix::fs::PermissionsExt;
 
-        let _key = ScopedEnvKey::set("OCTOS_PLUGIN_RELOAD_KEY");
+        let _key = ScopedEnvKey::set("ra_PLUGIN_RELOAD_KEY");
         let tmp = tempfile::tempdir().unwrap();
-        let octos_home = tmp.path().join("ra-home");
-        let data_dir = octos_home.join("profiles").join("reload").join("data");
-        let profile = fixture_profile("reload", "OCTOS_PLUGIN_RELOAD_KEY");
+        let ra_home = tmp.path().join("ra-home");
+        let data_dir = ra_home.join("profiles").join("reload").join("data");
+        let profile = fixture_profile("reload", "ra_PLUGIN_RELOAD_KEY");
         let original =
-            ProfileRuntime::bootstrap(&profile, &data_dir, Some(&octos_home), BootstrapRole::Serve)
+            ProfileRuntime::bootstrap(&profile, &data_dir, Some(&ra_home), BootstrapRole::Serve)
                 .await
                 .unwrap();
         assert!(original.tool_specs.get("reload_action_tool").is_none());
@@ -3082,7 +3080,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_keep_startup_best_effort_but_reject_rebuild_after_discovery_rejection() {
-        let _key = ScopedEnvKey::set("OCTOS_PLUGIN_RELOAD_DISCOVERY_KEY");
+        let _key = ScopedEnvKey::set("ra_PLUGIN_RELOAD_DISCOVERY_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let data_dir = tmp.path().join("profile-data");
         let plugin_dir = data_dir.join("skills").join("invalid-discovery-plugin");
@@ -3100,7 +3098,7 @@ mod tests {
             }"#,
         )
         .unwrap();
-        let profile = fixture_profile("reload-discovery", "OCTOS_PLUGIN_RELOAD_DISCOVERY_KEY");
+        let profile = fixture_profile("reload-discovery", "ra_PLUGIN_RELOAD_DISCOVERY_KEY");
 
         let original = ProfileRuntime::bootstrap(&profile, &data_dir, None, BootstrapRole::Serve)
             .await
@@ -3121,10 +3119,10 @@ mod tests {
 
     #[tokio::test]
     async fn should_keep_shared_cron_alive_until_replacement_runtime_drops() {
-        let _key = ScopedEnvKey::set("OCTOS_PLUGIN_RELOAD_CRON_KEY");
+        let _key = ScopedEnvKey::set("ra_PLUGIN_RELOAD_CRON_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let data_dir = tmp.path().join("profile-data");
-        let profile = fixture_profile("reload-cron", "OCTOS_PLUGIN_RELOAD_CRON_KEY");
+        let profile = fixture_profile("reload-cron", "ra_PLUGIN_RELOAD_CRON_KEY");
         let original = ProfileRuntime::bootstrap(&profile, &data_dir, None, BootstrapRole::Serve)
             .await
             .unwrap();
@@ -3149,10 +3147,10 @@ mod tests {
 
     #[tokio::test]
     async fn should_fail_rebuild_on_fatal_http_skill_discovery_error() {
-        let _key = ScopedEnvKey::set("OCTOS_PLUGIN_RELOAD_HTTP_KEY");
+        let _key = ScopedEnvKey::set("ra_PLUGIN_RELOAD_HTTP_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let data_dir = tmp.path().join("profile-data");
-        let profile = fixture_profile("reload-http", "OCTOS_PLUGIN_RELOAD_HTTP_KEY");
+        let profile = fixture_profile("reload-http", "ra_PLUGIN_RELOAD_HTTP_KEY");
         let original = ProfileRuntime::bootstrap(&profile, &data_dir, None, BootstrapRole::Serve)
             .await
             .unwrap();
@@ -3187,21 +3185,21 @@ mod tests {
     async fn should_reject_unsigned_plugins_when_rebuilding_under_host_strict_signing() {
         use std::os::unix::fs::PermissionsExt;
 
-        let _key = ScopedEnvKey::set("OCTOS_PLUGIN_RELOAD_SIGN_KEY");
+        let _key = ScopedEnvKey::set("ra_PLUGIN_RELOAD_SIGN_KEY");
         let tmp = tempfile::tempdir().unwrap();
-        let octos_home = tmp.path().join("ra-home");
-        let data_dir = octos_home
+        let ra_home = tmp.path().join("ra-home");
+        let data_dir = ra_home
             .join("profiles")
             .join("reload-signed")
             .join("data");
-        let profile = fixture_profile("reload-signed", "OCTOS_PLUGIN_RELOAD_SIGN_KEY");
+        let profile = fixture_profile("reload-signed", "ra_PLUGIN_RELOAD_SIGN_KEY");
         let strict = crate::config::PluginsConfig {
             require_signed: true,
         };
         let original = ProfileRuntime::bootstrap_with_host_plugins(
             &profile,
             &data_dir,
-            Some(&octos_home),
+            Some(&ra_home),
             BootstrapRole::Serve,
             Some(&strict),
             None,
@@ -3255,12 +3253,12 @@ mod tests {
     /// task, so we settle for the durable observable (`running` flag).
     #[tokio::test]
     async fn profile_runtime_drop_signals_cron_shutdown() {
-        let _key = ScopedEnvKey::set("OCTOS_M11F_REG2_DROP_KEY");
+        let _key = ScopedEnvKey::set("ra_M11F_REG2_DROP_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let data_dir = tmp.path().join("profile-data");
         std::fs::create_dir_all(&data_dir).unwrap();
 
-        let profile = fixture_profile("reg2-drop", "OCTOS_M11F_REG2_DROP_KEY");
+        let profile = fixture_profile("reg2-drop", "ra_M11F_REG2_DROP_KEY");
         let rt = ProfileRuntime::bootstrap(&profile, &data_dir, None, BootstrapRole::Serve)
             .await
             .expect("bootstrap should succeed");
@@ -3296,12 +3294,12 @@ mod tests {
     /// `session.rs::session_runtime_agent_inherits_profile_hooks`.
     #[tokio::test]
     async fn profile_runtime_bootstrap_initializes_hook_executor_field() {
-        let _key = ScopedEnvKey::set("OCTOS_M11F_REG3_KEY");
+        let _key = ScopedEnvKey::set("ra_M11F_REG3_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let data_dir = tmp.path().join("profile-data");
         std::fs::create_dir_all(&data_dir).unwrap();
 
-        let profile = fixture_profile("reg3", "OCTOS_M11F_REG3_KEY");
+        let profile = fixture_profile("reg3", "ra_M11F_REG3_KEY");
         let rt = ProfileRuntime::bootstrap(&profile, &data_dir, None, BootstrapRole::Serve)
             .await
             .expect("bootstrap should succeed");
@@ -3343,12 +3341,12 @@ mod tests {
     ///      `crates/ra-agent/src/tools/spawn.rs::ensure_subagent_tools_available`).
     #[tokio::test]
     async fn profile_runtime_bootstrap_populates_pipeline_factory_for_spawn_children() {
-        let _key = ScopedEnvKey::set("OCTOS_NEW07_PIPELINE_FACTORY_KEY");
+        let _key = ScopedEnvKey::set("ra_NEW07_PIPELINE_FACTORY_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let data_dir = tmp.path().join("profile-data");
         std::fs::create_dir_all(&data_dir).unwrap();
 
-        let profile = fixture_profile("new07", "OCTOS_NEW07_PIPELINE_FACTORY_KEY");
+        let profile = fixture_profile("new07", "ra_NEW07_PIPELINE_FACTORY_KEY");
         let rt = ProfileRuntime::bootstrap(&profile, &data_dir, None, BootstrapRole::Serve)
             .await
             .expect("bootstrap should succeed");
@@ -3494,10 +3492,10 @@ mod tests {
     fn should_resolve_goal_verifier_lane_key_from_its_api_key_env() {
         let mut env_vars = HashMap::new();
         env_vars.insert(
-            "OCTOS_TEST_1935_LANE_KEY".to_string(),
+            "ra_TEST_1935_LANE_KEY".to_string(),
             "lane-secret".to_string(),
         );
-        let config = openai_goal_verifier_config("OCTOS_TEST_1935_LANE_KEY", env_vars);
+        let config = openai_goal_verifier_config("ra_TEST_1935_LANE_KEY", env_vars);
         let lane = build_goal_verifier_provider(&config)
             .expect("lane with a resolvable api_key_env must build");
         assert_eq!(lane.model_id(), "gpt-4o-mini");
@@ -3514,13 +3512,13 @@ mod tests {
     /// the mechanism that makes that failure impossible:
     /// `build_goal_verifier_provider` sets `bypass_auth_store`, which removes
     /// the auth-store arm from `resolve_api_key` entirely, so this assertion
-    /// is deterministic on ANY host — including one where `ra auth login
+    /// is deterministic on ANY host — including one where `RecurAgent auth login
     /// -p openai` has stored a credential that the non-bypassed chain would
     /// have returned before ever consulting the lane's env var.
     #[test]
     fn should_refuse_goal_verifier_lane_when_api_key_env_unset_even_with_auth_store() {
         let config =
-            openai_goal_verifier_config("OCTOS_TEST_1935_DEFINITELY_UNSET_KEY", HashMap::new());
+            openai_goal_verifier_config("ra_TEST_1935_DEFINITELY_UNSET_KEY", HashMap::new());
         assert!(
             build_goal_verifier_provider(&config).is_none(),
             "unset lane api_key_env must fail the lane build (fail-open to the \

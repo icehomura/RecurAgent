@@ -1,7 +1,7 @@
 //! M7.2 — MCP server mode acceptance tests.
 //!
 //! These tests exercise the session-level MCP server: one MCP tool =
-//! one full ra session that runs to completion and returns the
+//! one full RecurAgent session that runs to completion and returns the
 //! workspace-contract artifact to the outer caller.
 //!
 //! The server supports two transports:
@@ -20,7 +20,7 @@ use ra_agent::harness_events::HarnessEventPayload;
 use ra_agent::mcp_server::{
     McpServer, McpServerError, McpSessionCost, McpSessionDispatch, McpSessionOutcome,
     SessionLifecycleObserver, build_initialize_response, build_tools_list_response,
-    constant_time_eq, dispatch_run_octos_session, parse_bearer_token, render_mcp_error,
+    constant_time_eq, dispatch_run_ra_session, parse_bearer_token, render_mcp_error,
 };
 use ra_agent::task_supervisor::{TaskLifecycleState, TaskSupervisor};
 use ra_agent::validators::{ValidatorOutcome, ValidatorPhase, ValidatorStatus};
@@ -171,7 +171,7 @@ async fn should_expose_session_as_mcp_tool_via_stdio() {
 }
 
 #[test]
-fn run_octos_session_schema_advertises_arc_agent_task_v1() {
+fn run_ra_session_schema_advertises_arc_agent_task_v1() {
     let dispatch = Arc::new(ScriptedDispatch::with_outcome(sample_ready_outcome()));
     let supervisor = Arc::new(TaskSupervisor::new());
     let server = McpServer::new(dispatch, supervisor);
@@ -570,7 +570,7 @@ async fn should_directly_dispatch_session_via_helper() {
         "name": "run_ra_session",
         "arguments": {"contract": "slides_delivery", "input": {"topic": "helper"}}
     });
-    let result = dispatch_run_octos_session(&*dispatch, &supervisor, &params)
+    let result = dispatch_run_ra_session(&*dispatch, &supervisor, &params)
         .await
         .expect("dispatch succeeds");
     let body: Value = serde_json::from_str(result["content"][0]["text"].as_str().unwrap()).unwrap();

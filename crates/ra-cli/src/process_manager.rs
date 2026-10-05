@@ -54,7 +54,7 @@ pub struct ProcessManager {
     /// Section B (codex review round-5 P1.2): host-level
     /// `plugins.require_signed` policy that spawned gateway processes
     /// must inherit. When `true`, every gateway gets
-    /// `RA_PLUGINS_REQUIRE_SIGNED=1` (legacy `OCTOS_PLUGINS_REQUIRE_SIGNED`)
+    /// `RA_PLUGINS_REQUIRE_SIGNED=1` (legacy `ra_PLUGINS_REQUIRE_SIGNED`)
     /// in its env so its `Config::from_file`
     /// OR-merges the flag onto whatever the profile JSON declared.
     host_plugins_require_signed: bool,
@@ -273,7 +273,7 @@ impl ProcessManager {
 
     /// Section B (codex review round-5 P1.2): mirror the host's
     /// `plugins.require_signed` onto every spawned gateway via
-    /// `RA_PLUGINS_REQUIRE_SIGNED=1` (legacy `OCTOS_PLUGINS_REQUIRE_SIGNED`).
+    /// `RA_PLUGINS_REQUIRE_SIGNED=1` (legacy `ra_PLUGINS_REQUIRE_SIGNED`).
     /// Default is `false` (legacy
     /// permissive path).
     pub fn with_host_plugins_require_signed(mut self, require_signed: bool) -> Self {
@@ -470,9 +470,9 @@ impl ProcessManager {
             cmd.arg("--api-port").arg(port.to_string());
         }
 
-        // Pass ra home dir so gateway can open ProfileStore for /account commands
+        // Pass RecurAgent home dir so gateway can open ProfileStore for /account commands
         cmd.arg("--ra-home")
-            .arg(self.profile_store.octos_home_dir());
+            .arg(self.profile_store.ra_home_dir());
 
         // Sub-account: pass parent profile path and merge parent env vars
         tracing::debug!(profile = %profile.id, "start: checking sub-account");
@@ -498,7 +498,7 @@ impl ProcessManager {
                         // profile env_vars entry that would override
                         // it (sub-account inheritance otherwise lets
                         // a parent silently flip strict signing on).
-                        if key.eq_ignore_ascii_case("OCTOS_PLUGINS_REQUIRE_SIGNED")
+                        if key.eq_ignore_ascii_case("ra_PLUGINS_REQUIRE_SIGNED")
                             || key.eq_ignore_ascii_case("RA_PLUGINS_REQUIRE_SIGNED")
                         {
                             tracing::warn!(
@@ -512,8 +512,8 @@ impl ProcessManager {
                         // The host memory envs are equally
                         // host-reserved: a parent profile must not
                         // impersonate them toward sub-accounts.
-                        if key.eq_ignore_ascii_case("OCTOS_MEMORY_MAX_INJECT_TOKENS")
-                            || key.eq_ignore_ascii_case("OCTOS_MEMORY_REFRESH_ENABLED")
+                        if key.eq_ignore_ascii_case("ra_MEMORY_MAX_INJECT_TOKENS")
+                            || key.eq_ignore_ascii_case("ra_MEMORY_REFRESH_ENABLED")
                             || key.eq_ignore_ascii_case("RA_MEMORY_MAX_INJECT_TOKENS")
                             || key.eq_ignore_ascii_case("RA_MEMORY_REFRESH_ENABLED")
                             || key.eq_ignore_ascii_case(HOST_ASR_LANGUAGE_ENV)
@@ -539,16 +539,16 @@ impl ProcessManager {
         cmd.env("OMINIX_API_URL", &ominix_url);
 
         // Admin mode: inject RA_SERVE_URL / RA_ADMIN_TOKEN (and the legacy
-        // OCTOS_ spellings) so gateways keep working across the rename.
+        // RA_ spellings) so gateways keep working across the rename.
         if profile.config.admin_mode {
             if let Some(port) = self.serve_port {
                 let url = format!("http://127.0.0.1:{}", port);
                 cmd.env("RA_SERVE_URL", &url);
-                cmd.env("OCTOS_SERVE_URL", url);
+                cmd.env("ra_SERVE_URL", url);
             }
             if let Some(token) = &self.admin_token {
                 cmd.env("RA_ADMIN_TOKEN", token);
-                cmd.env("OCTOS_ADMIN_TOKEN", token);
+                cmd.env("ra_ADMIN_TOKEN", token);
             }
         }
 
@@ -603,7 +603,7 @@ impl ProcessManager {
             // env is reserved for the parent serve to control. A profile
             // env_vars entry with this key would otherwise silently turn
             // off the host policy in the spawned gateway — refuse it.
-            if key.eq_ignore_ascii_case("OCTOS_PLUGINS_REQUIRE_SIGNED")
+            if key.eq_ignore_ascii_case("ra_PLUGINS_REQUIRE_SIGNED")
                 || key.eq_ignore_ascii_case("RA_PLUGINS_REQUIRE_SIGNED")
             {
                 tracing::warn!(
@@ -616,8 +616,8 @@ impl ProcessManager {
             // Same reservation for the host memory settings: profiles
             // override them via their own `memory` config block, not by
             // spoofing the host-controlled env vars.
-            if key.eq_ignore_ascii_case("OCTOS_MEMORY_MAX_INJECT_TOKENS")
-                || key.eq_ignore_ascii_case("OCTOS_MEMORY_REFRESH_ENABLED")
+            if key.eq_ignore_ascii_case("ra_MEMORY_MAX_INJECT_TOKENS")
+                || key.eq_ignore_ascii_case("ra_MEMORY_REFRESH_ENABLED")
                 || key.eq_ignore_ascii_case("RA_MEMORY_MAX_INJECT_TOKENS")
                 || key.eq_ignore_ascii_case("RA_MEMORY_REFRESH_ENABLED")
                 || key.eq_ignore_ascii_case(HOST_ASR_LANGUAGE_ENV)
@@ -640,7 +640,7 @@ impl ProcessManager {
         // var onto whatever the profile JSON declares.
         if self.host_plugins_require_signed {
             cmd.env("RA_PLUGINS_REQUIRE_SIGNED", "1");
-            cmd.env("OCTOS_PLUGINS_REQUIRE_SIGNED", "1");
+            cmd.env("ra_PLUGINS_REQUIRE_SIGNED", "1");
         }
         // Set-or-CLEAR: `Command` inherits the parent environment, so when
         // the host does not forward a memory setting we must remove any
@@ -650,22 +650,22 @@ impl ProcessManager {
         match self.host_max_inject_tokens {
             Some(n) => {
                 cmd.env("RA_MEMORY_MAX_INJECT_TOKENS", n.to_string());
-                cmd.env("OCTOS_MEMORY_MAX_INJECT_TOKENS", n.to_string());
+                cmd.env("ra_MEMORY_MAX_INJECT_TOKENS", n.to_string());
             }
             None => {
                 cmd.env_remove("RA_MEMORY_MAX_INJECT_TOKENS");
-                cmd.env_remove("OCTOS_MEMORY_MAX_INJECT_TOKENS");
+                cmd.env_remove("ra_MEMORY_MAX_INJECT_TOKENS");
             }
         }
         if self.host_memory_refresh_enabled {
             cmd.env("RA_MEMORY_REFRESH_ENABLED", "1");
-            cmd.env("OCTOS_MEMORY_REFRESH_ENABLED", "1");
+            cmd.env("ra_MEMORY_REFRESH_ENABLED", "1");
         } else {
             // DEFAULT-ON semantics: an absent var means enabled, so a
             // disabled host must mirror an explicit OFF — env_remove would
             // let the child fall back to on.
             cmd.env("RA_MEMORY_REFRESH_ENABLED", "0");
-            cmd.env("OCTOS_MEMORY_REFRESH_ENABLED", "0");
+            cmd.env("ra_MEMORY_REFRESH_ENABLED", "0");
         }
         match self.host_asr_language.as_deref() {
             Some(language) => {
@@ -1331,7 +1331,7 @@ impl ProcessManager {
             // Check in bundled app-skills
             let bundled = self
                 .profile_store
-                .octos_home_dir()
+                .ra_home_dir()
                 .join("bundled-app-skills/wechat-bridge/main");
             if bundled.exists() {
                 bundled

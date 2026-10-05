@@ -1,7 +1,7 @@
 ra
 Copyright 2026 the ra authors.
 
-This work is a fork of "octos" — https://github.com/octos-org/octos — which is
+This work is a fork of "ra" — https://github.com/icehomura/ra — which is
 licensed under the Apache License, Version 2.0 (the full text is in LICENSE).
 The upstream project and its contributors retain their copyright in everything
 here that derives from their work. Fork point: upstream commit
@@ -17,12 +17,12 @@ code as an explicit legacy path or recorded in the protocol notes under api/.
 Third-party sources vendored into this repository keep their own licenses and
 carry provenance notes next to them:
 
-    vendor/PROVENANCE.md            the OctoScript / makepad-script VM chain
-                                    (github.com/OctoSense-org/Octoscript,
-                                     github.com/OctoSense-org/makepad)
+    vendor/PROVENANCE.md            the Rascript / makepad-script VM chain
+                                    (github.com/icehomura/Rascript,
+                                     github.com/icehomura/makepad)
     tui/vendor/ttfx/PROVENANCE.md   the splash animation engine
                                     (github.com/omacom-io/ttfx)
 
-Upstream references in the source (for example `octos-org/octos#NNNN` issue
+Upstream references in the source (for example `icehomura/ra#NNNN` issue
 citations, or the repository URL still recorded as this checkout's `origin`)
 are historical and intentionally left in place.

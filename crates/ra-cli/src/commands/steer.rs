@@ -213,7 +213,7 @@ impl Executable for SteerCommand {
                 println!("steer queued: {}", note_path.display());
                 // OLP-CTRL slice 2: wake the steered session through the
                 // SAME continuation mechanism the goal-progress wake uses.
-                // In-process only: when ra runs the serve/scheduler, the
+                // In-process only: when RecurAgent runs the serve/scheduler, the
                 // enqueue lands on the live orchestrator; from a cold CLI
                 // (serve in another process) the durable .reviewer-notes
                 // sidecar is the doorbell and the session's next tick /
@@ -345,9 +345,9 @@ mod tests {
     }
     /// EVERY profile in `state.profiles` — a lookup keyed on
     /// `MAIN_PROFILE_ID` ("_main") was a dead door because the runtime
-    /// bootstrap registers "ra". This test pins the sweep to the
-    /// PRODUCTION profile id: the CLI resolves under "ra" (same as
-    /// the bootstrap), so a sweep addressed at "ra" must find the
+    /// bootstrap registers "RecurAgent". This test pins the sweep to the
+    /// PRODUCTION profile id: the CLI resolves under "RecurAgent" (same as
+    /// the bootstrap), so a sweep addressed at "RecurAgent" must find the
     /// queued steer — no test-injected profile name.
     #[test]
     fn olp_ctrl_steer_sweep_uses_production_profile_id() {
@@ -357,7 +357,7 @@ mod tests {
         append_reviewer_steer(temp.path(), session, "读黑板第 7 条").expect("queue");
         let orchestrator = crate::autonomy::agent_orchestrator::default_agent_orchestrator();
         let key = ra_core::SessionKey(session.to_owned());
-        // The PRODUCTION profile id is "ra" (NOT MAIN_PROFILE_ID
+        // The PRODUCTION profile id is "RecurAgent" (NOT MAIN_PROFILE_ID
         // "_main") — sweeping under it must enqueue.
         assert_ne!(
             "ra",

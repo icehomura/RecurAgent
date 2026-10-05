@@ -1,6 +1,6 @@
 //! `ra serve --host-managed`: a loopback server owned by an embedding host.
 //!
-//! An app shell (for example an OctoSense phone or desktop shell) runs ONE
+//! An app shell (for example an RecurAgent phone or desktop shell) runs ONE
 //! `ra serve` for its own native clients and may let the person attach an
 //! external client (a web client or a terminal UI) to the same agent runtime.
 //! Loopback is not an authentication boundary on a phone (any installed app
@@ -53,13 +53,13 @@ pub const HOST_TOKEN_ENV: &str = "RA_AUTH_TOKEN";
 /// The name the client still exports for [`HOST_TOKEN_ENV`]; refused like the
 /// new spelling so an older install cannot leak the token through the
 /// environment either.
-pub const LEGACY_HOST_TOKEN_ENV: &str = "OCTOS_AUTH_TOKEN";
+pub const LEGACY_HOST_TOKEN_ENV: &str = "ra_AUTH_TOKEN";
 
 /// Also refused in this mode, for the same reason.
 pub const EXTERNAL_TOKEN_ENV: &str = "RA_HOST_EXTERNAL_TOKEN";
 
 /// The name the client still exports for [`EXTERNAL_TOKEN_ENV`]; refused too.
-pub const LEGACY_EXTERNAL_TOKEN_ENV: &str = "OCTOS_HOST_EXTERNAL_TOKEN";
+pub const LEGACY_EXTERNAL_TOKEN_ENV: &str = "ra_HOST_EXTERNAL_TOKEN";
 
 /// Tokens shorter than this are refused (128 bits of hex).
 pub const MIN_TOKEN_LEN: usize = 32;

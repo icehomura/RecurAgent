@@ -12,7 +12,7 @@ resume_record: /goal resume 后，pr629-k3 独立只读核验 master result/活�
 
 # PR #629 GLM/k3 独立审查及交叉复核 — master 综合
 
-- goal_id: **goal_01**（profile octosfix）
+- goal_id: **goal_01**（profile rafix）
 - 审查对象：PR #629 `fix(onboarding): refuse a provider save with no resolved profile`，HEAD `9bcf4099c2719cd8ee63090a1849a2c6f3766999`，基线 `0a174d95ddec2b123adb3498432e29eb13affb81`，diff = `locales/en.yml`(+1) `locales/zh.yml`(+1) `src/store.rs`(+102)，纯新增。
 - 验证级别：**partially-verified（静态）**——全部结论来自只读源码审查 + 上游 pinned commit `d51601d` 只读核对；本轮未运行 cargo build/test/clippy（外层统一跑），未动态复现任何运行时行为，未采用 PR 作者 CI 结果。
 
@@ -21,10 +21,10 @@ resume_record: /goal resume 后，pr629-k3 独立只读核验 master result/活�
 | peer slug | model lane / 模型 | 阶段产出 | native outcome |
 |---|---|---|---|
 | pr629-glm | review (zai-coding/glm-5.3) | 首轮传输失败（failed to send streaming request），**未产出**，已关闭 | errored |
-| pr629-glm-primary | primary（继承 glm-5.3 主配置，外层纠偏后重派） | `.octos/independent-glm.md`（110 行）+ `.octos/cross-glm.md`（60 行） | completed ×2 |
-| pr629-k3 | strong (moonshot/k3-256k) | `.octos/independent-k3.md`（105 行）+ `.octos/cross-k3.md`（66 行） | completed ×2 |
+| pr629-glm-primary | primary（继承 glm-5.3 主配置，外层纠偏后重派） | `.ra/independent-glm.md`（110 行）+ `.ra/cross-glm.md`（60 行） | completed ×2 |
+| pr629-k3 | strong (moonshot/k3-256k) | `.ra/independent-k3.md`（105 行）+ `.ra/cross-k3.md`（66 行） | completed ×2 |
 
-四份报告文件（均在 `/private/tmp/octoloop-glm-k3-20260909/pr-629/.octos/`）：
+四份报告文件（均在 `/private/tmp/octoloop-glm-k3-20260909/pr-629/.ra/`）：
 `independent-glm.md`（14080B, 10:29）、`independent-k3.md`（10534B, 09:54）、`cross-glm.md`（10420B, 10:31）、`cross-k3.md`（11834B, 10:34）。首审双盲（互不读对方报告），互审为真实交叉：GLM-primary 裁 k3 的 22 项，k3 裁 GLM 的七环根因+四触发序列+§4 正确性+四遗留观察。
 
 ## 两车道收敛结论

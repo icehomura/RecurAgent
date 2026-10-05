@@ -1,18 +1,18 @@
-# ra 🐙
+# RecurAgent 🐙
 
 > Like an octopus — 9 brains, every arm thinks independently, but they share one brain.
 
-ra is an open-source AI agent platform built in Rust. It turns any LLM into a multi-channel, multi-user intelligent assistant — deployed as a single 31MB binary with zero runtime dependencies.
+RecurAgent is an open-source AI agent platform built in Rust. It turns any LLM into a multi-channel, multi-user intelligent assistant — deployed as a single 31MB binary with zero runtime dependencies.
 
-Connect your LLM API keys and messaging channels. ra handles conversation routing, tool execution, memory, provider failover, and multi-tenant isolation. Manage hundreds of AI agent profiles through a web dashboard or 91 REST endpoints.
+Connect your LLM API keys and messaging channels. RecurAgent handles conversation routing, tool execution, memory, provider failover, and multi-tenant isolation. Manage hundreds of AI agent profiles through a web dashboard or 91 REST endpoints.
 
 ## Repositories
 
 | Repo | Description |
 |------|-------------|
-| **[octos](https://github.com/your-org/ra)** | Core platform — Rust binary, 17 LLM providers, 14 channels, DOT pipeline engine, multi-tenant gateway, web dashboard |
-| **[octos-hub](https://github.com/your-org/ra-hub)** | Community skill registry — install and share agent skills |
-| **[octos-web](https://github.com/your-org/ra-web)** | Admin dashboard — React SPA for profile management, metrics, and fleet control |
+| **[RecurAgent](https://github.com/icehomura/ra)** | Core platform — Rust binary, 17 LLM providers, 14 channels, DOT pipeline engine, multi-tenant gateway, web dashboard |
+| **[ra-hub](https://github.com/icehomura/ra-hub)** | Community skill registry — install and share agent skills |
+| **[ra-web](https://github.com/icehomura/ra-web)** | Admin dashboard — React SPA for profile management, metrics, and fleet control |
 
 ## Key Capabilities
 
@@ -37,9 +37,9 @@ ra chat
 
 ## Links
 
-- [User Guide (English)](https://github.com/your-org/ra/blob/main/docs/user-guide.md)
-- [用户指南 (中文)](https://github.com/your-org/ra/blob/main/docs/user-guide-zh.md)
-- [中文 README](https://github.com/your-org/ra/blob/main/README-zh.md)
+- [User Guide (English)](https://github.com/icehomura/ra/blob/main/docs/user-guide.md)
+- [用户指南 (中文)](https://github.com/icehomura/ra/blob/main/docs/user-guide-zh.md)
+- [中文 README](https://github.com/icehomura/ra/blob/main/README-zh.md)
 
 ---
 

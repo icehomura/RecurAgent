@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
-# `tui/` is its own workspace (the ra terminal client ships and releases on its
-# own cadence, like upstream's octoscode); it path-depends on crates/ra-core.
+# `tui/` is its own workspace (the RecurAgent terminal client ships and releases on its
+# own cadence, like upstream's ra-tui); it path-depends on crates/ra-core.
 exclude = ["tui"]
 members = [
     "crates/ra-core",
@@ -48,9 +48,9 @@ members = [
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85.0"
-authors = ["ra team"]
+authors = ["RecurAgent team"]
 license = "Apache-2.0"
-repository = "https://github.com/your-org/ra"
+repository = "https://github.com/icehomura/ra"
 [workspace.lints.rust]
 unsafe_code = "deny"
 [workspace.dependencies]

@@ -1,6 +1,6 @@
-//! Plugin SDK for ra: manifest parsing, plugin discovery, and gating.
+//! Plugin SDK for RecurAgent: manifest parsing, plugin discovery, and gating.
 //!
-//! This crate provides the foundational types and logic for the ra plugin
+//! This crate provides the foundational types and logic for the RecurAgent plugin
 //! system. It handles:
 //!
 //! - **Manifest parsing** — reading and validating `manifest.json` files

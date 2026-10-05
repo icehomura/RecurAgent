@@ -100,13 +100,13 @@ fn run_skill(tool: &str, input: &str, env: &[(&str, String)]) -> (serde_json::Va
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         // Start from a clean smart-home config surface so ambient
-        // RA_*/OCTOS_*/SMART_HOME_* vars on the test machine can't leak in.
+        // RA_*/RA_*/SMART_HOME_* vars on the test machine can't leak in.
         .env_remove("SMART_HOME_BRIDGE_URL")
         .env_remove("SMART_HOME_BRIDGE_TOKEN")
         .env_remove("RA_HOME")
         .env_remove("RA_PROFILE_ID")
-        .env_remove("OCTOS_HOME")
-        .env_remove("OCTOS_PROFILE_ID");
+        .env_remove("ra_HOME")
+        .env_remove("ra_PROFILE_ID");
     for (key, value) in env {
         cmd.env(key, value);
     }
@@ -327,13 +327,13 @@ fn should_report_clear_error_when_no_bridge_configured_anywhere() {
         "smart_home_list_devices",
         "{}",
         &[
-            // The legacy `OCTOS_` spellings are still honoured (this test
+            // The legacy `RA_` spellings are still honoured (this test
             // keeps them on purpose; the others use `RA_*`).
             (
-                "OCTOS_HOME",
+                "ra_HOME",
                 state_home.path().to_string_lossy().to_string(),
             ),
-            ("OCTOS_PROFILE_ID", "e2e-user".to_string()),
+            ("ra_PROFILE_ID", "e2e-user".to_string()),
         ],
     );
 

@@ -1790,7 +1790,7 @@ int close(int fd) {
 #[cfg(unix)]
 fn af_unix_available() -> bool {
     use std::os::unix::net::UnixListener;
-    let path = std::env::temp_dir().join(format!(".octos_af_unix_test_{}", std::process::id()));
+    let path = std::env::temp_dir().join(format!(".ra_af_unix_test_{}", std::process::id()));
     let result = UnixListener::bind(&path).is_ok();
     let _ = fs::remove_file(&path);
     result
@@ -3442,7 +3442,7 @@ mod tests {
 
     #[test]
     fn normalize_path_allows_containment_under_sibling_relative_root() {
-        // When the package root itself begins with `..` (e.g. `ra office
+        // When the package root itself begins with `..` (e.g. `RecurAgent office
         // validate ../package`), a contained target normalizes to a path that
         // ALSO begins with `..`; it must be accepted after stripping the base,
         // and only a target that escapes past the base rejected.

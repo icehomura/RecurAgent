@@ -21,7 +21,7 @@
 
 ## 网关配置
 
-要将 ra 作为多渠道守护进程运行，需添加 `gateway` 部分：
+要将 RecurAgent 作为多渠道守护进程运行，需添加 `gateway` 部分：
 
 ```json
 {
@@ -49,7 +49,7 @@
 ```json
 {
   "base_url": "${ANTHROPIC_BASE_URL}",
-  "model": "${OCTOS_MODEL}"
+  "model": "${RA_MODEL}"
 }
 ```
 
@@ -185,7 +185,7 @@
 }
 ```
 
-> `memory.refresh` 流水线**默认开启**。完整字段列表与 `ra memory` 命令见[记忆与技能 → 自动记忆刷新](./memory-skills.md)。通过 `"enabled": false` 或 `OCTOS_MEMORY_REFRESH_ENABLED=0` 退出。
+> `memory.refresh` 流水线**默认开启**。完整字段列表与 `ra memory` 命令见[记忆与技能 → 自动记忆刷新](./memory-skills.md)。通过 `"enabled": false` 或 `RA_MEMORY_REFRESH_ENABLED=0` 退出。
 
 ## 浏览器 AppUI Origin
 
@@ -207,10 +207,10 @@
 
 每项只能包含 `http://` 或 `https://`、主机以及可选端口。userinfo、路径、
 query、fragment、通配符、`null` 或其他 scheme 会让启动直接失败。非空的
-`OCTOS_APPUI_ALLOWED_ORIGINS` 使用逗号分隔，并整体覆盖配置文件列表；
+`RA_APPUI_ALLOWED_ORIGINS` 使用逗号分隔，并整体覆盖配置文件列表；
 空值不覆盖配置。
 
-反向代理必须显式填写浏览器实际访问的公开 Origin。ra 不会从 `Host`
+反向代理必须显式填写浏览器实际访问的公开 Origin。RecurAgent 不会从 `Host`
 或 `X-Forwarded-*` 推导信任，也不会猜测 LAN 地址。非 loopback/生产
 Origin 应使用 HTTPS。浏览器认证 token 按 Origin 存储；URL 变化后请
 打开公开 Origin 并在该页面重新登录，在 localhost 登录不会自动认证
@@ -240,7 +240,7 @@ Origin 应使用 HTTPS。浏览器认证 token 按 Origin 存储；URL 变化后
 - 审批绑定到精确的工具参数（SHA-256 摘要）、发起房间以及 `authorized_approvers` 列表；每个请求只能被消费一次。
 - `expires_in_secs` 限定请求可应答的时长；到期后聊天会收到通知（`on_timeout: "notify"`）。
 - 待处理审批保存在内存中：网关重启会丢弃它们（审批卡片仍留在聊天中，但应答会报告该请求未知）。
-- 决策会追加到 `<data_dir>/audit/` 下的 JSONL 审计日志（`OCTOS_APPROVALS_AUDIT_*` 环境变量控制轮转/保留）。
+- 决策会追加到 `<data_dir>/audit/` 下的 JSONL 审计日志（`RA_APPROVALS_AUDIT_*` 环境变量控制轮转/保留）。
 - 也可通过 `profile.config.approval_policy` 按 profile 配置。
 
 ## 环境变量
@@ -308,16 +308,16 @@ Origin 应使用 HTTPS。浏览器认证 token 按 Origin 存储；URL 变化后
 
 | 变量 | 说明 |
 |------|------|
-| `OCTOS_SESSION_SEGMENT_BYTES` | 活跃会话文件封存为分段的大小（默认 8 MiB） |
-| `OCTOS_SESSION_LOAD_BUDGET_BYTES` | 普通加载按新到旧读取的会话历史字节数（默认 32 MiB；`0` = 不限） |
+| `RA_SESSION_SEGMENT_BYTES` | 活跃会话文件封存为分段的大小（默认 8 MiB） |
+| `RA_SESSION_LOAD_BUDGET_BYTES` | 普通加载按新到旧读取的会话历史字节数（默认 32 MiB；`0` = 不限） |
 
 ### 系统
 
 | 变量 | 说明 |
 |------|------|
 | `RUST_LOG` | 日志级别（error/warn/info/debug/trace） |
-| `OCTOS_LOG_JSON` | 启用 JSON 格式日志（设置为任意值即可） |
-| `OCTOS_APPUI_ALLOWED_ORIGINS` | 非空、逗号分隔的精确浏览器 Origin；覆盖 `appui.allowed_origins` |
+| `RA_LOG_JSON` | 启用 JSON 格式日志（设置为任意值即可） |
+| `RA_APPUI_ALLOWED_ORIGINS` | 非空、逗号分隔的精确浏览器 Origin；覆盖 `appui.allowed_origins` |
 
 ## 文件目录结构
 

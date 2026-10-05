@@ -142,7 +142,7 @@ impl Default for SnapshotConfig {
 pub struct SnapshotId(String);
 
 impl SnapshotId {
-    /// Wrap a user-supplied id (e.g. from a future `ra snapshot
+    /// Wrap a user-supplied id (e.g. from a future `RecurAgent snapshot
     /// restore <id>` command). Validated against the object store when
     /// used.
     pub fn new(id: impl Into<String>) -> Self {

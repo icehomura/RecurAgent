@@ -33,7 +33,7 @@ const FALLBACK_PIPELINE_NAME: &str = "deep_research";
 
 /// S1-5 opt-out: whether the typed-IR ([`crate::ir`]) authoring path is exposed
 /// to the LLM by default. ON unless the operator sets `RA_PIPELINE_IR=0`
-/// (or `false`; the legacy `OCTOS_PIPELINE_IR` is still honoured) in the daemon
+/// (or `false`; the legacy `ra_PIPELINE_IR` is still honoured) in the daemon
 /// environment (e.g. the launchd plist). The typed-IR
 /// palette is capability-locked — the LLM names kinds and prompts but cannot
 /// widen tools or select handlers — so it is safe to expose by default.
@@ -324,15 +324,15 @@ impl RunPipelineTool {
     /// registered as a LOWEST-precedence search path (via
     /// `add_bundled_pipelines_dir`), so an installed `deep_research.dot` in
     /// any skills/pipelines location always wins over the bundled fallback.
-    pub fn with_octos_home(mut self, octos_home: PathBuf) -> Self {
-        self.discovery.add_search_path(octos_home.join("skills"));
-        self.discovery.add_search_path(octos_home.join("pipelines"));
-        self.discovery.add_bundled_pipelines_dir(&octos_home);
+    pub fn with_ra_home(mut self, ra_home: PathBuf) -> Self {
+        self.discovery.add_search_path(ra_home.join("skills"));
+        self.discovery.add_search_path(ra_home.join("pipelines"));
+        self.discovery.add_bundled_pipelines_dir(&ra_home);
         self
     }
 
     /// Register `<root>/bundled-pipelines` as the LOWEST-precedence
-    /// discovery path. Used by the hosts that do not call `with_octos_home`
+    /// discovery path. Used by the hosts that do not call `with_ra_home`
     /// (`ra chat`, `ra serve`) and bootstrap the bundle into
     /// `<data_dir>/bundled-pipelines` instead. Keeps bootstrap-dir ==
     /// search-dir while preserving installed-wins (BLOCKER 2 + BLOCKER 3).

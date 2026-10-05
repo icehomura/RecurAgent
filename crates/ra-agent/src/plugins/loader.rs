@@ -124,7 +124,7 @@ pub struct PluginLoadOptions<'a> {
     /// Override the directory used to store the verified-hash ledger.
     /// When `None`, the loader resolves under the shared state dir
     /// (`ra_core::brand::state_path("cache").join("verified")`: `RA_HOME`,
-    /// legacy `OCTOS_HOME`, an existing `~/.ra`, or a legacy `~/.ra`),
+    /// legacy `ra_HOME`, or `~/.ra`),
     /// so the ledger lives outside the skill source tree (writing into the
     /// source dir taints ownership when the daemon runs as a different
     /// uid — see 2026-05 fleet skill-dir-root-ownership bug). Tests pass
@@ -1307,8 +1307,7 @@ fn compute_sha256(path: &Path) -> Result<String> {
 ///    keeps the test suite from polluting the user's real cache dir and
 ///    avoids cross-test races on shared plugin names.
 /// 3. `ra_core::brand::state_path("cache").join("verified")` — the shared
-///    state home (`RA_HOME`, legacy `OCTOS_HOME`, an existing `~/.ra`, or a
-///    legacy `~/.ra`).
+///    state home (`RA_HOME`, legacy `ra_HOME`, or `~/.ra`).
 /// 4. `std::env::temp_dir().join("ra-verified")` as a last resort when
 ///    HOME is unavailable (e.g. sandbox).
 ///

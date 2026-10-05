@@ -4073,7 +4073,7 @@ pub struct StatusResponse {
     pub agent_configured: bool,
     /// Public-facing base domain this mini serves profiles under
     /// (e.g. `"crew.ominix.io"`, `"bot.ominix.io"`). The dashboard and
-    /// octos-web client consume this to render correct preview URLs
+    /// ra-web client consume this to render correct preview URLs
     /// and infer profile IDs from hostnames. Always a concrete string
     /// — falls back to `DEFAULT_BASE_DOMAIN` when unconfigured.
     pub base_domain: String,

@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [scopedProfile, setScopedProfile] = useState<ScopedAuthTarget | null>(null)
   const [token, setToken] = useState<string | null>(
-    () => localStorage.getItem('octos_session_token') || localStorage.getItem('octos_auth_token')
+    () => localStorage.getItem('ra_session_token') || localStorage.getItem('ra_auth_token')
   )
   const [loading, setLoading] = useState(true)
 
@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         // Token invalid — clear it
-        localStorage.removeItem('octos_session_token')
+        localStorage.removeItem('ra_session_token')
         setToken(null)
         setUser(null)
         setScopedProfile(null)
@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyOtp = useCallback(async (email: string, code: string) => {
     const res = await authApi.verify(email, code)
     if (res.ok && res.token) {
-      localStorage.setItem('octos_session_token', res.token)
+      localStorage.setItem('ra_session_token', res.token)
       setToken(res.token)
       if (res.user) setUser(res.user)
       // Refresh the host scope after a successful verify — the OTP
@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithToken = useCallback(async (adminToken: string) => {
     // Store the token and try /api/auth/me to validate it
-    localStorage.setItem('octos_auth_token', adminToken)
+    localStorage.setItem('ra_auth_token', adminToken)
     try {
       const res = await authApi.me()
       setToken(adminToken)
@@ -95,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setScopedProfile(res.scoped_profile ?? null)
       return true
     } catch {
-      localStorage.removeItem('octos_auth_token')
+      localStorage.removeItem('ra_auth_token')
       return false
     }
   }, [])
@@ -105,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // they 403, so the SPA can never land a session it shouldn't.
   const soloLogin = useCallback(async () => {
     const res = await authApi.soloLogin()
-    localStorage.setItem('octos_session_token', res.token)
+    localStorage.setItem('ra_session_token', res.token)
     setToken(res.token)
     setUser(res.user)
     try {
@@ -119,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const soloCreate = useCallback(
     async (body: { name: string; username: string; email: string }) => {
       const res = await authApi.soloCreate(body)
-      localStorage.setItem('octos_session_token', res.token)
+      localStorage.setItem('ra_session_token', res.token)
       setToken(res.token)
       // Establish the principal directly from the create result so AuthGuard
       // always has a user — even if the follow-up /me refresh fails (which
@@ -146,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const swapToken = useCallback((newToken: string) => {
-    localStorage.setItem('octos_auth_token', newToken)
+    localStorage.setItem('ra_auth_token', newToken)
     setToken(newToken)
   }, [])
 
@@ -156,8 +156,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
-    localStorage.removeItem('octos_session_token')
-    localStorage.removeItem('octos_auth_token')
+    localStorage.removeItem('ra_session_token')
+    localStorage.removeItem('ra_auth_token')
     setToken(null)
     setUser(null)
     setScopedProfile(null)

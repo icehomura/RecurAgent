@@ -4,7 +4,7 @@
 //! a per-profile skill being deployed — skill drift on a fleet host silently
 //! turned `run_pipeline deep_research` into `Available: (none)` during a live
 //! soak. Bundling the canonical `.dot` into the binary and writing it to the
-//! dedicated `<octos_home>/bundled-pipelines/` dir on bootstrap (see
+//! dedicated `<ra_home>/bundled-pipelines/` dir on bootstrap (see
 //! [`super::bootstrap`]) guarantees the generic pipelines are always
 //! discoverable, while still letting an installed copy of the same name win
 //! (that dir is searched LAST, and the bootstrap never overwrites an existing
@@ -17,7 +17,7 @@
 /// `(file_name, dot_contents)` for each bundled generic pipeline.
 ///
 /// `file_name` includes the `.dot` extension; it is written verbatim under
-/// the dedicated `<octos_home>/bundled-pipelines/` dir. The pipeline's
+/// the dedicated `<ra_home>/bundled-pipelines/` dir. The pipeline's
 /// discoverable *name* is the file stem (`deep_research.dot` → `deep_research`).
 pub const BUNDLED_PIPELINES: &[(&str, &str)] = &[(
     "deep_research.dot",

@@ -1,6 +1,6 @@
 //! MCP-backed sub-agent backends for [`crate::tools::spawn::SpawnTool`].
 //!
-//! This module lets ra dispatch a task to an external agent that speaks
+//! This module lets RecurAgent dispatch a task to an external agent that speaks
 //! the Model Context Protocol (for example Claude Code via
 //! `claude mcp serve`, Codex via `codex mcp serve`, or any conforming
 //! hermes/jiuwenclaw runtime). The spawn tool hands the task to the backend

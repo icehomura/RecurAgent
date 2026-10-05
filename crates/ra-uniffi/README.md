@@ -1,6 +1,6 @@
 # ra-uniffi
 
-Idiomatic **Python / Swift / Kotlin** bindings for embedding ra, generated
+Idiomatic **Python / Swift / Kotlin** bindings for embedding RecurAgent, generated
 from a single Rust definition by [uniffi](https://mozilla.github.io/uniffi-rs/)
 (v0.29).
 
@@ -19,7 +19,7 @@ credential handling.
 | `Config` (record) | dict / data class of provider, model, key, cwd, … |
 | `Brief` (record) | `{ prompt, max_iterations? }` |
 | `TaskResult` / `TokenUsage` (records) | outputs |
-| `OctosError` (error enum) | exception (`Config`/`Provider`/`Run`/`Embed`/`NoEmbedder`/`Incomplete`/`Memory`) |
+| `RaError` (error enum) | exception (`Config`/`Provider`/`Run`/`Embed`/`NoEmbedder`/`Incomplete`/`Memory`) |
 | `Runtime` (object) | `new(config)`, `run_task(brief)`, `embed(text)`, `memory_upsert(json)`, `memory_search(json)`, `memory_load(id)`, `memory_stats()` |
 | `embedding_model_status(data_dir)` / `embedding_model_ensure(data_dir, download)` (free functions) | provision the default embedding model without a `Runtime` (JSON strings; same contracts as the C-ABI's `ra_embedding_model_*`) |
 
@@ -45,9 +45,9 @@ crate compiled against is the one that generates:
 
 ```bash
 cargo build -p ra-uniffi
-# Use liboctos_uniffi.so on Linux.
+# Use libra_uniffi.so on Linux.
 cargo run -p ra-uniffi --bin uniffi-bindgen -- generate \
-    --library target/debug/liboctos_uniffi.dylib \
+    --library target/debug/libra_uniffi.dylib \
     --language python --no-format \
     --out-dir crates/ra-uniffi/bindings/python
 
@@ -64,7 +64,7 @@ committed Python bindings live in [`bindings/python/ra.py`](bindings/python/).
 ## Python example
 
 Put `ra.py` on the `PYTHONPATH` and the compiled library
-(`liboctos_uniffi.dylib`/`.so`) where it can be loaded (uniffi looks it up by
+(`libra_uniffi.dylib`/`.so`) where it can be loaded (uniffi looks it up by
 name), then:
 
 ```python
@@ -84,9 +84,9 @@ protocol. Set `data_dir` to keep the episode + Recall memory stores — and the
 default embedding model — on disk across runtimes (otherwise they live in a
 scratch dir removed on drop).
 
-Errors surface as an `OctosError` exception; a failed provider build or run
+Errors surface as an `RaError` exception; a failed provider build or run
 carries a scrubbed message, and `embed` without an embedder raises
-`OctosError.NoEmbedder`.
+`RaError.NoEmbedder`.
 
 ### The default embedding model
 
@@ -95,7 +95,7 @@ An `embed-llama` build (the default) embeds with EmbeddingGemma-300M
 kept at `<data_dir>/models/embeddinggemma-300M-Q8_0.gguf`. When
 `embedding_model_path` is unset, `Runtime(...)` loads it if it is there;
 otherwise it downloads it first — **blocking the constructor** — unless
-`embedding_auto_download=False` or `OCTOS_NO_MODEL_DOWNLOAD=1` is set, in
+`embedding_auto_download=False` or `ra_NO_MODEL_DOWNLOAD=1` is set, in
 which case the runtime is keyword-only (`embed` raises `NoEmbedder`; memory
 search still works, BM25-only). The full resolution rules are in the
 [`ra-ffi` README](../ra-ffi/README.md#the-default-embedding-model).
@@ -104,14 +104,14 @@ constructing a runtime, with the two free functions:
 
 ```python
 import json
-from ra import embedding_model_status, embedding_model_ensure, OctosError
+from ra import embedding_model_status, embedding_model_ensure, RaError
 
 status = json.loads(embedding_model_status("/data/ra"))
 # {"path", "present", "bytes", "complete", "url", "license_url", "sha256"}
 if not status["complete"]:
     try:
         path = json.loads(embedding_model_ensure("/data/ra", download=True))["path"]
-    except OctosError.Embed as error:   # download disabled/vetoed, or failed to verify
+    except RaError.Embed as error:   # download disabled/vetoed, or failed to verify
         ...
 rt = Runtime(Config(provider="openai", model="gpt-4o-mini", api_key="sk-...",
                     data_dir="/data/ra", embedding_auto_download=False))
@@ -122,7 +122,7 @@ rt = Runtime(Config(provider="openai", model="gpt-4o-mini", api_key="sk-...",
 The four `memory_*` methods take and return JSON strings with exactly the
 contracts of the C-ABI's `ra_memory_*` functions (documented in the
 [`ra-ffi` README](../ra-ffi/README.md#memory-the-recall-index)); a
-failure raises `OctosError.Memory` (e.g. `no such record`). No embedder is
+failure raises `RaError.Memory` (e.g. `no such record`). No embedder is
 needed — the index is BM25-only until one is configured:
 
 ```python
@@ -136,18 +136,18 @@ record = json.loads(rt.memory_load(hits[0]["id"]))["record"]
 stats = json.loads(rt.memory_stats())
 ```
 
-A provider `max_tokens` stop raises `OctosError.Incomplete`, **not** a successful
+A provider `max_tokens` stop raises `RaError.Incomplete`, **not** a successful
 `TaskResult`. Its `partial` field contains the actual output, accumulated token
 usage, and iterations. The diagnostic string is fixed and short; the partial
 is lossless task payload and is not passed through error redaction or the
 600-byte diagnostic cap. Treat it as unfinished output, not as a final answer.
 
 ```python
-from ra import OctosError
+from ra import RaError
 
 try:
     result = rt.run_task(Brief(prompt="Explain the design"))
-except OctosError.Incomplete as error:
+except RaError.Incomplete as error:
     unfinished_output = error.partial.output
     consumed_tokens = error.partial.tokens
     # Display/store as incomplete; do not report a successful final answer.

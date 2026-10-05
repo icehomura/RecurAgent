@@ -844,7 +844,7 @@ pub(crate) trait MonitorSink: Send + Sync {
 /// Build the sanitized probe command: cleared of code-injection vars and
 /// credential-looking env (heuristic + runtime-registered secrets) via the
 /// shared `ra_core::env_hygiene` single source of truth — the same
-/// denylist every other ra subprocess spawner applies.
+/// denylist every other RecurAgent subprocess spawner applies.
 pub(crate) fn sanitized_monitor_command(
     argv: &[String],
     cwd: Option<&std::path::Path>,

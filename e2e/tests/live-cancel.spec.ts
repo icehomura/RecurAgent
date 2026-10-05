@@ -7,20 +7,20 @@
  * task_status channel.
  *
  * Run against a live host:
- *   OCTOS_TEST_URL=https://dspfac.bot.ominix.io \
- *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
- *   OCTOS_PROFILE=dspfac \
+ *   ra_TEST_URL=https://dspfac.bot.ominix.io \
+ *   ra_AUTH_TOKEN=ra-admin-2026 \
+ *   ra_PROFILE=dspfac \
  *   npx playwright test e2e/tests/live-cancel.spec.ts
  *
- * Skips automatically when OCTOS_TEST_URL is unset so unit / CI runs
+ * Skips automatically when ra_TEST_URL is unset so unit / CI runs
  * don't pay the live-network cost.
  */
 import { expect, test } from '@playwright/test';
 import { createNewSession, login, sendAndWait } from './live-browser-helpers';
 
-const LIVE_URL = process.env.OCTOS_TEST_URL || '';
+const LIVE_URL = process.env.ra_TEST_URL || '';
 
-test.skip(!LIVE_URL, 'OCTOS_TEST_URL not set — live test requires a running host');
+test.skip(!LIVE_URL, 'ra_TEST_URL not set — live test requires a running host');
 test.setTimeout(300_000);
 
 test('cancel button transitions long pipeline to Cancelled within 15s', async ({ page }) => {

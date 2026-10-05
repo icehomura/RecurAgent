@@ -1,6 +1,6 @@
 # 记忆与技能
 
-ra 拥有分层记忆系统和可扩展的技能框架。记忆赋予智能体跨会话的持久上下文，技能则为智能体提供新的工具和能力。
+RecurAgent 拥有分层记忆系统和可扩展的技能框架。记忆赋予智能体跨会话的持久上下文，技能则为智能体提供新的工具和能力。
 
 ## 引导文件
 
@@ -18,7 +18,7 @@ ra 拥有分层记忆系统和可扩展的技能框架。记忆赋予智能体�
 
 ## 记忆系统
 
-ra 采用三层记忆架构，结合自动记录与智能体驱动的知识管理：
+RecurAgent 采用三层记忆架构，结合自动记录与智能体驱动的知识管理：
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -71,7 +71,7 @@ ra 采用三层记忆架构，结合自动记录与智能体驱动的知识管�
 
 ### 自动记忆刷新（抽取 + 整合）
 
-ra 内置一套自动记忆流水线，从你的对话中读取持久化事实并整合进 `MEMORY.md`——无需手动编辑文件即可让长期记忆自动生长。该功能**默认开启**。
+RecurAgent 内置一套自动记忆流水线，从你的对话中读取持久化事实并整合进 `MEMORY.md`——无需手动编辑文件即可让长期记忆自动生长。该功能**默认开启**。
 
 **运行位置。** 后台扫描只在持有该 profile 刷新锁的长期运行进程中执行——即 `ra serve` 或 `ra gateway`。普通的 `ra chat` 从不运行后台扫描（否则会争用锁）。流水线分三部分：
 
@@ -114,7 +114,7 @@ ra memory forget --id ^m4k2abq   # 硬删除某条精确的 MEMORY.md 条目
 }
 ```
 
-- **`enabled`** 是三态：**缺省即开启**（产品默认）。设为 `false`——或 `OCTOS_MEMORY_REFRESH_ENABLED=0`——可彻底退出（无捕获工具、无每轮重读、无扫描）。宿主级别的退出会被子 profile 继承。
+- **`enabled`** 是三态：**缺省即开启**（产品默认）。设为 `false`——或 `RA_MEMORY_REFRESH_ENABLED=0`——可彻底退出（无捕获工具、无每轮重读、无扫描）。宿主级别的退出会被子 profile 继承。
 - **`extract_model` / `consolidate_model`** 默认使用 profile 的服务商；可指向便宜的模型以降低刷新成本。
 - 每日预算（`max_extractions_per_day`、`max_consolidations_per_day`、`max_daily_tokens`）按 profile 计并在本地日期翻转时重置；持久状态位于 `memory/refresh_state.json`。
 
@@ -163,7 +163,7 @@ ra memory forget --id ^m4k2abq   # 硬删除某条精确的 MEMORY.md 条目
 
 ## 内置系统技能
 
-ra 在编译时内置了 3 个系统技能：
+RecurAgent 在编译时内置了 3 个系统技能：
 
 | 技能 | 说明 |
 |-------|-------------|
@@ -175,7 +175,7 @@ ra 在编译时内置了 3 个系统技能：
 
 ## 预装应用技能
 
-八个应用技能以编译后的二进制文件形式随 ra 分发。它们在网关启动时自动部署到 `.ra/skills/`——无需手动安装。
+八个应用技能以编译后的二进制文件形式随 RecurAgent 分发。它们在网关启动时自动部署到 `.ra/skills/`——无需手动安装。
 
 ### 新闻获取
 
@@ -377,8 +377,8 @@ ra skills search "web scraping"   # 搜索在线注册表
 配置文件 gateway 按以下优先级加载技能：
 
 1. `~/.ra/profiles/<profile>/data/skills/`（配置文件作用域的自定义技能）
-2. `<octos_home>/bundled-app-skills/`（预装应用技能）
-3. `<octos_home>/platform-skills/`（管理员加载的平台技能）
+2. `<ra_home>/bundled-app-skills/`（预装应用技能）
+3. `<ra_home>/platform-skills/`（管理员加载的平台技能）
 
 独立项目运行还可以加载 `<project>/.ra/plugins/` 和
 `<project>/.ra/skills/`。旧的 HOME 全局目录仅用于迁移，不再属于常规扫描路径。

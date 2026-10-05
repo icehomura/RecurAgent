@@ -18,7 +18,7 @@
 #
 # Environment
 # -----------
-#   OCTOS_MANIFEST_VALIDATION   strict (default) | lenient | off
+#   ra_MANIFEST_VALIDATION   strict (default) | lenient | off
 #
 # Exits non-zero if any manifest fails validation. Builds the
 # `validate_manifests` bin in release mode so subsequent invocations are

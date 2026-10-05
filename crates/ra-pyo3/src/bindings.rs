@@ -9,12 +9,12 @@ use pyo3::prelude::*;
 
 create_exception!(
     ra,
-    OctosError,
+    RaError,
     PyException,
     "Raised by every ra runtime failure (config, provider, run, embed)."
 );
 
-/// Convert a native [`CoreError`] into a Python `OctosError`.
+/// Convert a native [`CoreError`] into a Python `RaError`.
 ///
 /// The caller's OWN key is already exact-scrubbed inside the core. Here we
 /// additionally apply ra-ffi's heuristic redactor + length cap
@@ -27,7 +27,7 @@ create_exception!(
 /// A free function rather than a `From` impl: the orphan rule forbids
 /// `impl From<CoreError> for PyErr` (both types are foreign to this crate).
 fn to_py_err(e: CoreError) -> PyErr {
-    OctosError::new_err(ra_ffi::sanitize_error_text(&e.to_string()))
+    RaError::new_err(ra_ffi::sanitize_error_text(&e.to_string()))
 }
 
 /// Runtime configuration. Maps directly onto [`ra_ffi::RuntimeConfig`].
@@ -277,7 +277,7 @@ impl TaskResult {
     }
 }
 
-/// An embedded ra runtime — the Python counterpart of the C-ABI's opaque
+/// An embedded RecurAgent runtime — the Python counterpart of the C-ABI's opaque
 /// `RaRuntime*`.
 ///
 /// Construct with `Runtime(config)`. Build the credential-resolved runtime once
@@ -304,7 +304,7 @@ pub struct Runtime {
 #[pymethods]
 impl Runtime {
     /// Build a runtime from a [`Config`]. Resolves and pins the credential
-    /// exactly once inside the core. Raises `OctosError` on a bad config or an
+    /// exactly once inside the core. Raises `RaError` on a bad config or an
     /// unknown/unbuildable provider. Does NOT touch the network.
     #[new]
     fn new(config: &Config) -> PyResult<Self> {
@@ -313,7 +313,7 @@ impl Runtime {
     }
 
     /// Run a one-shot task and return its output + token usage. Releases the GIL
-    /// around the blocking agent loop. Raises `OctosError` on failure.
+    /// around the blocking agent loop. Raises `RaError` on failure.
     fn run_task(&self, py: Python<'_>, brief: &Brief) -> PyResult<TaskResult> {
         let native = brief.to_native();
         // Release the GIL: the core's `block_on` drives the whole agent loop
@@ -327,7 +327,7 @@ impl Runtime {
 
     /// Embed `text`, returning the raw vector. Requires the `embed-llama` build
     /// feature and an `embedding_model_path` in the [`Config`]; otherwise raises
-    /// `OctosError` (NoEmbedder). Releases the GIL around the blocking call.
+    /// `RaError` (NoEmbedder). Releases the GIL around the blocking call.
     fn embed(&self, py: Python<'_>, text: String) -> PyResult<Vec<f32>> {
         py.allow_threads(|| self.inner.embed(&text))
             .map_err(to_py_err)
@@ -349,7 +349,7 @@ const _: fn() = || {
 
 /// The `ra` Python module. The `#[pymodule]` name and the `[lib] name` are
 /// both `ra`, so `import ra` loads this extension. The module name is
-/// the published Python API and is kept across the ra rename so existing
+/// the published Python API and is kept across the RecurAgent rename so existing
 /// `import ra` hosts keep working.
 #[pymodule]
 fn ra(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -358,7 +358,7 @@ fn ra(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<TokenUsage>()?;
     m.add_class::<TaskResult>()?;
     m.add_class::<Runtime>()?;
-    m.add("OctosError", m.py().get_type::<OctosError>())?;
+    m.add("RaError", m.py().get_type::<RaError>())?;
     Ok(())
 }
 
@@ -507,7 +507,7 @@ mod tests {
     }
 
     #[test]
-    fn runtime_new_rejects_unknown_provider_with_octos_error() {
+    fn runtime_new_rejects_unknown_provider_with_ra_error() {
         // Hermetic: provider construction fails offline (no network) before any
         // scratch dir is created, so this exercises the error path cleanly.
         init_py();
@@ -528,8 +528,8 @@ mod tests {
                 .err()
                 .expect("unknown provider must raise");
             assert!(
-                err.is_instance_of::<OctosError>(py),
-                "expected OctosError, got: {err}"
+                err.is_instance_of::<RaError>(py),
+                "expected RaError, got: {err}"
             );
         });
     }
@@ -546,8 +546,8 @@ mod tests {
         )));
         Python::with_gil(|py| {
             assert!(
-                err.is_instance_of::<OctosError>(py),
-                "expected OctosError, got: {err}"
+                err.is_instance_of::<RaError>(py),
+                "expected RaError, got: {err}"
             );
             let msg = err.value(py).to_string();
             assert!(msg.contains("<redacted>"), "not redacted: {msg}");
@@ -556,21 +556,21 @@ mod tests {
     }
 
     #[test]
-    fn no_embedder_maps_to_octos_error() {
+    fn no_embedder_maps_to_ra_error() {
         // Building a runtime succeeds offline; embed without a model reports
         // NoEmbedder (feature-off is always NoEmbedder; feature-on finds no
         // loaded embedder). Its message maps through `to_py_err`.
         let err = to_py_err(CoreError::NoEmbedder);
         init_py();
         Python::with_gil(|py| {
-            assert!(err.is_instance_of::<OctosError>(py));
+            assert!(err.is_instance_of::<RaError>(py));
             let msg = err.value(py).to_string();
             assert_eq!(msg, "no embedder configured");
         });
     }
 
     /// Real end-to-end run. Ignored: needs a live provider + network. Configure
-    /// via env `RA_PYO3_TEST_KEY_ENV` (legacy `OCTOS_PYO3_TEST_KEY_ENV` still
+    /// via env `RA_PYO3_TEST_KEY_ENV` (legacy `ra_PYO3_TEST_KEY_ENV` still
     /// honoured; default `OPENAI_API_KEY`). Run with:
     ///   cargo test -p ra-pyo3 --features python -- --ignored real_run_task
     #[test]

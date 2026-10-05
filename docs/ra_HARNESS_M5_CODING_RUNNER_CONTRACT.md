@@ -1,4 +1,4 @@
-# ra Harness M5 Coding Runner Contract
+# RecurAgent Harness M5 Coding Runner Contract
 
 Date: 2026-04-22
 
@@ -333,5 +333,5 @@ M5 is complete when:
 - live browser tests prove reload, session switch, false-success blocking, and
   repair after failure
 
-At that point, ra has a real software-factory loop for free-form coding:
+At that point, RecurAgent has a real software-factory loop for free-form coding:
 exploration remains flexible, but output quality is bounded by runtime evidence.

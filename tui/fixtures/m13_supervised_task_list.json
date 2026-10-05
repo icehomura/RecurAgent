@@ -41,7 +41,7 @@
     },
     {
       "id": "01950000-0000-7000-8000-0000000000a3",
-      "tool_name": "octos_user_task",
+      "tool_name": "ra_user_task",
       "tool_call_id": "call-3",
       "state": "completed",
       "status": "completed",

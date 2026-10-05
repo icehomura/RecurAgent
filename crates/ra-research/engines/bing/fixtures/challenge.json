@@ -1,5 +1,5 @@
 {
-  "recorded": "reconstructed, not captured: the challenge page from crates/octos-research/tests/fixtures/serp/bing_challenge.html (its public structure). The engine must report a challenge for the person, not parse it or work around it",
+  "recorded": "reconstructed, not captured: the challenge page from crates/ra-research/tests/fixtures/serp/bing_challenge.html (its public structure). The engine must report a challenge for the person, not parse it or work around it",
   "request": {
     "category": "general",
     "count": 5,

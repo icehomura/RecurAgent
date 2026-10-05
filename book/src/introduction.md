@@ -2,17 +2,17 @@
 
 > 🌐 **[中文文档](/ra/zh/)**
 
-## What is ra?
+## What is RecurAgent?
 
-ra is an open-source AI agent platform that turns any LLM into a multi-channel, multi-user intelligent assistant. You deploy a single Rust binary, connect your LLM API keys and messaging channels (Telegram, Discord, Slack, WhatsApp, Email, WeChat, and more), and ra handles everything else -- conversation routing, tool execution, memory, provider failover, and multi-tenant isolation.
+RecurAgent is an open-source AI agent platform that turns any LLM into a multi-channel, multi-user intelligent assistant. You deploy a single Rust binary, connect your LLM API keys and messaging channels (Telegram, Discord, Slack, WhatsApp, Email, WeChat, and more), and RecurAgent handles everything else -- conversation routing, tool execution, memory, provider failover, and multi-tenant isolation.
 
-Think of it as the **backend operating system for AI agents**. Instead of building a chatbot from scratch for each use case, you configure ra profiles -- each with their own system prompt, model, tools, and channels -- and manage them all through a web dashboard or REST API. A small team can run hundreds of specialized AI agents on a single machine.
+Think of it as the **backend operating system for AI agents**. Instead of building a chatbot from scratch for each use case, you configure RecurAgent profiles -- each with their own system prompt, model, tools, and channels -- and manage them all through a web dashboard or REST API. A small team can run hundreds of specialized AI agents on a single machine.
 
-ra is built for people who need more than a personal assistant: teams deploying AI for customer support across WhatsApp and Telegram, developers building AI-powered products on top of a REST API, researchers orchestrating multi-step research pipelines with different LLMs at each stage, or families sharing a single AI setup with per-person customization.
+RecurAgent is built for people who need more than a personal assistant: teams deploying AI for customer support across WhatsApp and Telegram, developers building AI-powered products on top of a REST API, researchers orchestrating multi-step research pipelines with different LLMs at each stage, or families sharing a single AI setup with per-person customization.
 
 ## Operating Modes
 
-ra operates in three primary modes:
+RecurAgent operates in three primary modes:
 
 - **Chat mode** (`ra chat`): Interactive multi-turn conversation with tools, or single-message execution via `--message`.
 - **Gateway mode** (`ra gateway`): Persistent daemon serving multiple messaging channels simultaneously.
@@ -22,8 +22,8 @@ ra operates in three primary modes:
 
 The `ra serve` backend speaks a single versioned **UI Protocol** (JSON-RPC over WebSocket or stdio), so several front-ends share one server:
 
-- **Web** ([octos-web](https://github.com/your-org/ra-web)): the React SPA embedded at `/app/` (chat, Slides Studio, Sites, Voice). The operator **admin dashboard** at `/admin/` is a separate embedded app in the octos repo (`dashboard/`).
-- **Terminal** ([octoscode](https://github.com/your-org/ra-tui)): a Rust TUI that connects over the UI Protocol (WebSocket to a running `serve`, or a spawned `serve --stdio` child) with live streaming, approvals, diffs, and onboarding.
+- **Web** ([ra-web](https://github.com/icehomura/ra-web)): the React SPA embedded at `/app/` (chat, Slides Studio, Sites, Voice). The operator **admin dashboard** at `/admin/` is a separate embedded app in the RecurAgent repo (`dashboard/`).
+- **Terminal** ([ra-tui](https://github.com/icehomura/ra-tui)): a Rust TUI that connects over the UI Protocol (WebSocket to a running `serve`, or a spawned `serve --stdio` child) with live streaming, approvals, diffs, and onboarding.
 
 ## Key Concepts
 

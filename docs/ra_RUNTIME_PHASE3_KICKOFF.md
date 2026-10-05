@@ -1,4 +1,4 @@
-# ra Runtime Phase 3 Kickoff Contract
+# RecurAgent Runtime Phase 3 Kickoff Contract
 
 This document turns the remaining Phase 3 work into a bounded delivery program.
 
@@ -6,7 +6,7 @@ It is the execution plan for the still-open issue set after the shipped canary
 release slice on:
 
 - `ra` branch `phase3/integrator`
-- `octos-web` branch `phase3/web-release`
+- `ra-web` branch `phase3/web-release`
 
 Use this document together with:
 
@@ -35,7 +35,7 @@ Out of scope:
 The following slices are already landed in the current Phase 3 release branch:
 
 - contract-backed artifact truth for contract-owned background slides/site runs
-- durable `octos-web` reload recovery for long-running tasks
+- durable `ra-web` reload recovery for long-running tasks
 - tighter shell retry bounds and two live coding hard-case proofs
 - operator summary source provenance
 
@@ -189,7 +189,7 @@ Issues:
 User value:
 
 - customer developers get a clear contractual API for building skills/apps on
-  ra instead of relying on prompt conventions and hidden runtime behavior
+  RecurAgent instead of relying on prompt conventions and hidden runtime behavior
 
 Deliverables:
 
@@ -209,7 +209,7 @@ Exit criteria:
   behavior
 - first-party harnessed workflows use the same contract shape we want customer
   developers to use
-- ra can clearly position itself as an execution OS with a contractual app
+- RecurAgent can clearly position itself as an execution OS with a contractual app
   interface rather than a loosely-defined agent shell
 
 ## Milestone Order
@@ -236,7 +236,7 @@ describes is actually true.
 - integration branch: `phase3/integrator`
 - per-lane branches should fork from the current integration head
 
-`octos-web`:
+`ra-web`:
 
 - integration branch: `phase3/web-release`
 - per-lane branches should fork from the current integration head
@@ -385,7 +385,7 @@ Outputs:
 
 Role:
 
-- `octos-web` persistence and operator UI consumer lane
+- `ra-web` persistence and operator UI consumer lane
 
 Responsibilities:
 

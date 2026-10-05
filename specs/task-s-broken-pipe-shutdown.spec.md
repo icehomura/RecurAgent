@@ -1,5 +1,5 @@
 spec: task
-name: "ra serve 关闭期 BrokenPipe 双重 panic / SIGABRT 修复"
+name: "RecurAgent serve 关闭期 BrokenPipe 双重 panic / SIGABRT 修复"
 tags: [serve, shutdown, broken-pipe, panic-hook, console-output, ra-cli]
 estimate: 0.5d
 requirement_id: REQ-SERVE-BP-001

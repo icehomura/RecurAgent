@@ -33,9 +33,9 @@ function isInternalRuntimeSessionId(id: string): boolean {
 async function fetchSessionIds(page: Page): Promise<string[]> {
   return page.evaluate(async () => {
     const token =
-      localStorage.getItem('octos_session_token') ||
-      localStorage.getItem('octos_auth_token') ||
-      sessionStorage.getItem('octos_token') ||
+      localStorage.getItem('ra_session_token') ||
+      localStorage.getItem('ra_auth_token') ||
+      sessionStorage.getItem('ra_token') ||
       '';
     const profile = localStorage.getItem('selected_profile') || '';
     const headers: Record<string, string> = {};

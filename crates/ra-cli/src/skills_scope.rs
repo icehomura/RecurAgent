@@ -122,7 +122,7 @@ pub fn build_account_plugin_dirs(data_dir: &Path) -> Vec<PathBuf> {
 /// installer.
 ///
 /// The OMiniX home resolution mirrors the runtime installer
-/// (`api::ominix_runtime`): `RA_OMINIX_HOME` (legacy `OCTOS_OMINIX_HOME`)
+/// (`api::ominix_runtime`): `RA_OMINIX_HOME` (legacy `ra_OMINIX_HOME`)
 /// relocates the whole OMiniX home (including the discovery file), falling
 /// back to `HOME`
 /// and then the OS home directory.
@@ -204,7 +204,7 @@ where
 /// dashboard-installed skills with the same environment they expect.
 ///
 /// Every variable is emitted twice: under the new `RA_` prefix first and
-/// the legacy `OCTOS_` prefix second, with the same value, so skills that
+/// the legacy `RA_` prefix second, with the same value, so skills that
 /// still read the old name keep working.
 ///
 /// The set is intentionally narrow: every entry is something a
@@ -214,7 +214,7 @@ where
 pub(crate) fn push_runtime_plugin_env(
     plugin_env: &mut Vec<(String, String)>,
     data_dir: &Path,
-    octos_home: &Path,
+    ra_home: &Path,
     profile_id: Option<&str>,
     ominix_url: Option<&str>,
 ) {
@@ -223,27 +223,27 @@ pub(crate) fn push_runtime_plugin_env(
         data_dir.to_string_lossy().to_string(),
     ));
     plugin_env.push((
-        "OCTOS_DATA_DIR".to_string(),
+        "ra_DATA_DIR".to_string(),
         data_dir.to_string_lossy().to_string(),
     ));
     plugin_env.push((
         "RA_HOME".to_string(),
-        octos_home.to_string_lossy().to_string(),
+        ra_home.to_string_lossy().to_string(),
     ));
     plugin_env.push((
-        "OCTOS_HOME".to_string(),
-        octos_home.to_string_lossy().to_string(),
+        "ra_HOME".to_string(),
+        ra_home.to_string_lossy().to_string(),
     ));
     if let Some(profile_id) = profile_id {
         plugin_env.push(("RA_PROFILE_ID".to_string(), profile_id.to_string()));
-        plugin_env.push(("OCTOS_PROFILE_ID".to_string(), profile_id.to_string()));
+        plugin_env.push(("ra_PROFILE_ID".to_string(), profile_id.to_string()));
     }
     let voice_dir = data_dir
         .join("voice_profiles")
         .to_string_lossy()
         .to_string();
     plugin_env.push(("RA_VOICE_DIR".to_string(), voice_dir.clone()));
-    plugin_env.push(("OCTOS_VOICE_DIR".to_string(), voice_dir));
+    plugin_env.push(("ra_VOICE_DIR".to_string(), voice_dir));
     if let Some(ominix_url) = ominix_url {
         plugin_env.push(("OMINIX_API_URL".to_string(), ominix_url.to_string()));
     }
@@ -468,18 +468,18 @@ mod tests {
     #[test]
     fn push_runtime_plugin_env_carries_voice_dir_and_profile_id() {
         // Validates the contract that `mofa-fm` / `fm_tts` depend on:
-        // `RA_PROFILE_ID` (legacy `OCTOS_PROFILE_ID`) for per-profile state
-        // and `RA_VOICE_DIR` (legacy `OCTOS_VOICE_DIR`) pointing at the
+        // `RA_PROFILE_ID` (legacy `ra_PROFILE_ID`) for per-profile state
+        // and `RA_VOICE_DIR` (legacy `ra_VOICE_DIR`) pointing at the
         // profile's `voice_profiles/` so yangmi.wav etc.
         // are findable. Also `OMINIX_API_URL` when provided so the
         // skill can reach the local TTS server.
         let data_dir = std::path::PathBuf::from("/tmp/profile-data");
-        let octos_home = std::path::PathBuf::from("/home/user/.ra");
+        let ra_home = std::path::PathBuf::from("/home/user/.ra");
         let mut env = Vec::new();
         push_runtime_plugin_env(
             &mut env,
             &data_dir,
-            &octos_home,
+            &ra_home,
             Some("dspfac"),
             Some("http://127.0.0.1:8765"),
         );
@@ -490,7 +490,7 @@ mod tests {
             Some("/tmp/profile-data")
         );
         assert_eq!(
-            map.get("OCTOS_DATA_DIR").map(String::as_str),
+            map.get("ra_DATA_DIR").map(String::as_str),
             Some("/tmp/profile-data")
         );
         assert_eq!(
@@ -498,7 +498,7 @@ mod tests {
             Some("/home/user/.ra")
         );
         assert_eq!(
-            map.get("OCTOS_HOME").map(String::as_str),
+            map.get("ra_HOME").map(String::as_str),
             Some("/home/user/.ra")
         );
         assert_eq!(
@@ -506,7 +506,7 @@ mod tests {
             Some("dspfac")
         );
         assert_eq!(
-            map.get("OCTOS_PROFILE_ID").map(String::as_str),
+            map.get("ra_PROFILE_ID").map(String::as_str),
             Some("dspfac")
         );
         // Derive the expectation the way the product does (`Path::join`), so
@@ -516,7 +516,7 @@ mod tests {
             .to_string_lossy()
             .to_string();
         assert_eq!(map.get("RA_VOICE_DIR"), Some(&expected_voice));
-        assert_eq!(map.get("OCTOS_VOICE_DIR"), Some(&expected_voice));
+        assert_eq!(map.get("ra_VOICE_DIR"), Some(&expected_voice));
         assert_eq!(
             map.get("OMINIX_API_URL").map(String::as_str),
             Some("http://127.0.0.1:8765")
@@ -535,14 +535,14 @@ mod tests {
         );
         let keys: std::collections::HashSet<_> = env.into_iter().map(|(k, _)| k).collect();
         assert!(!keys.contains("RA_PROFILE_ID"));
-        assert!(!keys.contains("OCTOS_PROFILE_ID"));
+        assert!(!keys.contains("ra_PROFILE_ID"));
         assert!(!keys.contains("OMINIX_API_URL"));
         assert!(keys.contains("RA_DATA_DIR"));
-        assert!(keys.contains("OCTOS_DATA_DIR"));
+        assert!(keys.contains("ra_DATA_DIR"));
         assert!(keys.contains("RA_HOME"));
-        assert!(keys.contains("OCTOS_HOME"));
+        assert!(keys.contains("ra_HOME"));
         assert!(keys.contains("RA_VOICE_DIR"));
-        assert!(keys.contains("OCTOS_VOICE_DIR"));
+        assert!(keys.contains("ra_VOICE_DIR"));
     }
 
     #[test]
@@ -570,7 +570,7 @@ mod tests {
         );
     }
 
-    /// A custom `OCTOS_OMINIX_HOME` relocates the installer's discovery
+    /// A custom `ra_OMINIX_HOME` relocates the installer's discovery
     /// file; discovery must prefer it over the default `$HOME` copy.
     #[test]
     #[allow(unsafe_code)]
@@ -589,13 +589,13 @@ mod tests {
             std::fs::write(dir.join("api_url"), url).unwrap();
         }
 
-        let keys = ["OMINIX_API_URL", "OCTOS_OMINIX_HOME", "HOME"];
+        let keys = ["OMINIX_API_URL", "ra_OMINIX_HOME", "HOME"];
         let saved: Vec<(&str, Option<std::ffi::OsString>)> =
             keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
         // SAFETY: serialized by TEST_ENV_LOCK; restored below.
         unsafe {
             std::env::remove_var("OMINIX_API_URL");
-            std::env::set_var("OCTOS_OMINIX_HOME", custom.path());
+            std::env::set_var("ra_OMINIX_HOME", custom.path());
             std::env::set_var("HOME", default_home.path());
         }
         let discovered = discover_ominix_url();
@@ -609,7 +609,7 @@ mod tests {
         assert_eq!(discovered.as_deref(), Some("http://127.0.0.1:8093"));
     }
 
-    /// Without `OCTOS_OMINIX_HOME`, discovery falls back to `$HOME`
+    /// Without `ra_OMINIX_HOME`, discovery falls back to `$HOME`
     /// (the pre-custom-home behavior every default install relies on).
     #[test]
     #[allow(unsafe_code)]
@@ -622,13 +622,13 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("api_url"), "http://127.0.0.1:8081").unwrap();
 
-        let keys = ["OMINIX_API_URL", "OCTOS_OMINIX_HOME", "HOME"];
+        let keys = ["OMINIX_API_URL", "ra_OMINIX_HOME", "HOME"];
         let saved: Vec<(&str, Option<std::ffi::OsString>)> =
             keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
         // SAFETY: serialized by TEST_ENV_LOCK; restored below.
         unsafe {
             std::env::remove_var("OMINIX_API_URL");
-            std::env::remove_var("OCTOS_OMINIX_HOME");
+            std::env::remove_var("ra_OMINIX_HOME");
             std::env::set_var("HOME", default_home.path());
         }
         let discovered = discover_ominix_url();

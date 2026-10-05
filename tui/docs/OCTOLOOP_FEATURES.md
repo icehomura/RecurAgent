@@ -45,19 +45,19 @@
   不升协议版本。阶段 2/3 增补:共享 `olp-evo-lib.py`、合成回放基线
   `fixtures/evolution/replay/`、窗口化诊断 `olp-evo-metrics.sh`(含停摆与
   伪 verified 行,非 KPI)、监视器 `--harvest` 常驻采集、FLAW 直出契约骨架
-  `olp-evo-spec-skeleton.sh`、索引 `olp-evo-index.sh`;ra 侧新增
+  `olp-evo-spec-skeleton.sh`、索引 `olp-evo-index.sh`;RecurAgent 侧新增
   `fallback_switch`/`malformed_exhausted` 事件(PR #2257)。
 
 ## 通信与信道
 
-- **纯 Rust MCP 第五信道**(#31):`octoscode olp-mcp-serve` 子命令,
+- **纯 Rust MCP 第五信道**(#31):`ra-tui olp-mcp-serve` 子命令,
   turn 内同步问外环(ask_outer/report_blocked 两工具、90s 超时降级、
   每进程限 3 次 + tried 必填、board 审计、取答归档)。缺省:profile
   mcp_servers 挂载即开。体感:内环遇分歧 90s 内拿到外环人工作答,
   超时得降级指引不卡 turn。
 - **startup --prompt**(#30):Omarchy 默认 Agent 唤起即用;引导完成
   后恰好一次自动 turn/start(派发前重连补发/派发后不重发)。
-  缺省:CLI 旗标。体感:`octoscode --prompt "任务"` 启动即开工,
+  缺省:CLI 旗标。体感:`ra-tui --prompt "任务"` 启动即开工,
   TUI 全程可交互。
 
 ## 命名

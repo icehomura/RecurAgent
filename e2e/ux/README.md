@@ -3,7 +3,7 @@
 This directory documents the shared scenario format used by the M19 real-tmux
 UX gate. The manifest itself lives at `e2e/matrix/ra-ux.toml`. The list
 command is wired through `npm --prefix e2e run ux:scenario:list` and runs
-without launching tmux, ra, or any backend.
+without launching tmux, RecurAgent, or any backend.
 
 This is the first cut of the gate (umbrella issue #1062, sub-issue #1063).
 Subsequent PRs add:
@@ -35,9 +35,9 @@ tier = "local"
 transport = "stdio"
 provider = "fixture"
 terminal = "100x30"
-tui_binary = "octoscode"
+tui_binary = "ra-tui"
 tmux_command = "ux-tui-stdio-happy"
-required_tools = ["tmux", "octos", "octoscode"]
+required_tools = ["tmux", "ra", "ra-tui"]
 required_capabilities = ["chat/send_prompt", "chat/receive_response"]
 expected_artifacts = [
   "scenario.json",

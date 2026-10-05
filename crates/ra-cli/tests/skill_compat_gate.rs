@@ -24,7 +24,7 @@ use std::process::Command;
 use serde_json::{Value, json};
 
 /// Absolute path of the `ra` binary built by the test harness.
-fn octos_binary() -> PathBuf {
+fn ra_binary() -> PathBuf {
     let mut path = std::env::current_exe().expect("current_exe");
     path.pop(); // test binary name
     path.pop(); // deps
@@ -51,8 +51,8 @@ fn fixture_skill_dir() -> PathBuf {
 ///
 /// The CLI resolves the skills directory as `<cwd>/.ra/skills/` when no
 /// `--profile` is provided, so each test gets its own isolated install root.
-fn run_octos_skills(cwd: &Path, args: &[&str]) -> std::process::Output {
-    let mut cmd = Command::new(octos_binary());
+fn run_ra_skills(cwd: &Path, args: &[&str]) -> std::process::Output {
+    let mut cmd = Command::new(ra_binary());
     cmd.arg("skills").arg("--cwd").arg(cwd).args(args);
     // Keep install-time plugin cache writes hermetic. The child `ra`
     // binary is not built with `cfg(test)`, so its default verified-hash
@@ -144,7 +144,7 @@ fn should_install_run_reload_remove_fixture_skill_when_driven_by_harness_contrac
     );
     assert!(fixture.join("main").exists(), "fixture binary missing");
 
-    let ra = octos_binary();
+    let ra = ra_binary();
     assert!(
         ra.exists(),
         "ra binary not built at {} — run `cargo build -p ra-cli`",
@@ -157,7 +157,7 @@ fn should_install_run_reload_remove_fixture_skill_when_driven_by_harness_contrac
     let installed_skill = skills_dir.join("compat-test-skill");
 
     // ── Phase 1: install ───────────────────────────────────────────────
-    let out = run_octos_skills(cwd, &["install", fixture.to_str().expect("fixture utf-8")]);
+    let out = run_ra_skills(cwd, &["install", fixture.to_str().expect("fixture utf-8")]);
     assert!(
         out.status.success(),
         "install failed: stdout={} stderr={}",
@@ -178,7 +178,7 @@ fn should_install_run_reload_remove_fixture_skill_when_driven_by_harness_contrac
     );
 
     // ── Phase 2: list shows the skill (harness discovery) ──────────────
-    let list_out = run_octos_skills(cwd, &["list"]);
+    let list_out = run_ra_skills(cwd, &["list"]);
     assert!(list_out.status.success(), "list failed");
     let list_stdout = String::from_utf8_lossy(&list_out.stdout);
     assert!(
@@ -265,7 +265,7 @@ fn should_install_run_reload_remove_fixture_skill_when_driven_by_harness_contrac
     // ── Phase 4: reload — artifacts and skill survive a fresh scan ─────
     // Simulate a runtime reload by re-running `ra skills list` (fresh process)
     // and re-invoking the skill against the already-delivered artifact.
-    let list_after_run = run_octos_skills(cwd, &["list"]);
+    let list_after_run = run_ra_skills(cwd, &["list"]);
     assert!(list_after_run.status.success());
     assert!(
         String::from_utf8_lossy(&list_after_run.stdout).contains("compat-test-skill"),
@@ -293,7 +293,7 @@ fn should_install_run_reload_remove_fixture_skill_when_driven_by_harness_contrac
     assert!(rerun_output.exists(), "rerun artifact missing");
 
     // ── Phase 5: remove — skill state is fully cleaned up ──────────────
-    let remove_out = run_octos_skills(cwd, &["remove", "compat-test-skill"]);
+    let remove_out = run_ra_skills(cwd, &["remove", "compat-test-skill"]);
     assert!(
         remove_out.status.success(),
         "remove failed: {}",
@@ -305,7 +305,7 @@ fn should_install_run_reload_remove_fixture_skill_when_driven_by_harness_contrac
     );
 
     // `ra skills list` no longer reports the skill.
-    let list_after_remove = run_octos_skills(cwd, &["list"]);
+    let list_after_remove = run_ra_skills(cwd, &["list"]);
     assert!(list_after_remove.status.success());
     assert!(
         !String::from_utf8_lossy(&list_after_remove.stdout).contains("compat-test-skill"),
@@ -314,7 +314,7 @@ fn should_install_run_reload_remove_fixture_skill_when_driven_by_harness_contrac
 
     // ── Phase 6: idempotent uninstall ──────────────────────────────────
     // Required invariant 3: removing an already-absent skill must not error.
-    let remove_twice = run_octos_skills(cwd, &["remove", "compat-test-skill"]);
+    let remove_twice = run_ra_skills(cwd, &["remove", "compat-test-skill"]);
     assert!(
         remove_twice.status.success(),
         "second remove must be idempotent: stdout={} stderr={}",

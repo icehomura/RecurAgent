@@ -6,9 +6,8 @@
 //! module resolves a usable backend — in order: a `ra`/`ra.exe` beside the
 //! running TUI binary (the normal layout in this repo, where `cargo build`
 //! drops both into the same target dir), then `ra` on `PATH`, then the install
-//! dir (`~/.ra/bin`, or `$RA_PREFIX`), then a legacy upstream `ra` install
-//! (`~/.ra/bin`), which speaks a compatible protocol. The first `Ready`
-//! candidate wins; a present-but-too-old one surfaces an "update" error.
+//! dir (`~/.ra/bin`, or `$RA_PREFIX`). The first `Ready` candidate wins; a
+//! present-but-too-old one surfaces an "update" error.
 //!
 //! We do NOT auto-install: this fork's server is built from this repo, so a
 //! fully-missing backend is an actionable error (`cargo build --bin ra`, or an
@@ -19,19 +18,19 @@
 //! off-PATH: on Unix we rewrite the stdio command to the full path; on Windows
 //! we never embed a path (a quoted path in the command string is mangled by
 //! `cmd /C`) — if the resolved binary's name differs from the command's program
-//! token (e.g. a legacy `ra` while the command says `ra`) we rewrite just
-//! that token, and the transport prepends the resolved dir to the *child's*
-//! PATH. The prepend is a function of the chosen resolution, so a rejected
-//! (e.g. outdated) candidate can never be prepended back into the launch.
+//! token we rewrite just that token, and the transport prepends the resolved
+//! dir to the *child's* PATH. The prepend is a function of the chosen
+//! resolution, so a rejected (e.g. outdated) candidate can never be prepended
+//! back into the launch.
 //!
 //! Scope — it acts on a `Mode::Protocol` launch whose `--stdio-command`'s
 //! **leading program** is a bare `ra` (PATH-resolved). Trailing args may carry
 //! shell syntax (`--data-dir ~/x`, a Windows `C:\...` path, a pipe): we still
 //! probe, since only the *rewrite* to an off-PATH path needs round-trippable
 //! syntax — and that rewrite bails to a clear error when it can't. An explicit
-//! path, a `PATH=` override, a non-`ra` program, or a user-specified legacy
-//! `ra` command is the user's own setup and is left untouched. A backend
-//! older than [`MIN_BACKEND_VERSION`] surfaces a clear "please update" error.
+//! path, a `PATH=` override, or a non-`ra` program is the user's own setup and
+//! is left untouched. A backend older than [`MIN_BACKEND_VERSION`] surfaces a
+//! clear "please update" error.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -40,30 +39,30 @@ use crate::cli::{Cli, Mode};
 use eyre::{Result, eyre};
 
 /// The minimum `ra` server version this build is known to speak with.
-/// octoscode pins `ra-core` (the UI-Protocol crate) by git rev; this is the
+/// ra-tui pins `ra-core` (the UI-Protocol crate) by git rev; this is the
 /// released server version carrying a compatible protocol. Bump it alongside
 /// the pinned `ra-core` rev whenever the protocol surface moves.
 pub(crate) const MIN_BACKEND_VERSION: &str = "0.1.0";
 
 /// Set to any value to disable auto-install (a missing backend then errors).
-const OPT_OUT_ENV: &str = "OCTOSCODE_NO_AUTO_INSTALL";
+const OPT_OUT_ENV: &str = "RA_TUI_NO_AUTO_INSTALL";
 
 /// Pre-rename spelling of [`OPT_OUT_ENV`], still honoured.
 ///
 /// This is the ONLY environment variable the binary reads that was part of the
-/// documented `octos-tui` contract (the other ~157 `OCTOS_TUI_*` names belong
+/// documented `ra-tui` contract (the other ~157 `ra_TUI_*` names belong
 /// to the soak harness, and the two `_BIN`/`_DIR` ones are read by our own
 /// scripts — all renamed in lockstep). Someone with
-/// `OCTOS_TUI_NO_AUTO_INSTALL=1` in a CI job or shell profile would otherwise
+/// `ra_TUI_NO_AUTO_INSTALL=1` in a CI job or shell profile would otherwise
 /// find auto-install silently switching itself back on, which is exactly the
 /// kind of quiet breakage a rename must not cause. Honour it, say so once,
 /// and drop it a release or two after the rename has settled.
-const OPT_OUT_ENV_LEGACY: &str = "OCTOS_TUI_NO_AUTO_INSTALL";
+const OPT_OUT_ENV_LEGACY: &str = "ra_TUI_NO_AUTO_INSTALL";
 
 /// Ensure a usable `ra` backend for a stdio launch, rewriting
 /// `cli.stdio_command` to an explicit path when the backend is usable only off
 /// `PATH`. Call this BEFORE entering raw mode.
-pub fn ensure_octos_backend(cli: &mut Cli) -> Result<()> {
+pub fn ensure_ra_backend(cli: &mut Cli) -> Result<()> {
     // Only the protocol backend spawns `ra serve`; `--mode mock` uses the
     // in-process mock and never launches a child (codex).
     if cli.mode != Mode::Protocol {
@@ -72,7 +71,7 @@ pub fn ensure_octos_backend(cli: &mut Cli) -> Result<()> {
     let Some(command) = cli.stdio_command.clone() else {
         return Ok(()); // WebSocket launch — no local backend to provision.
     };
-    let Some(program) = bare_octos_program(&command) else {
+    let Some(program) = bare_ra_program(&command) else {
         // Explicit path / PATH override / non-ra — the user's own setup, and
         // not something we can safely probe or rewrite.
         return Ok(());
@@ -93,10 +92,10 @@ pub fn ensure_octos_backend(cli: &mut Cli) -> Result<()> {
             if cfg!(windows) {
                 // `cmd /C` mangles a path embedded in the command string, so we
                 // never do that. If the resolved binary's name differs from the
-                // command's program token (a legacy `ra` while the command
-                // says `ra`), rewrite just that token; the transport prepends
-                // the binary's dir to the child's PATH (see `child_path_prepend`
-                // / `shell_command`) so the bare token resolves to it.
+                // command's program token, rewrite just that token; the
+                // transport prepends the binary's dir to the child's PATH (see
+                // `child_path_prepend` / `shell_command`) so the bare token
+                // resolves to it.
                 if let Some(rewritten) = windows_command_for(&command, &bin) {
                     cli.stdio_command = Some(rewritten);
                 }
@@ -152,7 +151,7 @@ fn opted_out() -> bool {
             static WARNED: std::sync::Once = std::sync::Once::new();
             WARNED.call_once(|| {
                 eprintln!(
-                    "octoscode: {OPT_OUT_ENV_LEGACY} is deprecated — \
+                    "ra-tui: {OPT_OUT_ENV_LEGACY} is deprecated — \
                      rename it to {OPT_OUT_ENV}. Still honoured for now."
                 );
             });
@@ -193,10 +192,8 @@ pub(crate) enum CandidateKind {
     Sibling,
     /// Bare `ra` resolved through `PATH`.
     Path,
-    /// The install dir (`$RA_PREFIX` or `~/.ra/bin`).
+    /// The install dir (`$RA_PREFIX`/`$ra_PREFIX` or `~/.ra/bin`).
     InstallDir,
-    /// A legacy upstream `ra` install (`$OCTOS_PREFIX` or `~/.ra/bin`).
-    LegacyOctos,
 }
 
 impl CandidateKind {
@@ -205,7 +202,6 @@ impl CandidateKind {
             Self::Sibling => "sibling of ra-tui",
             Self::Path => "PATH",
             Self::InstallDir => "ra install dir",
-            Self::LegacyOctos => "legacy ra install",
         }
     }
 }
@@ -220,9 +216,6 @@ pub(crate) fn backend_candidates(program: &str) -> Vec<(PathBuf, CandidateKind)>
     candidates.push((PathBuf::from(program), CandidateKind::Path));
     if let Some(exe) = install_dir_backend() {
         candidates.push((exe, CandidateKind::InstallDir));
-    }
-    if let Some(exe) = legacy_install_dir_octos() {
-        candidates.push((exe, CandidateKind::LegacyOctos));
     }
     candidates
 }
@@ -295,13 +288,10 @@ pub(crate) fn resolved_backend_report() -> Option<(PathBuf, &'static str)> {
 /// fork's server is built from this repo.
 fn backend_missing_error() -> eyre::Report {
     eyre!(
-        "no ra backend found: looked for a ra/ra.exe beside this binary, on PATH, in {}, \
-         and for a legacy ra in {}. Build this repo's server (`cargo build --bin ra`) \
-         or pass an explicit `--stdio-command` (or `--endpoint` for a running server).",
+        "no ra backend found: looked for a ra/ra.exe beside this binary, on PATH, and in {}. \
+         Build this repo's server (`cargo build --bin ra`) or pass an explicit \
+         `--stdio-command` (or `--endpoint` for a running server).",
         install_dir_backend()
-            .and_then(|p| p.parent().map(|d| d.display().to_string()))
-            .unwrap_or_else(|| "~/.ra/bin".to_owned()),
-        legacy_install_dir_octos()
             .and_then(|p| p.parent().map(|d| d.display().to_string()))
             .unwrap_or_else(|| "~/.ra/bin".to_owned()),
     )
@@ -323,7 +313,7 @@ fn outdated_error(found: &str) -> eyre::Report {
 /// install ships `ra`) that a direct spawn — which finds only `.exe` —
 /// misses, while the stdio transport's `cmd /C` resolves it. We mirror that
 /// resolution via `where` so probing classifies the *same* binary the real
-/// launch will run, including when an older ra shadows a newer one (codex).
+/// launch will run, including when an older RecurAgent shadows a newer one (codex).
 fn probe(candidate: &Path) -> Probe {
     let is_bare = {
         let s = candidate.to_string_lossy();
@@ -343,7 +333,7 @@ fn probe(candidate: &Path) -> Probe {
     };
     match output {
         Ok(output) if output.status.success() => {
-            match parse_octos_version(&String::from_utf8_lossy(&output.stdout)) {
+            match parse_ra_version(&String::from_utf8_lossy(&output.stdout)) {
                 Some(found) if version_lt(&found, MIN_BACKEND_VERSION) => Probe::Outdated(found),
                 _ => Probe::Ready,
             }
@@ -371,26 +361,15 @@ fn where_first(name: &Path) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-/// The ra binary this fork installs: `$RA_PREFIX/ra` or `~/.ra/bin/ra`
-/// (`ra.exe` on Windows). `None` if no home dir.
+/// The RecurAgent binary this fork installs: `$RA_PREFIX/ra` (or the legacy
+/// `$ra_PREFIX` env fallback) or `~/.ra/bin/ra` (`ra.exe` on Windows).
+/// `None` if no home dir.
 fn install_dir_backend() -> Option<PathBuf> {
-    let dir = match std::env::var_os("RA_PREFIX") {
-        Some(p) if !p.is_empty() => PathBuf::from(p),
+    let dir = match crate::env::env_os_compat("RA_PREFIX", "ra_PREFIX") {
+        Some(p) => PathBuf::from(p),
         _ => home_dir()?.join(".ra").join("bin"),
     };
     Some(dir.join(backend_binary_name()))
-}
-
-/// A legacy upstream `ra` server install: `$OCTOS_PREFIX/ra` or
-/// `~/.ra/bin/ra` (`ra.exe` on Windows). It speaks a compatible
-/// protocol, so it is accepted as a fallback backend. `None` if no home dir.
-fn legacy_install_dir_octos() -> Option<PathBuf> {
-    let dir = match std::env::var_os("OCTOS_PREFIX") {
-        Some(p) if !p.is_empty() => PathBuf::from(p),
-        _ => home_dir()?.join(".ra").join("bin"),
-    };
-    let name = if cfg!(windows) { "ra.exe" } else { "ra" };
-    Some(dir.join(name))
 }
 
 /// A `ra`/`ra.exe` sitting beside the running TUI binary — the normal dev
@@ -468,9 +447,9 @@ fn program_token_span(command: &str) -> Option<std::ops::Range<usize>> {
 /// args carrying shell syntax (a `--data-dir ~/x`, a pipe, or a Windows
 /// `C:\...` path) must NOT disqualify provisioning (codex); round-trip safety
 /// is enforced separately, at the rewrite step. Returns `None` for an explicit
-/// path, a `PATH=` override, or a non-`ra` program (a user-specified legacy
-/// `ra` command is left to the user).
-fn bare_octos_program(command: &str) -> Option<String> {
+/// path, a `PATH=` override, or a non-`ra` program (a user-specified non-`ra`
+/// command is left to the user).
+fn bare_ra_program(command: &str) -> Option<String> {
     let span = program_token_span(command)?;
     let token = &command[span];
     if token.contains('/') || token.contains('\\') {
@@ -478,9 +457,8 @@ fn bare_octos_program(command: &str) -> Option<String> {
     }
     // Only a bare `ra` is our canonical, provisionable form. We deliberately do
     // NOT accept `ra.exe`: it's never the canonical command (bare `ra` is, and
-    // Windows `cmd /C` resolves it to whatever `.exe` exists). A user-specified
-    // `ra` command is a legacy upstream client the user manages themselves —
-    // recognised as-is and never provisioned/rewritten.
+    // Windows `cmd /C` resolves it to whatever `.exe` exists). Any other
+    // program is the user's own setup — left as-is, never provisioned.
     (token == "ra").then(|| token.to_owned())
 }
 
@@ -504,11 +482,10 @@ fn rewrite_program_token(command: &str, new_program: &str) -> Option<String> {
 
 /// Windows never embeds a path in the stdio command (`cmd /C` mangles it).
 /// When the resolved binary's bare stem differs from the command's program
-/// token — e.g. the command says `ra` but the resolved backend is a legacy
-/// `ra.exe` — rewrite just that token so the child's prepended PATH resolves
-/// it; otherwise leave the command untouched. `None` = no change needed.
+/// token, rewrite just that token so the child's prepended PATH resolves it;
+/// otherwise leave the command untouched. `None` = no change needed.
 fn windows_command_for(command: &str, bin: &Path) -> Option<String> {
-    let token = bare_octos_program(command)?;
+    let token = bare_ra_program(command)?;
     let stem = bin.file_stem()?.to_str()?;
     (token != stem)
         .then(|| rewrite_program_token(command, stem))
@@ -530,15 +507,15 @@ fn is_env_assignment(token: &str) -> bool {
         .is_some_and(|(k, _)| !k.is_empty() && !k.contains('/') && !k.contains('\\'))
 }
 
-/// Rewrite a bare-`ra` stdio command to launch `octos_path` explicitly,
+/// Rewrite a bare-`ra` stdio command to launch `ra_path` explicitly,
 /// preserving a leading `stdio:` prefix, an `env` prefix, `KEY=value`
 /// assignments, and all trailing args. Returns `None` — so the caller surfaces
-/// an actionable "add ra to PATH" error instead of a mangled command — when
+/// an actionable "add RecurAgent to PATH" error instead of a mangled command — when
 /// the command carries shell syntax the split+rejoin round-trip can't preserve
 /// (`$PWD` would become a literal, a `~` would stop expanding, a pipe would be
 /// quoted into an argument). Unix-only in practice: the Windows caller errors
 /// before reaching here, since `cmd /C` won't honor this POSIX quoting anyway.
-fn rewrite_program(command: &str, octos_path: &Path) -> Option<String> {
+fn rewrite_program(command: &str, ra_path: &Path) -> Option<String> {
     let trimmed = command.trim();
     let (prefix, body) = match trimmed.strip_prefix("stdio:") {
         Some(rest) => ("stdio:", rest.trim()),
@@ -554,7 +531,7 @@ fn rewrite_program(command: &str, octos_path: &Path) -> Option<String> {
     while tokens.get(idx).is_some_and(|t| is_env_assignment(t)) {
         idx += 1;
     }
-    *tokens.get_mut(idx)? = octos_path.to_string_lossy().into_owned();
+    *tokens.get_mut(idx)? = RecurAgent_path.to_string_lossy().into_owned();
     // A DIRECT `VAR=value` prefix (no leading `env`) is fine as typed, but
     // `try_join` re-quotes it (`'VAR=value'`), and `sh -c` then treats the
     // quoted token as the *command name* rather than an assignment — so the
@@ -572,7 +549,7 @@ fn rewrite_program(command: &str, octos_path: &Path) -> Option<String> {
 /// `ra 1.1.0 (79c19f6d4 2026-07-11)` → `1.1.0`. `ra --version` prints
 /// `ra 0.1.0 (…)`, so a leading `v` and any `-pre`/`+build` suffix are
 /// stripped before reading the leading `X.Y.Z` core.
-fn parse_octos_version(output: &str) -> Option<String> {
+fn parse_ra_version(output: &str) -> Option<String> {
     output.split_whitespace().find_map(|tok| {
         let core = tok.trim_start_matches('v');
         let core = core.split(['-', '+']).next().unwrap_or(core);
@@ -611,12 +588,12 @@ fn run_installer() -> Result<()> {
     Err(backend_missing_error())
 }
 
-/// The ra server **release this client targets** — the tag whose server carries
+/// The RecurAgent server **release this client targets** — the tag whose server carries
 /// the exact `ra-core` protocol this client pins (see the `ra-core` rev in
 /// Cargo.toml). Surfaced by `doctor` as the server version to run against.
 ///
 /// **BUMP THIS whenever you bump the `ra-core` rev in Cargo.toml**, to the
-/// release tag that contains that rev. [`REQUIRED_OCTOS_CORE_REV`] and the test
+/// release tag that contains that rev. [`REQUIRED_ra_CORE_REV`] and the test
 /// beside it make the pair checkable: the rev moved to v2.0.3-rc.1 while this
 /// stayed on v2.0.2, so the tag and the pinned rev must move together.
 pub(crate) const REQUIRED_BACKEND_RELEASE: &str = "v0.1.0";
@@ -626,14 +603,14 @@ pub(crate) const REQUIRED_BACKEND_RELEASE: &str = "v0.1.0";
 ///
 /// These are two halves of one decision (which server protocol this client
 /// speaks) held in two files, with only a doc comment joining them. Recording
-/// the rev here lets `octos_release_pin_matches_cargo_core_rev` fail when they
+/// the rev here lets `ra_release_pin_matches_cargo_core_rev` fail when they
 /// disagree, so bumping Cargo.toml without revisiting the release tag is caught
 /// at test time rather than by a user running a mismatched server.
 ///
 /// Test-only: its whole job is to be compared against Cargo.toml, so it would
 /// be dead weight in a real build.
 #[cfg(test)]
-pub(crate) const REQUIRED_OCTOS_CORE_REV: &str = "f4a31d9a0ef2228e919c3d516b78a9d82ad6f470";
+pub(crate) const REQUIRED_ra_CORE_REV: &str = "f4a31d9a0ef2228e919c3d516b78a9d82ad6f470";
 /// The backend binary filename on this platform.
 fn backend_binary_name() -> &'static str {
     if cfg!(windows) { "ra.exe" } else { "ra" }
@@ -649,12 +626,10 @@ mod tests {
         let sibling = PathBuf::from("/tui/dir/ra.exe");
         let path = PathBuf::from("ra");
         let install = PathBuf::from("/home/u/.ra/bin/ra.exe");
-        let legacy = PathBuf::from("/home/u/.ra/bin/ra.exe");
         let candidates = vec![
             (sibling.clone(), Sibling),
             (path.clone(), Path),
             (install.clone(), InstallDir),
-            (legacy.clone(), LegacyOctos),
         ];
 
         // MUST-FIX 1: an OUTDATED sibling must not win over a Ready `ra` on
@@ -745,7 +720,7 @@ mod tests {
         );
         // A user-managed (non-canonical) command is never rewritten.
         assert_eq!(
-            windows_command_for("octos serve --stdio", Path::new("C:/Users/u/.ra/bin/ra.exe")),
+            windows_command_for("ra serve --stdio", Path::new("C:/Users/u/.ra/bin/ra.exe")),
             None
         );
     }
@@ -798,7 +773,7 @@ mod tests {
     }
 
     #[test]
-    fn bare_octos_program_matches_the_standard_shapes() {
+    fn bare_ra_program_matches_the_standard_shapes() {
         for cmd in [
             "ra serve --stdio --solo",
             "  ra serve --stdio  ",
@@ -814,7 +789,7 @@ mod tests {
             "RA_HOME=\"$PWD/.ra\" ra serve",
         ] {
             assert_eq!(
-                bare_octos_program(cmd).as_deref(),
+                bare_ra_program(cmd).as_deref(),
                 Some("ra"),
                 "should extract bare ra from: {cmd}"
             );
@@ -822,7 +797,7 @@ mod tests {
     }
 
     #[test]
-    fn bare_octos_program_skips_explicit_paths_shell_syntax_and_others() {
+    fn bare_ra_program_skips_explicit_paths_shell_syntax_and_others() {
         for cmd in [
             "/usr/local/bin/ra serve --stdio", // explicit path — user-managed
             "$HOME/.local/bin/ra serve --stdio", // path (leading program) — user-managed
@@ -830,12 +805,12 @@ mod tests {
             "my-custom-backend --stdio",          // not ra
             "env A=1 my-backend serve",           // not ra
             "ra.exe serve --stdio",               // not canonical; bare `ra` is
-            "octos serve --stdio",             // legacy name — user-managed
+            "ra serve --stdio",             // legacy name — user-managed
             "env PATH=/custom/bin:$PATH ra serve", // PATH override — can't probe same ra
             "PATH=/opt/ra/bin ra serve",          // leading PATH override
         ] {
             assert_eq!(
-                bare_octos_program(cmd),
+                bare_ra_program(cmd),
                 None,
                 "should NOT auto-manage: {cmd}"
             );
@@ -843,7 +818,7 @@ mod tests {
     }
 
     #[test]
-    fn rewrite_program_swaps_the_octos_token_only() {
+    fn rewrite_program_swaps_the_ra_token_only() {
         let p = Path::new("/home/u/.ra/bin/ra");
         assert_eq!(
             rewrite_program("ra serve --stdio --solo", p).as_deref(),
@@ -869,21 +844,21 @@ mod tests {
         // A DIRECT assignment prefix (no `env` keyword) gains one, so `sh -c`
         // keeps it an assignment instead of reading the re-quoted token as a
         // command name (codex).
-        let rewritten = rewrite_program("OCTOS_HOME=/data ra serve", p).unwrap();
+        let rewritten = rewrite_program("ra_HOME=/data ra serve", p).unwrap();
         assert_eq!(
             shlex::split(&rewritten).unwrap(),
             [
                 "env",
-                "OCTOS_HOME=/data",
+                "ra_HOME=/data",
                 "/home/u/.ra/bin/ra",
                 "serve"
             ]
         );
         // Shell syntax we can't round-trip → None, so the caller errors with an
-        // "add ra to PATH" message rather than emitting a mangled command.
+        // "add RecurAgent to PATH" message rather than emitting a mangled command.
         for cmd in [
             "ra serve --data-dir ~/data",          // ~ would stop expanding
-            "OCTOS_HOME=\"$PWD/.ra\" ra serve", // $PWD would become literal
+            "ra_HOME=\"$PWD/.ra\" ra serve", // $PWD would become literal
             "ra serve | tee log",                  // pipe quoted into an argument
             "ra serve && echo done",               // control operator
         ] {
@@ -898,18 +873,18 @@ mod tests {
     #[test]
     fn parse_backend_version_extracts_semver() {
         assert_eq!(
-            parse_octos_version("ra 1.1.0 (79c19f6d4 2026-07-11)").as_deref(),
+            parse_ra_version("ra 1.1.0 (79c19f6d4 2026-07-11)").as_deref(),
             Some("1.1.0")
         );
         assert_eq!(
-            parse_octos_version("ra v2.10.3\n").as_deref(),
+            parse_ra_version("ra v2.10.3\n").as_deref(),
             Some("2.10.3")
         );
-        assert_eq!(parse_octos_version("no version here"), None);
-        assert_eq!(parse_octos_version("ra 1.2.3.4"), None); // 4-part isn't X.Y.Z
+        assert_eq!(parse_ra_version("no version here"), None);
+        assert_eq!(parse_ra_version("ra 1.2.3.4"), None); // 4-part isn't X.Y.Z
         // `ra --version` prints a prerelease; the leading X.Y.Z must still read.
         assert_eq!(
-            parse_octos_version("ra 0.1.0-rc.13 (dde7655 2026-10-03)").as_deref(),
+            parse_ra_version("ra 0.1.0-rc.13 (dde7655 2026-10-03)").as_deref(),
             Some("0.1.0")
         );
     }
@@ -969,7 +944,7 @@ mod tests {
     ///
     /// Reading Cargo.toml at test time turns the comment into a check.
     #[test]
-    fn octos_release_pin_matches_cargo_core_rev() {
+    fn ra_release_pin_matches_cargo_core_rev() {
         let manifest = include_str!("../Cargo.toml");
         // The kernel now lives in this repo, so `ra-core` is a path dependency;
         // the protocol rev it corresponds to is recorded in the comment beside
@@ -983,14 +958,14 @@ mod tests {
             .expect("Cargo.toml records the ra-core protocol rev");
 
         assert_eq!(
-            rev, REQUIRED_OCTOS_CORE_REV,
+            rev, REQUIRED_ra_CORE_REV,
             "Cargo.toml records ra-core rev {rev}, but backend_ensure records \
-             {REQUIRED_OCTOS_CORE_REV} as the rev behind \
+             {REQUIRED_ra_CORE_REV} as the rev behind \
              REQUIRED_BACKEND_RELEASE ({REQUIRED_BACKEND_RELEASE}).\n\
              \n\
              If you bumped the rev, also bump REQUIRED_BACKEND_RELEASE to the \
              release tag containing it, and update \
-             REQUIRED_OCTOS_CORE_REV to match. Otherwise the recorded protocol \
+             REQUIRED_ra_CORE_REV to match. Otherwise the recorded protocol \
              revision disagrees with this client."
         );
     }
@@ -998,7 +973,7 @@ mod tests {
     /// A release tag, not a bare version. Only `doctor` and this test read it
     /// now — nothing downloads from it.
     #[test]
-    fn octos_release_pin_is_a_tag() {
+    fn ra_release_pin_is_a_tag() {
         assert!(
             REQUIRED_BACKEND_RELEASE.starts_with('v'),
             "REQUIRED_BACKEND_RELEASE must be a tag like `v2.0.3-rc.1`, got {REQUIRED_BACKEND_RELEASE}"

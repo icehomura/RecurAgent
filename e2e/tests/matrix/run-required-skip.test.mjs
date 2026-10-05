@@ -48,8 +48,8 @@ function runMatrix({ manifest, outDir }) {
       cwd: repoRoot,
       env: {
         ...process.env,
-        OCTOS_BIN: process.execPath,
-        OCTOS_MATRIX_DIR: outDir,
+        ra_BIN: process.execPath,
+        ra_MATRIX_DIR: outDir,
       },
       encoding: 'utf8',
     },

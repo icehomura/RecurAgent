@@ -23,7 +23,7 @@ run_installer() {
     set +e
     (
         cd "$workdir"
-        HOME="$home_dir" OCTOS_DOWNLOAD_URL="$DOWNLOAD_BASE" PATH="$mock_bin:$PATH" \
+        HOME="$home_dir" ra_DOWNLOAD_URL="$DOWNLOAD_BASE" PATH="$mock_bin:$PATH" \
             bash "$INSTALLER" --prefix "$prefix" --version test
     ) >"$output_file" 2>&1
     local status=$?
@@ -82,7 +82,7 @@ run_corrupt_installer() {
     set +e
     (
         cd "$workdir"
-        HOME="$home_dir" OCTOS_DOWNLOAD_URL="file://$bundle_dir" PATH="$mock_bin:$PATH" \
+        HOME="$home_dir" ra_DOWNLOAD_URL="file://$bundle_dir" PATH="$mock_bin:$PATH" \
             bash "$INSTALLER" --prefix "$prefix" --version test
     ) >"$output_file" 2>&1
     local status=$?
@@ -109,7 +109,7 @@ EOF
 }
 
 # Mock curl so a network fetch fails the test loudly: the default arm
-# (no OCTOS_DOWNLOAD_URL) must install from the auto-detected local bundle
+# (no ra_DOWNLOAD_URL) must install from the auto-detected local bundle
 # in the working directory, never over HTTP.
 create_mock_curl() {
     local mock_bin="$1"
@@ -246,7 +246,7 @@ main() {
     grep -q "checksum verified" "$test_root/crlf.out" \
         || fail "CRLF sidecar was not verified"
 
-    # ── The default arm: no OCTOS_DOWNLOAD_URL, so the installer
+    # ── The default arm: no ra_DOWNLOAD_URL, so the installer
     # auto-detects a bundle tarball in the working directory and installs it
     # (no network, no source build) (#2514).
     local auto_dir="$test_root/auto-detect"

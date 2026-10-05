@@ -9,7 +9,7 @@ turn: 2
 
 **Session Summary**
 
-- **报告**：`.octos/independent-glm.md`（110 行，17.7KB）已按外层要求重写收拢：
+- **报告**：`.ra/independent-glm.md`（110 行，17.7KB）已按外层要求重写收拢：
   - 已核实项全部带 file:line（本仓 HEAD 9bcf409）与上游 pinned commit d51601d 的路径级证据——七条根因声明逐环核对（serde 缺字段 → `_main` 默认 `ui_protocol_transport.rs:12968-12993` / `types.rs:494` → slug 拒绝 `profiles.rs:2693-2703` → `-32603` `ui_protocol_transport.rs:13090-13092` → workspace 门 `menu/providers.rs:2466-2477` → sub_providers 同链 → test/fetch 豁免理由成立）
   - 出口覆盖完整性：三处 gate（store.rs:4931/5016/5049）对应全仓仅有的三个 wizard save 构造点；inline `/research add`（store.rs:1899-1904）与 lane 路径（5001-5004）早有前置拒绝
   - **O-1（`_main` 经 test 结果回灌解析链）明确标为「待验证」**，并写明未核到 `profile_llm_mutation_result` 返回字段级、未动态复现——不冒充已验证

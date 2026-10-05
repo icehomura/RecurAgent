@@ -5,7 +5,7 @@ Date: 2026-05-15
 
 ## Summary
 
-Expose ra' backend-owned subagent supervision state through AppUI without
+Expose RecurAgent' backend-owned subagent supervision state through AppUI without
 making the TUI a subagent scheduler.
 
 Codex comparison changed this contract: Codex exposes many imperative APIs, but
@@ -16,7 +16,7 @@ Codex collaborative subagent operations (`spawnAgent`, `sendInput`, `wait`,
 events. The normal UI does not decide that a code review needs a subagent; the
 backend/model does.
 
-ra should copy that separation:
+RecurAgent should copy that separation:
 
 - TUI sends `turn/start` for normal user messages.
 - Optional `/review` or menu review UX may call a typed `review/start`.
@@ -196,7 +196,7 @@ Runtime behavior:
 - the server launches backend-owned specialists and surfaces lifecycle through
   `agent/updated`, `agent/output/delta`, and `agent/artifact/updated`
 - the native specialist list is server-resolved, not hard-coded into AppUI:
-  `OCTOS_REVIEW_NATIVE_SPECIALISTS_JSON` may override it for test/operator
+  `ra_REVIEW_NATIVE_SPECIALISTS_JSON` may override it for test/operator
   runs; otherwise the active profile's `review.native_specialists` list is
   used; otherwise the server falls back to its built-in default review
   template
@@ -223,9 +223,9 @@ Implementation note, 2026-05-16:
   Evidence:
   `~/home/ra/e2e/test-results-m15-task-supervisor-mirror-stdio/20260516T224154Z`
 - Real tmux evidence now covers the same ordinary `TaskSupervisor` mirror path
-  through `octoscode` against real `octos serve --stdio`:
+  through `ra-tui` against real `ra serve --stdio`:
   `e2e/scripts/m15-task-supervisor-mirror-tmux-soak.sh run` passed after fixing
-  octoscode to render the backend-provided agent summary/last-task detail in
+  ra-tui to render the backend-provided agent summary/last-task detail in
   the visible activity row. Evidence:
   `~/home/ra/e2e/test-results-m15-task-supervisor-mirror-tmux/m15-task-mirror-tmux-20260516T224202Z`
 
@@ -342,7 +342,7 @@ through a few structural mechanisms, not prompt discipline:
 - Compaction replaces backend history with explicit checkpoints at
   turn/sampling boundaries. It is not a TUI-local background timer.
 
-ra should mirror those rules in the backend runtime factory. AppUI's role is
+RecurAgent should mirror those rules in the backend runtime factory. AppUI's role is
 to expose lifecycle, checkpoint, artifact, and summary items so TUI/web can
 inspect what happened after reconnect.
 
@@ -378,5 +378,5 @@ unchanged.
 - Plain `turn/start` review requests still allow backend-owned subagent
   scheduling.
 - WebSocket and stdio expose identical method/result/error/event shapes.
-- Octoscode hides inspection controls on old servers and renders task tree plus
+- ra-tui hides inspection controls on old servers and renders task tree plus
   artifact browser when capabilities are present.

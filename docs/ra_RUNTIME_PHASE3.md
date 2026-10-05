@@ -1,4 +1,4 @@
-# ra Runtime Phase 3
+# RecurAgent Runtime Phase 3
 
 Phase 3 starts after the Phase 2 runtime hardening work is green on live canary.
 The goal is to exploit the new foundation instead of continuing to churn the same
@@ -54,7 +54,7 @@ Example:
 ```bash
 ra admin operator-summary \
   --base-url https://dspfac.crew.ominix.io \
-  --auth-token "$OCTOS_AUTH_TOKEN"
+  --auth-token "$ra_AUTH_TOKEN"
 ```
 
 For automation:

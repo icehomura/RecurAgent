@@ -1,6 +1,6 @@
 //! Install-method detection, product-agnostic.
 //!
-//! Ported from octoscode's `install_method.rs`, but every product-specific
+//! Ported from ra-tui's `install_method.rs`, but every product-specific
 //! string (formula, package, repo, crate) now comes from the [`ProductSpec`]
 //! rather than being hardcoded. The path classifier ([`classify_path`]) stays
 //! pure/testable; [`detect`] wires it to the live host.
@@ -341,17 +341,17 @@ mod tests {
         }
     }
 
-    fn octos_spec() -> ProductSpec {
-        ProductSpec::new("octos", "octos", "1.0.0", "your-org/ra", "octos-bundle")
-            .with_brew_formula("your-org/ra/octos")
-            .with_npm_package("@your-org/ra")
+    fn ra_spec() -> ProductSpec {
+        ProductSpec::new("ra", "ra", "1.0.0", "icehomura/ra", "ra-bundle")
+            .with_brew_formula("icehomura/ra/ra")
+            .with_npm_package("@icehomura/ra")
             .with_cargo_install("ra-cli")
             .with_cargo_dist_app("ra")
     }
 
     #[test]
     fn should_classify_npm_global_when_under_npm_root() {
-        let mut i = input("/usr/local/lib/node_modules/@your-org/ra/bin/octos");
+        let mut i = input("/usr/local/lib/node_modules/@icehomura/ra/bin/ra");
         i.npm_global_roots = vec![PathBuf::from("/usr/local/lib/node_modules")];
         assert_eq!(classify_path(&i), InstallMethod::Npm);
     }
@@ -378,7 +378,7 @@ mod tests {
     #[test]
     fn should_classify_usr_local_as_unknown_when_no_brew_present() {
         // No brew present → `/usr/local` is NOT a brew prefix → Unknown (avoids
-        // printing a wrong `brew upgrade`). Mirrors octoscode finding #1.
+        // printing a wrong `brew upgrade`). Mirrors ra-tui finding #1.
         let i = input("/usr/local/bin/ra");
         assert_eq!(classify_path(&i), InstallMethod::Unknown);
     }
@@ -428,7 +428,7 @@ mod tests {
 
     #[test]
     fn upgrade_hints_are_method_and_spec_specific() {
-        let spec = octos_spec();
+        let spec = ra_spec();
         assert!(
             InstallMethod::CargoDistInstaller
                 .upgrade_hint(&spec)
@@ -436,11 +436,11 @@ mod tests {
         );
         assert_eq!(
             InstallMethod::Homebrew.upgrade_hint(&spec).unwrap(),
-            "brew update && brew upgrade your-org/ra/octos"
+            "brew update && brew upgrade icehomura/ra/ra"
         );
         assert_eq!(
             InstallMethod::Npm.upgrade_hint(&spec).unwrap(),
-            "npm update -g @your-org/ra"
+            "npm update -g @icehomura/ra"
         );
         assert_eq!(
             InstallMethod::CargoRegistry.upgrade_hint(&spec).unwrap(),
@@ -448,7 +448,7 @@ mod tests {
         );
         assert_eq!(
             InstallMethod::CargoGit.upgrade_hint(&spec).unwrap(),
-            "cargo install --git https://github.com/your-org/ra ra-cli --force"
+            "cargo install --git https://github.com/icehomura/ra ra-cli --force"
         );
         assert!(
             InstallMethod::Unknown
@@ -462,7 +462,7 @@ mod tests {
     fn upgrade_hint_falls_back_to_installer_when_pkg_field_absent() {
         // A spec lacking brew/npm/cargo fields must still produce a usable hint
         // (the one-line installer), not panic or return None.
-        let bare = ProductSpec::new("octos", "octos", "1.0.0", "your-org/ra", "octos-bundle");
+        let bare = ProductSpec::new("ra", "ra", "1.0.0", "icehomura/ra", "ra-bundle");
         assert!(
             InstallMethod::Homebrew
                 .upgrade_hint(&bare)

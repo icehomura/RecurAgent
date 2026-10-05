@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 # In-process llama.cpp GGUF embedding provider. Deliberately NOT target-gated:
-# unlike octos-embed-mlx this builds on macOS, Linux and Windows, ARM and x86,
+# unlike ra-embed-mlx this builds on macOS, Linux and Windows, ARM and x86,
 # which is the entire reason it exists. Optional, so it costs nothing until
 # `embed-llama` is enabled.
 ra-embed-llama = { workspace = true, optional = true }

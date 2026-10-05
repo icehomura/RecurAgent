@@ -12,11 +12,11 @@
  *
  * Run from ~/home/ra/e2e:
  *
- *   OCTOS_TEST_URL=https://dspfac.ocean.ominix.io OCTOS_PROFILE=dspfac \
- *   OCTOS_TEST_EMAIL=dspfac@gmail.com \
+ *   ra_TEST_URL=https://dspfac.ocean.ominix.io ra_PROFILE=dspfac \
+ *   ra_TEST_EMAIL=dspfac@gmail.com \
  *     npx playwright test tests/m8-runtime-invariants-live.spec.ts --workers=1
  *
- * Mini5 SSH: set OCTOS_FLEET_SSH_MAP or OCTOS_TEST_SSH_HOST (key auth assumed).
+ * Mini5 SSH: set ra_FLEET_SSH_MAP or ra_TEST_SSH_HOST (key auth assumed).
  *   Profile data dir: ~/.ra/profiles/dspfac/data
  *   Workspace dirs:   <data>/users/<percent-encoded session key>/workspace
  *   Subagent outputs: <data>/subagent-outputs/<session_id>/<task_id>.out
@@ -26,9 +26,9 @@ import { test, expect } from '@playwright/test';
 import { execSync } from 'node:child_process';
 import { chatWS, type ChatWsEvent } from '../lib/m9-ws-client';
 
-const BASE = process.env.OCTOS_TEST_URL || 'https://dspfac.ocean.ominix.io';
-const TOKEN = process.env.OCTOS_AUTH_TOKEN || 'e2e-test-2026';
-const PROFILE = process.env.OCTOS_PROFILE || 'dspfac';
+const BASE = process.env.ra_TEST_URL || 'https://dspfac.ocean.ominix.io';
+const TOKEN = process.env.ra_AUTH_TOKEN || 'e2e-test-2026';
+const PROFILE = process.env.ra_PROFILE || 'dspfac';
 
 // Per spec, time-box at 3 minutes.
 test.setTimeout(180_000);
@@ -39,12 +39,12 @@ test.setTimeout(180_000);
 // even though the workspace is intact on the API host).
 //
 // Map known production domains to SSH targets. Override via env var
-// OCTOS_TEST_SSH_HOST when running against an unmapped target.
+// ra_TEST_SSH_HOST when running against an unmapped target.
 // SSH targets per fleet host come from the environment so no host
 // addresses live in the repo, e.g.
-//   OCTOS_FLEET_SSH_MAP='dspfac.crew.ominix.io=cloud@<host>,dspfac.bot.ominix.io=cloud@<host>'
+//   ra_FLEET_SSH_MAP='dspfac.crew.ominix.io=cloud@<host>,dspfac.bot.ominix.io=cloud@<host>'
 const HOST_MAP: Record<string, string> = Object.fromEntries(
-  (process.env.OCTOS_FLEET_SSH_MAP || '')
+  (process.env.ra_FLEET_SSH_MAP || '')
     .split(',')
     .map((pair): [string, string] => {
       const [k = '', v = ''] = pair.trim().split('=');
@@ -53,7 +53,7 @@ const HOST_MAP: Record<string, string> = Object.fromEntries(
     .filter(([k, v]) => k !== '' && v !== ''),
 );
 const SSH_HOST =
-  process.env.OCTOS_TEST_SSH_HOST ||
+  process.env.ra_TEST_SSH_HOST ||
   (() => {
     try {
       const host = new URL(BASE).hostname;
@@ -264,7 +264,7 @@ test.describe('M8.6 Resume sanitizer worktree-missing refusal', () => {
     if (!SSH_HOST) {
       test.skip(
         true,
-        `M8.6: cannot resolve SSH host for ${BASE}. Set OCTOS_TEST_SSH_HOST ` +
+        `M8.6: cannot resolve SSH host for ${BASE}. Set ra_TEST_SSH_HOST ` +
           `or extend HOST_MAP. Without a host that matches the API target, ` +
           `the deletion-verification step cannot reliably distinguish a true ` +
           `delete from "ssh failed because the dir lives on a different host".`,

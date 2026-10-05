@@ -41,7 +41,7 @@ pyo3 = { version = "0.23", features = ["abi3-py39"], optional = true }
 
 [dev-dependencies]
 # Dual-read the ignored end-to-end test's env knobs (`RA_*` first, legacy
-# `OCTOS_*` honoured).
+# `RA_*` honoured).
 ra-core = { workspace = true }
 
 [features]

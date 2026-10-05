@@ -1,5 +1,5 @@
 {
-  "schema": "octos.swarm.m7.live_gate.v1",
+  "schema": "ra.swarm.m7.live_gate.v1",
   "issue": 511,
   "workflow": "m7_swarm_dispatch",
   "required_test_count": 5,
@@ -9,7 +9,7 @@
   "required_matrix_rooms": 1,
   "required_matrix_puppets": 3,
   "required_validator_aggregates": 1,
-  "live_gate_env": "OCTOS_M7_SWARM_LIVE=1",
+  "live_gate_env": "ra_M7_SWARM_LIVE=1",
   "disallowed_hosts": [
     "dspfac.ocean.ominix.io"
   ],
@@ -58,14 +58,14 @@
     "matrix_room": [
       "matrix_room_id",
       "room_id",
-      "!octos",
+      "!ra",
       "matrix room"
     ],
     "matrix_puppet": [
       "matrix_user_id",
       "puppet",
       "puppet_id",
-      "@octos"
+      "@ra"
     ],
     "validator": [
       "m4.3",
@@ -84,7 +84,7 @@
     "diagnostic_sample_limit": 20
   },
   "diagnostic_schema": {
-    "schema": "octos.swarm.m7.live_gate.diagnostic.v1",
+    "schema": "ra.swarm.m7.live_gate.diagnostic.v1",
     "required_fields": [
       "schema",
       "status",

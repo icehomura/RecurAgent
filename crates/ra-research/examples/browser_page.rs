@@ -1,4 +1,4 @@
-//! Load a page in the person's browser (the ra browser profile).
+//! Load a page in the person's browser (the RecurAgent browser profile).
 //!
 //! ```text
 //! cargo run -p ra-research --features browser --example browser_page -- <url>          # print the rendered HTML

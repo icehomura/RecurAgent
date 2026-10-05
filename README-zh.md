@@ -1,22 +1,22 @@
-# ra
+# RecurAgent
 
 **用 Rust 编写、可嵌入应用的 AI Agent Harness 内核。**
 
-ra 为 AI Agent 应用提供执行循环、上下文管理、记忆、工具、技能、工作流和
+RecurAgent 为 AI Agent 应用提供执行循环、上下文管理、记忆、工具、技能、工作流和
 Agent 协作能力。你可以将内核编译进自己的应用，也可以通过 **OUP（ra UI
 Protocol，ra UI 协议）** 托管和控制它，让原生应用、终端、浏览器或另一个
 Agent 驱动同一套运行时。
 
-ra 的核心架构是 **可复用的内核 + 可编程的协议边界**。应用负责界面和产品
-流程，ra 负责 Agent 执行与运行时状态。面向人的客户端和自动化控制端，都能
+RecurAgent 的核心架构是 **可复用的内核 + 可编程的协议边界**。应用负责界面和产品
+流程，RecurAgent 负责 Agent 执行与运行时状态。面向人的客户端和自动化控制端，都能
 通过同一套 OUP 契约操作这个内核。
 
-[构建应用](#基于-ra-构建应用) · [通过 OUP 控制内核](#通过-oup-控制内核) ·
-[文档](https://your-org.github.io/ra/zh/) · [English](README.md)
+[构建应用](#基于-recuragent-构建应用) · [通过 OUP 控制内核](#通过-oup-控制内核) ·
+[文档](https://icehomura.github.io/ra/zh/) · [English](README.md)
 
-[OctoSense 集成源码导读](docs/octosense-integration-walkthrough.md)
+[RecurAgent 集成源码导读](docs/recuragent-integration-walkthrough.md)
 用一个日历请求串起请求准入、Tokio 任务、宿主工具调用和答案返回，
-并说明 app peer、人与系统 agent 的会话、存储边界，以及排查 OctoSense 时应阅读的源码版本。
+并说明 app peer、人与系统 agent 的会话、存储边界，以及排查 RecurAgent 时应阅读的源码版本。
 贡献约定见 [AGENTS.md](AGENTS.md)。
 
 ## 想直接使用编码 Agent？
@@ -25,15 +25,15 @@ ra 的核心架构是 **可复用的内核 + 可编程的协议边界**。应用
 
 | 应用 | 从哪里开始 |
 | --- | --- |
-| **[ra-tui](https://github.com/your-org/ra-tui)** | 安装终端客户端；首次启动时会自动准备兼容的本地 ra 运行时。 |
-| **[ra-tui-web](https://github.com/your-org/ra-tui-web)** | 按照[入门指南](https://github.com/your-org/ra-tui-web/blob/main/docs/getting-started.md)部署浏览器客户端，并连接 ra 运行时。 |
+| **[ra-tui](https://github.com/icehomura/ra-tui)** | 安装终端客户端；首次启动时会自动准备兼容的本地 RecurAgent 运行时。 |
+| **[ra-tui-web](https://github.com/icehomura/ra-tui-web)** | 按照[入门指南](https://github.com/icehomura/ra-tui-web/blob/main/docs/getting-started.md)部署浏览器客户端，并连接 RecurAgent 运行时。 |
 
 本仓库面向嵌入、扩展或集成 Harness 内核的开发者。应用安装和日常编码操作，
 请查看上面的客户端仓库。
 
-## 基于 ra 构建应用
+## 基于 RecurAgent 构建应用
 
-用 ra 构建编码应用、带 Agent 能力的桌面应用、研究服务、工作流引擎，或一组
+用 RecurAgent 构建编码应用、带 Agent 能力的桌面应用、研究服务、工作流引擎，或一组
 协作 Agent。界面、模型提供者、工具和宿主环境都由你的应用选择。
 
 ### 内核架构
@@ -41,7 +41,7 @@ ra 的核心架构是 **可复用的内核 + 可编程的协议边界**。应用
 将 Rust crates 或任务执行绑定嵌入应用，或通过 OUP 连接托管运行时。
 OUP 将命令传入内核，并将响应与事件返回客户端或控制端。
 
-![ra Harness 内核架构](docs/assets/readme/architecture-zh.svg)
+![RecurAgent Harness 内核架构](docs/assets/readme/architecture-zh.svg)
 
 ### 原生内核与库
 
@@ -64,7 +64,7 @@ cargo build --release -p ra-agent
 cargo build --release -p ra-ffi
 ```
 
-集成到其他 workspace 时，将相关 ra crates 固定在同一个 Git revision。
+集成到其他 workspace 时，将相关 RecurAgent crates 固定在同一个 Git revision。
 其他宿主语言可以使用 [C ABI](crates/ra-ffi/README.md)、
 [原生 Python 绑定](crates/ra-pyo3/README.md)或
 [Swift/Kotlin 绑定](crates/ra-uniffi/README.md)。C ABI 同时提供动态库和静态库。
@@ -98,10 +98,10 @@ Stdio 客户端通过 `client_hello` 协商 features；WebSocket 客户端通过
 `config/capabilities/list`，根据运行时公告的方法与能力选择控制方式和事件格式。对话历史、执行状态、压缩、权限与已提交
 结果由运行时管理；客户端通过协议展示这些状态，或据此采取行动。
 
-### 让另一个 Agent 驱动 ra
+### 让另一个 Agent 驱动 RecurAgent
 
 控制端集成可以将 OUP 请求封装成 **Codex、Claude Code 或其他 Agent** 可调用的
-工具，让控制 Agent 向 ra Agent 分配任务、观察执行、介入过程并收集结果。
+工具，让控制 Agent 向 RecurAgent Agent 分配任务、观察执行、介入过程并收集结果。
 OUP 客户端或桥接层由这项集成提供。
 
 典型控制流程：
@@ -142,7 +142,7 @@ OUP 客户端或桥接层由这项集成提供。
 }
 ```
 
-同一个控制端可以让 ra 执行研究或实现任务，检查结果，再调整下一轮工作。
+同一个控制端可以让 RecurAgent 执行研究或实现任务，检查结果，再调整下一轮工作。
 OUP 提供将这种协作方式集成到应用中所需的控制接口与执行证据。
 
 ## 从 OUP 看内核能力
@@ -157,7 +157,7 @@ OUP 让应用能够在任务的整个生命周期中控制 Harness：检查 Agen
 
 ### 上下文管理
 
-长任务会不断积累对话、工具输出与中间结果。ra 管理模型的上下文预算，压缩较早
+长任务会不断积累对话、工具输出与中间结果。RecurAgent 管理模型的上下文预算，压缩较早
 的内容，并保留近期工具调用与结果之间的对应关系。压缩可以采用 LLM 摘要或启发式
 策略；稳定的提示前缀有助于提供者复用缓存，变化中的任务状态则进入持续演进的对话。
 
@@ -187,7 +187,7 @@ OUP 让应用能够在任务的整个生命周期中控制 Harness：检查 Agen
 
 ### 持久化会话与恢复
 
-ra 管理会话标识、工作区作用域、对话历史和已提交事件。客户端可以在重新加载后
+RecurAgent 管理会话标识、工作区作用域、对话历史和已提交事件。客户端可以在重新加载后
 重建运行时中的对话状态，也可以为同一个已存储会话提供不同的交互界面。
 
 - **打开与检查：** `session/open` 建立会话并确认工作区；`session/hydrate`
@@ -248,7 +248,7 @@ Pipeline 库用 DOT 图描述多步骤任务，支持逐节点模型选择、并
 
 ### 子 Agent 与 Peer 协作
 
-ra 提供多种并行执行方式：子 Agent 接受委派任务并向父 Agent 返回结果；Peer
+RecurAgent 提供多种并行执行方式：子 Agent 接受委派任务并向父 Agent 返回结果；Peer
 拥有独立会话，可由客户端或控制端检查和引导；受监督的后台工具任务可以不创建新的
 LLM 循环。
 
@@ -307,7 +307,7 @@ Goal 记录 Agent 要完成什么，Loop 安排周期性轮次，Monitor 观察�
    下一轮修改。
 5. 保存会话标识与持久化 cursor，让界面在重连时重新加载已提交状态。
 
-宿主实现协调策略，ra 提供执行、状态与控制机制，并通过 OUP 暴露可观察的过程。
+宿主实现协调策略，RecurAgent 提供执行、状态与控制机制，并通过 OUP 暴露可观察的过程。
 
 ## 开发者文档
 
@@ -317,7 +317,7 @@ Goal 记录 Agent 要完成什么，Loop 安排周期性轮次，Monitor 观察�
 - [Harness 开发者接口](docs/ra_HARNESS_DEVELOPER_INTERFACE.md)
 - [产物与工作流集成指南](docs/ra_HARNESS_DEVELOPER_GUIDE.md)
 - [Harness 兼容性与版本管理](docs/ra_HARNESS_ABI_VERSIONING.md)
-- [文档站点](https://your-org.github.io/ra/zh/)
+- [文档站点](https://icehomura.github.io/ra/zh/)
 
 ## 参与开发
 

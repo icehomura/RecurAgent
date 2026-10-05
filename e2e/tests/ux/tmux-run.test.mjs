@@ -17,9 +17,9 @@ function makeEnv(runId) {
   return {
     env: {
       ...process.env,
-      OCTOS_UX_TMUX_RUN_ID: runId,
-      OCTOS_UX_TMUX_OUT_ROOT: join(root, 'out'),
-      OCTOS_UX_TMUX_RUNTIME_ROOT: join(root, 'runtime'),
+      ra_UX_TMUX_RUN_ID: runId,
+      ra_UX_TMUX_OUT_ROOT: join(root, 'out'),
+      ra_UX_TMUX_RUNTIME_ROOT: join(root, 'runtime'),
     },
     outDir: join(root, 'out', runId, 'stdio-happy-path'),
   };
@@ -104,6 +104,6 @@ test('stdio onboarding launch opts into local solo mode', () => {
   run(['stdio-happy-path', '--dry-run', '--no-validate'], env);
 
   const launchCommand = readFileSync(join(outDir, 'launch-command.txt'), 'utf8');
-  assert.match(launchCommand, /OCTOS_SOLO_LOGIN=/);
+  assert.match(launchCommand, /ra_SOLO_LOGIN=/);
   assert.match(launchCommand, /\bserve --stdio --solo\b/);
 });

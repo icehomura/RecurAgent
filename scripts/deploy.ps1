@@ -15,7 +15,7 @@ param(
     [string]$IdentityFile = "",
     [string]$Version = "latest",
     [string]$RemoteRoot = "C:\ra",
-    [string]$ServiceName = "OctosServe",
+    [string]$ServiceName = "RaServe",
     [int]$ServePort = 8080,
     [string]$AuthToken = "",
     [string]$DownloadBase = "",
@@ -29,7 +29,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$GithubRepo = "your-org/ra"
+$GithubRepo = "icehomura/ra"
 $BundleName = "ra-bundle-x86_64-pc-windows-msvc.zip"
 $NssmVersion = "2.24"
 
@@ -211,7 +211,7 @@ if (-not $authToken) {
     $authToken = New-AuthToken
 }
 
-$octosExe = Join-Path $binDir "ra.exe"
+$raExe = Join-Path $binDir "ra.exe"
 $nssmExe = Join-Path $binDir "nssm.exe"
 
 if ($installDeps) {
@@ -242,12 +242,12 @@ if (-not $restartOnly) {
     New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
     Expand-Archive -Path $bundleZip -DestinationPath $extractDir -Force
 
-    $octosSource = Get-ChildItem -Path $extractDir -Recurse -Filter "ra.exe" | Select-Object -First 1
-    if (-not $octosSource) {
+    $raSource = Get-ChildItem -Path $extractDir -Recurse -Filter "ra.exe" | Select-Object -First 1
+    if (-not $raSource) {
         throw "ra.exe not found in $bundleZip"
     }
-    Copy-Item $octosSource.FullName -Destination $octosExe -Force
-    Ok "installed $octosExe"
+    Copy-Item $raSource.FullName -Destination $raExe -Force
+    Ok "installed $raExe"
 }
 
 $configPath = Join-Path $dataDir "config.json"
@@ -255,7 +255,7 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     # #2496: no auth_token here — config.json is created with inherited
     # world-readable ACLs. The token lives in the ACL-restricted
     # serve-token file and reaches serve through the launcher's
-    # OCTOS_AUTH_TOKEN env var.
+    # ra_AUTH_TOKEN env var.
     $config = [ordered]@{
         provider = "openai"
         model = "gpt-4.1-mini"
@@ -340,12 +340,12 @@ if (Test-Path -LiteralPath $configPath) {
 $wrapperPath = Join-Path $dataDir "serve-launcher.cmd"
 Write-Utf8NoBom $wrapperPath @"
 @echo off
-set /p OCTOS_AUTH_TOKEN=<"$dataDir\serve-token"
-if not defined OCTOS_AUTH_TOKEN (
+set /p ra_AUTH_TOKEN=<"$dataDir\serve-token"
+if not defined ra_AUTH_TOKEN (
     echo [ra] serve-token file missing or empty; re-run deploy.ps1
     exit /b 1
 )
-"$octosExe" serve --host 0.0.0.0 --port $servePort --data-dir "$dataDir"
+"$raExe" serve --host 0.0.0.0 --port $servePort --data-dir "$dataDir"
 "@
 
 & $nssmExe install $serviceName "$env:SystemRoot\System32\cmd.exe" "/C" "`"$wrapperPath`""
@@ -359,7 +359,7 @@ if ($LASTEXITCODE -ne 0) {
 & $nssmExe set $serviceName AppRotateFiles 1 | Out-Null
 & $nssmExe set $serviceName Start SERVICE_AUTO_START | Out-Null
 # Non-secret env only — the token arrives through the wrapper (#2496).
-& $nssmExe set $serviceName AppEnvironmentExtra "OCTOS_HOME=$dataDir" "OCTOS_DATA_DIR=$dataDir" | Out-Null
+& $nssmExe set $serviceName AppEnvironmentExtra "ra_HOME=$dataDir" "ra_DATA_DIR=$dataDir" | Out-Null
 if ($LASTEXITCODE -ne 0) {
     throw "nssm.exe failed to set the service environment"
 }
@@ -372,7 +372,7 @@ if ($LASTEXITCODE -ne 0) {
 Ok "$serviceName service started"
 Write-Host ""
 Write-Host "    Remote root: $remoteRoot"
-Write-Host "    Binary:      $octosExe"
+Write-Host "    Binary:      $raExe"
 Write-Host "    Data dir:    $dataDir"
 Write-Host "    Logs:        $logDir"
 Write-Host "    Dashboard:   http://$env:COMPUTERNAME`:$servePort/admin/"

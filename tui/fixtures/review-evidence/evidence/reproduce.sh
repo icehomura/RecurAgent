@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Reproduce the eight negative review probes in a NEW disposable clone.
-# Usage: bash reproduce.sh /path/to/octoscode /private/tmp/new-review-clone
+# Usage: bash reproduce.sh /path/to/ra-tui /private/tmp/new-review-clone
 # Prerequisite: the source repository contains the pinned PR objects.
 set -euo pipefail
 source_repo="${1:?source repository required}"

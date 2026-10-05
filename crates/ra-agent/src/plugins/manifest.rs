@@ -466,7 +466,7 @@ pub struct PluginToolDef {
     /// Default: "SUCCESS: Task is now running in background..."
     #[serde(default)]
     pub spawn_only_message: Option<String>,
-    /// Item 6 of OCTOS_M8_FIX_FIRST_CHECKLIST_2026-04-24:
+    /// Item 6 of ra_M8_FIX_FIRST_CHECKLIST_2026-04-24:
     /// optional concurrency class. When `"exclusive"` the M8.8
     /// scheduler serialises this tool against any sibling in the same
     /// batch instead of fanning out in parallel. Default `None` means

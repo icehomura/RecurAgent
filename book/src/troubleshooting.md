@@ -110,7 +110,7 @@ To start fresh on purpose, use `/clear` (or bare `/new`), which clears the curre
 | Service will not start | Check logs: `tail -f ~/.ra/serve.log` (macOS) or `journalctl --user -u ra-serve` (Linux) |
 | Windows: `ra` not found | Ensure `%USERPROFILE%\.cargo\bin` is in your PATH |
 | Windows: shell commands fail | Commands run via `cmd /C`; use Windows-compatible syntax |
-| Sessions look shorter after upgrade | History now loads newest-first up to `OCTOS_SESSION_LOAD_BUDGET_BYTES` (32 MiB); older turns live in `<name>.segments/` and load on demand — nothing was deleted |
+| Sessions look shorter after upgrade | History now loads newest-first up to `RA_SESSION_LOAD_BUDGET_BYTES` (32 MiB); older turns live in `<name>.segments/` and load on demand — nothing was deleted |
 
 ---
 
@@ -144,5 +144,5 @@ To start fresh on purpose, use `/clear` (or bare `/new`), which clears the curre
 | `EMAIL_PASSWORD` | Email account password |
 | `WECOM_CORP_ID` | WeCom corp ID |
 | `WECOM_AGENT_SECRET` | WeCom agent secret |
-| `OCTOS_SESSION_SEGMENT_BYTES` | Active session file size at which it seals into a segment (default 8 MiB) |
-| `OCTOS_SESSION_LOAD_BUDGET_BYTES` | Session history bytes a plain load reads, newest first (default 32 MiB; `0` = unlimited) |
+| `RA_SESSION_SEGMENT_BYTES` | Active session file size at which it seals into a segment (default 8 MiB) |
+| `RA_SESSION_LOAD_BUDGET_BYTES` | Session history bytes a plain load reads, newest first (default 32 MiB; `0` = unlimited) |

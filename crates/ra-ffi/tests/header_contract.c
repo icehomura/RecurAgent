@@ -1,7 +1,7 @@
 /* Compile-only ABI declaration check; no provider/runtime calls. */
 #include "ra.h"
 
-void octos_header_contract(void) {
+void ra_header_contract(void) {
     char *(*run)(RaRuntime *, const char *) = ra_run_task;
     char *(*take_partial)(void) = ra_take_last_partial_result;
     const char *(*diagnostic)(void) = ra_last_error;

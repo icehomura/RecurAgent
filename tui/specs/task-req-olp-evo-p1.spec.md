@@ -117,7 +117,7 @@ grok 的对抗复审。
 ## 排除范围
 
 - retro 的判断部分(归层、锚定、立案、写记录)——由外环模型按简报手工完成。
-- events.jsonl 新 producer(ra 侧,阶段 2)。
+- events.jsonl 新 producer(RecurAgent 侧,阶段 2)。
 - 指标脚本、回放夹具、采集挂外环 watch 节拍(阶段 2/3)。
 - `docs/OUTER_LOOP_PROTOCOL.md` 的任何改动。
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, type DeploymentMode } from '../../api'
 
 const INSTALL_URL =
-  'https://github.com/your-org/ra/releases/latest/download/install.sh'
+  'https://github.com/icehomura/ra/releases/latest/download/install.sh'
 
 type Guidance = {
   tone: 'ok' | 'info' | 'warn'
@@ -22,18 +22,18 @@ function guidanceFor(
       return {
         tone: 'ok',
         title: 'Local mode — host is ready',
-        body: 'Standalone install. octos serve runs on 127.0.0.1; no tunnel, no public landing page. Nothing else to do.',
+        body: 'Standalone install. ra serve runs on 127.0.0.1; no tunnel, no public landing page. Nothing else to do.',
       }
     if (selected === 'tenant')
       return {
         tone: 'ok',
         title: 'Tenant mode — frpc tunnel detected',
-        body: 'frpc.toml was found and the host is set up to tunnel out to your cloud relay. No further action needed; restart octos serve if you changed the mode.',
+        body: 'frpc.toml was found and the host is set up to tunnel out to your cloud relay. No further action needed; restart ra serve if you changed the mode.',
       }
     return {
       tone: 'ok',
       title: 'Cloud mode — VPS relay environment detected',
-      body: 'TUNNEL_DOMAIN is set and this host is provisioned as the relay. Tenants can register through this node. Restart octos serve if you changed the mode.',
+      body: 'TUNNEL_DOMAIN is set and this host is provisioned as the relay. Tenants can register through this node. Restart ra serve if you changed the mode.',
     }
   }
 
@@ -72,9 +72,9 @@ function guidanceFor(
       tone: 'info',
       title: 'Switching to local will leave the frpc tunnel running',
       body:
-        'The mode flag only changes how octos serve behaves. The frpc client is a separate process that keeps tunneling traffic until you stop it.',
+        'The mode flag only changes how ra serve behaves. The frpc client is a separate process that keeps tunneling traffic until you stop it.',
       command:
-        '# macOS\nsudo launchctl unload /Library/LaunchDaemons/io.octos.frpc.plist\n# Linux\nsudo systemctl disable --now frpc',
+        '# macOS\nsudo launchctl unload /Library/LaunchDaemons/io.ra.frpc.plist\n# Linux\nsudo systemctl disable --now frpc',
       commandNote:
         'Or run sudo bash scripts/install.sh --uninstall to remove the binary, frpc, and all related config.',
     }
@@ -92,7 +92,7 @@ function guidanceFor(
   return {
     tone: 'ok',
     title: 'Local mode',
-    body: 'Standalone install. octos serve runs on 127.0.0.1; no tunnel.',
+    body: 'Standalone install. ra serve runs on 127.0.0.1; no tunnel.',
   }
 }
 

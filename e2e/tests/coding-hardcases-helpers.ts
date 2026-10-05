@@ -148,8 +148,8 @@ export async function waitForSingleSettledTurn(page: Page, timeoutMs = 240_000) 
 export async function fetchSessionIds(page: Page): Promise<string[]> {
   return page.evaluate(async () => {
     const token =
-      localStorage.getItem('octos_session_token') ||
-      localStorage.getItem('octos_auth_token') ||
+      localStorage.getItem('ra_session_token') ||
+      localStorage.getItem('ra_auth_token') ||
       '';
     const profile = localStorage.getItem('selected_profile') || '';
     const headers: Record<string, string> = {};
@@ -213,8 +213,8 @@ export async function getActiveSessionId(
 export async function getSessionTasks(page: Page, sessionId: string): Promise<SessionTask[]> {
   return page.evaluate(async ({ sessionId: sid }) => {
     const token =
-      localStorage.getItem('octos_session_token') ||
-      localStorage.getItem('octos_auth_token') ||
+      localStorage.getItem('ra_session_token') ||
+      localStorage.getItem('ra_auth_token') ||
       '';
     const profile = localStorage.getItem('selected_profile') || '';
     const headers: Record<string, string> = {};
@@ -238,8 +238,8 @@ export async function getSessionTasks(page: Page, sessionId: string): Promise<Se
 export async function getSessionMessagesText(page: Page, sessionId: string): Promise<string> {
   return page.evaluate(async ({ sessionId: sid }) => {
     const token =
-      localStorage.getItem('octos_session_token') ||
-      localStorage.getItem('octos_auth_token') ||
+      localStorage.getItem('ra_session_token') ||
+      localStorage.getItem('ra_auth_token') ||
       '';
     const profile = localStorage.getItem('selected_profile') || '';
     const headers: Record<string, string> = {};

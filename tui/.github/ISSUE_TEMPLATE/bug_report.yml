@@ -1,18 +1,18 @@
 name: Bug report
-description: Report a reproducible problem in octoscode
+description: Report a reproducible problem in ra-tui
 title: "bug: "
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for helping improve octoscode. Search existing issues first.
+        Thanks for helping improve ra-tui. Search existing issues first.
         Do not report vulnerabilities or include secrets here; follow SECURITY.md instead.
   - type: input
     id: version
     attributes:
-      label: octoscode version
-      description: Run `octoscode --version`.
-      placeholder: octoscode 0.x.y
+      label: ra-tui version
+      description: Run `ra-tui --version`.
+      placeholder: ra-tui 0.x.y
     validations:
       required: true
   - type: input
@@ -75,7 +75,7 @@ body:
     id: diagnostics
     attributes:
       label: Relevant diagnostics
-      description: Paste minimal logs or redacted `octoscode doctor --json` output. Remove tokens, keys, credentials, private prompts, and session data.
+      description: Paste minimal logs or redacted `ra-tui doctor --json` output. Remove tokens, keys, credentials, private prompts, and session data.
       render: shell
   - type: checkboxes
     id: checks

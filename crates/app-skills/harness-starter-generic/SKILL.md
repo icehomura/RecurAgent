@@ -2,7 +2,7 @@
 name: harness-starter-generic
 description: Minimal harnessed single-artifact starter. Use as a template for a custom app that produces one deliverable.
 version: 1.0.0
-author: ra
+author: RecurAgent
 always: false
 ---
 

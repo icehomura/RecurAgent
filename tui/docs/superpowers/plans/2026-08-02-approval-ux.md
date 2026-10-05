@@ -302,7 +302,7 @@ for tasks in `pending|running`.
 ```rust
 fn running_subagent_rows_for_chip(
     app: &AppState,
-    turn_id: Option<&octos_core::ui_protocol::TurnId>,
+    turn_id: Option<&ra_core::ui_protocol::TurnId>,
 ) -> Vec<String> {
     // …same filtering as today (keep the codex P2 scoping comment)…
         .map(|task| {

@@ -64,7 +64,7 @@ case "$out" in
 esac
 
 # Checksum sidecar so installers can verify the download (`sha256sum -c`
-# format) — without it octoscode's auto-provision silently skips verification
+# format) — without it ra-tui's auto-provision silently skips verification
 # (#1929). macOS runners ship shasum instead of sha256sum; output is identical.
 if command -v sha256sum >/dev/null 2>&1; then
   (cd "$(dirname "$out")" && sha256sum "$(basename "$out")" > "$(basename "$out").sha256")

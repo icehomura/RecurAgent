@@ -148,7 +148,7 @@ fn overlay<T>(
 /// `explicit-CLI > env > JSON > default`. A `DefaultValue` or an unset arg
 /// (`None`) yields the built-in default, which JSON is allowed to replace.
 ///
-/// (ra does not enable clap's `env` feature — its `RA_*` env vars are read
+/// (RecurAgent does not enable clap's `env` feature — its `RA_*` env vars are read
 /// manually in the command bodies, which re-assert env over the layered value
 /// for the few flags that honour them, e.g. `serve --solo`. The `EnvVariable`
 /// arm here keeps this correct should any arg ever adopt clap `env`.)

@@ -1,15 +1,15 @@
 //! `ra-diagnostics` — shared, **product-agnostic** diagnostics + update
-//! *planning* for the ra binaries (`ra doctor`, and later `ra update
+//! *planning* for the RecurAgent binaries (`ra doctor`, and later `RecurAgent update
 //! --check`).
 //!
-//! This crate is the dependency-light seam factored out of octoscode's
-//! `doctor`/`install_method` modules (octoscode#182, ADR
+//! This crate is the dependency-light seam factored out of ra-tui's
+//! `doctor`/`install_method` modules (ra-tui#182, ADR
 //! `docs/adr/ra-diagnostics-extraction-scope.md`). Stage 1 ships:
 //!
 //! - the report model ([`CheckStatus`] / [`Check`] / [`Report`]) with the
 //!   `[✓]/[!]/[✗]` glyphs, JSON support-bundle output, and exit-code policy;
-//! - a [`ProductSpec`] seam so the same logic serves both octoscode and the
-//!   ra server — **the current version is always passed IN** by the caller,
+//! - a [`ProductSpec`] seam so the same logic serves both ra-tui and the
+//!   RecurAgent server — **the current version is always passed IN** by the caller,
 //!   never read from this crate's `CARGO_PKG_VERSION`;
 //! - [`InstallMethod`] classification ([`classify_path`] pure + [`detect`]
 //!   path/env heuristics), PATH/shadow detection ([`locate`], [`on_path_check`],

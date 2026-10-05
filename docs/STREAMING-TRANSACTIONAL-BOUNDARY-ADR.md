@@ -7,7 +7,7 @@
 
 ## Context
 
-ra's LLM streaming layer treats partially-received SSE responses as if they were complete, then ships the corrupted state downstream. The agent loop, tool dispatcher, and plugin executor all act on the corrupted state as if it were a real `ChatResponse`, producing a cascade of secondary failures that look like model defects, plugin defects, or LLM misbehavior — but are all consequences of a single missing invariant in the streaming layer.
+RecurAgent's LLM streaming layer treats partially-received SSE responses as if they were complete, then ships the corrupted state downstream. The agent loop, tool dispatcher, and plugin executor all act on the corrupted state as if it were a real `ChatResponse`, producing a cascade of secondary failures that look like model defects, plugin defects, or LLM misbehavior — but are all consequences of a single missing invariant in the streaming layer.
 
 ### Empirical evidence
 
@@ -25,9 +25,9 @@ WARN spawn_only background tool failed tool=mofa_slides error=missing 'out'
 
 Initial hypothesis was kimi-k2.5 (the upstream model on moonshot@autodl) truncating its output. Direct API tests refuted that: 15 back-to-back calls with payloads up to 14k input tokens, 8 slides × 800 chars each, returned valid JSON every time. The model is not defective.
 
-The actual root cause is that ra's SSE handler (`crates/ra-agent/src/agent/streaming.rs:62-91`) breaks its read loop on the 30s inter-chunk timeout with a half-assembled `tool_calls[].arguments` buffer. The half-assembled buffer is then handed to `serde_json::from_str` at line 172, which legitimately fails ("EOF while parsing a string at column N"). The recovery code at lines 186-190 wraps the parse error as a sentinel `Value::String("MALFORMED_JSON: ... Raw input: <truncated 200 chars>")` and stores it as `ToolCall.arguments`. The agent loop accepts this as a valid `ChatResponse`, the tool dispatcher hands the sentinel string to the plugin, and the plugin errors with "missing 'out'" because it expected an object.
+The actual root cause is that RecurAgent's SSE handler (`crates/ra-agent/src/agent/streaming.rs:62-91`) breaks its read loop on the 30s inter-chunk timeout with a half-assembled `tool_calls[].arguments` buffer. The half-assembled buffer is then handed to `serde_json::from_str` at line 172, which legitimately fails ("EOF while parsing a string at column N"). The recovery code at lines 186-190 wraps the parse error as a sentinel `Value::String("MALFORMED_JSON: ... Raw input: <truncated 200 chars>")` and stores it as `ToolCall.arguments`. The agent loop accepts this as a valid `ChatResponse`, the tool dispatcher hands the sentinel string to the plugin, and the plugin errors with "missing 'out'" because it expected an object.
 
-The smoking-gun signal that this is a streaming-completeness bug, not a model defect, is `output_tokens=0` on the failing turns — the SSE `usage` event (sent only in the very last chunk per OpenAI's `stream_options.include_usage=true`) never arrived. The provider had more bytes to send; ra stopped listening prematurely.
+The smoking-gun signal that this is a streaming-completeness bug, not a model defect, is `output_tokens=0` on the failing turns — the SSE `usage` event (sent only in the very last chunk per OpenAI's `stream_options.include_usage=true`) never arrived. The provider had more bytes to send; RecurAgent stopped listening prematurely.
 
 ### Why this keeps recurring
 
@@ -115,7 +115,7 @@ The `RetryProvider` / `ProviderChain` / lane-based router infrastructure already
 
 - A new `StreamBuffer` type in `crates/ra-llm/src/streaming.rs` (or a new submodule). Holds per-turn streaming state. Sealed: cannot be observed externally except via `finalize() -> Result<ChatResponse, StreamError>`.
 - A new `StreamError` enum: `IdleTimeout`, `Incomplete` (missing `finish_reason` or usage), `MalformedArgs(tool_id, parse_err)`, `Transport`. All variants implement `is_retryable() -> bool` similar to codex's policy at `protocol/src/error.rs:193-202`.
-- Per-provider `StreamBuffer` adapter. For chat-completions providers (most of ra's fleet today: AnthropicProvider, OpenAIProvider, GeminiProvider, OpenRouterProvider, 8 OpenAI-compatible bases), the adapter buffers `tool_call.arguments` deltas internally and only emits the assembled `ToolCall` after seeing `finish_reason`. For any future Responses-API provider, the adapter delivers atomic tool_call frames directly.
+- Per-provider `StreamBuffer` adapter. For chat-completions providers (most of RecurAgent's fleet today: AnthropicProvider, OpenAIProvider, GeminiProvider, OpenRouterProvider, 8 OpenAI-compatible bases), the adapter buffers `tool_call.arguments` deltas internally and only emits the assembled `ToolCall` after seeing `finish_reason`. For any future Responses-API provider, the adapter delivers atomic tool_call frames directly.
 - Bumped default idle timeout: 30s → 180s (per-provider tunable). Configurable via existing provider config. Reasoning models on slower providers (kimi-k2.5/autodl, deepseek-r1, etc.) get more headroom.
 - A test fixture suite that simulates stream stalls at every byte position in a tool_call args string and asserts `Err(IdleTimeout)` propagates cleanly — no `Ok(ChatResponse)` ever produced with partial state. (codex has a similar test at `codex-rs/core/tests/suite/stream_no_completed.rs`.)
 
@@ -218,7 +218,7 @@ Rejected as primary fix. **Useful tuning knob for Phase 4 even after the structu
 
 What codex did. Architecturally cleaner — Responses API delivers atomic tool_call frames, eliminating the delta-assembly problem at the wire level.
 
-Rejected because ra's multi-provider strategy includes providers that do not speak Responses API (Anthropic, Gemini, wisemodel-hosted models, most OpenAI-compatible reseller endpoints). Maintaining Responses-API-only would force ra out of those provider lanes.
+Rejected because RecurAgent's multi-provider strategy includes providers that do not speak Responses API (Anthropic, Gemini, wisemodel-hosted models, most OpenAI-compatible reseller endpoints). Maintaining Responses-API-only would force RecurAgent out of those provider lanes.
 
 The architectural pattern (atomic delivery + sealed-result construction) is adopted; the wire-format restriction is not.
 
@@ -230,13 +230,13 @@ Rejected. Anti-pattern: every new tool requires a new salvager. The salvagers th
 
 ### Alternative E: Keep the current code, lean on PR #1348 (L3 routing) to make failures recoverable
 
-PR #1348 ensures that any post-spawn failure (including those caused by corrupted-args dispatch) reaches the LLM as a synthetic user message, prompting retry. Under this alternative, ra accepts that the streaming layer ships garbage but ensures the LLM can recover from each garbage dispatch.
+PR #1348 ensures that any post-spawn failure (including those caused by corrupted-args dispatch) reaches the LLM as a synthetic user message, prompting retry. Under this alternative, RecurAgent accepts that the streaming layer ships garbage but ensures the LLM can recover from each garbage dispatch.
 
-Rejected. This treats the agent loop as a fault-tolerance mechanism for streaming-layer bugs. The LLM is asked to debug ra's streaming-corruption every time it occurs, which: (a) burns LLM turns + tokens, (b) requires the LLM to figure out from the error message that the call was corrupted (it can't always tell — "missing 'out'" looks like its own mistake), (c) doesn't fix the latency cost (each garbage dispatch + LLM-retry is more expensive than a clean stream-layer retry). L3 routing remains useful for real plugin failures; it should not be the primary defense for streaming corruption.
+Rejected. This treats the agent loop as a fault-tolerance mechanism for streaming-layer bugs. The LLM is asked to debug RecurAgent's streaming-corruption every time it occurs, which: (a) burns LLM turns + tokens, (b) requires the LLM to figure out from the error message that the call was corrupted (it can't always tell — "missing 'out'" looks like its own mistake), (c) doesn't fix the latency cost (each garbage dispatch + LLM-retry is more expensive than a clean stream-layer retry). L3 routing remains useful for real plugin failures; it should not be the primary defense for streaming corruption.
 
 ## References
 
-### ra code referenced in this ADR
+### RecurAgent code referenced in this ADR
 
 - `crates/ra-agent/src/agent/streaming.rs:62-91` — SSE inter-chunk timeout + break
 - `crates/ra-agent/src/agent/streaming.rs:172-198` — JSON parse + sentinel fallback

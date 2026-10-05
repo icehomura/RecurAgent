@@ -291,14 +291,14 @@ fn smoke_real_binary(binary: &std::path::Path) {
             let Some(line) = line else { panic!("ra prompt failed: {}", tokio::time::timeout_at(deadline, diagnostic).await.unwrap().unwrap()); };
             let frame: serde_json::Value = serde_json::from_str(&line).unwrap();
             let result = match frame["method"].as_str() {
-                Some("_octos/host/tools/list") => {
+                Some("_ra/host/tools/list") => {
                     tool_lists += 1;
                     assert_eq!(tool_lists, 1, "unexpected tool catalog refresh");
                     json!({"tools":[{"name":"echo","description":"Synthetic host tool.",
                         "input_schema":{"type":"object","properties":{"text":{"type":"string"}},
                             "required":["text"],"additionalProperties":false}}]})
                 }
-                Some("_octos/host/model") => {
+                Some("_ra/host/model") => {
                     model_calls += 1;
                     assert_eq!(frame["params"]["tools"].as_array().unwrap().len(), 1,
                         "worker must expose only the host's tools");
@@ -325,7 +325,7 @@ fn smoke_real_binary(binary: &std::path::Path) {
                     }
                     result
                 }
-                Some("_octos/host/tools/call") => {
+                Some("_ra/host/tools/call") => {
                     tool_calls += 1;
                     assert_eq!((model_calls, tool_calls), (1, 1));
                     assert_eq!(frame["params"]["name"], "echo");

@@ -31,9 +31,9 @@
         "RA_ALLOW_BROWSER_SERP",
         "RA_METASEARCH",
         "RA_METASEARCH_MASTODON_INSTANCE",
-        "OCTOS_ALLOW_SERP_SCRAPE",
-        "OCTOS_RESPECT_ROBOTS",
-        "OCTOS_ALLOW_BROWSER_SERP"
+        "ra_ALLOW_SERP_SCRAPE",
+        "ra_RESPECT_ROBOTS",
+        "ra_ALLOW_BROWSER_SERP"
       ],
       "input_schema": {
         "type": "object",

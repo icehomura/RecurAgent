@@ -95,7 +95,7 @@ pub(crate) const CODING_P0_REQUIRED_TOOL_NAMES: &[&str] = &[
     "close_agent",
 ];
 
-pub(crate) const OCTOS_KNOWN_MODEL_VISIBLE_TOOLS: &[&str] = &[
+pub(crate) const ra_KNOWN_MODEL_VISIBLE_TOOLS: &[&str] = &[
     "apply_patch",
     "exec_command",
     "write_stdin",
@@ -186,7 +186,7 @@ impl<'a> ToolStatusListContext<'a> {
             profile_id: None,
             session_id,
             policy: ToolPolicyView::default(),
-            available_model_tools: OCTOS_KNOWN_MODEL_VISIBLE_TOOLS,
+            available_model_tools: ra_KNOWN_MODEL_VISIBLE_TOOLS,
             disabled_model_tools: &[],
             deferred_model_tools: &[],
             include_coding_tool_contract: true,
@@ -229,7 +229,7 @@ struct RequiredToolSpec {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct OctosToolSpec {
+struct RaToolSpec {
     name: &'static str,
     category: &'static str,
     aliases: &'static [&'static str],
@@ -328,43 +328,43 @@ const REQUIRED_CODING_TOOLS: &[RequiredToolSpec] = &[
     },
 ];
 
-const OCTOS_TOOL_SPECS: &[OctosToolSpec] = &[
-    OctosToolSpec {
+const ra_TOOL_SPECS: &[RaToolSpec] = &[
+    RaToolSpec {
         name: "apply_patch",
         category: "edit",
         aliases: &["diff_edit", "edit_file"],
         policy: "allowed",
         detail: Some("Codex-compatible patch entrypoint backed by ra file mutation policy."),
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "exec_command",
         category: "runtime",
         aliases: &["shell"],
         policy: "approval_gated",
         detail: Some("Codex-compatible command entrypoint with session output polling."),
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "write_stdin",
         category: "runtime",
         aliases: &[],
         policy: "approval_gated",
         detail: Some("Writes to exec_command sessions."),
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "update_plan",
         category: "planning",
         aliases: &[],
         policy: "allowed",
         detail: None,
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "request_user_input",
         category: "interaction",
         aliases: &[],
         policy: "allowed",
         detail: Some("Visible host-interaction shim; synchronous UI blocking is host-dependent."),
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "spawn_agent",
         category: "agent",
         aliases: &["spawn"],
@@ -373,14 +373,14 @@ const OCTOS_TOOL_SPECS: &[OctosToolSpec] = &[
             "Canonical Codex subagent entrypoint; forwards to ra spawn when the session runtime registers it.",
         ),
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "send_input",
         category: "agent",
         aliases: &[],
         policy: "allowed",
         detail: Some("Visible for Codex agent-control parity; conversational backends may no-op."),
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "resume_agent",
         category: "agent",
         aliases: &[],
@@ -389,98 +389,98 @@ const OCTOS_TOOL_SPECS: &[OctosToolSpec] = &[
             "Relaunches a supervised ra agent task when the session runtime has a relaunch callback.",
         ),
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "wait_agent",
         category: "agent",
         aliases: &["read_task_output"],
         policy: "allowed",
         detail: Some("Inspects ra task-supervisor state for Codex-compatible agent handles."),
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "close_agent",
         category: "agent",
         aliases: &[],
         policy: "allowed",
         detail: Some("Cancels active ra supervised tasks when a task supervisor is bound."),
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "read_file",
         category: "read",
         aliases: &[],
         policy: "allowed",
         detail: None,
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "write_file",
         category: "edit",
         aliases: &[],
         policy: "allowed",
         detail: None,
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "edit_file",
         category: "edit",
         aliases: &["apply_patch"],
         policy: "allowed",
         detail: Some("Partial apply_patch-adjacent editor; not Codex apply_patch parity."),
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "diff_edit",
         category: "edit",
         aliases: &["apply_patch"],
         policy: "allowed",
         detail: Some("Unified-diff editor; not Codex apply_patch parity."),
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "shell",
         category: "runtime",
         aliases: &["exec_command"],
         policy: "approval_gated",
         detail: Some("One-shot command runner; not Codex exec session parity."),
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "glob",
         category: "search",
         aliases: &[],
         policy: "allowed",
         detail: None,
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "grep",
         category: "search",
         aliases: &[],
         policy: "allowed",
         detail: None,
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "list_dir",
         category: "search",
         aliases: &[],
         policy: "allowed",
         detail: None,
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "web_search",
         category: "web",
         aliases: &[],
         policy: "allowed",
         detail: None,
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "web_fetch",
         category: "web",
         aliases: &[],
         policy: "allowed",
         detail: None,
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "browser",
         category: "web",
         aliases: &[],
         policy: "allowed",
         detail: None,
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "spawn",
         category: "agent",
         aliases: &["spawn_agent"],
@@ -489,7 +489,7 @@ const OCTOS_TOOL_SPECS: &[OctosToolSpec] = &[
             "ra subagent launcher; spawn_agent is the Codex-compatible supervisor alias.",
         ),
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "read_task_output",
         category: "agent",
         aliases: &["wait_agent"],
@@ -498,21 +498,21 @@ const OCTOS_TOOL_SPECS: &[OctosToolSpec] = &[
             "Background task output reader; wait_agent inspects the same TaskSupervisor state.",
         ),
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "activate_tools",
         category: "discovery",
         aliases: &[],
         policy: "allowed",
         detail: None,
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "configure_tool",
         category: "configuration",
         aliases: &[],
         policy: "allowed",
         detail: None,
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "manage_skills",
         category: "discovery",
         aliases: &[],
@@ -522,7 +522,7 @@ const OCTOS_TOOL_SPECS: &[OctosToolSpec] = &[
         ),
     },
     // #972 / M14-B P1: canonical Codex dynamic tool discovery surface.
-    OctosToolSpec {
+    RaToolSpec {
         name: "tool_search",
         category: "discovery",
         aliases: &[],
@@ -531,7 +531,7 @@ const OCTOS_TOOL_SPECS: &[OctosToolSpec] = &[
             "Canonical Codex tool_search entry. Returns ranked matches from the active coding tool contract.",
         ),
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "tool_suggest",
         category: "discovery",
         aliases: &[],
@@ -541,7 +541,7 @@ const OCTOS_TOOL_SPECS: &[OctosToolSpec] = &[
         ),
     },
     // #972 / M14-B P1: canonical Codex image-view surface.
-    OctosToolSpec {
+    RaToolSpec {
         name: "view_image",
         category: "read",
         aliases: &[],
@@ -560,7 +560,7 @@ const OCTOS_TOOL_SPECS: &[OctosToolSpec] = &[
     // don't render it as usable (UPCR-2026-020 §5: capability-gated
     // fields are omitted when the implementation isn't bound). Follow-up
     // to wire a real backend tracked in #1149.
-    OctosToolSpec {
+    RaToolSpec {
         name: "image_generation",
         category: "media",
         aliases: &[],
@@ -569,28 +569,28 @@ const OCTOS_TOOL_SPECS: &[OctosToolSpec] = &[
             "Canonical Codex image_generation entry. Stub: no native or skill backend bound yet; calls return a typed coding_tool_unsupported response (#1149 follow-up).",
         ),
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "check_workspace_contract",
         category: "workspace",
         aliases: &[],
         policy: "allowed",
         detail: None,
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "workspace_log",
         category: "workspace",
         aliases: &[],
         policy: "allowed",
         detail: None,
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "workspace_show",
         category: "workspace",
         aliases: &[],
         policy: "allowed",
         detail: None,
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "workspace_diff",
         category: "workspace",
         aliases: &[],
@@ -599,7 +599,7 @@ const OCTOS_TOOL_SPECS: &[OctosToolSpec] = &[
     },
     // #1172 — Codex naming-parity aliases. Surface them in the tool
     // contract so `tool/status/list` advertises the new spellings.
-    OctosToolSpec {
+    RaToolSpec {
         name: "bash",
         category: "runtime",
         aliases: &["shell", "exec_command"],
@@ -608,7 +608,7 @@ const OCTOS_TOOL_SPECS: &[OctosToolSpec] = &[
             "Codex-compatible one-shot shell alias. Shares the command policy / approval policy / sandbox with shell and exec_command.",
         ),
     },
-    OctosToolSpec {
+    RaToolSpec {
         name: "delegate",
         category: "agent",
         aliases: &["spawn_agent", "wait_agent"],
@@ -627,7 +627,7 @@ pub(crate) fn tool_status_list_payload(context: ToolStatusListContext<'_>) -> Va
         "profile_id": context.profile_id,
         "session_id": context.session_id,
         "policy_id": context.policy.tool_policy_id,
-        "tools": octos_tool_status_entries(&available, &disabled),
+        "tools": ra_tool_status_entries(&available, &disabled),
     });
 
     if context.include_coding_tool_contract {
@@ -840,20 +840,20 @@ fn required_tool_status_entry(
     Value::Object(entry)
 }
 
-fn octos_tool_status_entries(
+fn ra_tool_status_entries(
     available_model_tools: &HashSet<&str>,
     disabled_model_tools: &HashSet<&str>,
 ) -> Vec<Value> {
-    let mut entries: Vec<Value> = OCTOS_TOOL_SPECS
+    let mut entries: Vec<Value> = ra_TOOL_SPECS
         .iter()
         .filter(|spec| {
             available_model_tools.contains(spec.name) || disabled_model_tools.contains(spec.name)
         })
-        .map(|spec| octos_tool_status_entry(spec, disabled_model_tools))
+        .map(|spec| ra_tool_status_entry(spec, disabled_model_tools))
         .collect();
 
     for name in available_model_tools {
-        if OCTOS_TOOL_SPECS.iter().any(|spec| spec.name == *name) {
+        if ra_TOOL_SPECS.iter().any(|spec| spec.name == *name) {
             continue;
         }
         entries.push(json!({
@@ -874,7 +874,7 @@ fn octos_tool_status_entries(
     entries
 }
 
-fn octos_tool_status_entry(spec: &OctosToolSpec, disabled_model_tools: &HashSet<&str>) -> Value {
+fn ra_tool_status_entry(spec: &RaToolSpec, disabled_model_tools: &HashSet<&str>) -> Value {
     let status = if disabled_model_tools.contains(spec.name) {
         TOOL_STATUS_DISABLED_BY_POLICY
     } else {
@@ -1297,7 +1297,7 @@ mod tests {
     }
 
     /// #972 / M14-B P1 — sibling guard for the optional Codex parity surface.
-    /// Once these tools land, the OCTOS_KNOWN_MODEL_VISIBLE_TOOLS / OctosToolSpec
+    /// Once these tools land, the ra_KNOWN_MODEL_VISIBLE_TOOLS / RaToolSpec
     /// arrays and the `with_builtins` registration must all stay in lockstep
     /// so the contract's tools array surfaces them as `available` whenever
     /// the live registry registers them.
@@ -1393,7 +1393,7 @@ mod tests {
 
     /// #1149 / M14-B P2 — when the runtime reports `image_generation` as
     /// available, the contract's `tools` array must surface it through the
-    /// OCTOS_TOOL_SPECS entry (status `available`, category `media`).
+    /// ra_TOOL_SPECS entry (status `available`, category `media`).
     #[test]
     fn p2_image_generation_appears_in_contract_tools_array() {
         let available = &["image_generation"];
@@ -1412,7 +1412,7 @@ mod tests {
     }
 
     /// #972 / M14-B P1 — the contract's `tools` array (driven by
-    /// OCTOS_TOOL_SPECS) must surface every P1 tool when the runtime
+    /// ra_TOOL_SPECS) must surface every P1 tool when the runtime
     /// reports it as available. Otherwise the AppUI inspection flow can't
     /// see the new entries even though the live registry has them.
     #[test]

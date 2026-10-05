@@ -6,11 +6,11 @@
 //! `session/goal/set`, `loop/create`, …) is wired in a later PR once
 //! the backend exposes those ra UI methods.
 //!
-//! Contract reference: octoscode#47 (M15-E) and upstream
+//! Contract reference: ra-tui#47 (M15-E) and upstream
 //! `UPCR-2026-021` (Agent / Goal / Loop autonomy). The canonical spec
 //! lives at
 //! `ra/docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_021_AGENT_GOAL_LOOP_AUTONOMY.md`
-//! in the upstream ra repo. The earlier
+//! in the upstream RecurAgent repo. The earlier
 //! `docs/M15_AGENT_GOAL_LOOP_TUI_CONTRACT.md` working title was never
 //! landed — reference UPCR-2026-021 directly instead. The TUI must never:
 //!
@@ -25,7 +25,7 @@
 //! sub-menu shape sketched in #74 acceptance criterion 2) is deferred
 //! to M15-F UX work — no other autonomy slash commands have menu
 //! surfaces today, so adding one in isolation here would create an
-//! inconsistent UX. Tracking issue: octoscode#74 (acceptance criterion
+//! inconsistent UX. Tracking issue: ra-tui#74 (acceptance criterion
 //! #2 — `Add menu entries in src/menu/providers.rs`).
 
 use std::time::Duration;

@@ -2,7 +2,7 @@
 """Exercise real chat, ACP and OUP processes against an offline HTTP provider.
 
 Build ra-cli with its default features, then run:
-  OCTOS_BIN=target/debug/ra python3 scripts/tests/test-oup-runtime.py
+  ra_BIN=target/debug/ra python3 scripts/tests/test-oup-runtime.py
 Evidence is retained under target/oup-functional (override OUP_TEST_OUTPUT_DIR).
 Only fixture workspaces, profiles and localhost HTTP are used.
 """
@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BINARY = Path(os.environ.get("OCTOS_BIN", ROOT / "target/debug/ra")).resolve()
+BINARY = Path(os.environ.get("ra_BIN", ROOT / "target/debug/ra")).resolve()
 OUTPUT = Path(os.environ.get(
     "OUP_TEST_OUTPUT_DIR",
     ROOT / "target/oup-functional" / datetime.datetime.now(
@@ -239,7 +239,7 @@ class RuntimeContract(unittest.TestCase):
         }))
         env = {key: os.environ[key] for key in
                ("PATH", "SystemRoot", "WINDIR", "LANG", "LC_ALL") if key in os.environ}
-        env.update({"OCTOS_HOME": str(directory / "data"),
+        env.update({"ra_HOME": str(directory / "data"),
                     "XDG_CONFIG_HOME": str(directory / "config-home"),
                     "XDG_STATE_HOME": str(directory / "state-home"),
                     "XDG_RUNTIME_DIR": socket_dir.name,
@@ -468,10 +468,10 @@ class RuntimeContract(unittest.TestCase):
     def test_oup_compaction_epoch_and_restart(self):
         responses = [reply(f"FINAL_{index}: evidence checked, turn complete.") for index in range(5)]
         with self.fixture("oup-compaction", responses) as (directory, provider, env, args):
-            env.update({"OCTOS_CONTEXT_COMPACT_THRESHOLD_TOKENS": "1000000",
-                        "OCTOS_CONTEXT_COMPACT_TARGET_TOKENS": "1000",
-                        "OCTOS_CONTEXT_COMPACT_KEEP_ITEMS": "2",
-                        "OCTOS_PROMPT_CACHE_MANIFEST_JSONL": str(directory / "cache.jsonl"),
+            env.update({"ra_CONTEXT_COMPACT_THRESHOLD_TOKENS": "1000000",
+                        "ra_CONTEXT_COMPACT_TARGET_TOKENS": "1000",
+                        "ra_CONTEXT_COMPACT_KEEP_ITEMS": "2",
+                        "ra_PROMPT_CACHE_MANIFEST_JSONL": str(directory / "cache.jsonl"),
                         "RUST_LOG": "warn,ra.prompt_cache=trace"})
             session = "oup-ci:local:runtime-compaction"
             client = self.oup_connect(directory, env, args, "before")
@@ -540,9 +540,9 @@ class RuntimeContract(unittest.TestCase):
     def test_oup_automatic_compaction_preserves_history(self):
         with self.fixture("oup-auto-compaction", [reply(f"AUTO_FINAL_{i}") for i in range(5)]) as (
                 directory, provider, env, args):
-            env.update({"OCTOS_CONTEXT_COMPACT_THRESHOLD_TOKENS": "1800",
-                        "OCTOS_CONTEXT_COMPACT_TARGET_TOKENS": "1000",
-                        "OCTOS_CONTEXT_COMPACT_KEEP_ITEMS": "2"})
+            env.update({"ra_CONTEXT_COMPACT_THRESHOLD_TOKENS": "1800",
+                        "ra_CONTEXT_COMPACT_TARGET_TOKENS": "1000",
+                        "ra_CONTEXT_COMPACT_KEEP_ITEMS": "2"})
             session = "oup-ci:local:runtime-auto-compaction"
             client = self.oup_connect(directory, env, args, "automatic")
             try:

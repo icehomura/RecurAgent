@@ -12,19 +12,19 @@
  *      id appears under the same chat bubble.
  *
  * Run against a live host:
- *   OCTOS_TEST_URL=https://dspfac.bot.ominix.io \
- *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
- *   OCTOS_PROFILE=dspfac \
+ *   ra_TEST_URL=https://dspfac.bot.ominix.io \
+ *   ra_AUTH_TOKEN=ra-admin-2026 \
+ *   ra_PROFILE=dspfac \
  *   npx playwright test e2e/tests/live-restart.spec.ts
  *
- * Skips when OCTOS_TEST_URL is unset.
+ * Skips when ra_TEST_URL is unset.
  */
 import { expect, test } from '@playwright/test';
 import { createNewSession, login, sendAndWait } from './live-browser-helpers';
 
-const LIVE_URL = process.env.OCTOS_TEST_URL || '';
+const LIVE_URL = process.env.ra_TEST_URL || '';
 
-test.skip(!LIVE_URL, 'OCTOS_TEST_URL not set — live test requires a running host');
+test.skip(!LIVE_URL, 'ra_TEST_URL not set — live test requires a running host');
 test.setTimeout(360_000);
 
 test('restart-from-node re-runs only the failed subtree', async ({ page }) => {

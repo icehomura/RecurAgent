@@ -72,8 +72,8 @@ jobs:
 
       - name: Set build metadata
         run: |
-          echo "OCTOS_GIT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-          echo "OCTOS_BUILD_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
+          echo "ra_GIT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "ra_BUILD_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
           # Keep build-machine paths (home dir, cargo registry, checkout) out
           # of the shipped binaries' panic messages and file!() strings.
           home_dir="$HOME"; cargo_dir="${CARGO_HOME:-$HOME/.cargo}"; ws_dir="$GITHUB_WORKSPACE"
@@ -130,8 +130,8 @@ jobs:
 
       - name: Set build metadata
         run: |
-          echo "OCTOS_GIT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-          echo "OCTOS_BUILD_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
+          echo "ra_GIT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "ra_BUILD_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
           # Keep build-machine paths (home dir, cargo registry, checkout) out
           # of the shipped binaries' panic messages and file!() strings.
           home_dir="$HOME"; cargo_dir="${CARGO_HOME:-$HOME/.cargo}"; ws_dir="$GITHUB_WORKSPACE"
@@ -188,8 +188,8 @@ jobs:
 
       - name: Set build metadata
         run: |
-          echo "OCTOS_GIT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-          echo "OCTOS_BUILD_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
+          echo "ra_GIT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "ra_BUILD_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
           # Keep build-machine paths (home dir, cargo registry, checkout) out
           # of the shipped binaries' panic messages and file!() strings.
           home_dir="$HOME"; cargo_dir="${CARGO_HOME:-$HOME/.cargo}"; ws_dir="$GITHUB_WORKSPACE"
@@ -247,8 +247,8 @@ jobs:
       - name: Set build metadata
         shell: bash
         run: |
-          echo "OCTOS_GIT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-          echo "OCTOS_BUILD_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
+          echo "ra_GIT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "ra_BUILD_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
           # Keep build-machine paths (home dir, cargo registry, checkout) out
           # of the shipped binaries' panic messages and file!() strings.
           home_dir="$HOME"; cargo_dir="${CARGO_HOME:-$HOME/.cargo}"; ws_dir="$GITHUB_WORKSPACE"
@@ -409,7 +409,7 @@ jobs:
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
             --pattern 'ra-bundle-*' --dir verify
           # Every published sidecar must match the published bytes — this is
-          # the exact verification octoscode's auto-install performs (#1929).
+          # the exact verification ra-tui's auto-install performs (#1929).
           # Darwin sidecars are produced by shasum, the rest by sha256sum, so
           # checking all four covers both producer paths.
           (cd verify && sha256sum -c ./*.sha256)

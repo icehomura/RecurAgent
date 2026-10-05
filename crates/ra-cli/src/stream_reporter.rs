@@ -1290,7 +1290,7 @@ mod tests {
             None,
             active_sessions,
             ra_core::SessionKey::new("matrix", "!room:localhost"),
-            Some("@octosbot:localhost".to_string()),
+            Some("@rabot:localhost".to_string()),
             None,
             None,
             Arc::new(HashSet::from(["send_app_card".to_string()])),

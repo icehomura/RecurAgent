@@ -1,6 +1,6 @@
 # Project Governance
 
-octoscode uses lightweight, maintainer-led governance. The goal is to make
+ra-tui uses lightweight, maintainer-led governance. The goal is to make
 decisions transparent without imposing process that is heavier than the
 project needs.
 
@@ -9,7 +9,7 @@ project needs.
 **Contributors** are anyone who participates through issues, reviews,
 documentation, code, design, testing, or community support.
 
-**Maintainers** are contributors trusted by the ra organization to triage
+**Maintainers** are contributors trusted by the RecurAgent organization to triage
 issues, review and merge pull requests, manage releases, handle security
 reports, and represent the project's technical direction. Repository access is
 granted and removed by the existing maintainers based on sustained,
@@ -22,7 +22,7 @@ access may be removed to reduce operational and security risk.
 
 Routine decisions are made in the issue or pull request where the work occurs.
 Maintainers seek rough consensus, weighing technical evidence, user impact,
-compatibility, security, maintenance cost, and alignment with ra's shared
+compatibility, security, maintenance cost, and alignment with RecurAgent's shared
 protocol.
 
 For substantial or disputed changes:
@@ -35,7 +35,7 @@ For substantial or disputed changes:
    active maintainer is available.
 
 If consensus cannot be reached, maintainers may defer or reject a proposal.
-The ra organization retains final responsibility for repository scope,
+The RecurAgent organization retains final responsibility for repository scope,
 security, releases, and legal matters.
 
 ## Changes and releases

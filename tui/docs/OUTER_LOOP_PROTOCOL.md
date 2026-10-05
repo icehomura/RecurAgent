@@ -1,7 +1,7 @@
 # Outer-Loop Protocol (OLP) — v2
 
 > 让任意外部模型(Claude Code / Codex / 脚本化 agent)以标准方式**计划、监控、
-> 审查、指导** ra 的长程 goal 执行。本协议规范化的是已在实战中验证过的信道,
+> 审查、指导** RecurAgent 的长程 goal 执行。本协议规范化的是已在实战中验证过的信道,
 > 不发明新机制;L1/L2 是短期补齐路线。
 >
 > `protocol: olp/v2`
@@ -21,7 +21,7 @@
 | 角色 | 职责 | 模型档位 |
 |---|---|---|
 | **operator**(人) | 宏观指令(`/goal`)、终审、审批 | — |
-| **runtime**(ra serve + master/peers) | 长程执行:goal keeper 推进、peer 并行干活 | 苦力档(k3 / cheap lanes) |
+| **runtime**(RecurAgent serve + master/peers) | 长程执行:goal keeper 推进、peer 并行干活 | 苦力档(k3 / cheap lanes) |
 | **outer agent**(本协议的对象) | 计划、事件驱动监控、交付审查、指导、基建维护 | 强档(Fable / GPT) |
 
 ## L0 信道矩阵(现状即可用,全部已实证)
@@ -30,11 +30,11 @@
 
 | 信道 | 载体 | 时效 | 用途 |
 |---|---|---|---|
-| 会话常驻约束 | `AGENTS.md`(ra prompt_layer 自动注入每个 session) | session boot | 纪律、协议本身的引导 |
+| 会话常驻约束 | `AGENTS.md`(RecurAgent prompt_layer 自动注入每个 session) | session boot | 纪律、协议本身的引导 |
 | 任务级指导 | `<repo>/.ra/OUTER_LOOP_REVIEW.md` 的 `Active` 区(带日期条目 + `ACK:` 行) | master 每轮读 | 审查意见、整改要求;历史区不可执行。`docs/` 下同名文件是冻结快照,严禁写入 |
 | 既成事实 | 原子 git commit | 立即 | 代修、基建修复 |
 | 事件提示 / **门铃** | inbox `<session-hash>.notes` | 下一 turn,阅后即焚 | 仅事件通知与**黑板指针**("第 N 条已更新,去读并执行");不承载指令内容本身 |
-| **TUI 注入** | `herdr agent prompt <pane> '<text>'`(需 herdr ≥ Ti-Agent-OS fork `fc414dd8`,含 octoscode manifest)或 tmux `send-keys` | ~8s 内开 turn | 唯一实证"读**且执行**"的即时下行通道——文本落在 composer 即用户消息层级,等价 operator 亲手输入;steer API(L2)落地前的事实标准 |
+| **TUI 注入** | `herdr agent prompt <pane> '<text>'`(需 herdr ≥ Ti-Agent-OS fork `fc414dd8`,含 ra-tui manifest)或 tmux `send-keys` | ~8s 内开 turn | 唯一实证"读**且执行**"的即时下行通道——文本落在 composer 即用户消息层级,等价 operator 亲手输入;steer API(L2)落地前的事实标准 |
 
 ### 上行:runtime → outer
 
@@ -45,7 +45,7 @@
 | 权威账本 | `goal-ledgers/<goal_id>` | durable,重启幸存 |
 | 求助 | escalation(park 于 approval/question) | 分级升级,见 R3 |
 | 代码 | git log / diff | 审查对象 |
-| **主动问询(MCP 第五信道)** | `octoscode olp-mcp-serve` 子命令(#31 Rust 化,纯 stdlib)工具 `ask_outer`/`report_blocked`;信箱 `~/.ra/outer/mcp/questions|answers|consumed`,审计 `OUTER_LOOP_MCP.md` 署名 `MCP(ask_outer)` | 内环 turn 内同步发问,90s 超时降级,每片限 3 次+tried 必填(防思考外包);取答后归档 consumed/ |
+| **主动问询(MCP 第五信道)** | `ra-tui olp-mcp-serve` 子命令(#31 Rust 化,纯 stdlib)工具 `ask_outer`/`report_blocked`;信箱 `~/.ra/outer/mcp/questions|answers|consumed`,审计 `OUTER_LOOP_MCP.md` 署名 `MCP(ask_outer)` | 内环 turn 内同步发问,90s 超时降级,每片限 3 次+tried 必填(防思考外包);取答后归档 consumed/ |
 
 ## 协议语义(核心规则)
 
@@ -86,12 +86,12 @@
   拒绝并提示"开围栏",不静默切换。fenced peer 的 clone 内 checkout 放行;
   read-only git 与 pathspec restore 不拦。③外环 steer 不再是防撞的唯一
   手段——防撞为系统默认,外环只在谓词未覆盖的边界人工补位。
-  (ra #20-20c 移交,作为 R4 子条款,不升协议版本。)
+  (RecurAgent #20-20c 移交,作为 R4 子条款,不升协议版本。)
 - **R5 — 指导幂等**:outer 的意见带日期与唯一编号,只在 `Active` 区可执行;
   ACK 后移入历史区且永不重放。重复投递以 ACK 为去重依据。
 - **R7 — 主审权 OS 独占锁(outer-duty,olp/v2 起)**:多外环的主审权
   以 per-project 会话寿命 OS 锁为准——上岗外环必须经
-  `octoscode outer-duty hold --project P --signature S --duties D -- <agent>`
+  `ra-tui outer-duty hold --project P --signature S --duties D -- <agent>`
   启动(**守护式死亡耦合**:wrapper 是唯一锁 fd 持有者,CLOEXEC 保持
   置位;agent 经 setpgid+PR_SET_PDEATHSIG(SIGKILL) 与 wrapper 同死——
   wrapper 亡则 agent 必亡、锁即 VACANT,绝无 agent 活而锁 VACANT 的
@@ -107,7 +107,7 @@
 ## 接入清单(一个新的 outer agent 需要知道的全部)
 
 0. 启动命令注意:单人本地盒子要给 serve 带 **`--solo`**
-   (`ra serve --stdio --solo`,或 `OCTOS_SOLO_LOGIN=1`)。宽松
+   (`ra serve --stdio --solo`,或 `ra_SOLO_LOGIN=1`)。宽松
    permission profile(yolo/approvals-never/network-allow)是安全基石门,
    仅在显式 solo opt-in 下可设——漏掉它的症状是
    "requested permission profile is not allowed outside local solo mode"。
@@ -118,10 +118,10 @@
    **不可见**,任何构建命令都是 "command not found",历史上 peer 反复声明
    "本机无工具链" 的真相即此。要跑构建必须第 5 档 **Full Access**(免沙箱),
    或 serve 带 **`--danger-full-access`**(默认所有未显式选择的 session 为
-   Full Access;solo 门控;`OCTOS_DANGER_FULL_ACCESS=1` 等价)。注意:
+   Full Access;solo 门控;`ra_DANGER_FULL_ACCESS=1` 等价)。注意:
    给 agent 授免沙箱权限属 operator 亲手动作——外环自己的 harness 也会
    拦截代按,不要尝试绕过。标准启动命令:
-   `octoscode --stdio-command 'octos serve --stdio --solo --danger-full-access'`。
+   `ra-tui --stdio-command 'ra serve --stdio --solo --danger-full-access'`。
    重启 checklist:①上述命令启动(operator)②`/loop resume`(外环可代)。
 
 1. 数据根:`~/.ra/instances/<cwd-hash>/profiles/<profile>/data`
@@ -137,16 +137,16 @@
    `Historical record` 仅用于审计。
 4. 审查交付:`peers/*/result.md` → git diff → 独立复验(R2)。
 5. 写指导:黑板追加条目;紧急基建问题直接原子 commit(R4)。
-6. (可选,推荐)驾驶舱注入通道:herdr 里跑 octoscode 后,
-   `herdr agent list` 应显示 `octoscode | <pane> | idle`,
+6. (可选,推荐)驾驶舱注入通道:herdr 里跑 ra-tui 后,
+   `herdr agent list` 应显示 `ra-tui | <pane> | idle`,
    `herdr agent prompt <pane> '<text>'` 即用户消息层级下发。herdr 的注入
    有双重门:named-agent 名单 + pane 前台进程名匹配,二者缺一注入被静默丢弃
-   ——所以需要 fork 补丁把 octoscode 编入 Agent 枚举与 manifest,本地
+   ——所以需要 fork 补丁把 ra-tui 编入 Agent 枚举与 manifest,本地
    index.toml 覆盖**不能**新增 agent。降级方案:tmux `send-keys`(注意
    首字符为 `-` 的文本会被当 flag 吃掉,用 `--` 分隔)。
 7. (可选)内环→外环主动问询(第五信道,OLP-MCP,#31 起纯 Rust):内环
    profile 的 `~/.ra/profiles/<id>.json` 的 `config.mcp_servers` 挂
-   本仓库二进制——`command` 指向 octoscode 可执行文件、`args` 为
+   本仓库二进制——`command` 指向 ra-tui 可执行文件、`args` 为
    `["olp-mcp-serve"]`(契约测试 `cargo test --test olp_mcp_contract`
    七件自验;Python 原型已归档 scripts/reference/)后,内环模型 turn 内
    可原生调用 `ask_outer(question, context, tried)` — 信箱
@@ -168,7 +168,7 @@
 
 ### 心跳自治:maintenance loop × 黑板(实测定型)
 
-自治回路的基座是 ra 自带的 maintenance `/loop`:server 定时给 master
+自治回路的基座是 RecurAgent 自带的 maintenance `/loop`:server 定时给 master
 创造 turn,bare `/loop` 的 prompt 从仓库的 **`.ra/loop.md`** 解析——
 外环拥有心跳指令的定义权。本仓库的 loop.md 约定:每次醒来只执行黑板
 `Active` 区中编号最小的未 ACK 条目并原地 ACK;没有 active 工作时不得
@@ -190,7 +190,7 @@ L2 的 steer API 将消除"需要 operator 说一句话"这最后一步。
 
 ## v0 实验记录(2026-08-23,非持续认证)
 
-一次双环协作实验(外环 Claude Code/Fable 5,内环 octoscode + 苦力模型,
+一次双环协作实验(外环 Claude Code/Fable 5,内环 ra-tui + 苦力模型,
 黑板十条评审项)于 2026-08-23 完成记录。下表是当时的信道/流程样本,
 不是对未合并 PR、当前 main 或具体 runtime 实现的持续认证:
 
@@ -212,7 +212,7 @@ L1/L2 路线的动机,对应 REQ-OLP-{OBS,CTRL,HEADLESS}。
 
 ## 实战沉淀·第二辑(2026-08-24 性能战役,10.5s→0.21s 全程)
 
-一次跨两仓库的真实性能战役(octoscode #578 + octos #2114),外环三次
+一次跨两仓库的真实性能战役(ra-tui #578 + RecurAgent #2114),外环三次
 带证据改判、内环两次带证据抗命、一次外环拦截倒退修复。教训按角色归档:
 
 ### 外环派发纪律
@@ -241,7 +241,7 @@ L1/L2 路线的动机,对应 REQ-OLP-{OBS,CTRL,HEADLESS}。
   才算探针在场;缺一关就会像"writer 无输出"那样误导整轮推理。
 - 观测两坑:tracing subscriber 可能是线程作用域——裸 OS 线程(如专职
   writer 线程)的 tracing 输出会静默丢失,改直写文件;serve 子进程的
-  stderr 被 octoscode 收进 ring buffer,eprintln 探针不可见。
+  stderr 被 ra-tui 收进 ring buffer,eprintln 探针不可见。
 
 ### git 运维
 
@@ -249,8 +249,8 @@ L1/L2 路线的动机,对应 REQ-OLP-{OBS,CTRL,HEADLESS}。
   origin/main 是同样改动、不同哈希——此时 pull/rebase = 每文件冲突地狱。
   正解:存档分支(`archive/<date>`)→ `reset --hard origin/main` → 唯一
   上游没有的内容(黑板叙事)单 commit 补回。
-- **ra 构建永远带 `--features api`**:漏掉则 serve 子命令消失,
-  octoscode 启动失败,症状与代码 bug 无法区分(累计踩坑三次)。
+- **RecurAgent 构建永远带 `--features api`**:漏掉则 serve 子命令消失,
+  ra-tui 启动失败,症状与代码 bug 无法区分(累计踩坑三次)。
 
 ### 多外环并发(Codex 等第二外环的接入规则)
 
@@ -364,13 +364,13 @@ v1 起其 YAML frontmatter **必须包含**以下字段集合,恰为 6 个
 
 **消费侧约定**:未知字段必须忽略(forward compatibility)——消费方按上述
 6 字段清单取数,对 frontmatter 中出现的任何其他字段不做解释、不得报错。
-`verified` 与 `protocol` 两字段由 ra 侧写入
+`verified` 与 `protocol` 两字段由 RecurAgent 侧写入
 (specs/task-req-olp-exec-peer),本仓库只固化 schema 文档与消费约定,
 不做运行时消费。
 
 ## 附录 B:sub_providers 车道模板
 
-ra 的 `sub_providers` 配置把不同档位的模型分成"车道"(lane),runtime
+RecurAgent 的 `sub_providers` 配置把不同档位的模型分成"车道"(lane),runtime
 按任务性质选道,避免所有流量挤在主力档。v1 附开箱模板
 (契约测试 `olp_lane_template_parses` 钉住:TOML 可解析且每条 lane 有
 非空 description):

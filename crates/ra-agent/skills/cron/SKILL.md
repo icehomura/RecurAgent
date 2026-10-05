@@ -2,7 +2,7 @@
 name: cron
 description: Schedule reminders and recurring tasks using the cron tool.
 version: 1.0.0
-author: ra
+author: RecurAgent
 always: true
 ---
 

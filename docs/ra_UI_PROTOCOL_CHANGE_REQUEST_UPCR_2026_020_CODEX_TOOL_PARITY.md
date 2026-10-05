@@ -6,10 +6,10 @@ Date: 2026-05-15
 ## Summary
 
 Expose the server-owned coding tool contract through AppUI so clients can see
-whether an ra coding session is Codex-compatible without letting the client
+whether an RecurAgent coding session is Codex-compatible without letting the client
 construct or invoke model tools directly.
 
-The Codex comparison showed that ra has a richer platform tool system
+The Codex comparison showed that RecurAgent has a richer platform tool system
 (profiles, memory, app bundle skills, customer tools, MCP, MoFA, workspace
 contracts), but it is missing several coding-agent primitives that Codex models
 can rely on:
@@ -45,7 +45,7 @@ Do extend `tool/status/list` and `session/status/read` so clients can inspect
 the effective coding tool contract for the selected profile/session.
 
 Do add backend model-visible tool implementations or aliases that are resolved
-through the same profile runtime factory as every other ra coding session.
+through the same profile runtime factory as every other RecurAgent coding session.
 The tool contract must respect profile, memory, MCP, skill, sandbox, approval,
 QoE, and model-portfolio policy.
 
@@ -156,7 +156,7 @@ Required P0 tools for coding parity:
 - `update_plan` — model-visible structured task plan updates.
 - `request_user_input` — model-visible structured user decision request.
 - `spawn_agent`, `send_input`, `resume_agent`, `wait_agent`, `close_agent` —
-  Codex-compatible aliases backed by ra `TaskSupervisor`.
+  Codex-compatible aliases backed by RecurAgent `TaskSupervisor`.
 
 Required P1 tools:
 
@@ -168,7 +168,7 @@ Optional P2 tool:
 
 - `image_generation` — generic alias to an installed ra/MoFA media tool.
 
-Existing ra tools remain valid and should not be removed: `read_file`,
+Existing RecurAgent tools remain valid and should not be removed: `read_file`,
 `write_file`, `edit_file`, `diff_edit`, `shell`, `glob`, `grep`, `list_dir`,
 `web_search`, `web_fetch`, `browser`, `manage_skills`, memory tools, workspace
 contract tools, research tools, MCP tools, app bundle tools, customer tools,

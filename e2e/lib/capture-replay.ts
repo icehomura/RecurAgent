@@ -1,9 +1,9 @@
 // Capture-and-replay infrastructure for live e2e soak runs (PR I).
 //
-// Goal: when a live spec fails (or any time `OCTOS_CAPTURE_FIXTURE=1` is set)
+// Goal: when a live spec fails (or any time `ra_CAPTURE_FIXTURE=1` is set)
 // auto-save the streamed event log + final DOM state + assertion failure to
 // `e2e/fixtures/captured/<test-name>-<timestamp>.json`. Captured fixtures
-// can then be promoted to Layer 1 (`crates/octos-web/src/state/__tests__/
+// can then be promoted to Layer 1 (`crates/ra-web/src/state/__tests__/
 // fixtures/captured/`) via `scripts/promote-captured-fixture.sh` to lock in
 // the regression.
 //
@@ -46,7 +46,7 @@
 // Implementation strategy:
 //
 //  * Page-side `addInitScript` monkey-patches `fetch` to tee streaming
-//    responses into `window.__octosCaptureBuffer`. The SPA sees an
+//    responses into `window.__raCaptureBuffer`. The SPA sees an
 //    unchanged response; we get a side-channel copy. This works for
 //    classic `text/event-stream` responses and chunked-encoding streams
 //    on any fetch-based endpoint the caller lists in `streamingPaths`.
@@ -84,7 +84,7 @@ export interface RawSseEvent {
 }
 
 /** PR H-compatible normalized event. The shape mirrors `SseEvent` from
- *  `crates/octos-web/src/state/__tests__/lib/fixture-types.ts`. We can't
+ *  `crates/ra-web/src/state/__tests__/lib/fixture-types.ts`. We can't
  *  always faithfully populate every field at capture time (e.g. `turn_id`
  *  may be missing from older `{type: "token"}` frames); the promoter
  *  fills in gaps. Type is `unknown` rather than the strict PR H union
@@ -150,7 +150,7 @@ export interface CaptureHandle {
 /** Returns true iff the env opts in to capture. */
 export function captureEnabled(force = false): boolean {
   if (force) return true;
-  const v = process.env.OCTOS_CAPTURE_FIXTURE;
+  const v = process.env.ra_CAPTURE_FIXTURE;
   return v === '1' || v === 'true' || v === 'yes';
 }
 
@@ -161,13 +161,13 @@ export function captureEnabled(force = false): boolean {
  *
  * Behaviour:
  *
- *  - If capture is disabled (`OCTOS_CAPTURE_FIXTURE` unset and `force` not
+ *  - If capture is disabled (`ra_CAPTURE_FIXTURE` unset and `force` not
  *    passed) AND the test does not fail, the returned handle is a no-op
  *    skeleton: it records nothing, finalize returns null. This keeps the
  *    overhead of the helper trivial when capture isn't wanted.
  *
  *  - If capture is enabled, the init script is injected and ALL streaming
- *    responses to matching URLs are teed into `window.__octosCaptureBuffer`.
+ *    responses to matching URLs are teed into `window.__raCaptureBuffer`.
  *
  *  - On `finalize()` we drain the in-page buffer, snapshot the DOM, and
  *    write `<outputDir>/<safe-test-name>-<iso-timestamp>.json`.
@@ -177,21 +177,21 @@ export function captureEnabled(force = false): boolean {
  *    contract. To enable that path the helper itself runs in capture mode
  *    (so the in-page buffer exists); we just check the failure status at
  *    flush time. To suppress capture entirely (e.g. headless smoke runs
- *    that explicitly don't want disk writes) set `OCTOS_CAPTURE_DISABLE=1`.
+ *    that explicitly don't want disk writes) set `ra_CAPTURE_DISABLE=1`.
  */
 export async function attachCapture(
   page: Page,
   testInfo: TestInfo,
   opts: CaptureOptions = {},
 ): Promise<CaptureHandle> {
-  const disabled = process.env.OCTOS_CAPTURE_DISABLE === '1';
+  const disabled = process.env.ra_CAPTURE_DISABLE === '1';
   if (disabled) {
     return noopHandle();
   }
 
   // We always install the init script when capture isn't explicitly
   // disabled — that way we can still flush a fixture when the test fails,
-  // even if the operator forgot `OCTOS_CAPTURE_FIXTURE=1`. The page-side
+  // even if the operator forgot `ra_CAPTURE_FIXTURE=1`. The page-side
   // overhead of an idle TransformStream tee is negligible because we
   // ALSO gate by `Content-Type: text/event-stream` (or chunked transfer)
   // before starting to decode — see the matchUrl + content-type filter
@@ -209,7 +209,7 @@ export async function attachCapture(
   // soak run. Configurable via env. Beyond this we drop frames silently
   // (with a single warning marker) so that one bad soak run doesn't
   // produce a 500MB JSON file.
-  const maxFrames = Number(process.env.OCTOS_CAPTURE_MAX_FRAMES || 10_000);
+  const maxFrames = Number(process.env.ra_CAPTURE_MAX_FRAMES || 10_000);
 
   await page.addInitScript(
     ({ paths, maxFrames }) => {
@@ -222,11 +222,11 @@ export async function attachCapture(
       };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const w = window as any;
-      if (w.__octosCaptureBuffer) return; // idempotent
+      if (w.__raCaptureBuffer) return; // idempotent
       const startedAt = Date.now();
       const buffer: WireFrame[] = [];
-      w.__octosCaptureBuffer = buffer;
-      w.__octosCaptureStartedAt = startedAt;
+      w.__raCaptureBuffer = buffer;
+      w.__raCaptureStartedAt = startedAt;
 
       const matchUrl = (u: string): boolean => {
         try {
@@ -395,7 +395,7 @@ export async function attachCapture(
 
       // Marker hook — the harness can call this from page.evaluate to
       // splice synthetic events (e.g. `user_sent`) into the timeline.
-      w.__octosCaptureMark = (payload: unknown) => {
+      w.__raCaptureMark = (payload: unknown) => {
         pushFrame({
           t: Date.now() - startedAt,
           url: 'dom-marker',
@@ -429,7 +429,7 @@ export async function attachCapture(
         await page.evaluate(
           (t) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const fn = (window as any).__octosCaptureMark;
+            const fn = (window as any).__raCaptureMark;
             if (typeof fn === 'function') {
               fn({ type: 'user_sent', text: t });
             }
@@ -467,7 +467,7 @@ export async function attachCapture(
         drained = await page.evaluate(() => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const w = window as any;
-          const buffer = (w.__octosCaptureBuffer || []) as Array<{
+          const buffer = (w.__raCaptureBuffer || []) as Array<{
             t: number;
             url: string;
             source: 'fetch-stream' | 'eventsource' | 'dom-marker';
@@ -486,12 +486,12 @@ export async function attachCapture(
             document.body;
           const html = (region?.innerHTML || '').slice(0, 4096);
           // The static SPA stores the active session id under
-          // `octos_current_session` (see `crates/ra-cli/static/app.js`).
+          // `ra_current_session` (see `crates/ra-cli/static/app.js`).
           // The richer dashboard SPA may use other keys; we probe both
           // shapes so the helper works against whichever bundle the
           // target host is serving today.
           const sessionId =
-            localStorage.getItem('octos_current_session') ||
+            localStorage.getItem('ra_current_session') ||
             localStorage.getItem('selected_session') ||
             localStorage.getItem('current_session') ||
             undefined;
@@ -539,7 +539,7 @@ export async function attachCapture(
             (finalizeOpts.reason ? ` (${finalizeOpts.reason})` : ''),
         captured_at: new Date().toISOString(),
         spec: path.basename(testInfo.file || 'unknown.spec.ts'),
-        base_url: process.env.OCTOS_TEST_URL || 'http://localhost:3000',
+        base_url: process.env.ra_TEST_URL || 'http://localhost:3000',
         session_id: drained.sessionId,
         events: drained.events.map(normalizeFrame),
         raw_events: drained.events,
@@ -641,7 +641,7 @@ function writeSnapshotToDisk(
       `${onFailure ? 'failed' : 'captured'} live run: ${testInfo.title} (${reason})`,
     captured_at: new Date().toISOString(),
     spec: path.basename(testInfo.file || 'unknown.spec.ts'),
-    base_url: process.env.OCTOS_TEST_URL || 'http://localhost:3000',
+    base_url: process.env.ra_TEST_URL || 'http://localhost:3000',
     session_id: drained.sessionId,
     events: drained.events.map(normalizeFrame),
     raw_events: drained.events,

@@ -274,8 +274,8 @@ fn require_config_path(state: &AppState) -> Result<PathBuf, (StatusCode, Json<Er
             ))?;
             // Resolve the canonical config_home (NOT data_dir) so admin writes
             // land where the resolver READS config. The daemon carries its
-            // RA_HOME / RA_CONFIG_DIR in the environment (legacy `OCTOS_HOME` /
-            // `OCTOS_CONFIG_DIR` still honoured), so resolving with no override
+            // RA_HOME / RA_CONFIG_DIR in the environment (legacy `ra_HOME` /
+            // `ra_CONFIG_DIR` still honoured), so resolving with no override
             // reproduces serve's own config_home: XDG for a default install, the
             // state dir for an explicit RA_HOME, the tenant dir for
             // RA_CONFIG_DIR. This closes the leak where the old

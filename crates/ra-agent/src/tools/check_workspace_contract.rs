@@ -157,13 +157,13 @@ mod tests {
 
     /// Minimal PPTX magic-bytes prefix: ZIP local-file-header signature.
     /// Required so `MagicByteKind::Pptx` (wired into the slides-kind policy
-    /// by ra #997) accepts the placeholder deck.
+    /// by RecurAgent #997) accepts the placeholder deck.
     const PPTX_MAGIC_BYTES: &[u8] = &[
         0x50, 0x4B, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00,
     ];
 
-    /// ra #997 (round-2 fix): exercise the PRODUCTION code path that
+    /// RecurAgent #997 (round-2 fix): exercise the PRODUCTION code path that
     /// writes the slides-kind PPTX `MagicBytes` validator outcome to the
     /// project-root ledger. Previously these fixtures manually seeded the
     /// ledger via `ledger.append(...)`, which masked the gap codex flagged:
@@ -216,7 +216,7 @@ mod tests {
         write_file(repo_root.join("script.js"), "// slides");
         write_file(repo_root.join("memory.md"), "# memory");
         write_file(repo_root.join("changelog.md"), "# changelog");
-        // ra #997 (round-2): write a real PPTX, then exercise the
+        // RecurAgent #997 (round-2): write a real PPTX, then exercise the
         // production project-root validator path. The helper writes a Pass
         // outcome to `slides/demo/.ra/validator_outcomes.jsonl` —
         // the exact path `inspect_workspace_contract` reads.
@@ -263,7 +263,7 @@ mod tests {
             write_file(root.join("memory.md"), "# memory");
             write_file(root.join("changelog.md"), "# changelog");
         }
-        // ra #997 (round-2): only the "ready" workspace gets the PPTX
+        // RecurAgent #997 (round-2): only the "ready" workspace gets the PPTX
         // magic bytes — the production project-root validator run writes a
         // Pass for it but a Fail for "broken" (no PPTX → MagicBytes can't
         // find the artifact). Calling the helper here matches the path the

@@ -2,7 +2,7 @@
 //! directory writability, and the protocol-skew **adapter** over the pure
 //! `ra_core::ui_protocol` comparator.
 //!
-//! No network here (Stage 1). The terminal checks are ported from octoscode's
+//! No network here (Stage 1). The terminal checks are ported from ra-tui's
 //! `doctor.rs`; the writability checks take their directories as parameters so
 //! callers (ra-cli) resolve the real `~/.config/ra` + `~/.ra` (legacy
 //! `~/.config/ra` + `~/.ra` still resolve through the brand helpers).

@@ -1,6 +1,6 @@
 # M22-H Onboarding Operational Matrix
 
-Issue: [#1056](https://github.com/your-org/ra/issues/1056)
+Issue: [#1056](https://github.com/icehomura/ra/issues/1056)
 Contract: [UPCR-2026-018 Local Solo Onboarding And Policy Inspection](../../docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_018_LOCAL_SOLO_ONBOARDING_AND_POLICY.md)
 
 The matrix is a scenario-driven harness that exercises the AppUI onboarding
@@ -51,9 +51,9 @@ Environment knobs:
 
 | Variable                       | Meaning                                                                 |
 | ------------------------------ | ----------------------------------------------------------------------- |
-| `OCTOS_BIN`                    | Path to the `ra` binary. Defaults to `<repo>/target/debug/ra`.    |
-| `OCTOS_MATRIX_DIR`             | Override the output root for this run.                                  |
-| `OCTOS_MATRIX_RPC_TIMEOUT_MS`  | Per-RPC timeout in ms. Defaults to `10000`.                             |
+| `ra_BIN`                    | Path to the `ra` binary. Defaults to `<repo>/target/debug/ra`.    |
+| `ra_MATRIX_DIR`             | Override the output root for this run.                                  |
+| `ra_MATRIX_RPC_TIMEOUT_MS`  | Per-RPC timeout in ms. Defaults to `10000`.                             |
 
 ## Tiering rules
 

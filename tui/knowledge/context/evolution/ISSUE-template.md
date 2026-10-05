@@ -11,7 +11,7 @@ severity: <S1|S2|S3>
 
 ## Environment
 
-版本/平台/分支/会话形态(octoscode 标准、免审批窗格、强档车道)。
+版本/平台/分支/会话形态(ra-tui 标准、免审批窗格、强档车道)。
 
 ## Reproduction
 

@@ -83,7 +83,7 @@ def main():
                       "max_iterations": 3,
                       # Never fetch the default embedding model in a smoke test.
                       "embedding_auto_download": False}
-            lib = ctypes.CDLL(str(library_dir / library_name("octos_ffi")))
+            lib = ctypes.CDLL(str(library_dir / library_name("ra_ffi")))
             lib.ra_runtime_new.argtypes = [ctypes.c_char_p]
             lib.ra_runtime_new.restype = ctypes.c_void_p
             lib.ra_runtime_free.argtypes = [ctypes.c_void_p]
@@ -126,7 +126,7 @@ def main():
                 lib.ra_runtime_free(runtime)
 
             binding = Path(__file__).resolve().parents[1] / "bindings/python/ra.py"
-            spec = importlib.util.spec_from_file_location("octos_fixture_binding", binding)
+            spec = importlib.util.spec_from_file_location("ra_fixture_binding", binding)
             module = importlib.util.module_from_spec(spec)
             # Generated loader locates its binary next to __file__. Keep the
             # generated source unmodified; direct only its library lookup.
@@ -135,7 +135,7 @@ def main():
             runtime = module.Runtime(module.Config(**config))
             try:
                 runtime.run_task(module.Brief(prompt="fixture-incomplete"))
-            except module.OctosError.Incomplete as error:
+            except module.RaError.Incomplete as error:
                 assert error.partial.output == PARTIAL
                 assert error.partial.iterations == 1
                 assert {key: getattr(error.partial.tokens, key) for key in EXPECTED} == EXPECTED

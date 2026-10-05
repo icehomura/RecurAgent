@@ -1,6 +1,6 @@
 [book]
-title = "ra Documentation"
-authors = ["ra contributors"]
+title = "RecurAgent Documentation"
+authors = ["RecurAgent contributors"]
 language = "en"
 src = "src"
 
@@ -10,7 +10,7 @@ build-dir = "public"
 [output.html]
 default-theme = "light"
 preferred-dark-theme = "ayu"
-git-repository-url = "https://github.com/your-org/ra"
-edit-url-template = "https://github.com/your-org/ra/edit/main/book/src/{path}"
+git-repository-url = "https://github.com/icehomura/ra"
+edit-url-template = "https://github.com/icehomura/ra/edit/main/book/src/{path}"
 site-url = "/ra/"
 additional-css = ["theme/ra.css"]

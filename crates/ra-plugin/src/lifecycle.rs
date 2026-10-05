@@ -498,11 +498,11 @@ impl LifecycleExecutor {
         // Export RA_SKILL_DIR so SKILL.md `init:`/`shutdown:` commands can
         // reference paths relative to the skill's installed location, e.g.
         //   cd "$RA_SKILL_DIR" && dora up && dora start dataflows/foo.yaml
-        // The legacy OCTOS_SKILL_DIR is still exported alongside it: skill
+        // The legacy ra_SKILL_DIR is still exported alongside it: skill
         // bundles written before the rename (and hosts that only forward the
         // old name) reference it.
         cmd.env("RA_SKILL_DIR", &self.cwd);
-        cmd.env("OCTOS_SKILL_DIR", &self.cwd);
+        cmd.env("ra_SKILL_DIR", &self.cwd);
         cmd.kill_on_drop(true);
 
         // On Unix, put the child into its own process group so we can
@@ -700,7 +700,7 @@ mod tests {
     #[tokio::test]
     async fn run_phase_injects_ra_and_legacy_skill_dir_env() {
         // Build an executor whose cwd is a tempdir; the step writes
-        // $RA_SKILL_DIR and the legacy $OCTOS_SKILL_DIR to files we can read
+        // $RA_SKILL_DIR and the legacy $ra_SKILL_DIR to files we can read
         // back.
         let dir = tempfile::tempdir().unwrap();
         let skill_path = dir.path().to_path_buf();
@@ -719,11 +719,11 @@ mod tests {
         // trimmed before comparison.
         #[cfg(windows)]
         let command = format!(
-            "echo %RA_SKILL_DIR% >{ra_str} & echo %OCTOS_SKILL_DIR% >{legacy_str}"
+            "echo %RA_SKILL_DIR% >{ra_str} & echo %ra_SKILL_DIR% >{legacy_str}"
         );
         #[cfg(not(windows))]
         let command = format!(
-            r#"printf '%s' "$RA_SKILL_DIR" > "{ra_str}" && printf '%s' "$OCTOS_SKILL_DIR" > "{legacy_str}""#
+            r#"printf '%s' "$RA_SKILL_DIR" > "{ra_str}" && printf '%s' "$ra_SKILL_DIR" > "{legacy_str}""#
         );
         let steps = vec![LifecycleStep {
             label: "capture env".into(),

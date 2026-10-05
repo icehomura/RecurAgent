@@ -776,7 +776,7 @@ fn image_skill_call(
         )),
         // `mofa_image` (not `mofa_cards`): a plain "generate an image" request
         // wants a single picture, and — unlike `mofa_cards`, which emits no
-        // `files_to_send` (ra #1041, see `workspace_policy` test) so the
+        // `files_to_send` (RecurAgent #1041, see `workspace_policy` test) so the
         // backend would get empty rels and deliver nothing — `mofa_image`
         // reports its produced PNG via `files_to_send`, the same proven path
         // the Illustrated stage-1 call relies on.
@@ -2098,7 +2098,7 @@ mod tests {
         );
     }
 
-    // ra #1041: `image` kind must route to `mofa_image` (which reports its
+    // RecurAgent #1041: `image` kind must route to `mofa_image` (which reports its
     // PNG via `files_to_send`), NOT `mofa_cards` (which emits none, so the old
     // mapping delivered nothing for a plain "generate an image" request).
     #[tokio::test]

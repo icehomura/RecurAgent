@@ -1,9 +1,9 @@
-# ra Robotics Contracts — R01 through R10
+# RecurAgent Robotics Contracts — R01 through R10
 
 See also:
 
-- [OCTOS_ROBOTICS_ARCHITECTURE.md](./OCTOS_ROBOTICS_ARCHITECTURE.md)
-- [OCTOS_ROBOTICS_FAMILY.md](./OCTOS_ROBOTICS_FAMILY.md)
+- [ra_ROBOTICS_ARCHITECTURE.md](./ra_ROBOTICS_ARCHITECTURE.md)
+- [ra_ROBOTICS_FAMILY.md](./ra_ROBOTICS_FAMILY.md)
 
 ## Purpose
 
@@ -21,8 +21,8 @@ contract. The scope guard rejects anything outside the contract.
 
 Every contract below follows this shape. Nothing in a contract is optional.
 
-- **Phase.** Which family phase from `OCTOS_ROBOTICS_FAMILY.md`.
-- **Tier.** Which architectural target from `OCTOS_ROBOTICS_ARCHITECTURE.md`.
+- **Phase.** Which family phase from `ra_ROBOTICS_FAMILY.md`.
+- **Tier.** Which architectural target from `ra_ROBOTICS_ARCHITECTURE.md`.
 - **Blocks.** Contracts that cannot start until this one is green.
 - **Blocked by.** Contracts that must be green before this one starts.
 - **Problem.** User-visible or operator-visible failure this closes.
@@ -73,7 +73,7 @@ No contract outside this graph may be opened under the `R` family.
 
 ## R01 — Fast-Loop Peer
 
-**Phase:** ra
+**Phase:** RecurAgent
 **Tier:** T1.1 (Control-plane / data-plane split)
 **Blocks:** R02, R03, R04, R10
 **Blocked by:** harness branch `release/2026-04-17-harness-gate-local` green on canary
@@ -81,7 +81,7 @@ No contract outside this graph may be opened under the `R` family.
 ### Problem
 
 A blocked LLM tool call can stall the only runtime loop. On a physical
-robot this is a mechanical failure or a safety event. Current ra does
+robot this is a mechanical failure or a safety event. Current RecurAgent does
 not separate LLM cadence from hardware cadence.
 
 ### Stable Surfaces
@@ -152,7 +152,7 @@ New crate `crates/ra-realtime/`.
 
 - Counter `ra_realtime_ticks_total`
 - Counter `ra_realtime_missed_ticks_total`
-- Histogram `octos_realtime_tick_jitter_us`
+- Histogram `ra_realtime_tick_jitter_us`
 - Counter `ra_realtime_goals_received_total`
 - Counter `ra_realtime_goals_rejected_total{reason}`
 - Operator summary key `realtime.missed_ticks`
@@ -160,7 +160,7 @@ New crate `crates/ra-realtime/`.
 ### Rollback
 
 Gate the whole fast-loop wiring behind `ProfileConfig.robot.realtime.enabled`.
-Default false. Without the flag, ra behaves exactly as before.
+Default false. Without the flag, RecurAgent behaves exactly as before.
 
 ### Review Checklist
 
@@ -245,7 +245,7 @@ tasks.
 - Counter `ra_mission_runs_total`
 - Counter `ra_mission_exceptions_total{kind}`
 - Counter `ra_mission_replans_total`
-- Histogram `octos_mission_wall_seconds`
+- Histogram `ra_mission_wall_seconds`
 - Operator summary key `mission.in_flight`
 
 ### Rollback
@@ -265,14 +265,14 @@ mission descriptor, no new code path.
 
 ## R03 — Safety Supervisor
 
-**Phase:** ra
+**Phase:** RecurAgent
 **Tier:** T1.3
 **Blocks:** R07, R08, R10
 **Blocked by:** R01
 
 ### Problem
 
-ra has no trust-domain separation between the LLM and safety. Any
+RecurAgent has no trust-domain separation between the LLM and safety. Any
 safety claim we ship today is carried by prompt text or trait declarations
 that no enforcer reads. On a physical robot that is unsafe.
 
@@ -368,14 +368,14 @@ tier evaluation is skipped.
 
 ## R04 — Robotics Bridge
 
-**Phase:** ra
+**Phase:** RecurAgent
 **Tier:** T2.1
 **Blocks:** R06, R09
 **Blocked by:** R01
 
 ### Problem
 
-ra has no typed, backpressure-aware bridge to existing robotics stacks.
+RecurAgent has no typed, backpressure-aware bridge to existing robotics stacks.
 MCP over stdio is too slow and too unstructured for high-frequency
 topics. A naive bridge buffers sensor streams without bound.
 
@@ -445,7 +445,7 @@ New crate `crates/ra-robotics-bridge/`.
 
 - Counter `ra_bridge_messages_in_total{topic,adapter}`
 - Counter `ra_bridge_messages_dropped_total{topic,reason}`
-- Gauge `octos_bridge_queue_depth{topic}`
+- Gauge `ra_bridge_queue_depth{topic}`
 - Counter `ra_bridge_schema_violations_total{topic}`
 - Operator summary key `bridge.drops_last_minute`
 
@@ -620,7 +620,7 @@ New module `crates/ra-agent/src/sensor_context.rs`.
 
 ### Observability
 
-- Histogram `octos_sensor_context_tokens_used`
+- Histogram `ra_sensor_context_tokens_used`
 - Counter `ra_sensor_context_truncations_total`
 - Counter `ra_sensor_context_gate_evaluations_total{gate,result}`
 - Operator summary key `sensor_context.tokens_last_turn`
@@ -796,7 +796,7 @@ New module `crates/ra-bus/src/hitl.rs`.
 ### Observability
 
 - Counter `ra_hitl_requests_total{action,outcome}`
-- Histogram `octos_hitl_latency_ms{outcome}`
+- Histogram `ra_hitl_latency_ms{outcome}`
 - Operator summary key `hitl.pending`
 
 ### Rollback
@@ -880,7 +880,7 @@ New crate `crates/ra-sim/`.
 ### Observability
 
 - Counter `ra_sim_ticks_total{backend}`
-- Histogram `octos_sim_real_time_ratio{backend}`
+- Histogram `ra_sim_real_time_ratio{backend}`
 
 ### Rollback
 
@@ -994,5 +994,5 @@ These apply to every contract in this family.
 9. No contract may add a Python port of any Rust runtime component into
    the monorepo.
 10. Every contract review is gated by the Safety Gate role from
-    `OCTOS_ROBOTICS_FAMILY.md`, with veto power overriding every other
+    `ra_ROBOTICS_FAMILY.md`, with veto power overriding every other
     role.

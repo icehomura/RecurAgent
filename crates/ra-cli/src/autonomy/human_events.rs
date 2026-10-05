@@ -24,7 +24,7 @@
 //!   event plus a log line. No producer path can stall or error on this.
 //! - **Routing is by owning session.** Every emitted event carries the
 //!   `session_id` of the session that OWNS the emitter. Activity without one
-//!   renders in whichever session happens to be focused (octos-tui#461, #466,
+//!   renders in whichever session happens to be focused (ra-tui#461, #466,
 //!   #483); an event with a blank key is refused here rather than shipped.
 //! - **Capped, with a VISIBLE drop marker.** Unbounded emission is a client
 //!   DoS. The per-origin budget below caps admissions per window and emits ONE
@@ -91,7 +91,7 @@ pub(crate) fn set_background_activity_sink(sink: BackgroundActivitySink) {
 /// harness race, not a production one — a single serve process installs the
 /// sink exactly once at boot — but it makes the routing assertion flap, which
 /// is unacceptable for the one property that has regressed three times
-/// (octos-tui#461 / #466 / #483).
+/// (ra-tui#461 / #466 / #483).
 ///
 /// Hold the returned guard for the WHOLE test body. Poison-safe: a failing
 /// test panics while holding it, and the next test must still be able to run

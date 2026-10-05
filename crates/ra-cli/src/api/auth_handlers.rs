@@ -1084,9 +1084,9 @@ pub(crate) fn payload_from_user_profile(
 
 /// GET /api/my/profile/qr
 ///
-/// Export the caller's profile as an `OCTOS1:`/`OCTOS1E:` payload for
+/// Export the caller's profile as an `RA1:`/`RA1E:` payload for
 /// client-side QR rendering. With `include_secrets=true` the payload is
-/// ALWAYS PIN-wrapped (`OCTOS1E`) — there is no plain-secrets override
+/// ALWAYS PIN-wrapped (`RA1E`) — there is no plain-secrets override
 /// over the API — and the one-time PIN is returned beside the payload,
 /// so a screenshotted or logged QR image alone reveals nothing.
 pub async fn my_profile_qr(
@@ -5201,7 +5201,7 @@ mod tests {
             hs_token: String::new(),
             server_name: String::new(),
             sender_localpart: "ra".into(),
-            user_prefix: "octos_".into(),
+            user_prefix: "ra_".into(),
             port: 8009,
             allowed_senders: Vec::new(),
             mention_only: true,
@@ -5234,7 +5234,7 @@ mod tests {
             hs_token: String::new(),
             server_name: String::new(),
             sender_localpart: "ra".into(),
-            user_prefix: "octos_".into(),
+            user_prefix: "ra_".into(),
             port: 8009,
             allowed_senders: Vec::new(),
             mention_only: true,
@@ -5278,7 +5278,7 @@ mod tests {
             hs_token: String::new(),
             server_name: String::new(),
             sender_localpart: "ra".into(),
-            user_prefix: "octos_".into(),
+            user_prefix: "ra_".into(),
             port: 8009,
             allowed_senders: Vec::new(),
             mention_only: true,
@@ -5324,7 +5324,7 @@ mod tests {
             hs_token: String::new(),
             server_name: String::new(),
             sender_localpart: "ra".into(),
-            user_prefix: "octos_".into(),
+            user_prefix: "ra_".into(),
             port: 8009,
             allowed_senders: Vec::new(),
             mention_only: true,
@@ -6011,14 +6011,14 @@ mod tests {
             store.save(&profile).unwrap();
             let skill = store.resolve_data_dir(&profile).join("skills/env-probe");
             std::fs::create_dir_all(&skill).unwrap();
-            std::fs::write(skill.join("manifest.json"), r#"{"name":"env-probe","version":"1.0","tools":[{"name":"env_probe","description":"fixture","input_schema":{"type":"object"},"env":["GEMINI_API_KEY","RA_PROFILE_ID","OCTOS_PROFILE_ID","RA_DATA_DIR","OCTOS_DATA_DIR","RA_PROFILE_LLM_MODEL","OCTOS_PROFILE_LLM_MODEL","RA_PROFILE_LLM_CONFIG_REVISION","OCTOS_PROFILE_LLM_CONFIG_REVISION"]}]}"#).unwrap();
+            std::fs::write(skill.join("manifest.json"), r#"{"name":"env-probe","version":"1.0","tools":[{"name":"env_probe","description":"fixture","input_schema":{"type":"object"},"env":["GEMINI_API_KEY","RA_PROFILE_ID","ra_PROFILE_ID","RA_DATA_DIR","ra_DATA_DIR","RA_PROFILE_LLM_MODEL","ra_PROFILE_LLM_MODEL","RA_PROFILE_LLM_CONFIG_REVISION","ra_PROFILE_LLM_CONFIG_REVISION"]}]}"#).unwrap();
             let binary = skill.join("env-probe");
             std::fs::write(&binary, r#"#!/bin/sh
 read INPUT || true
-profile_id="${RA_PROFILE_ID:-$OCTOS_PROFILE_ID}"
-data_dir="${RA_DATA_DIR:-$OCTOS_DATA_DIR}"
-model="${RA_PROFILE_LLM_MODEL:-$OCTOS_PROFILE_LLM_MODEL}"
-revision="${RA_PROFILE_LLM_CONFIG_REVISION:-$OCTOS_PROFILE_LLM_CONFIG_REVISION}"
+profile_id="${RA_PROFILE_ID:-$ra_PROFILE_ID}"
+data_dir="${RA_DATA_DIR:-$ra_DATA_DIR}"
+model="${RA_PROFILE_LLM_MODEL:-$ra_PROFILE_LLM_MODEL}"
+revision="${RA_PROFILE_LLM_CONFIG_REVISION:-$ra_PROFILE_LLM_CONFIG_REVISION}"
 ok=false
 if [ "$GEMINI_API_KEY" = "fixture-$profile_id" ]; then ok=true; fi
 if [ -f "$data_dir/hold" ]; then
@@ -6059,7 +6059,7 @@ printf '{"success":%s,"output":"%s","structured_metadata":{"revision":"%s"}}\n' 
         let old_revision = old
             .plugin_env_template
             .iter()
-            .find(|(k, _)| k == "OCTOS_PROFILE_LLM_CONFIG_REVISION")
+            .find(|(k, _)| k == "ra_PROFILE_LLM_CONFIG_REVISION")
             .unwrap()
             .1
             .clone();
@@ -6144,8 +6144,8 @@ printf '{"success":%s,"output":"%s","structured_metadata":{"revision":"%s"}}\n' 
             let mut state = Arc::new(state);
             let patch = serde_json::json!({"config":{
                 "llm":{"primary":{"family_id":"openai","model_id":"gpt-4o-mini",
-                    "route":{"api_key_env":"OCTOS_TEST_REST_RUNTIME_KEY"}},"fallbacks":[]},
-                "env_vars":{"OCTOS_TEST_REST_RUNTIME_KEY":"fixture"}
+                    "route":{"api_key_env":"ra_TEST_REST_RUNTIME_KEY"}},"fallbacks":[]},
+                "env_vars":{"ra_TEST_REST_RUNTIME_KEY":"fixture"}
             }})
             .to_string();
             let identity = || {
@@ -6246,13 +6246,13 @@ printf '{"success":%s,"output":"%s","structured_metadata":{"revision":"%s"}}\n' 
                             "family_id": "openai",
                             "model_id": "gpt-4o-mini",
                             "route": {
-                                "api_key_env": "OCTOS_TEST_MY_PROFILE_LLM_KEY"
+                                "api_key_env": "ra_TEST_MY_PROFILE_LLM_KEY"
                             }
                         },
                         "fallbacks": []
                     },
                     "env_vars": {
-                        "OCTOS_TEST_MY_PROFILE_LLM_KEY": "test-key"
+                        "ra_TEST_MY_PROFILE_LLM_KEY": "test-key"
                     }
                 }
             })

@@ -1,6 +1,6 @@
 //! Host-owned app peers and their bound request contexts (UPCR-2026-034).
 //!
-//! An OctoSense-style host launches apps that need the assistant. For each
+//! An RecurAgent-style host launches apps that need the assistant. For each
 //! authorized app it creates (or resumes) ONE peer owned by the host's system
 //! agent session — the peer's recorded originator — through `peer/prepare`
 //! with a host binding. The binding is durable and host-supplied:

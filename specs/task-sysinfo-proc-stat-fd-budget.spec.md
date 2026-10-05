@@ -1,5 +1,5 @@
 spec: task
-name: "ra serve 不再长期持有 /proc/*/stat 句柄"
+name: "RecurAgent serve 不再长期持有 /proc/*/stat 句柄"
 tags: [ra-cli, sysinfo, resources, admin-metrics]
 estimate: 0.5d
 ---

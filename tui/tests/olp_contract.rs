@@ -3,7 +3,7 @@
 //! These are pure documentation contracts: they pin the ACK grammar, the
 //! lane-template TOML block, the result.md schema field list, and the
 //! protocol-version references across `docs/OUTER_LOOP_PROTOCOL.md`,
-//! `docs/OUTER_LOOP_REVIEW.md`, and `AGENTS.md`. No ra dependency.
+//! `docs/OUTER_LOOP_REVIEW.md`, and `AGENTS.md`. No RecurAgent dependency.
 //!
 //! Historical ACK lines predate the v1 grammar and are NOT rewritten: the
 //! exemption is an exact-content whitelist (`LEGACY_ACK_WHITELIST`) of the 20

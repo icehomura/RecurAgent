@@ -91,7 +91,7 @@ estimate: 0.5d
 
 ## 排除范围
 
-- ra 服务端在 turn 退出时返还未消费 steer（F4）。
+- RecurAgent 服务端在 turn 退出时返还未消费 steer（F4）。
 - 客户端将 steer 保留至 consumed/committed（F5）。
 - 基于 hydrate/status 的 stuck-state watchdog（F3）。
 - interrupt 关联日志、Esc/exit 出口与 fd 累积调查。

@@ -1,14 +1,14 @@
-//! Self-contained profile-in-QR export (`OCTOS1:` / `OCTOS1E:`).
+//! Self-contained profile-in-QR export (`RA1:` / `RA1E:`).
 //!
 //! Format (EU-DCC pattern, sized for phone cameras — a full profile with
 //! three provider keys lands around QR v15):
 //!
 //! ```text
-//! OCTOS1:<base45(zlib(canonical JSON payload))>            — plain
-//! OCTOS1E:<base45(zlib(salt ‖ nonce ‖ chacha20poly1305))>  — PIN-wrapped
+//! RA1:<base45(zlib(canonical JSON payload))>            — plain
+//! RA1E:<base45(zlib(salt ‖ nonce ‖ chacha20poly1305))>  — PIN-wrapped
 //! ```
 //!
-//! The `OCTOS1E` variant derives its key from a 6-digit PIN via Argon2id
+//! The `RA1E` variant derives its key from a 6-digit PIN via Argon2id
 //! (the PIN is displayed BESIDE the QR, never inside it): a photographed
 //! or logged QR alone is useless. Secrets are only included when the
 //! caller explicitly asks; including them forces the encrypted variant
@@ -24,9 +24,9 @@ use eyre::{Result, WrapErr, bail};
 use serde::{Deserialize, Serialize};
 
 /// Plain-format prefix.
-pub const PREFIX_PLAIN: &str = "OCTOS1:";
+pub const PREFIX_PLAIN: &str = "RA1:";
 /// PIN-encrypted-format prefix.
-pub const PREFIX_ENCRYPTED: &str = "OCTOS1E:";
+pub const PREFIX_ENCRYPTED: &str = "RA1E:";
 
 /// RFC 9285 alphabet == QR alphanumeric charset.
 const BASE45_ALPHABET: &[u8; 45] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
@@ -238,14 +238,14 @@ fn decrypt(body: &[u8], pin: &str) -> Result<Vec<u8>> {
 // Public encode / decode
 // ---------------------------------------------------------------------------
 
-/// Encode a payload as the plain `OCTOS1:` string.
+/// Encode a payload as the plain `RA1:` string.
 ///
 /// Refuses secret-bearing payloads unless `allow_plain_secrets` — the QR
 /// is a bearer artifact; anyone who photographs it owns its contents.
 pub fn encode_plain(payload: &ProfileQrPayload, allow_plain_secrets: bool) -> Result<String> {
     if payload.has_secrets() && !allow_plain_secrets {
         bail!(
-            "payload carries secrets; use a PIN (encrypted OCTOS1E) or pass \
+            "payload carries secrets; use a PIN (encrypted RA1E) or pass \
              the explicit plain-secrets override"
         );
     }
@@ -256,7 +256,7 @@ pub fn encode_plain(payload: &ProfileQrPayload, allow_plain_secrets: bool) -> Re
     ))
 }
 
-/// Encode a payload as the PIN-wrapped `OCTOS1E:` string.
+/// Encode a payload as the PIN-wrapped `RA1E:` string.
 pub fn encode_encrypted(payload: &ProfileQrPayload, pin: &str) -> Result<String> {
     if pin.len() < 6 {
         bail!("transfer secret must be at least 6 characters");
@@ -266,7 +266,7 @@ pub fn encode_encrypted(payload: &ProfileQrPayload, pin: &str) -> Result<String>
     Ok(format!("{PREFIX_ENCRYPTED}{}", base45_encode(&sealed)))
 }
 
-/// Decode either format. `pin` is required for `OCTOS1E:`.
+/// Decode either format. `pin` is required for `RA1E:`.
 pub fn decode(s: &str, pin: Option<&str>) -> Result<ProfileQrPayload> {
     let s = s.trim();
     if let Some(body) = s.strip_prefix(PREFIX_PLAIN) {
@@ -281,7 +281,7 @@ pub fn decode(s: &str, pin: Option<&str>) -> Result<ProfileQrPayload> {
         let json = decompress(&decrypt(&sealed, pin)?)?;
         return serde_json::from_slice(&json).wrap_err("parse payload JSON");
     }
-    bail!("not an ra profile QR payload (missing OCTOS1/OCTOS1E prefix)")
+    bail!("not an ra profile QR payload (missing RA1/RA1E prefix)")
 }
 
 /// Render the encoded string as a terminal QR (Unicode half-blocks).
@@ -485,7 +485,7 @@ mod tests {
     #[test]
     fn rejects_foreign_strings() {
         assert!(decode("WIFI:T:WPA;S:home;;", None).is_err());
-        assert!(decode("OCTOS1:%%%%", None).is_err());
+        assert!(decode("RA1:%%%%", None).is_err());
     }
 
     #[test]

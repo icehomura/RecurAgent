@@ -4,9 +4,9 @@
 
 | 假值 | 取值 |
 |---|---|
-| session | `octos:local:tui#coding` |
+| session | `ra:local:tui#coding` |
 | goal / slug | `goal_01..goal_09` / `p1..p9` |
-| host / 路径 | `host-a` / `/repo/octos`、`/home/u/.octos/instances/0000000000000000` |
+| host / 路径 | `host-a` / `/repo/ra`、`/home/u/.ra/instances/0000000000000000` |
 | provider | `lane-a` / `lane-b` / `lane-c` |
 | ask id | `a1b2c3d4e5f6…` |
 | reason 枚举句 | `inner stuck on step 3`、`waiting for outer decision`、`quota exhausted` |

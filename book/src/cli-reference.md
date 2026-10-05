@@ -146,13 +146,13 @@ Key options:
 | `--port <N>` | Port to listen on (default `50080`, in IANA's dynamic range) |
 | `--host <ADDR>` | Bind address (default `127.0.0.1`; use `0.0.0.0` for external) |
 | `--stdio` | Run the AppUI JSON-RPC protocol over stdin/stdout instead of HTTP |
-| `--solo` | Enable the loopback-only no-password solo login (`POST /api/auth/solo*`); also `OCTOS_SOLO_LOGIN=1`. Never enable behind a reverse proxy |
-| `--data-dir <P>` | Data directory for episodes/memory/sessions (default `$OCTOS_HOME` or `~/.ra`) |
-| `--auth-token <T>` | Admin bearer token for API access. Visible in the process list (`ps`) — prefer the `OCTOS_AUTH_TOKEN` env var or the config file |
+| `--solo` | Enable the loopback-only no-password solo login (`POST /api/auth/solo*`); also `RA_SOLO_LOGIN=1`. Never enable behind a reverse proxy |
+| `--data-dir <P>` | Data directory for episodes/memory/sessions (default `$RA_HOME` or `~/.ra`) |
+| `--auth-token <T>` | Admin bearer token for API access. Visible in the process list (`ps`) — prefer the `RA_AUTH_TOKEN` env var or the config file |
 | `--config <P>` | Config file path |
 | `--swarm-backend <stdio\|http>` | Enable the `/api/swarm/*` contract-authoring endpoints (pairs with `--swarm-backend-cmd` / `--swarm-backend-url`) |
 
-Serves the embedded SPAs at `/app/` (chat/studio) and `/admin/` (operator dashboard) plus the WS UI Protocol at `/api/ui-protocol/ws`. A `/metrics` endpoint provides Prometheus-format metrics (`ra_tool_calls_total`, `octos_tool_call_duration_seconds`, `ra_llm_tokens_total`). Multiple instances can run in parallel with distinct `--data-dir` + `--port`.
+Serves the embedded SPAs at `/app/` (chat/studio) and `/admin/` (operator dashboard) plus the WS UI Protocol at `/api/ui-protocol/ws`. A `/metrics` endpoint provides Prometheus-format metrics (`ra_tool_calls_total`, `ra_tool_call_duration_seconds`, `ra_llm_tokens_total`). Multiple instances can run in parallel with distinct `--data-dir` + `--port`.
 
 ---
 
@@ -194,15 +194,15 @@ startup, so it stays current with the installed binary:
 ```bash
 # bash (4+; older bash such as the macOS system bash 3.2 may not source this
 # form reliably — use the static script above there, or Homebrew's bash)
-echo 'source <(OCTOS_COMPLETE=bash ra)' >> ~/.bashrc
+echo 'source <(RA_COMPLETE=bash ra)' >> ~/.bashrc
 # zsh
-echo 'source <(OCTOS_COMPLETE=zsh ra)' >> ~/.zshrc
+echo 'source <(RA_COMPLETE=zsh ra)' >> ~/.zshrc
 # fish
-echo 'OCTOS_COMPLETE=fish ra | source' >> ~/.config/fish/config.fish
+echo 'RA_COMPLETE=fish ra | source' >> ~/.config/fish/config.fish
 # elvish
-echo 'eval (E:OCTOS_COMPLETE=elvish ra | slurp)' >> ~/.elvish/rc.elv
+echo 'eval (E:RA_COMPLETE=elvish ra | slurp)' >> ~/.elvish/rc.elv
 # powershell
-echo '$env:OCTOS_COMPLETE = "powershell"; ra | Out-String | Invoke-Expression; Remove-Item Env:\OCTOS_COMPLETE' >> $PROFILE
+echo '$env:RA_COMPLETE = "powershell"; ra | Out-String | Invoke-Expression; Remove-Item Env:\RA_COMPLETE' >> $PROFILE
 ```
 
 `--dynamic` prints a candidate list for one category instead of a script —
@@ -336,7 +336,7 @@ Fetches `SKILL.md` from the GitHub repo's main branch and installs to `.ra/skill
 
 ## `ra doctor`
 
-Run local environment diagnostics for the ra server and print a health report.
+Run local environment diagnostics for the RecurAgent server and print a health report.
 
 ```bash
 ra doctor [OPTIONS]
@@ -382,7 +382,7 @@ ra memory forget  --id ^m4k2abq              # Hard-delete an exact MEMORY.md en
 
 ## `ra update`
 
-Check for a newer ra release.
+Check for a newer RecurAgent release.
 
 ```bash
 ra update --check         # Print the update plan; exit 10 if an update is available, 0 if up to date
@@ -395,7 +395,7 @@ This is the Stage-2 **check-only** command: it detects the installer lineage (Ho
 
 ## `ra mcp-serve`
 
-Expose ra itself as an MCP server so an outer orchestrator can invoke it as a sub-agent.
+Expose RecurAgent itself as an MCP server so an outer orchestrator can invoke it as a sub-agent.
 
 ```bash
 ra mcp-serve [OPTIONS]
@@ -406,7 +406,7 @@ Options:
   -c, --cwd <PATH>              Working directory
 ```
 
-Both transports are served by the [rmcp](https://github.com/modelcontextprotocol/rust-sdk) SDK. `stdio` uses parent-trust auth (MCP JSON-RPC over stdin/stdout). `http` is an MCP Streamable HTTP endpoint (SSE responses with a per-session `Mcp-Session-Id`) and **requires** a bearer token via the `OCTOS_MCP_SERVER_TOKEN` environment variable; it is only compiled into builds with the `api` feature (otherwise use `--transport stdio`). Binding `--bind` to a non-loopback address disables rmcp's DNS-rebinding host guard, leaving the bearer token as the sole authenticator.
+Both transports are served by the [rmcp](https://github.com/modelcontextprotocol/rust-sdk) SDK. `stdio` uses parent-trust auth (MCP JSON-RPC over stdin/stdout). `http` is an MCP Streamable HTTP endpoint (SSE responses with a per-session `Mcp-Session-Id`) and **requires** a bearer token via the `RA_MCP_SERVER_TOKEN` environment variable; it is only compiled into builds with the `api` feature (otherwise use `--transport stdio`). Binding `--bind` to a non-loopback address disables rmcp's DNS-rebinding host guard, leaving the bearer token as the sole authenticator.
 
 The session it drives runs inside the configured sandbox (`SandboxMode::Auto` by default), so outer callers cannot use the exposed `run_ra_session` tool to read or write outside the working directory.
 

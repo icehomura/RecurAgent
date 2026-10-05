@@ -158,7 +158,7 @@ session 必须与该 peer 一致。模型来自 `token_cost_update.token_cost.mo
 GLM/K3 lane 分别接受 `glm`/`glm-*` 与 `k3`/`k3-*`。
 
 报告 turn=N 只标识原生 `result-N.md`，不能用来选择 ledger 第 N 轮：
-一次原生报告/索引写入失败就可能使两种编号错位。原生 ra writer 必须在
+一次原生报告/索引写入失败就可能使两种编号错位。原生 RecurAgent writer 必须在
 报告 frontmatter 写入真实 `turn_id`；freeze 保存初审原生报告的路径和 SHA256，
 带模型验证的 cross 收录也保存该轮原生报告的路径和 SHA256。每次验收都从
 这些未改变的原生字节读取 `turn_id`，匹配同一个 peer 的确切 ledger 轮次，
@@ -171,7 +171,7 @@ GLM/K3 lane 分别接受 `glm`/`glm-*` 与 `k3`/`k3-*`。
 原生报告被删除/改写，或 ID 缺失、重复、未知、复用或倒序，均不能验收。
 
 **升级兼容**：旧 runtime 生成的报告缺 `turn_id`，旧冻结状态缺原生报告绑定，
-均只能保留为审计材料。请升级 ra，在新评审上下文新建 reviewer peer，
+均只能保留为审计材料。请升级 RecurAgent，在新评审上下文新建 reviewer peer，
 重做初审、freeze、挑战与 cross；不能从现有编号反推 ID，也不能给旧报告补写 ID。
 
 `review_accepted` 现在始终要求原有行为证据门和双模型证据门同时通过。
@@ -190,7 +190,7 @@ ledger 不完整或归档被移走会降级为未验证，不猜测缺失轮次�
 测试执行证据。
 
 **reviewer 会话生命周期**：使用专用于本轮评审的短 peer 会话，初审与 cross
-必须在该 peer 的完整日志仍保留时验收。当前 ra 默认每段约 10 MiB、最多
+必须在该 peer 的完整日志仍保留时验收。当前 RecurAgent 默认每段约 10 MiB、最多
 保留 5 段；仅切段不影响核验，删除最早一段后则失去本门要求的完整事件链。
 不要复用长时间运行的编码 peer 充当 reviewer。若前段已经丢失，在新的评审
 上下文新建 reviewer peers，重做初审、冻结、挑战和 cross；不得重编号剩余

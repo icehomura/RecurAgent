@@ -75,11 +75,11 @@ function printUsageAndExit(code) {
     '                    e2e/matrix/<pack>.toml relative to repo root.',
     '',
     'Environment:',
-    '  OCTOS_BIN                  Override path to the ra binary.',
+    '  ra_BIN                  Override path to the ra binary.',
     '                             Defaults to <repo>/target/debug/ra.',
-    '  OCTOS_MATRIX_DIR           Override run output root.',
+    '  ra_MATRIX_DIR           Override run output root.',
     '                             Defaults to e2e/test-results-matrix/<UTC>/.',
-    '  OCTOS_MATRIX_RPC_TIMEOUT_MS  Per-RPC timeout. Default 10000.',
+    '  ra_MATRIX_RPC_TIMEOUT_MS  Per-RPC timeout. Default 10000.',
   ].join('\n');
   console.log(usage);
   process.exit(code);
@@ -690,7 +690,7 @@ export function evaluateOnboardingValidators({ scenario, localCtx, stepFrames, t
 }
 
 export class StdioClient {
-  constructor({ octosBin, dataDir, workspace, repoRoot, stderrLog, transcriptLog, timeoutMs }) {
+  constructor({ raBin, dataDir, workspace, repoRoot, stderrLog, transcriptLog, timeoutMs }) {
     this.timeoutMs = timeoutMs;
     this.transcriptLog = transcriptLog;
     this.stderrText = '';
@@ -698,7 +698,7 @@ export class StdioClient {
     this.notifications = [];
     this.nextSeq = 0;
     this.child = spawn(
-      octosBin,
+      raBin,
       // `--solo` opts into the no-password local-solo gate so the matrix's
       // `profile/local/create` onboarding scenarios are advertised/executed.
       // Solo is OFF by default (see `api::solo_auth`); harmless for non-solo
@@ -710,7 +710,7 @@ export class StdioClient {
           ...process.env,
           RUST_BACKTRACE: process.env.RUST_BACKTRACE || '1',
           // Defensive: block accidental OTP wiring during onboarding probes.
-          OCTOS_DISABLE_SMTP: process.env.OCTOS_DISABLE_SMTP || '1',
+          ra_DISABLE_SMTP: process.env.ra_DISABLE_SMTP || '1',
         },
         stdio: ['pipe', 'pipe', 'pipe'],
       },
@@ -723,7 +723,7 @@ export class StdioClient {
     this.rl = readline.createInterface({ input: this.child.stdout });
     this.rl.on('line', (line) => this._onLine(line));
     // Codex P2 follow-up: when the spawned `ra serve` crashes,
-    // panics, or the wrong binary is at OCTOS_BIN, the child can
+    // panics, or the wrong binary is at ra_BIN, the child can
     // exit with pending RPCs still in flight. Track exit so we can
     // reject pending requests instead of waiting for them to time
     // out (or worse, propagating an unhandled EPIPE on stdin —
@@ -888,7 +888,7 @@ function evaluateExpectations(expect, frame) {
 // Scenario execution.
 // ---------------------------------------------------------------------------
 
-async function runScenario(scenario, ctx, repoRoot, octosBin, runTimeoutMs) {
+async function runScenario(scenario, ctx, repoRoot, raBin, runTimeoutMs) {
   const scenarioDir = path.join(ctx.runRoot, scenario.name);
   const dataDir = path.join(scenarioDir, 'data');
   const workspace = path.join(scenarioDir, 'workspace');
@@ -934,7 +934,7 @@ async function runScenario(scenario, ctx, repoRoot, octosBin, runTimeoutMs) {
   };
 
   const client = new StdioClient({
-    octosBin,
+    raBin,
     dataDir,
     workspace,
     repoRoot,
@@ -1062,24 +1062,24 @@ async function main() {
   }
 
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z');
-  const runRoot = process.env.OCTOS_MATRIX_DIR
+  const runRoot = process.env.ra_MATRIX_DIR
     || path.join(repoRoot, 'e2e', 'test-results-matrix', `${args.pack}-${args.tier}`, stamp);
   fs.mkdirSync(runRoot, { recursive: true });
-  const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
-  if (!fs.existsSync(octosBin)) {
+  const raBin = process.env.ra_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
+  if (!fs.existsSync(raBin)) {
     const failure = {
       ok: false,
       pack: args.pack,
       tier: args.tier,
       run_root: runRoot,
-      error: `ra binary not found at ${octosBin}. Build it (\`cargo build -p ra-cli --features api\`) or set OCTOS_BIN.`,
+      error: `ra binary not found at ${raBin}. Build it (\`cargo build -p ra-cli --features api\`) or set ra_BIN.`,
     };
     writeJson(path.join(runRoot, 'summary.json'), failure);
     console.error(JSON.stringify(failure, null, 2));
     process.exit(2);
   }
 
-  const rpcTimeoutMs = Number(process.env.OCTOS_MATRIX_RPC_TIMEOUT_MS || 10_000);
+  const rpcTimeoutMs = Number(process.env.ra_MATRIX_RPC_TIMEOUT_MS || 10_000);
   const ctx = { runRoot, runStamp: stamp };
 
   const startedAt = new Date().toISOString();
@@ -1088,7 +1088,7 @@ async function main() {
   let failed = 0;
   let skipped = 0;
   for (const scenario of scenarios) {
-    const summary = await runScenario(scenario, ctx, repoRoot, octosBin, rpcTimeoutMs);
+    const summary = await runScenario(scenario, ctx, repoRoot, raBin, rpcTimeoutMs);
     scenarioSummaries.push(summary);
     if (summary.status === 'passed') passed += 1;
     else if (summary.status === 'skipped') skipped += 1;

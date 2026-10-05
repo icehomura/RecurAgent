@@ -4,7 +4,7 @@ Date: 2026-06-03
 
 Status: design draft (Phase 1: synchronous tool-block).
 
-Owner: ra-agent + ra-cli (AppUI/UI Protocol) + octoscode.
+Owner: ra-agent + ra-cli (AppUI/UI Protocol) + ra-tui.
 
 Related contract surfaces:
 
@@ -12,7 +12,7 @@ Related contract surfaces:
   (§7 `user_question/respond`, §8 `user_question/requested`, §4.1 UPCR-2026-023)
 - [api/ra_SERVER_FEATURE_REQUIREMENTS.md](../../api/ra_SERVER_FEATURE_REQUIREMENTS.md) (`SRV-041`)
 - [api/ra_APP_FEATURE_REQUIREMENTS.md](../../api/ra_APP_FEATURE_REQUIREMENTS.md) (`APP-037`)
-- [api/OCTOSCODE_FEATURE_REQUIREMENTS.md](../../api/OCTOSCODE_FEATURE_REQUIREMENTS.md) (`TUI-037`)
+- [api/RA_TUI_FEATURE_REQUIREMENTS.md](../../api/RA_TUI_FEATURE_REQUIREMENTS.md) (`TUI-037`)
 
 Existing machinery this design reuses (read these before implementing):
 
@@ -31,7 +31,7 @@ Existing machinery this design reuses (read these before implementing):
 
 ## 1. Motivation
 
-ra agents frequently reach a point mid-turn where they must make an
+RecurAgent agents frequently reach a point mid-turn where they must make an
 assumption the user could resolve in one tap: which framework, which target
 environment, which of two ambiguous files, opt-in to a destructive cleanup, and
 so on. Today the agent has two poor options:
@@ -47,7 +47,7 @@ so on. Today the agent has two poor options:
 Frontier coding agents (codex, Claude) solve this with a structured
 `AskUserQuestion` tool: the agent emits 1–4 multiple-choice questions, the
 client renders selectable options plus a free-text escape hatch, and the
-selected answer routes straight back into the same turn. ra already has every
+selected answer routes straight back into the same turn. RecurAgent already has every
 primitive needed to do this — the approval flow is exactly "pause the turn at a
 tool boundary, surface a typed decision point to the client, route the client's
 answer back, resume." AskUserQuestion is **approval + choices + free-text**.
@@ -323,9 +323,9 @@ in this docs-only change.
   - Capability negotiation: advertise `user_question.v1` in
     `supported_features` when the client requests it.
 
-**octoscode** (rendering):
+**ra-tui** (rendering):
 
-- `crates/octoscode/src/store.rs` + `src/app.rs` (mirror the approval-card
+- `crates/ra-tui/src/store.rs` + `src/app.rs` (mirror the approval-card
   handling): render the question picker — one card per question, single-select
   vs multi-select, each option as a selectable line, plus an "Other" free-text
   entry. Send `user_question/respond` with the correct `question_id` and
@@ -370,7 +370,7 @@ Follow the project RED → GREEN → REFACTOR cycle. Tests by layer:
 - `should_replay_pending_user_question_on_hydrate` (reconnect path).
 - `should_degrade_to_generic_when_client_lacks_capability`.
 
-**octoscode:**
+**ra-tui:**
 
 - Render snapshot of single-select and multi-select cards + the "Other" entry.
 - Reducer test: `user_question/respond` carries the right `question_id` and
@@ -383,7 +383,7 @@ tool await boundary, release the turn, persist a checkpoint, and resume from it
 when `user_question/respond` arrives. This frees the execution context and any
 upstream connection/budget while the user thinks, and degrades better for slow
 human responses. Rejected for Phase 1 because it requires a durable turn-state
-checkpoint/resume mechanism ra does not yet have; that is real new turn-state
+checkpoint/resume mechanism RecurAgent does not yet have; that is real new turn-state
 machinery, not a reuse of the approval flow. Deferred to §8.
 
 **B. Pipeline human-gate.** `ra-pipeline` already has a human-input gate with

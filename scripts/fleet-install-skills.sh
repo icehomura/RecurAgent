@@ -15,15 +15,15 @@
 #   scripts/fleet-install-skills.sh --dry-run
 #
 # Environment:
-#   OCTOS_FLEET_HOSTS         Space-or-comma-separated host override (same as --host)
+#   ra_FLEET_HOSTS         Space-or-comma-separated host override (same as --host)
 #   MOFA_SKILLS_DIR           Path to mofa-skills checkout (default: ~/home/mofa-skills)
-#   OCTOS_REMOTE_BIN          Path to ra binary on remote (default:
+#   ra_REMOTE_BIN          Path to ra binary on remote (default:
 #                             /Users/cloud/.ra/bin/ra)
-#   OCTOS_REMOTE_USER         SSH user on remote hosts (default: cloud)
+#   ra_REMOTE_USER         SSH user on remote hosts (default: cloud)
 #
 # Per host, per profile, per skill:
 #   1. rsync the local skill directory to a remote staging path
-#   2. SSH in, run `OCTOS_PROFILE_ID=<p> ra skills --profile <p> install
+#   2. SSH in, run `ra_PROFILE_ID=<p> ra skills --profile <p> install
 #      <staging_path> --force` so the install routes through the same code
 #      path as the runtime tool (verifies manifest sha256, builds binaries,
 #      writes .source for `skills update`)
@@ -36,19 +36,19 @@
 set -eEuo pipefail
 
 # ─── Defaults ────────────────────────────────────────────────────────────
-DEFAULT_HOSTS="${OCTOS_FLEET_DEFAULT_HOSTS:-}"  # no built-in host list
+DEFAULT_HOSTS="${ra_FLEET_DEFAULT_HOSTS:-}"  # no built-in host list
 DEFAULT_MOFA_DIR="$HOME/home/mofa-skills"
 DEFAULT_REMOTE_BIN="/Users/cloud/.ra/bin/ra"
 DEFAULT_REMOTE_USER="cloud"
 DEFAULT_REMOTE_STAGING="/tmp/ra-fleet-install-staging"
 
-HOSTS_ARG="${OCTOS_FLEET_HOSTS:-}"
+HOSTS_ARG="${ra_FLEET_HOSTS:-}"
 PROFILES_ARG=""
 SKILLS_ARG=""
 MOFA_DIR="${MOFA_SKILLS_DIR:-$DEFAULT_MOFA_DIR}"
-REMOTE_BIN="${OCTOS_REMOTE_BIN:-$DEFAULT_REMOTE_BIN}"
-REMOTE_USER="${OCTOS_REMOTE_USER:-$DEFAULT_REMOTE_USER}"
-REMOTE_STAGING="${OCTOS_REMOTE_STAGING:-$DEFAULT_REMOTE_STAGING}"
+REMOTE_BIN="${ra_REMOTE_BIN:-$DEFAULT_REMOTE_BIN}"
+REMOTE_USER="${ra_REMOTE_USER:-$DEFAULT_REMOTE_USER}"
+REMOTE_STAGING="${ra_REMOTE_STAGING:-$DEFAULT_REMOTE_STAGING}"
 DRY_RUN=false
 FORCE=true   # default: re-install on every run; idempotent because content hashes match
 VERBOSE=false
@@ -64,7 +64,7 @@ Usage:
 
 Options:
   --host LIST          Comma-or-space separated hosts (default: mini1-5 IPs)
-                       Overrides OCTOS_FLEET_HOSTS
+                       Overrides ra_FLEET_HOSTS
   --profile LIST       Comma-separated profile IDs (default: every profile
                        enumerated from ~/.ra/profiles/*/data on each host)
   --skill LIST         Comma-separated skill names (default: every dir under
@@ -80,11 +80,11 @@ Options:
   --help, -h           Show this help
 
 Environment overrides:
-  OCTOS_FLEET_HOSTS         Same as --host
+  ra_FLEET_HOSTS         Same as --host
   MOFA_SKILLS_DIR           Same as --mofa-dir
-  OCTOS_REMOTE_BIN          Same as --remote-bin
-  OCTOS_REMOTE_USER         Same as --remote-user
-  OCTOS_REMOTE_STAGING      Remote staging path (default: /tmp/ra-fleet-install-staging)
+  ra_REMOTE_BIN          Same as --remote-bin
+  ra_REMOTE_USER         Same as --remote-user
+  ra_REMOTE_STAGING      Remote staging path (default: /tmp/ra-fleet-install-staging)
 
 Examples:
   # Dry-run against the full fleet
@@ -95,7 +95,7 @@ Examples:
       --host <host> --profile dspfac --skill mofa-cli
 
   # Override host list via env
-  OCTOS_FLEET_HOSTS=<host> scripts/fleet-install-skills.sh
+  ra_FLEET_HOSTS=<host> scripts/fleet-install-skills.sh
 USAGE
 }
 
@@ -347,7 +347,7 @@ for host in "${HOSTS[@]}"; do
         for profile in "${PROFILES[@]}"; do
             force_flag=""
             [ "$FORCE" = "true" ] && force_flag="--force"
-            install_cmd="OCTOS_PROFILE_ID='$profile' '$REMOTE_BIN' skills --profile '$profile' install '$REMOTE_STAGING/$skill' $force_flag"
+            install_cmd="ra_PROFILE_ID='$profile' '$REMOTE_BIN' skills --profile '$profile' install '$REMOTE_STAGING/$skill' $force_flag"
 
             if [ "$DRY_RUN" = "true" ]; then
                 log "[dry-run] would: ssh $host -- $install_cmd"

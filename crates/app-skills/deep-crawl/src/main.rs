@@ -69,7 +69,7 @@ const MAX_CRAWL_DELAY_SECS: u64 = 10;
 /// Product token appended to the browser's own User-Agent so sites can tell
 /// this is an automated ra-research reader (policy: no disguised automation; see
 /// SKILL.md "Automation policy").
-const UA_SUFFIX: &str = "ra-research/1.0 (+https://github.com/your-org/ra)";
+const UA_SUFFIX: &str = "ra-research/1.0 (+https://github.com/icehomura/ra)";
 
 /// Environment variables to block when launching Chrome.
 const BLOCKED_ENV_VARS: &[&str] = &[
@@ -1306,7 +1306,7 @@ async fn run() -> Output {
         );
 
         // robots.txt (only when the operator enabled it with
-        // RA_RESPECT_ROBOTS=1, legacy OCTOS_RESPECT_ROBOTS honoured;
+        // RA_RESPECT_ROBOTS=1, legacy ra_RESPECT_ROBOTS honoured;
         // default off, never fetched): a disallowed
         // (or unreachable-robots) URL is recorded, never navigated, and
         // Crawl-delay is honoured between pages. Otherwise pages are spaced

@@ -25,7 +25,7 @@ choose compaction boundaries, rotate epochs, or alter provider-cache policy.
 
 ## Motivation
 
-OUP is the single context authority for OctosCode and future clients. A client
+OUP is the single context authority for ra-tui and future clients. A client
 needs enough information to explain a cache miss or compaction without parsing
 prompt bodies or recreating ContextManager policy. Reusing the existing
 context lifecycle records keeps one ordered lifecycle while the separate
@@ -93,7 +93,7 @@ newer generation or a different workspace-scoped session affinity.
 
 ## Frontend convergence
 
-OctosCode consumes this capability through OUP. Future `ra chat` and ACP
+ra-tui consumes this capability through OUP. Future `ra chat` and ACP
 frontends must use the same OUP session/context lifecycle rather than install a
 second semantic ledger or a client-owned compactor. Their adoption is a routing
 change, not permission to copy ContextManager.
@@ -102,5 +102,5 @@ change, not permission to copy ContextManager.
 
 - Feature and fields: `crates/ra-core/src/ui_protocol.rs`
 - OUP lifecycle population and capabilities: `crates/ra-cli/src/api/ui_protocol_transport.rs`
-- OctosCode decoding/rendering: `src/client_event.rs`, `src/model.rs`, `src/store.rs`
+- ra-tui decoding/rendering: `src/client_event.rs`, `src/model.rs`, `src/store.rs`
 - Design and acceptance evidence: `docs/adr/oup-semantic-boundary-context-cache.md`

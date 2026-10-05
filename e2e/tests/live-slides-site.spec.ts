@@ -6,10 +6,10 @@
  * - site: the built preview page is reachable and stays stable after reload
  *
  * Run against a live browser host:
- *   OCTOS_TEST_URL=https://dspfac.crew.ominix.io \
- *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
- *   OCTOS_PROFILE=dspfac \
- *   OCTOS_TEST_EMAIL=dspfac@gmail.com \
+ *   ra_TEST_URL=https://dspfac.crew.ominix.io \
+ *   ra_AUTH_TOKEN=ra-admin-2026 \
+ *   ra_PROFILE=dspfac \
+ *   ra_TEST_EMAIL=dspfac@gmail.com \
  *   npx playwright test tests/live-slides-site.spec.ts
  */
 import { expect, test, type Page } from '@playwright/test';
@@ -21,9 +21,9 @@ import {
   SEL,
 } from './live-browser-helpers';
 
-const AUTH_TOKEN = process.env.OCTOS_AUTH_TOKEN || 'ra-admin-2026';
-const PROFILE_ID = process.env.OCTOS_PROFILE || 'dspfac';
-const BASE_URL = process.env.OCTOS_TEST_URL || 'http://localhost:3000';
+const AUTH_TOKEN = process.env.ra_AUTH_TOKEN || 'ra-admin-2026';
+const PROFILE_ID = process.env.ra_PROFILE || 'dspfac';
+const BASE_URL = process.env.ra_TEST_URL || 'http://localhost:3000';
 
 // The canonical skill names in mofa-org/mofa-skills are hyphenated:
 // `mofa-slides` and `mofa-site` (singular). The dashboard's installed-skill
@@ -138,8 +138,8 @@ async function collectPreviewUrls(page: Page): Promise<string[]> {
 async function collectPersistedPreviewUrls(page: Page): Promise<string[]> {
   return page.evaluate(async () => {
     const token =
-      localStorage.getItem('octos_session_token') ||
-      localStorage.getItem('octos_auth_token') ||
+      localStorage.getItem('ra_session_token') ||
+      localStorage.getItem('ra_auth_token') ||
       '';
     const profile = localStorage.getItem('selected_profile') || '';
     const headers: Record<string, string> = {};

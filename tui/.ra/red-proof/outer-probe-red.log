@@ -1,6 +1,6 @@
-   Compiling octoscode v0.3.0-rc.10 (/Users/zhangalex/.local/tmp/octoloop-evolution-20260909/octoscode-behavior-review)
+   Compiling ra-tui v0.3.0-rc.10 (/Users/zhangalex/.local/tmp/octoloop-evolution-20260909/ra-tui-behavior-review)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 8.42s
-     Running tests/olp_review_evidence.rs (/Users/zhangalex/Work/Projects/FW/octoscode/target/debug/deps/olp_review_evidence-090e7289e7aa9ff5)
+     Running tests/olp_review_evidence.rs (/Users/zhangalex/Work/Projects/FW/ra-tui/target/debug/deps/olp_review_evidence-090e7289e7aa9ff5)
 
 running 3 tests
 test olp_review_outer_probe_freeze_requires_native_authority ... FAILED

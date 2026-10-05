@@ -2,7 +2,7 @@
 name: skill-creator
 description: Create custom skill packages with instructions, tools, and assets.
 version: 1.0.0
-author: ra
+author: RecurAgent
 ---
 
 # Skill Creator
@@ -97,7 +97,7 @@ The PluginLoader looks for executables in this order:
 ### Writing tools in Rust
 
 Add a `Cargo.toml` and `src/main.rs`. During `ra skills install`, the system will:
-1. Check the ra skill registry for a pre-built binary (with SHA-256 verification)
+1. Check the RecurAgent skill registry for a pre-built binary (with SHA-256 verification)
 2. Fall back to `cargo build --release` if no binary is available
 
 ```rust
@@ -146,7 +146,7 @@ console.log(JSON.stringify(result));
 ## Publishing to the Registry
 
 1. Push your skill to a GitHub repo
-2. Submit to the [octos skill registry](https://github.com/octos-org/octos-hub)
+2. Submit to the [RecurAgent skill registry](https://github.com/icehomura/ra-hub)
 3. The registry team audits, builds binaries, and publishes
 
 ## Multi-Skill Repos

@@ -1,14 +1,14 @@
 /**
  * M9 wire-level e2e: `session/open`.
  *
- * Issue: https://github.com/your-org/ra/issues/647
+ * Issue: https://github.com/icehomura/ra/issues/647
  * Spec  : api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md §7 Command Semantics
  *
  * Asserts envelope shape, error codes and cursor monotonicity ONLY — no
  * rendered DOM. Each test mints its own session id and tears down its own
  * socket so it is independently runnable:
  *
- *   OCTOS_LIVE_TOKEN=… npx playwright test tests/m9-protocol-session-open.spec.ts
+ *   ra_LIVE_TOKEN=… npx playwright test tests/m9-protocol-session-open.spec.ts
  *
  * The fault-injection variants of the cursor checks are duplicated by
  * `m9-protocol-fault-injection.spec.ts` so each spec file remains a useful

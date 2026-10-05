@@ -2,7 +2,7 @@
 //!
 //! Talks to a user-configured, self-hosted smart-home bridge (e.g. a Home
 //! Assistant instance fronted by a small REST shim) over plain HTTP, using
-//! the exact contract octos-web's browser client used to call directly:
+//! the exact contract ra-web's browser client used to call directly:
 //! `GET /devices`, `POST /devices/{id}` (form-encoded), `POST
 //! /cameras/{id}/stream` (form-encoded), `POST /cameras/{id}/stop`.
 //!

@@ -9,7 +9,7 @@ tags: [olp, evolution, harness, metrics, replay]
 
 ## Problem
 
-阶段 0/1 让采集与 retro 机械化,但三处仍缺:①octos 侧新增的 `fallback_switch` 与 `malformed_exhausted` 事件(REQ-OLP-OBS 修订)采集哨与 retro 要认;②"进化"与"漂移"无法区分,因为没有可重复的基线:需要一套结构保持、由 allowlist 合成(不含任何真实自由文本)的回放夹具,把采集与 retro 的产出钉成期望值;③没有指标脚本,而指标一旦把累计计数上涨定义为回归,就会奖励少报——指标必须窗口化、只作诊断。
+阶段 0/1 让采集与 retro 机械化,但三处仍缺:①RecurAgent 侧新增的 `fallback_switch` 与 `malformed_exhausted` 事件(REQ-OLP-OBS 修订)采集哨与 retro 要认;②"进化"与"漂移"无法区分,因为没有可重复的基线:需要一套结构保持、由 allowlist 合成(不含任何真实自由文本)的回放夹具,把采集与 retro 的产出钉成期望值;③没有指标脚本,而指标一旦把累计计数上涨定义为回归,就会奖励少报——指标必须窗口化、只作诊断。
 
 ## Requirements
 
@@ -65,7 +65,7 @@ Scenario: 指标窗口与基线诊断
 
 - proposal:LEP-003 §10 阶段 2
 - operator 2026-09-05 直令"按阶段完成这个目标"
-- ra 侧发射点契约:ra 仓库 `specs/task-olp-obs-p2-producers.spec.md`(分支 feat/olp-obs-p2-producers)
+- RecurAgent 侧发射点契约:RecurAgent 仓库 `specs/task-olp-obs-p2-producers.spec.md`(分支 feat/olp-obs-p2-producers)
 - 契约 v3 经 codex(gpt-6)PR 复审(2026-09-05):同会话双车道场景与按 detail 分组冲突、anchor 截 session、metrics 产生 pyc
 - 契约 v2 经 codex/grok 对抗复审(2026-09-05):累计计数当回归会奖励少报;黑名单脱敏不可证明;since 窗口与最近简报混用;新 kind 需进 events 类分组;fallback 锚点需含车道
 - 实测:阶段 0 影子采集 7 卡、阶段 1 干跑 4 候选,尚无可重复的期望基线

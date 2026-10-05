@@ -7,7 +7,7 @@ turn: 1
 
 第一阶段独立盲审完成，两份输出均已写入：
 
-**报告**：`.octos/independent-glm.md`（122 行）＋ native `result.md`（briefs 目录下，615 bytes）
+**报告**：`.ra/independent-glm.md`（122 行）＋ native `result.md`（briefs 目录下，615 bytes）
 
 ## 核心结论：**批准（Approve）—— 无本 PR 新增回归**
 
@@ -18,7 +18,7 @@ turn: 1
 
 **根因链逐环核实为真**（doc comment 的每条声明都对得上上游锁定提交）：
 1. `profile_id` None → serde 缺字段 ✅
-2. 服务器 `raw_scoped_llm_profile_id` 默认 `MAIN_PROFILE_ID`（`"_main"`，`octos-core/types.rs:494`）✅
+2. 服务器 `raw_scoped_llm_profile_id` 默认 `MAIN_PROFILE_ID`（`"_main"`，`ra-core/types.rs:494`）✅
 3. `validate_slug_shape` 仅收 `[a-z0-9-]`，`_` 被拒 ✅
 4. `save_with_merge` → `internal_error` → `-32603` ✅
 5. "Continue to Workspace" 由 saved-provider 门禁锁死 ✅

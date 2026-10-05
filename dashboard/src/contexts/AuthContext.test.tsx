@@ -80,7 +80,7 @@ describe('AuthContext soloCreate', () => {
     await user.click(screen.getByTestId('go'))
 
     await waitFor(() => expect(screen.getByTestId('uid')).toHaveTextContent('ada'))
-    expect(localStorage.getItem('octos_session_token')).toBe('tok123')
+    expect(localStorage.getItem('ra_session_token')).toBe('tok123')
   })
 
   it('refines the user from /me when it succeeds', async () => {

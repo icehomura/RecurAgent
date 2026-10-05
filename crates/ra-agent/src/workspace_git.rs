@@ -778,7 +778,7 @@ fn check_list_passed(checks: &[WorkspaceCheckStatus]) -> bool {
 fn resolve_artifact_matches(repo_root: &Path, pattern: &str) -> Vec<String> {
     // Slides projects declare slug-aware artifact globs like
     // `skill-output/slides/<slug>/output/deck.pptx` that point at the
-    // canonical ra plugin output location (outside the project dir).
+    // canonical RecurAgent plugin output location (outside the project dir).
     // For those patterns, resolve against the session root (the parent
     // of `<kind>/<slug>/`) but allowlist the search scope to
     // `<session>/skill-output/` so this can't be abused to read
@@ -1047,7 +1047,7 @@ mod tests {
         0x00, 0x00, 0x00, 0x00, 0x00,
     ];
 
-    /// ra #997 (round-2 fix): exercise the PRODUCTION code path that
+    /// RecurAgent #997 (round-2 fix): exercise the PRODUCTION code path that
     /// writes the slides-kind PPTX `MagicBytes` validator outcome to the
     /// project-root ledger. Pre-round-2 the inspect-contract tests manually
     /// seeded a `Pass` row via `ledger.append(...)` — but codex pointed out
@@ -1108,6 +1108,19 @@ mod tests {
         file.write_all(text.as_bytes()).unwrap();
     }
 
+    /// Render an absolute path for embedding in a quoted git config value.
+    ///
+    /// A backslash starts an escape sequence inside a quoted config value, so
+    /// a native Windows path (`C:\Users\...`) written verbatim makes git
+    /// reject the whole file ("bad config line N in file .git/config") — the
+    /// same trap [`crate::private_git`] avoids for `core.hooksPath` (#2662).
+    /// The PoC configs must stay parseable on every platform, or the
+    /// post-snapshot `git log` assertion below fails for a reason that has
+    /// nothing to do with the snapshot code.
+    fn config_value(path: &Path) -> String {
+        path.display().to_string().replace('\\', "/")
+    }
+
     fn plain_git_log(project: &Path) -> Vec<String> {
         let out = Command::new("git")
             .arg("-C")
@@ -1115,6 +1128,11 @@ mod tests {
             .args(["log", "--format=%s"])
             .output()
             .unwrap();
+        assert!(
+            out.status.success(),
+            "plain `git log` in the project failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
         String::from_utf8_lossy(&out.stdout)
             .lines()
             .map(str::to_string)
@@ -1138,10 +1156,7 @@ mod tests {
         let pwned = markers.join("PWNED");
         append_repo_config(
             &project,
-            &format!(
-                "[filter \"p\"]\n\tclean = \"touch '{}'; cat\"\n",
-                pwned.display()
-            ),
+            &format!("[filter \"p\"]\n\tclean = \"touch '{}'; cat\"\n", config_value(&pwned)),
         );
         std::fs::write(project.join(".gitattributes"), "* filter=p\n").unwrap();
         std::fs::write(project.join("index.html"), "<h1>v2</h1>\n").unwrap();
@@ -1393,7 +1408,7 @@ mod tests {
         policy.validation.on_turn_end = vec!["file_exists:$deck".into()];
         policy.validation.on_completion = vec!["file_exists:$previews".into()];
         write_workspace_policy(&slides_root, &policy).unwrap();
-        // ra #997 (round-2): run the production project-root validator
+        // RecurAgent #997 (round-2): run the production project-root validator
         // before committing so the resulting Pass row in
         // `.ra/validator_outcomes.jsonl` is part of the committed state.
         // Pre-round-2 this test seeded a fake `Pass` directly via
@@ -1483,7 +1498,7 @@ mod tests {
             &WorkspacePolicy::for_kind(WorkspaceProjectKind::Slides),
         )
         .unwrap();
-        // ra #997 (round-2): run the production project-root validator
+        // RecurAgent #997 (round-2): run the production project-root validator
         // BEFORE the initial commit so the ledger entry is part of the
         // committed state and `status.dirty` remains false. Pre-round-2 this
         // test manually seeded a `Pass` row via `ledger.append(...)`, which
@@ -1557,7 +1572,7 @@ mod tests {
         policy.validation.on_turn_end = vec!["file_count_eq:output/*.png:2".into()];
         policy.validation.on_completion = vec!["any_exists:output/*.png|output/*.pdf".into()];
         // This test exercises PNG file-count semantics, not the slides-kind
-        // PPTX MagicBytes validator (ra #997). Clear the validator list so
+        // PPTX MagicBytes validator (RecurAgent #997). Clear the validator list so
         // the gate does not require a PPTX fixture that isn't relevant here.
         policy.validation.validators = Vec::new();
         write_workspace_policy(&slides_root, &policy).unwrap();

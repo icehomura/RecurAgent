@@ -16,7 +16,7 @@
     "headers": {}
   },
   "response_headers": {
-    "x-octos-final-url": "https://www.google.com/sorry/index?continue=https://www.google.com/search%3Fq%3Domarchy%2Blinux&hl=en&q=EgQ"
+    "x-ra-final-url": "https://www.google.com/sorry/index?continue=https://www.google.com/search%3Fq%3Domarchy%2Blinux&hl=en&q=EgQ"
   },
   "body_file": "challenge.body",
   "expect_status": "challenge",

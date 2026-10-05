@@ -2,7 +2,7 @@
 name: git
 description: Git version control operations via shell. Triggers: git, commit, branch, merge, diff, log, clone, push, pull, rebase, stash.
 version: 1.0.0
-author: ra
+author: RecurAgent
 always: false
 ---
 

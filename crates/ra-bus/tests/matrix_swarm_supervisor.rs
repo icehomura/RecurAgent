@@ -240,14 +240,14 @@ fn make_supervisor_channel(homeserver: &str) -> MatrixChannel {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         9881,
         Arc::new(AtomicBool::new(false)),
     )
     .with_swarm_supervisor(SwarmSupervisorParams {
-        puppet_prefix: "octos_swarm_".into(),
-        room_prefix: "octos_swarm_".into(),
+        puppet_prefix: "ra_swarm_".into(),
+        room_prefix: "ra_swarm_".into(),
         supervisor_user_ids: vec!["@alice:localhost".into()],
     })
 }
@@ -275,7 +275,7 @@ async fn should_register_puppet_idempotently() {
     );
     // Localpart must include prefix + sanitized session + label.
     assert!(
-        first.as_str().starts_with("@octos_swarm_s3f1_claude-code"),
+        first.as_str().starts_with("@ra_swarm_s3f1_claude-code"),
         "expected sanitized localpart, got {}",
         first
     );
@@ -413,9 +413,9 @@ async fn should_route_typed_harness_event_to_correct_puppet_message() {
         .split('&')
         .find_map(|pair| pair.strip_prefix("user_id="))
         .unwrap_or("");
-    // percent-decoded prefix should start with "@octos_swarm_s3f1_claude-code"
+    // percent-decoded prefix should start with "@RecurAgent_swarm_s3f1_claude-code"
     assert!(
-        encoded_puppet.contains("octos_swarm_s3f1_claude-code"),
+        encoded_puppet.contains("ra_swarm_s3f1_claude-code"),
         "send should use puppet identity, got query={query}, puppet={puppet}"
     );
 
@@ -523,8 +523,8 @@ async fn should_ignore_swarm_supervisor_when_config_absent() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         9882,
         Arc::new(AtomicBool::new(false)),
     );
@@ -656,8 +656,8 @@ fn should_preserve_kind_tag_for_all_event_variants() {
 
 #[test]
 fn should_format_matrix_ids_as_wrapped_strings() {
-    let user = MatrixUserId::new("@octos_swarm_s3f1_claude-code:localhost");
-    assert_eq!(user.to_string(), "@octos_swarm_s3f1_claude-code:localhost");
+    let user = MatrixUserId::new("@ra_swarm_s3f1_claude-code:localhost");
+    assert_eq!(user.to_string(), "@ra_swarm_s3f1_claude-code:localhost");
     let room = MatrixRoomId::new("!abc:localhost");
     assert_eq!(room.to_string(), "!abc:localhost");
 }
@@ -672,7 +672,7 @@ fn should_strip_puppet_mention_from_steering_body() {
     let steering = SteeringInput {
         session_id: "s3f1".into(),
         agent_label: "claude-code".into(),
-        puppet_user_id: MatrixUserId::new("@octos_swarm_s3f1_claude-code:localhost"),
+        puppet_user_id: MatrixUserId::new("@ra_swarm_s3f1_claude-code:localhost"),
         supervisor_user_id: "@alice:localhost".into(),
         body: "do X".into(),
     };
@@ -694,27 +694,27 @@ async fn should_preserve_existing_matrix_channel_tests() {
         "as_token_test",
         "hs_token_test",
         "localhost",
-        "octos_bot",
-        "octos_",
+        "ra_bot",
+        "ra_",
         9883,
         Arc::new(AtomicBool::new(false)),
     );
 
     // Baseline surface — unchanged since pre-M7.3.
-    assert_eq!(ch.bot_user_id(), "@octos_bot:localhost");
+    assert_eq!(ch.bot_user_id(), "@ra_bot:localhost");
 
     // Baseline bot router still provisions routes and resolves them.
     let router = ch.bot_router();
     router
-        .register("@octos_weather:localhost", "profile-weather")
+        .register("@ra_weather:localhost", "profile-weather")
         .await
         .unwrap();
     assert_eq!(
-        router.route("@octos_weather:localhost").await,
+        router.route("@ra_weather:localhost").await,
         Some("profile-weather".to_string())
     );
     assert!(
-        router.route("@octos_unknown:localhost").await.is_none(),
+        router.route("@ra_unknown:localhost").await.is_none(),
         "unknown bots still return None — baseline BotRouter contract intact"
     );
 }

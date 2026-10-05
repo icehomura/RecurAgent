@@ -6,7 +6,7 @@ estimate: 1d
 
 ## Intent
 
-OctOS 的 Matrix/Robrix human-approval 流程在用户批准后只执行被批准的 tool 并发出 tool output，随后立即结束该 turn。这个行为让 agent 无法基于真实 tool result 继续完成原任务，也容易诱导在审批恢复路径里硬编码后续动作。本任务把 approved tool 的结果重新接回正常 agent loop，让 agent 依据会话历史、tool result、工具策略和审批策略决定下一步。
+RecurAgent 的 Matrix/Robrix human-approval 流程在用户批准后只执行被批准的 tool 并发出 tool output，随后立即结束该 turn。这个行为让 agent 无法基于真实 tool result 继续完成原任务，也容易诱导在审批恢复路径里硬编码后续动作。本任务把 approved tool 的结果重新接回正常 agent loop，让 agent 依据会话历史、tool result、工具策略和审批策略决定下一步。
 
 ## Decisions
 

@@ -8,7 +8,7 @@ estimate: 1d
 
 ## 意图
 
-`octoscode doctor --endpoint ...` 原先只记录 WS endpoint 已配置，并继续跑本地
+`ra-tui doctor --endpoint ...` 原先只记录 WS endpoint 已配置，并继续跑本地
 结构性 protocol-skew 检查；这无法发现真实 server 是否可连、是否支持
 `config/capabilities/list`、以及 live capability set 是否满足 TUI 运行所需。
 本任务补齐 doctor 的 live AppUI capability probe，并把本轮发现的严格质量门
@@ -18,7 +18,7 @@ estimate: 1d
 ## 已定决策
 
 - WS endpoint 模式优先执行 live probe：建立 WebSocket 连接，携带
-  `X-Octos-Ui-Features`，发送 JSON-RPC
+  `X-Ra-Ui-Features`，发送 JSON-RPC
   `config/capabilities/list`，并把返回的 `UiProtocolCapabilities` 交给
   `compare_against_server` 做 protocol/schema/feature 兼容性判断。
 - live probe 成功时，不再追加本地 structural fallback 的 protocol-skew 检查，
@@ -75,7 +75,7 @@ estimate: 1d
 - stdio transport 的 live capability handshake。当前 stdio 仍只验证命令解析与
   结构性 protocol-skew fallback。
 - 认证握手、token 刷新、server 自动启动、endpoint 自动发现或 probe timeout 配置。
-- `octos-core::diagnostics` 抽取与 `octos doctor` 共享实现。
+- `ra-core::diagnostics` 抽取与 `ra doctor` 共享实现。
 - MCP refresh/reload、approval scopes clear、模型 reasoning effort 等后续 AppUI
   contract 扩展。
 

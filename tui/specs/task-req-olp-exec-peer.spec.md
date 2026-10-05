@@ -1,6 +1,6 @@
 spec: task
-name: "执行硬化:peer 工具链、默认隔离、机制化验证(ra)"
-tags: [olp, peer, verification, ra, upstream]
+name: "执行硬化:peer 工具链、默认隔离、机制化验证(RecurAgent)"
+tags: [olp, peer, verification, RecurAgent, upstream]
 depends: [task-req-olp-obs-cli]
 satisfies: [REQ-OLP-EXEC]
 estimate: 2d
@@ -12,7 +12,7 @@ estimate: 2d
 多写者共用工作区仅靠 AGENTS.md 纪律兜底;内环两次以 lib-only 测试的
 绿色失实声称"已验证"。本任务把验证从纪律降为机制:工具链继承、worktree
 默认隔离与完成即清、profile 级 verify_command 自动执行并落账。实施仓库
-为 **ra**。
+为 **RecurAgent**。
 
 ## 已定决策
 
@@ -32,7 +32,7 @@ estimate: 2d
 
 ## 边界
 
-### Allowed Changes(ra 仓库)
+### Allowed Changes(RecurAgent 仓库)
 - crates/ra-cli/src/peers/**
 - crates/ra-cli/src/commands/chat.rs
 - crates/ra-cli/src/commands/serve.rs
@@ -48,7 +48,7 @@ estimate: 2d
 
 ## 排除范围
 
-- verified 字段的消费端(外环/octoscode 展示)。
+- verified 字段的消费端(外环/ra-tui 展示)。
 - per-peer token 预算。
 - verify 结果的重试/自动整改策略。
 

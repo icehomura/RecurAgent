@@ -9,7 +9,7 @@ tags: [olp, evolution, harness, automation]
 
 ## Problem
 
-阶段 0–2 让采集、retro、回放基线与窗口化指标全部机械化,但四处仍靠主审手动:①采集只在 retro 前手跑,活板在战役中间的摩擦要等收官才进黑板,主审复盘时上下文已冷;②FLAW 记录到任务契约之间是一段手写(FLAW-001/002 各手写一份 ra 契约),记录里已有的症状/责任步/根因/锚点/结案/保护门没有被机械复用;③`docs/OUTER_LOOP_PROTOCOL.md` 的"实战沉淀"散文与 FLAW 记录并存,新读者不知道哪条已被记录;④"派单后无 ACK"与"伪 verified(外环 R2 记档)"两项跨源信号今天只在主审记忆里,阶段 2 明确留待本阶段。另有两类摩擦没有任何事件来源:内环达到迭代上限停机、内环就地补丁失败留下编译错误(2026-09-05 ra 活板 #48 实测),本阶段只登记为 kind 候选。
+阶段 0–2 让采集、retro、回放基线与窗口化指标全部机械化,但四处仍靠主审手动:①采集只在 retro 前手跑,活板在战役中间的摩擦要等收官才进黑板,主审复盘时上下文已冷;②FLAW 记录到任务契约之间是一段手写(FLAW-001/002 各手写一份 RecurAgent 契约),记录里已有的症状/责任步/根因/锚点/结案/保护门没有被机械复用;③`docs/OUTER_LOOP_PROTOCOL.md` 的"实战沉淀"散文与 FLAW 记录并存,新读者不知道哪条已被记录;④"派单后无 ACK"与"伪 verified(外环 R2 记档)"两项跨源信号今天只在主审记忆里,阶段 2 明确留待本阶段。另有两类摩擦没有任何事件来源:内环达到迭代上限停机、内环就地补丁失败留下编译错误(2026-09-05 RecurAgent 活板 #48 实测),本阶段只登记为 kind 候选。
 
 ## Requirements
 
@@ -29,7 +29,7 @@ tags: [olp, evolution, harness, automation]
 
 [REQ-OLP-EVO-P3-FAKEVERIFIED] 指标 MUST 新增固定行 `fake_verified: N`(窗口内 trigger 为 `r2_record` 的卡数;外环未记档则为 0),`--json` 中为 `fake_verified` 键与 `stalls` 列表;stall 与 fake_verified MUST 与既有 `note:` 同为诊断,MUST NOT 作为通过/失败判据出现在任何脚本退出码或文案中。
 
-[REQ-OLP-EVO-P3-KINDCANDIDATES] `knowledge/context/evolution/README.md` MUST 增加"kind 候选"一段,登记 `iteration_cap`(内环达到迭代上限停机)与 `patch_failed`(就地补丁失败留下编译错误)及其出处(2026-09-05 ra 活板 #48"48b 中断记录"),标注"发射点属 ra 侧,另立契约"。
+[REQ-OLP-EVO-P3-KINDCANDIDATES] `knowledge/context/evolution/README.md` MUST 增加"kind 候选"一段,登记 `iteration_cap`(内环达到迭代上限停机)与 `patch_failed`(就地补丁失败留下编译错误)及其出处(2026-09-05 RecurAgent 活板 #48"48b 中断记录"),标注"发射点属 RecurAgent 侧,另立契约"。
 
 [REQ-OLP-EVO-P3-NOWRITE] 节拍采集之外,本阶段脚本 MUST NOT 修改 `specs/**`(`specs/drafts/` 除外)、`.ra/OUTER_LOOP_REVIEW.md`、`src/**`;索引脚本只写 `INDEX.md`;指标脚本零写入。
 
@@ -73,15 +73,15 @@ Scenario: 停摆与伪 verified 诊断
 
 - proposal:LEP-003(阶段计划:采集挂外环 watch 节拍、规格直出契约、散文沉淀退役)
 - REQ-OLP-EVO-P2 Open Questions:"无 ACK 停摆"与"伪 verified"跨源指标留阶段 3
-- 实测 2026-09-05:ra 内环 48b 在 50 次迭代上限停机、python 就地补丁失败留下编译错(ra 活板 #48"48b 中断记录")
-- 实测 2026-09-04/05:FLAW-001/002 → ra 契约均为手写;两记录段名为 症状/责任步/根因/锚点/复发史/保护门/异议/结案,无 req 字段
+- 实测 2026-09-05:RecurAgent 内环 48b 在 50 次迭代上限停机、python 就地补丁失败留下编译错(RecurAgent 活板 #48"48b 中断记录")
+- 实测 2026-09-04/05:FLAW-001/002 → RecurAgent 契约均为手写;两记录段名为 症状/责任步/根因/锚点/复发史/保护门/异议/结案,无 req 字段
 - PR 复审 codex gpt-6 2026-09-05(#619):CI 未装 agent-spec、--out 保护依赖 cwd、安装版找不到采集脚本、片号子串与日期串带、字段映射偏差、索引测试共享临时目录、docs 提交破坏阶段 1 golden
 - 对抗复审 codex 2026-09-05(`~/.ra/outer/evo/reviews/p3-codex.md`):one-shot 哨需显式兼容模式与 base 推进;真实 FLAW schema 无五段;派单两种词序(`27c 派单`)、ACK 状态词前缀;Allowed 取锚点段
 - 对抗复审 grok 2026-09-05(`~/.ra/outer/evo/reviews/p3-grok.md`):watch 一击退出与常驻冲突、FLAW 段名别名、派单/ACK 定式抽样、stall 奖励空 ACK、PROTOCOL 无 FLAW-001/002 散文
 
 ## Open Questions
 
-- `iteration_cap`/`patch_failed` 发射点是否并入 REQ-OLP-OBS 第三次修订(ra 侧)。
+- `iteration_cap`/`patch_failed` 发射点是否并入 REQ-OLP-OBS 第三次修订(RecurAgent 侧)。
 - LEP-004:canon 是否扩展 `flaw` 类型并进 lint(另立提案)。
 - 空 ACK(写 `ACK(... done)` 但无 commit)的识别需活板与 git 对账,不在本需求内。
 - 阶段 3 的运行验收"两个战役内主审无需手写契约与手跑采集"不由场景机械证明。

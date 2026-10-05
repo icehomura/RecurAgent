@@ -7,10 +7,10 @@ turn: 2
 
 互审被阻塞，已向外环落板说明：
 
-**Blocker**: `independent-glm.md` 不存在 — GLM 的初审 turn 1 因传输错误（`failed to send streaming request to Anthropic`）失败，报告从未生成。外层已在 round-2 brief 中令其重试，但 `.octos/` 下至今没有该文件。
+**Blocker**: `independent-glm.md` 不存在 — GLM 的初审 turn 1 因传输错误（`failed to send streaming request to Anthropic`）失败，报告从未生成。外层已在 round-2 brief 中令其重试，但 `.ra/` 下至今没有该文件。
 
 **已核实的证据**:
-- `ls .octos/`：仅有 `independent-k3.md`（我的）、`loop.md`、`OUTER_LOOP_REVIEW.md`、`review-brief.md`、`octosfix/`
+- `ls .ra/`：仅有 `independent-k3.md`（我的）、`loop.md`、`OUTER_LOOP_REVIEW.md`、`review-brief.md`、`rafix/`
 - 全盘 `find /private/tmp/octoloop-glm-k3-20260909 -name "independent-glm.md"` 无结果
 - `runtime-629/.../peers/pr629-glm/result.md` 明确记录 `outcome: errored`
 

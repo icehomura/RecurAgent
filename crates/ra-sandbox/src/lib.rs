@@ -1,4 +1,4 @@
-//! Confinement for an ra worker whose only authority is its host's IPC broker.
+//! Confinement for an RecurAgent worker whose only authority is its host's IPC broker.
 //!
 //! This is separate from the interactive tool sandbox's workspace permissions.
 //! The parent must use [`host_managed_command`] and the worker must call

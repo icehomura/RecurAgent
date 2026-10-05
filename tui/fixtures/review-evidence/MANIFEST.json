@@ -132,7 +132,7 @@
       "outer_recommendation": "request-changes"
     }
   },
-  "upstream_octos_pin": "d51601dff70cb27318ac7b3bd95e1c018132b756",
+  "upstream_ra_pin": "d51601dff70cb27318ac7b3bd95e1c018132b756",
   "combined_clone": "/private/tmp/octoloop-codex-20260909/combined",
   "combined_file_sha256": {
     "docs/ARCHITECTURE.md": "a5cc1aec5e700af777f10ae844d1870630a73e250cf0fabb537da25ee1998293",

@@ -9,7 +9,7 @@
 - Target protocol: `ra-ui/v1alpha1`
 - Status: accepted
 - Related M issue: `#704` (M9 req 9 P2 from
-  [OCTOS_HARNESS_AUDIT_M6_M9_2026-04-30.md](OCTOS_HARNESS_AUDIT_M6_M9_2026-04-30.md))
+  [ra_HARNESS_AUDIT_M6_M9_2026-04-30.md](ra_HARNESS_AUDIT_M6_M9_2026-04-30.md))
 
 ## Summary
 

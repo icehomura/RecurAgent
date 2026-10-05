@@ -7,7 +7,7 @@ estimate: 0.125d
 
 ## 意图
 
-当 OUP 接受 `profile/llm/select` 但返回 `restart_required=true` 时，OctosCode 必须明确
+当 OUP 接受 `profile/llm/select` 但返回 `restart_required=true` 时，RaCode 必须明确
 说明选择已保存、尚未生效；footer 与 model catalog 继续显示当前进程实际使用的模型，
 直到重连后的 status/catalog 刷新确认新 runtime。
 

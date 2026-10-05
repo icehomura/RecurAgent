@@ -1,6 +1,6 @@
 # Gateway & Channels
 
-ra runs as a **gateway** that bridges messaging platforms to your LLM agent. Each platform connection is called a **channel**. You can run multiple channels simultaneously -- for example, Telegram and Slack in the same gateway process.
+RecurAgent runs as a **gateway** that bridges messaging platforms to your LLM agent. Each platform connection is called a **channel**. You can run multiple channels simultaneously -- for example, Telegram and Slack in the same gateway process.
 
 ## Channel Overview
 
@@ -103,9 +103,9 @@ For inbound events, configure the DingTalk outgoing robot callback URL. Behind `
 
 ```text
 # behind ra serve (proxy)
-https://YOUR_OCTOS_HOST/webhook/dingtalk/<profile_id>
+https://YOUR_RA_HOST/webhook/dingtalk/<profile_id>
 # standalone ra gateway
-http://YOUR_OCTOS_HOST:<webhook_port>/dingtalk/webhook
+http://YOUR_RA_HOST:<webhook_port>/dingtalk/webhook
 ```
 
 Build with the `dingtalk` feature flag:
@@ -316,7 +316,7 @@ export WECOM_AGENT_SECRET="..."
 
 ## WeChat (via WorkBuddy Bridge)
 
-Regular WeChat users can connect to your agent through a WorkBuddy desktop bridge. WorkBuddy handles the WeChat transport; ra handles the AI logic via its WeCom Bot channel.
+Regular WeChat users can connect to your agent through a WorkBuddy desktop bridge. WorkBuddy handles the WeChat transport; RecurAgent handles the AI logic via its WeCom Bot channel.
 
 ```
 WeChat (mobile) --> WorkBuddy (desktop) --> WeCom group robot (WSS) --> ra wecom-bot channel
@@ -445,7 +445,7 @@ export LINE_CHANNEL_ACCESS_TOKEN="..."
 }
 ```
 
-In standalone `ra gateway` mode, LINE pushes events to the channel's own webhook server at `http://YOUR_OCTOS_HOST:<webhook_port>/line/webhook`; behind `ra serve`, use the proxy route `https://YOUR_OCTOS_HOST/webhook/line/<profile_id>` instead. Inbound signatures are verified over the request **body** with the channel secret (HMAC-SHA256), so either URL works. Build with the `line` feature flag.
+In standalone `ra gateway` mode, LINE pushes events to the channel's own webhook server at `http://YOUR_RA_HOST:<webhook_port>/line/webhook`; behind `ra serve`, use the proxy route `https://YOUR_RA_HOST/webhook/line/<profile_id>` instead. Inbound signatures are verified over the request **body** with the channel secret (HMAC-SHA256), so either URL works. Build with the `line` feature flag.
 
 ---
 
@@ -470,7 +470,7 @@ export TWILIO_AUTH_TOKEN="..."
 }
 ```
 
-Point your Twilio number's inbound webhook at the channel's own webhook server: `http://YOUR_OCTOS_HOST:<webhook_port>/twilio/webhook`. Twilio's `X-Twilio-Signature` is verified against the full reconstructed URL, which the channel builds from the request's `Host` and `X-Forwarded-Proto` headers (scheme defaults to `http`). Behind an HTTPS reverse proxy, the proxy must preserve the `/twilio/webhook` path and forward both the public host and `X-Forwarded-Proto: https` — otherwise the reconstructed URL is `http://…` and signature verification fails (403). Build with the `twilio` feature flag.
+Point your Twilio number's inbound webhook at the channel's own webhook server: `http://YOUR_RA_HOST:<webhook_port>/twilio/webhook`. Twilio's `X-Twilio-Signature` is verified against the full reconstructed URL, which the channel builds from the request's `Host` and `X-Forwarded-Proto` headers (scheme defaults to `http`). Behind an HTTPS reverse proxy, the proxy must preserve the `/twilio/webhook` path and forward both the public host and `X-Forwarded-Proto: https` — otherwise the reconstructed URL is `http://…` and signature verification fails (403). Build with the `twilio` feature flag.
 
 ---
 

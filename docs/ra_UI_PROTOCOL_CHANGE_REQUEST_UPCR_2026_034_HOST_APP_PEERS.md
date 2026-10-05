@@ -16,12 +16,12 @@
   `read_parent` (a read-only view of the peer's folder, amended 2026-09-30,
   #2603); an additive raw AppUI method `peer/purge` (erase a host-owned app
   peer, amended 2026-09-30, #2604)
-- Origin: Rinx ADR 0007, "Host-owned ra app peers and Rinx deployment
-  modes" (OctoSense shells host apps such as Rinx on one shared kernel)
+- Origin: Rinx ADR 0007, "Host-owned RecurAgent app peers and Rinx deployment
+  modes" (RecurAgent shells host apps such as Rinx on one shared kernel)
 
 ## Problem
 
-A host (an OctoSense shell) runs one kernel and one provider profile per user
+A host (an RecurAgent shell) runs one kernel and one provider profile per user
 runtime and launches apps that need the assistant. Each authorized app should
 get ONE peer owned by the host's system agent, which the system agent can
 talk to for the app's lifetime. The existing peer primitives stop short:
@@ -74,7 +74,7 @@ lies inside the kernel's memory stores. Two apps therefore never share a
 memory store or a workspace by construction. Host-bound prepares of one
 profile are serialized, so two concurrent prepares on the same folder or
 namespace cannot both pass this check. `host_token` values are redacted
-from the AppUI evidence transcript (`OCTOSCODE_M15_UX_OUTPUT_DIR`).
+from the AppUI evidence transcript (`RA_TUI_M15_UX_OUTPUT_DIR`).
 
 Typed `data.kind`: `peer_originator_mismatch` and `peer_host_token_mismatch`
 (permission denied), `peer_binding_mismatch`, `peer_binding_conflict`,
@@ -317,7 +317,7 @@ origin: {kind: "person" | "system_agent" | "app", label?: string}
   whose queue is full refuses a `peer/input` with `peer/input/reject`
   reason `busy` (UPCR-2026-035); person messages it holds or drops in its own
   UI. Keeping the queue in the host keeps the kernel's one-turn admission
-  unchanged (OctoSense's broker already queues `peer/input`).
+  unchanged (RecurAgent's broker already queues `peer/input`).
 - **Memory.** Every turn on the peer's session uses the peer's namespace,
   whoever speaks; the system agent's private memory never reaches it.
 
@@ -377,7 +377,7 @@ break tool-call pairing and compaction.
   call of the turn, and is **never written** into the reader's transcript or
   context ledger. It is shown only on turns that get the app's context (the
   host's turns), never on a foreign or kernel-internal turn.
-- **A turn still running in the other lane** (amended 2026-09-29, ra
+- **A turn still running in the other lane** (amended 2026-09-29, RecurAgent
   #2636 follow-up). A lane's transcript gets a turn's rows only when that
   turn ends, so the block also shows the other lane's RUNNING turn, after
   the finished rows: its request (with its origin marker, as its transcript
@@ -574,8 +574,8 @@ Other kinds: `peer_not_found`, `peer_originator_mismatch`,
   not enforced: a raw client authenticated for the profile can `session/open`
   or `turn/start` any session of the profile, including a bound one, exactly
   as for every other session in the single-user profile model. Hosts must not
-  hand raw OUP to untrusted apps; they broker requests (as OctoSense's
-  `octosense-app-peers` does). Where a client must be pinned to one session,
+  hand raw OUP to untrusted apps; they broker requests (as RecurAgent's
+  `recuragent-app-peers` does). Where a client must be pinned to one session,
   the existing session-ingress credential is the mechanism.
 - Namespace stores are cached per process by root (one redb open per file).
 

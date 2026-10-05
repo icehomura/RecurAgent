@@ -37,7 +37,7 @@ pub struct PeerListArgs {
     /// Profile id used to validate peer lifetime projections
     /// (task-evo-peer-turn-status). The lifetime's registry_key must match
     /// `<profile>:peer:<slug>`; the profile is NEVER derived from the
-    /// data-dir path. Defaults to the standard default profile ("ra").
+    /// data-dir path. Defaults to the standard default profile ("RecurAgent").
     #[arg(long, value_name = "ID")]
     pub profile: Option<String>,
 }
@@ -221,7 +221,7 @@ impl Executable for PeerCommand {
                 // projection validation comes from --profile (explicit) or
                 // the default — NEVER derived from the data-dir path. The
                 // SAME id also drives the data-root resolution, so
-                // `--profile octosfix` without --data-dir reads the octosfix
+                // `--profile rafix` without --data-dir reads the rafix
                 // profile's directory (outer-loop review: passing the
                 // constant here made --profile a no-op for resolution).
                 let (data_dir, profile_id) = route_peer_list(
@@ -336,14 +336,14 @@ mod tests {
     /// production routing (`route_peer_list`, the same fn `execute` calls),
     /// not a direct `list_peers(temp, profile)` call that bypasses the CLI
     /// layer (outer-loop review finding). A lifetime minted for profile
-    /// "octosfix" under a custom root: trusted under --profile octosfix,
+    /// "rafix" under a custom root: trusted under --profile rafix,
     /// UNKNOWN under the default — proving the profile reaches the
     /// projection validation intact while --data-dir supplies the root.
     #[test]
     fn peer_list_custom_data_dir_with_explicit_profile_combination() {
         use clap::Parser as _;
-        // REAL clap parse of the full CLI surface: ra peer list
-        // --data-dir <custom> --profile octosfix
+        // REAL clap parse of the full CLI surface: RecurAgent peer list
+        // --data-dir <custom> --profile rafix
         let custom_root = tempfile::tempdir().expect("custom root");
         let custom_str = custom_root.path().to_str().expect("utf8 path").to_owned();
         let parsed = crate::commands::Args::try_parse_from([
@@ -353,7 +353,7 @@ mod tests {
             "--data-dir",
             &custom_str,
             "--profile",
-            "octosfix",
+            "rafix",
         ])
         .expect("cli parse");
         let crate::commands::Command::Peer(peer) = parsed.command else {
@@ -369,7 +369,7 @@ mod tests {
                     kept as a binding so adding a subcommand fails HERE, not silently"
             )
         };
-        assert_eq!(args.profile.as_deref(), Some("octosfix"));
+        assert_eq!(args.profile.as_deref(), Some("rafix"));
         assert_eq!(args.data_dir.as_deref(), Some(custom_root.path()));
 
         // Production routing: --data-dir wins for the root, --profile flows
@@ -379,10 +379,10 @@ mod tests {
         let cwd = tempfile::tempdir().expect("cwd");
         let (data_dir, profile_id) = super::route_peer_list(&args, state_home.path(), cwd.path());
         assert_eq!(data_dir, custom_root.path());
-        assert_eq!(profile_id, "octosfix");
+        assert_eq!(profile_id, "rafix");
 
         // And the routed pair feeds the projection: a lifetime minted for
-        // "octosfix" under the custom root is trusted (running); the SAME
+        // "rafix" under the custom root is trusted (running); the SAME
         // disk state under the DEFAULT profile fails registry_key
         // validation → fail-closed unknown + identity null.
         let peers_root = custom_root.path().join("peers");
@@ -393,7 +393,7 @@ mod tests {
         let lifetime = serde_json::json!({
             "version": 1,
             "task_id": "task-combo",
-            "registry_key": crate::peers::peer_wire_key("octosfix", "combo"),
+            "registry_key": crate::peers::peer_wire_key("rafix", "combo"),
             "master": "m1",
             "generation": 1,
             "phase": "running",

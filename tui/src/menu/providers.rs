@@ -1902,7 +1902,7 @@ fn onboarding_menu(ctx: &MenuContext<'_>) -> MenuBuildResult {
                 )
             } else if state.selection_is_keyless(ctx.app.profile_llm_catalog) {
                 // Keyless selections must not render the key as an unmet
-                // requirement (octoscode#562 review round).
+                // requirement (ra-tui#562 review round).
                 format!(
                     "{}: {}",
                     t!("menu.onboard.item.api_key.label"),
@@ -2383,7 +2383,7 @@ fn onboarding_done_menu(ctx: &MenuContext<'_>) -> MenuBuildResult {
         t!("menu.onboard_done.subtitle", profile = profile).into_owned()
     };
     // Name the concrete command to start a session with this profile, rather
-    // than a vague "relaunch ra here" (user feedback).
+    // than a vague "relaunch RecurAgent here" (user feedback).
     let (ready_label, ready_desc) = if profile.is_empty() {
         (
             t!("menu.onboard_done.item.ready.label_generic").into_owned(),
@@ -2722,7 +2722,7 @@ fn provider_config_rows(
         // Draft-first, saved-fallback for the API key row: a key already saved in
         // the profile (server-confirmed `has_api_key`) must not read as "not set".
         // Keyless selections show "not needed" and never render as an unmet
-        // required field (octoscode#562 review round).
+        // required field (ra-tui#562 review round).
         let selection_keyless = state.selection_is_keyless(ctx.app.profile_llm_catalog);
         let api_key_display = if state.has_api_key() {
             Some(state.api_key_label().to_string())
@@ -3293,7 +3293,7 @@ fn onboarding_local_profile_menu(
     requested_id_supported: bool,
     make_default_supported: bool,
 ) -> MenuBuildResult {
-    // The "Create your local ra profile / stays on this machine, no OTP"
+    // The "Create your local RecurAgent profile / stays on this machine, no OTP"
     // framing is NOT a menu row — it is non-actionable info, so it lives in the
     // right-hand teaching panel (`WizardProgress::explanation_preview`) instead
     // of taking a dead `Noop` slot in the action list.
@@ -3318,7 +3318,7 @@ fn onboarding_local_profile_menu(
     } else {
         // Legacy fallback for older servers that do not advertise the nameable
         // feature: keep the full name/username/email create so the TUI still
-        // works end-to-end against an older ra server.
+        // works end-to-end against an older RecurAgent server.
         items.extend([
             onboarding_edit_item(
                 "onboard.local.name",
@@ -3397,7 +3397,7 @@ fn onboarding_local_profile_menu(
         searchable: false,
         search_placeholder: None,
         footer_hint: Some(progress.footer_hint(next_action.as_ref())),
-        // The first-run ra splash renders in the MAIN window (see
+        // The first-run RecurAgent splash renders in the MAIN window (see
         // `render_onboarding_first_launch_layout` in app.rs); the right pane now
         // carries the per-step TEACHING panel (explanatory prose + progress) so
         // the user always sees where they are, what's left, and what to do.
@@ -4078,7 +4078,7 @@ fn onboarding_has_saved_primary_provider(
             .and_then(|llm| llm.primary_provider())
             // key_satisfied, not has_api_key: a rehydrated keyless primary
             // publishes has_api_key=false and must not disable the finish /
-            // open-session rows after a TUI restart (red-team, octoscode#562).
+            // open-session rows after a TUI restart (red-team, ra-tui#562).
             .is_some_and(|provider| provider.key_satisfied())
 }
 
@@ -4873,7 +4873,7 @@ fn research_lane_summary(lane: &crate::model::SubProviderView) -> String {
 
 /// Lane-key picker for the wizard's research-lane Save (PR384 review P1-b):
 /// deep_research's palette requests lanes by the LITERAL keys `cheap`/`strong`
-/// (ra `contract_for`), so the guided flow must land the save on one of
+/// (RecurAgent `contract_for`), so the guided flow must land the save on one of
 /// those — a family-id key would create a lane the router never selects. Rows
 /// show current occupancy (display-matched to the active profile, same rule as
 /// `research_menu`) so replacing an existing lane is visible BEFORE the save
@@ -8765,7 +8765,7 @@ mod tests {
 
     /// Keyless selections keep the Test/Save rows enabled with no key and
     /// render the key row as "not needed"; without a fetched catalog the
-    /// same rows stay disabled (fail closed) — octoscode#562 review round.
+    /// same rows stay disabled (fail closed) — ra-tui#562 review round.
     #[test]
     fn onboarding_provider_menu_keyless_rows_enabled_without_key() {
         let registry = core_menu_registry();
@@ -11369,7 +11369,7 @@ mod tests {
             },
             crate::model::SessionChipView {
                 session_id: ra_core::SessionKey("local:b".into()),
-                title: "octos-web".into(),
+                title: "ra-web".into(),
                 focused: false,
                 live: true,
                 unread: 3,
@@ -11971,7 +11971,7 @@ mod tests {
                 name: "deep-search".into(),
                 version: Some("0.1.0".into()),
                 tool_count: 1,
-                source_repo: Some("octos-org/octos-hub/skills/deep-search".into()),
+                source_repo: Some("icehomura/ra-hub/skills/deep-search".into()),
                 installed: true,
                 status: Some("installed".into()),
             }],
@@ -11981,7 +11981,7 @@ mod tests {
             packages: vec![crate::model::ProfileSkillRegistryPackage {
                 name: "news".into(),
                 description: "News skill".into(),
-                repo: "octos-org/octos-hub/skills/news".into(),
+                repo: "icehomura/ra-hub/skills/news".into(),
                 version: Some("0.2.0".into()),
                 author: None,
                 license: None,
@@ -12030,7 +12030,7 @@ mod tests {
             panic!("expected profile skills install action");
         };
         assert_eq!(params.profile_id.as_deref(), Some("coding"));
-        assert_eq!(params.repo, "octos-org/octos-hub/skills/news");
+        assert_eq!(params.repo, "icehomura/ra-hub/skills/news");
     }
 
     #[test]

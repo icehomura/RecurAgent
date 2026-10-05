@@ -4,35 +4,35 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 
-run_id="${OCTOS_M15_TASK_MIRROR_TMUX_RUN_ID:-m15-task-mirror-tmux-$(date -u +%Y%m%dT%H%M%SZ)}"
-tui_repo="${OCTOSCODE_REPO:-$(dirname "$repo_root")/octoscode}"
-tui_runner="${OCTOS_M15_TASK_MIRROR_TUI_RUNNER:-$tui_repo/scripts/run-m15-live-tmux-ux-soak.sh}"
-out_root="${OCTOS_M15_TASK_MIRROR_TMUX_OUT_ROOT:-$repo_root/e2e/test-results-m15-task-supervisor-mirror-tmux}"
-out_dir="${OCTOS_M15_TASK_MIRROR_TMUX_OUT_DIR:-$out_root/$run_id}"
-runtime_root="${OCTOS_M15_TASK_MIRROR_TMUX_RUNTIME_ROOT:-/tmp/ra-m15-task-mirror-$run_id}"
-data_dir="${OCTOS_M15_TASK_MIRROR_TMUX_DATA_DIR:-$runtime_root/data}"
-workdir="${OCTOS_M15_TASK_MIRROR_TMUX_WORKDIR:-$runtime_root/workspace}"
-replay_file="${OCTOS_M15_TASK_MIRROR_TMUX_REPLAY:-$out_dir/m15-task-supervisor-mirror-replay.txt}"
-octos_bin="${OCTOS_BIN:-$repo_root/target/debug/ra}"
-tui_bin="${OCTOSCODE_BIN:-$tui_repo/target/debug/octoscode}"
-session_name="${OCTOS_M15_TASK_MIRROR_TMUX_SESSION:-ra-m15-task-mirror-$run_id}"
-profile_id="${OCTOS_M15_TASK_MIRROR_PROFILE:-coding}"
-session_id="${OCTOS_M15_TASK_MIRROR_SESSION_ID:-$profile_id:local:m15-task-mirror:$run_id}"
+run_id="${ra_M15_TASK_MIRROR_TMUX_RUN_ID:-m15-task-mirror-tmux-$(date -u +%Y%m%dT%H%M%SZ)}"
+tui_repo="${RA_TUI_REPO:-$(dirname "$repo_root")/ra-tui}"
+tui_runner="${ra_M15_TASK_MIRROR_TUI_RUNNER:-$tui_repo/scripts/run-m15-live-tmux-ux-soak.sh}"
+out_root="${ra_M15_TASK_MIRROR_TMUX_OUT_ROOT:-$repo_root/e2e/test-results-m15-task-supervisor-mirror-tmux}"
+out_dir="${ra_M15_TASK_MIRROR_TMUX_OUT_DIR:-$out_root/$run_id}"
+runtime_root="${ra_M15_TASK_MIRROR_TMUX_RUNTIME_ROOT:-/tmp/ra-m15-task-mirror-$run_id}"
+data_dir="${ra_M15_TASK_MIRROR_TMUX_DATA_DIR:-$runtime_root/data}"
+workdir="${ra_M15_TASK_MIRROR_TMUX_WORKDIR:-$runtime_root/workspace}"
+replay_file="${ra_M15_TASK_MIRROR_TMUX_REPLAY:-$out_dir/m15-task-supervisor-mirror-replay.txt}"
+ra_bin="${ra_BIN:-$repo_root/target/debug/ra}"
+tui_bin="${RA_TUI_BIN:-$tui_repo/target/debug/ra-tui}"
+session_name="${ra_M15_TASK_MIRROR_TMUX_SESSION:-ra-m15-task-mirror-$run_id}"
+profile_id="${ra_M15_TASK_MIRROR_PROFILE:-coding}"
+session_id="${ra_M15_TASK_MIRROR_SESSION_ID:-$profile_id:local:m15-task-mirror:$run_id}"
 
 usage() {
   cat <<'USAGE'
 Usage: e2e/scripts/m15-task-supervisor-mirror-tmux-soak.sh <run|self-test|help>
 
-Runs a real tmux visual soak proving that octoscode can display a backend
+Runs a real tmux visual soak proving that ra-tui can display a backend
 TaskSupervisor task mirrored into the AppUI agent lifecycle over stdio.
 
 Environment:
-  OCTOSCODE_REPO                         Path to octoscode checkout. Default: an octoscode checkout next to this repo.
-  OCTOS_BIN                              ra binary. Default: ra/target/debug/ra.
-  OCTOSCODE_BIN                          octoscode binary. Default: octoscode/target/debug/octoscode.
-  OCTOS_M15_TASK_MIRROR_BUILD            Set 0 to skip building ra. Default: 1.
-  OCTOS_M15_TASK_MIRROR_BUILD_TUI        Set 1 to rebuild octoscode. Default: build only if missing.
-  OCTOS_M15_TASK_MIRROR_TMUX_KEEP_SESSION
+  RA_TUI_REPO                         Path to ra-tui checkout. Default: an ra-tui checkout next to this repo.
+  ra_BIN                              ra binary. Default: ra/target/debug/ra.
+  RA_TUI_BIN                          ra-tui binary. Default: ra-tui/target/debug/ra-tui.
+  ra_M15_TASK_MIRROR_BUILD            Set 0 to skip building ra. Default: 1.
+  ra_M15_TASK_MIRROR_BUILD_TUI        Set 1 to rebuild ra-tui. Default: build only if missing.
+  ra_M15_TASK_MIRROR_TMUX_KEEP_SESSION
                                          Set 1 to keep tmux session after the run.
 USAGE
 }
@@ -47,15 +47,15 @@ shell_quote() {
 }
 
 ensure_binaries() {
-  if [[ "${OCTOS_M15_TASK_MIRROR_BUILD:-1}" == "1" ]]; then
+  if [[ "${ra_M15_TASK_MIRROR_BUILD:-1}" == "1" ]]; then
     (cd "$repo_root" && cargo build -p ra-cli --bin ra --features api)
   fi
-  if [[ "${OCTOS_M15_TASK_MIRROR_BUILD_TUI:-0}" == "1" || ! -x "$tui_bin" ]]; then
-    (cd "$tui_repo" && cargo build --bin octoscode)
+  if [[ "${ra_M15_TASK_MIRROR_BUILD_TUI:-0}" == "1" || ! -x "$tui_bin" ]]; then
+    (cd "$tui_repo" && cargo build --bin ra-tui)
   fi
-  [[ -x "$octos_bin" ]] || die "ra binary is not executable: $octos_bin"
-  [[ -x "$tui_bin" ]] || die "octoscode binary is not executable: $tui_bin"
-  [[ -x "$tui_runner" ]] || die "octoscode tmux runner is not executable: $tui_runner"
+  [[ -x "$ra_bin" ]] || die "ra binary is not executable: $ra_bin"
+  [[ -x "$tui_bin" ]] || die "ra-tui binary is not executable: $tui_bin"
+  [[ -x "$tui_runner" ]] || die "ra-tui tmux runner is not executable: $tui_runner"
 }
 
 write_profile_config() {
@@ -251,24 +251,24 @@ run_soak() {
   write_replay
 
   local backend_command
-  backend_command="env OCTOS_M9_PROTOCOL_FIXTURES=1 DEEPSEEK_API_KEY=dummy-key-for-m15-task-supervisor-fixture $(shell_quote "$octos_bin") serve --stdio --data-dir $(shell_quote "$data_dir") --cwd $(shell_quote "$workdir")"
+  backend_command="env ra_M9_PROTOCOL_FIXTURES=1 DEEPSEEK_API_KEY=dummy-key-for-m15-task-supervisor-fixture $(shell_quote "$ra_bin") serve --stdio --data-dir $(shell_quote "$data_dir") --cwd $(shell_quote "$workdir")"
 
-  export OCTOSCODE_M15_UX_RUN_ID="$run_id"
-  export OCTOSCODE_M15_UX_OUT_DIR="$out_dir"
-  export OCTOSCODE_M15_UX_RUNTIME_ROOT="$runtime_root"
-  export OCTOSCODE_M15_UX_WORKDIR="$workdir"
-  export OCTOSCODE_M15_UX_CHILD_OUT_DIR="$runtime_root/artifacts"
-  export OCTOSCODE_M15_UX_BIN="$tui_bin"
-  export OCTOSCODE_M15_UX_BACKEND_COMMAND="$backend_command"
-  export OCTOSCODE_M15_UX_TMUX_SESSION="$session_name"
-  export OCTOSCODE_M15_UX_REPLAY="$replay_file"
-  export OCTOSCODE_M15_UX_SCENARIO="task_supervisor_mirror"
-  export OCTOSCODE_M15_UX_FINAL_MARKER="M15_TASK_SUPERVISOR_MIRROR_FINAL_LINE"
-  export OCTOSCODE_M15_UX_SESSION_ID="$session_id"
-  export OCTOSCODE_M15_UX_PROFILE="$profile_id"
-  export OCTOSCODE_M15_UX_REPLACE_SESSION=1
-  export OCTOSCODE_M15_UX_COLS="${OCTOS_M15_TASK_MIRROR_TMUX_COLS:-120}"
-  export OCTOSCODE_M15_UX_ROWS="${OCTOS_M15_TASK_MIRROR_TMUX_ROWS:-40}"
+  export RA_TUI_M15_UX_RUN_ID="$run_id"
+  export RA_TUI_M15_UX_OUT_DIR="$out_dir"
+  export RA_TUI_M15_UX_RUNTIME_ROOT="$runtime_root"
+  export RA_TUI_M15_UX_WORKDIR="$workdir"
+  export RA_TUI_M15_UX_CHILD_OUT_DIR="$runtime_root/artifacts"
+  export RA_TUI_M15_UX_BIN="$tui_bin"
+  export RA_TUI_M15_UX_BACKEND_COMMAND="$backend_command"
+  export RA_TUI_M15_UX_TMUX_SESSION="$session_name"
+  export RA_TUI_M15_UX_REPLAY="$replay_file"
+  export RA_TUI_M15_UX_SCENARIO="task_supervisor_mirror"
+  export RA_TUI_M15_UX_FINAL_MARKER="M15_TASK_SUPERVISOR_MIRROR_FINAL_LINE"
+  export RA_TUI_M15_UX_SESSION_ID="$session_id"
+  export RA_TUI_M15_UX_PROFILE="$profile_id"
+  export RA_TUI_M15_UX_REPLACE_SESSION=1
+  export RA_TUI_M15_UX_COLS="${ra_M15_TASK_MIRROR_TMUX_COLS:-120}"
+  export RA_TUI_M15_UX_ROWS="${ra_M15_TASK_MIRROR_TMUX_ROWS:-40}"
 
   "$tui_runner" start
   local status=0
@@ -276,7 +276,7 @@ run_soak() {
   "$tui_runner" capture || true
   scrub_fixture_key
   python3 "$script_dir/validate-m15-task-supervisor-mirror-tmux.py" --out-dir "$out_dir" || status=$?
-  if [[ "${OCTOS_M15_TASK_MIRROR_TMUX_KEEP_SESSION:-0}" != "1" ]]; then
+  if [[ "${ra_M15_TASK_MIRROR_TMUX_KEEP_SESSION:-0}" != "1" ]]; then
     "$tui_runner" stop || true
   fi
   trap - EXIT

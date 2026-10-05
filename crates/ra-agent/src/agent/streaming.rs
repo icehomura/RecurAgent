@@ -92,7 +92,7 @@ impl Agent {
     ) -> Result<(ChatResponse, bool)> {
         // Thresholds flow from `AgentConfig` (env-overridable: see
         // `RA_LLM_FIRST_TOKEN_GRACE_SECS` / `RA_LLM_STREAM_IDLE_SECS` /
-        // `RA_LLM_CALL_MAX_SECS`; legacy `OCTOS_*` names still honoured). The
+        // `RA_LLM_CALL_MAX_SECS`; legacy `RA_*` names still honoured). The
         // first-token grace caps the
         // input-scaled TTFT budget so a stream that never yields a single
         // token can't hang the turn; the inter-chunk idle catches a stream
@@ -132,7 +132,7 @@ impl Agent {
     /// tokens are still flowing — Pi has no such cap, and the inter-chunk idle
     /// and TTFT guards still catch a genuinely dead provider. An operator who
     /// explicitly sets `RA_LLM_CALL_MAX_SECS` (legacy
-    /// `OCTOS_LLM_CALL_MAX_SECS` still honoured) gets exactly that value even
+    /// `ra_LLM_CALL_MAX_SECS` still honoured) gets exactly that value even
     /// on local. Cloud keeps the `DEFAULT_LLM_CALL_MAX_SECS` (1200s) backstop.
     fn effective_llm_call_max_secs(&self) -> u64 {
         if self.is_local_provider() && ra_core::brand::env_compat("LLM_CALL_MAX_SECS").is_none() {

@@ -1,7 +1,7 @@
 //! Profile command: portable profile export/import surfaces.
 //!
 //! `ra profile qr` renders the resolved local configuration as a
-//! scannable QR (`OCTOS1:` plain / `OCTOS1E:` PIN-encrypted — see
+//! scannable QR (`RA1:` plain / `RA1E:` PIN-encrypted — see
 //! [`crate::profile_qr`]) so a mobile client can onboard by pointing a
 //! camera at the terminal. `ra profile decode` is the inverse,
 //! for verifying a payload or importing one by hand.
@@ -29,11 +29,11 @@ enum ProfileAction {
     /// Render the resolved local config as a scannable profile QR.
     Qr {
         /// Include resolved provider API keys in the payload. Forces the
-        /// PIN-encrypted OCTOS1E format unless --plain-secrets is given.
+        /// PIN-encrypted RA1E format unless --plain-secrets is given.
         #[arg(long)]
         include_secrets: bool,
         /// DANGEROUS with --include-secrets: emit secrets in the plain
-        /// OCTOS1 format (anyone who photographs the QR owns the keys).
+        /// RA1 format (anyone who photographs the QR owns the keys).
         #[arg(long, requires = "include_secrets")]
         plain_secrets: bool,
         /// PIN for the encrypted format (default: auto-generated 6 digits,
@@ -57,11 +57,11 @@ enum ProfileAction {
         #[arg(long)]
         payload_only: bool,
     },
-    /// Decode an OCTOS1/OCTOS1E payload and print the profile JSON.
+    /// Decode an RA1/RA1E payload and print the profile JSON.
     Decode {
         /// The payload string ("-" to read from stdin).
         payload: String,
-        /// PIN for OCTOS1E payloads.
+        /// PIN for RA1E payloads.
         #[arg(long)]
         pin: Option<String>,
         /// Print secret values instead of masking them.

@@ -9,30 +9,30 @@ cargo test --test appui_ux_fixture
 scripts/validate-tmux-ux-capture.sh fixtures/tui_ux_captures/reported_bugs_good.txt
 if scripts/validate-tmux-ux-capture.sh \
   fixtures/tui_ux_captures/reported_bugs_bad_stuck.txt \
-  fixtures/tui_ux_captures/reported_bugs_bad_server.log >/tmp/octoscode-ux-bad-fixture.out 2>&1; then
-  cat /tmp/octoscode-ux-bad-fixture.out >&2
+  fixtures/tui_ux_captures/reported_bugs_bad_server.log >/tmp/ra-tui-ux-bad-fixture.out 2>&1; then
+  cat /tmp/ra-tui-ux-bad-fixture.out >&2
   echo "bad tmux UX fixture unexpectedly passed" >&2
   exit 1
 else
   echo "Bad tmux UX fixture correctly failed validator"
 fi
 
-if [[ -n "${OCTOSCODE_UX_CAPTURE_FILE:-}" ]]; then
-  if [[ -n "${OCTOSCODE_UX_SERVER_LOG:-}" ]]; then
-    scripts/validate-tmux-ux-capture.sh "$OCTOSCODE_UX_CAPTURE_FILE" "$OCTOSCODE_UX_SERVER_LOG"
+if [[ -n "${RA_TUI_UX_CAPTURE_FILE:-}" ]]; then
+  if [[ -n "${RA_TUI_UX_SERVER_LOG:-}" ]]; then
+    scripts/validate-tmux-ux-capture.sh "$RA_TUI_UX_CAPTURE_FILE" "$RA_TUI_UX_SERVER_LOG"
   else
-    scripts/validate-tmux-ux-capture.sh "$OCTOSCODE_UX_CAPTURE_FILE"
+    scripts/validate-tmux-ux-capture.sh "$RA_TUI_UX_CAPTURE_FILE"
   fi
 fi
 
-if [[ "${OCTOSCODE_UX_LIVE_SOAK:-0}" == "1" ]]; then
-  if [[ -z "${OCTOSCODE_PROTOCOL_ENDPOINT:-}" ]]; then
-    echo "OCTOSCODE_PROTOCOL_ENDPOINT is required for live soak" >&2
+if [[ "${RA_TUI_UX_LIVE_SOAK:-0}" == "1" ]]; then
+  if [[ -z "${RA_TUI_PROTOCOL_ENDPOINT:-}" ]]; then
+    echo "RA_TUI_PROTOCOL_ENDPOINT is required for live soak" >&2
     exit 2
   fi
 
   run_id="$(date -u +%Y%m%dT%H%M%SZ)"
-  artifact_dir="${OCTOSCODE_UX_ARTIFACT_DIR:-e2e/test-results-tui-coding-ux/$run_id}"
+  artifact_dir="${RA_TUI_UX_ARTIFACT_DIR:-e2e/test-results-tui-coding-ux/$run_id}"
   mkdir -p \
     "$artifact_dir/transcripts" \
     "$artifact_dir/logs" \
@@ -47,8 +47,8 @@ if [[ "${OCTOSCODE_UX_LIVE_SOAK:-0}" == "1" ]]; then
 Manual AppUI UX live soak placeholder
 
 Duration target: 60 minutes
-Endpoint: $OCTOSCODE_PROTOCOL_ENDPOINT
-Issues covered: octoscode#21, octoscode#22, octoscode#24
+Endpoint: $RA_TUI_PROTOCOL_ENDPOINT
+Issues covered: ra-tui#21, ra-tui#22, ra-tui#24
 
 Required live matrix:
 - WebSocket short reconnect lane with runtime policy stamp, tool timeline, diff, artifact, and typed approval markers.
@@ -58,7 +58,7 @@ Required live matrix:
 - validator lane that records at least one failed validator followed by a passing rerun.
 - narrow terminal lane, 80x24 or smaller, with no overlap in cockpit/timeline/safety panes.
 
-Run the parent octos tmux harness against this octoscode checkout and retain:
+Run the parent ra tmux harness against this ra-tui checkout and retain:
 - transcripts/appui-transcript.jsonl
 - logs/server.log
 - policy/runtime-policy-stamp.json

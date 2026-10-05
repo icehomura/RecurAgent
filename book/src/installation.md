@@ -24,7 +24,7 @@ You also need an API key from at least one supported LLM provider.
 ## Build from Source
 
 ```bash
-git clone https://github.com/your-org/ra
+git clone https://github.com/icehomura/ra
 cd ra
 
 # Recommended: canonical feature set (matches scripts/milestone-ci.sh).
@@ -86,7 +86,7 @@ For cloud signup and managed tenant installs, the node name becomes both the ten
 
 ### NixOS
 
-If you use Nix, ra provides a flake with packages, a development shell, and NixOS / nix-darwin modules. See the [Nix](nix.md) page for details.
+If you use Nix, RecurAgent provides a flake with packages, a development shell, and NixOS / nix-darwin modules. See the [Nix](nix.md) page for details.
 
 ### macOS
 
@@ -100,7 +100,7 @@ brew install node ffmpeg poppler
 brew install --cask libreoffice
 
 # 3. Clone and deploy
-git clone https://github.com/your-org/ra.git
+git clone https://github.com/icehomura/ra.git
 cd ra
 ./scripts/local-tenant-deploy.sh --full
 
@@ -142,7 +142,7 @@ source "$HOME/.cargo/env"
 sudo apt install -y nodejs npm ffmpeg poppler-utils
 
 # 4. Clone and deploy
-git clone https://github.com/your-org/ra.git
+git clone https://github.com/icehomura/ra.git
 cd ra
 ./scripts/local-tenant-deploy.sh --full
 
@@ -183,7 +183,7 @@ sudo dnf install -y gcc pkg-config openssl-devel
 
 ### Windows (Native)
 
-ra builds and runs natively on Windows. Shell commands are executed via `cmd /C`.
+RecurAgent builds and runs natively on Windows. Shell commands are executed via `cmd /C`.
 
 ```powershell
 # 1. Install Rust (download rustup-init.exe from https://rustup.rs)
@@ -192,7 +192,7 @@ rustup-init.exe
 # 2. Clone and build with the canonical feature set
 #    (omit features only if you just want `ra chat`; `ra serve`
 #    requires the `api` feature).
-git clone https://github.com/your-org/ra.git
+git clone https://github.com/icehomura/ra.git
 cd ra
 cargo install --path crates/ra-cli `
     --features "api,telegram,discord,dingtalk,whatsapp,feishu,twilio,wecom,wecom-bot,audio_mp3"

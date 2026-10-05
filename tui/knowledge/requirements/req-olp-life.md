@@ -4,7 +4,7 @@ id: REQ-OLP-LIFE
 title: "Global 运行时生命周期:驾驶舱脚本、注入纪律、headless client"
 status: accepted
 liveness: auto
-tags: [olp, lifecycle, herdr, tmux, headless, octoscode]
+tags: [olp, lifecycle, herdr, tmux, headless, ra-tui]
 ---
 
 ## Problem

@@ -29,15 +29,15 @@ pub const PLATFORM_SKILLS_DIR: &str = "platform-skills";
 /// dir (`<root>/pipelines`). `ra_pipeline::discovery::PipelineDiscovery`
 /// searches this dir at the LOWEST precedence (after every installed-skill /
 /// installed-pipeline location), so an installed `deep_research.dot` — whether
-/// in `<data>/pipelines`, `<data>/skills/<x>/`, `<octos_home>/skills/<x>/`, or
-/// `<octos_home>/pipelines` — ALWAYS wins over the bundled fallback.
+/// in `<data>/pipelines`, `<data>/skills/<x>/`, `<ra_home>/skills/<x>/`, or
+/// `<ra_home>/pipelines` — ALWAYS wins over the bundled fallback.
 ///
-/// `RunPipelineTool::with_octos_home` appends `<octos_home>/{BUNDLED_PIPELINES_DIR}`
+/// `RunPipelineTool::with_ra_home` appends `<ra_home>/{BUNDLED_PIPELINES_DIR}`
 /// as the final search path, so anything written here is discoverable by
 /// `run_pipeline` but never shadows an installed copy.
 pub const BUNDLED_PIPELINES_DIR: &str = "bundled-pipelines";
 
-/// Bootstrap bundled generic pipelines into `<octos_home>/bundled-pipelines/`.
+/// Bootstrap bundled generic pipelines into `<ra_home>/bundled-pipelines/`.
 ///
 /// Writes each embedded `.dot` (see [`crate::bundled_pipelines`]) so that
 /// load-bearing generic pipelines (e.g. `deep_research`) are always
@@ -58,8 +58,8 @@ pub const BUNDLED_PIPELINES_DIR: &str = "bundled-pipelines";
 /// check and the write are a single atomic syscall — a concurrent
 /// installer racing the bootstrap can never have its file clobbered
 /// (the `AlreadyExists` error is treated as "skip").
-pub fn bootstrap_bundled_pipelines(octos_home: &Path) -> usize {
-    let target_dir = octos_home.join(BUNDLED_PIPELINES_DIR);
+pub fn bootstrap_bundled_pipelines(ra_home: &Path) -> usize {
+    let target_dir = ra_home.join(BUNDLED_PIPELINES_DIR);
 
     if std::fs::create_dir_all(&target_dir).is_err() {
         return 0;
@@ -97,25 +97,25 @@ pub fn bootstrap_bundled_pipelines(octos_home: &Path) -> usize {
     count
 }
 
-/// Bootstrap bundled app-skills into `octos_home/bundled-app-skills/`.
+/// Bootstrap bundled app-skills into `ra_home/bundled-app-skills/`.
 ///
 /// Returns the number of skills bootstrapped.
-pub fn bootstrap_bundled_skills(octos_home: &Path) -> usize {
-    let target_dir = octos_home.join(BUNDLED_APP_SKILLS_DIR);
+pub fn bootstrap_bundled_skills(ra_home: &Path) -> usize {
+    let target_dir = ra_home.join(BUNDLED_APP_SKILLS_DIR);
     bootstrap_entries(&target_dir, BUNDLED_APP_SKILLS)
 }
 
-/// Bootstrap platform skills into `octos_home/platform-skills/`.
+/// Bootstrap platform skills into `ra_home/platform-skills/`.
 ///
 /// Returns the number of skills bootstrapped.
-pub fn bootstrap_platform_skills(octos_home: &Path) -> usize {
-    let target_dir = octos_home.join(PLATFORM_SKILLS_DIR);
+pub fn bootstrap_platform_skills(ra_home: &Path) -> usize {
+    let target_dir = ra_home.join(PLATFORM_SKILLS_DIR);
     bootstrap_entries(&target_dir, PLATFORM_SKILLS)
 }
 
 /// Per-skill marker file recording the sha256 of the source sibling binary
 /// that was last copied into `<skill_dir>/main`. Used to detect staleness so
-/// an ra UPGRADE refreshes the skill binary instead of leaving it pinned to
+/// an RecurAgent UPGRADE refreshes the skill binary instead of leaving it pinned to
 /// whatever was copied on first install.
 const BUNDLE_SRC_SHA_MARKER: &str = ".bundle-src-sha256";
 
@@ -131,7 +131,7 @@ fn sha256_file(path: &Path) -> Option<String> {
     Some(format!("{:x}", hasher.finalize()))
 }
 
-/// Resolve a bundled skill's source binary that sits beside the ra
+/// Resolve a bundled skill's source binary that sits beside the RecurAgent
 /// executable. Tries the bare `binary_name` first, then `binary_name.exe` on
 /// Windows — release bundles ship `weather.exe`, `news_fetch.exe`, … so a
 /// bare-name-only lookup would falsely report every skill missing on Windows
@@ -170,7 +170,7 @@ fn bootstrap_entries(skills_dir: &Path, entries: &[(&str, &str, &str, &str)]) ->
 ///
 /// **Staleness refresh:** instead of the old "skip if `main` exists" check —
 /// which pinned the skill binary to whatever shipped on first install and so
-/// went stale across an ra UPGRADE — each skill records the sha256 of its
+/// went stale across an RecurAgent UPGRADE — each skill records the sha256 of its
 /// source sibling binary in a `<skill_dir>/.bundle-src-sha256` marker. A skill
 /// is left untouched only when `main` exists AND the marker matches the current
 /// source hash; otherwise SKILL.md, manifest.json, and `main` are (re)written
@@ -253,7 +253,7 @@ fn bootstrap_entries_in(
 }
 
 /// Bundled app-skills that are *declared* (so they still bootstrap when their
-/// binary happens to sit beside ra) but are NOT shipped by the standard
+/// binary happens to sit beside RecurAgent) but are NOT shipped by the standard
 /// release bundle (`scripts/build-local-bundle.sh`, `release.yml`). The
 /// bare-binary preflight must not flag these as "missing" — their absence is
 /// expected on a normal full-bundle install, so warning about them would make
@@ -296,14 +296,14 @@ pub fn missing_bundled_skill_binaries() -> Vec<&'static str> {
     missing_sibling_skill_binaries_in(&exe_dir)
 }
 
-/// Bootstrap a single named skill into the appropriate directory under `octos_home`.
+/// Bootstrap a single named skill into the appropriate directory under `ra_home`.
 ///
 /// Unlike `bootstrap_bundled_skills`/`bootstrap_platform_skills`, this always
 /// overwrites existing files (used for conditional skills that may need
 /// re-bootstrap after updates).
 ///
 /// Returns `true` if the skill was successfully bootstrapped.
-pub fn bootstrap_single_skill(octos_home: &Path, name: &str) -> bool {
+pub fn bootstrap_single_skill(ra_home: &Path, name: &str) -> bool {
     let exe_dir = match std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.to_path_buf()))
@@ -311,7 +311,7 @@ pub fn bootstrap_single_skill(octos_home: &Path, name: &str) -> bool {
         Some(d) => d,
         None => return false,
     };
-    bootstrap_single_skill_in(&exe_dir, octos_home, name)
+    bootstrap_single_skill_in(&exe_dir, ra_home, name)
 }
 
 /// Testable seam for [`bootstrap_single_skill`] (the public caller resolves
@@ -320,7 +320,7 @@ pub fn bootstrap_single_skill(octos_home: &Path, name: &str) -> bool {
 /// [`bootstrap_entries`] / [`bootstrap_entries_in`] split so tests can pass a
 /// controlled `exe_dir` rather than depending on whatever sits beside the test
 /// runner (on Windows cargo leaves bare-named skill `.exe`s in `deps/`).
-fn bootstrap_single_skill_in(exe_dir: &Path, octos_home: &Path, name: &str) -> bool {
+fn bootstrap_single_skill_in(exe_dir: &Path, ra_home: &Path, name: &str) -> bool {
     // Determine which list this skill belongs to and its target directory
     let (entry, subdir) =
         if let Some(e) = BUNDLED_APP_SKILLS.iter().find(|&&(d, _, _, _)| d == name) {
@@ -333,7 +333,7 @@ fn bootstrap_single_skill_in(exe_dir: &Path, octos_home: &Path, name: &str) -> b
 
     let &(dir_name, binary_name, skill_md, manifest_json) = entry;
 
-    let skill_dir = octos_home.join(subdir).join(dir_name);
+    let skill_dir = ra_home.join(subdir).join(dir_name);
     let main_path = skill_dir.join("main");
 
     let src_binary = match resolve_sibling_binary(exe_dir, binary_name) {
@@ -516,17 +516,17 @@ mod tests {
     #[test]
     fn bootstrap_bundled_pipelines_writes_deep_research_dot() {
         let tmp = tempfile::tempdir().unwrap();
-        let octos_home = tmp.path();
+        let ra_home = tmp.path();
 
-        let count = bootstrap_bundled_pipelines(octos_home);
+        let count = bootstrap_bundled_pipelines(ra_home);
         assert!(count >= 1, "at least deep_research must be bootstrapped");
 
-        let dot = octos_home
+        let dot = ra_home
             .join(BUNDLED_PIPELINES_DIR)
             .join("deep_research.dot");
         assert!(
             dot.exists(),
-            "bootstrap must write deep_research.dot into <octos_home>/bundled-pipelines"
+            "bootstrap must write deep_research.dot into <ra_home>/bundled-pipelines"
         );
         let body = std::fs::read_to_string(&dot).unwrap();
         assert!(
@@ -538,12 +538,12 @@ mod tests {
     #[test]
     fn bootstrap_bundled_pipelines_is_idempotent() {
         let tmp = tempfile::tempdir().unwrap();
-        let octos_home = tmp.path();
+        let ra_home = tmp.path();
 
-        let first = bootstrap_bundled_pipelines(octos_home);
+        let first = bootstrap_bundled_pipelines(ra_home);
         assert!(first >= 1);
         // Second run: everything already present, nothing newly written.
-        let second = bootstrap_bundled_pipelines(octos_home);
+        let second = bootstrap_bundled_pipelines(ra_home);
         assert_eq!(second, 0, "second bootstrap must be a no-op (idempotent)");
     }
 
@@ -553,19 +553,19 @@ mod tests {
         // dir (searched last), NOT the user-pipeline dir `<root>/pipelines`
         // (which precedes `<root>/skills` and would shadow installs).
         let tmp = tempfile::tempdir().unwrap();
-        let octos_home = tmp.path();
+        let ra_home = tmp.path();
 
-        bootstrap_bundled_pipelines(octos_home);
+        bootstrap_bundled_pipelines(ra_home);
         assert_eq!(BUNDLED_PIPELINES_DIR, "bundled-pipelines");
         assert!(
-            octos_home
+            ra_home
                 .join("bundled-pipelines")
                 .join("deep_research.dot")
                 .exists(),
             "bundle must be written to the dedicated <root>/bundled-pipelines dir"
         );
         assert!(
-            !octos_home
+            !ra_home
                 .join("pipelines")
                 .join("deep_research.dot")
                 .exists(),
@@ -579,15 +579,15 @@ mod tests {
         // exists (e.g. an installer wrote it first in a race) is preserved
         // byte-for-byte and NOT counted as newly written.
         let tmp = tempfile::tempdir().unwrap();
-        let octos_home = tmp.path();
-        let bundled_dir = octos_home.join(BUNDLED_PIPELINES_DIR);
+        let ra_home = tmp.path();
+        let bundled_dir = ra_home.join(BUNDLED_PIPELINES_DIR);
         std::fs::create_dir_all(&bundled_dir).unwrap();
 
         let racing = bundled_dir.join("deep_research.dot");
         let racing_body = "digraph deep_research { concurrent_install [prompt=\"race\"] }";
         std::fs::write(&racing, racing_body).unwrap();
 
-        let count = bootstrap_bundled_pipelines(octos_home);
+        let count = bootstrap_bundled_pipelines(ra_home);
         assert_eq!(
             count, 0,
             "an already-present (concurrently installed) file must NOT be clobbered or counted"
@@ -605,15 +605,15 @@ mod tests {
         // same name must WIN over the bundled fallback — bootstrap must not
         // overwrite it.
         let tmp = tempfile::tempdir().unwrap();
-        let octos_home = tmp.path();
-        let pipelines_dir = octos_home.join(BUNDLED_PIPELINES_DIR);
+        let ra_home = tmp.path();
+        let pipelines_dir = ra_home.join(BUNDLED_PIPELINES_DIR);
         std::fs::create_dir_all(&pipelines_dir).unwrap();
 
         let installed = pipelines_dir.join("deep_research.dot");
         let installed_body = "digraph deep_research { installed [prompt=\"custom\"] }";
         std::fs::write(&installed, installed_body).unwrap();
 
-        let count = bootstrap_bundled_pipelines(octos_home);
+        let count = bootstrap_bundled_pipelines(ra_home);
         // deep_research was already present, so it is NOT counted/written.
         // (Other bundled pipelines, if any, may still be written.)
         let after = std::fs::read_to_string(&installed).unwrap();

@@ -1,6 +1,5 @@
 //! `ra-tui config`: read-only inspection of the client's startup config
-//! (`~/.config/ra-tui/config.json`, or a legacy `~/.config/octoscode/config.json`
-//! when only that exists).
+//! (`~/.config/ra-tui/config.json`).
 //!
 //! There is no interactive wizard. Configuration is covered by the top-level
 //! CLI flags, the in-TUI onboarding, and the runtime toggles (`/theme`,

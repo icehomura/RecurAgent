@@ -2241,7 +2241,7 @@ fn mark_completed_after_completed_is_idempotent_and_warns() {
     );
 }
 
-/// mini4 RC2/RC3 regression (`review-octos-web-v3`): a worker's failed
+/// mini4 RC2/RC3 regression (`review-ra-web-v3`): a worker's failed
 /// TOOL CALL (`unknown tool: write_file`, classified
 /// `tool_execution`/`fail_fast`) reaches the supervisor via the
 /// harness-event sink. The agent loop treats that error as feedback and

@@ -25,7 +25,7 @@ chrono = "0.4"
 # ra browser profile when RA_BROWSER is set.
 ra-research = { path = "../../ra-research", features = ["http", "browser", "impersonate"] }
 # Product identity: `RA_WORK_DIR`/`RA_EVENT_SINK`/`RA_SESSION_ID`/`RA_TASK_ID`
-# win over the legacy `OCTOS_*` spellings the parent may still forward.
+# win over the legacy `RA_*` spellings the parent may still forward.
 ra-core = { path = "../../ra-core" }
 
 [package.metadata.release]

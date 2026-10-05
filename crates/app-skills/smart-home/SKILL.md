@@ -2,7 +2,7 @@
 name: smart-home
 description: List and control smart-home devices (lights, thermostats, switches, covers, speakers) via the profile's configured bridge. Triggers: smart home, turn on/off, lights, thermostat, dim, brightness, temperature, unlock, devices, 智能家居, 开灯, 关灯, 空调, 窗帘, 灯光, 设备.
 version: 1.1.0
-author: ra
+author: RecurAgent
 always: false
 ---
 
@@ -10,7 +10,7 @@ always: false
 
 List and control smart-home devices through the bridge configured on this
 profile (e.g. Home Assistant or a compatible gateway). Camera video is not
-available through this skill — it is a UI-only feature in the octos-web
+available through this skill — it is a UI-only feature in the ra-web
 dashboard.
 
 Requires a bridge to be configured for the profile first (dashboard:

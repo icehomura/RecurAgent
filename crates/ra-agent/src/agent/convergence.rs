@@ -301,7 +301,7 @@ pub(super) fn format_elapsed(elapsed: Duration) -> String {
 
 /// Read a `u64` knob, clamped to `[min, max]`. `suffix` resolves through
 /// [`ra_core::brand::env_compat_str`] (`RA_<suffix>` first, legacy
-/// `OCTOS_<suffix>` second).
+/// `RA_<suffix>` second).
 fn env_u64(suffix: &str, default: u64, min: u64, max: u64) -> u64 {
     ra_core::brand::env_compat_str(suffix)
         .and_then(|value| value.parse::<u64>().ok())

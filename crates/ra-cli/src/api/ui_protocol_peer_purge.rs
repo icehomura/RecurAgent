@@ -1,7 +1,7 @@
 //! UPCR-2026-034 `peer/purge` (#2604): erase a host-owned app peer and free
 //! its (app, account) binding.
 //!
-//! The host (OctoSense) calls it when a person removes an account or
+//! The host (RecurAgent) calls it when a person removes an account or
 //! uninstalls an app. It closes the peer if it is open, stops everything
 //! still running for it, then erases what the kernel keeps for it: its
 //! transcripts (the peer's own session and every request context), its memory

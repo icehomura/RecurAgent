@@ -52,7 +52,7 @@ fn backend() -> Result<&'static LlamaBackend> {
     BACKEND
         .get_or_init(|| {
             let mut b = LlamaBackend::init().map_err(|e| e.to_string())?;
-            // llama.cpp is chatty on stderr; ra owns its own logging.
+            // llama.cpp is chatty on stderr; RecurAgent owns its own logging.
             b.void_logs();
             Ok(b)
         })

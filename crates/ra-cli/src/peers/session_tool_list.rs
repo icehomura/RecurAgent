@@ -1,7 +1,7 @@
 //! The durable host-only kernel tool list of a host SESSION (#2605,
 //! UPCR-2026-035 "Durable host session tool list").
 //!
-//! The host (the connection that owns the app peers, e.g. OctoSense's shell)
+//! The host (the connection that owns the app peers, e.g. RecurAgent's shell)
 //! sets, for one of its own sessions that is not an app peer (typically the
 //! system agent's conversation), the EXACT list of kernel tools every turn on
 //! that session may keep. The list:

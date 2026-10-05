@@ -15,7 +15,7 @@ const MAX_CLIENT_COMMAND_LEN: usize = 32;
 /// no client can honor them, so declarations of them are rejected.
 pub const SERVER_STATE_COMMANDS: &[&str] = &["adaptive", "router", "queue", "reset"];
 /// Gateway commands serve also intercepts, but that a client can handle
-/// locally without reaching the server (octoscode implements both), so
+/// locally without reaching the server (ra-tui implements both), so
 /// declarations of them are accepted.
 pub const CLIENT_HANDLED_COMMANDS: &[&str] = &["status", "thinking"];
 
@@ -268,7 +268,7 @@ mod tests {
 
     #[test]
     fn should_carry_the_three_phase_coding_output_contract() {
-        // #2141: the coding output contract (octoscode#585) lives in the
+        // #2141: the coding output contract (ra-tui#585) lives in the
         // server/harness prompt, not the TUI. Pin its load-bearing pieces so
         // an edit can't silently drop the anti-off-ramp guidance that keeps a
         // small local model from ending each work turn with a polished

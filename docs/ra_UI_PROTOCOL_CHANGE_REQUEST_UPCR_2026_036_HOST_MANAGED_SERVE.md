@@ -16,7 +16,7 @@
   adds an optional `external_prompt` key to the stored ledger record (not to
   any wire event), so an external client's prompts stay its own across a
   restart.
-- Origin: OctoSense shells share one kernel between native apps and an
+- Origin: RecurAgent shells share one kernel between native apps and an
   external web or terminal client (see `docs/HOST_MANAGED_SERVE.md`).
 
 ## Problem
@@ -98,7 +98,7 @@ Moreover:
   running turn and on each approval and question the turn raises, and checks
   that. An external approval never records an approval scope;
 - an approval or question raised by an external connection's turn belongs
-  to that connection (OctoSense ADR 0004, gap G1). Its `approval/requested`,
+  to that connection (RecurAgent ADR 0004, gap G1). Its `approval/requested`,
   `approval/decided`, `approval/cancelled`, `approval/auto_resolved` and
   `user_question/requested` go only to that connection: live, on replay, in
   `session/open` pending approvals and questions, and in `session/hydrate`.

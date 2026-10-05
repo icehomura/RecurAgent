@@ -1,8 +1,8 @@
-# ra 应用技能开发指南
+# RecurAgent 应用技能开发指南
 
-[English](app-skill-dev-guide.md) | [中文](app-skill-dev-guide-zh.md)
+[English](../../docs/app-skill-dev-guide.md) | [中文](../../docs/app-skill-dev-guide-zh.md)
 
-本指南涵盖了构建、注册和部署 ra 应用技能所需的全部内容。
+本指南涵盖了构建、注册和部署 RecurAgent 应用技能所需的全部内容。
 
 ---
 
@@ -46,7 +46,7 @@
 下列属于 **插件工具**（本指南）：
 
 - **`fm_tts`**、**`mofa_slides`**、**`mofa_publish`**、**`search`**（原 `deep_search`）— 能力本身。每个都是具体实现，常包装外部运行时（Python、Chromium、原生 CLI），版本独立于宿主。
-- **`qwen-tts`** 声音克隆 — 包装外部 HTTP API + 鉴权；按租户凭据；无需重编 ra 即可更新。
+- **`qwen-tts`** 声音克隆 — 包装外部 HTTP API + 鉴权；按租户凭据；无需重编 RecurAgent 即可更新。
 
 下列才适合作为**插件 hook**（仅在它属于**可选增强**、缺失也不影响工具本身的情况下）：
 
@@ -122,7 +122,7 @@ pub enum ValidatorSpec {
 
 ## 架构概览
 
-应用技能是一个**独立的可执行二进制文件**，通过简单的 **stdin/stdout JSON 协议**与 ra 网关通信。网关为每次工具调用将技能二进制文件作为子进程启动，通过 stdin 传递 JSON 参数，并从 stdout 读取 JSON 结果。
+应用技能是一个**独立的可执行二进制文件**，通过简单的 **stdin/stdout JSON 协议**与 RecurAgent 网关通信。网关为每次工具调用将技能二进制文件作为子进程启动，通过 stdin 传递 JSON 参数，并从 stdout 读取 JSON 结果。
 
 ```
 User message → LLM → tool_use("get_weather", {"city": "Paris"})
@@ -392,7 +392,7 @@ pub const BUNDLED_APP_SKILLS: &[(&str, &str, &str, &str)] = &[
 
 **元组格式：** `(dir_name, binary_name, skill_md, manifest_json)`
 
-- `dir_name`：引导写入 `<octos_home>/bundled-app-skills/` 时使用的目录名
+- `dir_name`：引导写入 `<ra_home>/bundled-app-skills/` 时使用的目录名
 - `binary_name`：`target/release/` 中的二进制文件名（必须与 Cargo.toml 中的 `[[bin]] name` 匹配）
 - `skill_md`：嵌入的 SKILL.md 内容
 - `manifest_json`：嵌入的 manifest.json 内容
@@ -960,7 +960,7 @@ manage_skills(action="search", query="comic")
 
 ### 发布到注册表
 
-外部技能可通过 [octos-hub](https://github.com/your-org/ra-hub) 注册表被发现。
+外部技能可通过 [ra-hub](https://github.com/icehomura/ra-hub) 注册表被发现。
 
 1. 将你的技能仓库推送到 GitHub
 2. 通过 PR 向 `registry.json` 添加条目：
@@ -1018,7 +1018,7 @@ ra skills --profile alice install your-user/your-repo/skill-a
 - 主提供商的 API 密钥（例如 `DASHSCOPE_API_KEY`）
 - 备选提供商的密钥（例如 `GEMINI_API_KEY`、`OPENAI_API_KEY`）
 - 非标准端点的 Base URL
-- `OCTOS_DATA_DIR` 和 `OCTOS_WORK_DIR`
+- `RA_DATA_DIR` 和 `ra_WORK_DIR`
 
 密钥在网关启动时从 macOS 钥匙串解析。技能二进制文件以环境变量的形式接收它们 -- 无需手动 export。
 

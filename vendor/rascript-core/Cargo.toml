@@ -1,0 +1,21 @@
+# Vendored from https://github.com/icehomura/Rascript at
+# e152f8bc1fd7dae1ce51993cab1c5fcb0fdc8b23 (see ../PROVENANCE.md).
+# Changes vs upstream: sibling crates (`rascript-ui-l0`, `makepad-script`)
+# are path deps into this tree, and the upstream `[workspace.package]` /
+# `[lints] workspace = true` inheritance is inlined.
+[package]
+name = "rascript-core"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/icehomura/Rascript"
+description = "Bounded, host-neutral Rascript VM runtime"
+
+[lints.rust]
+unsafe_code = "forbid"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }
+
+[dependencies]
+rascript-ui-l0 = { path = "../rascript-ui-l0" }
+makepad-script = { path = "../makepad-script" }
+serde_json = "1.0.150"

@@ -1,14 +1,14 @@
 spec: task
-name: "atomcode vs octoscode debug-flow A/B under injected faults"
+name: "atomcode vs ra-tui debug-flow A/B under injected faults"
 inherits: project
 tags: [ab-testing, atomcode, debug, fault-injection, pty-capture, harness]
-depends: [task-ab-atomcode-octoscode-harness]
+depends: [task-ab-atomcode-ra-tui-harness]
 estimate: 2d
 ---
 
 ## Intent
 
-`task-ab-atomcode-octoscode-harness` compares the two clients on prompts that
+`task-ab-atomcode-ra-tui-harness` compares the two clients on prompts that
 succeed, which measures the surface a user sees when nothing goes wrong. The
 interesting difference between two coding agents is what each one does when the
 work FAILS — a tool exits non-zero, credit runs out, the stream dies mid-turn,
@@ -30,7 +30,7 @@ it.
   `scripts/capture-appui-ux-pty.sh` is not a driver: its command is fixed to
   `cargo test --test appui_ux_fixture` and it performs NO normalization. What is
   reused from it is the capture TECHNIQUE — `script -q -e -c` with the BSD
-  fallback — and the `OCTOSCODE_UX_CAPTURE_DIR` override convention. The only
+  fallback — and the `RA_TUI_UX_CAPTURE_DIR` override convention. The only
   normalization prior art in the repo is the ANSI/CR strip in
   `scripts/validate-tmux-ux-capture.sh`; everything past it (timestamps, session
   and turn ids, cursor positions, elapsed-time rows) is new work owned here.
@@ -51,7 +51,7 @@ it.
   | `quota-rate-limited` | provider answers `429` `rate_limit_exceeded` | a wait-and-retry, not a terminal failure |
   | `auth-revoked` | provider answers `401` | terminal; re-keying is the only fix |
   | `stream-dies-mid-turn` | the connection drops after partial output | a partial answer must not read as a complete one |
-  | `frame-seq-gap` | a replayed frame seq is skipped | octoscode reports `protocol/replay_lossy`; silence is the defect |
+  | `frame-seq-gap` | a replayed frame seq is skipped | ra-tui reports `protocol/replay_lossy`; silence is the defect |
   | `user-interrupt` | the driver interrupts mid-turn | what survives the interrupt, and what is lost |
   | `approval-park` | the backend parks on an approval | asymmetric by design, see below |
 - Every row carries TWO fields, and conflating them is the mistake this split
@@ -61,14 +61,14 @@ it.
   `silently-continued`, `aborted`, `not-applicable`. `silently-continued` is the
   finding this harness exists to catch — an arm that neither shows the fault nor
   acts on it — and a round that never fired must never be able to produce it.
-- Markers are matched on LOCALE-INDEPENDENT evidence. octoscode renders its
+- Markers are matched on LOCALE-INDEPENDENT evidence. ra-tui renders its
   failure text through `t!()` against `locales/en.yml` and `locales/zh.yml`, so
-  a harness grepping English status strings silently reclassifies every octoscode
+  a harness grepping English status strings silently reclassifies every ra-tui
   row the moment the capture runs under `zh`. Each manifest entry therefore
   matches a glyph or a structural token that both locale files share — the `✗`
   failure bullet, the `Error [` status prefix's bracketed code, the approval
-  card's `┌─ ⚠` frame — and the harness pins `OCTOSCODE_LOCALE` for the
-  octoscode arm and records the pinned locale in the report.
+  card's `┌─ ⚠` frame — and the harness pins `RA_TUI_LOCALE` for the
+  ra-tui arm and records the pinned locale in the report.
 - Capability asymmetry is recorded, not scored. atomcode runs headless as
   `atomcode -p <prompt> -y --dev --no-telemetry`, where `-y` resolves to
   skip-permissions mode and prints its own `all tool calls are auto-approved`
@@ -106,7 +106,7 @@ it.
 - Latency is not recorded at all. The sibling contract labels it mock-served;
   under injected faults it measures the injected delay, so this report omits the
   column rather than qualifying it.
-- No octoscode source changes. A client that mishandles an injected fault is a
+- No ra-tui source changes. A client that mishandles an injected fault is a
   finding this harness reports, not a fix it makes.
 
 ## Boundaries
@@ -138,7 +138,7 @@ it.
 - The happy-path prompt battery and its report, which the sibling contract owns.
 - Automatic judgement of which recovery class is the better behaviour.
 - Real provider faults, real rate limits, and real billing state.
-- Any agent other than atomcode and octoscode.
+- Any agent other than atomcode and ra-tui.
 - Image or pixel-diffed screenshots.
 
 ## Completion Criteria
@@ -214,8 +214,8 @@ Scenario: arms served different scenarios produce no report
 Scenario: markers survive a locale change
   Test: test_debug_markers_are_locale_independent
   Level: integration
-  Test Double: stub octoscode arm rendering the zh locale
-  Given one capture of the octoscode arm taken under "en" and one under "zh"
+  Test Double: stub ra-tui arm rendering the zh locale
+  Given one capture of the ra-tui arm taken under "en" and one under "zh"
   When both are classified for the fault "tool-nonzero-exit"
   Then both rows carry the same recovery
   And the report names the locale each arm was pinned to
@@ -264,7 +264,7 @@ Scenario: an arm exiting non-zero fails only its own row
   Given the atomcode arm exits non-zero on one fault
   When the round completes
   Then that arm's row for that fault carries the outcome "arm-failed"
-  And the octoscode row for the same fault carries the outcome "ok"
+  And the ra-tui row for the same fault carries the outcome "ok"
 
 Scenario: a hung arm is killed and recorded as a timeout
   Test: test_debug_hung_arm_is_killed_and_recorded

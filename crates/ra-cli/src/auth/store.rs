@@ -59,7 +59,7 @@ impl AuthStore {
         let path = auth_home.join("auth.json");
         let data = if path.exists() {
             // Harden an existing store on open: a credential file created by an
-            // older ra (or copied in by hand) may be 0644. `save()` always
+            // older RecurAgent (or copied in by hand) may be 0644. `save()` always
             // writes 0600, but a file we only ever READ would stay world/group
             // readable forever — tighten it best-effort whenever we open it.
             #[cfg(unix)]

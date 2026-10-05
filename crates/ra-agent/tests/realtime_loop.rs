@@ -402,7 +402,7 @@ async fn should_attach_sensor_snapshot_to_hook_domain_data() {
         .domain_data
         .as_ref()
         .expect("domain_data should be set when source has snapshots");
-    assert_eq!(data["source"], "octos_realtime");
+    assert_eq!(data["source"], "ra_realtime");
     let snaps = data["snapshots"].as_array().expect("snapshots array");
     assert_eq!(snaps.len(), 1);
     assert_eq!(snaps[0]["sensor_id"], "force_torque");

@@ -352,11 +352,11 @@ fn build_totals(samples: &[ParsedMetricSample]) -> BTreeMap<String, u64> {
         ),
         (
             "loop_errors".to_string(),
-            total_for_metric(samples, ra_agent::OCTOS_LOOP_ERROR_TOTAL),
+            total_for_metric(samples, ra_agent::ra_LOOP_ERROR_TOTAL),
         ),
         (
             "loop_retries".to_string(),
-            total_for_metric(samples, ra_agent::OCTOS_LOOP_RETRY_TOTAL),
+            total_for_metric(samples, ra_agent::ra_LOOP_RETRY_TOTAL),
         ),
     ])
 }
@@ -483,7 +483,7 @@ fn build_breakdowns(samples: &[ParsedMetricSample]) -> BTreeMap<String, Vec<Valu
             "loop_errors".to_string(),
             breakdown(
                 samples,
-                ra_agent::OCTOS_LOOP_ERROR_TOTAL,
+                ra_agent::ra_LOOP_ERROR_TOTAL,
                 &["variant", "recovery"],
             ),
         ),
@@ -491,7 +491,7 @@ fn build_breakdowns(samples: &[ParsedMetricSample]) -> BTreeMap<String, Vec<Valu
             "loop_retries".to_string(),
             breakdown(
                 samples,
-                ra_agent::OCTOS_LOOP_RETRY_TOTAL,
+                ra_agent::ra_LOOP_RETRY_TOTAL,
                 &["variant", "decision"],
             ),
         ),
@@ -929,7 +929,7 @@ fn lifecycle_priority(state: &str) -> u8 {
 pub fn record_tool_call(name: &str, success: bool, duration_secs: f64) {
     let labels = [("tool", name.to_string()), ("success", success.to_string())];
     counter!("ra_tool_calls_total", &labels).increment(1);
-    histogram!("octos_tool_call_duration_seconds", "tool" => name.to_string())
+    histogram!("ra_tool_call_duration_seconds", "tool" => name.to_string())
         .record(duration_secs);
 }
 

@@ -79,13 +79,13 @@ export WECOM_BOT_SECRET="your_secret"
 **消息未到达**
 
 - 确认上游中继服务正在运行且已关联到你的账号。
-- 检查企业微信群机器人是否与 ra 中配置的一致。
+- 检查企业微信群机器人是否与 RecurAgent 中配置的一致。
 - 如果使用了 `allowed_senders`，验证发送者的企业微信用户 ID 是否在列表中。
 - 检查重复消息过滤 -- 频道会对最近 1000 条消息 ID 去重。
 
 **长消息被截断**
 
-超过 4096 字符的消息会被 ra 自动拆分为多个分块。如果仍有截断，检查中继服务本身的消息长度设置。
+超过 4096 字符的消息会被 RecurAgent 自动拆分为多个分块。如果仍有截断，检查中继服务本身的消息长度设置。
 
 ---
 
@@ -110,7 +110,7 @@ export WECOM_BOT_SECRET="your_secret"
 | 服务无法启动 | 查看日志：`tail -f ~/.ra/serve.log`（macOS）或 `journalctl --user -u ra-serve`（Linux） |
 | Windows: 找不到 `ra` | 确保 `%USERPROFILE%\.cargo\bin` 在 PATH 中 |
 | Windows: shell 命令失败 | 命令通过 `cmd /C` 执行；使用 Windows 兼容的语法 |
-| 升级后会话看起来变短了 | 历史现在按新到旧最多加载 `OCTOS_SESSION_LOAD_BUDGET_BYTES`（32 MiB）；更早的轮次存于 `<name>.segments/` 并按需加载——没有删除任何内容 |
+| 升级后会话看起来变短了 | 历史现在按新到旧最多加载 `RA_SESSION_LOAD_BUDGET_BYTES`（32 MiB）；更早的轮次存于 `<name>.segments/` 并按需加载——没有删除任何内容 |
 
 ---
 
@@ -142,5 +142,5 @@ export WECOM_BOT_SECRET="your_secret"
 | `EMAIL_PASSWORD` | 邮箱账户密码 |
 | `WECOM_CORP_ID` | 企业微信企业 ID |
 | `WECOM_AGENT_SECRET` | 企业微信应用密钥 |
-| `OCTOS_SESSION_SEGMENT_BYTES` | 活跃会话文件封存为分段的大小（默认 8 MiB） |
-| `OCTOS_SESSION_LOAD_BUDGET_BYTES` | 普通加载按新到旧读取的会话历史字节数（默认 32 MiB；`0` = 不限） |
+| `RA_SESSION_SEGMENT_BYTES` | 活跃会话文件封存为分段的大小（默认 8 MiB） |
+| `RA_SESSION_LOAD_BUDGET_BYTES` | 普通加载按新到旧读取的会话历史字节数（默认 32 MiB；`0` = 不限） |

@@ -37,7 +37,7 @@ fn anthropic_root(base_url: &str) -> String {
         .unwrap_or_else(|| format!("{base_url}/anthropic"))
 }
 
-/// Per-model discovery resolution (octos#2185): a claude-* selection must be
+/// Per-model discovery resolution (RecurAgent#2185): a claude-* selection must be
 /// probed with the Anthropic Messages strategy against [`anthropic_root`] —
 /// the family-wide OpenAI declaration would probe `{base}/models` with a
 /// Bearer header the Anthropic endpoint does not speak. Anything else keeps

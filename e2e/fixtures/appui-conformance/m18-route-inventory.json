@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "source": "crates/octos-core/src/ui_protocol.rs UI_PROTOCOL_FIRST_SERVER_METHODS plus crates/octos-cli/src/api/ui_protocol_transport.rs APPUI_EXTRA_METHODS",
+  "source": "crates/ra-core/src/ui_protocol.rs UI_PROTOCOL_FIRST_SERVER_METHODS plus crates/ra-cli/src/api/ui_protocol_transport.rs APPUI_EXTRA_METHODS",
   "last_reviewed": "2026-09-25",
-  "issue": "octos#1030, octos#716",
+  "issue": "ra#1030, ra#716",
   "transports": ["websocket", "stdio"],
   "methods": [
     { "method": "profile/local/create", "classification": "shared" },

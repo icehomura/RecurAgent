@@ -1,4 +1,4 @@
-//! ra CLI entry point.
+//! RecurAgent CLI entry point.
 
 use clap::{CommandFactory, FromArgMatches};
 use color_eyre::eyre::Result;
@@ -29,10 +29,10 @@ const COMPLETE_VAR: &str = "RA_COMPLETE";
 /// `clap_complete` is handed the *name*, not a value;
 /// [`complete_var_names_follow_the_brand_prefixes`] pins both spellings to the
 /// brand prefixes.
-const LEGACY_COMPLETE_VAR: &str = "OCTOS_COMPLETE";
+const LEGACY_COMPLETE_VAR: &str = "ra_COMPLETE";
 
 /// Name of the shell-completion request variable: `RA_COMPLETE`, falling back to
-/// the legacy `OCTOS_COMPLETE` when only that one is set (the new name wins when
+/// the legacy `ra_COMPLETE` when only that one is set (the new name wins when
 /// both are). `clap_complete` reads the variable itself and wants a
 /// `&'static str`, so the two candidate names are consts.
 fn complete_env_var() -> &'static str {
@@ -99,7 +99,7 @@ fn run_cli() -> Result<()> {
     install_error_hooks()?;
 
     // Hidden chaos-test switch (outer-loop blueprint step ②): when
-    // OCTOS_TEST_PANIC_AFTER_BOOT=1, panic immediately AFTER the production
+    // ra_TEST_PANIC_AFTER_BOOT=1, panic immediately AFTER the production
     // hooks are installed. Integration tests use this to drive the REAL
     // production panic-hook path under a broken-pipe stderr and assert no
     // second panic / no SIGABRT. Never set in normal operation.
@@ -110,9 +110,9 @@ fn run_cli() -> Result<()> {
     // Answer shell completion requests before argument parsing (#2413): with
     // `RA_COMPLETE=<shell>` set the shell sources the registration script and
     // calls back into this binary on every tab; without it this is a no-op. The
-    // legacy `OCTOS_COMPLETE` keeps shells registered before the rename working
+    // legacy `ra_COMPLETE` keeps shells registered before the rename working
     // (new name wins when both are set). The var is namespaced — a generic
-    // `COMPLETE` exported for some other tool must not brick every ra
+    // `COMPLETE` exported for some other tool must not brick every RecurAgent
     // invocation. Must precede parsing — mid-edit arguments don't parse cleanly.
     clap_complete::CompleteEnv::with_factory(<Args as clap::CommandFactory>::command)
         .var(complete_env_var())

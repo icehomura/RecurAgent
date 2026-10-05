@@ -1,7 +1,7 @@
 //! WeChat channel — connects to wechat-bridge via WebSocket.
 //!
 //! The bridge maintains the persistent WeChat long-poll connection.
-//! This channel just translates between the bridge's WS protocol and ra InboundMessage/OutboundMessage.
+//! This channel just translates between the bridge's WS protocol and RecurAgent InboundMessage/OutboundMessage.
 
 use std::collections::HashSet;
 use std::sync::Arc;

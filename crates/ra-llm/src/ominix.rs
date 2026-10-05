@@ -1,7 +1,7 @@
 //! Async HTTP client for ominix-api (ASR/TTS) and platform model allowlist.
 //!
 //! Model metadata lives in ominix-api (`~/.OminiX/local_models_config.json`
-//! and `/v1/models/catalog`).  ra only maintains a small allowlist at
+//! and `/v1/models/catalog`).  RecurAgent only maintains a small allowlist at
 //! `state_home()/platform-models.json` that specifies which ominix-api models
 //! the platform skills are permitted to use.
 
@@ -70,7 +70,7 @@ fn parse_transcription_response(json: &serde_json::Value) -> Result<AsrTranscrip
 pub struct PlatformModel {
     /// Model ID as known by ominix-api (e.g. "qwen3-asr-1.7b").
     pub id: String,
-    /// Role this model fills for ra platform skills: "asr" or "tts".
+    /// Role this model fills for RecurAgent platform skills: "asr" or "tts".
     pub role: String,
 }
 
@@ -151,7 +151,7 @@ impl PlatformModels {
 
 /// A model from ominix-api's `/v1/models/catalog` response.
 ///
-/// We only define the fields ra needs; unknown fields are ignored.
+/// We only define the fields RecurAgent needs; unknown fields are ignored.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CatalogModel {
     pub id: String,

@@ -17,7 +17,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-const LEGACY_CONTEXT_MANAGER_SCHEMA: &str = "ra.context-manager.v1";
+/// Schema id this build writes for the ledger format. Only this id is accepted
+/// on read — there is no back-compat path for pre-rename ledgers.
 const CONTEXT_MANAGER_SCHEMA: &str = "ra.context-manager.v2";
 const DEFAULT_TOOL_OUTPUT_POLICY_ID: &str = "tool-output-v1";
 const TOOL_OUTPUT_UI_PREVIEW_MAX_BYTES: usize = 512;
@@ -789,8 +790,7 @@ pub(crate) fn load_context_manager_snapshot(
             path.display()
         )
     })?;
-    if snapshot.schema != CONTEXT_MANAGER_SCHEMA && snapshot.schema != LEGACY_CONTEXT_MANAGER_SCHEMA
-    {
+    if snapshot.schema != CONTEXT_MANAGER_SCHEMA {
         return Err(format!(
             "unsupported context ledger schema {} in {}",
             snapshot.schema,
@@ -1968,13 +1968,7 @@ impl ContextManager {
         };
         let repaired_projection =
             snapshot.schema == CONTEXT_MANAGER_SCHEMA && !projection_is_coherent;
-        let items = if snapshot.schema == LEGACY_CONTEXT_MANAGER_SCHEMA {
-            if snapshot.active_item_ids.is_empty() {
-                canonical_items.clone()
-            } else {
-                requested_projection.unwrap_or_else(|| canonical_items.clone())
-            }
-        } else if projection_is_coherent {
+        let items = if projection_is_coherent {
             requested_projection.expect("coherent projection was materialized")
         } else if let Some(expected) = expected_projection {
             expected
@@ -2557,7 +2551,7 @@ impl ContextManager {
                 // intentionally still carried on the wire / session JSONL /
                 // displayed bubble, which the voice frontend depends on (it
                 // renders the "generating" state from the marker and strips it
-                // for display — see octos-web `use-voice-conversation.ts`); the
+                // for display — see ra-web `use-voice-conversation.ts`); the
                 // ContextManager is model-only, so cleaning here never touches
                 // those surfaces. No-op for a reply without a trailing marker.
                 let assistant_content = strip_trailing_visual_marker(&message.content);
@@ -7491,7 +7485,7 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_materializes_v2_semantic_blocks_without_trusting_legacy_index() {
+    fn snapshot_materializes_v2_semantic_blocks() {
         let mut manager = ContextManager::new("s", None);
         manager.record_message(&Message::user("hello"));
         manager.record_message(&Message::assistant("world"));
@@ -7499,16 +7493,6 @@ mod tests {
         let snapshot = manager.snapshot();
         assert_eq!(snapshot.schema, CONTEXT_MANAGER_SCHEMA);
         assert_eq!(snapshot.semantic_blocks, manager.semantic_blocks());
-
-        // A v1 snapshot has no semantic index. Deserialization defaults it to
-        // empty, and `from_snapshot` rebuilds from the canonical item vector.
-        let mut legacy = serde_json::to_value(snapshot).unwrap();
-        legacy["schema"] = json!(LEGACY_CONTEXT_MANAGER_SCHEMA);
-        legacy.as_object_mut().unwrap().remove("semantic_blocks");
-        let legacy: ContextSnapshot = serde_json::from_value(legacy).unwrap();
-        assert!(legacy.semantic_blocks.is_empty());
-        let rebuilt = ContextManager::from_snapshot(legacy);
-        assert_eq!(rebuilt.semantic_blocks().len(), 2);
     }
 
     #[test]

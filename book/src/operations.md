@@ -29,9 +29,9 @@ sudo systemctl restart ra-serve
 
 ## Session Storage Capacity
 
-Sessions are stored as rolling JSONL segments, not one ever-growing file. When the active file reaches `OCTOS_SESSION_SEGMENT_BYTES` (default 8 MiB), it is sealed into a sibling `<name>.segments/NNNNNN.jsonl` and a fresh active file starts. A plain load reads the active file plus as many sealed segments, newest first, as fit within `OCTOS_SESSION_LOAD_BUDGET_BYTES` (default 32 MiB; `0` = unlimited) — history beyond the budget stays on disk and remains reachable through full-history loads and `/undo`.
+Sessions are stored as rolling JSONL segments, not one ever-growing file. When the active file reaches `RA_SESSION_SEGMENT_BYTES` (default 8 MiB), it is sealed into a sibling `<name>.segments/NNNNNN.jsonl` and a fresh active file starts. A plain load reads the active file plus as many sealed segments, newest first, as fit within `RA_SESSION_LOAD_BUDGET_BYTES` (default 32 MiB; `0` = unlimited) — history beyond the budget stays on disk and remains reachable through full-history loads and `/undo`.
 
-**Memory planning**: the budget bounds the file bytes one resident session holds; parsed rows cost roughly 1.5–3× their file size, so a process caching N long sessions needs up to about `N × 32 MiB × 3`. Memory-limited hosts should lower the budget (e.g. `OCTOS_SESSION_LOAD_BUDGET_BYTES=16777216`) or the session cache size (`gateway.max_sessions`).
+**Memory planning**: the budget bounds the file bytes one resident session holds; parsed rows cost roughly 1.5–3× their file size, so a process caching N long sessions needs up to about `N × 32 MiB × 3`. Memory-limited hosts should lower the budget (e.g. `RA_SESSION_LOAD_BUDGET_BYTES=16777216`) or the session cache size (`gateway.max_sessions`).
 
 **Mixed-version overlap** (e.g. a Kubernetes rolling upgrade on a shared data directory): an old binary does not see `.segments/`; its `*.jsonl` walks show only the active file, which looks like a short session. Sessions this build has written carry schema version 2, which older builds refuse to load — but never let an old binary *rewrite* (rename, summary) any rolled session: a rewrite replaces the active file with whatever the old build could read. For an older (schema 1) session, a legacy rewrite that erases `sealed_segments` makes the sealed segments invisible to loads; while that unnamed state stands, rewrites refuse and the seal refuses to replace the unnamed segments, so the files stay on disk but the session stops rolling until the state is reconciled.
 
@@ -41,7 +41,7 @@ Sessions are stored as rolling JSONL segments, not one ever-growing file. When t
 
 ## Keychain Integration
 
-ra supports storing API keys in the OS secret store instead of plaintext in profile JSON files: the macOS Keychain on macOS (hardware-backed, per-user access control), a 0600 file under `~/.ra/secrets` on Linux, and no store on Windows yet — use the process environment or plain `env_vars` there. The diagram below shows the macOS backend.
+RecurAgent supports storing API keys in the OS secret store instead of plaintext in profile JSON files: the macOS Keychain on macOS (hardware-backed, per-user access control), a 0600 file under `~/.ra/secrets` on Linux, and no store on Windows yet — use the process environment or plain `env_vars` there. The diagram below shows the macOS backend.
 
 ### Architecture
 
@@ -141,7 +141,7 @@ security set-keychain-settings ~/Library/Keychains/login.keychain-db
 | "User interaction is not allowed" | Keychain locked (SSH session) | `ra auth unlock --password <pw>` |
 | Keychain lookup timed out (3s) | Keychain locked (LaunchDaemon) | Enable auto-login, reboot |
 | "keychain marker found but no secret" | Key never stored or wrong keychain | Re-run `ra auth set-key` after unlock |
-| Gateway hangs at startup | Keychain lookup blocking | Update to latest ra binary |
+| Gateway hangs at startup | Keychain lookup blocking | Update to latest RecurAgent binary |
 
 ### Security Comparison
 
@@ -225,7 +225,7 @@ Full walkthrough (including a minimal Python client): `docs/ra_WORK_SECRET_SESSI
 
 ### macOS (launchd)
 
-The deploy script installs ra as a **system LaunchDaemon** at `/Library/LaunchDaemons/io.ra.serve.plist` (so it survives logout and starts before GUI login). Manage it with `sudo`:
+The deploy script installs RecurAgent as a **system LaunchDaemon** at `/Library/LaunchDaemons/io.ra.serve.plist` (so it survives logout and starts before GUI login). Manage it with `sudo`:
 
 ```bash
 # Load the service
@@ -274,4 +274,4 @@ The server stops three ways: Ctrl+C in the terminal running the foreground `ra s
 
 A UI Protocol client connected over the authenticated WebSocket (`/api/ui-protocol/ws`) can stop the server with the `server/shutdown` method. It stops the process exactly like Ctrl+C: connections drain, gateways stop, the process exits. The call is idempotent, and the stop fires ~250 ms after the request is handled so the acknowledgement still gets a chance to reach the client (under outbound backpressure the client may miss it; the stop still happens).
 
-The method is only accepted on a local deployment (`config.mode = "local"`) with solo login opted in (`ra serve --solo` / `OCTOS_SOLO_LOGIN=1`) and only by an HTTP serve (`ra serve` without `--stdio`). One call stops the process for every connected client and cancels their running turns. Fleet/hosted servers and `--stdio` serve reject the call with `invalid_request` (-32600) and `data.kind: "server_shutdown_unavailable"` and stop nothing; session-scoped (session-ingress) connections can never call it and are refused with a plain `invalid_request`. Note the local-solo trust model: on a solo serve, any local process -- or any page on an allowed origin -- that can open the WebSocket can stop the server.
+The method is only accepted on a local deployment (`config.mode = "local"`) with solo login opted in (`ra serve --solo` / `RA_SOLO_LOGIN=1`) and only by an HTTP serve (`ra serve` without `--stdio`). One call stops the process for every connected client and cancels their running turns. Fleet/hosted servers and `--stdio` serve reject the call with `invalid_request` (-32600) and `data.kind: "server_shutdown_unavailable"` and stop nothing; session-scoped (session-ingress) connections can never call it and are refused with a plain `invalid_request`. Note the local-solo trust model: on a solo serve, any local process -- or any page on an allowed origin -- that can open the WebSocket can stop the server.

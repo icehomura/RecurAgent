@@ -1,4 +1,4 @@
-//! Startup splash: a ttfx-rendered ra logo animation played on the main
+//! Startup splash: a ttfx-rendered RecurAgent logo animation played on the main
 //! screen before the event loop claims the terminal.
 //! Contract: specs/task-startup-splash.spec.
 
@@ -61,7 +61,7 @@ fn text_dimensions(text: &str) -> (u16, u16) {
 #[derive(Debug, Clone, Copy)]
 pub struct SplashGate {
     pub no_splash_flag: bool,
-    /// RA_TUI_NO_SPLASH (legacy OCTOSCODE_NO_SPLASH) is set.
+    /// RA_TUI_NO_SPLASH (legacy RA_TUI_NO_SPLASH) is set.
     pub env_disabled: bool,
     pub stdout_is_tty: bool,
     /// CI env var is set (any value).
@@ -315,7 +315,7 @@ pub fn play(cli: &crate::cli::Cli) {
     let (term_cols, term_rows) = crossterm::terminal::size().unwrap_or((0, 0));
     let gate = SplashGate {
         no_splash_flag: cli.no_splash,
-        env_disabled: crate::env::env_compat("RA_TUI_NO_SPLASH", "OCTOSCODE_NO_SPLASH").is_some(),
+        env_disabled: crate::env::env_compat("RA_TUI_NO_SPLASH", "RA_TUI_NO_SPLASH").is_some(),
         stdout_is_tty: std::io::stdout().is_terminal(),
         ci: std::env::var_os("CI").is_some(),
         term_cols,
@@ -332,10 +332,10 @@ fn play_inner(theme: &crate::cli::ThemeName) -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| u64::from(d.subsec_nanos()) ^ d.as_secs())
         .unwrap_or(0);
-    // RA_TUI_SPLASH_EFFECT (legacy OCTOSCODE_SPLASH_EFFECT) pins a curated
+    // RA_TUI_SPLASH_EFFECT (legacy RA_TUI_SPLASH_EFFECT) pins a curated
     // effect by name (e.g. `matrix`); unset or unknown names fall back to the
     // seeded random pick.
-    let effect_args = crate::env::env_compat("RA_TUI_SPLASH_EFFECT", "OCTOSCODE_SPLASH_EFFECT")
+    let effect_args = crate::env::env_compat("RA_TUI_SPLASH_EFFECT", "RA_TUI_SPLASH_EFFECT")
         .and_then(|name| effect_args_for(name.trim()))
         .unwrap_or_else(|| pick_effect_args(seed));
 

@@ -319,7 +319,7 @@ fn runtime_without_model_and_downloads_disabled_is_keyword_only() {
 }
 
 /// Real end-to-end run. Ignored: needs a live provider + network. Configure via
-/// env: `RA_FFI_TEST_PROVIDER` (legacy `OCTOS_FFI_TEST_PROVIDER` still
+/// env: `RA_FFI_TEST_PROVIDER` (legacy `ra_FFI_TEST_PROVIDER` still
 /// honoured), `RA_FFI_TEST_MODEL`, and the provider's
 /// key env var (e.g. `OPENAI_API_KEY`). Run with:
 ///   cargo test -p ra-ffi --test ffi -- --ignored e2e_run_task

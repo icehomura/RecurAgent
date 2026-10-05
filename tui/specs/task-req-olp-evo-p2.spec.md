@@ -7,7 +7,7 @@ estimate: 1.5d
 
 ## 意图
 
-补齐进化环的三块工具面:①采集哨与 retro 识别 ra 阶段 2 新增的 `fallback_switch` 与
+补齐进化环的三块工具面:①采集哨与 retro 识别 RecurAgent 阶段 2 新增的 `fallback_switch` 与
 `malformed_exhausted`(已在 43a/43-r1 落地),并把 fallback 锚点细化到车道;②归一化/锚点/解析
 抽成共享 python 模块,retro 与指标共用;③一套由主审以 allowlist 合成、结构保持的回放夹具与
 `expected.json`,把采集与 retro 的产出钉成可重复基线;④窗口化的指标脚本,只作诊断、不作 KPI、
@@ -88,7 +88,7 @@ codex 与 grok 对抗复审。
 
 ## 排除范围
 
-- ra 侧发射点(ra `specs/task-olp-obs-p2-producers.spec.md`)。
+- RecurAgent 侧发射点(RecurAgent `specs/task-olp-obs-p2-producers.spec.md`)。
 - 采集挂外环 watch 节拍、规格直出契约、散文沉淀退役(阶段 3)。
 - "无 ACK 停摆"与"伪 verified"两项跨源指标(阶段 3)。
 
@@ -117,10 +117,10 @@ codex 与 grok 对抗复审。
 场景: 同会话不同车道切换各计一次(critical)
   标签: critical
   测试: olp_evo_retro_fallback_anchor_includes_lanes
-  假设 进化黑板含两张 fallback_switch 卡,symptom JSON 的 session 均为 ra:local:tui#coding,detail 分别为 router failover: lane-a -> lane-b (quota exhausted, 1200ms) 与 router failover: lane-b -> lane-c (quota exhausted, 900ms)
+  假设 进化黑板含两张 fallback_switch 卡,symptom JSON 的 session 均为 RecurAgent:local:tui#coding,detail 分别为 router failover: lane-a -> lane-b (quota exhausted, 1200ms) 与 router failover: lane-b -> lane-c (quota exhausted, 900ms)
   当 运行 olp-evo-retro.sh --dry-run
   那么 简报含 candidates: 1
-  并且 该候选行含 recurrence_hint=2 且 anchors 行含 ra:local:tui#coding|lane-a->lane-b 与 ra:local:tui#coding|lane-b->lane-c
+  并且 该候选行含 recurrence_hint=2 且 anchors 行含 RecurAgent:local:tui#coding|lane-a->lane-b 与 RecurAgent:local:tui#coding|lane-b->lane-c
 
 场景: 不同会话同后缀不合并
   测试: olp_evo_retro_fallback_anchor_uses_full_session

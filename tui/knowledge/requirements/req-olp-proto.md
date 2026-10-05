@@ -4,7 +4,7 @@ id: REQ-OLP-PROTO
 title: "协议 v1:result schema、ACK 语法、车道模板、可执行合约"
 status: accepted
 liveness: auto
-tags: [olp, protocol, octoscode]
+tags: [olp, protocol, ra-tui]
 ---
 
 ## Problem
@@ -23,7 +23,7 @@ slug、outcome、updated_unix、turn、verified、protocol(olp/v1);未知
 `ACK(done|wontdo|blocked): <说明>`;对 `wontdo` 外环 MUST 接受或升级
 operator,MUST NOT 循环打回同一条目。
 
-[REQ-OLP-PROTO-LANES] octoscode 文档 MUST 提供 sub_providers 车道配置
+[REQ-OLP-PROTO-LANES] ra-tui 文档 MUST 提供 sub_providers 车道配置
 模板(cheap/strong 各一例,description 写明选道标准)及与双环的推荐
 搭配矩阵(分析/验证→cheap,实施→primary,keeper→primary)。
 

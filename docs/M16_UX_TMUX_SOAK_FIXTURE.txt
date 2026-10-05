@@ -10,37 +10,37 @@ multi-agent orchestration through the real AppUI stdio path.
 
 It launches:
 
-- ra serve --stdio from this repo.
-- octoscode --mode protocol --stdio-command ... through the octoscode tmux
+- RecurAgent serve --stdio from this repo.
+- ra-tui --mode protocol --stdio-command ... through the ra-tui tmux
   harness.
 - A typed AppUI review/start request that asks for supervised specialist
   agents. Native specialists are resolved from
-  OCTOS_REVIEW_NATIVE_SPECIALISTS_JSON, then profile
+  ra_REVIEW_NATIVE_SPECIALISTS_JSON, then profile
   review.native_specialists, then the built-in default template. Optional
   reviewer-cli and reviewer-mcp specialists are added when their backends are
   configured.
 
-The backend uses the production review/start path inside ra serve --stdio.
+The backend uses the production review/start path inside RecurAgent serve --stdio.
 Native model-backed specialists, a CLI-process specialist, and an MCP stdio
 specialist are normalized into the same AppUI agent lifecycle. The Python
 AppUI fixture backend is not used.
 
 Command
 
-From the ra repo:
+From the RecurAgent repo:
 
   bash e2e/scripts/m16-live-tui-tmux-soak.sh run
 
 Useful overrides:
 
-  OCTOSCODE_REPO=~/home/octoscode \
-  OCTOS_M16_UX_RUN_ID=m16-local \
+  RA_TUI_REPO=~/home/ra-tui \
+  ra_M16_UX_RUN_ID=m16-local \
   bash e2e/scripts/m16-live-tui-tmux-soak.sh run
 
-Set OCTOS_M16_BUILD=0 to skip building ra with the api feature.
-Set OCTOS_M16_BUILD_TUI=1 to force rebuilding octoscode; by default the script
-uses an existing octoscode binary and only builds it when missing.
-Set OCTOS_M16_UX_KEEP_SESSION=1 to leave tmux open after the run.
+Set ra_M16_BUILD=0 to skip building RecurAgent with the api feature.
+Set ra_M16_BUILD_TUI=1 to force rebuilding ra-tui; by default the script
+uses an existing ra-tui binary and only builds it when missing.
+Set ra_M16_UX_KEEP_SESSION=1 to leave tmux open after the run.
 
 Evidence
 
@@ -50,7 +50,7 @@ The default output root is:
 
 Required evidence includes:
 
-- launch-command.txt: proves octoscode launched with octos serve --stdio.
+- launch-command.txt: proves ra-tui launched with RecurAgent serve --stdio.
 - input-replay.log: records the exact terminal replay and prompt.
 - tui-capture-child-start.txt
 - tui-capture-child-progress.txt
@@ -67,7 +67,7 @@ Required evidence includes:
 
 The M16 validator asserts:
 
-- The TUI used a real ra serve --stdio backend, not the Python fixture
+- The TUI used a real RecurAgent serve --stdio backend, not the Python fixture
   backend.
 - The replay submitted a real review/start request and names the configured
   specialist agents.
@@ -93,7 +93,7 @@ Validator status:
 Passed checks:
 
 - required_artifacts
-- real_octos_serve_stdio_backend
+- real_ra_serve_stdio_backend
 - explicit_code_review_prompt
 - appui_orchestration_events
 - visible_child_start

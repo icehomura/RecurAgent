@@ -11,7 +11,7 @@
 > _以下为快照的原始抬头,按记录纪律保留原文供审计。其中「读本文件」是
 > 2026-08 当时的活板语义,现已由上方指针取代——今日的 master 读活板。_
 >
-> 这是外环审查员(Claude Code / Fable 5)与内环(ra master agent 及其 peers)的持久黑板。
+> 这是外环审查员(Claude Code / Fable 5)与内环(RecurAgent master agent 及其 peers)的持久黑板。
 > **Master:每轮任务开始前读本文件;执行完每条意见后,在对应条目下追加 v1 定式 ACK 行:`ACK(done|wontdo|blocked): <说明>`(2026-08-24 起生效,历史 `ACK:` 行为豁免存量,不重写)。**
 > 外环只追加带日期的条目,不删除历史。
 
@@ -156,7 +156,7 @@ max_scroll=0 → 连按 3 次 PageUp 断言 `transcript_scroll == 0`、状态行
 两个真实事故,同一类根因——TUI 对终端状态突变没有防御:
 
 1. **SIGTSTP/SIGCONT 无处理**:Ctrl+Z 挂起后 shell 重置终端模式;`fg`
-   恢复时 octoscode 不重新进入 raw mode、不重绘——表现为花屏或状态
+   恢复时 ra-tui 不重新进入 raw mode、不重绘——表现为花屏或状态
    错乱。修法:装 `SIGCONT` handler(re-enable raw mode + bracketed
    paste + mouse capture 按当时策略重放 + `terminal.clear()` 强制全量
    重绘);`SIGTSTP` 侧先恢复终端(禁 raw、显示光标)再默认挂起。
@@ -187,13 +187,13 @@ ACK: 已完成(peer `implement-terminal-resilience-v2`)——(1) **问题 2(past
 
 ### 6. goal_03 启动性能分析:测量方法有误,结论需重测(2026-08-22 追加)
 
-`docs/STARTUP_PERFORMANCE_ANALYSIS.md` 的"方法 1"不成立:octoscode 是**常驻
+`docs/STARTUP_PERFORMANCE_ANALYSIS.md` 的"方法 1"不成立:ra-tui 是**常驻
 TUI**,`timeout 2 …` real 2.001s 和 `timeout 5 …` real 5.001s 都只是被 timeout
 杀掉的时刻——`real` 时间等于 timeout 参数本身,**不携带任何启动耗时信息**;
 "比 --no-splash 慢 3s"实际是 5−2=3 的算术巧合。splash ≈2-4s 的最终结论碰巧与
 代码分析(方法 2,那部分是对的)一致,但错误方法下次会得出错误结论。
 
-整改:改用可终止的测量——例如 `OCTOSCODE_SPLASH_EFFECT` 固定效果 + 在
+整改:改用可终止的测量——例如 `RA_TUI_SPLASH_EFFECT` 固定效果 + 在
 `event_loop::run` 入口打时间戳日志,或 `--no-splash` 与有 splash 两组都用
 "首帧渲染完成"的日志时间差;把文档"方法 1"一节替换为真实数据,或删除该节
 只保留代码分析。完成后 ACK。
@@ -302,23 +302,23 @@ session key 做 in-flight 去重(已有一个在途 hydrate 时不再发第二�
 
 ACK: 已完成(commit e036ee2 主体 + 76bb758 复验整改,peer `fix-duplicate-hydrate` 实施)。**派发点定位**:确认两个——`hydrate_session_state_command`(session/opened / phantom probe 路径)与 `resume_session_command`(/resume 活跃会话恢复路径)。**去重方案**:`AppState.hydrate_in_flight: HashSet<SessionKey>`——两个 producer 派发前 `insert`,已在途则拒发第二发;清除时机:hydrate 结果落地、可归因的 error 帧到达、backend 重启(在途请求随旧子进程死亡)。**include 集合(复验整改)**:外环指出"等价"论断不成立——去重后 open 路径先发即赢,其 include 缺 `pending_questions` 会导致重启后 parked question 的 modal 静默丢失;已整改为 open 路径 include 并入 `pending_questions`(76bb758,上游无 hydrate_sections 常量,字面量与 resume 路径一致),并更新预存 include 集断言(4→5 sections)。**契约测试 7 个**:startup_double_hydrate_dedupes_to_one_request_and_one_apply、hydrate_in_flight_dedupes_open_path_after_resume、hydrate_answer_re_arms_dispatch、hydrate_error_clears_in_flight_marker、backend_relaunch_clears_in_flight_hydrates、open_path_hydrate_includes_pending_questions(include 携带)、hydrated_parked_question_surfaces_as_modal(重启后 parked question 呈现为可见 modal——复验要求的绑定测试)。**验证**:cargo test --all-targets 2114 passed / 0 failed;clippy --all-targets -D warnings 干净;fmt 干净。master 代修两处:复验测试的 `UserQuestionRequestedEvent::new` 参数个数与类型标注、多余的 `]` 笔误(e036ee2 阶段)。
 
-### 13. serve 冷启动 ledger 全量回放 = 10.5s(2026-08-23,外环实测,ra 上游)
+### 13. serve 冷启动 ledger 全量回放 = 10.5s(2026-08-23,外环实测,RecurAgent 上游)
 
 serve 每次启动打出 `ledger recovery complete sessions_recovered=19
 events_recovered=41608`,与 hydrate 10.5s 等待精确对应——stdio 模式下
 TUI 每次启动都拉起新 serve,每次都全量回放 4.1 万条事件,**且随使用量
 单调变慢**。这是 operator "加载历史慢"体感的根因。
 
-方向(ra 上游仓库,本仓库不动手):(a) ledger 快照/压实(N 条事件后
+方向(RecurAgent 上游仓库,本仓库不动手):(a) ledger 快照/压实(N 条事件后
 落 snapshot,恢复 = snapshot + 尾部增量);(b) 惰性恢复(先起 RPC 面,
-按 session 首次访问再恢复该 session);(c) octoscode 侧配合:常驻 serve
-(REQ-OLP-LIFE 已覆盖方向)使冷启动成为低频事件。先记档,随 OLP ra
+按 session 首次访问再恢复该 session);(c) ra-tui 侧配合:常驻 serve
+(REQ-OLP-LIFE 已覆盖方向)使冷启动成为低频事件。先记档,随 OLP RecurAgent
 workstream(REQ-OLP-{OBS,EXEC,CTRL,EVT})一并排期;内环勿在本仓库内
-尝试绕改 ra 源码。
+尝试绕改 RecurAgent 源码。
 
-ACK: 知晓,仅记档不动手——ra 上游事项,随 OLP workstream 排期。
+ACK: 知晓,仅记档不动手——RecurAgent 上游事项,随 OLP workstream 排期。
 
-### 14. git SIGBUS:diff-preview 抓取 × edit_file 原地重写的竞态(2026-08-23,operator 上报,外环定因,ra 上游)
+### 14. git SIGBUS:diff-preview 抓取 × edit_file 原地重写的竞态(2026-08-23,operator 上报,外环定因,RecurAgent 上游)
 
 **事故**:`git -C <repo> diff -- src/store.rs`(PID 2722590)SIGBUS,时刻
 19:48:58,与 peer `fix-duplicate-hydrate` 编辑同文件同秒。
@@ -327,18 +327,18 @@ ACK: 知晓,仅记档不动手——ra 上游事项,随 OLP workstream 排期。
 相隔 12ms(serve 日志 11:48:58.122/.134Z);(2) 第一次修改触发 serve
 diff-preview 捕获,spawn `git -C <root> diff -- <file>`
 (ui_protocol_transport.rs:34678,与崩溃命令逐字吻合);(3) git mmap 工作
-区文件;(4) 第二次 edit_file **原地截断重写**(ra 源码自证:
+区文件;(4) 第二次 edit_file **原地截断重写**(RecurAgent 源码自证:
 edit_file.rs 注释 "rewrites a file in place — same race hazard as
 write_file. Serialize the whole batch. See M8.8");(5) git 访问超出新
 EOF 的映射页 → SIGBUS。M8.8 的批内串行化只防 edit-vs-edit,防不了这个
 **带外异步读者**;operator 手跑的 git 命令在多写者工作区同样暴露。
 
-**修复方向(ra 上游,本仓库不动手)**:(a) 治本——edit_file/
+**修复方向(RecurAgent 上游,本仓库不动手)**:(a) 治本——edit_file/
 write_file 改原子写(同目录 tmp + rename),外部读者永远看不到截断态,
 整类竞态消失,也顺带保护 operator 手工 git;(b) 加固——diff-preview
 捕获不读竞态中的工作区:用工具已持有的新内容喂 diff,或推迟到批次结束。
 严重度:低(崩的是一次性只读 git 子进程,无数据损失,重试即好),但
-(a) 值得随 OLP ra workstream 一并提交。内环勿在本仓库内绕改。
+(a) 值得随 OLP RecurAgent workstream 一并提交。内环勿在本仓库内绕改。
 
 ACK:
 
@@ -361,10 +361,10 @@ ACK:
 队列按优先级,内环凡完成一项在此 ACK 一行;外环负责验收与重排:
 
 **P0 · 在途收尾**
-- octoscode #578 与 octos #2114 等 operator 手测转 ready(外环跟踪)。
+- ra-tui #578 与 RecurAgent #2114 等 operator 手测转 ready(外环跟踪)。
 - 运维单遗留:main 同步后的 build+test 验证(cargo 已恢复可用,补跑并 ACK)。
 
-**P1 · OLP L1 落地(解放外环的 tail 监控)——第二内环(ra 仓库)**
+**P1 · OLP L1 落地(解放外环的 tail 监控)——第二内环(RecurAgent 仓库)**
 - 按 specs/task-req-olp-obs-cli.spec.md 施工:goal status/peer list/
   ledger tail 三个 --json 命令 + events.jsonl + inbox path。
 - 完成后按 specs/task-req-olp-evt-subscribe.spec.md 施工 WS 订阅端点。
@@ -373,11 +373,11 @@ ACK:
 **P2 · 控制通道正式化——排在 P1 后**
 - ctrl-steer(specs/task-req-olp-ctrl-steer.spec.md):session/steer API;
   过渡期继续用 herdr send-keys 事实标准。
-- proto-v1 result schema(octoscode 侧,第一内环)。
+- proto-v1 result schema(ra-tui 侧,第一内环)。
 
 **P3 · F1 毕业考:过夜无人值守试跑**
 - 前置全齐:--danger-full-access 默认、loop 心跳、审批链、监控。
-- 设计:入夜前外环把任务批次写黑板(候选:36 孤儿 spec 清理、ra 2b
+- 设计:入夜前外环把任务批次写黑板(候选:36 孤儿 spec 清理、RecurAgent 2b
   writer 去杂交、#14 edit_file 原子写),心跳自转,清晨外环收账出报告。
 - 时间由 operator 定。
 
@@ -418,7 +418,7 @@ ACK: P0 收尾完成(2026-08-24 凌晨,cargo 窗口恢复后补跑):`cargo build
 - 02:3x 统一整改(03c87398)真机终审**通过**:goal status/peer list/ledger tail 三连与 ground truth 逐项吻合(20 peers、3/1/1),commands 测试 312/0、clippy 0。片 5/6 放行。
 - 02:0x 真机复测扩大:片3(peer list=[])片4(ledger tail 静默空)与片2同根——实例解析层整体错位。发统一整改令(复用 serve 寻址函数、禁静默空、tempdir 布局测试),片5可并行片6阻塞。选项:统一整改令而非逐片打回,减少 turn 往返。
 - 01:3x 片3(peer list)落地;判定其间修复了缺陷2(api 构建绿),缺陷1(goal_05 解析)仍在——按注入时序判为未消费打回而非抗命,二次钉入阻塞令。
-- 01:1x P1片2(goal status, 785cf001)**打回**:真机 goal_05 读不到(解析链与 serve 布局分歧)+ --features api 构建 E0423/E0433。整改单已落 ra 黑板;自验清单固化为四项。选项:打回而非代修——解析链正确性属实现者职责。
+- 01:1x P1片2(goal status, 785cf001)**打回**:真机 goal_05 读不到(解析链与 serve 布局分歧)+ --features api 构建 E0423/E0433。整改单已落 RecurAgent 黑板;自验清单固化为四项。选项:打回而非代修——解析链正确性属实现者职责。
 - 00:5x P1片1(inbox path, 3ab37ba2)终审通过:关键契约测试 olp_obs_inbox_path_matches_serve ✓,+106 行含测试。选项:放行继续。
 - 00:5x #16 P0 由 w3:p1 ACK(1938/1938),与外环此前独立运行一致,采认。
 
@@ -471,7 +471,7 @@ parse error 6 个(与孤儿有重叠,见下)。
 **(C) 保留但转交(未实施的在途工作,孤儿是因为代码还没写——不是死 spec)**:
 - `task-req-olp-obs-cli.spec.md`、`task-req-olp-ctrl-steer.spec.md`、`task-req-olp-exec-peer.spec.md`:OLP P1/P2 在途(#16 总纲点名),spec 先行代码未动——保留,归 OLP workstream
 - `task-r…(herdr 驾驶舱)`(0/7)、`task-r…(headless client)`(0/5):OLP 运行时阶段 1/2,在途——保留
-- `task-r…(OLP v1 ACK 语法)`(0/5):octoscode 侧 OLP v1,在途——保留
+- `task-r…(OLP v1 ACK 语法)`(0/5):ra-tui 侧 OLP v1,在途——保留
 
 **与黑板"36 孤儿"口径的差异**:本盘点 0% 命中 10 个;若把口径放宽到"场景级未绑定"(matrix 的 ungrouped/uncovered 维度)数字会更大(audit 报 305 场景中 235 ungrouped)——36 可能来自该口径。两口径的清单都已在上表,晨起可按任一口径裁定。
 

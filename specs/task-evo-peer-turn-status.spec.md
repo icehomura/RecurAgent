@@ -30,10 +30,10 @@ numbered results 终止证据。
   降级 unknown）：version==1、task_id 非空、registry_key 与
   `<profile>:peer:<slug>` 精确匹配、originator leaf 存在且等于
   lifetime.master。registry_key 的 `<profile>` 由调用方提供：CLI 新增
-  `--profile <id>` 参数（默认 DEFAULT_PROFILE_ID="ra"），显式传入
+  `--profile <id>` 参数（默认 DEFAULT_PROFILE_ID="RecurAgent"），显式传入
   list_peers 与投影校验；serve 回调用其已知 profile_id。`--data-dir` 是
   任意合法路径，**不得**从目录名推导 profile（/tmp 自定义根同样有效）；
-  必须有 `--data-dir 自定义根 + --profile octosfix` 组合测试。不从
+  必须有 `--data-dir 自定义根 + --profile rafix` 组合测试。不从
   lifetime.json 文件内容反推 profile。任何校验失败 → 该 peer 的
   execution/身份字段全部 unknown/null，不用旧 terminal guessed-idle。
   legacy peer 无 lifetime.json：execution=unknown、last_outcome 按
@@ -337,7 +337,7 @@ Scenario: serve gather/list 入口按调用方 profile 投影（critical）
   When 以 profile_id=gatherx 调 raw peer/gather RPC 与 peer_gather 工具回调
   Then raw JSON execution=="running" 且
     master_session_id/task_id/generation/turn_id/last_outcome 原样透出
-    （修复前默认 ra 读取会使同一盘面降级 unknown）；peer_gather 工具
+    （修复前默认 RecurAgent 读取会使同一盘面降级 unknown）；peer_gather 工具
     回调与 peer_list 工具文本（exec=running）经同一 profile-aware 读取组文
 
 ## Out of Scope

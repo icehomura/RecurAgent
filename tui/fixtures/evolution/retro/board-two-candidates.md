@@ -1,13 +1,13 @@
 ### EVO-0001（2026-09-05T01:00:00Z，harvest）
 trigger: ack_blocked
-source: review /repo/a/.octos/OUTER_LOOP_REVIEW.md
-identity: board:/repo/a/.octos/OUTER_LOOP_REVIEW.md#12#blocked#1111111111111111111111111111111111111111111111111111111111111111
+source: review /repo/a/.RecurAgent/OUTER_LOOP_REVIEW.md
+identity: board:/repo/a/.RecurAgent/OUTER_LOOP_REVIEW.md#12#blocked#1111111111111111111111111111111111111111111111111111111111111111
 envelope: line=7 offset=118 ts=2026-09-05T01:00:00Z
 symptom: ACK(blocked): cargo test fails with E0596 unresolved import
 ### EVO-0002（2026-09-05T01:00:01Z，harvest）
 trigger: ack_blocked
-source: review /repo/a/.octos/OUTER_LOOP_REVIEW.md
-identity: board:/repo/a/.octos/OUTER_LOOP_REVIEW.md#13#blocked#2222222222222222222222222222222222222222222222222222222222222222
+source: review /repo/a/.RecurAgent/OUTER_LOOP_REVIEW.md
+identity: board:/repo/a/.RecurAgent/OUTER_LOOP_REVIEW.md#13#blocked#2222222222222222222222222222222222222222222222222222222222222222
 envelope: line=13 offset=273 ts=2026-09-05T01:00:01Z
 symptom: ACK(blocked): cargo test fails with E0382 borrow error
 ### EVO-0003（2026-09-05T01:00:02Z，harvest）

@@ -2,7 +2,7 @@
 name: voice
 description: Batch ASR (via dedicated ASR_API_URL or OminiX fallback), preset-voice TTS with emotion/speed control, and model management via Qwen3 models on Apple Silicon. For voice cloning and custom voice profiles, use mofa-fm. Triggers: voice, transcribe audio, text to speech, speak this, read aloud, model management, download model, 语音识别, 语音合成, 模型管理.
 version: 1.2.0
-author: ra
+author: RecurAgent
 always: true
 ---
 

@@ -130,7 +130,7 @@ impl ra_llm::LlmProvider for BarrierLlm {
     }
 }
 
-/// Test transport: expose the ra ACP agent (backed by `factory`) as a
+/// Test transport: expose the RecurAgent ACP agent (backed by `factory`) as a
 /// `ConnectTo<Client>` so an in-process client can drive it. The session
 /// map is caller-supplied so tests can observe cancel flags directly.
 struct CancelTestTransport {

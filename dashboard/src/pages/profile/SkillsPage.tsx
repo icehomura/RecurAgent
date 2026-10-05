@@ -10,7 +10,7 @@ interface SkillEntry {
   source_repo: string | null
 }
 
-type InstallSourceMode = 'github' | 'octos-hub'
+type InstallSourceMode = 'github' | 'ra-hub'
 
 export default function SkillsPage() {
   const { id } = useParams<{ id: string }>()
@@ -35,7 +35,7 @@ export default function SkillsPage() {
 
   const ownProfile = !id
   const canManageSkills = isAdmin || ownProfile
-  const showOctosHubInstall = ownProfile
+  const showRaHubInstall = ownProfile
 
   const fetchSkills = useCallback(async () => {
     try {
@@ -56,28 +56,28 @@ export default function SkillsPage() {
   }, [fetchSkills])
 
   const fetchRegistry = useCallback(async () => {
-    if (!canManageSkills || !showOctosHubInstall) return
+    if (!canManageSkills || !showRaHubInstall) return
     setLoadingRegistry(true)
     setRegistryError(null)
     try {
       const data = await myApi.listProfileSkillRegistry()
       setRegistryPackages(data.packages || [])
     } catch (e: any) {
-      setRegistryError(e.message || 'Failed to load Octos Hub registry')
+      setRegistryError(e.message || 'Failed to load Ra Hub registry')
     } finally {
       setLoadingRegistry(false)
     }
-  }, [canManageSkills, showOctosHubInstall])
+  }, [canManageSkills, showRaHubInstall])
 
   useEffect(() => {
     fetchRegistry()
   }, [fetchRegistry])
 
   useEffect(() => {
-    if (!showOctosHubInstall && sourceMode === 'octos-hub') {
+    if (!showRaHubInstall && sourceMode === 'ra-hub') {
       setSourceMode('github')
     }
-  }, [showOctosHubInstall, sourceMode])
+  }, [showRaHubInstall, sourceMode])
 
   const handleInstallFromSource = async (source: string) => {
     if (!source.trim()) return
@@ -239,22 +239,22 @@ export default function SkillsPage() {
               >
                 GitHub / Git URL / Local Path
               </button>
-              {showOctosHubInstall && (
+              {showRaHubInstall && (
                 <button
                   type="button"
-                  onClick={() => setSourceMode('octos-hub')}
+                  onClick={() => setSourceMode('ra-hub')}
                   className={`px-3 py-1.5 text-xs rounded-md transition ${
-                    sourceMode === 'octos-hub'
+                    sourceMode === 'ra-hub'
                       ? 'bg-accent text-white'
                       : 'text-gray-300 hover:bg-white/[0.06]'
                   }`}
                 >
-                  Octos Hub
+                  Ra Hub
                 </button>
               )}
             </div>
 
-            {sourceMode === 'github' || !showOctosHubInstall ? (
+            {sourceMode === 'github' || !showRaHubInstall ? (
               <>
                 <div className="flex gap-3">
                   <div className="flex-1">
@@ -265,7 +265,7 @@ export default function SkillsPage() {
                       type="text"
                       value={repo}
                       onChange={(e) => setRepo(e.target.value)}
-                      placeholder="e.g. your-org/system-skills, https://host/org/repo.git, or ./skills/my-skill"
+                      placeholder="e.g. icehomura/system-skills, https://host/org/repo.git, or ./skills/my-skill"
                       className="w-full px-3 py-2 bg-black/30 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent"
                       onKeyDown={(e) => e.key === 'Enter' && handleInstall()}
                     />
@@ -296,7 +296,7 @@ export default function SkillsPage() {
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">
-                    Search Octos Hub packages
+                    Search Ra Hub packages
                   </label>
                   <input
                     type="text"
@@ -307,12 +307,12 @@ export default function SkillsPage() {
                   />
                 </div>
                 {loadingRegistry ? (
-                  <div className="text-xs text-gray-400">Loading Octos Hub packages...</div>
+                  <div className="text-xs text-gray-400">Loading Ra Hub packages...</div>
                 ) : registryError ? (
                   <div className="text-xs text-red-400">{registryError}</div>
                 ) : filteredRegistryPackages.length === 0 ? (
                   <div className="text-xs text-gray-500">
-                    No matching packages in Octos Hub.
+                    No matching packages in Ra Hub.
                   </div>
                 ) : (
                   <div className="max-h-64 overflow-auto rounded-lg border border-gray-700/40 divide-y divide-gray-700/30">
@@ -356,7 +356,7 @@ export default function SkillsPage() {
               )}
             </div>
             <p className="text-xs text-gray-600">
-              Skills are installed to the profile&apos;s data directory. Use GitHub/Git URL/local path directly or pick a package from Octos Hub. The gateway must be restarted to load new skills.
+              Skills are installed to the profile&apos;s data directory. Use GitHub/Git URL/local path directly or pick a package from Ra Hub. The gateway must be restarted to load new skills.
             </p>
           </div>
         </div>

@@ -9,7 +9,7 @@
 > 史存档。
 
 - Spec: `specs/task-evo-goal-verifier.spec.md`（**历史快照时点 v3/29 scenarios**；现行 44——见上方权威指向；agent-spec lint 100%；v2 吸收外层复核 8 条，v3 吸收 GLM/k3 设计审查——双 APPROVE-WITH-CHANGES 收编）
-- Native goal: `goal_01` (profile `octosfix`)
+- Native goal: `goal_01` (profile `rafix`)
 - 分支: `fix/evo-goal-verifier`（已合并 #2273）；构建/测试经共享 target 定点运行（-p ra-cli --features api），全量 all-targets 由外层集成树统一执行。
 
 ## v3 关键裁决（两 peer 分歧点）

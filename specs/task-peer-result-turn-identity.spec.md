@@ -47,5 +47,5 @@ Scenario: 原生文件写入失败后恢复仍携带后续真实 ID(critical)
 
 ## Out of Scope
 
-- octoscode 的模型证据消费逻辑在关联 PR637 修复。
+- ra-tui 的模型证据消费逻辑在关联 PR637 修复。
 - 既有报告迁移、goal 自动唤醒与完成验证器故障。

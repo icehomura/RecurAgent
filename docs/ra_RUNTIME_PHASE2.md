@@ -1,4 +1,4 @@
-# ra Runtime Phase 2
+# RecurAgent Runtime Phase 2
 
 Phase 1 established the runtime foundation:
 - loop-governor scaffolding
@@ -43,7 +43,7 @@ Primary surfaces:
 - `crates/ra-cli/src/session_actor.rs`
 - `crates/ra-agent/src/tools/spawn.rs`
 - `crates/ra-agent/src/task_supervisor.rs`
-- `crates/octos-web/src/runtime/*`
+- `crates/ra-web/src/runtime/*`
 
 Must produce:
 - per-session and per-child-session lifecycle events
@@ -125,7 +125,7 @@ Primary surfaces:
 - `crates/ra-agent/src/workspace_policy.rs`
 - `crates/ra-agent/src/behaviour.rs`
 - `e2e/*`
-- `~/home/octos-web/tests/*`
+- `~/home/ra-web/tests/*`
 
 Must produce:
 - broader artifact truth for multi-file and mixed-media outputs

@@ -2,24 +2,24 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-OCTOSCODE_DIR="${OCTOSCODE_DIR:-$ROOT_DIR/../octoscode}"
+RA_TUI_DIR="${RA_TUI_DIR:-$ROOT_DIR/../ra-tui}"
 
 # shellcheck source=../../scripts/tmux-cli-driver.sh
 if [ -f "$ROOT_DIR/scripts/tmux-cli-driver.sh" ]; then
   source "$ROOT_DIR/scripts/tmux-cli-driver.sh"
 else
-  OCTOS_TMUX_ROOT="${OCTOS_TMUX_ROOT:-$ROOT_DIR}"
-  OCTOS_TMUX_COLS="${OCTOS_TMUX_COLS:-140}"
-  OCTOS_TMUX_ROWS="${OCTOS_TMUX_ROWS:-40}"
-  OCTOS_TMUX_PREFIX="${OCTOS_TMUX_PREFIX:-ra-tmux-}"
-  OCTOS_TMUX_RUN_ID="${OCTOS_TMUX_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
-  OCTOS_TMUX_RUN_PREFIX="${OCTOS_TMUX_PREFIX}${OCTOS_TMUX_RUN_ID}-"
-  OCTOS_TMUX_ARTIFACT_ROOT="${OCTOS_TMUX_ARTIFACT_ROOT:-${OCTOS_TMUX_ROOT}/e2e/test-results-tmux}"
-  OCTOS_TMUX_ARTIFACT_DIR="${OCTOS_TMUX_ARTIFACT_DIR:-${OCTOS_TMUX_ARTIFACT_ROOT}/${OCTOS_TMUX_RUN_ID}}"
-  OCTOS_TMUX_KEEP="${OCTOS_TMUX_KEEP:-0}"
+  ra_TMUX_ROOT="${ra_TMUX_ROOT:-$ROOT_DIR}"
+  ra_TMUX_COLS="${ra_TMUX_COLS:-140}"
+  ra_TMUX_ROWS="${ra_TMUX_ROWS:-40}"
+  ra_TMUX_PREFIX="${ra_TMUX_PREFIX:-ra-tmux-}"
+  ra_TMUX_RUN_ID="${ra_TMUX_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
+  ra_TMUX_RUN_PREFIX="${ra_TMUX_PREFIX}${ra_TMUX_RUN_ID}-"
+  ra_TMUX_ARTIFACT_ROOT="${ra_TMUX_ARTIFACT_ROOT:-${ra_TMUX_ROOT}/e2e/test-results-tmux}"
+  ra_TMUX_ARTIFACT_DIR="${ra_TMUX_ARTIFACT_DIR:-${ra_TMUX_ARTIFACT_ROOT}/${ra_TMUX_RUN_ID}}"
+  ra_TMUX_KEEP="${ra_TMUX_KEEP:-0}"
 
-  declare -a OCTOS_TMUX_SESSIONS=()
-  declare -i OCTOS_TMUX_CAPTURE_SEQ=0
+  declare -a ra_TMUX_SESSIONS=()
+  declare -i ra_TMUX_CAPTURE_SEQ=0
 
   tmux_log() {
     printf '[tmux] %s\n' "$*"
@@ -37,13 +37,13 @@ else
   }
 
   tmux_init_artifacts() {
-    mkdir -p "$OCTOS_TMUX_ARTIFACT_DIR"
+    mkdir -p "$ra_TMUX_ARTIFACT_DIR"
   }
 
   tmux_session_name() {
     local slug="${1:-session}"
     slug="${slug//[^a-zA-Z0-9_-]/-}"
-    printf '%s%s' "$OCTOS_TMUX_RUN_PREFIX" "$slug"
+    printf '%s%s' "$ra_TMUX_RUN_PREFIX" "$slug"
   }
 
   tmux_quote_command() {
@@ -69,7 +69,7 @@ else
 
   tmux_register_session() {
     local session="$1"
-    OCTOS_TMUX_SESSIONS+=("$session")
+    ra_TMUX_SESSIONS+=("$session")
   }
 
   tmux_unregister_session() {
@@ -77,15 +77,15 @@ else
     local next=()
     local item
 
-    for item in "${OCTOS_TMUX_SESSIONS[@]}"; do
+    for item in "${ra_TMUX_SESSIONS[@]}"; do
       if [ "$item" != "$session" ]; then
         next+=("$item")
       fi
     done
     if [ "${#next[@]}" -eq 0 ]; then
-      OCTOS_TMUX_SESSIONS=()
+      ra_TMUX_SESSIONS=()
     else
-      OCTOS_TMUX_SESSIONS=("${next[@]}")
+      ra_TMUX_SESSIONS=("${next[@]}")
     fi
   }
 
@@ -108,7 +108,7 @@ else
   tmux_new_default() {
     local session="$1"
     shift
-    tmux_new "$session" "$OCTOS_TMUX_COLS" "$OCTOS_TMUX_ROWS" "$@"
+    tmux_new "$session" "$ra_TMUX_COLS" "$ra_TMUX_ROWS" "$@"
   }
 
   tmux_send() {
@@ -126,14 +126,14 @@ else
   tmux_redact() {
     perl -0pe '
       BEGIN {
-        @tokens = grep { defined && length } ($ENV{OCTOS_AUTH_TOKEN}, $ENV{OCTOS_TMUX_AUTH_TOKEN});
+        @tokens = grep { defined && length } ($ENV{ra_AUTH_TOKEN}, $ENV{ra_TMUX_AUTH_TOKEN});
       }
       for my $token (@tokens) {
         s/\Q$token\E/[REDACTED]/g;
       }
       s/(Authorization:\s*Bearer\s+)[^\s]+/${1}[REDACTED]/gi;
       s/(--auth-token(?:=|\s+))[^\s]+/${1}[REDACTED]/g;
-      s/(OCTOS_AUTH_TOKEN=)[^\s]+/${1}[REDACTED]/g;
+      s/(ra_AUTH_TOKEN=)[^\s]+/${1}[REDACTED]/g;
     '
   }
 
@@ -148,8 +148,8 @@ else
     local safe_session="${session//[^a-zA-Z0-9_.-]/-}"
     local safe_label="${label//[^a-zA-Z0-9_.-]/-}"
     printf '%s/%03d-%s-%s.%s.log' \
-      "$OCTOS_TMUX_ARTIFACT_DIR" \
-      "$OCTOS_TMUX_CAPTURE_SEQ" \
+      "$ra_TMUX_ARTIFACT_DIR" \
+      "$ra_TMUX_CAPTURE_SEQ" \
       "$safe_session" \
       "$safe_label" \
       "$suffix"
@@ -160,7 +160,7 @@ else
     local label="${2:-capture}"
 
     tmux_init_artifacts
-    OCTOS_TMUX_CAPTURE_SEQ=$((OCTOS_TMUX_CAPTURE_SEQ + 1))
+    ra_TMUX_CAPTURE_SEQ=$((ra_TMUX_CAPTURE_SEQ + 1))
 
     local raw_path
     raw_path="$(tmux_artifact_path "$session" "$label" "raw")"
@@ -181,7 +181,7 @@ else
     local label="${2:-capture}"
 
     tmux_init_artifacts
-    OCTOS_TMUX_CAPTURE_SEQ=$((OCTOS_TMUX_CAPTURE_SEQ + 1))
+    ra_TMUX_CAPTURE_SEQ=$((ra_TMUX_CAPTURE_SEQ + 1))
 
     local raw_path
     local clean_path
@@ -207,7 +207,7 @@ else
     printf '\nFAIL: %s\n' "$message" >&2
     printf -- '--- last clean tmux capture: %s ---\n' "$session" >&2
     tmux_capture_clean "$session" "failure" >&2 || true
-    printf -- '--- artifacts: %s ---\n' "$OCTOS_TMUX_ARTIFACT_DIR" >&2
+    printf -- '--- artifacts: %s ---\n' "$ra_TMUX_ARTIFACT_DIR" >&2
   }
 
   tmux_fail() {
@@ -265,17 +265,17 @@ else
 
   tmux_cleanup() {
     local session
-    if [ "${OCTOS_TMUX_KEEP:-0}" = "1" ]; then
+    if [ "${ra_TMUX_KEEP:-0}" = "1" ]; then
       set +u
-      if [ "${#OCTOS_TMUX_SESSIONS[@]}" -gt 0 ]; then
-        tmux_log "OCTOS_TMUX_KEEP=1; keeping sessions: ${OCTOS_TMUX_SESSIONS[*]}"
+      if [ "${#ra_TMUX_SESSIONS[@]}" -gt 0 ]; then
+        tmux_log "ra_TMUX_KEEP=1; keeping sessions: ${ra_TMUX_SESSIONS[*]}"
       fi
       set -u
       return 0
     fi
 
     set +u
-    for session in "${OCTOS_TMUX_SESSIONS[@]}"; do
+    for session in "${ra_TMUX_SESSIONS[@]}"; do
       tmux kill-session -t "$session" 2>/dev/null || true
     done
     set -u
@@ -292,14 +292,14 @@ else
     local command
     command="$(tmux_quote_command "$@")"
     local wrapped
-    printf -v wrapped '%s\nrc=$?\nprintf "\\n__OCTOS_TMUX_EXIT:%%s__\\n" "$rc"\nwhile :; do sleep 3600; done\n' "$command"
+    printf -v wrapped '%s\nrc=$?\nprintf "\\n__ra_TMUX_EXIT:%%s__\\n" "$rc"\nwhile :; do sleep 3600; done\n' "$command"
     tmux_new_default "$session" bash -lc "$wrapped"
   }
 
   tmux_wait_for_exit() {
     local session="$1"
     local timeout="${2:-20}"
-    tmux_wait_for "$session" '__OCTOS_TMUX_EXIT:[0-9]+__' "$timeout"
+    tmux_wait_for "$session" '__ra_TMUX_EXIT:[0-9]+__' "$timeout"
   }
 
   tmux_assert_exit_status() {
@@ -307,7 +307,7 @@ else
     local expected="$2"
     local capture
     capture="$(tmux_capture_clean "$session" "exit-status" || true)"
-    if ! printf '%s\n' "$capture" | grep -E -q -- "__OCTOS_TMUX_EXIT:${expected}__"; then
+    if ! printf '%s\n' "$capture" | grep -E -q -- "__ra_TMUX_EXIT:${expected}__"; then
       tmux_fail "$session" "expected exit status ${expected}"
     fi
   }
@@ -316,7 +316,7 @@ else
     local live=()
     local session
     set +u
-    for session in "${OCTOS_TMUX_SESSIONS[@]}"; do
+    for session in "${ra_TMUX_SESSIONS[@]}"; do
       if tmux has-session -t "$session" 2>/dev/null; then
         live+=("$session")
       fi
@@ -333,7 +333,7 @@ else
     local live=()
     local session
     while IFS= read -r session; do
-      if [[ "$session" == "$OCTOS_TMUX_RUN_PREFIX"* ]]; then
+      if [[ "$session" == "$ra_TMUX_RUN_PREFIX"* ]]; then
         live+=("$session")
       fi
     done < <(tmux list-sessions -F '#S' 2>/dev/null || true)
@@ -347,40 +347,40 @@ else
 fi
 
 LANE="${1:-default}"
-OCTOS_TMUX_AUTH_TOKEN="${OCTOS_TMUX_AUTH_TOKEN:-ra-tmux-secret-token-2026}"
+ra_TMUX_AUTH_TOKEN="${ra_TMUX_AUTH_TOKEN:-ra-tmux-secret-token-2026}"
 
 shell_quote() {
   printf '%q' "$1"
 }
 
-if [ -n "${OCTOS_BIN:-}" ]; then
-  OCTOS_BIN_CMD="$OCTOS_BIN"
+if [ -n "${ra_BIN:-}" ]; then
+  ra_BIN_CMD="$ra_BIN"
 elif [ -x "$ROOT_DIR/target/debug/ra" ]; then
-  OCTOS_BIN_CMD="$ROOT_DIR/target/debug/ra"
+  ra_BIN_CMD="$ROOT_DIR/target/debug/ra"
 elif [ -f "$ROOT_DIR/Cargo.toml" ]; then
-  OCTOS_BIN_CMD="cargo run --manifest-path $(printf '%q' "$ROOT_DIR/Cargo.toml") -p ra-cli --features api --bin ra --"
+  ra_BIN_CMD="cargo run --manifest-path $(printf '%q' "$ROOT_DIR/Cargo.toml") -p ra-cli --features api --bin ra --"
 else
-  echo "Unable to locate ra CLI. Set OCTOS_BIN." >&2
+  echo "Unable to locate ra CLI. Set ra_BIN." >&2
   exit 2
 fi
 
-OCTOSCODE_BIN_CMD=""
+RA_TUI_BIN_CMD=""
 
-resolve_octoscode_bin_cmd() {
-  if [ -n "$OCTOSCODE_BIN_CMD" ]; then
+resolve_ra_tui_bin_cmd() {
+  if [ -n "$RA_TUI_BIN_CMD" ]; then
     return 0
   fi
 
-  if [ -n "${OCTOSCODE_BIN:-}" ]; then
-    OCTOSCODE_BIN_CMD="$OCTOSCODE_BIN"
-  elif [ -f "$OCTOSCODE_DIR/Cargo.toml" ]; then
-    OCTOSCODE_BIN_CMD="cargo run --manifest-path $(printf '%q' "$OCTOSCODE_DIR/Cargo.toml") --"
-  elif [ -x "$OCTOSCODE_DIR/target/debug/octoscode" ]; then
-    OCTOSCODE_BIN_CMD="$OCTOSCODE_DIR/target/debug/octoscode"
-  elif [ -x "$ROOT_DIR/target/debug/octoscode" ]; then
-    OCTOSCODE_BIN_CMD="$ROOT_DIR/target/debug/octoscode"
+  if [ -n "${RA_TUI_BIN:-}" ]; then
+    RA_TUI_BIN_CMD="$RA_TUI_BIN"
+  elif [ -f "$RA_TUI_DIR/Cargo.toml" ]; then
+    RA_TUI_BIN_CMD="cargo run --manifest-path $(printf '%q' "$RA_TUI_DIR/Cargo.toml") --"
+  elif [ -x "$RA_TUI_DIR/target/debug/ra-tui" ]; then
+    RA_TUI_BIN_CMD="$RA_TUI_DIR/target/debug/ra-tui"
+  elif [ -x "$ROOT_DIR/target/debug/ra-tui" ]; then
+    RA_TUI_BIN_CMD="$ROOT_DIR/target/debug/ra-tui"
   else
-    echo "Unable to locate standalone octoscode. Set OCTOSCODE_BIN or OCTOSCODE_DIR." >&2
+    echo "Unable to locate standalone ra-tui. Set RA_TUI_BIN or RA_TUI_DIR." >&2
     exit 2
   fi
 }
@@ -416,7 +416,7 @@ run_line_expect_failure() {
   for expect in "$@"; do
     tmux_assert_capture "$session" "$expect"
   done
-  tmux_assert_not_capture "$session" "__OCTOS_TMUX_EXIT:0__"
+  tmux_assert_not_capture "$session" "__ra_TMUX_EXIT:0__"
   tmux_capture_clean "$session" "$name" >/dev/null
   tmux_kill "$session"
 }
@@ -425,7 +425,7 @@ run_tui_mock() {
   local name="mock-tui"
   local session
   session="$(tmux_session_name "$name")"
-  tmux_new_default "$session" bash -lc "$OCTOSCODE_BIN_CMD --mode mock"
+  tmux_new_default "$session" bash -lc "$RA_TUI_BIN_CMD --mode mock"
   tmux_wait_for "$session" "Opened coding:local:prototype#m9|Ask ra to change code" 45
   tmux_assert_capture "$session" "Opened coding:local:prototype#m9|Ask ra to change code"
   tmux_assert_capture "$session" "Composer"
@@ -456,7 +456,7 @@ run_tui_mock_approval_kind() {
   local session
   session="$(tmux_session_name "$name")"
   tmux_new_default "$session" bash -lc \
-    "OCTOSCODE_MOCK_APPROVAL_KIND=$(shell_quote "$kind") $OCTOSCODE_BIN_CMD --mode mock"
+    "RA_TUI_MOCK_APPROVAL_KIND=$(shell_quote "$kind") $RA_TUI_BIN_CMD --mode mock"
   tmux_wait_for "$session" "Opened coding:local:prototype#m9|Ask ra to change code" 45
   tmux_send "$session" "approval ${kind}"
   tmux_key "$session" Enter
@@ -483,7 +483,7 @@ run_tui_protocol_readonly() {
   local capture
   session="$(tmux_session_name "$name")"
   tmux_new_default "$session" bash -lc \
-    "$OCTOSCODE_BIN_CMD --mode protocol --endpoint ws://127.0.0.1:9/api/ui-protocol/ws --session 'coding:local:prototype#m9' --profile-id coding --auth-token '$OCTOS_TMUX_AUTH_TOKEN' --readonly"
+    "$RA_TUI_BIN_CMD --mode protocol --endpoint ws://127.0.0.1:9/api/ui-protocol/ws --session 'coding:local:prototype#m9' --profile-id coding --auth-token '$ra_TMUX_AUTH_TOKEN' --readonly"
   tmux_wait_for "$session" "read-only|no network connection opened|Protocol backend read-only" 45
   tmux_assert_capture "$session" "Protocol backend read-only|no network connection ope"
   tmux_assert_capture "$session" "read-only"
@@ -497,7 +497,7 @@ run_tui_protocol_readonly() {
   tmux_key "$session" Enter
   tmux_wait_for "$session" "Read-only mode|turn/start disabled|read-only" 10
   capture="$(tmux_capture_clean "$session" "$name")"
-  if printf '%s\n' "$capture" | grep -q "$OCTOS_TMUX_AUTH_TOKEN"; then
+  if printf '%s\n' "$capture" | grep -q "$ra_TMUX_AUTH_TOKEN"; then
     tmux_fail "$session" "auth token leaked into cleaned capture"
   fi
   tmux_key "$session" C-q
@@ -513,10 +513,10 @@ run_protocol_reconnect_interrupt_probe() {
   local session
   local command
   session="$(tmux_session_name "$name")"
-  command="OCTOS_TMUX_WS_ENDPOINT=$(shell_quote "${endpoint}?token=${OCTOS_TMUX_AUTH_TOKEN}") OCTOS_TMUX_SESSION_ID=$(shell_quote "$session_id") OCTOS_TMUX_PROFILE_ID=$(shell_quote "$profile_id") node <<'NODE'
-const endpoint = process.env.OCTOS_TMUX_WS_ENDPOINT;
-const sessionId = process.env.OCTOS_TMUX_SESSION_ID;
-const profileId = process.env.OCTOS_TMUX_PROFILE_ID;
+  command="ra_TMUX_WS_ENDPOINT=$(shell_quote "${endpoint}?token=${ra_TMUX_AUTH_TOKEN}") ra_TMUX_SESSION_ID=$(shell_quote "$session_id") ra_TMUX_PROFILE_ID=$(shell_quote "$profile_id") node <<'NODE'
+const endpoint = process.env.ra_TMUX_WS_ENDPOINT;
+const sessionId = process.env.ra_TMUX_SESSION_ID;
+const profileId = process.env.ra_TMUX_PROFILE_ID;
 
 function openSocket() {
   return new Promise((resolve, reject) => {
@@ -613,15 +613,15 @@ NODE"
 
 run_default() {
   tmux_require
-  resolve_octoscode_bin_cmd
+  resolve_ra_tui_bin_cmd
   tmux_init_artifacts
-  tmux_log "artifacts: $OCTOS_TMUX_ARTIFACT_DIR"
+  tmux_log "artifacts: $ra_TMUX_ARTIFACT_DIR"
 
-  run_line_capture "ra-help" "$OCTOS_BIN_CMD --help" "Usage: ra" "Commands:" "serve"
+  run_line_capture "ra-help" "$ra_BIN_CMD --help" "Usage: ra" "Commands:" "serve"
   run_line_capture \
-    "octoscode-help" \
-    "$OCTOSCODE_BIN_CMD --help" \
-    "Usage: octoscode" \
+    "ra-tui-help" \
+    "$RA_TUI_BIN_CMD --help" \
+    "Usage: ra-tui" \
     "--mode" \
     "--endpoint" \
     "--session" \
@@ -637,8 +637,8 @@ run_default() {
   run_tui_mock_approval_kind "sandbox_escalation" "danger-full-access"
   run_tui_protocol_readonly
   run_line_expect_failure \
-    "octoscode-bad-endpoint" \
-    "$OCTOSCODE_BIN_CMD --mode protocol --endpoint https://example.test/ui-protocol --readonly" \
+    "ra-tui-bad-endpoint" \
+    "$RA_TUI_BIN_CMD --mode protocol --endpoint https://example.test/ui-protocol --readonly" \
     "endpoint must be a WebSocket URL"
 
   tmux_assert_no_registered_sessions
@@ -648,20 +648,20 @@ run_default() {
 
 run_live() {
   tmux_require
-  resolve_octoscode_bin_cmd
-  if [ "${OCTOS_TMUX_LIVE:-0}" != "1" ]; then
-    tmux_log "SKIP: live lane requires OCTOS_TMUX_LIVE=1"
+  resolve_ra_tui_bin_cmd
+  if [ "${ra_TMUX_LIVE:-0}" != "1" ]; then
+    tmux_log "SKIP: live lane requires ra_TMUX_LIVE=1"
     exit 0
   fi
 
   tmux_init_artifacts
-  tmux_log "artifacts: $OCTOS_TMUX_ARTIFACT_DIR"
+  tmux_log "artifacts: $ra_TMUX_ARTIFACT_DIR"
 
-  local host="${OCTOS_TMUX_LIVE_HOST:-127.0.0.1}"
-  local port="${OCTOS_TMUX_LIVE_PORT:-50190}"
-  local data_dir="${OCTOS_TMUX_LIVE_DATA_DIR:-$OCTOS_TMUX_ARTIFACT_DIR/live-data}"
-  local session_id="${OCTOS_TMUX_LIVE_SESSION:-coding:local:prototype#m9-live}"
-  local profile_id="${OCTOS_TMUX_LIVE_PROFILE_ID:-coding}"
+  local host="${ra_TMUX_LIVE_HOST:-127.0.0.1}"
+  local port="${ra_TMUX_LIVE_PORT:-50190}"
+  local data_dir="${ra_TMUX_LIVE_DATA_DIR:-$ra_TMUX_ARTIFACT_DIR/live-data}"
+  local session_id="${ra_TMUX_LIVE_SESSION:-coding:local:prototype#m9-live}"
+  local profile_id="${ra_TMUX_LIVE_PROFILE_ID:-coding}"
   local endpoint="ws://${host}:${port}/api/ui-protocol/ws"
   local server_session
   local tui_session
@@ -671,8 +671,8 @@ run_live() {
 
   server_session="$(tmux_session_name "live-server")"
   tui_session="$(tmux_session_name "live-tui")"
-  server_cmd="$OCTOS_BIN_CMD serve --host $(shell_quote "$host") --port $(shell_quote "$port") --data-dir $(shell_quote "$data_dir") --cwd $(shell_quote "$ROOT_DIR") --auth-token $(shell_quote "$OCTOS_TMUX_AUTH_TOKEN")"
-  tui_cmd="$OCTOSCODE_BIN_CMD --mode protocol --endpoint $(shell_quote "$endpoint") --cwd $(shell_quote "$ROOT_DIR") --auth-token $(shell_quote "$OCTOS_TMUX_AUTH_TOKEN")"
+  server_cmd="$ra_BIN_CMD serve --host $(shell_quote "$host") --port $(shell_quote "$port") --data-dir $(shell_quote "$data_dir") --cwd $(shell_quote "$ROOT_DIR") --auth-token $(shell_quote "$ra_TMUX_AUTH_TOKEN")"
+  tui_cmd="$RA_TUI_BIN_CMD --mode protocol --endpoint $(shell_quote "$endpoint") --cwd $(shell_quote "$ROOT_DIR") --auth-token $(shell_quote "$ra_TMUX_AUTH_TOKEN")"
   if [ -n "$session_id" ]; then
     tui_cmd="$tui_cmd --session $(shell_quote "$session_id") --profile-id $(shell_quote "$profile_id")"
   fi
@@ -689,7 +689,7 @@ run_live() {
   run_protocol_reconnect_interrupt_probe "$endpoint" "$session_id" "$profile_id"
 
   capture="$(tmux_capture_clean "$tui_session" "live-tui")"
-  if printf '%s\n' "$capture" | grep -q "$OCTOS_TMUX_AUTH_TOKEN"; then
+  if printf '%s\n' "$capture" | grep -q "$ra_TMUX_AUTH_TOKEN"; then
     tmux_fail "$tui_session" "auth token leaked into live TUI capture"
   fi
   if printf '%s\n' "$capture" | grep -Eq "INFO calling LLM|parallel_tools|result_sizes|tool_ids="; then
@@ -713,29 +713,29 @@ run_live() {
 run_m9_protocol() {
   tmux_require
   tmux_init_artifacts
-  tmux_log "artifacts: $OCTOS_TMUX_ARTIFACT_DIR"
+  tmux_log "artifacts: $ra_TMUX_ARTIFACT_DIR"
 
-  if [ -z "${OCTOS_BIN:-}" ] && [ ! -x "$ROOT_DIR/target/debug/ra" ] && [ -f "$ROOT_DIR/Cargo.toml" ]; then
+  if [ -z "${ra_BIN:-}" ] && [ ! -x "$ROOT_DIR/target/debug/ra" ] && [ -f "$ROOT_DIR/Cargo.toml" ]; then
     tmux_log "building ra CLI before starting tmux server"
     cargo build --manifest-path "$ROOT_DIR/Cargo.toml" -p ra-cli --features api --bin ra
-    OCTOS_BIN_CMD="$ROOT_DIR/target/debug/ra"
+    ra_BIN_CMD="$ROOT_DIR/target/debug/ra"
   fi
 
-  local host="${OCTOS_TMUX_M9_HOST:-127.0.0.1}"
-  local port="${OCTOS_TMUX_M9_PORT:-50191}"
-  local data_dir="${OCTOS_TMUX_M9_DATA_DIR:-${TMPDIR:-/tmp}/ra-m9-data-${OCTOS_TMUX_RUN_ID}}"
+  local host="${ra_TMUX_M9_HOST:-127.0.0.1}"
+  local port="${ra_TMUX_M9_PORT:-50191}"
+  local data_dir="${ra_TMUX_M9_DATA_DIR:-${TMPDIR:-/tmp}/ra-m9-data-${ra_TMUX_RUN_ID}}"
   local server_session
   local server_cmd
   local server_wrapped
-  local server_start_timeout="${OCTOS_TMUX_M9_SERVER_START_TIMEOUT:-120}"
-  local llm_api_key="${OCTOS_TMUX_M9_LLM_API_KEY:-ra-m9-dummy-key}"
+  local server_start_timeout="${ra_TMUX_M9_SERVER_START_TIMEOUT:-120}"
+  local llm_api_key="${ra_TMUX_M9_LLM_API_KEY:-ra-m9-dummy-key}"
   server_session="$(tmux_session_name "m9-server")"
-  server_cmd="OCTOS_M9_PROTOCOL_FIXTURES=1 OPENAI_API_KEY=$(shell_quote "$llm_api_key") $OCTOS_BIN_CMD serve --host $(shell_quote "$host") --port $(shell_quote "$port") --data-dir $(shell_quote "$data_dir") --cwd $(shell_quote "$ROOT_DIR") --auth-token $(shell_quote "$OCTOS_TMUX_AUTH_TOKEN") --provider openai --model gpt-4o --no-retry"
-  printf -v server_wrapped '%s\nrc=$?\nprintf "\\n__OCTOS_TMUX_SERVER_EXIT:%%s__\\n" "$rc"\nwhile :; do sleep 3600; done\n' "$server_cmd"
+  server_cmd="ra_M9_PROTOCOL_FIXTURES=1 OPENAI_API_KEY=$(shell_quote "$llm_api_key") $ra_BIN_CMD serve --host $(shell_quote "$host") --port $(shell_quote "$port") --data-dir $(shell_quote "$data_dir") --cwd $(shell_quote "$ROOT_DIR") --auth-token $(shell_quote "$ra_TMUX_AUTH_TOKEN") --provider openai --model gpt-4o --no-retry"
+  printf -v server_wrapped '%s\nrc=$?\nprintf "\\n__ra_TMUX_SERVER_EXIT:%%s__\\n" "$rc"\nwhile :; do sleep 3600; done\n' "$server_cmd"
 
   tmux_new_default "$server_session" bash -lc "$server_wrapped"
-  tmux_wait_for "$server_session" "Listening: http://${host}:${port}|__OCTOS_TMUX_SERVER_EXIT:[0-9]+__" "$server_start_timeout"
-  tmux_assert_not_capture "$server_session" "__OCTOS_TMUX_SERVER_EXIT:"
+  tmux_wait_for "$server_session" "Listening: http://${host}:${port}|__ra_TMUX_SERVER_EXIT:[0-9]+__" "$server_start_timeout"
+  tmux_assert_not_capture "$server_session" "__ra_TMUX_SERVER_EXIT:"
   tmux_assert_capture "$server_session" "Listening: http://${host}:${port}"
 
   pushd "$ROOT_DIR/e2e" >/dev/null
@@ -743,10 +743,10 @@ run_m9_protocol() {
     tmux_log "installing e2e deps"
     npm install >/dev/null
   fi
-  OCTOS_LIVE_URL="http://${host}:${port}" \
-  OCTOS_LIVE_TOKEN="$OCTOS_TMUX_AUTH_TOKEN" \
-  OCTOS_M9_APPROVAL_FIXTURE=1 \
-  OCTOS_M9_REPLAY_LOSSY_FIXTURE=1 \
+  ra_LIVE_URL="http://${host}:${port}" \
+  ra_LIVE_TOKEN="$ra_TMUX_AUTH_TOKEN" \
+  ra_M9_APPROVAL_FIXTURE=1 \
+  ra_M9_REPLAY_LOSSY_FIXTURE=1 \
     npx playwright test --workers=1 tests/m9-protocol-*.spec.ts --reporter=line
   popd >/dev/null
 

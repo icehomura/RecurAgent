@@ -1584,7 +1584,7 @@ pub struct PipelineExecutor {
     config: ExecutorConfig,
     /// Explicit DAG-scheduler override. `Some(true)`/`Some(false)` force the
     /// scheduler on/off and take PRECEDENCE over the `RA_PIPELINE_DAG` env
-    /// (legacy `OCTOS_PIPELINE_DAG` still honoured); `None` defers to the env.
+    /// (legacy `ra_PIPELINE_DAG` still honoured); `None` defers to the env.
     /// Default `None` → byte-identical production
     /// until an operator opts in. The builder sets it so a test can force the
     /// legacy path even when an opted-in env (`RA_PIPELINE_DAG=1`) is set.

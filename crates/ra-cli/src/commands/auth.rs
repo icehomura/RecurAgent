@@ -9,18 +9,15 @@ use ra_agent::bridge::work_secret::{WorkSecret, WorkSecretGrantRecord, WorkSecre
 
 use super::Executable;
 use crate::auth::{AuthStore, keychain, oauth, token};
-use crate::config_context::{resolve_config_context, run_migrations};
+use crate::config_context::resolve_config_context;
 use crate::profiles::ProfileStore;
 
 /// Open the global auth store for the `auth login/logout/status` commands.
 ///
 /// Auth is GLOBAL: it lives under the resolver's `auth_home` (RA_CONFIG_DIR
-/// if set, else the XDG default), independent of `--data-dir`. We run the
-/// migrations first so a legacy `~/.ra/auth.json` is copied into the XDG
-/// location (0600, legacy left intact) before the store opens.
+/// if set, else the XDG default), independent of `--data-dir`.
 fn open_global_auth_store() -> Result<AuthStore> {
     let ctx = resolve_config_context(None);
-    run_migrations(&ctx);
     AuthStore::open(&ctx)
 }
 

@@ -1,34 +1,34 @@
-class Octoscode < Formula
+class ra-tui < Formula
   desc "Terminal UI client for the ra UI Protocol"
-  homepage "https://github.com/your-org/ra-tui"
+  homepage "https://github.com/icehomura/ra-tui"
   version "__VERSION__"
   if OS.mac? && Hardware::CPU.arm?
-    url "https://github.com/your-org/ra-tui/releases/download/__TAG__/octoscode-aarch64-apple-darwin.tar.xz"
+    url "https://github.com/icehomura/ra-tui/releases/download/__TAG__/ra-tui-aarch64-apple-darwin.tar.xz"
     sha256 "__SHA_DARWIN_ARM__"
   end
   if OS.linux?
     if Hardware::CPU.arm?
-      url "https://github.com/your-org/ra-tui/releases/download/__TAG__/octoscode-aarch64-unknown-linux-gnu.tar.xz"
+      url "https://github.com/icehomura/ra-tui/releases/download/__TAG__/ra-tui-aarch64-unknown-linux-gnu.tar.xz"
       sha256 "__SHA_LINUX_ARM__"
     end
     if Hardware::CPU.intel?
-      url "https://github.com/your-org/ra-tui/releases/download/__TAG__/octoscode-x86_64-unknown-linux-gnu.tar.xz"
+      url "https://github.com/icehomura/ra-tui/releases/download/__TAG__/ra-tui-x86_64-unknown-linux-gnu.tar.xz"
       sha256 "__SHA_LINUX_X64__"
     end
   end
   license "Apache-2.0"
 
-  # octoscode is a CLIENT; a local launch spawns `octos serve --stdio` as its
-  # backend. We deliberately do NOT `depends_on "your-org/ra/octos"`: Homebrew
+  # ra-tui is a CLIENT; a local launch spawns `ra serve --stdio` as its
+  # backend. We deliberately do NOT `depends_on "icehomura/ra/ra"`: Homebrew
   # does not auto-tap third-party dependency taps, so that would abort the
   # install with "tap must be installed explicitly". Instead the tui
   # auto-installs the ra server on first run if it's missing (see caveats).
   def caveats
     <<~EOS
-      octoscode talks to the `octos` server backend. If octos isn't installed,
-      octoscode installs the latest release automatically on first run
-      (set OCTOSCODE_NO_AUTO_INSTALL=1 to disable). To install it up front:
-        brew install your-org/ra/octos
+      ra-tui talks to the `ra` server backend. If ra isn't installed,
+      ra-tui installs the latest release automatically on first run
+      (set RA_TUI_NO_AUTO_INSTALL=1 to disable). To install it up front:
+        brew install icehomura/ra/ra
     EOS
   end
 
@@ -55,9 +55,9 @@ class Octoscode < Formula
   end
 
   def install
-    bin.install "octoscode" if OS.mac? && Hardware::CPU.arm?
-    bin.install "octoscode" if OS.linux? && Hardware::CPU.arm?
-    bin.install "octoscode" if OS.linux? && Hardware::CPU.intel?
+    bin.install "ra-tui" if OS.mac? && Hardware::CPU.arm?
+    bin.install "ra-tui" if OS.linux? && Hardware::CPU.arm?
+    bin.install "ra-tui" if OS.linux? && Hardware::CPU.intel?
 
     install_binary_aliases!
 

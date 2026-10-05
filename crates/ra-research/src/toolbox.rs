@@ -1,4 +1,4 @@
-//! The octos side of the OctoSense system toolbox (ADR 0002 §6).
+//! The RecurAgent side of the RecurAgent system toolbox (ADR 0002 §6).
 //!
 //! App agents do not search, read or crawl themselves; they are granted
 //! toolbox tools that the host runs with the app's **scope** (languages,

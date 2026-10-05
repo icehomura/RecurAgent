@@ -2,7 +2,7 @@
 # olp-init.sh — 在当前项目目录一键铺设 OLP(Outer-Loop Protocol)双环脚手架。
 #
 # 做的事(全部幂等,存在即跳过,绝不覆盖已有内容):
-#   1. 依赖体检:octoscode / octos / git / API key 环境,缺什么打印怎么装;
+#   1. 依赖体检:ra-tui / ra / git / API key 环境,缺什么打印怎么装;
 #   2. 生成 .ra/loop.md(内环维护循环)与 .ra/OUTER_LOOP_REVIEW.md
 #      (外环审查黑板,含 v1 ACK 定式说明);
 #   3. 黑板加入 .gitignore(分支无关,避免跨分支裂脑);
@@ -23,15 +23,15 @@ MISSING=0
 
 say "== OLP init: 依赖体检 =="
 command -v git >/dev/null 2>&1 && ok "git" || todo "git 未安装——请先安装 git"
-if command -v octoscode >/dev/null 2>&1; then
-  ok "octoscode ($(command -v octoscode))"
+if command -v ra-tui >/dev/null 2>&1; then
+  ok "ra-tui ($(command -v ra-tui))"
 else
-  todo "octoscode 未安装:npm install -g @your-org/ra-tui(或 brew / shell installer,见 README)"
+  todo "ra-tui 未安装:npm install -g @icehomura/ra-tui(或 brew / shell installer,见 README)"
 fi
 if command -v ra >/dev/null 2>&1 || [ -x "$HOME/.ra/bin/ra" ]; then
   ok "ra server(已装或已自动拉起过)"
 else
-  say "  [--] octos server 未见——首次运行 octoscode 会自动下载到 ~/.ra/bin(需网络);离线环境请手装:npm i -g @your-org/ra"
+  say "  [--] ra server 未见——首次运行 ra-tui 会自动下载到 ~/.ra/bin(需网络);离线环境请手装:npm i -g @icehomura/ra"
 fi
 [ -n "${MOONSHOT_API_KEY:-}${OPENAI_API_KEY:-}${ANTHROPIC_API_KEY:-}" ] \
   && ok "检测到模型 API key 环境变量" \
@@ -118,7 +118,7 @@ case "${OLP_INIT_LANG:-en}" in
   zh|zh-CN|zh_CN) CARD_NAME="OCTOLOOP_AGENTS.zh-CN.md" ;;
   *)              CARD_NAME="OCTOLOOP_AGENTS.md" ;;
 esac
-CARD_URL="https://raw.githubusercontent.com/your-org/ra-tui/main/docs/$CARD_NAME"
+CARD_URL="https://raw.githubusercontent.com/icehomura/ra-tui/main/docs/$CARD_NAME"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
 CARD_SRC=""
 # 认仓库布局才复制:同目录须有 olp-init.sh 自身,避免 curl|bash 时 dirname 落在
@@ -171,7 +171,7 @@ fi
 say ""
 say "== 下一步(按序) =="
 say "  1. 启动内环(标准命令;--solo 是单人盒子安全门):"
-say "       octoscode --stdio-command 'octos serve --stdio --solo'"
+say "       ra-tui --stdio-command 'ra serve --stdio --solo'"
 say "     需要跑构建/工具链时,操作者显式追加 --danger-full-access"
 say "     (权限档 1-4 是 bwrap 沙箱,~/.cargo 不可见——见 QUICKSTART 0b 节)。"
 say "  2. 首次进入 TUI 完成 onboarding(选 provider、贴 key)。"

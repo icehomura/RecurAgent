@@ -183,7 +183,7 @@ pub const UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2: &str = "projection.envelop
 ///
 /// REST endpoints stay live for clients that do not negotiate this
 /// feature; D-1 is additive only. Phase D-5 retires the REST routes
-/// once `octos-web` has migrated (tracked separately).
+/// once `ra-web` has migrated (tracked separately).
 pub const UI_PROTOCOL_FEATURE_AUXILIARY_REST_TO_WS_V1: &str = "auxiliary.rest_to_ws.v1";
 
 /// Required feature flag for UPCR-2026-021 M15 autonomy inspection/control.
@@ -527,7 +527,7 @@ pub fn clear_tool_approval_risks_for_test() {
 /// - `-32000..=-32099`: JSON-RPC server-error band. Pre-existing
 ///   `METHOD_NOT_SUPPORTED = -32004` lives here; `APPROVAL_NOT_PENDING =
 ///   -32011` is the spec-explicit slot in this band.
-/// - `-32100..=-32199`: ra application-level taxonomy. All new typed
+/// - `-32100..=-32199`: RecurAgent application-level taxonomy. All new typed
 ///   categories from M9-FIX-02 land here so they never collide with
 ///   transport-layer codes and are easy to grep.
 ///
@@ -1390,7 +1390,7 @@ pub mod methods {
     pub const PEER_INPUT: &str = "peer/input";
 
     // ---- Smart-home bridge integration ----
-    // Device control/state moved server-side from octos-web's client-only
+    // Device control/state moved server-side from ra-web's client-only
     // widget so bridge credentials never reach the browser. Camera video
     // stays a direct browser-to-bridge stream; these methods only return
     // the playback URL. All five are capability-gated on
@@ -3455,7 +3455,7 @@ pub enum LaunchDecisionKind {
     /// The folder holds conversation(s) for other profile(s) but not the
     /// resolved one — offer switch-and-resume or start-fresh.
     CrossProfile,
-    /// No profile exists on the machine — send the user to `octoscode onboard`.
+    /// No profile exists on the machine — send the user to `ra-tui onboard`.
     NoProfile,
 }
 
@@ -4116,7 +4116,7 @@ pub struct AttachmentOwnerV2 {
 /// This deliberately mirrors [`Payload`] as a NEW type rather than extending
 /// it: `projection.envelope.v1` remains frozen. The wire stays
 /// `{ "type": "…", "data": { … } }`, which is the flattened boundary
-/// shape accepted by the Stage-0 octos-web parser.
+/// shape accepted by the Stage-0 ra-web parser.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum PayloadV2 {
@@ -6648,7 +6648,7 @@ pub struct RouterFailoverEvent {
 /// is empty (after the in-flight turn lands).
 ///
 /// **Server emission status:** the queue itself is client-side today
-/// (`octos-web/src/runtime/ui-protocol-send.ts` per-session FIFO). The
+/// (`ra-web/src/runtime/ui-protocol-send.ts` per-session FIFO). The
 /// server never emits this variant — the web bridge manufactures it
 /// locally using the existing DOM event pattern so other clients can
 /// observe queue state uniformly. The variant is defined here so the
@@ -6739,7 +6739,7 @@ pub struct PeerClosedEvent {
 ///
 /// Contract:
 /// - `session_id` is **required** and is the routing key. Activity without one
-///   renders in whichever session happens to be focused (octos-tui#461, #466,
+///   renders in whichever session happens to be focused (ra-tui#461, #466,
 ///   #483) — the exact bug class this event must not re-ship.
 /// - `origin_kind` + `origin_id` (+ optional `origin_label`) attribute the
 ///   line. An unattributed monitor/peer line reads as the master speaking.
@@ -7190,7 +7190,7 @@ impl UiNotification {
             // on `session_id`; a topic-scoped pane routes on `topic`.
             //
             // The flatten keeps the bare Envelope keys at the TOP level so
-            // an older/tolerant client (e.g. the octos-web bridge) that
+            // an older/tolerant client (e.g. the ra-web bridge) that
             // reads `thread_id`/`seq`/`payload` top-level and ignores
             // unknown keys decodes it unchanged. The matching decoder in
             // `from_method_and_params` accepts an OLD frame lacking

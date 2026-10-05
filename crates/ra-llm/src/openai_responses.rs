@@ -278,10 +278,21 @@ impl OpenAIResponsesProvider {
         loop {
             tracing::info!(target: "ra.responses", continuation = body.get("previous_response_id").is_some(),
                 full_bytes = full.to_string().len(), sent_bytes = body.to_string().len(), "Responses request");
-            let response = client
+            let mut builder = client
                 .post(format!("{}/responses", self.base_url.trim_end_matches('/')))
                 .bearer_auth(self.api_key.expose_secret())
-                .json(&body)
+                .json(&body);
+            // OpenCode (Zen and Go tiers) requires a per-conversation session
+            // header before it will route the request. The struct has no
+            // provider label, but the host check covers opencode.ai lanes.
+            for (name, value) in crate::attribution::opencode_headers(
+                "",
+                &self.base_url,
+                crate::attribution::current_session_id().as_deref(),
+            ) {
+                builder = builder.header(name, value);
+            }
+            let response = builder
                 .send()
                 .await
                 .wrap_err_with(|| {

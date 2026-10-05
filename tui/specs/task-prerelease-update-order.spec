@@ -6,7 +6,7 @@ tags: [tui, release, update]
 
 ## 意图
 
-`octoscode update --prerelease` 应选择已发布、非 draft 的最高 SemVer 预发布版本。
+`ra-tui update --prerelease` 应选择已发布、非 draft 的最高 SemVer 预发布版本。
 GitHub release 列表按创建时间排序，不能把该顺序当作 RC 版本顺序。
 
 ## 完成条件

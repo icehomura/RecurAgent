@@ -840,8 +840,8 @@ pub async fn serve_logs(
         .tail_n
         .unwrap_or(DEFAULT_SERVE_LOG_TAIL_N)
         .min(MAX_SERVE_LOG_TAIL_N);
-    let octos_home = store.octos_home_dir().to_path_buf();
-    let log_path = serve_log_path_for_now(&octos_home);
+    let ra_home = store.ra_home_dir().to_path_buf();
+    let log_path = serve_log_path_for_now(&ra_home);
 
     let replay = read_serve_log_replay(&log_path, tail_n, &filter)
         .await
@@ -862,7 +862,7 @@ pub async fn serve_logs(
     );
     let live_stream = futures::stream::unfold(
         ServeLogTailState {
-            octos_home,
+            ra_home,
             path: log_path,
             offset: initial_offset,
             pending: String::new(),
@@ -901,7 +901,7 @@ pub async fn serve_logs(
 
 #[derive(Debug, Clone)]
 struct ServeLogTailState {
-    octos_home: PathBuf,
+    ra_home: PathBuf,
     path: PathBuf,
     offset: u64,
     pending: String,
@@ -910,7 +910,7 @@ struct ServeLogTailState {
 
 impl ServeLogTailState {
     fn refresh_path_for_rotation(&mut self) {
-        let next_path = serve_log_path_for_now(&self.octos_home);
+        let next_path = serve_log_path_for_now(&self.ra_home);
         if next_path != self.path {
             self.path = next_path;
             self.offset = 0;
@@ -919,20 +919,20 @@ impl ServeLogTailState {
     }
 }
 
-fn serve_log_path_for_now(octos_home: &FsPath) -> PathBuf {
-    serve_log_path_for_instant(octos_home, Utc::now())
+fn serve_log_path_for_now(ra_home: &FsPath) -> PathBuf {
+    serve_log_path_for_instant(ra_home, Utc::now())
 }
 
 /// tracing_appender's DAILY rotation names files by the UTC date
 /// (`OffsetDateTime::now_utc()`), so the tail side must resolve the current
 /// log path with the same clock — using `Local` would tail a nonexistent
 /// `serve.<local-date>.log` for part of each day on non-UTC hosts.
-fn serve_log_path_for_instant(octos_home: &FsPath, now: DateTime<Utc>) -> PathBuf {
-    serve_log_path_for_date(octos_home, now.date_naive())
+fn serve_log_path_for_instant(ra_home: &FsPath, now: DateTime<Utc>) -> PathBuf {
+    serve_log_path_for_date(ra_home, now.date_naive())
 }
 
-fn serve_log_path_for_date(octos_home: &FsPath, date: chrono::NaiveDate) -> PathBuf {
-    octos_home
+fn serve_log_path_for_date(ra_home: &FsPath, date: chrono::NaiveDate) -> PathBuf {
+    ra_home
         .join("logs")
         .join(format!("serve.{}.log", date.format("%Y-%m-%d")))
 }
@@ -1093,7 +1093,7 @@ pub async fn test_provider(
     }
 
     // Link-local (cloud metadata) targets are never model servers — refuse
-    // before any outbound request (adversarial review, octos#2097).
+    // before any outbound request (adversarial review, RecurAgent#2097).
     if req
         .base_url
         .as_deref()
@@ -1218,7 +1218,7 @@ pub async fn provider_models(
         resolve_saved_key(&state, &identity, &req)
     };
     // Keyless local families (local/ollama/vllm) list models without a key —
-    // their /v1/models answers unauthenticated (octos#2096 review round).
+    // their /v1/models answers unauthenticated (RecurAgent#2096 review round).
     let api_key = match resolved {
         Ok(key) => key,
         Err(_) if keyless => String::new(),
@@ -1228,7 +1228,7 @@ pub async fn provider_models(
         return Err((StatusCode::BAD_REQUEST, "No API key".into()));
     }
     // Link-local (cloud metadata) targets are never model servers — refuse
-    // before any outbound request (adversarial review, octos#2097).
+    // before any outbound request (adversarial review, RecurAgent#2097).
     if req
         .base_url
         .as_deref()
@@ -2741,7 +2741,7 @@ pub async fn list_platform_skills(
         "admin not configured".into(),
     ))?;
     let skills_dir = store
-        .octos_home_dir()
+        .ra_home_dir()
         .join(ra_agent::bootstrap::PLATFORM_SKILLS_DIR);
 
     // List installed platform skills
@@ -2754,7 +2754,7 @@ pub async fn list_platform_skills(
 
     // Check models against platform allowlist
     let mdir = models_dir();
-    let allowlist = ra_llm::ominix::PlatformModels::load_or_create(store.octos_home_dir());
+    let allowlist = ra_llm::ominix::PlatformModels::load_or_create(store.ra_home_dir());
     let asr_models: Vec<String> = allowlist
         .ids_for_role("asr")
         .into_iter()
@@ -2832,10 +2832,10 @@ pub async fn platform_runtime_bootstrap(
         StatusCode::SERVICE_UNAVAILABLE,
         "admin not configured".into(),
     ))?;
-    let octos_home = store.octos_home_dir();
+    let ra_home = store.ra_home_dir();
     let mut actions = Vec::new();
 
-    let mut allowlist = ra_llm::ominix::PlatformModels::load_or_create(octos_home);
+    let mut allowlist = ra_llm::ominix::PlatformModels::load_or_create(ra_home);
     for (model_id, role) in ominix_runtime::DEFAULT_VOICE_MODELS {
         if allowlist.find(model_id).is_none() {
             allowlist
@@ -2847,7 +2847,7 @@ pub async fn platform_runtime_bootstrap(
             actions.push(format!("enabled {model_id} for {role}"));
         }
     }
-    allowlist.save(octos_home).map_err(|e| {
+    allowlist.save(ra_home).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to save platform model allowlist: {e}"),
@@ -2934,9 +2934,9 @@ pub async fn install_platform_skill(
         StatusCode::SERVICE_UNAVAILABLE,
         "admin not configured".into(),
     ))?;
-    let octos_home = store.octos_home_dir();
+    let ra_home = store.ra_home_dir();
 
-    if ra_agent::bootstrap::bootstrap_single_skill(octos_home, &name) {
+    if ra_agent::bootstrap::bootstrap_single_skill(ra_home, &name) {
         Ok(Json(ActionResponse {
             ok: true,
             message: Some(format!("Platform skill '{name}' installed")),
@@ -2959,7 +2959,7 @@ pub async fn remove_platform_skill(
         "admin not configured".into(),
     ))?;
     let skills_dir = store
-        .octos_home_dir()
+        .ra_home_dir()
         .join(ra_agent::bootstrap::PLATFORM_SKILLS_DIR);
 
     // Defer to spawn_blocking so remove_skill's internal current-thread
@@ -3273,7 +3273,7 @@ pub async fn platform_models_catalog(
         StatusCode::SERVICE_UNAVAILABLE,
         "admin not configured".into(),
     ))?;
-    let allowlist = ra_llm::ominix::PlatformModels::load_or_create(store.octos_home_dir());
+    let allowlist = ra_llm::ominix::PlatformModels::load_or_create(store.ra_home_dir());
 
     // Try fetching live catalog from ominix-api
     let ominix = ra_llm::ominix::OminixClient::new(&ominix_api_url());
@@ -3329,7 +3329,7 @@ pub async fn platform_models_download(
         StatusCode::SERVICE_UNAVAILABLE,
         "admin not configured".into(),
     ))?;
-    let allowlist = ra_llm::ominix::PlatformModels::load_or_create(store.octos_home_dir());
+    let allowlist = ra_llm::ominix::PlatformModels::load_or_create(store.ra_home_dir());
     if allowlist.find(model_id).is_none() {
         let valid: Vec<&str> = allowlist
             .platform_models
@@ -3426,7 +3426,7 @@ pub async fn platform_models_remove(
 /// GET /api/admin/platform-skills/ominix-api/models/available — list ALL ominix-api models
 ///
 /// Returns the full unfiltered catalog from ominix-api so the admin can see
-/// what's available to enable for ra platform use.
+/// what's available to enable for RecurAgent platform use.
 pub async fn platform_models_available(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
@@ -3434,7 +3434,7 @@ pub async fn platform_models_available(
         StatusCode::SERVICE_UNAVAILABLE,
         "admin not configured".into(),
     ))?;
-    let allowlist = ra_llm::ominix::PlatformModels::load_or_create(store.octos_home_dir());
+    let allowlist = ra_llm::ominix::PlatformModels::load_or_create(store.ra_home_dir());
     let ominix = ra_llm::ominix::OminixClient::new(&ominix_api_url());
 
     let catalog = ominix.fetch_catalog().await.map_err(|e| {
@@ -3451,7 +3451,7 @@ pub async fn platform_models_available(
             let role = allowlist.find(&m.id).map(|p| p.role.as_str()).unwrap_or("");
             let mut v = serde_json::to_value(&m).unwrap_or_default();
             if let Some(obj) = v.as_object_mut() {
-                obj.insert("enabled_for_octos".into(), enabled.into());
+                obj.insert("enabled_for_ra".into(), enabled.into());
                 if enabled {
                     obj.insert("role".into(), role.into());
                 }
@@ -3483,8 +3483,8 @@ pub async fn platform_models_enable(
         StatusCode::SERVICE_UNAVAILABLE,
         "admin not configured".into(),
     ))?;
-    let octos_home = store.octos_home_dir();
-    let mut allowlist = ra_llm::ominix::PlatformModels::load_or_create(octos_home);
+    let ra_home = store.ra_home_dir();
+    let mut allowlist = ra_llm::ominix::PlatformModels::load_or_create(ra_home);
 
     if allowlist.find(model_id).is_some() {
         return Ok(Json(serde_json::json!({
@@ -3499,7 +3499,7 @@ pub async fn platform_models_enable(
             id: model_id.to_string(),
             role: role.to_string(),
         });
-    allowlist.save(octos_home).map_err(|e| {
+    allowlist.save(ra_home).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to save allowlist: {e}"),
@@ -3528,8 +3528,8 @@ pub async fn platform_models_disable(
         StatusCode::SERVICE_UNAVAILABLE,
         "admin not configured".into(),
     ))?;
-    let octos_home = store.octos_home_dir();
-    let mut allowlist = ra_llm::ominix::PlatformModels::load_or_create(octos_home);
+    let ra_home = store.ra_home_dir();
+    let mut allowlist = ra_llm::ominix::PlatformModels::load_or_create(ra_home);
 
     let before = allowlist.platform_models.len();
     allowlist.platform_models.retain(|m| m.id != model_id);
@@ -3541,7 +3541,7 @@ pub async fn platform_models_disable(
         })));
     }
 
-    allowlist.save(octos_home).map_err(|e| {
+    allowlist.save(ra_home).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to save allowlist: {e}"),
@@ -4617,7 +4617,7 @@ fn required_frps_server(state: &AppState) -> Result<&str, (StatusCode, String)> 
 }
 
 /// GET /api/admin/tenants/{id}/setup-script — returns a bash one-liner that
-/// installs ra + frpc on a fresh Mac Mini.
+/// installs RecurAgent + frpc on a fresh Mac Mini.
 pub async fn tenant_setup_script(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -4643,7 +4643,7 @@ fn build_admin_tenant_setup_script(
     domain: &str,
     server: &str,
 ) -> String {
-    let install_url = "https://github.com/octos-org/octos/releases/latest/download/install.sh";
+    let install_url = "https://github.com/icehomura/ra/releases/latest/download/install.sh";
     format!(
         r#"#!/usr/bin/env bash
 # Setup script for {subdomain}.{domain}
@@ -4944,7 +4944,7 @@ fn build_register_setup_command_windows(
     server: &str,
 ) -> String {
     format!(
-        r#"irm "https://github.com/octos-org/octos/releases/latest/download/install.ps1" -OutFile install.ps1; .\install.ps1 -Tunnel -AuthToken "{auth_token}" -Port {local_port} -TenantName "{subdomain}" -FrpsToken "{frps_token}" -SshPort {ssh_port} -TunnelDomain "{domain}" -FrpsServer "{server}""#,
+        r#"irm "https://github.com/icehomura/ra/releases/latest/download/install.ps1" -OutFile install.ps1; .\install.ps1 -Tunnel -AuthToken "{auth_token}" -Port {local_port} -TenantName "{subdomain}" -FrpsToken "{frps_token}" -SshPort {ssh_port} -TunnelDomain "{domain}" -FrpsServer "{server}""#,
         subdomain = tenant.subdomain,
         domain = domain,
         server = server,
@@ -4960,7 +4960,7 @@ fn build_register_setup_script(
     domain: &str,
     server: &str,
 ) -> String {
-    let install_url = "https://github.com/octos-org/octos/releases/latest/download/install.sh";
+    let install_url = "https://github.com/icehomura/ra/releases/latest/download/install.sh";
     format!(
         r#"#!/usr/bin/env bash
 # Setup script for {subdomain}.{domain}
@@ -6417,7 +6417,7 @@ mod tests {
             .await
             .unwrap();
         let mut state = ServeLogTailState {
-            octos_home: dir.path().to_path_buf(),
+            ra_home: dir.path().to_path_buf(),
             path,
             offset: "2026-05-24T10:00:00Z INFO boot\n".len() as u64,
             pending: String::new(),

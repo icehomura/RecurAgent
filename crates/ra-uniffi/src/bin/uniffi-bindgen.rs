@@ -8,7 +8,7 @@
 //! ```text
 //! cargo build -p ra-uniffi
 //! cargo run -p ra-uniffi --bin uniffi-bindgen -- generate \
-//!     --library target/debug/liboctos_uniffi.dylib \
+//!     --library target/debug/libra_uniffi.dylib \
 //!     --language python \
 //!     --out-dir crates/ra-uniffi/bindings/python
 //! ```

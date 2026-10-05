@@ -2,5 +2,5 @@
 
 | FLAW | 结果 | 原因类 | 适用条件 | issue / PR |
 |---|---|---|---|---|
-| FLAW-001 | accepted | — | 围栏 peer 且 workspace 为 Cargo;仓库自带 .cargo/config.toml 时不覆盖 | ra #2236 / PR #2240 (e08c2715) |
-| FLAW-002 | accepted | — | goal 终态集合 complete|archived;active/blocked/paused/budget_limited 仍拒绝 | ra #2237 / PR #2241 (17487501) |
+| FLAW-001 | accepted | — | 围栏 peer 且 workspace 为 Cargo;仓库自带 .cargo/config.toml 时不覆盖 | RecurAgent #2236 / PR #2240 (e08c2715) |
+| FLAW-002 | accepted | — | goal 终态集合 complete|archived;active/blocked/paused/budget_limited 仍拒绝 | RecurAgent #2237 / PR #2241 (17487501) |

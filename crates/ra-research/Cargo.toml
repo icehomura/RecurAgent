@@ -4,11 +4,11 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Research building blocks for ra search tools: free news/search providers, structured items, lang/since/domain filters, robots.txt, main-text extraction, and a clean-room metasearch with sandboxed OctoScript engines"
+description = "Research building blocks for ra search tools: free news/search providers, structured items, lang/since/domain filters, robots.txt, main-text extraction, and a clean-room metasearch with sandboxed Rascript engines"
 
 [dependencies]
-# Product identity: `RA_` env vars win over the legacy `OCTOS_` spellings, and
-# the state home (`~/.ra`, keeping an existing `~/.ra`) resolves here.
+# Product identity: `RA_` env vars win over the legacy `RA_` spellings; the
+# state home (`~/.ra`) resolves here.
 ra-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -24,13 +24,13 @@ reqwest = { workspace = true, optional = true, features = ["gzip"] }
 # readability.js). Optional so `deep-crawl` can use the robots.txt and URL
 # helpers without pulling in an HTML parser it does not need.
 dom_smoothie = { version = "0.18", optional = true }
-# Metasearch: engines are sandboxed OctoScript scripts (MIT, OctoSense-org),
+# Metasearch: engines are sandboxed Rascript scripts (MIT, icehomura),
 # vendored under `vendor/` at the reviewed revisions (see
 # `vendor/PROVENANCE.md`) so building the feature needs no external git
 # fetch. Only the bounded core runtime is used (the host installs its own
 # `net`/`markup` modules); makepad-script is the VM it re-exports, at the
-# same revision Octoscript uses, for the native method macros.
-octoscript-core = { path = "../../vendor/octoscript-core", optional = true }
+# same revision rascript uses, for the native method macros.
+rascript-core = { path = "../../vendor/rascript-core", optional = true }
 makepad-script = { path = "../../vendor/makepad-script", optional = true }
 sha2 = { workspace = true, optional = true }
 # HTML selection for results-page engines (`markup.select`) and redirect
@@ -59,7 +59,7 @@ fetch = ["dep:reqwest"]
 # `fetch` provides the private-address checks applied to engine hosts.
 metasearch = [
     "fetch",
-    "dep:octoscript-core",
+    "dep:rascript-core",
     "dep:makepad-script",
     "dep:sha2",
     "dep:scraper",

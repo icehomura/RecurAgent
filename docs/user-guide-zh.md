@@ -1,6 +1,6 @@
-# ra 用户指南
+# RecurAgent 用户指南
 
-部署、配置和使用 ra AI 智能体平台的完整指南。
+部署、配置和使用 RecurAgent AI 智能体平台的完整指南。
 
 ---
 
@@ -38,17 +38,17 @@
 
 ## 1. 概览
 
-ra 是一个 Rust 原生的 AI 智能体平台，支持三种运行模式：
+RecurAgent 是一个 Rust 原生的 AI 智能体平台，支持三种运行模式：
 
 - **`ra serve`** — 控制面板 + 管理仪表盘 + 约 140 个 REST 端点。管理多个 **配置文件**（机器人实例），每个实例作为独立的 gateway 子进程运行，拥有独立的配置、记忆、会话和消息通道。首次启动且无管理员配置时，嵌入式仪表盘会运行**首次设置向导**。
 - **`ra gateway`** — 单个 gateway 实例，服务于各消息通道（Telegram、Discord、Slack、WhatsApp、Matrix、飞书、邮件、微信、企业微信、企业微信群机器人、QQ 机器人、Twilio）。
 - **`ra chat`** — 交互式 CLI 聊天，用于开发和测试。
 
-chat 和 `ra acp` 通过进程内连接使用与 OctosCode 相同的 OUP 会话 runtime，
+chat 和 `ra acp` 通过进程内连接使用与 ra-tui 相同的 OUP 会话 runtime，
 共享历史、压缩、权限和取消逻辑，不再各自执行另一套 Agent 循环。
 两者需要默认启用的 `api` feature，无需额外启动服务进程或网络监听。
 ACP 支持 `session/load` 回放和工具权限请求；OUP 结构化用户提问仍由
-终端 chat／OctosCode 提供交互。
+终端 chat／ra-tui 提供交互。
 
 ### 架构
 
@@ -166,7 +166,7 @@ export SMTP_PASSWORD="your-app-password"
 
 当 `ra serve` 首次启动且没有管理员配置时，嵌入式仪表盘会启动**设置向导**，引导操作员依次完成：
 
-1. **部署模式** — 在本地、自托管云 + 租户、ra Cloud 注册之间选择，每种模式有相应指引文本。
+1. **部署模式** — 在本地、自托管云 + 租户、RecurAgent Cloud 注册之间选择，每种模式有相应指引文本。
 2. **SMTP 配置** — OTP 邮件登录所需（本地部署可跳过）。
 3. **LLM 提供商** — 选择提供商、填入 API 密钥并在保存前进行联通测试。
 4. **管理员配置** — 名称、通道、可选的 Family Plan 子账户。
@@ -209,7 +209,7 @@ ra auth revoke-work-secret '<secret>'
 
 ## 3. 配置 LLM 提供商
 
-ra 开箱即用支持 17 个 LLM 提供商家族。云端提供商需要设置对应的环境变量 API 密钥；本地服务器（见 [3.6](#36-本地模型llamacppollamavllmlm-studio)）无需密钥。
+RecurAgent 开箱即用支持 17 个 LLM 提供商家族。云端提供商需要设置对应的环境变量 API 密钥；本地服务器（见 [3.6](#36-本地模型llamacppollamavllmlm-studio)）无需密钥。
 
 ### 3.1 支持的提供商
 
@@ -336,7 +336,7 @@ ra chat --model gpt-4o  # 从模型名称自动检测提供商
 
 #### 方法 3：自动检测
 
-省略 `provider` 时，ra 会从模型名称自动检测提供商：
+省略 `provider` 时，RecurAgent 会从模型名称自动检测提供商：
 
 | 模型名模式 | 检测到的提供商 |
 |-----------|--------------|
@@ -410,7 +410,7 @@ ra auth logout --provider openai
 
 ### 3.6 本地模型（llama.cpp、Ollama、vLLM、LM Studio）
 
-主流本地模型服务器都提供 OpenAI 兼容 API，因此 ra 将它们统一为**一个提供商家族：`local`**。无需关心背后是哪个引擎——选择 `local`，把 `base_url` 指向服务器即可。引擎名也可作为别名使用（`"provider": "llamacpp"`、`"lmstudio"` 等都会解析为 `local`）。
+主流本地模型服务器都提供 OpenAI 兼容 API，因此 RecurAgent 将它们统一为**一个提供商家族：`local`**。无需关心背后是哪个引擎——选择 `local`，把 `base_url` 指向服务器即可。引擎名也可作为别名使用（`"provider": "llamacpp"`、`"lmstudio"` 等都会解析为 `local`）。
 
 零配置默认指向 llama.cpp `llama-server` 的标准端口：
 
@@ -435,7 +435,7 @@ ra auth logout --provider openai
 
 **用 `ra doctor` 验证配置。** 对本地家族，doctor 会查询服务器的 `/v1/models` 端点，报告实际加载的模型，并在配置的 `model` 不在列表中或端口无响应时给出警告（并列出常见的本地端点）。
 
-**工具调用注意事项：** Agent 循环依赖工具/函数调用，而对本地服务器来说这取决于*模型及其聊天模板*，与 ra 无关。请使用支持工具调用的模型；llama.cpp 需以 `--jinja` 启动以启用模板的工具支持。如果聊天正常但工具异常，请首先检查这一点。
+**工具调用注意事项：** Agent 循环依赖工具/函数调用，而对本地服务器来说这取决于*模型及其聊天模板*，与 RecurAgent 无关。请使用支持工具调用的模型；llama.cpp 需以 `--jinja` 启动以启用模板的工具支持。如果聊天正常但工具异常，请首先检查这一点。
 
 ---
 
@@ -761,7 +761,7 @@ curl -X DELETE http://localhost:50080/api/admin/profiles/my-bot
 curl http://localhost:50080/api/admin/profiles/my-bot/logs
 
 # 主 daemon SSE 日志流，支持初始回放和可选过滤
-curl -H "Authorization: Bearer $OCTOS_ADMIN_TOKEN" \
+curl -H "Authorization: Bearer $RA_ADMIN_TOKEN" \
   'http://localhost:50080/api/admin/serve/logs?tail_n=200&grep=.*error.*'
 
 # 提供商指标
@@ -1146,7 +1146,7 @@ ra cron enable <job-id> --disable
 
 ## 12. 内置应用技能
 
-内置应用技能作为编译好的二进制文件随 `ra` 一起发布。Gateway 启动时会写入 `<octos_home>/bundled-app-skills/<name>/`，运维或用户自定义技能安装到当前 profile 的 `~/.ra/profiles/<profile>/data/skills/`，因此重新部署不会覆盖自定义内容。完整列表见 `BUNDLED_APP_SKILLS`（`crates/ra-agent/src/bundled_app_skills.rs`）：
+内置应用技能作为编译好的二进制文件随 `ra` 一起发布。Gateway 启动时会写入 `<ra_home>/bundled-app-skills/<name>/`，运维或用户自定义技能安装到当前 profile 的 `~/.ra/profiles/<profile>/data/skills/`，因此重新部署不会覆盖自定义内容。完整列表见 `BUNDLED_APP_SKILLS`（`crates/ra-agent/src/bundled_app_skills.rs`）：
 
 > **自动安装的内置技能：** news、deep-search、deep-crawl、send-email、account-manager、time（二进制名 `clock`）、weather、smart-home、skill-evolve。加上平台技能 `voice`。
 
@@ -1530,7 +1530,7 @@ export LARK_FROM_ADDRESS="your-feishu-email@company.com"
 **前置条件：** 需要先为该 profile 配置好桥接（设置 → 智能家居）
 **上下文触发：** 当对话提到"智能家居"、"设备"、"灯"、"空调"、"开灯"、"关灯"、"窗帘"等关键词时激活
 
-通过当前 profile 配置的桥接（如 Home Assistant）列出并控制智能家居设备（灯具、空调、窗帘、音箱等）。直接从 profile 读取桥接 URL 和 token —— 不经过正在运行的 gateway 转发。摄像头视频串流仍然是 octos-web 中面向人类、仅通过 WebSocket 提供的功能，不对 agent 开放。
+通过当前 profile 配置的桥接（如 Home Assistant）列出并控制智能家居设备（灯具、空调、窗帘、音箱等）。直接从 profile 读取桥接 URL 和 token —— 不经过正在运行的 gateway 转发。摄像头视频串流仍然是 ra-web 中面向人类、仅通过 WebSocket 提供的功能，不对 agent 开放。
 
 #### smart_home_list_devices 参数
 
@@ -1647,8 +1647,8 @@ ASR_API_URL=http://127.0.0.1:8091 ra serve --port 50080
 服务必须接受 `POST /v1/audio/transcriptions`，JSON 请求字段为 `file`（base64
 音频）、可选的 `language` 和 `response_format`，并返回包含字符串 `text` 的
 JSON。成功但为空的 `text` 会被视为“未检测到人声”，不会发送给智能体。
-ra 会通过 `GET /health` 检查 readiness；没有该路由的服务可返回 `404` 或
-`405`。如果 `ASR_API_URL` 未设置或为空，ra 会继续使用 OminiX ASR。
+RecurAgent 会通过 `GET /health` 检查 readiness；没有该路由的服务可返回 `404` 或
+`405`。如果 `ASR_API_URL` 未设置或为空，RecurAgent 会继续使用 OminiX ASR。
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -1670,7 +1670,7 @@ ra 会通过 `GET /health` 检查 readiness；没有该路由的服务可返回 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `text` | 字符串 | *（必填）* | 要合成的文本 |
-| `output_path` | 字符串 | `/tmp/octos_tts_<ts>.wav` | 输出文件路径 |
+| `output_path` | 字符串 | `/tmp/ra_tts_<ts>.wav` | 输出文件路径 |
 | `language` | 字符串 | `"chinese"` | `"chinese"`、`"english"`、`"japanese"`、`"korean"` |
 | `speaker` | 字符串 | `"vivian"` | 语音预设 |
 
@@ -1907,8 +1907,8 @@ requires_env: MY_API_KEY
 配置文件 gateway 按以下优先级加载技能：
 
 1. `~/.ra/profiles/<profile>/data/skills/`（配置文件作用域的自定义技能）
-2. `<octos_home>/bundled-app-skills/`（内置：news、deep-search 等）
-3. `<octos_home>/platform-skills/`（管理员加载的平台技能，如 ASR/TTS）
+2. `<ra_home>/bundled-app-skills/`（内置：news、deep-search 等）
+3. `<ra_home>/platform-skills/`（管理员加载的平台技能，如 ASR/TTS）
 
 独立项目运行还可以加载 `<project>/.ra/plugins/` 和
 `<project>/.ra/skills/`。旧的 HOME 全局目录 `~/.ra/plugins/` 和
@@ -2162,10 +2162,10 @@ chmod +x .ra/skills/translator/main
 | 变量 | 说明 |
 |------|------|
 | **长时间运行回合** | |
-| `OCTOS_CONVERGENCE_LLM_CALLS` | 按 LLM 调用次数触发无工具反思（默认 `20`） |
-| `OCTOS_CONVERGENCE_ACTIVE_TOKENS` | 按非缓存输入 + 输出 token 触发反思（默认 `100000`） |
-| `OCTOS_CONVERGENCE_SECS` | 按经过秒数触发反思（默认 `300`） |
-| `OCTOS_FILE_CHURN_THRESHOLD` | 同一文件成功修改多少次后提前反思；第二次越阈同时请求模型/provider 升级（默认 `5`） |
+| `RA_CONVERGENCE_LLM_CALLS` | 按 LLM 调用次数触发无工具反思（默认 `20`） |
+| `RA_CONVERGENCE_ACTIVE_TOKENS` | 按非缓存输入 + 输出 token 触发反思（默认 `100000`） |
+| `RA_CONVERGENCE_SECS` | 按经过秒数触发反思（默认 `300`） |
+| `RA_FILE_CHURN_THRESHOLD` | 同一文件成功修改多少次后提前反思；第二次越阈同时请求模型/provider 升级（默认 `5`） |
 | **LLM 提供商** | |
 | `ANTHROPIC_API_KEY` | Anthropic（Claude）API 密钥 |
 | `OPENAI_API_KEY` | OpenAI API 密钥 |
@@ -2207,11 +2207,11 @@ chmod +x .ra/skills/translator/main
 | `ASR_API_URL` | 独立批量 ASR 服务基址；设置后转录不再走 OMiniX |
 | `OMINIX_API_URL` | OminiX ASR/TTS API 地址 |
 | **会话存储** | |
-| `OCTOS_SESSION_SEGMENT_BYTES` | 活跃会话文件封存为分段的大小（默认 8 MiB） |
-| `OCTOS_SESSION_LOAD_BUDGET_BYTES` | 普通加载按新到旧读取的会话历史字节数（默认 32 MiB；`0` = 不限） |
+| `RA_SESSION_SEGMENT_BYTES` | 活跃会话文件封存为分段的大小（默认 8 MiB） |
+| `RA_SESSION_LOAD_BUDGET_BYTES` | 普通加载按新到旧读取的会话历史字节数（默认 32 MiB；`0` = 不限） |
 | **系统** | |
 | `RUST_LOG` | 日志级别（error/warn/info/debug/trace） |
-| `OCTOS_LOG_JSON` | 启用 JSON 格式日志（设置为任意值） |
+| `RA_LOG_JSON` | 启用 JSON 格式日志（设置为任意值） |
 
 ### 15.3 文件布局
 
@@ -2274,7 +2274,7 @@ chmod +x .ra/skills/translator/main
 
 ## 16. Matrix Appservice（Palpo）
 
-ra 可以作为 [Matrix Application Service](https://spec.matrix.org/latest/application-service-api/)（应用服务）运行在 Matrix 主服务器后面。本节介绍如何使用 Docker Compose 将 ra 与 [Palpo](https://github.com/palpo-im/palpo) 一起部署，使用户可以从任何 Matrix 客户端与机器人对话。
+RecurAgent 可以作为 [Matrix Application Service](https://spec.matrix.org/latest/application-service-api/)（应用服务）运行在 Matrix 主服务器后面。本节介绍如何使用 Docker Compose 将 RecurAgent 与 [Palpo](https://github.com/palpo-im/palpo) 一起部署，使用户可以从任何 Matrix 客户端与机器人对话。
 
 ### 16.1 工作原理
 
@@ -2291,12 +2291,12 @@ Matrix 客户端（Element 等）
   Palpo ──► Matrix 客户端
 ```
 
-Palpo 在启动时加载一个**注册 YAML 文件**，告诉它哪些用户命名空间属于 ra，以及将事件转发到哪里。ra 在专用端口（默认 `8009`）监听这些事件，并通过 Palpo 的 Client-Server API 回复。
+Palpo 在启动时加载一个**注册 YAML 文件**，告诉它哪些用户命名空间属于 RecurAgent，以及将事件转发到哪里。RecurAgent 在专用端口（默认 `8009`）监听这些事件，并通过 Palpo 的 Client-Server API 回复。
 
 ### 16.2 目录结构
 
 ```
-palpo_with_octos/
+palpo_with_ra/
 ├── compose.yml                        # Docker Compose 文件
 ├── palpo.toml                         # Palpo 主服务器配置
 ├── appservices/
@@ -2316,7 +2316,7 @@ palpo_with_octos/
 
 #### 1. 生成令牌
 
-应用服务注册文件和 ra 配置文件必须共享两个令牌。只需生成一次：
+应用服务注册文件和 RecurAgent 配置文件必须共享两个令牌。只需生成一次：
 
 ```bash
 # 生成 as_token 和 hs_token（任意随机十六进制字符串）
@@ -2341,15 +2341,15 @@ url: "http://ra:8009"
 as_token: "<你的-as-token>"
 hs_token: "<你的-hs-token>"
 
-sender_localpart: octosbot
+sender_localpart: rabot
 rate_limited: false
 
 namespaces:
   users:
     - exclusive: true
-      regex: "@octosbot_.*:your\\.server\\.name"
+      regex: "@rabot_.*:your\\.server\\.name"
     - exclusive: true
-      regex: "@octosbot:your\\.server\\.name"
+      regex: "@rabot:your\\.server\\.name"
   aliases: []
   rooms: []
 ```
@@ -2359,9 +2359,9 @@ namespaces:
 | 字段 | 说明 |
 |------|------|
 | `url` | Palpo 发送事件的目标地址。使用 Docker 服务名（如 `http://ra:8009`），不要用 `localhost`。 |
-| `as_token` | ra 调用 Palpo API 时使用的令牌。 |
-| `hs_token` | Palpo 向 ra 推送事件时使用的令牌。 |
-| `sender_localpart` | 机器人的 Matrix 本地用户名（最终变为 `@octosbot:your.server.name`）。 |
+| `as_token` | RecurAgent 调用 Palpo API 时使用的令牌。 |
+| `hs_token` | Palpo 向 RecurAgent 推送事件时使用的令牌。 |
+| `sender_localpart` | 机器人的 Matrix 本地用户名（最终变为 `@rabot:your.server.name`）。 |
 | `namespaces.users` | 应用服务管理的用户 ID 正则匹配模式。包含机器人本身和桥接用户前缀。 |
 
 #### 3. 配置 Palpo
@@ -2387,7 +2387,7 @@ server = "your.server.name"
 client = "https://your.server.name"
 ```
 
-#### 4. 创建 ra 配置文件
+#### 4. 创建 RecurAgent 配置文件
 
 创建 `config/botfather.json`，配置使用相同令牌的 Matrix 频道：
 
@@ -2407,8 +2407,8 @@ client = "https://your.server.name"
         "as_token": "<你的-as-token>",
         "hs_token": "<你的-hs-token>",
         "server_name": "your.server.name",
-        "sender_localpart": "octosbot",
-        "user_prefix": "octosbot_",
+        "sender_localpart": "rabot",
+        "user_prefix": "rabot_",
         "port": 8009,
         "mention_only": true,
         "allowed_senders": ["@alice:your.server.name"]
@@ -2432,7 +2432,7 @@ Matrix 频道字段说明：
 | `server_name` | Matrix 域名（必须与 `palpo.toml` 一致）。 |
 | `sender_localpart` | 机器人用户名（必须与注册文件一致）。 |
 | `user_prefix` | 此应用服务管理的桥接用户 ID 前缀。 |
-| `port` | ra 监听来自 Palpo 的应用服务事件的端口。 |
+| `port` | RecurAgent 监听来自 Palpo 的应用服务事件的端口。 |
 | `allowed_senders` | 允许与机器人对话的 Matrix 用户 ID。空数组 = 允许所有人。 |
 | `mention_only` | 可选，默认 `true`。在真正的 1:1 私聊之外，机器人只在被显式寻址时才回复（`m.mentions` 条目、MXID pill/提及、或客户端指定的 target）。真正的 1:1 私聊——1 个人类 + 该应用服务在此房间仅管理 1 个机器人（以应用服务自己的房间映射为准）——始终回复。多机器人房间即使只有 1 个人类也要求提及，避免所有机器人同时应答。设为 `false` 则在所有房间回复每条消息（带 `org.ra.explicit_room` 标记的消息仍走门控）。 |
 
@@ -2508,7 +2508,7 @@ networks:
 docker compose up -d
 ```
 
-Palpo 在启动时读取 `appservices/ra-registration.yaml`。当 Matrix 用户在机器人所在的房间发送消息时，Palpo 将事件推送到 `http://ra:8009`，ra 通过智能体循环处理消息，并通过 Palpo 的 Client-Server API 回复。
+Palpo 在启动时读取 `appservices/ra-registration.yaml`。当 Matrix 用户在机器人所在的房间发送消息时，Palpo 将事件推送到 `http://ra:8009`，RecurAgent 通过智能体循环处理消息，并通过 Palpo 的 Client-Server API 回复。
 
 ### 16.4 令牌匹配检查清单
 
@@ -2518,18 +2518,18 @@ Palpo 在启动时读取 `appservices/ra-registration.yaml`。当 Matrix 用户�
 |----|--------------------------|-------------------|
 | `as_token` | `as_token: "abc..."` | `"as_token": "abc..."` |
 | `hs_token` | `hs_token: "def..."` | `"hs_token": "def..."` |
-| `sender_localpart` | `sender_localpart: octosbot` | `"sender_localpart": "octosbot"` |
-| server name | `regex: "@octosbot:your\\.server\\.name"` | `"server_name": "your.server.name"` |
+| `sender_localpart` | `sender_localpart: rabot` | `"sender_localpart": "rabot"` |
+| server name | `regex: "@rabot:your\\.server\\.name"` | `"server_name": "your.server.name"` |
 
 ### 16.5 故障排除
 
 | 症状 | 原因 | 解决方法 |
 |------|------|----------|
 | 机器人无响应 | 注册文件与配置文件之间令牌不匹配 | 检查[令牌匹配清单](#164-令牌匹配检查清单) |
-| Palpo 日志中出现 `Connection refused` | ra 未运行或注册文件中 `url` 错误 | 确保 ra 已启动；使用 Docker 服务名（`http://ra:8009`），不要用 `localhost` |
+| Palpo 日志中出现 `Connection refused` | RecurAgent 未运行或注册文件中 `url` 错误 | 确保 RecurAgent 已启动；使用 Docker 服务名（`http://ra:8009`），不要用 `localhost` |
 | `User ID not in namespace` | `sender_localpart` 与注册文件 `namespaces.users` 正则不匹配 | 更新正则以包含机器人的完整用户 ID |
 | 未授权用户的消息被忽略 | `allowed_senders` 过滤 | 将用户的 Matrix ID 添加到数组中，或设置为 `[]` 以允许所有人 |
 
 ---
 
-*本指南反映 M8.10 之后的状态（2026 年 4 月）。最新更新请参阅仓库 [github.com/your-org/ra](https://github.com/your-org/ra)。*
+*本指南反映 M8.10 之后的状态（2026 年 4 月）。最新更新请参阅仓库 [github.com/icehomura/ra](https://github.com/icehomura/ra)。*

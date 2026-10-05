@@ -1,4 +1,4 @@
-# ra Failure Modes Inventory
+# RecurAgent Failure Modes Inventory
 
 Living catalogue of how the runtime handles each class of failure.
 Update this file whenever a new failure class is discovered or an

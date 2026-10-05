@@ -6,7 +6,7 @@ This chapter covers power-user features: tool management, queue modes, lifecycle
 
 ## Tools
 
-ra sends the **full set of enabled tools** to the LLM as callable tool specifications on every turn. There is no recency-based deferral: which tools are available is controlled by [Tool Policies](#tool-policies) (allow/deny lists, named groups) and per-provider policy — not by how recently a tool was used.
+RecurAgent sends the **full set of enabled tools** to the LLM as callable tool specifications on every turn. There is no recency-based deferral: which tools are available is controlled by [Tool Policies](#tool-policies) (allow/deny lists, named groups) and per-provider policy — not by how recently a tool was used.
 
 Two categories are intentionally kept out of the per-turn tool list:
 
@@ -496,7 +496,7 @@ Split preference: paragraph boundary > newline > sentence end > space > hard cut
 
 ## Autonomy & Session Control
 
-Beyond one-shot chat, the graphical clients (octos-web, octoscode) drive longer-running behaviors over the [UI Protocol](./architecture.md). The autonomy and task-artifact groups are gated by negotiated capability flags (see [Capability Negotiation](#capability-negotiation)); the core turn/session controls (`turn/start`, `turn/interrupt`, `session/rollback`, `task/output/read`) are always available.
+Beyond one-shot chat, the graphical clients (ra-web, ra-tui) drive longer-running behaviors over the [UI Protocol](./architecture.md). The autonomy and task-artifact groups are gated by negotiated capability flags (see [Capability Negotiation](#capability-negotiation)); the core turn/session controls (`turn/start`, `turn/interrupt`, `session/rollback`, `task/output/read`) are always available.
 
 ### Goals
 
@@ -712,5 +712,5 @@ Features:
 
 A `/metrics` endpoint provides Prometheus-format metrics:
 - `ra_tool_calls_total`
-- `octos_tool_call_duration_seconds`
+- `ra_tool_call_duration_seconds`
 - `ra_llm_tokens_total`

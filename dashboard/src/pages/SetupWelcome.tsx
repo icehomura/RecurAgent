@@ -4,7 +4,7 @@ export default function SetupWelcome() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-lg bg-surface border border-gray-700/50 rounded-xl p-8 shadow-xl">
-        <h1 className="text-2xl font-bold text-white mb-2">Welcome to Octos</h1>
+        <h1 className="text-2xl font-bold text-white mb-2">Welcome to Ra</h1>
         <p className="text-sm text-gray-400 mb-6">
           Two quick steps before you're fully set up.
         </p>

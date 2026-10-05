@@ -1506,7 +1506,7 @@ async fn denied_command_response_carries_sandbox_hint() {
     let result = registry
         .execute(
             "exec_command",
-            &json!({ "cmd": "echo x > /etc/octos_denied_probe" }),
+            &json!({ "cmd": "echo x > /etc/ra_denied_probe" }),
         )
         .await
         .expect("exec command");

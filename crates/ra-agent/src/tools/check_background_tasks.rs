@@ -47,7 +47,7 @@ impl Tool for CheckBackgroundTasksTool {
     }
 
     fn concurrency_class(&self) -> super::ConcurrencyClass {
-        // Item 6 of OCTOS_M8_FIX_FIRST_CHECKLIST_2026-04-24:
+        // Item 6 of ra_M8_FIX_FIRST_CHECKLIST_2026-04-24:
         // check_background_tasks reads the shared TaskSupervisor state.
         // The reads are atomic individually but a sibling tool that
         // mutates supervisor state in the same batch (e.g. spawn) can

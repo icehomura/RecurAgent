@@ -95,7 +95,7 @@ else
     [ "$INSTALL_DEPS" = true ] && DASHBOARD_ARGS+=(--install-deps)
     ./scripts/build-dashboard.sh "${DASHBOARD_ARGS[@]}"
 
-    # There is no bundled web client: the upstream `octos-web` SPA submodule was
+    # There is no bundled web client: the upstream `ra-web` SPA submodule was
     # removed with the fork, so `ra serve` answers 503 "web_bundle_missing" at
     # /app until a client is built into crates/ra-cli/static/web/ (see
     # crates/ra-cli/src/api/static_files.rs). The terminal client is `ra-tui`.

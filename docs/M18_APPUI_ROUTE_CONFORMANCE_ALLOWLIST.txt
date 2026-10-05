@@ -2,7 +2,7 @@
 
 Status: strict runtime gaps fail
 Date: 2026-05-18
-Issues: octos#1030, octos#1032
+Issues: RecurAgent#1030, RecurAgent#1032
 
 The M18 same-scenario runner writes these artifacts for every run:
 

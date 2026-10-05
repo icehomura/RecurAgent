@@ -121,13 +121,13 @@ class Validator:
         launch = read_text(self.out_dir / "launch-command.txt").replace("\\ ", " ")
         ok = (
             "serve --stdio" in launch
-            and "OCTOS_M9_PROTOCOL_FIXTURES=1" in launch
+            and "ra_M9_PROTOCOL_FIXTURES=1" in launch
             and "m15-fixture-appui-backend.py" not in launch
         )
         self.add(
-            "real_octos_serve_stdio_backend",
+            "real_ra_serve_stdio_backend",
             ok,
-            "octoscode launched against real octos serve --stdio with M9 protocol fixture enabled"
+            "ra-tui launched against real ra serve --stdio with M9 protocol fixture enabled"
             if ok
             else "launch command does not prove real ra serve --stdio plus M9 fixture",
             ["launch-command.txt"],

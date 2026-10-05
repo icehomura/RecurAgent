@@ -1,6 +1,6 @@
 # ra-wasm
 
-Browser/JS client-side binding of ra's protocol + utility types
+Browser/JS client-side binding of RecurAgent's protocol + utility types
 (`ra-core`). Use it to (de)serialize the `ra serve` WS/REST protocol and
 model messages/tasks/IDs in a web frontend. The AGENT LOOP does NOT run
 in-browser — `redb` (filesystem), `tokio` threads, native TLS, and llama.cpp
@@ -12,7 +12,7 @@ cannot target `wasm32-unknown-unknown`; run the agent via `ra serve`
 
 `ra-core` is the leaf crate — shared protocol types + codecs with pure deps
 (`serde`, `serde_json`, `chrono`, `uuid`, `eyre`, `tracing`, `sha2`). It is the
-only ra crate that can compile to `wasm32-unknown-unknown`. The heavier
+only RecurAgent crate that can compile to `wasm32-unknown-unknown`. The heavier
 crates are hard blockers in the browser:
 
 | Blocker | Where | Why it can't target wasm |

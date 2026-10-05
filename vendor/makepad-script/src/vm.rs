@@ -387,7 +387,7 @@ impl<'a> ScriptVm<'a> {
 
     /// Clears resource-limit signals that did not belong to an active VM
     /// instruction. Hosts normally do not need this: `run_core` consumes its
-    /// own failures, and Octoscript clears stale signals before a fresh eval.
+    /// own failures, and Rascript clears stale signals before a fresh eval.
     pub fn clear_execution_limit_failures(&mut self) {
         self.bx.threads.cur().take_stack_limit_exceeded();
         self.bx.threads.cur().take_call_frame_limit_exceeded();
@@ -1916,14 +1916,14 @@ mod tests {
         let reentrant = vm.bx.heap.new_module(id!(reentrant));
         vm.add_method(reentrant, id!(reload), &[], |vm, _| {
             vm.eval(ScriptMod {
-                file: "reentrant-reload.octoscript".to_owned(),
+                file: "reentrant-reload.rascript".to_owned(),
                 code: "41\n;".to_owned(),
                 ..Default::default()
             })
         });
 
         let _ = vm.eval(ScriptMod {
-            file: "reentrant-reload.octoscript".to_owned(),
+            file: "reentrant-reload.rascript".to_owned(),
             code: "use mod.reentrant\nreentrant.reload()\n;".to_owned(),
             ..Default::default()
         });
@@ -1945,7 +1945,7 @@ mod tests {
         let mut host = ScriptVmHost::new((), ());
         let mut vm = plain_vm(&mut host);
         let script_mod = || ScriptMod {
-            file: "streaming-try-catch.octoscript".to_owned(),
+            file: "streaming-try-catch.rascript".to_owned(),
             ..Default::default()
         };
         // The trailing space makes the tokenizer emit the separator in the
@@ -1977,7 +1977,7 @@ mod tests {
             let mut host = ScriptVmHost::new((), ());
             let mut vm = plain_vm(&mut host);
             let module = || ScriptMod {
-                file: "streaming-precedence.octoscript".into(),
+                file: "streaming-precedence.rascript".into(),
                 ..Default::default()
             };
             let partial = vm.with_instruction_limit(1000, |vm| {
@@ -2003,7 +2003,7 @@ mod tests {
         let mut host = ScriptVmHost::new((), ());
         let mut vm = plain_vm(&mut host);
         let script_mod = || ScriptMod {
-            file: "streaming-try-ok.octoscript".to_owned(),
+            file: "streaming-try-ok.rascript".to_owned(),
             ..Default::default()
         };
         let prefix = "let marker = 0\ntry { 7 } { marker = 1 }";
@@ -2030,7 +2030,7 @@ mod tests {
         ));
 
         let result = vm.eval(ScriptMod {
-            file: "hard-time-budget.octoscript".to_owned(),
+            file: "hard-time-budget.rascript".to_owned(),
             code: "try { loop {} } catch { 42 }\n;".to_owned(),
             ..Default::default()
         });
@@ -2094,7 +2094,7 @@ mod tests {
         let mut vm = plain_vm(&mut host);
         vm.bx.captured_errors = Some(Vec::new());
         let plain = vm.eval(ScriptMod {
-            file: "uncaught-plain.octoscript".to_owned(),
+            file: "uncaught-plain.rascript".to_owned(),
             code: format!("{source}\n;"),
             ..Default::default()
         });
@@ -2105,7 +2105,7 @@ mod tests {
         let mut vm = plain_vm(&mut host);
         let streaming = vm.eval_with_append_source(
             ScriptMod {
-                file: "uncaught-streaming.octoscript".to_owned(),
+                file: "uncaught-streaming.rascript".to_owned(),
                 ..Default::default()
             },
             &format!("{source}\n;"),

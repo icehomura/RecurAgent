@@ -4914,23 +4914,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "octoscript-core"
-version = "0.1.0"
-dependencies = [
- "makepad-script",
- "octoscript-ui-l0",
- "serde_json",
-]
-
-[[package]]
-name = "octoscript-ui-l0"
-version = "0.1.0"
-dependencies = [
- "blake3",
- "serde_json",
-]
-
-[[package]]
 name = "once_cell"
 version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6049,9 +6032,9 @@ dependencies = [
  "dom_smoothie",
  "futures",
  "makepad-script",
- "octoscript-core",
  "quick-xml",
  "ra-core",
+ "rascript-core",
  "regex",
  "reqwest 0.12.28",
  "scraper 0.22.0",
@@ -6342,6 +6325,23 @@ checksum = "11762a6aea3b0a87a51b21cb2085d252f10c01cd0f3f505e1da002cf6e2427da"
 dependencies = [
  "thiserror 2.0.18",
  "windows 0.62.2",
+]
+
+[[package]]
+name = "rascript-core"
+version = "0.1.0"
+dependencies = [
+ "makepad-script",
+ "rascript-ui-l0",
+ "serde_json",
+]
+
+[[package]]
+name = "rascript-ui-l0"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "serde_json",
 ]
 
 [[package]]

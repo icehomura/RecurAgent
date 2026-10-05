@@ -4,7 +4,7 @@
 #
 # Usage:
 #   ra-doctor.sh
-#   curl -fsSL https://github.com/your-org/ra/releases/latest/download/octos-doctor.sh | bash
+#   curl -fsSL https://github.com/icehomura/ra/releases/latest/download/ra-doctor.sh | bash
 #
 # Options:
 #   --prefix DIR     Install prefix to check (default: ~/.ra/bin)
@@ -12,8 +12,8 @@
 
 set -euo pipefail
 
-PREFIX="${OCTOS_PREFIX:-$HOME/.ra/bin}"
-DATA_DIR="${OCTOS_HOME:-$HOME/.ra}"
+PREFIX="${ra_PREFIX:-$HOME/.ra/bin}"
+DATA_DIR="${ra_HOME:-$HOME/.ra}"
 
 needval() {
     # Ensure that option "$1" has a non-empty value in "$2".
@@ -191,7 +191,7 @@ is_service_active() {
     esac
 }
 
-find_octos_serve_pid() {
+find_ra_serve_pid() {
     local pid=""
     pid=$(ps ax -o pid= -o command= 2>/dev/null | grep -E '(^|/| )ra( |$).* serve( |$)|(^| )ra serve( |$)' | grep -v grep | head -1 | awk '{print $1}' || true)
     printf '%s\n' "$pid"
@@ -255,26 +255,26 @@ echo "============"
 # ── Binary ───────────────────────────────────────────────────────
 section "ra binary"
 
-OCTOS_BIN="$PREFIX/ra"
-if [ -f "$OCTOS_BIN" ]; then
-    ok "found: $OCTOS_BIN"
-    if "$OCTOS_BIN" --version &>/dev/null; then
-        ok "version: $("$OCTOS_BIN" --version 2>&1 | head -1)"
+ra_BIN="$PREFIX/ra"
+if [ -f "$ra_BIN" ]; then
+    ok "found: $ra_BIN"
+    if "$ra_BIN" --version &>/dev/null; then
+        ok "version: $("$ra_BIN" --version 2>&1 | head -1)"
     else
         err "binary exists but failed to run"
         if [ "$OS" = "Darwin" ]; then
-            hint "Try: xattr -d com.apple.quarantine $OCTOS_BIN && codesign -s - $OCTOS_BIN"
+            hint "Try: xattr -d com.apple.quarantine $ra_BIN && codesign -s - $ra_BIN"
         else
-            hint "Try: chmod +x $OCTOS_BIN"
-            hint "Check dependencies: ldd $OCTOS_BIN"
+            hint "Try: chmod +x $ra_BIN"
+            hint "Check dependencies: ldd $ra_BIN"
         fi
         hint "Or re-run install.sh"
     fi
 else
     if command -v ra &>/dev/null; then
         FOUND="$(command -v ra)"
-        warn "not found at $OCTOS_BIN, but found at $FOUND"
-        hint "Set OCTOS_PREFIX or add $PREFIX to PATH"
+        warn "not found at $ra_BIN, but found at $FOUND"
+        hint "Set ra_PREFIX or add $PREFIX to PATH"
     else
         err "ra binary not found"
         hint "Run install.sh to install"
@@ -320,11 +320,11 @@ fi
 # ── ra serve process ──────────────────────────────────────────
 section "ra serve"
 
-OCTOS_PID="$(find_octos_serve_pid)"
-if [ -n "$OCTOS_PID" ]; then
-    OCTOS_CMD=$(ps -p "$OCTOS_PID" -o args= 2>/dev/null || true)
-    ok "running (PID: $OCTOS_PID)"
-    echo "    CMD: $OCTOS_CMD"
+ra_PID="$(find_ra_serve_pid)"
+if [ -n "$ra_PID" ]; then
+    ra_CMD=$(ps -p "$ra_PID" -o args= 2>/dev/null || true)
+    ok "running (PID: $ra_PID)"
+    echo "    CMD: $ra_CMD"
 else
     if is_service_active serve; then
         warn "service appears active but process match failed"
@@ -378,9 +378,9 @@ fi
 if [ -n "$PORT_CMD" ]; then
     if echo "$PORT_CMD" | grep -qi ra; then
         ok "port 8080 held by ra (PID: $PORT_PID)"
-        if [ -z "$OCTOS_PID" ]; then
-            OCTOS_PID="$PORT_PID"
-            OCTOS_CMD=$(ps -p "$OCTOS_PID" -o args= 2>/dev/null || true)
+        if [ -z "$ra_PID" ]; then
+            ra_PID="$PORT_PID"
+            ra_CMD=$(ps -p "$ra_PID" -o args= 2>/dev/null || true)
         fi
     else
         err "port 8080 held by $PORT_CMD (PID: $PORT_PID) — not ra"
@@ -391,9 +391,9 @@ if [ -n "$PORT_CMD" ]; then
         fi
     fi
 elif [ "$PORT_CHECK_AVAILABLE" = true ]; then
-    if [ -n "$OCTOS_PID" ]; then
+    if [ -n "$ra_PID" ]; then
         err "ra serve is running but nothing is listening on 8080"
-        hint "Check if it's bound to a different port: ps -p $OCTOS_PID -o args="
+        hint "Check if it's bound to a different port: ps -p $ra_PID -o args="
     else
         warn "nothing listening on port 8080"
     fi

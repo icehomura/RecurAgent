@@ -9,7 +9,7 @@
 
 2026-09-06 磁盘事故(#1 总纲):每个 peer 各自 `git clone`(peers/mod.rs:1637–1652)出一份独立工作区,每份工作区又各自长出一个 `target/`;cargo 不回收旧产物,也没有任何空间门。结果是 43 个 target 共 303 GB、herdr 两次因磁盘满关闭。
 
-机制目标:ra 自身提供「编译目录池 + 分配 + 回收 + 空间门」。peer 与外环复验不再各养一个 `target/`,而是从每仓库受控数量的槽里领用;任务终态按状态释放;剩余空间不足时拒绝新的分配。
+机制目标:RecurAgent 自身提供「编译目录池 + 分配 + 回收 + 空间门」。peer 与外环复验不再各养一个 `target/`,而是从每仓库受控数量的槽里领用;任务终态按状态释放;剩余空间不足时拒绝新的分配。
 
 核心不变量(全文反复引用):
 
@@ -28,7 +28,7 @@
 
 `<profile data_dir>` 就是今天承载 `peers/` 的那个根:serve 侧 `runtime.data_dir.join("peers")`(api/ui_protocol_transport.rs:13212),默认 `~/.ra/profiles/<id>/data`(profiles.rs:164、resolve_data_dir profiles.rs:1894),profile 显式 `data_dir` 覆盖时跟随覆盖。
 
-选它的理由:(a) peer staging 已经在这里,槽与 peer 元数据同根同生命周期;(b) serve 启动时会把 ra home 追加进 `read_allow_paths`(runtime/profile.rs:991–996),池在 home 内 ⇒ peer 沙箱默认可读,不需要为读再开口子;(c) `data_dir` 覆盖(profiles.rs:166)自动被尊重。
+选它的理由:(a) peer staging 已经在这里,槽与 peer 元数据同根同生命周期;(b) serve 启动时会把 RecurAgent home 追加进 `read_allow_paths`(runtime/profile.rs:991–996),池在 home 内 ⇒ peer 沙箱默认可读,不需要为读再开口子;(c) `data_dir` 覆盖(profiles.rs:166)自动被尊重。
 
 注意:`data_dir` 被覆盖到 home 之外时,上面的 (b) 不成立,此时槽的注入点必须同时授 `file-read*`(见 §7.3)。
 
@@ -201,7 +201,7 @@ $RELEASE                            # 必须保留 acquire 返回的 --token 参
 - **release 语义**:每次 acquire 生成全新的 UUID claim token,写入 holder.json 并嵌入 RELEASE 行的 `--token` 参数。release 在锁内比对 token;旧 token 不匹配时返回 `claim mismatch; unchanged`,不改 holder.json 或 last_used。无 holder.json 则返回 `already released`,保持幂等;路径不在池根下、或目录里没有 `.lock` ⇒ 报错退出非零(不误删任意目录);槽正被活 flock 持有(peer 槽或在跑的 CLI)⇒ 拒绝并提示。target/ 内容永不删除(I2)。
 - **`--purpose peer` 不存在**:peer 槽由 serve 内部领用,CLI 只开放 verify 命名空间(§1.3 的命名空间隔离在命令面上同样成立)。
 - **verify 槽互相不挤占 peer 槽**:acquire 只扫 `verify-N`(`verify_slots`,默认 1)。
-- octoscode 侧 OLP_OUTER_BOOT.md 的对应规程改写(把「每仓库一个长期 worktree + 自管槽锁」换成上述 acquire/parse/release 流程)由外环处理,本仓库只交付命令与本文档的契约描述。
+- ra-tui 侧 OLP_OUTER_BOOT.md 的对应规程改写(把「每仓库一个长期 worktree + 自管槽锁」换成上述 acquire/parse/release 流程)由外环处理,本仓库只交付命令与本文档的契约描述。
 
 ## 5. 空间门
 
@@ -252,14 +252,14 @@ peer 的 cwd 是它自己的 clone `peers/<slug>/wt`(peers/mod.rs:1597–1622),�
 
 ### 7.3 读侧
 
-默认路径下池在 ra home 内,serve 启动已把 home 加进 `read_allow_paths`(runtime/profile.rs:991–996),读已覆盖;但 `data_dir` 被覆盖到 home 外时 read_allow_paths 非空且不含池 ⇒ 这就是 §7.2 里 slot 授权同时发 `file-read*` 与 `file-write*` 的原因。
+默认路径下池在 RecurAgent home 内,serve 启动已把 home 加进 `read_allow_paths`(runtime/profile.rs:991–996),读已覆盖;但 `data_dir` 被覆盖到 home 外时 read_allow_paths 非空且不含池 ⇒ 这就是 §7.2 里 slot 授权同时发 `file-read*` 与 `file-write*` 的原因。
 
 ### 7.4 环境变量注入(CARGO_TARGET_DIR 如何到达 cargo)
 
 关键事实:**serve 路径上 peer 与 master 同进程**(peer 会话就是同一 serve 里的一个 `peer-<slug>` topic 会话,run_chat_peer 的进程内驱动 commands/chat.rs:797–812 与 serve 的 per-turn agent 重建 api/ui_protocol_transport.rs:32616–32652)。因此**不能**用进程环境变量区分 peer —— `std::env::set_var` 会污染所有会话。注入必须 per-tool-call:
 
 - 持久层:`peers/<slug>/` 下新增一行文件 `build-cache`(内容 = 槽路径),与 `goal`/`originator` 同模式原子写,由该 peer 当次持槽的 acquire 方写入——首轮是 `stage_peer` 的 staging 段,后续 turn 是 §4.1 的 per-turn boot 段(serve 侧 ui_protocol_transport.rs:32616–32652 读 goal/originator 的同一处,solo 侧 `read_peer_boot`,peers/host.rs:96–127,PeerBoot 加一字段)。文件只是「当前槽路径」的读回通道,随 per-turn acquire 覆写;真值仍是 §3 的锁与 holder.json。首轮例外:boot 段不覆写,而是按 §4.1 的 adopt 规则读回并认领 stage_peer 记录的槽。
-- 传递层:`ToolContext` 新增 `build_cache_slot: Option<PathBuf>`,模式照抄 `goal_id`/`task_id`/`originator_session`(ra-agent tools/mod.rs:341–348,由 Agent 携带、execution.rs:508–511 逐调用下发)。变量名落在 `OCTOS_*` 命名空间还有一个好处:即便未来走到插件/子进程的 strict 清洗,`OCTOS_*` 也被保留(subprocess_env.rs:90–94 与 :113–127)。
+- 传递层:`ToolContext` 新增 `build_cache_slot: Option<PathBuf>`,模式照抄 `goal_id`/`task_id`/`originator_session`(ra-agent tools/mod.rs:341–348,由 Agent 携带、execution.rs:508–511 逐调用下发)。变量名落在 `RA_*` 命名空间还有一个好处:即便未来走到插件/子进程的 strict 清洗,`RA_*` 也被保留(subprocess_env.rs:90–94 与 :113–127)。
 - 应用层:shell 工具在 `wrap_command` 之后、与 `apply_frontend_tool_env`/`apply_git_tool_env` 同一位置(tools/shell.rs:201–204 前台、:1104–1107 后台)发 `CARGO_TARGET_DIR=<slot>/target` 与 `CARGO_INCREMENTAL=0`。`sanitize_command_env`(shell.rs:204/:1107,策略 subprocess_env.rs:159–171)只剥 secret/注入类变量,不会剥 `CARGO_TARGET_DIR`,顺序安全。
 - `CARGO_INCREMENTAL=0` 即使机器级 `~/.cargo/config.toml` 已设也照发:peer 环境的 CARGO_HOME 不可控(#1 事故里 incremental 一项就占 31 GB),per-command 显式覆盖最稳。
 
@@ -290,8 +290,8 @@ peer 的 cwd 是它自己的 clone `peers/<slug>/wt`(peers/mod.rs:1597–1622),�
 - peer staging 核心:crates/ra-cli/src/peers/mod.rs:1563(stage_peer 签名);:1592–1595 slug 预留;:1597–1599 cwd=peers/<slug>/wt;:1615–1628 为何是 clone 不是 worktree;:1637–1652 `git clone --quiet --no-hardlinks`;:1654–1668 建分支;:1726–1733 goal 文件两行格式;:1738 brief.md;:1760–1767 StagedPeer 返回。
 - peer 终态/清理:peers/mod.rs:264–275 retire_peer_supervised_task;:1912–1924 cleanup_staged_peer;api/ui_protocol_transport.rs:14279 write_peer_result_if_peer_session(成果写入；缓存主释放已移至 transition_to_terminal_settling_steers);:14406 per-turn collect_peer_branch;:15138 build_peer_close_callback(兜底);:15177–15186 closed 标记;:15192 close 侧 collect_peer_branch;:15197–15198 取消注入;:1729–1739 peer_close 中断 turn;:2830 防复活闸(#438 持久会话);:36776 evict_session(FIX-06,权限清理；缓存由 abort_connection_turns 按 owner 清理);:32616–32652 serve 侧 peer boot(goal/originator 重水化,per-turn acquire 段)。
 - 沙箱:crates/ra-agent/src/sandbox/mod.rs:37 SandboxConfig;:149 allow_toolchains;:92 repo_git_write;:183–187 ToolchainWriteGrants;:209–247 toolchain_write_grants;:254–265 push_cargo_grants;:269–275 configured_toolchain_grants(deny-wins 抑制点);:1005 create_sandbox;:1075–1085 build_backend(MacosSandbox 装配);sandbox/macos.rs:307 cwd 写规则;:315–332 toolchain 授权发射;:333–378 workspace 三臂;:358–369 repo_git_write 规则(canonicalize 模式);:417–443 外部 scratch 独立授权(本设计 §7.2 的同构范本);:448–461 profile 拼装与 `(deny default)`;:464–469 TMPDIR 注入;:498 起 tests(规则字符串断言范本)。
-- 环境注入:crates/ra-cli/src/commands/chat.rs:797–812 进程内 peer 驱动;:828 run_chat_peer;:854 create_sandbox;:875–882 Agent 装配;:886 goal 重水化。crates/ra-agent/src/tools/shell.rs:194 wrap_command;:201–204 与 :1104–1107 环境注入点;:327–332 apply_frontend_tool_env(范本);:754 apply_git_tool_env;:449–462 MAIN_TREE_SOVEREIGNTY_PROVIDER(host 装配范本)。crates/ra-agent/src/subprocess_env.rs:159–171 should_forward_env_name;:90–94 + :113–127 strict 变体保留 OCTOS_*。crates/ra-agent/src/tools/mod.rs:261 ToolContext;:341–348 goal/task/originator 字段(§7.4 传递层范本);agent/execution.rs:508–511 逐调用下发。
-- 路径与数据根:api/ui_protocol_transport.rs:13212 `runtime.data_dir.join("peers")`;:11525 同;crates/ra-cli/src/profiles.rs:164–166 data_dir 覆盖;:1894 resolve_data_dir;:1939 octos_home_dir;crates/ra-cli/src/config.rs:26 Config;:123/127 既有可选段形态;runtime/profile.rs:991–996 read_allow_paths 追加 home。
+- 环境注入:crates/ra-cli/src/commands/chat.rs:797–812 进程内 peer 驱动;:828 run_chat_peer;:854 create_sandbox;:875–882 Agent 装配;:886 goal 重水化。crates/ra-agent/src/tools/shell.rs:194 wrap_command;:201–204 与 :1104–1107 环境注入点;:327–332 apply_frontend_tool_env(范本);:754 apply_git_tool_env;:449–462 MAIN_TREE_SOVEREIGNTY_PROVIDER(host 装配范本)。crates/ra-agent/src/subprocess_env.rs:159–171 should_forward_env_name;:90–94 + :113–127 strict 变体保留 RA_*。crates/ra-agent/src/tools/mod.rs:261 ToolContext;:341–348 goal/task/originator 字段(§7.4 传递层范本);agent/execution.rs:508–511 逐调用下发。
+- 路径与数据根:api/ui_protocol_transport.rs:13212 `runtime.data_dir.join("peers")`;:11525 同;crates/ra-cli/src/profiles.rs:164–166 data_dir 覆盖;:1894 resolve_data_dir;:1939 ra_home_dir;crates/ra-cli/src/config.rs:26 Config;:123/127 既有可选段形态;runtime/profile.rs:991–996 read_allow_paths 追加 home。
 - 空间与锁依赖:crates/ra-cli/Cargo.toml:59 fs2;:58 sha2;:24 ra-agent;:111/154 sysinfo(api-only);autonomy/monitor_runtime.rs:410–437 fs2::FileExt 用法与 MSRV 注释;api/admin.rs:3068–3082 df -Pk 版(不采用的对照);fs2-0.4.3/src/lib.rs:180 available_space(statvfs)。
 
 

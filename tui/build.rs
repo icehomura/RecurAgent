@@ -3,7 +3,7 @@ use std::process::Command;
 fn main() {
     // Git short hash — so `ra-tui --version` identifies the exact build
     // (a branch/dev build reports e.g. `0.2.2-rc.7 (94e43fd …)`), mirroring the
-    // ra server. Without it, an unreleased branch build is indistinguishable
+    // RecurAgent server. Without it, an unreleased branch build is indistinguishable
     // from the published release of the same Cargo version.
     let hash = Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])

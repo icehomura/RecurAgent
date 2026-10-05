@@ -1,6 +1,6 @@
 # Multi-Agent Orchestration
 
-ra can run more than one agent at a time in three distinct shapes. Pick by **who owns the work** and **when you need the result**:
+RecurAgent can run more than one agent at a time in three distinct shapes. Pick by **who owns the work** and **when you need the result**:
 
 | Model | Entry | Ownership | Result | Lifetime |
 |-------|-------|-----------|--------|----------|
@@ -62,7 +62,7 @@ Gracefully closes a running peer you created.
 
 ## Creating and gathering from the client
 
-Humans drive peers through two server methods, surfaced as `/peer` and `/gather` in octoscode:
+Humans drive peers through two server methods, surfaced as `/peer` and `/gather` in ra-tui:
 
 - **`peer/prepare`** — stage 1–8 peers as a fleet (all-or-nothing). Set `token_budget` to give each staged peer the same cumulative token limit; omit it to leave peer-specific spend unrestricted. The response echoes the limit. The client then opens each session and starts its first turn.
 - **`peer/gather`** — the human-facing side of the blackboard; composes the peers' results into the caller's session.

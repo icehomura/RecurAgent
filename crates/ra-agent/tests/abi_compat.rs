@@ -121,7 +121,7 @@ fn should_load_workspace_policy_v1_session_fixture() {
         "expected fm_tts AudioNonSilent validator over spawn_only_files mp3",
     );
 
-    // ra #1034: the podcast_generate contract opts into the
+    // RecurAgent #1034: the podcast_generate contract opts into the
     // `spawn_only_files` source via the new ABI fields. The fixture is the
     // durable promise of that shape — parsing it must populate `source =
     // SpawnOnlyFiles` and `extension = Some("mp3")` on both the MagicBytes
@@ -164,7 +164,7 @@ fn should_load_workspace_policy_v1_session_fixture() {
         "podcast fixture must declare AudioNonSilent(spawn_only_files)"
     );
 
-    // ra #1040 (follow-up to #1035 / #1037): mofa_comic, mofa_infographic,
+    // RecurAgent #1040 (follow-up to #1035 / #1037): mofa_comic, mofa_infographic,
     // and mofa_frame all carry MagicBytes(Png) on the `spawn_only_files`
     // source with the `extension = "png"` filter. The fixture is the
     // durable promise of that shape; the round-trip pins both the new ABI

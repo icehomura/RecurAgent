@@ -84,7 +84,7 @@ pub fn marker_account<'a>(value: &'a str, fallback_name: &'a str) -> &'a str {
         .unwrap_or(fallback_name)
 }
 
-/// The service name used for all ra keychain entries (macOS backend).
+/// The service name used for all RecurAgent keychain entries (macOS backend).
 #[cfg(target_os = "macos")]
 const SERVICE: &str = "ra";
 
@@ -257,9 +257,8 @@ pub fn is_accessible() -> bool {
 // ── Linux file-backed store ────────────────────────────────────────────────
 //
 // `<ra home>/secrets/<account>` — one file per secret, 0600, directory
-// 0700. The root mirrors the `ProfileStore::octos_home_dir()` the CLI auth
-// commands use (`~/.ra`, legacy `~/.ra`): same resolver, `secrets/`
-// sibling of `profiles/`.
+// 0700. The root mirrors the `ProfileStore::ra_home_dir()` the CLI auth
+// commands use (`~/.ra`): same resolver, `secrets/` sibling of `profiles/`.
 #[cfg(any(target_os = "linux", all(test, unix)))]
 pub(crate) mod linux_file {
     use std::io::{Read as _, Write as _};
@@ -274,9 +273,9 @@ pub(crate) mod linux_file {
     const DIR_MODE: Mode = Mode::RWXU;
     const FILE_MODE: Mode = Mode::RUSR.union(Mode::WUSR);
 
-    /// The secrets root: `<ra home>/secrets`, with the ra home resolved
-    /// exactly as `ProfileStore::octos_home_dir()` does for the CLI auth
-    /// commands (`~/.ra`, legacy `~/.ra`).
+    /// The secrets root: `<ra home>/secrets`, with the RecurAgent home resolved
+    /// exactly as `ProfileStore::ra_home_dir()` does for the CLI auth
+    /// commands (`~/.ra`).
     fn secrets_root() -> Result<PathBuf> {
         #[cfg(test)]
         if let Some(dir) = super::test_store::root() {
@@ -304,7 +303,7 @@ pub(crate) mod linux_file {
             .file_name()
             .ok_or_else(|| eyre::eyre!("secret root has no name"))?;
         if create {
-            // The production parent is ~/.ra (legacy ~/.ra). Refuse a
+            // The production parent is ~/.ra. Refuse a
             // symlink at that boundary below, rather than following it while
             // chmod'ing secrets.
             std::fs::DirBuilder::new()
@@ -928,7 +927,7 @@ mod tests {
     fn should_keep_owner_read_write_permissions_under_restrictive_umask() {
         use std::os::unix::fs::PermissionsExt;
         // Manual knob: `RA_TEST_SECRET_UMASK_ROOT=<dir>` (legacy
-        // `OCTOS_TEST_SECRET_UMASK_ROOT`) points this test at a real directory.
+        // `ra_TEST_SECRET_UMASK_ROOT`) points this test at a real directory.
         if let Some(root) = ra_core::brand::env_compat("TEST_SECRET_UMASK_ROOT") {
             let root = std::path::PathBuf::from(root);
             let _root = test_override_secrets_root(root.clone());
@@ -947,6 +946,10 @@ mod tests {
         // umask is process-global: change it ONLY in a dedicated child, never
         // in the parallel test runner. The existing root is owned by this test.
         let root = tempfile::tempdir().unwrap();
+        // The child resolves this knob through `brand::env_compat`, so export
+        // the current spelling; the legacy `RA_` one is still read by the
+        // child as well.
+        let child_root_env = format!("{}TEST_SECRET_UMASK_ROOT", ra_core::brand::ENV_PREFIX);
         let status = std::process::Command::new("sh")
             .args(["-c", "umask 777; exec \"$@\"", "secret-fixture"])
             .arg(std::env::current_exe().unwrap())
@@ -954,7 +957,7 @@ mod tests {
                 "should_keep_owner_read_write_permissions_under_restrictive_umask",
                 "--nocapture",
             ])
-            .env(CHILD_ROOT, root.path())
+            .env(child_root_env, root.path())
             .status()
             .unwrap();
         assert!(status.success());

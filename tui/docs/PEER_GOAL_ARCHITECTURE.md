@@ -1,6 +1,6 @@
 # Peer Agent + Goal Architecture
 
-octos 的多 agent 协作系统：goal 分解为 task graph，peer agent 并行执行，client（octoscode）只做渲染和命令转发。
+RecurAgent 的多 agent 协作系统：goal 分解为 task graph，peer agent 并行执行，client（ra-tui）只做渲染和命令转发。
 
 ## 目录
 
@@ -22,7 +22,7 @@ octos 的多 agent 协作系统：goal 分解为 task graph，peer agent 并行�
 
 Peer 机制的心智模型直接来自操作系统的并发原语：
 
-| OS 概念 | ra 对应物 | 含义 |
+| OS 概念 | RecurAgent 对应物 | 含义 |
 |---|---|---|
 | **thread** | subagent（`SpawnTool`/`DelegateTool`） | 父 turn 内派生，共享父的上下文与工作区（≈ 共享 heap/stack），父 turn 被打断则随之终止，结果作为工具结果直接回到父上下文 |
 | **process** | peer agent（`peer_handoff`） | fork 出去之后有自己独立的 session、workspace（可 clone 隔离）、turn 循环与 token 预算；parent 挂了它照跑 |
@@ -54,7 +54,7 @@ flowchart LR
 
 Claude Code 式的 goal 实现是**把 goal 文本每个 turn 注入到 context** 里，依赖模型在微观执行中持续 honor 它——实践中模型经常不 honor：跑几轮就停下来、或被眼前的工具输出带偏。
 
-ra 的做法把 goal 从微观 context 中**拿出来**：
+RecurAgent 的做法把 goal 从微观 context 中**拿出来**：
 
 - goal 由 server 端的 keeper 在**宏观层**持有和推进（`GoalContinue` tick 自动续跑、fleet 派发、ledger 归集）；
 - peer 的微观执行 context 里**没有 goal 文本**——它只看到自己的 brief（一个自包含的任务契约）；
@@ -68,7 +68,7 @@ ra 的做法把 goal 从微观 context 中**拿出来**：
 
 ```mermaid
 flowchart TB
-    subgraph client["octoscode（TUI client，纯渲染）"]
+    subgraph client["ra-tui（TUI client，纯渲染）"]
         SC["/goal · /peer slash commands"]
         GB[Goal banner]
         PD[Peer Dock]
@@ -86,7 +86,7 @@ flowchart TB
     ORCH --> BB
 ```
 
-octoscode 是**纯 client**——所有 peer/goal 的逻辑都在 octos server 端，octoscode 只做：
+ra-tui 是**纯 client**——所有 peer/goal 的逻辑都在 RecurAgent server 端，ra-tui 只做：
 
 - 解析 slash command（`/goal`, `/peer`）
 - 发 RPC 请求（`peer/prepare`, `session/goal/set`）
@@ -162,7 +162,7 @@ sequenceDiagram
     participant H as 人类
     participant M as Master agent
     participant S as ra server
-    participant C as octoscode client
+    participant C as ra-tui client
     participant P as Peer session
 
     H->>M: 宏观指令（/goal 或 prompt）
@@ -291,7 +291,7 @@ goal-scoped peer 的产出走三条路回到 master 的 `goal_get`：
 
 ### 1. Client 是哑的
 
-octoscode **不知道** goal 如何分解成 task graph，**不知道** peer 如何调度——全部是 server 的逻辑。Client 只渲染状态和转发命令。
+ra-tui **不知道** goal 如何分解成 task graph，**不知道** peer 如何调度——全部是 server 的逻辑。Client 只渲染状态和转发命令。
 
 **优点**：
 
@@ -305,7 +305,7 @@ octoscode **不知道** goal 如何分解成 task graph，**不知道** peer 如
 
 ### 2. Peer 是独立 session
 
-每个 peer 是一个**完整的 ra session**，有自己的：
+每个 peer 是一个**完整的 RecurAgent session**，有自己的：
 
 - LLM provider（可以和主 session 不同）
 - 工具集（可以限制权限）
@@ -340,7 +340,7 @@ octoscode **不知道** goal 如何分解成 task graph，**不知道** peer 如
 
 ## 代码组织
 
-### octoscode（client）
+### ra-tui（client）
 
 | 文件 | 职责 |
 |---|---|
@@ -351,7 +351,7 @@ octoscode **不知道** goal 如何分解成 task graph，**不知道** peer 如
 | `src/app/render.rs` | Peer Dock 渲染（`peer_strip_lines`） |
 | `src/transport.rs` | RPC 编解码（`peer/prepare` request/response、`peer/staged` notification） |
 
-### ra（server，本机 `~/Work/Projects/FW/ra`）
+### RecurAgent（server，本机 `~/Work/Projects/FW/ra`）
 
 | 文件 | 职责 |
 |---|---|
@@ -444,7 +444,7 @@ Client UI:
 
 ## 与类似系统的对比
 
-| 特性 | ra goal/peer | Cursor Composer | Claude Code subagent |
+| 特性 | RecurAgent goal/peer | Cursor Composer | Claude Code subagent |
 |---|---|---|---|
 | 并发模型 | **multiprocessing**（peer = 独立会话/工作区） | 单 agent | **threading**（subagent 挂在父 turn 下，可并行多个） |
 | 任务分解 | Server 自动分解 goal | 用户手动指定文件 | Agent 自主 spawn |
@@ -454,7 +454,7 @@ Client UI:
 | 状态持久化 | Durable brief + blackboard + goal-ledgers，重启可恢复 | 内存 | 内存（父上下文） |
 | 父挂掉时 | Peer 照跑（进程语义） | — | Subagent 随父终止（线程语义） |
 
-ra 的设计更接近 **CI/CD pipeline**（task graph + 并行执行 + 预算控制），而不是 **pair programming**（单 agent 协作）。
+RecurAgent 的设计更接近 **CI/CD pipeline**（task graph + 并行执行 + 预算控制），而不是 **pair programming**（单 agent 协作）。
 
 ---
 
@@ -474,8 +474,8 @@ ra 的设计更接近 **CI/CD pipeline**（task graph + 并行执行 + 预算控
 
 ## 参考
 
-- octoscode 源码：`src/autonomy.rs`, `src/store.rs`, `src/model.rs`, `src/app.rs`, `src/app/render.rs`, `src/transport.rs`
-- ra 源码：`crates/ra-agent/src/tools/peer_handoff.rs`, `crates/ra-cli/src/peers/`, `crates/ra-cli/src/goal_tool.rs`, `crates/ra-cli/src/autonomy/agent_orchestrator.rs`
+- ra-tui 源码：`src/autonomy.rs`, `src/store.rs`, `src/model.rs`, `src/app.rs`, `src/app/render.rs`, `src/transport.rs`
+- RecurAgent 源码：`crates/ra-agent/src/tools/peer_handoff.rs`, `crates/ra-cli/src/peers/`, `crates/ra-cli/src/goal_tool.rs`, `crates/ra-cli/src/autonomy/agent_orchestrator.rs`
 - ra-core RPC 协议：`UiGoalRecord`, `UiAgentRecord`, `peer/prepare`, `peer/staged`, `peer/closed`
 - Workstream 契约：`ra/workstreams/M15-agent-goal-loop-autonomy.md`（agent/goal/loop 的后端编排契约）
-- 相关 issue：octos#1800 (peer agents v1), octos#1801 (peer agents v2/v3), octos#1967 (escalation 回读), octoscode#395, octoscode#407
+- 相关 issue：RecurAgent#1800 (peer agents v1), RecurAgent#1801 (peer agents v2/v3), RecurAgent#1967 (escalation 回读), ra-tui#395, ra-tui#407

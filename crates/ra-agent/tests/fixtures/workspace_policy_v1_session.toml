@@ -17,7 +17,7 @@ ignore = ["tmp/**", ".DS_Store"]
 [artifacts]
 primary_audio = "*.mp3"
 podcast_audio = "**/podcast_full_*.*"
-# octos #1040: the image-producing mofa contracts (comic, infographic,
+# ra #1040: the image-producing mofa contracts (comic, infographic,
 # frame) need a named artifact source so `bind_explicit_files_to_artifacts`
 # can bind the plugin-reported PNG into `ActionContext`. The glob mirrors
 # the `**/*.png` pattern the MagicBytes(Png) validator uses in glob mode.
@@ -41,7 +41,7 @@ on_verify = [
     "file_size_min:$artifact:4096",
 ]
 on_failure = ["notify_user:Podcast generation failed"]
-# octos #1034: opt the magic-bytes + audio-non-silent validators into the
+# ra #1034: opt the magic-bytes + audio-non-silent validators into the
 # `spawn_only_files` source so the validator consumes the authoritative path
 # list the plugin reports via its JSON stdout envelope. Avoids the
 # topic-suffixed output directory race (`mofa-podcast-zhuyu/`, etc.) that
@@ -59,7 +59,7 @@ on_completion = [
 ]
 on_failure = ["notify_user:Voice registration failed"]
 
-# octos #1036 (follow-up to #1034): mofa_slides now opts into the
+# ra #1036 (follow-up to #1034): mofa_slides now opts into the
 # `spawn_only_files` source so the magic-bytes check inspects the exact
 # PPTX path the plugin reported instead of any `**/*.pptx` match in the
 # session workspace. The `extension = "pptx"` filter narrows the list to
@@ -71,7 +71,7 @@ on_completion = [
 ]
 on_failure = ["notify_user:Slide generation failed"]
 
-# octos #1040 (follow-up to #1035 / #1037): mofa_comic, mofa_infographic,
+# ra #1040 (follow-up to #1035 / #1037): mofa_comic, mofa_infographic,
 # and mofa_frame all carry the same MagicBytes(Png) shape on the
 # `spawn_only_files` source. The plugin envelopes (or auto-detection via
 # `args.out` in `plugins/tool.rs::detect_output_file`) populate
@@ -110,7 +110,7 @@ on_completion = [
 ]
 on_failure = ["notify_user:Frame extraction failed"]
 
-# octos #1038 (follow-up to #1037): voice_synthesize now opts into the
+# ra #1038 (follow-up to #1037): voice_synthesize now opts into the
 # `spawn_only_files` source so the audio-non-silent check inspects the
 # exact audio path the plugin reported via `files_to_send`. The previous
 # `skill-output/voice/**/*.{mp3,wav}` glob could match a stale file from

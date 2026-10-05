@@ -14,20 +14,20 @@ tags: [olp, evolution, harness]
 
 | 层 | 算子 | 对应实案与剩余缺口 | 仓库 |
 |---|---|---|---|
-| Lifecycle | 验证门控收工 | 预算耗尽已 wip commit 加 checkpoint,剩余缺口是审查黑板无 ACK | octoscode 规程 + octos |
-| Lifecycle | 重试与超时上界 | writer 停摆;恒定时长即固定成本或超时 | octoscode |
-| Lifecycle | 状态检查点与写序 | 离线 goal archive 被 live cache 反盖(#43 在线化后观察复发) | ra |
-| Lifecycle | 委派输出校验 | peer 交付双写竞争,result.md 单写者已落地 | ra |
-| Lifecycle | 环境快照复用 | 围栏 peer 克隆无构建缓存,Rust peer 冷编译耗尽迭代(ra #2236) | ra |
-| Lifecycle | 准入判定修正 | goal_create 把 archived 当未完成拒绝(ra #2237) | ra |
-| Observability | 新增 producer | malformed 耗尽、fallback 切道无事件;kind 集合归 REQ-OLP-OBS 修订 | ra |
-| Observability | 错误与状态差日志 | serve stderr 进 ring buffer 探针不可见;裸线程 tracing 丢失 | octoscode |
-| Tooling | 报错信息修复 | 权限档 1 到 4 下 cargo "command not found" 无沙箱提示;档位不动只改文案 | ra |
-| Tooling | 参数校验 | malformed 自纠上限 | ra |
-| Context | idle 读板唤醒 | loop paused 或哨兵失效时 idle master 不消费新板项;不把 steer 升为用户消息层级 | ra |
-| Context | 上下文预算检查 | 沉淀章节越长越吃上下文 | octoscode 文档 |
-| Verification | 效果证据收工守卫 | verified 声称被复验证伪 | octoscode 规程 |
-| Verification | 期望与实际状态对比 | 自检翻数据目录而 TUI 状态栏明示 paused;自检绑定权威面 | octoscode 规程 |
+| Lifecycle | 验证门控收工 | 预算耗尽已 wip commit 加 checkpoint,剩余缺口是审查黑板无 ACK | ra-tui 规程 + RecurAgent |
+| Lifecycle | 重试与超时上界 | writer 停摆;恒定时长即固定成本或超时 | ra-tui |
+| Lifecycle | 状态检查点与写序 | 离线 goal archive 被 live cache 反盖(#43 在线化后观察复发) | RecurAgent |
+| Lifecycle | 委派输出校验 | peer 交付双写竞争,result.md 单写者已落地 | RecurAgent |
+| Lifecycle | 环境快照复用 | 围栏 peer 克隆无构建缓存,Rust peer 冷编译耗尽迭代(RecurAgent #2236) | RecurAgent |
+| Lifecycle | 准入判定修正 | goal_create 把 archived 当未完成拒绝(RecurAgent #2237) | RecurAgent |
+| Observability | 新增 producer | malformed 耗尽、fallback 切道无事件;kind 集合归 REQ-OLP-OBS 修订 | RecurAgent |
+| Observability | 错误与状态差日志 | serve stderr 进 ring buffer 探针不可见;裸线程 tracing 丢失 | ra-tui |
+| Tooling | 报错信息修复 | 权限档 1 到 4 下 cargo "command not found" 无沙箱提示;档位不动只改文案 | RecurAgent |
+| Tooling | 参数校验 | malformed 自纠上限 | RecurAgent |
+| Context | idle 读板唤醒 | loop paused 或哨兵失效时 idle master 不消费新板项;不把 steer 升为用户消息层级 | RecurAgent |
+| Context | 上下文预算检查 | 沉淀章节越长越吃上下文 | ra-tui 文档 |
+| Verification | 效果证据收工守卫 | verified 声称被复验证伪 | ra-tui 规程 |
+| Verification | 期望与实际状态对比 | 自检翻数据目录而 TUI 状态栏明示 paused;自检绑定权威面 | ra-tui 规程 |
 | Verification | 回归夹具 | 单测全绿但真管道字节流损坏;夹具必须用真 OS 原语 | 两仓库 |
 | Governance | 只加门 | 只能加更严的围栏;树主权谓词与审批分级属协议修订,不走进化派单 | 不派单 |
 
@@ -47,7 +47,7 @@ tags: [olp, evolution, harness]
 ```
 ## 修复规格
 target:     FLAW-NNN · issue #NNNN
-repo:       octoscode | octos
+repo:       ra-tui | ra
 operators:  primary = <算子>; aux = <算子>
 allowed:    <路径列表>
 forbidden:  (固定禁改段) + 本次追加

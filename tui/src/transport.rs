@@ -323,7 +323,7 @@ fn auth_token_from_cli(cli: &Cli) -> Option<String> {
         .clone()
         .and_then(clean_auth_token)
         .or_else(|| {
-            crate::env::env_compat("RA_AUTH_TOKEN", "OCTOS_AUTH_TOKEN")
+            crate::env::env_compat("RA_AUTH_TOKEN", "ra_AUTH_TOKEN")
                 .and_then(clean_auth_token)
         })
 }
@@ -1924,7 +1924,7 @@ impl ProtocolAppUiBackend {
     fn mark_disconnected(&mut self, message: impl Into<String>) {
         let message = message.into();
 
-        // The backend refused to start because another ra serve already owns
+        // The backend refused to start because another RecurAgent serve already owns
         // this data directory (redb single-writer). Respawning it would only
         // crash again — the silent ~5s loop the user hit with two ra-tui
         // windows. Latch a fatal state (suppresses reconnect in
@@ -2528,7 +2528,7 @@ impl ProtocolAppUiBackend {
                 | AppUiCommand::ProfileLlmFetchModels(_)
                 | AppUiCommand::ProfileSubProvidersList(_)
                 | AppUiCommand::SnapshotList(_)
-                // octos#1801 v2: `peer/gather` only reads brief/result files
+                // RecurAgent#1801 v2: `peer/gather` only reads brief/result files
                 // off the peer blackboard — readonly viewers may gather.
                 | AppUiCommand::PeerGather(_)
                 | AppUiCommand::ProfileSkillsList(_)
@@ -3093,7 +3093,7 @@ fn runtime_unavailable(error: Option<&str>) -> eyre::Report {
 }
 
 /// Build the cross-platform `(program, args)` for running `cmd` through the
-/// system shell, mirroring ra conventions: `sh -c <cmd>` on unix,
+/// system shell, mirroring RecurAgent conventions: `sh -c <cmd>` on unix,
 /// `cmd /C <cmd>` on windows. The command string is passed as a single
 /// argument so the shell — not us — does the word splitting.
 fn local_shell_command_args(cmd: &str) -> (&'static str, Vec<String>) {
@@ -3256,7 +3256,7 @@ fn websocket_request(
 /// Build the `X-Ra-Ui-Features` negotiation value.
 ///
 /// Normally the TUI advertises the full modern feature set. When
-/// `RA_TUI_OLD_SERVER_FEATURES=1` (legacy `OCTOSCODE_OLD_SERVER_FEATURES`) is
+/// `RA_TUI_OLD_SERVER_FEATURES=1` (legacy `RA_TUI_OLD_SERVER_FEATURES`) is
 /// set it advertises only the
 /// pre-autonomy baseline, dropping the coding autonomy / agent-control /
 /// goal / loop / harness-task-control features. This lets the onboarding
@@ -3269,7 +3269,7 @@ fn appui_feature_header_value() -> String {
 }
 
 fn old_server_features_requested() -> bool {
-    crate::env::env_compat("RA_TUI_OLD_SERVER_FEATURES", "OCTOSCODE_OLD_SERVER_FEATURES").as_deref()
+    crate::env::env_compat("RA_TUI_OLD_SERVER_FEATURES", "RA_TUI_OLD_SERVER_FEATURES").as_deref()
         == Some("1")
 }
 
@@ -3637,7 +3637,7 @@ fn rpc_value_to_app_event(
         if method == "server/heartbeat" {
             return Ok(None);
         }
-        // octos#1801 v3: `peer/staged` is decoded tui-locally BEFORE the
+        // RecurAgent#1801 v3: `peer/staged` is decoded tui-locally BEFORE the
         // vendored `UiNotification::from_method_and_params` — the pinned
         // ra-core rev predates the variant, so routing it through the
         // vendored decoder would degrade it to an `unknown_notification`
@@ -3648,7 +3648,7 @@ fn rpc_value_to_app_event(
         if method == crate::model::APPUI_METHOD_PEER_CLOSED {
             return Ok(Some(peer_closed_notification_to_client_event(params)));
         }
-        // octos#2019: `background/activity` is decoded tui-locally for the same
+        // RecurAgent#2019: `background/activity` is decoded tui-locally for the same
         // reason — the pinned ra-core rev predates the variant, so the
         // vendored decoder would degrade it to an `unknown_notification` error.
         if method == crate::model::APPUI_METHOD_BACKGROUND_ACTIVITY {
@@ -4690,7 +4690,7 @@ fn peer_prepare_event(result: crate::model::PeerPrepareResult) -> ClientEvent {
     ClientEvent::PeerPrepared(crate::client_event::PeerPreparedClientEvent { message, result })
 }
 
-/// octos#1807: decode a `turn/steer` result into the typed
+/// RecurAgent#1807: decode a `turn/steer` result into the typed
 /// [`ClientEvent::TurnSteered`]. The store owns the user-facing status line;
 /// this message is diagnostic.
 fn turn_steered_event(result: crate::model::TurnSteerResult) -> ClientEvent {
@@ -5164,7 +5164,7 @@ fn opened_session_from_client_event(event: Option<&ClientEvent>) -> Option<Sessi
     }
 }
 
-/// octos#1801 v3: decodes the durable `peer/staged` notification into the
+/// RecurAgent#1801 v3: decodes the durable `peer/staged` notification into the
 /// typed [`ClientEvent::PeerStaged`] via the tui-local
 /// [`crate::model::PeerStagedParams`] mirror (the vendored ra-core rev has
 /// no `UiNotification` variant for it yet). Malformed params surface as the
@@ -5183,7 +5183,7 @@ fn peer_staged_notification_to_client_event(params: Value) -> ClientEvent {
     }
 }
 
-/// octos#2019: decodes the durable `background/activity` notification into the
+/// RecurAgent#2019: decodes the durable `background/activity` notification into the
 /// typed [`ClientEvent::BackgroundActivity`] via the tui-local
 /// [`crate::model::BackgroundActivityParams`] mirror (the vendored ra-core
 /// rev has no `UiNotification` variant for it yet). Malformed params surface as
@@ -5202,7 +5202,7 @@ fn background_activity_notification_to_client_event(params: Value) -> ClientEven
     }
 }
 
-/// octos#1801 v3: decodes the durable `peer/closed` notification into the
+/// RecurAgent#1801 v3: decodes the durable `peer/closed` notification into the
 /// typed [`ClientEvent::PeerClosed`] via the tui-local
 /// [`crate::model::PeerClosedParams`] mirror (the vendored ra-core rev has
 /// no `UiNotification` variant for it yet). Mirror of
@@ -6232,7 +6232,7 @@ impl AppUiBackend for MockAppUiBackend {
 }
 
 fn mock_approval_kind() -> String {
-    crate::env::env_compat("RA_TUI_MOCK_APPROVAL_KIND", "OCTOSCODE_MOCK_APPROVAL_KIND")
+    crate::env::env_compat("RA_TUI_MOCK_APPROVAL_KIND", "RA_TUI_MOCK_APPROVAL_KIND")
         .unwrap_or_else(|| approval_kinds::COMMAND.into())
 }
 
@@ -6285,7 +6285,7 @@ fn mock_profile_llm_catalog() -> ProfileLlmCatalogResult {
         }),
     );
     // Keyless local-server family (empty env) so --mock runs can exercise the
-    // keyless onboarding path at all (red-team pass, octoscode#562).
+    // keyless onboarding path at all (red-team pass, ra-tui#562).
     families.insert(
         "local".into(),
         serde_json::json!({
@@ -6347,7 +6347,7 @@ fn mock_profile_skills() -> ProfileSkillsListResult {
             name: "deep-search".into(),
             version: Some("0.1.0".into()),
             tool_count: 1,
-            source_repo: Some("octos-org/octos-hub/skills/deep-search".into()),
+            source_repo: Some("icehomura/ra-hub/skills/deep-search".into()),
             installed: true,
             status: Some("installed".into()),
         }],
@@ -6360,7 +6360,7 @@ fn mock_skill_registry() -> ProfileSkillsRegistrySearchResult {
         packages: vec![ProfileSkillRegistryPackage {
             name: "deep-search".into(),
             description: "Mock registry package for deep research.".into(),
-            repo: "octos-org/octos-hub/skills/deep-search".into(),
+            repo: "icehomura/ra-hub/skills/deep-search".into(),
             version: Some("0.1.0".into()),
             author: Some("ra".into()),
             license: Some("MIT".into()),
@@ -8290,7 +8290,7 @@ mod tests {
             "skills-3".into(),
             AppUiCommand::ProfileSkillsInstall(ProfileSkillsInstallParams {
                 profile_id: Some("coding".into()),
-                repo: "octos-org/octos-hub/skills/deep-search".into(),
+                repo: "icehomura/ra-hub/skills/deep-search".into(),
                 branch: Some("main".into()),
                 force: true,
             }),
@@ -8302,7 +8302,7 @@ mod tests {
         );
         assert_eq!(
             install.params["repo"],
-            "octos-org/octos-hub/skills/deep-search"
+            "icehomura/ra-hub/skills/deep-search"
         );
         assert_eq!(install.params["branch"], "main");
         assert_eq!(install.params["force"], true);
@@ -8771,7 +8771,7 @@ mod tests {
         );
     }
 
-    /// octos#1801 v2: `peer/prepare` fleet requests encode `n` (omitted when
+    /// RecurAgent#1801 v2: `peer/prepare` fleet requests encode `n` (omitted when
     /// absent), and fleet results decode the `peers` array alongside the
     /// scalar head.
     #[test]
@@ -8842,7 +8842,7 @@ mod tests {
         assert_eq!(event.result.peers[1].topic, "peer-fix-nav-2");
     }
 
-    /// octos#1807: `turn/steer` requests encode session/expected-turn/input
+    /// RecurAgent#1807: `turn/steer` requests encode session/expected-turn/input
     /// (`expected_turn_id: None` omitted from the wire), and both result
     /// shapes decode into the typed `ClientEvent::TurnSteered`.
     #[test]
@@ -8935,16 +8935,16 @@ mod tests {
         assert_eq!(event.result.turn_id, new_turn);
     }
 
-    /// octos#1801 v3: the durable `peer/staged` NOTIFICATION decodes via the
+    /// RecurAgent#1801 v3: the durable `peer/staged` NOTIFICATION decodes via the
     /// tui-local string-keyed match into `ClientEvent::PeerStaged` — the
     /// vendored ra-core rev predates the `UiNotification` variant, so
     /// routing it through `from_method_and_params` would degrade it to an
     /// `unknown_notification` error event.
     #[test]
     fn should_decode_background_activity_onto_the_owning_session_when_the_frame_arrives() {
-        // octos#2019 — the wire frame's `session_id` is the ROUTING key and
+        // RecurAgent#2019 — the wire frame's `session_id` is the ROUTING key and
         // must survive decode intact. A decoder that lost it would force the
-        // store to fall back to the focused session (octos-tui#461/#466/#483).
+        // store to fall back to the focused session (ra-tui#461/#466/#483).
         let frame = json!({
             "jsonrpc": "2.0",
             "method": "background/activity",
@@ -8979,7 +8979,7 @@ mod tests {
         assert!(activity.dropped_count.is_none());
     }
 
-    /// octos#2019 — the cap's drop marker decodes with its total intact, so
+    /// RecurAgent#2019 — the cap's drop marker decodes with its total intact, so
     /// the client can say so out loud instead of truncating silently.
     #[test]
     fn should_decode_the_drop_marker_when_background_activity_was_capped() {
@@ -9034,7 +9034,7 @@ mod tests {
         assert!(error.message.contains("background/activity"));
     }
 
-    /// octos#2019 — the client must ADVERTISE the capability, or the server
+    /// RecurAgent#2019 — the client must ADVERTISE the capability, or the server
     /// (which gates the notification on it) never sends the frame and the
     /// human sink is silently dead.
     #[test]
@@ -9111,7 +9111,7 @@ mod tests {
         assert!(error.message.contains("peer/staged"));
     }
 
-    /// octos#1801 v3: the durable `peer/closed` NOTIFICATION decodes via the
+    /// RecurAgent#1801 v3: the durable `peer/closed` NOTIFICATION decodes via the
     /// tui-local string-keyed match into `ClientEvent::PeerClosed` — the mirror
     /// of the `peer/staged` decode (the vendored ra-core rev predates the
     /// `UiNotification` variant, so `from_method_and_params` would degrade it to
@@ -9168,7 +9168,7 @@ mod tests {
         assert!(error.message.contains("peer/closed"));
     }
 
-    /// octos#1801 v2: `peer/gather` requests encode the slug filter (omitted
+    /// RecurAgent#1801 v2: `peer/gather` requests encode the slug filter (omitted
     /// for gather-all) and results decode into
     /// `ClientEvent::PeerGathered` — including a peer with no result yet.
     #[test]
@@ -9255,7 +9255,7 @@ mod tests {
         assert!(event.message.contains("1/2"));
     }
 
-    /// Realistic `session/status/read` result body as emitted by an ra
+    /// Realistic `session/status/read` result body as emitted by an RecurAgent
     /// server (protocol 1.1.0) for a fresh data dir where onboarding has not
     /// saved a provider yet — captured verbatim from `ra serve --stdio`
     /// (capabilities trimmed to a representative subset). `model_member`
@@ -9522,7 +9522,7 @@ mod tests {
                 profile_id: Some("coding".into()),
                 q: Some("search".into()),
             }),
-            // octos#1801 v2: `peer/gather` only reads the blackboard —
+            // RecurAgent#1801 v2: `peer/gather` only reads the blackboard —
             // readonly viewers may gather (the follow-up SubmitPrompt is
             // where readonly blocks).
             AppUiCommand::PeerGather(crate::model::PeerGatherParams {
@@ -9601,7 +9601,7 @@ mod tests {
             }),
             AppUiCommand::ProfileSkillsInstall(ProfileSkillsInstallParams {
                 profile_id: Some("coding".into()),
-                repo: "octos-org/octos-hub/skills/deep-search".into(),
+                repo: "icehomura/ra-hub/skills/deep-search".into(),
                 branch: None,
                 force: false,
             }),
@@ -9620,7 +9620,7 @@ mod tests {
                 session_id: None,
                 profile_id: None,
             }),
-            // octos#1807: `turn/steer` injects input into a running turn —
+            // RecurAgent#1807: `turn/steer` injects input into a running turn —
             // the same mutation class as `turn/start`, blocked in read-only.
             AppUiCommand::TurnSteer(crate::model::TurnSteerParams {
                 session_id: SessionKey("local:test".into()),

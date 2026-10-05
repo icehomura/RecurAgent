@@ -2,8 +2,8 @@
  * M7.8 live swarm dispatch release gate (issue #511).
  *
  * This spec is intentionally gated out of default e2e runs. It only talks to
- * a real canary when OCTOS_M7_SWARM_LIVE=1 is present and the supervisor has
- * supplied OCTOS_TEST_URL plus OCTOS_AUTH_TOKEN. The companion script
+ * a real canary when ra_M7_SWARM_LIVE=1 is present and the supervisor has
+ * supplied ra_TEST_URL plus ra_AUTH_TOKEN. The companion script
  * `scripts/validate-m7-swarm-live.sh` sets those variables.
  */
 import fs from 'node:fs';
@@ -76,15 +76,15 @@ interface GateState {
 
 const FIXTURE_PATH = path.join(__dirname, '..', 'fixtures', 'm7-swarm-expected.json');
 const FIXTURE = loadFixture();
-const RUN_LIVE = process.env.OCTOS_M7_SWARM_LIVE === '1';
-const BASE = (process.env.OCTOS_TEST_URL || '').replace(/\/+$/, '');
-const TOKEN = process.env.OCTOS_AUTH_TOKEN || '';
-const PROFILE = process.env.OCTOS_PROFILE || 'dspfac';
+const RUN_LIVE = process.env.ra_M7_SWARM_LIVE === '1';
+const BASE = (process.env.ra_TEST_URL || '').replace(/\/+$/, '');
+const TOKEN = process.env.ra_AUTH_TOKEN || '';
+const PROFILE = process.env.ra_PROFILE || 'dspfac';
 const OUTPUT_DIR =
-  process.env.OCTOS_M7_SWARM_OUTPUT_DIR ||
+  process.env.ra_M7_SWARM_OUTPUT_DIR ||
   path.join(process.cwd(), 'test-results-m7-swarm-live');
 const DIAGNOSTIC_JSON =
-  process.env.OCTOS_M7_SWARM_DIAGNOSTICS ||
+  process.env.ra_M7_SWARM_DIAGNOSTICS ||
   path.join(OUTPUT_DIR, 'diagnostic.json');
 const POLL_INTERVAL_MS = FIXTURE.limits.poll_interval_seconds * 1_000;
 const DISPATCH_TIMEOUT_MS = FIXTURE.limits.dispatch_timeout_seconds * 1_000;
@@ -342,16 +342,16 @@ async function pollUntil(
 
 async function ensureLiveConfig(): Promise<void> {
   if (!BASE) {
-    await failWithDiagnostic('missing_base_url', 'OCTOS_TEST_URL is required when OCTOS_M7_SWARM_LIVE=1');
+    await failWithDiagnostic('missing_base_url', 'ra_TEST_URL is required when ra_M7_SWARM_LIVE=1');
   }
   if (!TOKEN) {
-    await failWithDiagnostic('missing_auth_token', 'OCTOS_AUTH_TOKEN is required when OCTOS_M7_SWARM_LIVE=1');
+    await failWithDiagnostic('missing_auth_token', 'ra_AUTH_TOKEN is required when ra_M7_SWARM_LIVE=1');
   }
   let host = '';
   try {
     host = new URL(BASE).hostname;
   } catch {
-    await failWithDiagnostic('invalid_base_url', `Invalid OCTOS_TEST_URL: ${BASE}`);
+    await failWithDiagnostic('invalid_base_url', `Invalid ra_TEST_URL: ${BASE}`);
   }
   if (FIXTURE.disallowed_hosts.includes(host)) {
     await failWithDiagnostic('disallowed_host', `M7 swarm live gate refuses to run on ${host}`, {
@@ -377,7 +377,7 @@ async function openSessionAfterReload(): Promise<void> {
 async function pointBrowserAtSession(page: Page): Promise<void> {
   await login(page);
   await page.evaluate((sessionId) => {
-    localStorage.setItem('octos_current_session', sessionId);
+    localStorage.setItem('ra_current_session', sessionId);
   }, state.sessionId);
   await page.goto('/chat', { waitUntil: 'domcontentloaded' });
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -387,7 +387,7 @@ async function pointBrowserAtSession(page: Page): Promise<void> {
 test.describe('M7.8 live swarm dispatch gate', () => {
   test.describe.configure({ mode: 'serial' });
   test.setTimeout(DISPATCH_TIMEOUT_MS + 120_000);
-  test.skip(!RUN_LIVE, 'Set OCTOS_M7_SWARM_LIVE=1 to run the M7.8 canary-only swarm gate.');
+  test.skip(!RUN_LIVE, 'Set ra_M7_SWARM_LIVE=1 to run the M7.8 canary-only swarm gate.');
 
   test.beforeAll(async () => {
     await ensureLiveConfig();

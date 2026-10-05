@@ -1,6 +1,6 @@
 # Sandbox
 
-ra can isolate shell commands inside a sandbox, preventing the AI agent from modifying the host system outside the project workspace. Only the `shell` tool is sandboxed; file tools (`read_file`, `write_file`, `edit_file`) use their own path validation (`O_NOFOLLOW`, traversal checks).
+RecurAgent can isolate shell commands inside a sandbox, preventing the AI agent from modifying the host system outside the project workspace. Only the `shell` tool is sandboxed; file tools (`read_file`, `write_file`, `edit_file`) use their own path validation (`O_NOFOLLOW`, traversal checks).
 
 ## Quick Start
 
@@ -20,7 +20,7 @@ This auto-detects the best available backend for your platform.
 
 ### Auto-Detection Order
 
-When `mode` is `"auto"` (default), ra probes in order, picking the first match for the host OS:
+When `mode` is `"auto"` (default), RecurAgent probes in order, picking the first match for the host OS:
 
 1. **bwrap** on Linux (checked via `which bwrap`)
 2. **sandbox-exec** on macOS (checked via `which sandbox-exec`)
@@ -58,7 +58,7 @@ sudo pacman -S bubblewrap
 | `/proc` | Mounted |
 | PID namespace | Isolated (`--unshare-pid`) |
 | Network | Blocked by default (`--unshare-net`) |
-| Parent process | `--die-with-parent` (killed if ra exits) |
+| Parent process | `--die-with-parent` (killed if RecurAgent exits) |
 
 **Limitations:**
 
@@ -103,7 +103,7 @@ Uses Apple's Seatbelt sandbox framework with a [SBPL](https://reverse.put.as/wp-
 
 Uses Windows AppContainer isolation via the `ra-sandbox` helper binary (built on the [`rappct`](https://crates.io/crates/rappct) crate).
 
-**No installation needed** — the helper ships with the ra binary on Windows.
+**No installation needed** — the helper ships with the RecurAgent binary on Windows.
 
 **What it does:**
 
@@ -384,4 +384,4 @@ In debug logs, you'll see either:
 
 4. **Docker image trust.** The default image is `alpine:3.21`. If you override it, ensure the image is from a trusted source.
 
-5. **`allow_network: true` opens all network access.** There is no fine-grained network filtering (e.g., allow only specific hosts). Use Docker's `--network` options outside of ra if you need more control.
+5. **`allow_network: true` opens all network access.** There is no fine-grained network filtering (e.g., allow only specific hosts). Use Docker's `--network` options outside of RecurAgent if you need more control.

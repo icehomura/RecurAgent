@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # #407 Peer TUI soak — live tmux UX test for the peer dock.
 #
-# Drives a real octoscode against a real octos serve, stages peers via
+# Drives a real ra-tui against a real ra serve, stages peers via
 # peer_handoff (or /peer --prepare), and asserts:
 #   - peer chip appears in the session strip
 #   - overflow shows the structured "Peers: N · M live · K⚠" pill
@@ -12,8 +12,8 @@
 # workspace + data dir under /tmp, tears down on exit.
 set -euo pipefail
 
-OCTOS_BIN="${OCTOS_BIN:-$HOME/home/ra-one/ra/target/debug/ra}"
-OCTOSCODE_BIN="${OCTOSCODE_BIN:-$(cd "$(dirname "$0")/.." && pwd)/target/debug/octoscode}"
+ra_BIN="${ra_BIN:-$HOME/home/ra-one/ra/target/debug/ra}"
+RA_TUI_BIN="${RA_TUI_BIN:-$(cd "$(dirname "$0")/.." && pwd)/target/debug/ra-tui}"
 
 RUN_ID="${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 ROOT="/tmp/ra-peer-soak-$RUN_ID"
@@ -90,18 +90,18 @@ teardown() {
 trap teardown EXIT
 
 echo "=== binaries ==="
-[ -x "$OCTOS_BIN" ] || die "ra binary missing: $OCTOS_BIN"
-[ -x "$OCTOSCODE_BIN" ] || die "octoscode binary missing: $OCTOSCODE_BIN"
-"$OCTOS_BIN" --version | head -1
-"$OCTOSCODE_BIN" --version | head -1
+[ -x "$ra_BIN" ] || die "ra binary missing: $ra_BIN"
+[ -x "$RA_TUI_BIN" ] || die "ra-tui binary missing: $RA_TUI_BIN"
+"$ra_BIN" --version | head -1
+"$RA_TUI_BIN" --version | head -1
 
 echo "=== launching ra serve (ws on $PORT) ==="
-# OCTOS_HOME=~/.crew resolves the 'dev' profile (LLM creds). A SEPARATE
+# ra_HOME=~/.crew resolves the 'dev' profile (LLM creds). A SEPARATE
 # --instance-data-dir keeps the serve lock off the running production
 # server (PID held against ~/.crew/instances/...).
 tmux new-session -d -s "$SERVER_SESSION" \
-  "cd '$WORKSPACE' && OCTOS_HOME='$HOME/.crew' KIMI_API_KEY='$KIMI_API_KEY' \
-    '$OCTOS_BIN' serve --host '$HOST' --port '$PORT' \
+  "cd '$WORKSPACE' && ra_HOME='$HOME/.crew' KIMI_API_KEY='$KIMI_API_KEY' \
+    '$ra_BIN' serve --host '$HOST' --port '$PORT' \
     --instance-data-dir '$DATA_DIR/runtime' \
     --auth-token '$AUTH_TOKEN' \
     2>&1 | tee '$LOGS_DIR/server.log'"
@@ -115,9 +115,9 @@ done
 grep -qE "listening|ready|serving|bound|accepting|ra API server" "$LOGS_DIR/server.log" 2>/dev/null || \
   { echo "server log head:"; head -40 "$LOGS_DIR/server.log"; die "server did not become ready"; }
 
-echo "=== launching octoscode (ws transport) ==="
+echo "=== launching ra-tui (ws transport) ==="
 tmux new-session -d -s "$TUI_SESSION" \
-  "cd '$WORKSPACE' && '$OCTOSCODE_BIN' \
+  "cd '$WORKSPACE' && '$RA_TUI_BIN' \
     --endpoint '$ENDPOINT' --auth-token '$AUTH_TOKEN' \
     --profile-id '$PROFILE_ID' --session '$SESSION_ID' \
     --cwd '$WORKSPACE' --theme codex \

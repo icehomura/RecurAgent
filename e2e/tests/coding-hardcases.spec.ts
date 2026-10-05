@@ -9,9 +9,9 @@
  * - concurrent coding sessions stay isolated under load
  *
  * Run listing only:
- *   OCTOS_TEST_URL=https://dspfac.crew.ominix.io \
- *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
- *   OCTOS_PROFILE=dspfac \
+ *   ra_TEST_URL=https://dspfac.crew.ominix.io \
+ *   ra_AUTH_TOKEN=ra-admin-2026 \
+ *   ra_PROFILE=dspfac \
  *   npx playwright test tests/coding-hardcases.spec.ts --list
  */
 import { expect, test } from '@playwright/test';

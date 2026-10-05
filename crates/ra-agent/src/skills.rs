@@ -710,7 +710,7 @@ mod tests {
 
     #[test]
     fn test_parse_skill_requires_env_missing() {
-        let content = "---\nname: envskill\ndescription: d\nrequires_env: OCTOS_NONEXISTENT_VAR_XYZ_99\n---\nB\n";
+        let content = "---\nname: envskill\ndescription: d\nrequires_env: ra_NONEXISTENT_VAR_XYZ_99\n---\nB\n";
         let path = PathBuf::from("/fake/envskill/SKILL.md");
         let info = parse_skill(&path, content, false).unwrap();
         assert!(!info.available);
@@ -718,8 +718,8 @@ mod tests {
 
     #[test]
     fn test_parse_skill_requires_env_multiple_one_missing() {
-        // HOME should exist, but OCTOS_NONEXISTENT should not
-        let content = "---\nname: envskill\ndescription: d\nrequires_env: HOME, OCTOS_NONEXISTENT_VAR_XYZ_99\n---\nB\n";
+        // HOME should exist, but ra_NONEXISTENT should not
+        let content = "---\nname: envskill\ndescription: d\nrequires_env: HOME, ra_NONEXISTENT_VAR_XYZ_99\n---\nB\n";
         let path = PathBuf::from("/fake/envskill/SKILL.md");
         let info = parse_skill(&path, content, false).unwrap();
         assert!(!info.available);

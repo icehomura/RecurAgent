@@ -21,7 +21,7 @@
 //! connection).
 //!
 //! **Stage 3 (this file) adds the ra-specific health surface** — the
-//! checks that answer "why doesn't ra work on THIS machine":
+//! checks that answer "why doesn't RecurAgent work on THIS machine":
 //! - `Config`: parse the resolved `config.json` (config is hand-edited now —
 //!   a typo is the #1 support case) and surface the exact serde error.
 //! - `Provider & auth`: resolve the configured provider, verify an API key is
@@ -44,11 +44,11 @@
 //!   tail probe parses and immediately discards; no transcript content
 //!   reaches the report.
 //!
-//! Stage-3 contract: ra state is never created, migrated, or modified, and
+//! Stage-3 contract: RecurAgent state is never created, migrated, or modified, and
 //! no secret value reaches the report or the JSON bundle (env var NAMES only;
 //! quoted literals are redacted out of parse errors; URLs are stripped of
 //! userinfo/query for display AND before probing). Documented exceptions to
-//! "no side effects", each mirroring what ra itself does on startup: the
+//! "no side effects", each mirroring what RecurAgent itself does on startup: the
 //! API-key check runs the REAL resolver, which may re-`chmod 0600` the auth
 //! store and resolve keychain-backed `env_vars` via the OS keychain; the
 //! sandbox check runs the runtime's own availability probes (on Linux that
@@ -102,7 +102,7 @@ const SESSION_TAIL_PROBE_BYTES: u64 = 64 * 1024;
 /// Session files examined per store (metadata + tail probe each).
 const MAX_SESSION_FILES: usize = 256;
 
-/// Run local environment diagnostics for the ra server.
+/// Run local environment diagnostics for the RecurAgent server.
 #[derive(Debug, Args)]
 pub struct DoctorCommand {
     /// Emit machine-readable JSON (support bundle).
@@ -119,7 +119,7 @@ pub struct DoctorCommand {
     pub data_dir: Option<PathBuf>,
 }
 
-/// Build the ra server [`ProductSpec`]. `current_version` is the CLI's OWN
+/// Build the RecurAgent server [`ProductSpec`]. `current_version` is the CLI's OWN
 /// `CARGO_PKG_VERSION`, passed IN here — never the diagnostics crate's.
 ///
 /// There is deliberately **no published release channel** for this fork: it
@@ -241,15 +241,15 @@ fn build_report(cmd: &DoctorCommand, with_network: bool) -> Result<Report> {
     ));
     report.push(shadow_check(&located, &method, &spec));
 
-    // --- Installations (every ra + octoscode copy, with versions) --------
-    // Parity with `octoscode doctor`'s Installations section: enumerate BOTH
+    // --- Installations (every RecurAgent + ra-tui copy, with versions) --------
+    // Parity with `ra-tui doctor`'s Installations section: enumerate BOTH
     // binaries across PATH + the known install dirs so duplicate / mismatched
     // installs are visible from either doctor.
     report.extend(installations_checks(&spec));
 
     // --- Config / data-dir context ------------------------------------------
     // Resolve the REAL config_home (~/.config/ra by default) and data_dir
-    // (~/.ra) via the canonical resolver so doctor reports what ra
+    // (~/.ra) via the canonical resolver so doctor reports what RecurAgent
     // actually reads/writes. Read-only here: no migrations, no dir creation.
     let ctx = crate::config_context::resolve_config_context(cmd.data_dir.as_deref());
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -259,7 +259,7 @@ fn build_report(cmd: &DoctorCommand, with_network: bool) -> Result<Report> {
     // The EFFECTIVE config (defaults when no file) feeds the provider /
     // profiles / stores / skills / MCP / channels checks below; when the file
     // is broken those checks are skipped (a degraded roster, like codex
-    // doctor) rather than reporting against defaults that ra won't run
+    // doctor) rather than reporting against defaults that RecurAgent won't run
     // with either.
     let config_path = crate::config::resolve_config_file_path(&cwd, &ctx, None);
     let (config_check_row, effective_config) = config_parse_check(&config_path, &cwd, &ctx);
@@ -336,35 +336,19 @@ fn build_report(cmd: &DoctorCommand, with_network: bool) -> Result<Report> {
 }
 
 // ---------------------------------------------------------------------------
-// Installations — every ra + octoscode on the machine, with versions
+// Installations — every RecurAgent + ra-tui on the machine, with versions
 // ---------------------------------------------------------------------------
 
-/// Parity with `octoscode doctor`'s Installations section: enumerate every
-/// ra AND octoscode copy (across `$PATH`, Homebrew, cargo, the shell
-/// installer's `~/.local/bin`, and octoscode's `~/.ra/bin` / legacy
-/// `~/.ra/bin` auto-install dir),
+/// Parity with `ra-tui doctor`'s Installations section: enumerate every
+/// RecurAgent AND ra-tui copy (across `$PATH`, Homebrew, cargo, the shell
+/// installer's `~/.local/bin`, and RecurAgent's `~/.ra/bin` auto-install dir),
 /// with each copy's `--version` + inferred install method — so duplicate /
 /// mismatched installs are visible from `ra doctor` too, not just the TUI's.
 fn installations_checks(ra: &ProductSpec) -> Vec<Check> {
     let mut checks = vec![
-        installs_check("ra", &locate_with_octos_bin(ra)),
+        installs_check("ra", &locate_with_ra_bin(ra)),
         installs_check("ra-tui", &locate(&ra_tui_spec())),
     ];
-    // The terminal client was renamed octos-tui -> octoscode -> ra-tui.
-    // Enumerating only the current name would report "none found" to anyone who
-    // has not upgraded yet — wrong, and worst for exactly the user who needs
-    // `doctor` to explain things. Look for both older names too, and surface
-    // each ONLY when a copy is actually present so the section does not grow
-    // permanent empty rows. Drop these once the renames have settled.
-    for (label, spec) in [
-        ("octoscode (legacy name)", octoscode_spec()),
-        ("octos-tui (legacy name)", octoscode_legacy_spec()),
-    ] {
-        let legacy = locate(&spec);
-        if !install_rows(&legacy).is_empty() {
-            checks.push(installs_check(label, &legacy));
-        }
-    }
     checks
 }
 
@@ -380,50 +364,25 @@ fn ra_tui_spec() -> ProductSpec {
     )
 }
 
-/// Pre-rename spec, so a not-yet-upgraded `octoscode` copy is still found.
-fn octoscode_spec() -> ProductSpec {
-    ProductSpec::new(
-        "octoscode",
-        "octoscode",
-        "0.0.0",
-        "octos-org/octoscode",
-        "octoscode",
-    )
-}
-
-/// Pre-rename spec, so a not-yet-upgraded `octos-tui` copy is still found.
-/// See the note in [`installations_checks`].
-fn octoscode_legacy_spec() -> ProductSpec {
-    ProductSpec::new(
-        "octos-tui",
-        "octos-tui",
-        "0.0.0",
-        "octos-org/octos-tui",
-        "octos-tui",
-    )
-}
-
-/// `locate()` scans PATH + Homebrew/cargo/`~/.local/bin`, but octoscode's
-/// auto-installer drops the binary into `~/.ra/bin` (or the legacy `~/.ra/bin`),
-/// off both — add both (deduped by canonical path).
-fn locate_with_octos_bin(spec: &ProductSpec) -> LocatedBinaries {
+/// `locate()` scans PATH + Homebrew/cargo/`~/.local/bin`, but RecurAgent's
+/// auto-installer drops the binary into `~/.ra/bin`, off both — add it
+/// (deduped by canonical path).
+fn locate_with_ra_bin(spec: &ProductSpec) -> LocatedBinaries {
     let mut located = locate(spec);
     if let Some(home) = std::env::var_os("HOME") {
-        for dir in [ra_core::brand::STATE_DIR, ra_core::brand::LEGACY_STATE_DIR] {
-            let candidate = Path::new(&home)
-                .join(dir)
-                .join("bin")
-                .join(spec.binary_file_name());
-            if candidate.is_file() {
-                let canonical =
-                    std::fs::canonicalize(&candidate).unwrap_or_else(|_| candidate.clone());
-                let already = located
-                    .all()
-                    .iter()
-                    .any(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()) == canonical);
-                if !already {
-                    located.off_path.push(candidate);
-                }
+        let candidate = Path::new(&home)
+            .join(ra_core::brand::STATE_DIR)
+            .join("bin")
+            .join(spec.binary_file_name());
+        if candidate.is_file() {
+            let canonical =
+                std::fs::canonicalize(&candidate).unwrap_or_else(|_| candidate.clone());
+            let already = located
+                .all()
+                .iter()
+                .any(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()) == canonical);
+            if !already {
+                located.off_path.push(candidate);
             }
         }
     }
@@ -439,8 +398,8 @@ fn install_method_for_path(path: &Path) -> &'static str {
         "npm"
     } else if p.contains("/homebrew/") || p.contains("/Cellar/") || p.starts_with("/usr/local/") {
         "brew"
-    } else if p.contains("/.ra/bin/") || p.contains("/.ra/bin/") {
-        "octoscode auto-install"
+    } else if p.contains("/.ra/bin/") {
+        "ra-tui auto-install"
     } else if p.contains("/.local/bin/") {
         "shell installer"
     } else if p.starts_with("/usr/bin/") || p.starts_with("/bin/") {
@@ -569,7 +528,7 @@ fn network_checks(spec: &ProductSpec, method: &InstallMethod) -> Vec<Check> {
                 CAT_NETWORK,
                 "latest release",
                 format!("could not check for a newer release: {err}"),
-                "retry when online, or set OCTOS_GITHUB_TOKEN if rate-limited",
+                "retry when online, or set ra_GITHUB_TOKEN if rate-limited",
             )),
         }
     }
@@ -585,7 +544,7 @@ fn network_checks(spec: &ProductSpec, method: &InstallMethod) -> Vec<Check> {
 /// downstream checks. Distinguishes three cases: no file (defaults — pass with
 /// a note), parsed (pass with a provider/model summary), broken (FAIL with the
 /// exact error and the file to edit — downstream config-dependent checks are
-/// skipped, mirroring the fact that ra itself won't run with that file).
+/// skipped, mirroring the fact that RecurAgent itself won't run with that file).
 fn config_parse_check(
     config_path: &Path,
     cwd: &Path,
@@ -940,7 +899,7 @@ fn local_server_checks(
     }
     // Agent use depends on tool calling, which local servers only provide
     // with a tool-capable model + chat template — a connect-fine/tools-broken
-    // setup otherwise looks like an ra bug. Named "(advisory)" because
+    // setup otherwise looks like an RecurAgent bug. Named "(advisory)" because
     // nothing is verified here; a bare pass would read as a checked result.
     if canonical == "local" {
         checks.push(Check::pass(
@@ -1280,7 +1239,7 @@ fn profile_checks(profiles: &[DiscoveredProfile]) -> Vec<Check> {
 }
 
 /// Classify an EXISTING redb store's lock state WITHOUT opening it as a
-/// database: healthy-and-unlocked, held by another ra process (the
+/// database: healthy-and-unlocked, held by another RecurAgent process (the
 /// single-writer lock — how a second `ra serve` on one data-dir dies,
 /// #1666), or unreadable.
 ///
@@ -1897,7 +1856,7 @@ fn embedder_check(data_dir: &Path) -> Check {
             CAT_STORES,
             "embedding model",
             "absent and automatic download is disabled — memory search is keyword-only",
-            "run `ra memory embedder --fetch`, or unset OCTOS_NO_MODEL_DOWNLOAD / embedding.auto_download",
+            "run `ra memory embedder --fetch`, or unset ra_NO_MODEL_DOWNLOAD / embedding.auto_download",
         )
     }
 }
@@ -2079,19 +2038,19 @@ mod tests {
             "brew"
         );
         assert_eq!(
-            install_method_for_path(Path::new("/home/u/.local/bin/octoscode")),
+            install_method_for_path(Path::new("/home/u/.local/bin/ra-tui")),
             "shell installer"
         );
         assert_eq!(
             install_method_for_path(Path::new("/home/u/.ra/bin/ra")),
-            "octoscode auto-install"
+            "ra-tui auto-install"
         );
         assert_eq!(
             install_method_for_path(Path::new("/usr/bin/ra")),
             "system"
         );
         assert_eq!(
-            install_method_for_path(Path::new("/x/node_modules/.bin/octoscode")),
+            install_method_for_path(Path::new("/x/node_modules/.bin/ra-tui")),
             "npm"
         );
     }
@@ -2123,10 +2082,10 @@ mod tests {
     }
 
     #[test]
-    fn installations_checks_cover_both_octos_and_octoscode() {
+    fn installations_checks_cover_server_and_terminal_client() {
         let checks = installations_checks(&ra_server_spec());
         assert!(checks.iter().any(|c| c.name == "ra installs"));
-        assert!(checks.iter().any(|c| c.name == "octoscode installs"));
+        assert!(checks.iter().any(|c| c.name == "ra-tui installs"));
     }
 
     #[test]
@@ -2134,7 +2093,9 @@ mod tests {
         let spec = ra_server_spec();
         assert_eq!(spec.current_version, env!("CARGO_PKG_VERSION"));
         assert_eq!(spec.binary_name, "ra");
-        assert_eq!(spec.github_repo, "octos-org/octos");
+        // This fork ships from the source tree, so it advertises no upstream
+        // release channel (see `ra_server_spec`).
+        assert_eq!(spec.github_repo, "");
         assert_eq!(
             spec.asset_selector.asset_name("aarch64-apple-darwin"),
             "ra-bundle-aarch64-apple-darwin"
@@ -2226,7 +2187,7 @@ mod tests {
         assert_eq!(key.value.as_deref(), Some("DOCTORTESTONLY_API_KEY"));
 
         // A REGISTERED cloud provider (key env set, no base_url requirement)
-        // with an unresolvable key is a hard FAIL — ra won't run a turn.
+        // with an unresolvable key is a hard FAIL — RecurAgent won't run a turn.
         // `zzz_doctor_env` guards against a real key in the test env.
         let cloud = crate::config::Config {
             provider: Some("anthropic".into()),

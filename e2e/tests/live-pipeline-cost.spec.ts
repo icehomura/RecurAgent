@@ -18,15 +18,15 @@
  *     is present we additionally assert one row per pipeline node.
  *
  * Run from `e2e/`:
- *   OCTOS_TEST_URL=https://dspfac.bot.ominix.io \
+ *   ra_TEST_URL=https://dspfac.bot.ominix.io \
  *     npx playwright test tests/live-pipeline-cost.spec.ts --workers=1
  */
 
 import { test, expect } from '@playwright/test';
 
-const BASE = process.env.OCTOS_TEST_URL || 'https://dspfac.bot.ominix.io';
-const TOKEN = process.env.OCTOS_AUTH_TOKEN || 'ra-admin-2026';
-const PROFILE = process.env.OCTOS_PROFILE || 'dspfac';
+const BASE = process.env.ra_TEST_URL || 'https://dspfac.bot.ominix.io';
+const TOKEN = process.env.ra_AUTH_TOKEN || 'ra-admin-2026';
+const PROFILE = process.env.ra_PROFILE || 'dspfac';
 
 test.setTimeout(180_000);
 

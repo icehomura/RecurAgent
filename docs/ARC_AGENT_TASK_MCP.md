@@ -1,6 +1,6 @@
 # Native ARC Agent Tasks over MCP
 
-ra can execute a versioned task compiled by the Agentic Requirement
+RecurAgent can execute a versioned task compiled by the Agentic Requirement
 Compiler (ARC) without flattening the task into a free-form prompt. The
 integration reuses the existing `run_ra_session` MCP tool and adds an
 optional `input.arc_task` contract.
@@ -8,7 +8,7 @@ optional `input.arc_task` contract.
 ## Capability discovery
 
 ARC first initializes `ra mcp-serve` and calls `tools/list`. A compatible
-ra build advertises this nested field:
+RecurAgent build advertises this nested field:
 
 ```text
 run_ra_session.inputSchema
@@ -16,12 +16,12 @@ run_ra_session.inputSchema
     └── properties.schema.const = "arc.agent-task.v1"
 ```
 
-This explicit capability check prevents an older ra binary from silently
+This explicit capability check prevents an older RecurAgent binary from silently
 running the compiled task through the legacy prompt path.
 
 ## Request shape
 
-`contract` remains the ra workspace contract name. ARC normally uses
+`contract` remains the RecurAgent workspace contract name. ARC normally uses
 `coding`; the versioned ARC package is carried separately:
 
 ```json
@@ -66,10 +66,10 @@ running the compiled task through the legacy prompt path.
 
 ## Native mapping
 
-ra validates the package before constructing an LLM provider or starting
+RecurAgent validates the package before constructing an LLM provider or starting
 the agent loop:
 
-| ARC field | ra execution behavior |
+| ARC field | RecurAgent execution behavior |
 | --- | --- |
 | `system_prompt` | Installed through `Agent::with_system_prompt`; it is not copied into user content |
 | `message` | Stored as the structured custom task instruction |
@@ -108,7 +108,7 @@ Input errors use the `arc_task_invalid:` prefix. Artifact validation errors use
 ## Backward compatibility
 
 Calls without `input.arc_task` retain the existing `input.prompt`,
-`expected_artifact`, and `artifact_name` behavior. ra continues to expose
+`expected_artifact`, and `artifact_name` behavior. RecurAgent continues to expose
 exactly one MCP tool, so existing orchestrators are unaffected.
 
 ## Verification

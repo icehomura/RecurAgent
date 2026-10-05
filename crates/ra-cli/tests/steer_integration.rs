@@ -49,7 +49,7 @@ fn olp_ctrl_steer_subprocess_cli_writes_sidecar_and_marker() {
     std::fs::create_dir_all(&cwd).expect("cwd");
     let session = "prod:local:tui#coding";
     // Seed a REAL session transcript so the CLI's existence check passes.
-    // "ra" is the production default profile id (stored state, not brand):
+    // "RecurAgent" is the production default profile id (stored state, not brand):
     // its on-disk directory keeps the legacy name.
     let root = project_sessions_root(&cwd, "ra");
     let base = session.split('#').next().expect("base");

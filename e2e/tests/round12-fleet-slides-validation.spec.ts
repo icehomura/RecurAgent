@@ -34,7 +34,7 @@
  *
  * Run:
  *   cd ~/home/ra/e2e
- *   OCTOS_AUTH_TOKEN=ra-admin-2026 OCTOS_PROFILE=dspfac \
+ *   ra_AUTH_TOKEN=ra-admin-2026 ra_PROFILE=dspfac \
  *     npx playwright test tests/round12-fleet-slides-validation.spec.ts \
  *     --reporter=json --workers=4
  *
@@ -65,14 +65,14 @@ interface HostTrial {
   sshHost: string;
 }
 
-// SSH targets come from OCTOS_FLEET_SSH_MAP (same format as in
+// SSH targets come from ra_FLEET_SSH_MAP (same format as in
 // m8-runtime-invariants-live.spec.ts). river uses key auth; the rest use
 // the project SSH config (~/.ssh/config) and ControlMaster.
 // SSH targets per fleet host come from the environment so no host
 // addresses live in the repo, e.g.
-//   OCTOS_FLEET_SSH_MAP='dspfac.crew.ominix.io=cloud@<host>,dspfac.bot.ominix.io=cloud@<host>'
+//   ra_FLEET_SSH_MAP='dspfac.crew.ominix.io=cloud@<host>,dspfac.bot.ominix.io=cloud@<host>'
 const SSH_MAP: Record<string, string> = Object.fromEntries(
-  (process.env.OCTOS_FLEET_SSH_MAP || '')
+  (process.env.ra_FLEET_SSH_MAP || '')
     .split(',')
     .map((pair): [string, string] => {
       const [k = '', v = ''] = pair.trim().split('=');
@@ -134,7 +134,7 @@ const SLIDE_BUDGET_MS = 20 * 60 * 1000; // 20-min generate-phase wait
 const SLIDES_DEADLINE_MS = 20 * 60 * 1000; // post-confirm DOM/WS wait
 const TEST_TIMEOUT_MS = 75 * 60 * 1000; // hard cap for the whole test
 
-const PROFILE = process.env.OCTOS_PROFILE || 'dspfac';
+const PROFILE = process.env.ra_PROFILE || 'dspfac';
 
 interface WsCapture {
   framesTotal: number;

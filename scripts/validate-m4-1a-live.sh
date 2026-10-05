@@ -32,8 +32,8 @@
 #       [--output-dir /tmp/m4-1a-live-results]
 #
 # Environment overrides mirror the CLI flags:
-#   OCTOS_TEST_URL, OCTOS_AUTH_TOKEN, OCTOS_PROFILE, OCTOS_TEST_EMAIL,
-#   OCTOS_E2E_OUTPUT_ROOT, OCTOS_M4_1A_TIMEOUT
+#   ra_TEST_URL, ra_AUTH_TOKEN, ra_PROFILE, ra_TEST_EMAIL,
+#   ra_E2E_OUTPUT_ROOT, ra_M4_1A_TIMEOUT
 
 set -euo pipefail
 
@@ -41,11 +41,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 FIXTURE_PATH="${ROOT}/e2e/fixtures/m4-1a-progress-expected.json"
 
-BASE_URL="${OCTOS_TEST_URL:-}"
-AUTH_TOKEN="${OCTOS_AUTH_TOKEN:-}"
-PROFILE_ID="${OCTOS_PROFILE:-dspfac}"
-TEST_EMAIL="${OCTOS_TEST_EMAIL:-dspfac@gmail.com}"
-TIMEOUT_SECONDS="${OCTOS_M4_1A_TIMEOUT:-600}"
+BASE_URL="${ra_TEST_URL:-}"
+AUTH_TOKEN="${ra_AUTH_TOKEN:-}"
+PROFILE_ID="${ra_PROFILE:-dspfac}"
+TEST_EMAIL="${ra_TEST_EMAIL:-dspfac@gmail.com}"
+TIMEOUT_SECONDS="${ra_M4_1A_TIMEOUT:-600}"
 OUTPUT_DIR=""
 SKIP_E2E=false
 E2E_ONLY=false
@@ -102,11 +102,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$BASE_URL" ]]; then
-  fail "missing --base-url (or OCTOS_TEST_URL)"
+  fail "missing --base-url (or ra_TEST_URL)"
   exit 2
 fi
 if [[ -z "$AUTH_TOKEN" ]]; then
-  fail "missing --auth-token (or OCTOS_AUTH_TOKEN)"
+  fail "missing --auth-token (or ra_AUTH_TOKEN)"
   exit 2
 fi
 
@@ -127,7 +127,7 @@ fi
 BASE_URL="${BASE_URL%/}"
 
 if [[ -z "$OUTPUT_DIR" ]]; then
-  OUTPUT_DIR="${OCTOS_E2E_OUTPUT_ROOT:-${ROOT}/e2e/test-results-m4-1a-live}"
+  OUTPUT_DIR="${ra_E2E_OUTPUT_ROOT:-${ROOT}/e2e/test-results-m4-1a-live}"
 fi
 mkdir -p "$OUTPUT_DIR"
 
@@ -581,10 +581,10 @@ run_e2e_specs() {
   if ! (
     cd "$ROOT/e2e" && \
     env \
-      OCTOS_TEST_URL="$BASE_URL" \
-      OCTOS_AUTH_TOKEN="$AUTH_TOKEN" \
-      OCTOS_PROFILE="$PROFILE_ID" \
-      OCTOS_TEST_EMAIL="$TEST_EMAIL" \
+      ra_TEST_URL="$BASE_URL" \
+      ra_AUTH_TOKEN="$AUTH_TOKEN" \
+      ra_PROFILE="$PROFILE_ID" \
+      ra_TEST_EMAIL="$TEST_EMAIL" \
       npx playwright test tests/live-progress-gate.spec.ts \
         --reporter=line \
         --output="$pw_output"
@@ -592,7 +592,7 @@ run_e2e_specs() {
     emit_diagnostic \
       "playwright_failed" \
       "Playwright live-progress-gate specs failed. Inspect ${pw_output} for traces/screenshots." \
-      "cd ${ROOT}/e2e && OCTOS_TEST_URL=${BASE_URL} OCTOS_AUTH_TOKEN=*** OCTOS_PROFILE=${PROFILE_ID} npx playwright test tests/live-progress-gate.spec.ts"
+      "cd ${ROOT}/e2e && ra_TEST_URL=${BASE_URL} ra_AUTH_TOKEN=*** ra_PROFILE=${PROFILE_ID} npx playwright test tests/live-progress-gate.spec.ts"
     exit 3
   fi
   pass "Playwright live-progress-gate passed"

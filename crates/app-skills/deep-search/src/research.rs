@@ -1,14 +1,14 @@
 //! Search providers, controls and the polite page reader for deep-search.
 //!
-//! Provider order (see `ra_research::plan`): the ra metasearch first
-//! (key-less OctoScript engines over official APIs and feeds: GDELT, Hacker
+//! Provider order (see `ra_research::plan`): the RecurAgent metasearch first
+//! (key-less Rascript engines over official APIs and feeds: GDELT, Hacker
 //! News, Wikipedia, arXiv, ...; disable with `RA_METASEARCH=0` — legacy
-//! `OCTOS_METASEARCH=0` still honoured — to call
+//! `ra_METASEARCH=0` still honoured — to call
 //! GDELT + Google News RSS directly for news), then a
 //! self-hosted SearXNG (`SEARXNG_URL`), then search APIs with keys, then
 //! results-page search (DuckDuckGo HTML, Bing in headless Chrome) for general
 //! web results, on unless `RA_ALLOW_SERP_SCRAPE=0` (alias
-//! `RA_ALLOW_BROWSER_SERP`; the legacy `OCTOS_` spellings are still
+//! `RA_ALLOW_BROWSER_SERP`; the legacy `RA_` spellings are still
 //! honoured). If nothing returns anything, the result is
 //! empty and says how to add SearXNG or a key.
 //!

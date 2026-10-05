@@ -1,29 +1,29 @@
-# Design: `octoscode update` and `octoscode doctor`
+# Design: `ra-tui update` and `ra-tui doctor`
 
 **Status:** design / RFC.
-**Target repos:** `your-org/ra-tui` (primary), `your-org/ra` (shared bits + future `octos doctor`/`octos update`).
+**Target repos:** `icehomura/ra-tui` (primary), `icehomura/ra` (shared bits + future `ra doctor`/`ra update`).
 **Date:** 2026-06-05.
 
 ---
 
 ## 0. TL;DR
 
-1. **`update`**: build on **`axoupdater`** (the crate behind cargo-dist's updater), driven by the **install receipt** cargo-dist writes. The receipt is the discriminator: **if a receipt exists, the binary came from the cargo-dist shell/PowerShell installer and we self-update in place; if `load_receipt()` returns `NoReceipt`, the binary came from brew / npm / `cargo install` / a distro package, and we print the correct package-manager command instead of clobbering a file we don't own.** This is the rustup model ("self-update is disabled for this build … use your package manager") generalized across all of octoscode's install methods. Embed axoupdater as a library under an `octoscode update` subcommand — do **not** ship the standalone `octoscode-update` binary.
-2. **`doctor`**: a **flutter-doctor-style** categorized report (`[✓]/[!]/[✗]` per check, each failing check carries one actionable fix line), `--json` for support bundles, `--verbose` for detail. The headline novel check is **protocol/version skew** between octoscode's pinned `octos-core` (`UI_PROTOCOL_SCHEMA_VERSION`) and the live server's `config/capabilities/list` payload — the top real-world failure mode for two independently-versioned repos.
-3. **Sharing**: put install-method detection + the generic checks (binary/PATH, TERM/locale, network/GitHub, update-check) in a small shared module (`ra-core::diagnostics`, feature-gated) so `ra doctor`/`ra update` on the **server** binary reuse them once ra is itself cargo-dist-packaged.
+1. **`update`**: build on **`axoupdater`** (the crate behind cargo-dist's updater), driven by the **install receipt** cargo-dist writes. The receipt is the discriminator: **if a receipt exists, the binary came from the cargo-dist shell/PowerShell installer and we self-update in place; if `load_receipt()` returns `NoReceipt`, the binary came from brew / npm / `cargo install` / a distro package, and we print the correct package-manager command instead of clobbering a file we don't own.** This is the rustup model ("self-update is disabled for this build … use your package manager") generalized across all of ra-tui's install methods. Embed axoupdater as a library under an `ra-tui update` subcommand — do **not** ship the standalone `ra-tui-update` binary.
+2. **`doctor`**: a **flutter-doctor-style** categorized report (`[✓]/[!]/[✗]` per check, each failing check carries one actionable fix line), `--json` for support bundles, `--verbose` for detail. The headline novel check is **protocol/version skew** between ra-tui's pinned `ra-core` (`UI_PROTOCOL_SCHEMA_VERSION`) and the live server's `config/capabilities/list` payload — the top real-world failure mode for two independently-versioned repos.
+3. **Sharing**: put install-method detection + the generic checks (binary/PATH, TERM/locale, network/GitHub, update-check) in a small shared module (`ra-core::diagnostics`, feature-gated) so `ra doctor`/`ra update` on the **server** binary reuse them once RecurAgent is itself cargo-dist-packaged.
 
 ---
 
-## A. `octoscode update`
+## A. `ra-tui update`
 
 ### A.1 Mechanism: axoupdater + cargo-dist receipts
 
-cargo-dist (`dist` 0.32) produces, for the **shell** and **PowerShell** installers, an **install receipt** — JSON at `~/.config/octoscode/octoscode-receipt.json` (Linux/macOS) or `%LOCALAPPDATA%\octoscode\octoscode-receipt.json` (Windows). Shape (`axoupdater/src/receipt.rs`):
+cargo-dist (`dist` 0.32) produces, for the **shell** and **PowerShell** installers, an **install receipt** — JSON at `~/.config/ra-tui/ra-tui-receipt.json` (Linux/macOS) or `%LOCALAPPDATA%\ra-tui\ra-tui-receipt.json` (Windows). Shape (`axoupdater/src/receipt.rs`):
 
 ```rust
 pub struct InstallReceipt {
     pub install_prefix: Utf8PathBuf,   // where the binary lives
-    pub binaries: Vec<String>,         // ["octoscode"]
+    pub binaries: Vec<String>,         // ["ra-tui"]
     pub cdylibs: Vec<String>,
     pub source: ReleaseSource,         // owner/name/app_name + GitHub vs Axo
     pub version: String,               // "0.1.1"
@@ -43,7 +43,7 @@ install-updater = true          # makes cargo-dist emit + maintain the receipt
 github-attestations = true      # provenance attestations on release artifacts
 ```
 
-`octoscode/Cargo.toml`:
+`ra-tui/Cargo.toml`:
 
 ```toml
 [dependencies]
@@ -52,10 +52,10 @@ axoupdater = { version = "0.6", default-features = false, features = ["github_re
 
 ### A.2 The subcommand (embedded, not standalone)
 
-`octoscode update [--check] [--version X.Y.Z | --tag vX.Y.Z] [--prerelease] [--force] [--yes] [--json]`
+`ra-tui update [--check] [--version X.Y.Z | --tag vX.Y.Z] [--prerelease] [--force] [--yes] [--json]`
 
 - detect install method (A.3); if cargo-dist installer → axoupdater self-update; else → print the right package-manager command.
-- axoupdater wiring: `AxoUpdater::new_for("octoscode")` → `load_receipt()` → `set_current_version(CARGO_PKG_VERSION)` → optional `set_github_token(OCTOSCODE_GITHUB_TOKEN)` → `configure_version_specifier(UpdateRequest::{Latest|LatestMaybePrerelease|SpecificVersion|SpecificTag})` → `always_update(force)` → `--check` uses `query_new_version()`, otherwise `run_sync()`.
+- axoupdater wiring: `AxoUpdater::new_for("ra-tui")` → `load_receipt()` → `set_current_version(CARGO_PKG_VERSION)` → optional `set_github_token(RA_TUI_GITHUB_TOKEN)` → `configure_version_specifier(UpdateRequest::{Latest|LatestMaybePrerelease|SpecificVersion|SpecificTag})` → `always_update(force)` → `--check` uses `query_new_version()`, otherwise `run_sync()`.
 - Confirmed axoupdater API: `new_for`, `load_receipt`, `set_current_version`, `set_github_token`, `configure_version_specifier`, `always_update`, `query_new_version`, `is_update_needed_sync`, `run_sync`. `UpdateResult { old_version: Option<Version>, new_version, new_version_tag, install_prefix }`.
 
 ### A.3 Install-method detection + per-method behavior
@@ -63,18 +63,18 @@ axoupdater = { version = "0.6", default-features = false, features = ["github_re
 Detection order (first match wins):
 1. **cargo-dist installer** → `load_receipt()` succeeds (authoritative; receipt pins `install_prefix`).
 2. else classify by `current_exe()` location + corroborating signal:
-   - Homebrew prefix (`/opt/homebrew/`, `/usr/local/Cellar/`, `$(brew --prefix)`) or `brew list octoscode` → **Homebrew**.
-   - npm global root (`npm root -g`/`npm prefix -g`, or `node_modules/@your-org/ra-tui` ancestor) → **npm**.
-   - `~/.cargo/bin` + `~/.cargo/.crates2.json` mentions octoscode → **cargo**; sub-classify `--git` vs registry by the recorded `source`.
+   - Homebrew prefix (`/opt/homebrew/`, `/usr/local/Cellar/`, `$(brew --prefix)`) or `brew list ra-tui` → **Homebrew**.
+   - npm global root (`npm root -g`/`npm prefix -g`, or `node_modules/@icehomura/ra-tui` ancestor) → **npm**.
+   - `~/.cargo/bin` + `~/.cargo/.crates2.json` mentions ra-tui → **cargo**; sub-classify `--git` vs registry by the recorded `source`.
    - else → **Unknown / distro**.
 
 | Detected method | `update` does | `--check` does |
 |---|---|---|
 | cargo-dist installer (receipt) | self-update in place via axoupdater (verify + atomic swap; respects `--version`/`--tag`/`--prerelease`/`--force`) | `query_new_version()`; print + exit 10 if newer |
-| Homebrew | print `brew update && brew upgrade your-org/ra-tui/octoscode`; exit 3 | best-effort `brew outdated --json`; else print command, exit 0 |
-| npm (`-g`) | print `npm update -g @your-org/ra-tui`; exit 3 | `npm outdated -g @your-org/ra-tui` |
-| cargo install (registry) | print `cargo install octoscode --force` (+ suggest `cargo install-update`); exit 3 | compare to crates.io / latest tag |
-| cargo install --git | print `cargo install --git https://github.com/your-org/ra-tui octoscode --force`; exit 3 | compare `CARGO_PKG_VERSION` to repo latest tag |
+| Homebrew | print `brew update && brew upgrade icehomura/ra-tui/ra-tui`; exit 3 | best-effort `brew outdated --json`; else print command, exit 0 |
+| npm (`-g`) | print `npm update -g @icehomura/ra-tui`; exit 3 | `npm outdated -g @icehomura/ra-tui` |
+| cargo install (registry) | print `cargo install ra-tui --force` (+ suggest `cargo install-update`); exit 3 | compare to crates.io / latest tag |
+| cargo install --git | print `cargo install --git https://github.com/icehomura/ra-tui ra-tui --force`; exit 3 | compare `CARGO_PKG_VERSION` to repo latest tag |
 | Unknown / distro | print manual instructions + suggest the curl\|sh installer to convert to a self-updating install; exit 3 | GitHub-latest compare only |
 
 ### A.4 UX, exit codes, security
@@ -86,25 +86,25 @@ Detection order (first match wins):
 
 ### A.5 Generalizing to the `ra` server binary
 
-ra already has `crates/ra-cli/src/updater.rs`, but it is **macOS-aarch64-only** (`ASSET_NAME = ra-bundle-aarch64-apple-darwin.tar.gz`), has **no install-method awareness** (clobbers brew/distro binaries), and re-implements backup/rollback/codesign by hand. To reach parity: cargo-dist-package ra (declare the whole bundle in `[dist].binaries` so the receipt covers all of them), set `install-updater = true`, replace updater.rs's bespoke logic with the shared `InstallMethod` + axoupdater wrapper, but **keep** the macOS re-codesign + skills-dir-clean post-steps. Until then, gate updater.rs behind the same install-method check so a brew/distro ra defers instead of clobbering.
+RecurAgent already has `crates/ra-cli/src/updater.rs`, but it is **macOS-aarch64-only** (`ASSET_NAME = ra-bundle-aarch64-apple-darwin.tar.gz`), has **no install-method awareness** (clobbers brew/distro binaries), and re-implements backup/rollback/codesign by hand. To reach parity: cargo-dist-package RecurAgent (declare the whole bundle in `[dist].binaries` so the receipt covers all of them), set `install-updater = true`, replace updater.rs's bespoke logic with the shared `InstallMethod` + axoupdater wrapper, but **keep** the macOS re-codesign + skills-dir-clean post-steps. Until then, gate updater.rs behind the same install-method check so a brew/distro RecurAgent defers instead of clobbering.
 
 ---
 
-## B. `octoscode doctor`
+## B. `ra-tui doctor`
 
 Flutter-doctor output: one line per check, `[✓]` pass / `[!]` warn / `[✗]` fail, grouped by category, each non-pass line followed by an indented `→ fix:` action, ending with a one-line summary. `--json` emits the same data structured (support bundle; redact tokens); `--verbose` adds resolved paths/versions.
 
 ### Checks
 
 **Binary & version**
-- octoscode on PATH (resolve `which` vs `current_exe()`).
+- ra-tui on PATH (resolve `which` vs `current_exe()`).
 - newer release available (reuse §A `--check`, method-aware fix command).
-- **no shadowing installs** — enumerate every octoscode on `$PATH` + known prefixes (cargo bin, npm global, brew); warn if >1 with all paths + which wins (the Claude Code #22415 failure mode).
+- **no shadowing installs** — enumerate every ra-tui on `$PATH` + known prefixes (cargo bin, npm global, brew); warn if >1 with all paths + which wins (the Claude Code #22415 failure mode).
 
 **Terminal environment**
 - TERM set + terminfo loadable (pre-empts the README's `can't find terminfo database`); fix `export TERM=xterm-256color`.
 - UTF-8 locale (`LANG`/`LC_ALL`/`LC_CTYPE`).
-- CJK width (octoscode uses `unicode-width`; CJK double-width; informational — also depends on terminal font).
+- CJK width (ra-tui uses `unicode-width`; CJK double-width; informational — also depends on terminal font).
 - color support (`COLORTERM`/`TERM` truecolor/256).
 
 **Config & data**
@@ -124,19 +124,19 @@ Flutter-doctor output: one line per check, `[✓]` pass / `[!]` warn / `[✗]` f
 
 ### `--json` / `--verbose` / auto-fix
 
-- `--json`: array of `{category, name, status, detail, fix, value}` + `{summary, exit_code, octoscode_version, octos_core_schema_version, platform}`. Support-bundle format (ask users to paste `octoscode doctor --json`). Redact tokens.
+- `--json`: array of `{category, name, status, detail, fix, value}` + `{summary, exit_code, ra_tui_version, ra_core_schema_version, platform}`. Support-bundle format (ask users to paste `ra-tui doctor --json`). Redact tokens.
 - Auto-fix (`--fix`): only safe, local, reversible actions (create missing data-dir, write default config, *print* the upgrade command). **Never** auto-run brew/npm/binary swaps (that's `update`); never edit shell rc files (print the export line).
 - Exit codes: `0` all pass (warnings → 0 but mention), `1` ≥1 `[✗]`; optional `--strict` makes warnings fail.
 
 ### Sharing with server `ra doctor`
 
-Make `doctor` a thin renderer over a library. Shared, binary-agnostic checks (install-method detection + update-check, TERM/locale/UTF-8/color, config/data/auth validity, GitHub reachability, the protocol capability compare) live in `octos-core::diagnostics`. TUI-only checks (terminfo specifics, stdio-command parsing) stay in octoscode; server-only checks (port bind, sandbox backend, provider creds, MCP reachability) live in octos-cli. The renderer + `--json` schema are shared so both binaries look identical.
+Make `doctor` a thin renderer over a library. Shared, binary-agnostic checks (install-method detection + update-check, TERM/locale/UTF-8/color, config/data/auth validity, GitHub reachability, the protocol capability compare) live in `ra-core::diagnostics`. TUI-only checks (terminfo specifics, stdio-command parsing) stay in ra-tui; server-only checks (port bind, sandbox backend, provider creds, MCP reachability) live in ra-cli. The renderer + `--json` schema are shared so both binaries look identical.
 
 ---
 
 ## C. Implementation plan
 
-- **octoscode crate**: `src/cmd/update.rs` (+ `InstallMethod`), `src/cmd/doctor.rs` (+ renderer). New dep `axoupdater` behind a default-on `update` feature (off for distro packaging — matches rustup's `no-self-update`; with the feature off, `update` still works as a pure advisor and `doctor` still runs). Reuse existing `reqwest`/`serde_json`; `which`/`current_exe` for detection.
+- **ra-tui crate**: `src/cmd/update.rs` (+ `InstallMethod`), `src/cmd/doctor.rs` (+ renderer). New dep `axoupdater` behind a default-on `update` feature (off for distro packaging — matches rustup's `no-self-update`; with the feature off, `update` still works as a pure advisor and `doctor` still runs). Reuse existing `reqwest`/`serde_json`; `which`/`current_exe` for detection.
 - **ra-core**: `pub mod diagnostics` (feature `diagnostics`) with the shared checks + `Check`/`CheckStatus`/`Report` types + a `compare(client_schema, server_caps) -> Vec<Check>` helper (it already has `UiProtocolCapabilities` + version-compat logic).
 - **ra-cli** (later): `ra doctor`/`ra update` calling `ra-core::diagnostics` + a refactored install-method-aware `updater.rs`.
 
@@ -155,9 +155,9 @@ Make `doctor` a thin renderer over a library. Shared, binary-agnostic checks (in
 - axoupdater has **no** built-in "defer to brew/npm" — *we* provide it by treating `NoReceipt` as "not our path". Guard against a future cargo-dist writing receipts for npm/brew by also checking `provider.source`/install prefix before self-updating.
 - Independent-versioning skew is **structural** — doctor detects it but can't fix it. Mitigate by having the server surface its ra-core schema at *connect* time (warn early), and document a compatibility window (server supports client schema N and N-1).
 - Windows: PS installer writes the receipt under `%LOCALAPPDATA%` (self-update works); macOS codesign step is macOS-only; brew/npm detection must handle Windows paths; verify the self-replace-while-running rename dance on Windows.
-- GitHub rate limits on `--check`/doctor probes — honor `OCTOSCODE_GITHUB_TOKEN`, cache last-check timestamp, make the network check `[!]`-warn (not `[✗]`) on 403/timeout.
+- GitHub rate limits on `--check`/doctor probes — honor `RA_TUI_GITHUB_TOKEN`, cache last-check timestamp, make the network check `[!]`-warn (not `[✗]`) on 403/timeout.
 - macOS Gatekeeper: self-updated binaries must be re-signed or SIGKILL on Sequoia even when bit-identical.
 
 ### Sources
 
-axoupdater (README + `src/lib.rs` + `src/receipt.rs`); cargo-dist updater/receipts/`install-updater` docs; rustup "self-update disabled … use your package manager"; gh/deno package-manager deferral; Claude Code `claude doctor` + release channels + shadowing bug (#22415); flutter doctor UX; octos codebase (`crates/octos-cli/src/updater.rs`, `crates/octos-core/src/ui_protocol.rs`, octoscode README).
+axoupdater (README + `src/lib.rs` + `src/receipt.rs`); cargo-dist updater/receipts/`install-updater` docs; rustup "self-update disabled … use your package manager"; gh/deno package-manager deferral; Claude Code `claude doctor` + release channels + shadowing bug (#22415); flutter doctor UX; RecurAgent codebase (`crates/ra-cli/src/updater.rs`, `crates/ra-core/src/ui_protocol.rs`, ra-tui README).

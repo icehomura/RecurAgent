@@ -2,10 +2,10 @@
 
 - Date: 2026-09-02
 - Updated: 2026-09-14
-- Status: OUP/OctosCode and chat/ACP implemented; final review, local acceptance and mini3 cloud OUP/tmux soak passed with explicit limits
-- Scope: OUP (`ra serve --stdio/--ws`), OctosCode, and local chat/ACP adapters
-- ra base revision reviewed: `5ea987813de4fd2afdd1d78f2106ad2868f0d923`
-- OctosCode base revision reviewed: `60376702272c41e024ebcecfbd0a580759c12363`
+- Status: OUP/ra-tui and chat/ACP implemented; final review, local acceptance and mini3 cloud OUP/tmux soak passed with explicit limits
+- Scope: OUP (`ra serve --stdio/--ws`), ra-tui, and local chat/ACP adapters
+- RecurAgent base revision reviewed: `5ea987813de4fd2afdd1d78f2106ad2868f0d923`
+- ra-tui base revision reviewed: `60376702272c41e024ebcecfbd0a580759c12363`
 - Pi revision reviewed: `5cd93f688aaab89dbb6dfa4aca535f21796ae185`
 - Primary research reference: [FreeToken §3.1, Semantic-Aware State Caching](https://arxiv.org/html/2608.16157v1#S3.SS1)
 
@@ -31,7 +31,7 @@ work is:
 - [x] Select implicit iteration limits by execution intent, not transport;
   interactive turns are unlimited, explicit limits and autonomous safeguards
   remain. Convergence checkpoints still reflect and continue.
-- [x] Eliminate fabricated Session Summary assistant replies in OctosCode;
+- [x] Eliminate fabricated Session Summary assistant replies in ra-tui;
   recover canonical output or expose the missing answer as a diagnostic.
 - [x] Cover default/minimal feature builds, adapter protocol integration tests,
   strict lint/format checks and real multi-turn chat/ACP/OUP soak runs.
@@ -95,9 +95,9 @@ semantically similar text can share KV state.
 ## Implementation outcome (2026-09-03)
 
 The OUP milestone described by this record is implemented in the current
-ra and OctosCode worktrees. The semantic path is the default for
+RecurAgent and ra-tui worktrees. The semantic path is the default for
 `ra serve --stdio/--ws`; it is not an optional client-side compactor.
-OctosCode consumes OUP lifecycle state and renders diagnostics, while OUP
+ra-tui consumes OUP lifecycle state and renders diagnostics, while OUP
 remains the only policy authority.
 
 The rollout selector is:
@@ -108,12 +108,12 @@ The rollout selector is:
 | `shadow` | Legacy projection remains model-visible while the semantic candidate is calculated and compared through redacted hashes/counts. |
 | `off` | Legacy item-boundary compaction remains available as an operational rollback. |
 
-Set it with `OCTOS_OUP_SEMANTIC_CONTEXT_MODE`. Automatic compaction defaults
+Set it with `ra_OUP_SEMANTIC_CONTEXT_MODE`. Automatic compaction defaults
 to 70% of the provider context window and targets two thirds of that threshold
 (about 46.7% of the window, before summary-budget reservation). Tests and
 operators can override those values with
-`OCTOS_CONTEXT_COMPACT_THRESHOLD_TOKENS` and
-`OCTOS_CONTEXT_COMPACT_TARGET_TOKENS`.
+`ra_CONTEXT_COMPACT_THRESHOLD_TOKENS` and
+`ra_CONTEXT_COMPACT_TARGET_TOKENS`.
 
 ### Delivered work by phase
 
@@ -125,10 +125,10 @@ operators can override those values with
 | 3 — stable prefix epochs | Complete | Stable instruction/tool prefix, volatile typed tail events, explicit epoch identity, and invalidation reasons for route/system/tools/compaction changes. |
 | 4 — provider context | Complete | Provider-neutral `PromptCacheContext`; capability-gated OpenAI fields; Anthropic semantic breakpoints; normalized manifests for OpenAI, Responses, Anthropic, Gemini, and OpenRouter; usage attribution through retries/failover. |
 | 5 — recurrent-state hints | Contract complete | Closed-boundary hints and restored-checkpoint reports are typed and capability-gated through provider wrappers. No bundled hosted provider claims to materialize recurrent checkpoints; a capable local engine must opt in. |
-| 6 — client adoption | Shared OUP path | Negotiated `context.semantic_cache.v1`, optional lifecycle fields, and the OctosCode `/context` diagnostic pane are shipped. The follow-on above also routes chat/ACP through OUP and records their separate acceptance. |
+| 6 — client adoption | Shared OUP path | Negotiated `context.semantic_cache.v1`, optional lifecycle fields, and the ra-tui `/context` diagnostic pane are shipped. The follow-on above also routes chat/ACP through OUP and records their separate acceptance. |
 
 The wire change is specified separately by
-[UPCR-2026-029](../OCTOS_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_029_SEMANTIC_CONTEXT_CACHE_DIAGNOSTICS.md).
+[UPCR-2026-029](../ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_029_SEMANTIC_CONTEXT_CACHE_DIAGNOSTICS.md).
 The four optional fields are `cache_epoch_id`,
 `last_cache_invalidation_reason`, `semantic_head_id`, and
 `semantic_head_kind`. Old clients ignore them; new clients display them only
@@ -148,7 +148,7 @@ prompt.
   mutable usage state are typed tail data rather than System mutations.
 - Provider manifests retain hashes, kinds, ordering, and normalized sizes, not
   prompt bodies. Cache availability affects performance only.
-- OctosCode owns reconnect presentation and queue safety, but it does not infer
+- ra-tui owns reconnect presentation and queue safety, but it does not infer
   semantic heads, rotate epochs, or choose compaction boundaries.
 
 ### Post-review amendments (2026-09-03, independent review)
@@ -345,7 +345,7 @@ Agent loop (`crates/ra-agent`):
   unset; `AgentConfig::default().max_iterations = 0` (unlimited) remains the
   interactive default for chat and ACP.
 
-OctosCode client (reconnect presentation and queue safety):
+ra-tui client (reconnect presentation and queue safety):
 
 - Reconnect reconciliation is connection-epoch aware. When a replacement
   stdio child connects, the transport queues a `BackendConnectionEpoch` marker
@@ -553,7 +553,7 @@ Durable UI ledger privacy (`ra_core::secret_redaction`):
   `primary_key`-style suffix matches, bare `Basic <b64>` outside an
   `Authorization` header, and `{"name": "DB_PASSWORD", "value": …}` pairs.
 
-OctosCode client (stdio reconnect):
+ra-tui client (stdio reconnect):
 
 - The new `client_hello` (3 s) and scoped `session/open` (10 s) barriers
   measured from spawn, while a real `ra serve --stdio` cold start takes
@@ -597,20 +597,20 @@ Reviewed and left as documented limitations (not fixed in this pass):
   and can log a lane change; no production caller today.
 - `ledger_rebuilt` is an in-memory flag: a rebuild performed by a
   hydrate/inspection read persists a covering snapshot, and the next turn
-  reports `initialized`. The in-loop `OCTOS_CONTEXT_COMPACT_THRESHOLD_TOKENS`
+  reports `initialized`. The in-loop `ra_CONTEXT_COMPACT_THRESHOLD_TOKENS`
   path applies no clamp/warning.
 - Sub-agent affinity keys: spawn/delegate workers hash `"anonymous"`, so all
   sub-agents in a process share one `prompt_cache_key` (routing efficiency
   only). Checkpoint bodies consume iteration indices (a cap of M yields
   M − ⌊M/(N+1)⌋ action calls). Any User row that mimics the checkpoint
   envelope is stripped from the prompt.
-- OctosCode: a `HydrateSession` becomes the confirmed reopen target at send
+- ra-tui: a `HydrateSession` becomes the confirmed reopen target at send
   time; the connection-epoch marker can in principle be outrun by a frame
   read inside the same reconnecting poll (microseconds); commands deferred
   for a session whose `session/open` was definitively rejected are still
   flushed.
 - The OUP `turn/start` agent runs with the unattended fallback of 50
-  iterations when `gateway.max_iterations` is unset even though OctosCode
+  iterations when `gateway.max_iterations` is unset even though ra-tui
   can interrupt a turn; an explicit `0` disables the backstop silently.
 
 ## Scope and routing decision
@@ -618,7 +618,7 @@ Reviewed and left as documented limitations (not fixed in this pass):
 The canonical execution path used by all three frontends is:
 
 ```text
-OctosCode / local chat / ACP bridge
+RaCode / local chat / ACP bridge
   -> OUP connection (stdio/WebSocket or in-process NDJSON)
   -> session/open
   -> turn/start
@@ -705,7 +705,7 @@ separate mechanisms and are not part of this OUP context design.
 The comparison in this record is based on these concrete implementation
 surfaces rather than README-level descriptions.
 
-### OUP and ra
+### OUP and RecurAgent
 
 - `crates/ra-cli/src/api/context_manager.rs`
   - `TranscriptItemKind`
@@ -730,7 +730,7 @@ surfaces rather than README-level descriptions.
 - `specs/kv-cache-friendly-compaction.spec.md`
   - the earlier cache-friendly work and its explicit exclusion of the OUP
     ContextManager/AppUI path
-- OctosCode `src/cli.rs`
+- ra-tui `src/cli.rs`
   - default backend command `ra serve --stdio --solo`
 
 ### Pi
@@ -1203,14 +1203,14 @@ last_invalidation_reason
 ```
 
 Do not expose raw hidden reasoning or full peer/tool payloads in telemetry.
-OctosCode should display a compact cache/context diagnostic view; it does not
+ra-tui should display a compact cache/context diagnostic view; it does not
 own compaction or boundary decisions.
 
 ## Implementation plan and disposition
 
 The phase descriptions below are retained as the implementation contract.
 Their disposition reflects the verified worktree on 2026-09-03; “complete” is
-scoped to OUP and OctosCode, not the deferred legacy frontend routing.
+scoped to OUP and ra-tui, not the deferred legacy frontend routing.
 
 ### Phase 0 — Baseline and invariant instrumentation — complete
 
@@ -1237,7 +1237,7 @@ Primary files:
 
 Exit criteria:
 
-- A multi-turn OctosCode run identifies every prefix invalidation reason.
+- A multi-turn ra-tui run identifies every prefix invalidation reason.
 - No prompt bodies, secrets, or hidden reasoning are written to diagnostics;
   only hashes, counts, roles, and boundary metadata are retained.
 
@@ -1381,16 +1381,16 @@ Changes:
 
 - Add optional context/cache diagnostics to OUP capability negotiation and
   lifecycle notifications.
-- Render them in OctosCode without moving policy into the client.
+- Render them in ra-tui without moving policy into the client.
 - Route `ra chat` and ACP entry points through OUP rather than copying
   the semantic ledger or compaction implementation.
 
 Exit criteria:
 
-- OctosCode, chat, and ACP frontends observe the same OUP context
+- ra-tui, chat, and ACP frontends observe the same OUP context
   generation and cache epoch for equivalent sessions.
 
-Disposition note: the initial OUP milestone covered OctosCode only. The
+Disposition note: the initial OUP milestone covered ra-tui only. The
 2026-09-04 follow-on removes the separate chat/ACP execution paths and tests
 the real adapters against this same lifecycle.
 
@@ -1440,7 +1440,7 @@ the real adapters against this same lifecycle.
 - Session restart, hydrate, branch, and continue.
 - Compaction failure and heuristic fallback without ledger mutation.
 
-### Real OctosCode tmux soak
+### Real ra-tui tmux soak
 
 Run the actual `ra serve --stdio --solo` backend, not a fixture, with:
 
@@ -1474,18 +1474,18 @@ The final worktree passed these commands after the last reconnect fix:
 
 | Repository | Command | Result |
 | --- | --- | --- |
-| OctosCode | `cargo test --all-targets --quiet` | No failures. Main unit suite: 1,967 passed, 1 ignored; every integration suite also passed. |
-| OctosCode | `cargo clippy --all-targets -- -D warnings` | Passed. |
-| OctosCode | `cargo build --bin octoscode` | Passed. |
-| ra | `cargo test -p ra-core -p ra-llm -p ra-agent --quiet` | No failures. Principal library suites included 2,624 passed/3 ignored, 359 passed/1 ignored, and 539 passed/3 ignored; credentialed network tests remained explicitly ignored. |
-| ra | `cargo test -p ra-cli --quiet -- --test-threads=1` | No failures. Main CLI suite: 1,582 passed, 3 ignored; all following integration/doc suites passed. |
-| ra | `cargo clippy -p ra-core -p ra-llm -p ra-agent -p ra-cli --all-targets -- -D warnings` | Passed. |
-| ra | `cargo build -p ra-cli` | Passed. |
+| ra-tui | `cargo test --all-targets --quiet` | No failures. Main unit suite: 1,967 passed, 1 ignored; every integration suite also passed. |
+| ra-tui | `cargo clippy --all-targets -- -D warnings` | Passed. |
+| ra-tui | `cargo build --bin ra-tui` | Passed. |
+| RecurAgent | `cargo test -p ra-core -p ra-llm -p ra-agent --quiet` | No failures. Principal library suites included 2,624 passed/3 ignored, 359 passed/1 ignored, and 539 passed/3 ignored; credentialed network tests remained explicitly ignored. |
+| RecurAgent | `cargo test -p ra-cli --quiet -- --test-threads=1` | No failures. Main CLI suite: 1,582 passed, 3 ignored; all following integration/doc suites passed. |
+| RecurAgent | `cargo clippy -p ra-core -p ra-llm -p ra-agent -p ra-cli --all-targets -- -D warnings` | Passed. |
+| RecurAgent | `cargo build -p ra-cli` | Passed. |
 | Both | formatter check and `git diff --check` | Passed. |
 
 An earlier workspace-wide all-features build reached the optional
 `llama-cpp`/CUDA binding and could not continue because this macOS test host
-does not have `cmake`. The production OUP/OctosCode packages and all relevant
+does not have `cmake`. The production OUP/ra-tui packages and all relevant
 feature paths above compile and test; this is recorded as an environment
 limitation rather than silently classified as a passing all-features build.
 
@@ -1497,15 +1497,15 @@ re-verified from scratch. `ra-cli` compiles the OUP transport only under
 
 | Repository | Command | Result |
 | --- | --- | --- |
-| OctosCode | `cargo fmt --all -- --check`, `git diff --check` | Clean. |
-| OctosCode | `cargo clippy --all-targets -- -D warnings` | Passed. |
-| OctosCode | `cargo test --all-targets --quiet` | No failures. Main unit suite: 1,977 passed, 1 ignored; every integration suite passed. |
-| ra | `cargo fmt --all -- --check`, `git diff --check` | Clean. |
-| ra | `cargo clippy -p ra-core -p ra-llm -p ra-agent -p ra-cli --all-targets -- -D warnings` | Passed. |
-| ra | `cargo clippy -p ra-cli --features api --all-targets -- -D warnings` | Passed. |
-| ra | `cargo test -p ra-core -p ra-llm -p ra-agent --quiet` | No failures. Core: 387 passed/1 ignored; LLM: 587 passed/3 ignored; agent: 2,630 passed/3 ignored. Every integration target passed. |
-| ra | `cargo test -p ra-cli --quiet -- --test-threads=1` | No failures. Main suite: 1,591 passed, 3 ignored. |
-| ra | `cargo test -p ra-cli --features api --quiet -- --test-threads=1` | No failures. Main suite: 3,117 passed, 6 ignored. Every integration target and doctest passed. |
+| ra-tui | `cargo fmt --all -- --check`, `git diff --check` | Clean. |
+| ra-tui | `cargo clippy --all-targets -- -D warnings` | Passed. |
+| ra-tui | `cargo test --all-targets --quiet` | No failures. Main unit suite: 1,977 passed, 1 ignored; every integration suite passed. |
+| RecurAgent | `cargo fmt --all -- --check`, `git diff --check` | Clean. |
+| RecurAgent | `cargo clippy -p ra-core -p ra-llm -p ra-agent -p ra-cli --all-targets -- -D warnings` | Passed. |
+| RecurAgent | `cargo clippy -p ra-cli --features api --all-targets -- -D warnings` | Passed. |
+| RecurAgent | `cargo test -p ra-core -p ra-llm -p ra-agent --quiet` | No failures. Core: 387 passed/1 ignored; LLM: 587 passed/3 ignored; agent: 2,630 passed/3 ignored. Every integration target passed. |
+| RecurAgent | `cargo test -p ra-cli --quiet -- --test-threads=1` | No failures. Main suite: 1,591 passed, 3 ignored. |
+| RecurAgent | `cargo test -p ra-cli --features api --quiet -- --test-threads=1` | No failures. Main suite: 3,117 passed, 6 ignored. Every integration target and doctest passed. |
 | Both | `cargo build` | Passed with the default feature sets. |
 
 The 2026-09-03 `tmux` soak below predates the amendment fixes. It was
@@ -1522,17 +1522,17 @@ OUP transport only under `--features api`, so both feature sets were run.
 
 | Repository | Command | Result |
 | --- | --- | --- |
-| OctosCode | `cargo fmt --all -- --check`, `git diff --check` | Clean. |
-| OctosCode | `cargo clippy --all-targets -- -D warnings` | Passed. |
-| OctosCode | `cargo test --all-targets --quiet` | No failures. 2,166 passed, 4 ignored across 33 test binaries. |
-| OctosCode | `cargo build --bin octoscode` | Passed. |
-| ra | `cargo fmt --all -- --check`, `git diff --check` | Clean. |
-| ra | `cargo clippy -p ra-cli --features api --all-targets -- -D warnings` | Passed. |
-| ra | `cargo clippy -p ra-core -p ra-llm -p ra-agent -p ra-cli --all-targets -- -D warnings` | Passed. |
-| ra | `cargo test -p ra-core -p ra-llm -p ra-agent --quiet` | No failures. 3,949 passed, 49 ignored across 64 test binaries. |
-| ra | `cargo test -p ra-cli --features api --quiet -- --test-threads=1` | No failures. 3,266 passed, 13 ignored across 22 test binaries. |
-| ra | `cargo test -p ra-cli --quiet -- --test-threads=1` | No failures. 1,644 passed, 9 ignored across 21 test binaries. |
-| ra | `cargo build -p ra-cli --features api` | Passed. |
+| ra-tui | `cargo fmt --all -- --check`, `git diff --check` | Clean. |
+| ra-tui | `cargo clippy --all-targets -- -D warnings` | Passed. |
+| ra-tui | `cargo test --all-targets --quiet` | No failures. 2,166 passed, 4 ignored across 33 test binaries. |
+| ra-tui | `cargo build --bin ra-tui` | Passed. |
+| RecurAgent | `cargo fmt --all -- --check`, `git diff --check` | Clean. |
+| RecurAgent | `cargo clippy -p ra-cli --features api --all-targets -- -D warnings` | Passed. |
+| RecurAgent | `cargo clippy -p ra-core -p ra-llm -p ra-agent -p ra-cli --all-targets -- -D warnings` | Passed. |
+| RecurAgent | `cargo test -p ra-core -p ra-llm -p ra-agent --quiet` | No failures. 3,949 passed, 49 ignored across 64 test binaries. |
+| RecurAgent | `cargo test -p ra-cli --features api --quiet -- --test-threads=1` | No failures. 3,266 passed, 13 ignored across 22 test binaries. |
+| RecurAgent | `cargo test -p ra-cli --quiet -- --test-threads=1` | No failures. 1,644 passed, 9 ignored across 21 test binaries. |
+| RecurAgent | `cargo build -p ra-cli --features api` | Passed. |
 
 Regressions observed RED against the pre-fix behavior:
 `should_not_spend_budget_grace_call_on_convergence_reflection` (re-run with
@@ -1554,7 +1554,7 @@ The acceptance run was repeated against the final binaries built by the
 verification chain above (daemon 2026-09-04 02:29, client 2026-09-04 01:20),
 with the same real PTY harness as the 2026-09-03 run:
 
-- tmux 3.7b (prefix build), 210×58 pane; OctosCode in protocol mode;
+- tmux 3.7b (prefix build), 210×58 pane; ra-tui in protocol mode;
 - `ra serve --stdio --solo` with a fresh, isolated instance directory
   (`/tmp/ra-oup-final-20260904.epW6om/instance`) and an isolated workspace;
 - OUP session `oup-final-20260904f`; semantic mode `on`, 6,000-token test threshold,
@@ -1688,7 +1688,7 @@ The acceptance run used the actual debug binaries and a real PTY, not a mock
 transport:
 
 - tmux 3.7b, 210×58 pane;
-- OctosCode in protocol mode;
+- ra-tui in protocol mode;
 - `ra serve --stdio --solo` with an isolated instance directory;
 - OUP session `oup-final-20260903b` and an isolated workspace;
 - semantic mode `on`, 6,000-token test threshold, and 2,000-token target;
@@ -1716,7 +1716,7 @@ The run exercised:
    stayed absent;
 7. goal create/plan/dispatch, fleet completion, and the goal-progress wake that
    re-entered the keeper and observed `complete`;
-8. OctosCode process restart against the same durable session;
+8. ra-tui process restart against the same durable session;
 9. two external stdio-daemon terminations with a prompt submitted immediately
    during recovery; scoped reopen, hydration, and FIFO drain completed without
    a duplicate or lost prompt;
@@ -1738,7 +1738,7 @@ context work was already correct.
 
 1. **Repeated background continuation rendering.** A server-initiated
    continuation reuses the latest user prompt as its semantic anchor.
-   OctosCode inferred that every such continuation belonged to the first
+   ra-tui inferred that every such continuation belonged to the first
    assistant after that prompt, rejected the correct live-prefix coverage, and
    re-flushed the answer when `assistant_persisted` arrived. The coverage
    reducer now lets direct canonical-prefix evidence win when the inferred row
@@ -1746,7 +1746,7 @@ context work was already correct.
    `server_continuation_reuses_prompt_anchor_without_reflushing_live_prefix`.
 2. **Working forever after daemon restart.** A new daemon can resume a
    process-wide durable continuation before the client's workspace-scoped
-   `session/open` completes. OctosCode previously reconciled dead-child state
+   `session/open` completes. ra-tui previously reconciled dead-child state
    at socket connect, then accepted the startup turn; switching to the scoped
    stream could hide that turn's terminal and strand the queue. Relaunch
    reconciliation is now delayed until the expected scoped `session/opened`,
@@ -1813,7 +1813,7 @@ not expose a correlated TTFT field in the response usage contract.
 ### UX and operations
 
 - Context/cache diagnostics are understandable without exposing implementation
-  noise in the normal OctosCode transcript.
+  noise in the normal ra-tui transcript.
 - Cache misses never affect correctness.
 - Operators can disable provider-specific cache features without disabling
   semantic context management.
@@ -1833,7 +1833,7 @@ not expose a correlated TTFT field in the response usage contract.
 - Roll back projection behavior independently from ledger recording so evidence
   collected in shadow mode remains usable.
 - Introduce any OUP wire additions as optional fields behind capability
-  negotiation; old OctosCode builds must continue to function.
+  negotiation; old ra-tui builds must continue to function.
 
 ## Relationship to existing contracts
 
@@ -1871,7 +1871,7 @@ not expose a correlated TTFT field in the response usage contract.
 - Treating a semantic boundary as permission to reuse invalid KV.
 - Reimplementing a serving engine's KV or recurrent-state allocator in OUP.
 - Coupling correctness to provider cache availability.
-- Maintaining separate semantic context implementations for OctosCode, chat,
+- Maintaining separate semantic context implementations for ra-tui, chat,
   ACP, gateway, or individual providers.
 - Including FreeToken's expert LRU or bandwidth-adaptive MoE scheduling in the
   OUP context layer.
@@ -1886,7 +1886,7 @@ The implementation followed this dependency order:
 4. Stable System and explicit cache epochs.
 5. Provider cache-context integration.
 6. Optional local-engine recurrent checkpoint hints.
-7. OUP lifecycle diagnostics and OctosCode adoption.
+7. OUP lifecycle diagnostics and ra-tui adoption.
 8. Chat/ACP routing convergence and obsolete-code removal (the follow-on above).
 
 Correctness work precedes provider optimizations. In particular, do not add an
@@ -1941,7 +1941,7 @@ the three `prompt_cache_manifest_diff` example tests,
 `continuation_coverage_never_consumes_another_turn_with_the_same_prefix`,
 `legacy_reply_with_shared_anchor_retains_ambiguous_prefix`, and
 `should_reclaim_expired_context_persist_locks_without_splitting_live_writers`.
-OctosCode's scope-barrier and assistant-projection specs carry the revised
+ra-tui's scope-barrier and assistant-projection specs carry the revised
 contracts. Markdown fixtures now supply the same identities as production
 commits; their prefix/suffix and fence-separator assertions are unchanged.
 
@@ -1949,12 +1949,12 @@ Follow-up verification on a local arm64 dev machine (arm64):
 
 | Target | Verification | Result |
 | --- | --- | --- |
-| OctosCode | `cargo test --all-targets` | 2,169 passed, 4 ignored, no failures (33 test binaries). |
-| OctosCode | strict all-targets clippy, build, fmt, diff check | Passed. |
-| ra core/LLM/agent | `cargo test -p ra-core -p ra-llm -p ra-agent --all-targets` | 3,944 passed, 49 ignored, no failures (65 test binaries, including the manifest example). |
-| ra CLI API | `cargo test -p ra-cli --features api -- --test-threads=1` | 3,262 passed, 13 ignored, no failures (22 test/doc-test summaries). |
-| ra CLI default | `cargo test -p ra-cli -- --test-threads=1` | 1,644 passed, 9 ignored, no failures (21 summaries). |
-| ra | strict all-targets clippy for CLI API and core/LLM/agent; API build; fmt; diff check | Passed. |
+| ra-tui | `cargo test --all-targets` | 2,169 passed, 4 ignored, no failures (33 test binaries). |
+| ra-tui | strict all-targets clippy, build, fmt, diff check | Passed. |
+| RecurAgent core/LLM/agent | `cargo test -p ra-core -p ra-llm -p ra-agent --all-targets` | 3,944 passed, 49 ignored, no failures (65 test binaries, including the manifest example). |
+| RecurAgent CLI API | `cargo test -p ra-cli --features api -- --test-threads=1` | 3,262 passed, 13 ignored, no failures (22 test/doc-test summaries). |
+| RecurAgent CLI default | `cargo test -p ra-cli -- --test-threads=1` | 1,644 passed, 9 ignored, no failures (21 summaries). |
+| RecurAgent | strict all-targets clippy for CLI API and core/LLM/agent; API build; fmt; diff check | Passed. |
 
 The first parallel CLI library run was **not** green: two
 `peer_awaiting_wake_tests` failed while inspecting the shared default
@@ -2018,12 +2018,12 @@ the isolated proof data was retained.
 Evidence files in that directory: `evidence.txt`, `soak-driver.log`,
 `cache-finalpass.jsonl`, `manifest-diff.jsonl`, `binary-sha256.txt`, terminal
 captures, and the corrected local harness/verifier. Full test/clippy logs are
-under `/tmp/octos-six-fixes-*.log` and `/tmp/octoscode-six-fixes-*.log`.
+under `/tmp/ra-six-fixes-*.log` and `/tmp/ra-tui-six-fixes-*.log`.
 No commit was created by this follow-up.
 
 ## Frontend migration validation and open review (2026-09-04)
 
-Chat and ACP now use the same OUP dispatcher as OctosCode. The old chat/ACP
+Chat and ACP now use the same OUP dispatcher as ra-tui. The old chat/ACP
 Agent loops, independent ACP history/bootstrap/replay, chat-specific peer host,
 and orphaned pipeline-tool assembler have been removed. The three legacy files
 `commands/chat.rs`, `commands/acp.rs`, and `peers/host.rs` account for 5,005 deleted
@@ -2053,15 +2053,15 @@ added to this record.
   (`/tmp/ra-migration-agent-llm-v1.log`).
 - Core/bus: 644 passed across eight suites, one ignored, zero failed
   (`/tmp/ra-migration-core-bus-v1.log`).
-- OctosCode all targets: 2,170 passed across 33 suites, four ignored, zero failed
+- ra-tui all targets: 2,170 passed across 33 suites, four ignored, zero failed
   (`/tmp/ra-migration-client-all-v5.log`).
-- Strict all-target clippy passed for CLI/Agent/bus and OctosCode; both builds,
+- Strict all-target clippy passed for CLI/Agent/bus and ra-tui; both builds,
   both format checks and both diff checks passed. The final CLI no-default-feature
   check passed (`/tmp/ra-migration-no-default-final.log`). Optional workspace-wide
   llama-cpp/CUDA coverage is not claimed. The macOS debug linker emitted its
   unwind-table-size warning.
 
-The 51-scenario normal real-provider matrix passed: OctosCode/OUP 30, chat REPL
+The 51-scenario normal real-provider matrix passed: ra-tui/OUP 30, chat REPL
 10, ACP 10 and chat JSON one. OUP ran in real tmux from 17:04 to 17:12 PDT with
 six compaction completions, automatic/manual compaction, peer and background
 delivery, goal wake/completion, monitor lifecycle, parallel tools, a client
@@ -2100,7 +2100,7 @@ fixtures, without external model calls or image generation:
    `agent/detection.rs::is_retriable_response` excludes responses containing
    reasoning from empty-response recovery. The Agent's EndTurn path returns
    successful empty content, and OUP emits Completed with no final assistant row.
-   The migrated chat adapter reports a missing-answer error, and OctosCode no
+   The migrated chat adapter reports a missing-answer error, and ra-tui no
    longer fabricates the empty Session Summary, but neither fixes this backend
    misclassification. There is no canonical answer for reopening to recover.
 2. **P2: output truncation is accepted as successful completion.** The
@@ -2143,7 +2143,7 @@ fixtures and peer attempt remain historical evidence, not silently relabeled pas
 
 The repeatedly reported “partial live answer” card has a separately verified
 deployment cause. The active design window was still running the installed
-OctosCode `0.3.0-rc.9 (02e6816 2026-09-01)` and ra
+ra-tui `0.3.0-rc.9 (02e6816 2026-09-01)` and RecurAgent
 `2.0.3-rc.9 (5ea98781 2026-08-24)` from `~/.cargo/bin`; executable inode and
 SHA-256 checks matched those installed files. The old client contains the exact
 reported card text. Its successful-tool-activity heuristic classifies a single
@@ -2192,7 +2192,7 @@ against the same AppState; it is not described as a cold-process restart test.
 
 New pinned-binary proof directory:
 `/tmp/ra-terminal-integrity-final-20260904.XEjkc9`. Unlike the earlier harness,
-this run also isolates `OCTOS_HOME` and the profile registry so model switching
+this run also isolates `ra_HOME` and the profile registry so model switching
 does not modify the operator's active profile. The operator's design window has
 not been terminated or restarted, and no installed binary has been replaced.
 
@@ -2219,7 +2219,7 @@ also remains exposed to cancellation of that later cleanup tail.
   rerun passed 9/9, including exact single-charge assertions.
 - Agent/LLM: 3,563 passed, zero failed, 48 ignored, 62 suites
   (`/tmp/ra-terminal-agent-llm-full.log`).
-- OctosCode: 2,171 passed, zero failed, four ignored, 33 all-target suites after
+- ra-tui: 2,171 passed, zero failed, four ignored, 33 all-target suites after
   the explicit Chinese regression (`/tmp/ra-terminal-client-all-chinese.log`).
 - Both strict all-target clippy checks, format/diff checks, the backend build,
   and CLI no-default-feature check passed. The macOS debug linker retained its
@@ -2309,7 +2309,7 @@ grounds to discard work. The pre-existing crash window between in-memory fleet
 synthesis enqueue and durable synthesized marks is also not claimed repaired.
 
 The next live run, `/tmp/ra-peer-wake-final-20260904.uvgEr7`, used an isolated
-`OCTOS_HOME`, a new store, and newly built pinned backend/client binaries. It ran
+`ra_HOME`, a new store, and newly built pinned backend/client binaries. It ran
 20:30–20:39 PDT through all 30 scenarios, five compactions, client restart, three
 daemon restarts and K3 → GLM-5.3 → K3. The driver again reported `FAILS=0`, but
 the unchanged independent gate **failed T14=2**, with every other expected reply
@@ -2339,7 +2339,7 @@ it. The exact winning reset is not identifiable from that log. All six unsafe
 reset calls and their now-unused test-only helpers have been removed; affected
 tests use dedicated profiles/sessions. Default-parallel CLI all-targets then
 passed 3,255 tests, zero failed, nine ignored, 21 suites
-(`/tmp/ra-peer-wake-cli-full-isolated.log`); OctosCode all-targets passed 2,171,
+(`/tmp/ra-peer-wake-cli-full-isolated.log`); ra-tui all-targets passed 2,171,
 zero failed, four ignored, 33 suites (`/tmp/ra-peer-wake-client-full.log`).
 This isolation cleanup does not change production behavior. Neither passing
 suite overrides the remaining live consumed-result failure.
@@ -2453,7 +2453,7 @@ Frozen-build automated validation now passes: Agent/LLM 3,568 tests (48 ignored,
 62 suites), CLI all targets 3,264 tests (9 ignored, 21 suites), strict
 Agent/CLI all-target clippy, CLI no-default-features check, fmt and diff checks.
 CLI doctests have four pre-existing ignored examples and no failures. The
-unchanged OctosCode binary matches the separately validated client build
+unchanged ra-tui binary matches the separately validated client build
 (2,171 tests, 4 ignored, 33 suites). The macOS debug build emits only the known
 oversized DWARF unwind-table linker warning. Workspace-wide optional llama/CUDA
 targets are not covered by this scoped build matrix.
@@ -2615,7 +2615,7 @@ The next immutable pair at
 localhost lanes again (`green-final-v2/results.json` under the preflight proof),
 and all 12 HTTP terminal cases plus independent ledger audit. The automated
 matrix passes: core 392 tests (1 ignored), Agent/LLM 3,570 (48 ignored), CLI all
-targets 3,288 (9 ignored), OctosCode 2,176 (4 ignored), strict all-target clippy,
+targets 3,288 (9 ignored), ra-tui 2,176 (4 ignored), strict all-target clippy,
 no-default CLI check, builds, fmt and diff checks. CLI doctests have four
 existing ignored examples. Optional workspace llama/CUDA targets remain outside
 this scoped matrix; the known macOS debug unwind-table linker warning remains.
@@ -2940,8 +2940,8 @@ client replay repair is in progress. This candidate is rejected before copying
 any private provider profile or starting another real-provider 30+4 run.
 
 Separately, fixes for already-merged #2239 and #2240 are published in isolated
-follow-up PRs [#2261](https://github.com/your-org/ra/pull/2261) and
-[#2262](https://github.com/your-org/ra/pull/2262). They are open, not merged,
+follow-up PRs [#2261](https://github.com/icehomura/ra/pull/2261) and
+[#2262](https://github.com/icehomura/ra/pull/2262). They are open, not merged,
 and not silently included in these primary-worktree binaries. Their PR reports
 distinguish focused passing tests, upstream full-suite failures, and platform
 validation limitations.
@@ -3150,13 +3150,13 @@ this new long-run rejection.
 The original #2239/#2240 were already merged, so their fixes remain separate
 open follow-ups, not changes silently integrated into these dirty worktrees:
 
-- [#2261](https://github.com/your-org/ra/pull/2261), head
+- [#2261](https://github.com/icehomura/ra/pull/2261), head
   `6aae774d87a913ef12139121aa0849865634b59a`: authentication-store safety and
   relocation/error-handling fixes, plus correctly serialized Windows readiness
   test fixtures. All scheduled checks pass; native Windows completed at
   2026-09-05 09:06:20 UTC. Its test-only Windows file-store override does not
   implement or claim a production Windows credential backend.
-- [#2262](https://github.com/your-org/ra/pull/2262), head
+- [#2262](https://github.com/icehomura/ra/pull/2262), head
   `b26702dcb5f36a936aefcd98b54b2954dc8d114d`: fenced peer cache/config publication,
   valid TOML strings and safe exclusion updates. All scheduled checks pass;
   Windows completed at07:59:49 UTC. Unix no-follow/symlink/hardlink checks remain
@@ -3367,7 +3367,7 @@ real-provider30+4 are still running at this checkpoint. The latter started at
 18:32:54UTC, is local-only, and uses an isolated0700 home/0600 copied profile.
 
 The separately read-only pinned-web check establishes that
-`octos-web@1e985386a4dff3dddcee409157f6d36fe2a462c8` uses WS/OUP rather than the
+`ra-web@1e985386a4dff3dddcee409157f6d36fe2a462c8` uses WS/OUP rather than the
 legacy SSE completion bridge. It does not establish deployed versions or external
 old SSE consumers. Other explicit limits remain: retained-ledger hydrate reads
 are not constant-time; ephemeral explicit tool writes share profile state; FFI
@@ -3466,7 +3466,7 @@ listed above remain explicit; local acceptance does not erase them.
 The operator supplied and authorized the cloud target after local acceptance.
 This resolves the earlier cloud-target prerequisite; it does not turn prior
 local evidence into cloud evidence. This is an actual remote macOS 15.7.9 arm64
-OctosCode/OUP/tmux execution, not a cloud rerun of the entire local unit, ABI,
+ra-tui/OUP/tmux execution, not a cloud rerun of the entire local unit, ABI,
 chat/ACP or provider-fault matrix. Passwordless SSH uses the local `mini3` alias;
 no login password, private key or host address is recorded in this repository.
 
@@ -3566,11 +3566,11 @@ Local integration evidence is retained under
 - `ra-tests-3.log`: 8,354 passing tests across 94 suites, 62 ignored,
   covering CLI, agent, core, LLM, bus and services with all targets.
 - `ra-clippy-workspace-1.log`: strict workspace/all-target clippy passed.
-- `octoscode-tests-runtime-2.log`: 2,281 passing tests across 43 suites,
+- `ra-tui-tests-runtime-2.log`: 2,281 passing tests across 43 suites,
   four ignored. Linux-only `olp_evo_*` and `olp_watch_board_harvest_*`
   cases were filtered on this Mac because GNU flock/stat are unavailable;
   unfiltered Ubuntu CI remains required before merge.
-- `octoscode-clippy-1.log`: strict all-target clippy passed.
+- `ra-tui-clippy-1.log`: strict all-target clippy passed.
 - Subsequent `ra-minimal-tests.log`: 1,682 passed, six ignored.
   `ra-release-matrix-clippy.log`: strict combined channel/release-feature
   clippy passed. The isolated FFI build exposed API-gated peer-registry helpers
@@ -3604,9 +3604,9 @@ client restart, four daemon restarts and K3 → GLM-5.3 → K3.
 
 This run used locally built integrated candidates, not published artifacts:
 
-- ra `2.0.3-rc.11`, source `e6168cf92`, binary SHA256
+- RecurAgent `2.0.3-rc.11`, source `e6168cf92`, binary SHA256
   `e4319c6c85fc471479c0f68e6cfe083c1298758133694d080ec67175aacf98c0`.
-- OctosCode `0.3.0-rc.10`, source `7c56b43`, binary SHA256
+- ra-tui `0.3.0-rc.10`, source `7c56b43`, binary SHA256
   `5c9add9b50b4cd5da0f3b0f711df7799c90060aad2190d6241c4598d08880aa0`.
   Its final backend dependency pin is still a release sequencing gate.
 
@@ -3635,7 +3635,7 @@ acceptance documentation; final CI/approval/merge/release remain separate gates.
 
 ## Definition of done
 
-The original OUP/OctosCode milestone required the following properties. Current
+The original OUP/ra-tui milestone required the following properties. Current
 worktree acceptance and its explicit rejections above take precedence; this list
 is not a new all-clear:
 
@@ -3645,9 +3645,9 @@ is not a new all-clear:
   verified;
 - cache epoch rotations are explicit and observable;
 - provider caching is capability-gated and measured;
-- the real OctosCode stdio/tmux soak passes across compaction, peer/background
+- the real ra-tui stdio/tmux soak passes across compaction, peer/background
   delivery, restart, and one deliberate invalidation.
 
 The follow-on frontend convergence routes `ra chat` and ACP through the same
 OUP dispatcher. Its separate acceptance must cover real adapters and shutdown,
-not merely reuse the earlier OctosCode milestone's test counts.
+not merely reuse the earlier ra-tui milestone's test counts.

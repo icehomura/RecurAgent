@@ -1,14 +1,14 @@
 # ra-tui UI strings — 简体中文 (Simplified Chinese).
 # Mirror the key structure of en.yml. Native-speaker review welcome.
 composer:
-  placeholder: "让 ra 帮你改代码……"
+  placeholder: "让 RecurAgent 帮你改代码……"
 
 app:
   banner:
-    title: "欢迎使用 ra — 你的编程伙伴"
+    title: "欢迎使用 RecurAgent — 你的编程伙伴"
     greeting_named: "欢迎回来 — %{profile}"
-    greeting_default: "欢迎使用 ra"
-    hint: "向 ra 提问，即可开始。"
+    greeting_default: "欢迎使用 RecurAgent"
+    hint: "向 RecurAgent 提问，即可开始。"
     onboarding_setup: "正在配置……"
   pane:
     sessions: "会话"
@@ -200,7 +200,7 @@ app:
     status_active: "进行中"
     status_paused: "已暂停"
     status_budget_limited: "预算已用尽"
-    # octoscode#532：预算用尽只会停止目标的自驱动轮询；舰队汇总、peer 等待输入、
+    # ra-tui#532：预算用尽只会停止目标的自驱动轮询；舰队汇总、peer 等待输入、
     # 子任务完成这些外部唤醒仍会触发，所以不能读作"已终止"。
     status_budget_limited_fleet: "预算已用尽 · peer 仍在运行"
     status_blocked: "已阻塞"
@@ -219,7 +219,7 @@ app:
     ps_to_view: "/ps 查看"
     esc_interrupt: "Esc 中断"
     stop_to_close: "/stop 关闭"
-    # octoscode#532：主 agent 等待舰队时会长时间沉默，仅在其自身轮次已结束时显示。
+    # ra-tui#532：主 agent 等待舰队时会长时间沉默，仅在其自身轮次已结束时显示。
     awaiting_fleet: "等待 %{total} 个 peer 中的 %{outstanding} 个：%{peers}"
     pending_decision_help: "等待你的确认 — Ctrl+R/Alt+A 应答 · Ctrl+C 中断"
     parked_decision_banner: "⚠ 已等待你 %{elapsed} — Ctrl+R/Alt+A 应答 · Ctrl+C 中断"
@@ -278,7 +278,7 @@ app:
     peer_dock_pill_unread: " · %{count}● 未读"
     peer_dock_toggle_hint: "Alt+P/Ctrl+L 预览"
     peer_dock_title: " peers "
-    # octoscode#532：舰队落地进度——"5 个中已落地 3 个"此前无处可见。
+    # ra-tui#532：舰队落地进度——"5 个中已落地 3 个"此前无处可见。
     peer_dock_landed: "已落地 %{landed}/%{total}"
     peer_dock_row_blocked: "等你确认：%{reason}"
     peer_dock_row_idle: "空闲"
@@ -398,7 +398,7 @@ onboarding:
     server_rejected_email: "服务器拒绝了邮箱：%{reason}。请使用 /onboard email <地址> 修改。"
     server_rejected_fields: "服务器判定档案字段无效：%{reason}。请使用 /onboard name|username|email 修改。"
     local_profile_create_failed: "profile/local/create 失败：%{reason}"
-  welcome_title: "欢迎使用 ra"
+  welcome_title: "欢迎使用 RecurAgent"
   value_saved: "%{value}（已保存）"
   value_suggested: "%{value}（建议）"
   api_key_saved: "已保存于档案"
@@ -418,7 +418,7 @@ onboarding:
     profile_name_desc: "回车编辑 —— 例如 glm 或 deepseek 这样的简短 ID（用于保存此配置）。"
     existing_profile: "使用已有档案（输入 ID）"
   local:
-    title: "创建你的本地 ra 档案"
+    title: "创建你的本地 RecurAgent 档案"
     description: "仅保存在本机；不会发送邮箱验证码。"
     subtitle: "设置本地单人档案以继续。"
     continue: "继续"
@@ -507,7 +507,7 @@ onboarding:
       workspace_hint: "/onboard workspace <路径>   （可用 `.` 表示当前文件夹）"
       permissions_hint: "/onboard permissions <default|read-only|workspace-write|full-access>"
   wizard:
-    setup_title: "ra 设置向导"
+    setup_title: "RecurAgent 设置向导"
     progress_title: "设置进度"
     header: "第 %{number}/%{total} 步 — %{title}"
     subtitle: "%{header} · %{purpose}"
@@ -522,29 +522,29 @@ onboarding:
       activate: "激活"
     purpose:
       language: "选择界面语言。默认使用 English。"
-      profile: "为 ra 创建本地身份。仅保存在本机，不会发送邮件。"
-      provider: "选择 ra 调用的 AI 模型（模型系列、模型和供应商线路）。"
+      profile: "为 RecurAgent 创建本地身份。仅保存在本机，不会发送邮件。"
+      provider: "选择 RecurAgent 调用的 AI 模型（模型系列、模型和供应商线路）。"
       connect: "粘贴供应商 API 密钥并进行实时测试，确认模型能正常响应。"
       save: "将验证通过的供应商保存到档案中以便持久化。"
-      workspace: "选择并验证 ra 在编码时可读写的文件夹。"
+      workspace: "选择并验证 RecurAgent 在编码时可读写的文件夹。"
       activate: "激活工作区：打开编码会话并开始工作。"
     explain_title: "关于本步骤"
     explain_progress: "设置进度 — 第 %{number}/%{total} 步"
     explain_now: "当前：%{title}"
     explain:
-      language: "选择完成设置时 ra 使用的语言。\n默认已选择 English。如果想让后续引导流程和应用立即切换为中文，请选择 中文。\n之后也可以使用 `/lang` 更改。"
-      profile: "ra 需要一个本地档案，用于关联你的设置、供应商和历史记录。\n为它取一个简短的名称（例如 work 或 research）后继续。名称只是一个标签——与你使用哪个模型无关；模型在下一步选择，也可随时通过 /add-model 添加或更改。（较旧的服务器会改为要求填写姓名、用户名和邮箱。）\n该档案仅保存在本机，不会发送任何信息。"
-      provider: "选择驱动 ra 的 AI 模型。\n先选模型系列（如 GPT、Claude），再选具体模型，最后选择提供该模型的供应商线路（官方或替代线路）。\n这决定了 ra 与谁通信以及编码辅助的质量——之后可随时更改。"
-      connect: "在依赖该模型之前，先确认它确实能够响应。\n粘贴你的供应商 API 密钥，然后运行实时测试。ra 会发送一个小请求并报告成功或具体错误。\n这样能在此刻发现密钥错误或线路不对，而不是任务进行中才发现。"
+      language: "选择完成设置时 RecurAgent 使用的语言。\n默认已选择 English。如果想让后续引导流程和应用立即切换为中文，请选择 中文。\n之后也可以使用 `/lang` 更改。"
+      profile: "RecurAgent 需要一个本地档案，用于关联你的设置、供应商和历史记录。\n为它取一个简短的名称（例如 work 或 research）后继续。名称只是一个标签——与你使用哪个模型无关；模型在下一步选择，也可随时通过 /add-model 添加或更改。（较旧的服务器会改为要求填写姓名、用户名和邮箱。）\n该档案仅保存在本机，不会发送任何信息。"
+      provider: "选择驱动 RecurAgent 的 AI 模型。\n先选模型系列（如 GPT、Claude），再选具体模型，最后选择提供该模型的供应商线路（官方或替代线路）。\n这决定了 RecurAgent 与谁通信以及编码辅助的质量——之后可随时更改。"
+      connect: "在依赖该模型之前，先确认它确实能够响应。\n粘贴你的供应商 API 密钥，然后运行实时测试。RecurAgent 会发送一个小请求并报告成功或具体错误。\n这样能在此刻发现密钥错误或线路不对，而不是任务进行中才发现。"
       save: "将验证通过的供应商持久化到档案 JSON 中，以便重启后仍然可用。\n可将其保存为主供应商（或添加为备用）。保存前，该线路仅存在于当前会话中。\n保存后，工作区步骤即可解锁。"
-      workspace: "选择 ra 在编码时可读写的项目文件夹。\n默认使用你启动时所在的文件夹；可用 `/onboard workspace <路径>` 覆盖（用 `.` 表示当前文件夹）。然后进行验证——ra 会检查路径是否存在、是否为目录以及是否可写。\n激活前必须有一个有效的工作区。"
-      activate: "打开编码会话并进入工作界面。\n上面的步骤都已完成：档案已创建、供应商已保存并测试通过、工作区已验证。在“激活”上按回车即可开始。\n这是最后一步——完成后你就可以开始用 ra 编码了。"
-    workspace_title: "ra 设置 — 工作区"
+      workspace: "选择 RecurAgent 在编码时可读写的项目文件夹。\n默认使用你启动时所在的文件夹；可用 `/onboard workspace <路径>` 覆盖（用 `.` 表示当前文件夹）。然后进行验证——RecurAgent 会检查路径是否存在、是否为目录以及是否可写。\n激活前必须有一个有效的工作区。"
+      activate: "打开编码会话并进入工作界面。\n上面的步骤都已完成：档案已创建、供应商已保存并测试通过、工作区已验证。在“激活”上按回车即可开始。\n这是最后一步——完成后你就可以开始用 RecurAgent 编码了。"
+    workspace_title: "RecurAgent 设置 — 工作区"
     workspace_open_label: "继续到工作区 →"
-    workspace_open_description: "选择并验证 ra 将要编码的项目文件夹，然后激活。"
+    workspace_open_description: "选择并验证 RecurAgent 将要编码的项目文件夹，然后激活。"
     workspace_locked_reason: "请先保存一个供应商"
     finish_label: "完成 —— 大脑就绪 →"
-    finish_description: "大脑已配置好。在此重新启动 ra 即可开始会话。"
+    finish_description: "大脑已配置好。在此重新启动 RecurAgent 即可开始会话。"
     activate_ready_label: "▶ 激活工作区 — 打开编码会话（回车）"
     activate_blocked_label: "激活工作区 — 打开编码会话"
     activate_ready_description: "已就绪。在此按回车打开会话并开始编码。"
@@ -1155,7 +1155,7 @@ menu:
         desc: 加载仪表盘模型系列和供应商线路
         label: 加载供应商目录
       catalog_refresh:
-        desc: 使用 profile/llm/catalog。目录结构由 ra dashboard 管理。
+        desc: 使用 profile/llm/catalog。目录结构由 RecurAgent dashboard 管理。
         label: 刷新仪表盘供应商目录
       catalog_reload:
         label: 重新加载供应商目录
@@ -1720,13 +1720,13 @@ status:
   doctor_no_provider_recovery: "请使用 /onboard family / model / route、/onboard key、/onboard save。"
   doctor_workspace_resolvable: "可从 `%{root}` 解析出工作区 cwd"
   doctor_workspace_unusable: "工作区 cwd 为 `%{root}`（不是可用路径）"
-  doctor_workspace_unusable_recovery: "使用 `--cwd <path>` 重启 ra，或通过传输启动设置 workspace.root。"
+  doctor_workspace_unusable_recovery: "使用 `--cwd <path>` 重启 RecurAgent，或通过传输启动设置 workspace.root。"
   doctor_methods_advertised: "已公布 %{advertised}/%{total} 个引导方法"
   doctor_caps_not_received: "尚未收到 ra UI 能力"
   doctor_caps_not_received_recovery: "请等待 `config/capabilities/list` 或重新连接传输。"
   doctor_appui_target: "ra UI 目标：%{target}"
   doctor_no_transport: "未配置 ra UI 传输"
-  doctor_no_transport_recovery: "请使用 ra-tui --stdio-command \"ra serve --stdio\" 或 ra-tui --endpoint ws://<host>:<port>/api/ui-protocol/ws 重新启动。"
+  doctor_no_transport_recovery: "请使用 ra-tui --stdio-command \"RecurAgent serve --stdio\" 或 ra-tui --endpoint ws://<host>:<port>/api/ui-protocol/ws 重新启动。"
   onboarding_doctor_summary: "引导诊断 — %{summary}"
   doctor_outcome:
     pass: "通过"

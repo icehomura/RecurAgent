@@ -1,6 +1,6 @@
 [book]
-title = "ra 文档"
-authors = ["ra contributors"]
+title = "RecurAgent 文档"
+authors = ["RecurAgent contributors"]
 language = "zh"
 src = "src"
 
@@ -10,7 +10,7 @@ build-dir = "public"
 [output.html]
 default-theme = "light"
 preferred-dark-theme = "ayu"
-git-repository-url = "https://github.com/your-org/ra"
-edit-url-template = "https://github.com/your-org/ra/edit/main/book-zh/src/{path}"
+git-repository-url = "https://github.com/icehomura/ra"
+edit-url-template = "https://github.com/icehomura/ra/edit/main/book-zh/src/{path}"
 site-url = "/ra/zh/"
 additional-css = ["theme/ra.css"]

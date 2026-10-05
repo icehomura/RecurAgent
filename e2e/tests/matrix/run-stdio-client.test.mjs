@@ -1,7 +1,7 @@
 // Codex P2 follow-up on #1157 (M22 onboarding matrix):
 //
 // When the spawned `ra serve` process exits before / during an RPC
-// (startup crash, panic, wrong binary at OCTOS_BIN), the original
+// (startup crash, panic, wrong binary at ra_BIN), the original
 // runner would emit `EPIPE` on `child.stdin` with no handler and
 // Node would terminate — leaving no scenario.json or summary.json
 // artifact behind. The StdioClient must instead:
@@ -33,8 +33,8 @@ test('rpc() on a backend that already exited resolves to a typed backend_exited 
 
   const client = new StdioClient({
     // node exits immediately — emulates a binary that crashes on
-    // startup or the wrong file at OCTOS_BIN.
-    octosBin: process.execPath,
+    // startup or the wrong file at ra_BIN.
+    raBin: process.execPath,
     dataDir: tmp,
     workspace: tmp,
     repoRoot: tmp,
@@ -79,7 +79,7 @@ test('rpc() on a backend that exits with pending requests fails those requests t
   // Use a short-lived python/sh fallback: a process that holds stdin
   // open briefly then exits. node with `-e` works the same way.
   const client = new StdioClient({
-    octosBin: process.execPath,
+    raBin: process.execPath,
     dataDir: tmp,
     workspace: tmp,
     repoRoot: tmp,

@@ -15,8 +15,8 @@
 
 ## 1. OctoLoop 是什么
 
-OctoLoop 是一套"双环"协作系统:**内环**由便宜模型(octoscode TUI +
-ra serve,如 glm/kimi 档)在你的仓库里干活——读黑板、执行、commit;
+OctoLoop 是一套"双环"协作系统:**内环**由便宜模型(ra-tui TUI +
+RecurAgent serve,如 glm/kimi 档)在你的仓库里干活——读黑板、执行、commit;
 **外环**由强模型 CLI agent(Claude Code / Codex)审查——读黑板、派整改单、
 独立复验、采认后代为 push。内环便宜、可反复重跑,外环贵、只花在审查与
 裁决上;推送权只在外环,每个 commit 都过两双眼睛。
@@ -37,10 +37,10 @@ ra serve,如 glm/kimi 档)在你的仓库里干活——读黑板、执行、com
 | 依赖 | 必须? | 说明 |
 |---|---|---|
 | Linux / macOS | 是 | Windows 可跑 TUI;serve 的 bwrap 沙箱档是 Linux 特性 |
-| octoscode 可执行 | 是 | `npm install -g @your-org/ra-tui`(octos server 首启自动下载到 `~/.ra/bin`) |
+| ra-tui 可执行 | 是 | `npm install -g @icehomura/ra-tui`(RecurAgent server 首启自动下载到 `~/.ra/bin`) |
 | 内环模型 API key | 是 | 便宜档,例:Moonshot(kimi)/ ZAI;onboarding 向导里粘贴 |
 | 外环模型 CLI | 是 | Claude Code / Codex 任一,用你已有的订阅 |
-| herdr 或 tmux | 推荐 | 外环程序化驱动内环窗格;herdr 来源 <https://github.com/hagency-org/herdr>(octoscode 窗格识别当前在 `feat/octoscode-agent` 分支构建),不装可降级 tmux send-keys |
+| herdr 或 tmux | 推荐 | 外环程序化驱动内环窗格;herdr 来源 <https://github.com/hagency-org/herdr>(ra-tui 窗格识别当前在 `feat/ra-tui-agent` 分支构建),不装可降级 tmux send-keys |
 | bwrap(bubblewrap) | Linux 自带居多 | 权限档 1-4 的文件系统沙箱(见 §3.1 免沙箱说明) |
 
 不需要 Rust——源码构建才需要(Rust 1.85+)。
@@ -49,14 +49,14 @@ ra serve,如 glm/kimi 档)在你的仓库里干活——读黑板、执行、com
 
 ```bash
 # ① 装 TUI
-npm install -g @your-org/ra-tui
+npm install -g @icehomura/ra-tui
 
 # ② 在你的项目目录铺 OLP 脚手架(幂等,绝不覆盖已有文件)
 cd your-project/
 bash scripts/olp-init.sh     # 或 curl 官方 raw 地址 | bash
 
 # ③ 启动内环
-octoscode --stdio-command 'octos serve --stdio --solo'
+ra-tui --stdio-command 'ra serve --stdio --solo'
 ```
 
 `olp-init.sh` 做四件事:依赖体检、生成 `.ra/loop.md` 与
@@ -73,14 +73,14 @@ OctoLoop 的一键入口是 `.claude/skills/octoloop` 这张 skill 卡(即本仓
 
 引导运行 `bash scripts/olp-init.sh`,完成后逐项核对 `docs/OLP_QUICKSTART.md`
 §1 依赖清单;缺口按 §6 故障速查处理,再跑 QUICKSTART §5 冒烟验证(两分钟:
-发个 hello、黑板首条 ACK 掉、`herdr agent list` 显示 octoscode 窗格)。
+发个 hello、黑板首条 ACK 掉、`herdr agent list` 显示 ra-tui 窗格)。
 
 **权限档必读**:权限档 1-4 都运行在 bwrap 文件系统沙箱里,`~/.cargo`、
 `~/.rustup` 对 agent 不可见,构建命令会 "command not found"。要让内环跑
 cargo/npm,选第 **5 档 Full Access** 或启动带:
 
 ```bash
-octoscode --stdio-command 'octos serve --stdio --solo --danger-full-access'
+ra-tui --stdio-command 'ra serve --stdio --solo --danger-full-access'
 ```
 
 `--solo` 是单人本地安全门,漏掉会报 "not allowed outside local solo mode"。
@@ -106,7 +106,7 @@ skill 卡的模式 inner 要求按任务形态选内环形态;三档各有定位
 
 | 形态 | 适用场景 | 关键点 |
 |---|---|---|
-| **octoscode 标准** | 仓库内编码主路径 | octos serve stdio 挂载,全工具面 + MCP 第五信道(ask_outer/report_blocked) |
+| **ra-tui 标准** | 仓库内编码主路径 | RecurAgent serve stdio 挂载,全工具面 + MCP 第五信道(ask_outer/report_blocked) |
 | **claude / codex 免审批窗格** | 快轨修订、外环同级复审 | herdr 窗格隔离,绕内环审批链;分支纪律照旧 |
 | **强档车道** | 大型战役/多 peer 并行 | profile 多模型 lane(见 §5),sub_providers 供 pipeline 按节点选档 |
 
@@ -149,7 +149,7 @@ skill 卡的模式 inner 要求按任务形态选内环形态;三档各有定位
 
 - **TUI agents 栏**:`Alt+P` 打开,`Ctrl+L` peek——实时看各 peer
   状态与车道。
-- **CLI**:`ra peer list` 列 peer(含 model 车道);`ra goal
+- **CLI**:`ra peer list` 列 peer(含 model 车道);`RecurAgent goal
   status --goal <id>` 看 goal 状态与 token 消耗。
 - **事件流**:`tail -f .../data/events.jsonl` 可见 peer_staged
   (含 model_lane)与 goal_transition 事件(见 QUICKSTART)。
@@ -215,7 +215,7 @@ goal 达成后**必须显式收口**,否则变僵尸拦截后续 goal:
 | 黑板没被内环读到 | 黑板被误 track/跨分支裂脑 | 确认 `.ra/OUTER_LOOP_REVIEW.md` 在 `.gitignore`(olp-init 已做);重跑 init 幂等补 |
 | 断供空转/全线报错停摆 | 未配 fallbacks,主道 quota/auth 拒付 | 按 §5 配 `fallbacks[]`,新会话生效 |
 | herdr 注入静默丢失 | 双重门:named-agent 名单 + 窗格前台进程名匹配 | 缺一即丢;降级 tmux `send-keys`(`-` 开头文本用 `--` 分隔) |
-| 首启下载 server 失败 | 离线/代理 | 手装 `npm i -g @your-org/ra`;`OCTOSCODE_NO_AUTO_INSTALL=1` 关自动装 |
+| 首启下载 server 失败 | 离线/代理 | 手装 `npm i -g @icehomura/ra`;`RA_TUI_NO_AUTO_INSTALL=1` 关自动装 |
 | Linux 构建大项目链接器 SIGBUS / EDQUOT | `/tmp` tmpfs 带配额 | `export TMPDIR=~/.local/tmp`(建目录后写进 shell profile) |
 
 ### 7.1 平台支持矩阵
@@ -227,7 +227,7 @@ goal 达成后**必须显式收口**,否则变僵尸拦截后续 goal:
 | Linux | 全功率 | 全部能力含 outer-duty 内核锁、bwrap 沙箱档 |
 | WSL2 | 等同 Linux | prctl//proc/bwrap/bash/herdr 全在,实战结论直接适用 |
 | macOS | 可用,两缺口 | ①outer-duty 锁不可用(Linux-only,多外环退回值班簿纪律层+operator 裁决);②bwrap 档为 Linux 特性,权限档 1-4 沙箱语义不成立;herdr 未验证,降级 tmux(`--` 分隔坑见 BOOT) |
-| Windows 原生 | 不推荐 | octoscode 构建未完整验证(CI windows job backlog 在案);bash 脚本/herdr/tmux 缺失,外环驱动观测通道瘫;活 serve 的 goal archive/reopen 一律 fail closed;请用 WSL2 |
+| Windows 原生 | 不推荐 | ra-tui 构建未完整验证(CI windows job backlog 在案);bash 脚本/herdr/tmux 缺失,外环驱动观测通道瘫;活 serve 的 goal archive/reopen 一律 fail closed;请用 WSL2 |
 
 注:①outer-duty 锁的权威语义见协议 R7(守护式死亡耦合,Linux-only,
 非 Linux unsupported 退出 2,Windows LockFileEx 另立条目);②值班簿
@@ -252,7 +252,7 @@ OctoLoop 把一个长程任务拆给两圈 agent 加一个人,三者模型档位
 | 角色 | 职责 | 模型档位 |
 |---|---|---|
 | **operator**(人) | 宏观指令、终审、审批(推送、授权、范围变更) | — |
-| **内环 runtime**(ra serve + master/peers) | 长程执行:goal keeper 推进、peer 并行干活、按黑板整改 | 便宜档(如 kimi/k3 车道) |
+| **内环 runtime**(RecurAgent serve + master/peers) | 长程执行:goal keeper 推进、peer 并行干活、按黑板整改 | 便宜档(如 kimi/k3 车道) |
 | **外环 outer agent**(Claude Code / Codex 等) | 计划、事件驱动监控、交付审查、指导、基建维护 | 强档 |
 
 设计动机:内环模型便宜、可反复重跑,出错成本低;外环模型贵,只花在
@@ -271,16 +271,16 @@ OctoLoop 把一个长程任务拆给两圈 agent 加一个人,三者模型档位
 | 2 | 交付物 | `peers/<slug>/result.md`(frontmatter schema) | 每轮交付的权威回执,单写者契约 |
 | 3 | 权威账本 | `goal-ledgers/<goal_id>` | durable 审计与读面,重启幸存(状态裁定拓扑见机制篇 §3.5) |
 | 4 | 求助 | escalation(park 于 approval/question) | 分级升级,见 R3 |
-| 5 | **主动问询(MCP)** | `octoscode olp-mcp-serve` 子命令 | 内环 turn 内**同步**问外环,见下(绰号"第五信道"沿用历史序数:上行前四信道+MCP=五;"代码"信道系后加入,现排第 6 行) |
+| 5 | **主动问询(MCP)** | `ra-tui olp-mcp-serve` 子命令 | 内环 turn 内**同步**问外环,见下(绰号"第五信道"沿用历史序数:上行前四信道+MCP=五;"代码"信道系后加入,现排第 6 行) |
 | 6 | 代码 | git log / diff | 审查对象,原子 commit 即既成事实 |
 
 前四条与第 6 行代码信道是"外环拉取"模型:内环留下痕迹,外环循事件来读。第 5 行的主动问询信道(绰号"第五信道")
 (#31 落地,纯 Rust 实现,无 Python 依赖)方向相反——**内环主动推**:
 
-- **挂载方式**:profile 的 `config.mcp_servers` 指向 octoscode 可执行
+- **挂载方式**:profile 的 `config.mcp_servers` 指向 ra-tui 可执行
   文件,`args` 为 `["olp-mcp-serve"]`;挂载后内环模型 turn 内可原生
   调用两个 MCP 工具(接线步骤见 OUTER_LOOP_PROTOCOL.md 接入清单第 7 项;
-  就地两行:profile `config.mcp_servers` 里 `"command"` 指向 octoscode
+  就地两行:profile `config.mcp_servers` 里 `"command"` 指向 ra-tui
   可执行文件、`"args": ["olp-mcp-serve"]`,新会话生效)。
 - **`ask_outer(question, context, tried)`**:turn 内同步发问。信箱目录
   `~/.ra/outer/mcp/` 下 `questions/` → `answers/` → `consumed/`(取答
@@ -352,7 +352,7 @@ decisions/escalations 表)——master 不会为"自认为解决了"的事再上
 ### R4b — 树主权与自动围栏
 
 R4 管"同树多写者",R4b 管"多 goal 撞同一棵树",是系统默认机制而非
-外环手工活(ra #20-20c 移交,作为 R4 子条款,不升协议版本):
+外环手工活(RecurAgent #20-20c 移交,作为 R4 子条款,不升协议版本):
 
 - **自动围栏**:`peer_handoff` 未显式指定 worktree 时,撞车谓词
   (active goal > 1 / peer 目标分支 ≠ 主树当前分支 / 主树有未围栏在途
@@ -544,7 +544,7 @@ goal 仍活着,下一个 turn 立刻接上,不等外环唤醒节拍。体感:goa
 
 ## 5. `startup --prompt`:恰一次语义
 
-`octoscode --prompt "任务"` 让启动即开工(#30),其语义可以一句话说清:
+`ra-tui --prompt "任务"` 让启动即开工(#30),其语义可以一句话说清:
 **引导(onboarding)完成后,恰好自动发一次 turn/start**。
 
 - **恰一次**:派发前若连接中断,重连后会补发那一次;一旦派发成功,

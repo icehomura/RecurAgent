@@ -1,7 +1,7 @@
 //! Standalone account-manager skill binary.
 //!
 //! Manages sub-accounts under a parent profile by reading/writing profile JSON
-//! files in `$RA_HOME/profiles/` (the legacy `$OCTOS_HOME` is still honoured).
+//! files in `$RA_HOME/profiles/` (the legacy `$ra_HOME` is still honoured).
 //! Communicates via stdin/stdout JSON protocol.
 
 use std::collections::HashMap;
@@ -139,7 +139,7 @@ fn main() {
         Some(v) => v,
         None => {
             output_error(
-                "RA_PROFILE_ID (legacy OCTOS_PROFILE_ID) is not set — this tool must be run \
+                "RA_PROFILE_ID (legacy ra_PROFILE_ID) is not set — this tool must be run \
                  from a gateway",
             );
             return;

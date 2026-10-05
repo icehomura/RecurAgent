@@ -21,7 +21,7 @@ A minimal configuration specifies the LLM provider and model:
 
 ## Gateway Config
 
-To run ra as a multi-channel daemon, add a `gateway` section:
+To run RecurAgent as a multi-channel daemon, add a `gateway` section:
 
 ```json
 {
@@ -49,7 +49,7 @@ Use `${VAR_NAME}` syntax anywhere in config values:
 ```json
 {
   "base_url": "${ANTHROPIC_BASE_URL}",
-  "model": "${OCTOS_MODEL}"
+  "model": "${RA_MODEL}"
 }
 ```
 
@@ -142,7 +142,7 @@ The complete configuration structure with all available fields:
   // <data_dir>/models/ (334 MB, Gemma Terms of Use — see
   // docs/THIRD_PARTY_MODELS.md) and used with no API key. `model_path`
   // points at any other GGUF; `auto_download: false` (or
-  // OCTOS_NO_MODEL_DOWNLOAD=1) keeps memory keyword-only until a model is
+  // RA_NO_MODEL_DOWNLOAD=1) keeps memory keyword-only until a model is
   // supplied. Builds add embed-llama-metal / -cuda to offload; CPU otherwise.
   // Changing provider or model changes the vector DIMENSION, which
   // invalidates a populated index — re-embed after switching.
@@ -202,7 +202,7 @@ The complete configuration structure with all available fields:
 }
 ```
 
-> The `memory.refresh` pipeline is **on by default**. See [Memory & Skills → Automatic Memory Refresh](./memory-skills.md) for the full field list and the `ra memory` command. Opt out with `"enabled": false` or `OCTOS_MEMORY_REFRESH_ENABLED=0`.
+> The `memory.refresh` pipeline is **on by default**. See [Memory & Skills → Automatic Memory Refresh](./memory-skills.md) for the full field list and the `ra memory` command. Opt out with `"enabled": false` or `RA_MEMORY_REFRESH_ENABLED=0`.
 
 ## Browser AppUI Origins
 
@@ -224,10 +224,10 @@ or custom hostname used to reach the embedded assets:
 
 Only `http://` and `https://` scheme + host + optional port are accepted.
 Userinfo, paths, queries, fragments, wildcards, `null`, and other schemes make
-startup fail. A non-empty comma-separated `OCTOS_APPUI_ALLOWED_ORIGINS`
+startup fail. A non-empty comma-separated `RA_APPUI_ALLOWED_ORIGINS`
 replaces the config list; an empty value does not.
 
-Reverse proxies must configure their public origin explicitly. ra never
+Reverse proxies must configure their public origin explicitly. RecurAgent never
 derives trust from `Host` or `X-Forwarded-*`, and it does not guess LAN
 addresses. Use HTTPS for every non-loopback/production origin. Browser auth
 tokens are stored per origin, so open the public origin and log in there after
@@ -319,7 +319,7 @@ like Robrix render native Approve/Deny buttons, others show a text fallback):
 - Pending approvals are in-memory: a gateway restart drops them (the request
   card stays in chat but answering it reports the request as unknown).
 - Decisions are appended to the JSONL audit log under `<data_dir>/audit/`
-  (`OCTOS_APPROVALS_AUDIT_*` env vars control rotation/retention).
+  (`RA_APPROVALS_AUDIT_*` env vars control rotation/retention).
 - Also available per-profile via `profile.config.approval_policy`.
 
 ## Environment Variables
@@ -389,16 +389,16 @@ like Robrix render native Approve/Deny buttons, others show a text fallback):
 
 | Variable | Description |
 |----------|-------------|
-| `OCTOS_SESSION_SEGMENT_BYTES` | Active session file size at which it seals into a segment (default 8 MiB) |
-| `OCTOS_SESSION_LOAD_BUDGET_BYTES` | Session history bytes a plain load reads, newest first (default 32 MiB; `0` = unlimited) |
+| `RA_SESSION_SEGMENT_BYTES` | Active session file size at which it seals into a segment (default 8 MiB) |
+| `RA_SESSION_LOAD_BUDGET_BYTES` | Session history bytes a plain load reads, newest first (default 32 MiB; `0` = unlimited) |
 
 ### System
 
 | Variable | Description |
 |----------|-------------|
 | `RUST_LOG` | Log level (error/warn/info/debug/trace) |
-| `OCTOS_LOG_JSON` | Enable JSON-formatted logs (set to any value) |
-| `OCTOS_APPUI_ALLOWED_ORIGINS` | Non-empty comma-separated exact browser origins; replaces `appui.allowed_origins` |
+| `RA_LOG_JSON` | Enable JSON-formatted logs (set to any value) |
+| `RA_APPUI_ALLOWED_ORIGINS` | Non-empty comma-separated exact browser origins; replaces `appui.allowed_origins` |
 
 ## File Layout
 

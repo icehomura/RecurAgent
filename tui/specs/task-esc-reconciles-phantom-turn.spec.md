@@ -152,4 +152,4 @@ gate）下不再只报错，而是复用看门狗的证据驱动复位：有证�
 
 - 看门狗本身的 tick 逻辑与证据定义（task-stuck-run-state-watchdog）。
 - Ctrl+Q 的按键路由（event loop 中已无条件返回 Quit，不改动）。
-- 服务端返还未消费 steer（ra F4）。
+- 服务端返还未消费 steer（RecurAgent F4）。

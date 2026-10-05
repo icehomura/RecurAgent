@@ -1056,11 +1056,11 @@ async fn dispatch_once(
     prior_attempts: u32,
 ) -> SubtaskOutcome {
     // #1021 / M17-C — swarm dispatches go through external MCP backends
-    // that don't consume the ra prompt context manager. Tag the
+    // that don't consume the RecurAgent prompt context manager. Tag the
     // contract with backend_kind/agent_id/risk so the evidence ledger
     // can identify each unmanaged dispatch without parsing free-form
     // text. The contract_id doubles as the agent_id here — swarm
-    // subtasks don't have a separate ra task supervisor handle.
+    // subtasks don't have a separate RecurAgent task supervisor handle.
     let context_contract =
         DispatchContextContract::external_unmanaged("swarm_mcp_backend_context_payload_not_wired")
             .with_child_session_key(Some(contract.contract_id.clone()))

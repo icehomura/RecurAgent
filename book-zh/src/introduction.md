@@ -2,17 +2,17 @@
 
 > 🌐 **[English Documentation](/ra/)**
 
-## ra 是什么？
+## RecurAgent 是什么？
 
-ra 是一个开源 AI 智能体平台，能将任意大语言模型变成多渠道、多用户的智能助手。你只需部署一个 Rust 编译的二进制文件，配置好 LLM API 密钥和消息渠道（Telegram、Discord、Slack、WhatsApp、Email、微信等），ra 会处理其余一切——对话路由、工具执行、记忆管理、模型故障切换，以及多租户隔离。
+RecurAgent 是一个开源 AI 智能体平台，能将任意大语言模型变成多渠道、多用户的智能助手。你只需部署一个 Rust 编译的二进制文件，配置好 LLM API 密钥和消息渠道（Telegram、Discord、Slack、WhatsApp、Email、微信等），RecurAgent 会处理其余一切——对话路由、工具执行、记忆管理、模型故障切换，以及多租户隔离。
 
-可以把它理解为 **AI 智能体的后端操作系统**。你无需为每个场景从零搭建聊天机器人，只需配置 ra 的 Profile——每个 Profile 拥有独立的系统提示词、模型、工具和渠道——然后通过 Web 仪表板或 REST API 统一管理。一个小团队就能在一台机器上运行数百个专用 AI 智能体。
+可以把它理解为 **AI 智能体的后端操作系统**。你无需为每个场景从零搭建聊天机器人，只需配置 RecurAgent 的 Profile——每个 Profile 拥有独立的系统提示词、模型、工具和渠道——然后通过 Web 仪表板或 REST API 统一管理。一个小团队就能在一台机器上运行数百个专用 AI 智能体。
 
-ra 面向那些需求超越个人助手的用户：需要在 WhatsApp 和 Telegram 上部署 AI 客服的团队、希望在 REST API 之上构建 AI 产品的开发者、使用不同 LLM 编排多步骤研究流程的科研人员，或是共享一套 AI 系统并为每位家庭成员提供个性化配置的家庭用户。
+RecurAgent 面向那些需求超越个人助手的用户：需要在 WhatsApp 和 Telegram 上部署 AI 客服的团队、希望在 REST API 之上构建 AI 产品的开发者、使用不同 LLM 编排多步骤研究流程的科研人员，或是共享一套 AI 系统并为每位家庭成员提供个性化配置的家庭用户。
 
 ## 运行模式
 
-ra 有三种主要运行模式：
+RecurAgent 有三种主要运行模式：
 
 - **对话模式** (`ra chat`)：交互式多轮对话，支持工具调用；也可通过 `--message` 发送单条消息后退出。
 - **网关模式** (`ra gateway`)：常驻守护进程，同时服务多个消息渠道。
@@ -22,8 +22,8 @@ ra 有三种主要运行模式：
 
 `ra serve` 后端使用单一的带版本 **UI Protocol**（基于 WebSocket 或 stdio 的 JSON-RPC），因此多个前端共享同一个服务器：
 
-- **Web**（[octos-web](https://github.com/your-org/ra-web)）：内嵌在 `/app/` 的 React SPA（聊天、Slides Studio、Sites、语音）。位于 `/admin/` 的运维**管理仪表板**是 octos 仓库中一个独立的内嵌应用（`dashboard/`）。
-- **终端**（[octoscode](https://github.com/your-org/ra-tui)）：通过 UI Protocol 连接的 Rust TUI（WebSocket 连到运行中的 `serve`，或拉起一个 `serve --stdio` 子进程），支持实时流式、审批、diff 与引导。
+- **Web**（[ra-web](https://github.com/icehomura/ra-web)）：内嵌在 `/app/` 的 React SPA（聊天、Slides Studio、Sites、语音）。位于 `/admin/` 的运维**管理仪表板**是 RecurAgent 仓库中一个独立的内嵌应用（`dashboard/`）。
+- **终端**（[ra-tui](https://github.com/icehomura/ra-tui)）：通过 UI Protocol 连接的 Rust TUI（WebSocket 连到运行中的 `serve`，或拉起一个 `serve --stdio` 子进程），支持实时流式、审批、diff 与引导。
 
 ## 核心概念
 

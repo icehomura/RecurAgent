@@ -866,7 +866,7 @@ async fn should_populate_validator_results_when_workspace_policy_declares_valida
 /// Security regression for the M7.2 session-dispatch RCE: the per-session tool
 /// registry must confine `shell` to the workspace `cwd`. Before the fix the
 /// dispatch built tools with `with_builtins` (`NoSandbox`), so an outer MCP
-/// caller could drive `shell` to write anywhere the ra process could.
+/// caller could drive `shell` to write anywhere the RecurAgent process could.
 ///
 /// Self-gates on backend availability: where `SandboxMode::Auto` resolves to
 /// `NoSandbox` (no `sandbox-exec` on macOS / no `bwrap` on Linux), OS-level

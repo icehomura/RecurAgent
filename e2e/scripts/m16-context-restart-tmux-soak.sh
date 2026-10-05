@@ -4,24 +4,24 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 
-run_id="${OCTOS_M16_CONTEXT_TMUX_RUN_ID:-m16-context-reconnect-tmux-$(date -u +%Y%m%dT%H%M%SZ)}"
-tui_repo="${OCTOSCODE_REPO:-$(dirname "$repo_root")/octoscode}"
-tui_runner="${OCTOS_M16_CONTEXT_TUI_RUNNER:-$tui_repo/scripts/run-m15-live-tmux-ux-soak.sh}"
-out_root="${OCTOS_M16_CONTEXT_TMUX_OUT_ROOT:-$repo_root/e2e/test-results-m16-context-restart-tmux}"
-out_dir="${OCTOS_M16_CONTEXT_TMUX_OUT_DIR:-$out_root/$run_id}"
-runtime_root="${OCTOS_M16_CONTEXT_TMUX_RUNTIME_ROOT:-/tmp/ra-m16-context-tmux-$run_id}"
+run_id="${ra_M16_CONTEXT_TMUX_RUN_ID:-m16-context-reconnect-tmux-$(date -u +%Y%m%dT%H%M%SZ)}"
+tui_repo="${RA_TUI_REPO:-$(dirname "$repo_root")/ra-tui}"
+tui_runner="${ra_M16_CONTEXT_TUI_RUNNER:-$tui_repo/scripts/run-m15-live-tmux-ux-soak.sh}"
+out_root="${ra_M16_CONTEXT_TMUX_OUT_ROOT:-$repo_root/e2e/test-results-m16-context-restart-tmux}"
+out_dir="${ra_M16_CONTEXT_TMUX_OUT_DIR:-$out_root/$run_id}"
+runtime_root="${ra_M16_CONTEXT_TMUX_RUNTIME_ROOT:-/tmp/ra-m16-context-tmux-$run_id}"
 bootstrap_dir="$out_dir/bootstrap-stdio"
 replay_file="$out_dir/context-reconnect-replay.txt"
-octos_bin="${OCTOS_BIN:-$repo_root/target/debug/ra}"
-tui_bin="${OCTOSCODE_BIN:-$tui_repo/target/debug/octoscode}"
-session_name="${OCTOS_M16_CONTEXT_TMUX_SESSION:-ra-m16-context-$run_id}"
+ra_bin="${ra_BIN:-$repo_root/target/debug/ra}"
+tui_bin="${RA_TUI_BIN:-$tui_repo/target/debug/ra-tui}"
+session_name="${ra_M16_CONTEXT_TMUX_SESSION:-ra-m16-context-$run_id}"
 
 usage() {
   cat <<'USAGE'
 Usage: e2e/scripts/m16-context-restart-tmux-soak.sh <run|self-test|help>
 
 Creates a compacted ContextManager checkpoint with a direct stdio soak, then
-launches real octoscode in tmux against a restarted octos serve --stdio backend
+launches real ra-tui in tmux against a restarted ra serve --stdio backend
 and captures /status context visual evidence.
 USAGE
 }
@@ -42,15 +42,15 @@ json_get() {
 }
 
 ensure_binaries() {
-  if [[ "${OCTOS_M16_CONTEXT_BUILD:-1}" == "1" ]]; then
+  if [[ "${ra_M16_CONTEXT_BUILD:-1}" == "1" ]]; then
     (cd "$repo_root" && cargo build -p ra-cli --bin ra --features api)
   fi
-  if [[ "${OCTOS_M16_CONTEXT_BUILD_TUI:-0}" == "1" || ! -x "$tui_bin" ]]; then
-    (cd "$tui_repo" && cargo build --bin octoscode)
+  if [[ "${ra_M16_CONTEXT_BUILD_TUI:-0}" == "1" || ! -x "$tui_bin" ]]; then
+    (cd "$tui_repo" && cargo build --bin ra-tui)
   fi
-  [[ -x "$octos_bin" ]] || die "ra binary is not executable: $octos_bin"
-  [[ -x "$tui_bin" ]] || die "octoscode binary is not executable: $tui_bin"
-  [[ -x "$tui_runner" ]] || die "octoscode tmux runner is not executable: $tui_runner"
+  [[ -x "$ra_bin" ]] || die "ra binary is not executable: $ra_bin"
+  [[ -x "$tui_bin" ]] || die "ra-tui binary is not executable: $tui_bin"
+  [[ -x "$tui_runner" ]] || die "ra-tui tmux runner is not executable: $tui_runner"
 }
 
 write_replay() {
@@ -79,8 +79,8 @@ run_soak() {
   ensure_binaries
   mkdir -p "$out_dir" "$runtime_root"
 
-  OCTOS_BIN="$octos_bin" \
-    OCTOS_M16_CONTEXT_RESTART_DIR="$bootstrap_dir" \
+  ra_BIN="$ra_bin" \
+    ra_M16_CONTEXT_RESTART_DIR="$bootstrap_dir" \
     "$script_dir/m16-context-restart-stdio-soak.mjs" > "$out_dir/bootstrap-stdio.stdout.json"
 
   local summary="$bootstrap_dir/m16-context-restart-stdio-summary.json"
@@ -101,23 +101,23 @@ run_soak() {
   write_replay
 
   local backend_command
-  backend_command="env OCTOS_CONTEXT_COMPACT_THRESHOLD_TOKENS=1 OCTOS_CONTEXT_COMPACT_KEEP_ITEMS=4 $(shell_quote "$octos_bin") serve --stdio --data-dir $(shell_quote "$data_dir") --cwd $(shell_quote "$workspace")"
+  backend_command="env ra_CONTEXT_COMPACT_THRESHOLD_TOKENS=1 ra_CONTEXT_COMPACT_KEEP_ITEMS=4 $(shell_quote "$ra_bin") serve --stdio --data-dir $(shell_quote "$data_dir") --cwd $(shell_quote "$workspace")"
 
-  export OCTOSCODE_M15_UX_RUN_ID="$run_id"
-  export OCTOSCODE_M15_UX_OUT_DIR="$out_dir"
-  export OCTOSCODE_M15_UX_RUNTIME_ROOT="$runtime_root"
-  export OCTOSCODE_M15_UX_WORKDIR="$workspace"
-  export OCTOSCODE_M15_UX_CHILD_OUT_DIR="$runtime_root/artifacts"
-  export OCTOSCODE_M15_UX_BIN="$tui_bin"
-  export OCTOSCODE_M15_UX_BACKEND_COMMAND="$backend_command"
-  export OCTOSCODE_M15_UX_TMUX_SESSION="$session_name"
-  export OCTOSCODE_M15_UX_REPLAY="$replay_file"
-  export OCTOSCODE_M15_UX_SCENARIO="context_restart_reconnect"
-  export OCTOSCODE_M15_UX_SESSION_ID="$session_id"
-  export OCTOSCODE_M15_UX_PROFILE="$profile_id"
-  export OCTOSCODE_M15_UX_REPLACE_SESSION=1
-  export OCTOSCODE_M15_UX_COLS="${OCTOS_M16_CONTEXT_TMUX_COLS:-120}"
-  export OCTOSCODE_M15_UX_ROWS="${OCTOS_M16_CONTEXT_TMUX_ROWS:-40}"
+  export RA_TUI_M15_UX_RUN_ID="$run_id"
+  export RA_TUI_M15_UX_OUT_DIR="$out_dir"
+  export RA_TUI_M15_UX_RUNTIME_ROOT="$runtime_root"
+  export RA_TUI_M15_UX_WORKDIR="$workspace"
+  export RA_TUI_M15_UX_CHILD_OUT_DIR="$runtime_root/artifacts"
+  export RA_TUI_M15_UX_BIN="$tui_bin"
+  export RA_TUI_M15_UX_BACKEND_COMMAND="$backend_command"
+  export RA_TUI_M15_UX_TMUX_SESSION="$session_name"
+  export RA_TUI_M15_UX_REPLAY="$replay_file"
+  export RA_TUI_M15_UX_SCENARIO="context_restart_reconnect"
+  export RA_TUI_M15_UX_SESSION_ID="$session_id"
+  export RA_TUI_M15_UX_PROFILE="$profile_id"
+  export RA_TUI_M15_UX_REPLACE_SESSION=1
+  export RA_TUI_M15_UX_COLS="${ra_M16_CONTEXT_TMUX_COLS:-120}"
+  export RA_TUI_M15_UX_ROWS="${ra_M16_CONTEXT_TMUX_ROWS:-40}"
 
   {
     printf 'bootstrap_summary=%s\n' "$summary"

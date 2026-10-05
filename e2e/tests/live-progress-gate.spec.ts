@@ -13,10 +13,10 @@
  * do NOT mock the backend. Pointing them at localhost only makes sense if the
  * canary stack is running locally.
  *
- *   OCTOS_TEST_URL=https://dspfac.crew.ominix.io \
- *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
- *   OCTOS_PROFILE=dspfac \
- *   OCTOS_TEST_EMAIL=dspfac@gmail.com \
+ *   ra_TEST_URL=https://dspfac.crew.ominix.io \
+ *   ra_AUTH_TOKEN=ra-admin-2026 \
+ *   ra_PROFILE=dspfac \
+ *   ra_TEST_EMAIL=dspfac@gmail.com \
  *   npx playwright test tests/live-progress-gate.spec.ts
  */
 import fs from 'node:fs';
@@ -367,8 +367,8 @@ async function openSseSnapshot(
   return page.evaluate(
     async ({ sessionId: sid, timeoutMs: timeout }) => {
       const token =
-        localStorage.getItem('octos_session_token') ||
-        localStorage.getItem('octos_auth_token') ||
+        localStorage.getItem('ra_session_token') ||
+        localStorage.getItem('ra_auth_token') ||
         '';
       const headers: Record<string, string> = {};
       if (token) headers.Authorization = `Bearer ${token}`;
@@ -649,7 +649,7 @@ test.describe('M4.1A live progress gate', () => {
     } else {
       // Fallback: direct navigation.
       await page.evaluate((sid) => {
-        localStorage.setItem('octos_current_session', sid);
+        localStorage.setItem('ra_current_session', sid);
       }, originSessionId);
       await page.reload({ waitUntil: 'domcontentloaded' });
     }

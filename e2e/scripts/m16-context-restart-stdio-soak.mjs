@@ -11,20 +11,20 @@ import readline from 'node:readline';
 const repoRoot = path.resolve(import.meta.dirname, '..', '..');
 const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z');
 const runRoot = path.resolve(
-  process.env.OCTOS_M16_CONTEXT_RESTART_DIR
+  process.env.ra_M16_CONTEXT_RESTART_DIR
     || path.join(repoRoot, 'e2e', 'test-results-m16-context-restart-stdio', stamp),
 );
 const dataDir = path.join(runRoot, 'data');
 const workspace = path.join(runRoot, 'workspace');
-const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
-const profileId = process.env.OCTOS_M16_CONTEXT_RESTART_PROFILE || 'm16-context';
+const raBin = process.env.ra_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
+const profileId = process.env.ra_M16_CONTEXT_RESTART_PROFILE || 'm16-context';
 const sessionId =
-  process.env.OCTOS_M16_CONTEXT_RESTART_SESSION
+  process.env.ra_M16_CONTEXT_RESTART_SESSION
   || `${profileId}:local:m16-context-restart-${stamp}`;
-const timeoutMs = Number(process.env.OCTOS_M16_CONTEXT_RESTART_TIMEOUT_MS || 60_000);
-const preRestartTurns = Number(process.env.OCTOS_M16_CONTEXT_RESTART_PRE_TURNS || 1);
-const postRestartTurns = Number(process.env.OCTOS_M16_CONTEXT_RESTART_POST_TURNS || 0);
-const pressureRepeat = Number(process.env.OCTOS_M16_CONTEXT_RESTART_PRESSURE_REPEAT || 200);
+const timeoutMs = Number(process.env.ra_M16_CONTEXT_RESTART_TIMEOUT_MS || 60_000);
+const preRestartTurns = Number(process.env.ra_M16_CONTEXT_RESTART_PRE_TURNS || 1);
+const postRestartTurns = Number(process.env.ra_M16_CONTEXT_RESTART_POST_TURNS || 0);
+const pressureRepeat = Number(process.env.ra_M16_CONTEXT_RESTART_PRESSURE_REPEAT || 200);
 const finalMarker = 'M16_CONTEXT_RESTART_FINAL_LINE';
 
 assert(Number.isInteger(preRestartTurns) && preRestartTurns >= 1, 'pre-restart turns must be a positive integer');
@@ -149,13 +149,13 @@ class StdioClient {
     this.turnErrored = null;
     this.stderrText = '';
     this.nextSeq = 0;
-    this.child = spawn(octosBin, ['serve', '--stdio', '--data-dir', dataDir, '--cwd', workspace], {
+    this.child = spawn(raBin, ['serve', '--stdio', '--data-dir', dataDir, '--cwd', workspace], {
       cwd: repoRoot,
       env: {
         ...process.env,
         ...extraEnv,
-        OCTOS_CONTEXT_COMPACT_THRESHOLD_TOKENS: '1',
-        OCTOS_CONTEXT_COMPACT_KEEP_ITEMS: '4',
+        ra_CONTEXT_COMPACT_THRESHOLD_TOKENS: '1',
+        ra_CONTEXT_COMPACT_KEEP_ITEMS: '4',
         RUST_BACKTRACE: process.env.RUST_BACKTRACE || '1',
       },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -299,7 +299,7 @@ async function openProfileAndSession(client, fakeBaseUrl) {
         route_id: 'local-openai-fixture',
         api_type: 'openai',
         base_url: fakeBaseUrl,
-        api_key_env: 'OCTOS_FAKE_OPENAI_KEY',
+        api_key_env: 'ra_FAKE_OPENAI_KEY',
       },
     },
     api_key: 'test-key',

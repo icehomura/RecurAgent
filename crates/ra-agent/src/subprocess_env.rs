@@ -90,7 +90,7 @@ fn is_always_retain_env_name(name: &str) -> bool {
 /// them to plumb harness identity (session id, work dir, event sink).
 fn is_harness_env_name(name: &str) -> bool {
     let upper = normalize_env_name(name);
-    upper.starts_with("OCTOS_")
+    upper.starts_with("RA_")
 }
 
 /// Strict variant of [`should_forward_env_name`] for plugin tools that
@@ -107,7 +107,7 @@ fn is_harness_env_name(name: &str) -> bool {
 /// - AND either:
 ///   - it is in the manifest allowlist, OR
 ///   - it is in [`ALWAYS_RETAIN_ENV_NAMES`] (runtime essentials), OR
-///   - it is a non-secret harness-injected `OCTOS_*` var.
+///   - it is a non-secret harness-injected `RA_*` var.
 ///
 /// Any other env var — secret OR non-secret — is dropped.
 pub(crate) fn should_forward_env_name_strict(name: &str, allowlist: &EnvAllowlist) -> bool {
@@ -133,7 +133,7 @@ pub(crate) fn should_forward_env_name_strict(name: &str, allowlist: &EnvAllowlis
 ///
 /// Use this when the plugin's manifest declares a non-empty `env`
 /// allowlist. Strips every env var that isn't in the manifest list,
-/// runtime essentials, or the `OCTOS_*` harness namespace.
+/// runtime essentials, or the `RA_*` harness namespace.
 pub(crate) fn sanitize_command_env_strict(cmd: &mut Command, allowlist: &EnvAllowlist) {
     for (key, _) in std::env::vars_os() {
         let Some(name) = key.to_str() else {
@@ -251,7 +251,7 @@ mod tests {
             "USER",
             "OPENAI_BASE_URL",
             "OMINIX_API_URL",
-            "OCTOS_PROFILE_ID",
+            "ra_PROFILE_ID",
             "PPT_TEMPLATE_DIR",
             "TOKENIZERS_PARALLELISM",
             "NPM_CONFIG_CACHE",
@@ -346,16 +346,16 @@ mod tests {
     }
 
     #[test]
-    fn strict_allowlist_rejects_undeclared_octos_secrets() {
+    fn strict_allowlist_rejects_undeclared_ra_secrets() {
         let allowlist = EnvAllowlist::from_names(["MY_VAR"]);
-        for name in ["OCTOS_AUTH_TOKEN", "OCTOS_ADMIN_TOKEN"] {
+        for name in ["ra_AUTH_TOKEN", "ra_ADMIN_TOKEN"] {
             assert!(!should_forward_env_name_strict(name, &allowlist), "{name}");
             assert!(should_forward_env_name_strict(
                 name,
                 &EnvAllowlist::from_names([name])
             ));
         }
-        let registered = "OCTOS_TEST_REGISTERED_CREDS";
+        let registered = "ra_TEST_REGISTERED_CREDS";
         register_secret_env_names([registered]);
         assert!(!should_forward_env_name_strict(registered, &allowlist));
         assert!(should_forward_env_name_strict(
@@ -363,31 +363,31 @@ mod tests {
             &EnvAllowlist::from_names([registered])
         ));
         for name in [
-            "OCTOS_PROFILE_ID",
-            "OCTOS_DATA_DIR",
-            "OCTOS_WORK_DIR",
-            "OCTOS_HOME",
-            "OCTOS_VOICE_DIR",
-            "OCTOS_SESSION_ID",
-            "OCTOS_TASK_ID",
-            "OCTOS_HARNESS_SESSION_ID",
-            "OCTOS_HARNESS_TASK_ID",
-            "OCTOS_EVENT_SINK",
-            "OCTOS_SESSION_WORKSPACE",
-            "OCTOS_PROFILE_LLM_MODEL",
-            "OCTOS_PROFILE_LLM_PROVIDER",
-            "OCTOS_ALLOW_SERP_SCRAPE",
-            "OCTOS_RESPECT_ROBOTS",
+            "ra_PROFILE_ID",
+            "ra_DATA_DIR",
+            "ra_WORK_DIR",
+            "ra_HOME",
+            "ra_VOICE_DIR",
+            "ra_SESSION_ID",
+            "ra_TASK_ID",
+            "ra_HARNESS_SESSION_ID",
+            "ra_HARNESS_TASK_ID",
+            "ra_EVENT_SINK",
+            "ra_SESSION_WORKSPACE",
+            "ra_PROFILE_LLM_MODEL",
+            "ra_PROFILE_LLM_PROVIDER",
+            "ra_ALLOW_SERP_SCRAPE",
+            "ra_RESPECT_ROBOTS",
         ] {
             assert!(should_forward_env_name_strict(name, &allowlist), "{name}");
         }
     }
 
     #[test]
-    fn strict_allowlist_retains_octos_namespace() {
+    fn strict_allowlist_retains_ra_namespace() {
         let allowlist = EnvAllowlist::from_names(["MY_VAR"]);
-        assert!(should_forward_env_name_strict("OCTOS_TASK_ID", &allowlist));
-        assert!(should_forward_env_name_strict("OCTOS_WORK_DIR", &allowlist));
+        assert!(should_forward_env_name_strict("ra_TASK_ID", &allowlist));
+        assert!(should_forward_env_name_strict("ra_WORK_DIR", &allowlist));
     }
 
     #[test]

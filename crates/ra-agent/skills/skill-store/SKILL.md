@@ -2,7 +2,7 @@
 name: skill-store
 description: Browse, install, update, and manage skill packages from the registry.
 version: 1.0.0
-author: ra
+author: RecurAgent
 always: true
 ---
 

@@ -4,26 +4,26 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 
-run_id="${OCTOS_M16_UX_RUN_ID:-m16-ux-soak-$(date -u +%Y%m%dT%H%M%SZ)}"
-tui_repo="${OCTOSCODE_REPO:-$(dirname "$repo_root")/octoscode}"
-tui_runner="${OCTOS_M16_TUI_RUNNER:-$tui_repo/scripts/run-m15-live-tmux-ux-soak.sh}"
-out_root="${OCTOS_M16_UX_OUT_ROOT:-$repo_root/e2e/test-results-m16-tmux-ux}"
-out_dir="${OCTOS_M16_UX_OUT_DIR:-$out_root/$run_id}"
-runtime_root="${OCTOS_M16_UX_RUNTIME_ROOT:-/tmp/ra-m16-ux-$run_id}"
-data_dir="${OCTOS_M16_UX_DATA_DIR:-$runtime_root/data}"
-workdir="${OCTOS_M16_UX_WORKDIR:-$runtime_root/workspace}"
-replay_file="${OCTOS_M16_UX_REPLAY:-$out_dir/m16-code-review-replay.txt}"
-octos_bin="${OCTOS_BIN:-$repo_root/target/debug/ra}"
-tui_bin="${OCTOSCODE_BIN:-$tui_repo/target/debug/octoscode}"
-session_name="${OCTOS_M16_UX_TMUX_SESSION:-ra-m16-ux-$run_id}"
-profile_id="${OCTOS_M16_UX_PROFILE:-coding}"
-session_id="${OCTOS_M16_UX_SESSION_ID:-$profile_id:local:m16-ux:$run_id}"
-delay_scale="${OCTOS_M16_UX_SUBAGENT_DELAY_SCALE:-8}"
+run_id="${ra_M16_UX_RUN_ID:-m16-ux-soak-$(date -u +%Y%m%dT%H%M%SZ)}"
+tui_repo="${RA_TUI_REPO:-$(dirname "$repo_root")/ra-tui}"
+tui_runner="${ra_M16_TUI_RUNNER:-$tui_repo/scripts/run-m15-live-tmux-ux-soak.sh}"
+out_root="${ra_M16_UX_OUT_ROOT:-$repo_root/e2e/test-results-m16-tmux-ux}"
+out_dir="${ra_M16_UX_OUT_DIR:-$out_root/$run_id}"
+runtime_root="${ra_M16_UX_RUNTIME_ROOT:-/tmp/ra-m16-ux-$run_id}"
+data_dir="${ra_M16_UX_DATA_DIR:-$runtime_root/data}"
+workdir="${ra_M16_UX_WORKDIR:-$runtime_root/workspace}"
+replay_file="${ra_M16_UX_REPLAY:-$out_dir/m16-code-review-replay.txt}"
+ra_bin="${ra_BIN:-$repo_root/target/debug/ra}"
+tui_bin="${RA_TUI_BIN:-$tui_repo/target/debug/ra-tui}"
+session_name="${ra_M16_UX_TMUX_SESSION:-ra-m16-ux-$run_id}"
+profile_id="${ra_M16_UX_PROFILE:-coding}"
+session_id="${ra_M16_UX_SESSION_ID:-$profile_id:local:m16-ux:$run_id}"
+delay_scale="${ra_M16_UX_SUBAGENT_DELAY_SCALE:-8}"
 final_marker="M16_CODE_REVIEW_FINAL_LINE"
 fixture_dir="$out_dir/fixtures"
 cli_fixture="$fixture_dir/review-cli-specialist.mjs"
 mcp_fixture="$fixture_dir/review-mcp-specialist.mjs"
-provider_key_source="${OCTOS_M16_NATIVE_PROVIDER_KEY_SOURCE:-$repo_root/e2e/test-results-m15-native-review-start-stdio/20260516T191424Z/data/profiles/m15-native.json}"
+provider_key_source="${ra_M16_NATIVE_PROVIDER_KEY_SOURCE:-$repo_root/e2e/test-results-m15-native-review-start-stdio/20260516T191424Z/data/profiles/m15-native.json}"
 live_provider_config_path="$data_dir/profiles/$profile_id.json"
 secret_cleanup_report="$out_dir/m16-secret-cleanup.json"
 cleanup_secrets_done=0
@@ -35,17 +35,17 @@ usage() {
 Usage: e2e/scripts/m16-live-tui-tmux-soak.sh <run|self-test|help>
 
 Runs the M16 visual TUI tmux soak against a real ra serve --stdio backend.
-The script reuses the octoscode tmux driver but writes all M16 evidence under
+The script reuses the ra-tui tmux driver but writes all M16 evidence under
 ra/e2e/test-results-m16-tmux-ux/<run-id>.
 
 Key environment:
-  OCTOSCODE_REPO              Path to octoscode checkout. Default: an octoscode checkout next to this repo.
-  OCTOS_BIN                   ra binary. Default: ra/target/debug/ra.
-  OCTOSCODE_BIN               octoscode binary. Default: octoscode/target/debug/octoscode.
-  OCTOS_M16_BUILD             Set 0 to skip building ra with api. Default: 1.
-  OCTOS_M16_BUILD_TUI         Set 1 to rebuild octoscode. Default: build only if missing.
-  OCTOS_M16_UX_KEEP_SESSION   Set 1 to keep tmux session after the run.
-  OCTOS_M16_UX_OUT_DIR        Override evidence output directory.
+  RA_TUI_REPO              Path to ra-tui checkout. Default: an ra-tui checkout next to this repo.
+  ra_BIN                   ra binary. Default: ra/target/debug/ra.
+  RA_TUI_BIN               ra-tui binary. Default: ra-tui/target/debug/ra-tui.
+  ra_M16_BUILD             Set 0 to skip building ra with api. Default: 1.
+  ra_M16_BUILD_TUI         Set 1 to rebuild ra-tui. Default: build only if missing.
+  ra_M16_UX_KEEP_SESSION   Set 1 to keep tmux session after the run.
+  ra_M16_UX_OUT_DIR        Override evidence output directory.
 USAGE
 }
 
@@ -59,14 +59,14 @@ shell_quote() {
 }
 
 ensure_binaries() {
-  if [[ "${OCTOS_M16_BUILD:-1}" == "1" ]]; then
+  if [[ "${ra_M16_BUILD:-1}" == "1" ]]; then
     (cd "$repo_root" && cargo build -p ra-cli --bin ra --features api)
   fi
-  if [[ "${OCTOS_M16_BUILD_TUI:-0}" == "1" || ! -x "$tui_bin" ]]; then
-    (cd "$tui_repo" && cargo build --bin octoscode)
+  if [[ "${ra_M16_BUILD_TUI:-0}" == "1" || ! -x "$tui_bin" ]]; then
+    (cd "$tui_repo" && cargo build --bin ra-tui)
   fi
-  [[ -x "$octos_bin" ]] || die "ra binary is not executable: $octos_bin"
-  [[ -x "$tui_bin" ]] || die "octoscode binary is not executable: $tui_bin"
+  [[ -x "$ra_bin" ]] || die "ra binary is not executable: $ra_bin"
+  [[ -x "$tui_bin" ]] || die "ra-tui binary is not executable: $tui_bin"
 }
 
 write_replay() {
@@ -208,12 +208,12 @@ write_review_fixtures() {
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
-const artifactPath = process.env.OCTOS_REVIEW_ARTIFACT_PATH;
+const artifactPath = process.env.ra_REVIEW_ARTIFACT_PATH;
 if (!artifactPath) {
-  console.error('missing OCTOS_REVIEW_ARTIFACT_PATH');
+  console.error('missing ra_REVIEW_ARTIFACT_PATH');
   process.exit(2);
 }
-const target = process.env.OCTOS_REVIEW_TARGET || 'unknown-target';
+const target = process.env.ra_REVIEW_TARGET || 'unknown-target';
 const text = [`# Grace Hopper CLI Review`, '', `Medium: CLI specialist fixture reviewed ${target}.`].join('\n');
 fs.mkdirSync(path.dirname(artifactPath), { recursive: true });
 fs.writeFileSync(artifactPath, `${text}\n`, 'utf8');
@@ -438,7 +438,7 @@ stop_tui_session() {
     return 0
   fi
   cleanup_stop_done=1
-  if [[ "${tmux_session_started:-0}" == "1" && "${OCTOS_M16_UX_KEEP_SESSION:-0}" != "1" && -x "$tui_runner" ]]; then
+  if [[ "${tmux_session_started:-0}" == "1" && "${ra_M16_UX_KEEP_SESSION:-0}" != "1" && -x "$tui_runner" ]]; then
     "$tui_runner" stop || true
   fi
 }
@@ -464,46 +464,46 @@ run_soak() {
   trap 'cleanup_on_exit $?' EXIT
   trap 'cleanup_on_signal 130' INT
   trap 'cleanup_on_signal 143' TERM
-  if [[ "${OCTOS_M16_UX_INJECT_FAIL_AFTER_PROFILE_WRITE:-0}" != "1" ]]; then
+  if [[ "${ra_M16_UX_INJECT_FAIL_AFTER_PROFILE_WRITE:-0}" != "1" ]]; then
     command -v tmux >/dev/null 2>&1 || die "tmux is required"
-    [[ -x "$tui_runner" ]] || die "octoscode tmux runner not found or not executable: $tui_runner"
+    [[ -x "$tui_runner" ]] || die "ra-tui tmux runner not found or not executable: $tui_runner"
     ensure_binaries
   fi
   write_review_workspace_fixture
   write_review_fixtures
   write_replay
 
-  local provider_key="${OCTOS_M16_NATIVE_API_KEY:-${OCTOS_M15_NATIVE_API_KEY:-${DEEPSEEK_API_KEY:-}}}"
+  local provider_key="${ra_M16_NATIVE_API_KEY:-${ra_M15_NATIVE_API_KEY:-${DEEPSEEK_API_KEY:-}}}"
   if [[ -z "$provider_key" || "$provider_key" == "<redacted>" ]]; then
     provider_key="$(deepseek_key_from_source)"
   fi
-  [[ -n "$provider_key" && "$provider_key" != "<redacted>" ]] || die "missing provider key; set OCTOS_M16_NATIVE_API_KEY, OCTOS_M15_NATIVE_API_KEY, DEEPSEEK_API_KEY, or OCTOS_M16_NATIVE_PROVIDER_KEY_SOURCE"
+  [[ -n "$provider_key" && "$provider_key" != "<redacted>" ]] || die "missing provider key; set ra_M16_NATIVE_API_KEY, ra_M15_NATIVE_API_KEY, DEEPSEEK_API_KEY, or ra_M16_NATIVE_PROVIDER_KEY_SOURCE"
   write_profile_config
   export DEEPSEEK_API_KEY="$provider_key"
-  if [[ "${OCTOS_M16_UX_INJECT_FAIL_AFTER_PROFILE_WRITE:-0}" == "1" ]]; then
+  if [[ "${ra_M16_UX_INJECT_FAIL_AFTER_PROFILE_WRITE:-0}" == "1" ]]; then
     echo "Injected failure after provider config write" >&2
     return 97
   fi
 
   local backend_command
-  backend_command="env OCTOS_REVIEW_CLI_SPECIALIST_ARGV_JSON=$(shell_quote "[\"$cli_fixture\"]") OCTOS_REVIEW_MCP_TIMEOUT_SECS=30 $(shell_quote "$octos_bin") serve --stdio --data-dir $(shell_quote "$data_dir") --cwd $(shell_quote "$workdir") --swarm-backend stdio --swarm-backend-cmd $(shell_quote "$mcp_fixture")"
+  backend_command="env ra_REVIEW_CLI_SPECIALIST_ARGV_JSON=$(shell_quote "[\"$cli_fixture\"]") ra_REVIEW_MCP_TIMEOUT_SECS=30 $(shell_quote "$ra_bin") serve --stdio --data-dir $(shell_quote "$data_dir") --cwd $(shell_quote "$workdir") --swarm-backend stdio --swarm-backend-cmd $(shell_quote "$mcp_fixture")"
 
-  export OCTOSCODE_M15_UX_RUN_ID="$run_id"
-  export OCTOSCODE_M15_UX_OUT_DIR="$out_dir"
-  export OCTOSCODE_M15_UX_RUNTIME_ROOT="$runtime_root"
-  export OCTOSCODE_M15_UX_WORKDIR="$workdir"
-  export OCTOSCODE_M15_UX_CHILD_OUT_DIR="$runtime_root/artifacts"
-  export OCTOSCODE_M15_UX_BIN="$tui_bin"
-  export OCTOSCODE_M15_UX_BACKEND_COMMAND="$backend_command"
-  export OCTOSCODE_M15_UX_TMUX_SESSION="$session_name"
-  export OCTOSCODE_M15_UX_REPLAY="$replay_file"
-  export OCTOSCODE_M15_UX_SCENARIO="code_review_subagents"
-  export OCTOSCODE_M15_UX_FINAL_MARKER="$final_marker"
-  export OCTOSCODE_M15_UX_SESSION_ID="$session_id"
-  export OCTOSCODE_M15_UX_PROFILE="$profile_id"
-  export OCTOSCODE_M15_UX_REPLACE_SESSION=1
-  export OCTOSCODE_M15_UX_COLS="${OCTOS_M16_UX_COLS:-120}"
-  export OCTOSCODE_M15_UX_ROWS="${OCTOS_M16_UX_ROWS:-40}"
+  export RA_TUI_M15_UX_RUN_ID="$run_id"
+  export RA_TUI_M15_UX_OUT_DIR="$out_dir"
+  export RA_TUI_M15_UX_RUNTIME_ROOT="$runtime_root"
+  export RA_TUI_M15_UX_WORKDIR="$workdir"
+  export RA_TUI_M15_UX_CHILD_OUT_DIR="$runtime_root/artifacts"
+  export RA_TUI_M15_UX_BIN="$tui_bin"
+  export RA_TUI_M15_UX_BACKEND_COMMAND="$backend_command"
+  export RA_TUI_M15_UX_TMUX_SESSION="$session_name"
+  export RA_TUI_M15_UX_REPLAY="$replay_file"
+  export RA_TUI_M15_UX_SCENARIO="code_review_subagents"
+  export RA_TUI_M15_UX_FINAL_MARKER="$final_marker"
+  export RA_TUI_M15_UX_SESSION_ID="$session_id"
+  export RA_TUI_M15_UX_PROFILE="$profile_id"
+  export RA_TUI_M15_UX_REPLACE_SESSION=1
+  export RA_TUI_M15_UX_COLS="${ra_M16_UX_COLS:-120}"
+  export RA_TUI_M15_UX_ROWS="${ra_M16_UX_ROWS:-40}"
 
   "$tui_runner" start
   tmux_session_started=1
@@ -527,7 +527,7 @@ self_test() {
   mkdir -p "$tmp_root/out" "$tmp_root/runtime/preexisting"
   cat > "$tmp_root/out/seed.env" <<TXT
 OPENAI_API_KEY=sk-test-1234567890ABCDEFG1234567890
-ANTHROPIC_OAUTH_JWT=sk-ant-oat01-jwthdr.octosjwtpayloadABCDEFGH.octosjwtsignatureIJKLMNOP
+ANTHROPIC_OAUTH_JWT=sk-ant-oat01-jwthdr.rajwtpayloadABCDEFGH.rajwtsignatureIJKLMNOP
 TXT
   cat > "$tmp_root/runtime/preexisting/log.txt" <<TXT
 auth: Bearer abcdefghijklmnopqrstuvwxyz0123456789ABCD
@@ -535,21 +535,21 @@ google: AIzaSyA-1234567890abcdefghijklmnopqrstuv
 TXT
   local output_file="$tmp_root/injected-failure.out"
   set +e
-  OCTOS_M16_UX_OUT_DIR="$tmp_root/out" \
-    OCTOS_M16_UX_RUNTIME_ROOT="$tmp_root/runtime" \
-    OCTOS_M16_UX_DATA_DIR="$tmp_root/runtime/data" \
-    OCTOS_M16_UX_WORKDIR="$tmp_root/runtime/workspace" \
-    OCTOS_M16_UX_INJECT_FAIL_AFTER_PROFILE_WRITE=1 \
-    OCTOS_M16_NATIVE_API_KEY="sk-testm16cleanup000000000000" \
-    OCTOS_M16_BUILD=0 \
+  ra_M16_UX_OUT_DIR="$tmp_root/out" \
+    ra_M16_UX_RUNTIME_ROOT="$tmp_root/runtime" \
+    ra_M16_UX_DATA_DIR="$tmp_root/runtime/data" \
+    ra_M16_UX_WORKDIR="$tmp_root/runtime/workspace" \
+    ra_M16_UX_INJECT_FAIL_AFTER_PROFILE_WRITE=1 \
+    ra_M16_NATIVE_API_KEY="sk-testm16cleanup000000000000" \
+    ra_M16_BUILD=0 \
     "$0" run >"$output_file" 2>&1
   local status=$?
   set -e
   [[ "$status" == "97" ]] || die "self-test expected injected failure status 97, got $status"
   [[ ! -f "$tmp_root/runtime/data/profiles/coding.json" ]] || die "self-test provider config was not removed"
-  if grep -RIEq -- 'sk-test|sk-ant-oat01|AIzaSy|Bearer abcdefghij|octosjwtpayload|octosjwtsignature' "$tmp_root/out" "$tmp_root/runtime"; then
+  if grep -RIEq -- 'sk-test|sk-ant-oat01|AIzaSy|Bearer abcdefghij|rajwtpayload|rajwtsignature' "$tmp_root/out" "$tmp_root/runtime"; then
     echo "secret cleanup self-test FAIL: residual secrets in $tmp_root" >&2
-    grep -RIEn -- 'sk-test|sk-ant-oat01|AIzaSy|Bearer abcdefghij|octosjwtpayload|octosjwtsignature' "$tmp_root/out" "$tmp_root/runtime" || true
+    grep -RIEn -- 'sk-test|sk-ant-oat01|AIzaSy|Bearer abcdefghij|rajwtpayload|rajwtsignature' "$tmp_root/out" "$tmp_root/runtime" || true
     return 1
   fi
   node - "$tmp_root/out/m16-secret-cleanup.json" <<'NODE'

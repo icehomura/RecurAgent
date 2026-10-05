@@ -10,7 +10,7 @@
 //! `data_dir_locked` lock on the UPCR-018 first-user path.
 //!
 //! The guard now hangs on `ProcessManager::start()` itself, and these tests
-//! drive the REAL ra binary over HTTP:
+//! drive the REAL RecurAgent binary over HTTP:
 //!
 //! - `solo_serve_refuses_manual_gateway_starts` — with `--solo`, the admin
 //!   start/restart routes and the self-service start/restart/sub-account
@@ -45,9 +45,9 @@ mod serve_solo_gateway_guard {
         }
     }
 
-    /// Path to a real ra binary that includes the `serve` subcommand,
-    /// mirroring `serve_sigterm::octos_binary`.
-    fn octos_binary() -> std::path::PathBuf {
+    /// Path to a real RecurAgent binary that includes the `serve` subcommand,
+    /// mirroring `serve_sigterm::ra_binary`.
+    fn ra_binary() -> std::path::PathBuf {
         if cfg!(feature = "api") {
             return env!("CARGO_BIN_EXE_ra").into();
         }
@@ -72,7 +72,7 @@ mod serve_solo_gateway_guard {
     /// `serve_sigterm::serve_command`. `solo` toggles the `--solo` flag whose
     /// manual-start gap this file pins.
     fn serve_command(port: u16, data_dir: &std::path::Path, solo: bool) -> Command {
-        let mut cmd = Command::new(octos_binary());
+        let mut cmd = Command::new(ra_binary());
         let mut args = vec![
             "serve".to_string(),
             "--instance-data-dir".to_string(),
@@ -99,13 +99,13 @@ mod serve_solo_gateway_guard {
             .env("RA_AUTH_TOKEN", "solo-guard-e2e-token")
             .env_remove("RA_INSTANCE_DATA_DIR")
             .env_remove("RA_HOME")
-            .env_remove("OCTOS_HOME")
+            .env_remove("ra_HOME")
             .env_remove("RA_DATA_DIR")
-            .env_remove("OCTOS_DATA_DIR")
+            .env_remove("ra_DATA_DIR")
             // The solo condition also rides this env var; scrub it so a
             // developer shell exporting it cannot flip the non-solo scenario.
             .env_remove("RA_SOLO_LOGIN")
-            .env_remove("OCTOS_SOLO_LOGIN");
+            .env_remove("ra_SOLO_LOGIN");
         #[cfg(unix)]
         unsafe {
             use std::os::unix::process::CommandExt;
@@ -279,7 +279,7 @@ mod serve_solo_gateway_guard {
         let _guard = serial_guard();
         let port = find_free_port();
         let data_dir =
-            std::env::temp_dir().join(format!("octos_solo_guard_{}", std::process::id()));
+            std::env::temp_dir().join(format!("ra_solo_guard_{}", std::process::id()));
         std::fs::create_dir_all(data_dir.join("profiles")).unwrap();
 
         // An enabled profile with an LLM selection: auto-start already skips
@@ -380,7 +380,7 @@ mod serve_solo_gateway_guard {
         let _guard = serial_guard();
         let port = find_free_port();
         let data_dir =
-            std::env::temp_dir().join(format!("octos_solo_manual_{}", std::process::id()));
+            std::env::temp_dir().join(format!("ra_solo_manual_{}", std::process::id()));
         std::fs::create_dir_all(data_dir.join("profiles")).unwrap();
         write_profile(&data_dir, "manual-only-0", false, None);
 
@@ -438,7 +438,7 @@ mod serve_solo_gateway_guard {
     fn solo_login_env_gates_manual_gateway_starts_too() {
         let _guard = serial_guard();
         let port = find_free_port();
-        let data_dir = std::env::temp_dir().join(format!("octos_solo_env_{}", std::process::id()));
+        let data_dir = std::env::temp_dir().join(format!("ra_solo_env_{}", std::process::id()));
         std::fs::create_dir_all(data_dir.join("profiles")).unwrap();
         write_profile(&data_dir, "solo-guard-env-0", true, None);
 

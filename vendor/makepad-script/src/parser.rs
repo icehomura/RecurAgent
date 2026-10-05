@@ -5337,10 +5337,10 @@ mod tests {
         let mut heap = crate::heap::ScriptHeap::default();
         let mut tokenizer = ScriptTokenizer::default();
         tokenizer.tokenize(source, &mut heap);
-        // Octoscript's compatibility preflight appends this terminal marker.
+        // Rascript's compatibility preflight appends this terminal marker.
         tokenizer.tokenize("\n;", &mut heap);
         let mut parser = ScriptParser::default();
-        parser.parse(&tokenizer, "parser_test.octoscript", (0, 0), &[]);
+        parser.parse(&tokenizer, "parser_test.rascript", (0, 0), &[]);
         parser
     }
 
@@ -5352,7 +5352,7 @@ mod tests {
         tokenizer.tokenize("\n;", &mut heap);
         let mut parser = ScriptParser::default();
         parser.set_emit_errors(false);
-        parser.parse(&tokenizer, "diag.octoscript", (10, 5), &[]);
+        parser.parse(&tokenizer, "diag.rascript", (10, 5), &[]);
 
         assert!(parser.had_error);
         assert!(!parser.diagnostics_truncated());
@@ -5369,7 +5369,7 @@ mod tests {
         assert!(parser
             .parse_errors
             .iter()
-            .any(|e| e.starts_with("diag.octoscript:12:9: Rust value index 0 is unavailable")));
+            .any(|e| e.starts_with("diag.rascript:12:9: Rust value index 0 is unavailable")));
         assert_eq!(parser.diagnostics.len(), parser.diagnostics().len());
     }
 
@@ -5381,7 +5381,7 @@ mod tests {
         tokenizer.tokenize("\n;", &mut heap);
         let mut parser = ScriptParser::default();
         parser.set_emit_errors(false);
-        parser.parse(&tokenizer, "bounded.octoscript", (0, 0), &[]);
+        parser.parse(&tokenizer, "bounded.rascript", (0, 0), &[]);
 
         assert!(parser.had_error);
         assert_eq!(parser.diagnostics().len(), MAX_PARSER_DIAGNOSTICS);
@@ -5447,7 +5447,7 @@ mod tests {
         // char arrives, and the separator must be consumed in this pass.
         tokenizer.tokenize("let catch = 1\ntry { 2 } catch ", &mut heap);
         let mut parser = ScriptParser::default();
-        let cp = parser.parse_streaming(&tokenizer, "checkpoint.octoscript", (0, 0), &[], None);
+        let cp = parser.parse_streaming(&tokenizer, "checkpoint.rascript", (0, 0), &[], None);
         parser.restore_checkpoint(cp);
 
         assert!(

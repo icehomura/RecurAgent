@@ -54,7 +54,7 @@ async function sendUnixSocket(path, line) {
   });
 }
 
-export async function emitEvent(event, sink = process.env.OCTOS_EVENT_SINK || '') {
+export async function emitEvent(event, sink = process.env.ra_EVENT_SINK || '') {
   if (!sink) {
     return false;
   }
@@ -112,7 +112,7 @@ async function main() {
   }
 
   const progress = args.progress === undefined ? undefined : Number(args.progress);
-  const sink = args.sink ?? process.env.OCTOS_EVENT_SINK ?? '';
+  const sink = args.sink ?? process.env.ra_EVENT_SINK ?? '';
   const wrote = await emitProgress(
     args['session-id'],
     args['task-id'],

@@ -90,7 +90,7 @@ pub struct ChatConfig {
     pub context_management: Option<serde_json::Value>,
     /// Extra sampler params for OpenAI-compatible servers, flattened verbatim
     /// into the request body — e.g. `{"repeat_penalty": 1.1, "top_p": 0.95}`.
-    /// For params ra does not model (`repeat_penalty`, `top_p`, `top_k`,
+    /// For params RecurAgent does not model (`repeat_penalty`, `top_p`, `top_k`,
     /// `min_p`, `frequency_penalty`, `presence_penalty`, …). `None` → nothing is
     /// added, so cloud requests are unchanged. Do not put `temperature` /
     /// `max_tokens` here — use their dedicated fields. See issue #2172.

@@ -1,4 +1,4 @@
-# REQ-SERVE-BP-001: ra serve 关闭期 BrokenPipe 不阻断 gateway cleanup
+# REQ-SERVE-BP-001: RecurAgent serve 关闭期 BrokenPipe 不阻断 gateway cleanup
 
 **Status**: Accepted
 **Date**: 2026-08-26

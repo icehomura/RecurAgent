@@ -1,10 +1,10 @@
 # Skill Fleet Deployment
 
 This document covers operator-side deployment of skill packages onto an
-ra fleet (e.g. the mini1-5 cluster). It supersedes the legacy
+RecurAgent fleet (e.g. the mini1-5 cluster). It supersedes the legacy
 `mofa-skills/scripts/deploy-mini.sh` raw-scp flow.
 
-Related docs: [`STRICT_ACCOUNT_SCOPED_SKILLS.md`](./STRICT_ACCOUNT_SCOPED_SKILLS.md)
+Related docs: `STRICT_ACCOUNT_SCOPED_SKILLS.md` (not in this tree)
 for the architectural decision to make skill installs per-profile only.
 
 ## Why per-profile only
@@ -42,7 +42,7 @@ pushing mofa-skills onto the fleet. Differences from the old script:
 For each (host, profile, skill) triple, the script:
 
 1. `rsync -az --delete <mofa-skills>/<skill>/ <host>:/tmp/ra-fleet-install-staging/<skill>/`
-2. `ssh <host> "OCTOS_PROFILE_ID=<p> /Users/cloud/.ra/bin/ra skills --profile <p> install /tmp/ra-fleet-install-staging/<skill> --force"`
+2. `ssh <host> "ra_PROFILE_ID=<p> /Users/cloud/.ra/bin/ra skills --profile <p> install /tmp/ra-fleet-install-staging/<skill> --force"`
 3. Records OK / FAIL with the tail of stderr.
 4. Cleans up staging at the end of the host.
 
@@ -66,7 +66,7 @@ The result: every install goes through the same code path the runtime
 ```
 scripts/fleet-install-skills.sh [OPTIONS]
 
-  --host LIST          Comma/space hosts (required; or OCTOS_FLEET_HOSTS)
+  --host LIST          Comma/space hosts (required; or ra_FLEET_HOSTS)
   --profile LIST       Comma-separated profile IDs (default: enumerate per host)
   --skill LIST         Comma-separated skill names (default: all mofa-* with
                        SKILL.md+manifest.json in MOFA_SKILLS_DIR)
@@ -79,8 +79,8 @@ scripts/fleet-install-skills.sh [OPTIONS]
   --help, -h           Show usage
 ```
 
-Environment overrides: `OCTOS_FLEET_HOSTS`, `MOFA_SKILLS_DIR`,
-`OCTOS_REMOTE_BIN`, `OCTOS_REMOTE_USER`, `OCTOS_REMOTE_STAGING`.
+Environment overrides: `ra_FLEET_HOSTS`, `MOFA_SKILLS_DIR`,
+`ra_REMOTE_BIN`, `ra_REMOTE_USER`, `ra_REMOTE_STAGING`.
 
 ## Migration: hosts that already have `~/.ra/skills/` populated
 
@@ -137,5 +137,5 @@ Also runs `shellcheck` against `scripts/fleet-install-skills.sh`.
 
 The legacy script in `mofa-skills/scripts/deploy-mini.sh` now errors out
 with a redirect message pointing at `fleet-install-skills.sh`. The legacy
-behavior is gated behind `OCTOS_DEPRECATED_SCP=1` for emergencies; do not
+behavior is gated behind `ra_DEPRECATED_SCP=1` for emergencies; do not
 rely on it.

@@ -240,8 +240,8 @@ Tests JSONL-backed session storage with LRU caching.
 
 | Test | What It Verifies |
 |------|-----------------|
-| `should_seal_the_active_file_into_a_segment_at_the_segment_size` | Active file seals into a segment at `OCTOS_SESSION_SEGMENT_BYTES` (8 MiB) |
-| `should_load_only_the_newest_segments_within_the_budget` | A plain load reads the active file plus as many newest-first sealed segments as fit within `OCTOS_SESSION_LOAD_BUDGET_BYTES` (32 MiB) |
+| `should_seal_the_active_file_into_a_segment_at_the_segment_size` | Active file seals into a segment at `RA_SESSION_SEGMENT_BYTES` (8 MiB) |
+| `should_load_only_the_newest_segments_within_the_budget` | A plain load reads the active file plus as many newest-first sealed segments as fit within `RA_SESSION_LOAD_BUDGET_BYTES` (32 MiB) |
 | `test_load_rejects_future_schema_version` | Rejects unknown schema versions |
 | `test_purge_stale_sessions` | Deletes sessions older than N days |
 

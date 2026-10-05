@@ -1,6 +1,6 @@
-//! `ra acp`: run ra as an [Agent Client Protocol][acp] (ACP) agent over
+//! `ra acp`: run RecurAgent as an [Agent Client Protocol][acp] (ACP) agent over
 //! stdin/stdout so ACP clients (Zed, and other editors/CLIs that speak ACP) can
-//! drive the ra agent loop.
+//! drive the RecurAgent agent loop.
 //!
 //! [acp]: https://agentclientprotocol.com/
 //!
@@ -95,7 +95,7 @@ pub use host_managed::{NotifyIfBusy, NotifyRequest, NotifyResponse};
 /// budget the CLI does.
 pub const DEFAULT_MAX_ITERATIONS: u32 = 0;
 
-/// Run ra as an ACP (Agent Client Protocol) agent over stdin/stdout.
+/// Run RecurAgent as an ACP (Agent Client Protocol) agent over stdin/stdout.
 ///
 /// ACP clients (Zed and other editors) spawn this process and drive it via
 /// JSON-RPC on stdio. Provider/model/profile flags mirror `ra chat` so the
@@ -408,7 +408,7 @@ impl SessionAgentFactory for TestAgentFactory {
     }
 }
 
-/// Test-support transport: the ra ACP **agent** exposed as a
+/// Test-support transport: the RecurAgent ACP **agent** exposed as a
 /// `ConnectTo<Client>` so an in-process ACP client can use it directly as its
 /// transport (no OS pipes, no subprocess, no network).
 ///
@@ -419,7 +419,7 @@ impl SessionAgentFactory for TestAgentFactory {
 /// ```ignore
 /// Client.builder()
 ///     .on_receive_notification(record_updates, ...)
-///     .connect_with(OctosAcpAgentTransport::new(factory), |conn| async {
+///     .connect_with(RaAcpAgentTransport::new(factory), |conn| async {
 ///         conn.send_request(InitializeRequest::new(V1)).block_task().await?;
 ///         // session/new, session/prompt, assert stop reason ...
 ///     })
@@ -427,13 +427,13 @@ impl SessionAgentFactory for TestAgentFactory {
 /// ```
 #[cfg(feature = "api")]
 #[doc(hidden)]
-pub struct OctosAcpAgentTransport {
+pub struct RaAcpAgentTransport {
     factory: TestAgentFactory,
 }
 
 #[cfg(feature = "api")]
 #[doc(hidden)]
-impl OctosAcpAgentTransport {
+impl RaAcpAgentTransport {
     /// Wrap a [`TestAgentFactory`] so it can serve one in-process ACP client.
     pub fn new(factory: TestAgentFactory) -> Self {
         Self { factory }
@@ -441,7 +441,7 @@ impl OctosAcpAgentTransport {
 }
 
 #[cfg(feature = "api")]
-impl agent_client_protocol::ConnectTo<Client> for OctosAcpAgentTransport {
+impl agent_client_protocol::ConnectTo<Client> for RaAcpAgentTransport {
     async fn connect_to(
         self,
         client: impl agent_client_protocol::ConnectTo<AcpAgentRole> + 'static,
@@ -457,7 +457,7 @@ impl AcpCommand {
     /// happens here: context/config resolution, provider and model selection,
     /// and the lazily-built shared agent stack. What comes back is the same
     /// [`SessionAgentFactory`] the stdio path drives, so an embedder that links
-    /// ra instead of spawning it gets provider fallbacks, the auth store,
+    /// RecurAgent instead of spawning it gets provider fallbacks, the auth store,
     /// `keychain:` markers, MCP, plugins, skills and memory identically — and
     /// stays in step with the CLI, rather than reimplementing a subset that
     /// drifts.
@@ -548,7 +548,7 @@ impl AcpCommand {
     }
 }
 
-/// Build the `initialize` response advertising ra's agent capabilities.
+/// Build the `initialize` response advertising RecurAgent's agent capabilities.
 ///
 /// Per ACP the agent must reply with a protocol version it actually supports —
 /// NOT whatever the client requested. This handler implements v1 only, so we
@@ -559,7 +559,7 @@ impl AcpCommand {
 fn build_initialize_response(req: &InitializeRequest) -> InitializeResponse {
     use agent_client_protocol::schema::ProtocolVersion;
 
-    // Prompt capabilities: ra consumes plain text prompt blocks today.
+    // Prompt capabilities: RecurAgent consumes plain text prompt blocks today.
     // Image/audio/embedded-context are left false (v1 extracts text only).
     let prompt = PromptCapabilities::new();
     let caps = AgentCapabilities::new()
@@ -580,7 +580,7 @@ fn build_initialize_response(req: &InitializeRequest) -> InitializeResponse {
     InitializeResponse::new(negotiated).agent_capabilities(caps)
 }
 
-/// Handle `session/new`: build a fresh ra agent and register it.
+/// Handle `session/new`: build a fresh RecurAgent agent and register it.
 /// Generate a fresh, unique ACP session id.
 fn new_session_id() -> SessionId {
     SessionId::new(format!("ra-{}", uuid::Uuid::new_v4()))
@@ -588,7 +588,7 @@ fn new_session_id() -> SessionId {
 
 /// Extract the plain text from a prompt's ACP content blocks.
 ///
-/// ra's agent loop consumes a single text prompt; we concatenate the text of
+/// RecurAgent's agent loop consumes a single text prompt; we concatenate the text of
 /// every `ContentBlock::Text` (and the text payload of embedded text
 /// resources), joining multiple blocks with newlines. `ContentBlock::ResourceLink`
 /// is BASELINE ACP prompt content (file/context attachments), so we surface each
@@ -610,7 +610,7 @@ fn extract_prompt_text(blocks: &[ContentBlock]) -> String {
             }
             // Resource links are baseline ACP prompt content (file/context
             // attachments). Surface the reference as usable context text so a
-            // prompt made entirely of links still reaches ra with content.
+            // prompt made entirely of links still reaches RecurAgent with content.
             ContentBlock::ResourceLink(link) => {
                 let label = link.title.as_deref().unwrap_or(&link.name);
                 let mut part = format!("[Resource: {label} ({})]", link.uri);
@@ -629,7 +629,7 @@ fn extract_prompt_text(blocks: &[ContentBlock]) -> String {
     parts.join("\n")
 }
 
-/// Best-effort mapping from an ra tool name to an ACP [`ToolKind`] so clients
+/// Best-effort mapping from an RecurAgent tool name to an ACP [`ToolKind`] so clients
 /// can render an appropriate icon. Unknown tools fall back to `Other`.
 fn tool_kind_for(name: &str) -> agent_client_protocol::schema::v1::ToolKind {
     use agent_client_protocol::schema::v1::ToolKind;

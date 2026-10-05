@@ -34,7 +34,7 @@
 //!   sandbox (wiring lands with #4).
 //!
 //! peer slots (`slot-N`) and outer-loop slots (`verify-N`) are two separate
-//! namespaces: a peer never takes `verify-N` and `ra cache acquire
+//! namespaces: a peer never takes `verify-N` and `RecurAgent cache acquire
 //! --purpose verify` never takes `slot-N`, so outer-loop re-verification is
 //! not crowded out by running peers and vice versa (§1.3).
 

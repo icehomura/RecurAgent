@@ -10,7 +10,7 @@ estimate: 2d
 把进化环剩下的四段手工接成机械:①活板监视器命中即采集并常驻,让战役中的摩擦在上下文还热时进黑板;
 ②FLAW 记录直出任务契约骨架,主审只补测试选择器与场景细节;③FLAW 索引把 `docs/OUTER_LOOP_PROTOCOL.md`
 的散文沉淀标成"已记录",原文不删;④指标脚本补"派单无 ACK"与"伪 verified"两项跨源诊断(仍是诊断,
-不是判据)。另把 `iteration_cap`/`patch_failed` 登记为 kind 候选(发射点属 ra 侧)。不改运行时代码、
+不是判据)。另把 `iteration_cap`/`patch_failed` 登记为 kind 候选(发射点属 RecurAgent 侧)。不改运行时代码、
 协议与 MCP 工具面;骨架不自动入库 `specs/`。契约 v4.2 已并入 grok/codex 对抗复审与 codex gpt-6 两轮 PR 复审(#619/#620)。
 
 ## 已定决策
@@ -48,8 +48,8 @@ estimate: 2d
   无 ACK 且(未知或 `now - t` ≥ 阈值)输出 `stall: <片号> <整数分钟|open>`,汇总 `stalls: N`;`fake_verified: N` =
   窗口内 `r2_record` 卡数;`--json` 增 `stalls`(对象列表 `{slice, minutes|null}`)与 `fake_verified`;既有行不改,
   `note:` 行不变,退出码恒 0,零写入,输出不含 `regress`。
-- README 增"kind 候选"一段(`iteration_cap`、`patch_failed`,出处 2026-09-05 ra 活板 #48"48b 中断记录",
-  发射点属 ra 侧另立契约)与"索引"一段(INDEX.md 由脚本生成)。
+- README 增"kind 候选"一段(`iteration_cap`、`patch_failed`,出处 2026-09-05 RecurAgent 活板 #48"48b 中断记录",
+  发射点属 RecurAgent 侧另立契约)与"索引"一段(INDEX.md 由脚本生成)。
 - 夹具:`fixtures/evolution/skeleton/FLAW-sample.md`(模板五段 + `req: REQ-OLP-EVO`)、
   `fixtures/evolution/index/`(两条 FLAW + 带引用的 PROTOCOL 片段)、`fixtures/evolution/stall/review-board.md`
   (含 `派单 43c-2`、`派单 43-r1`+`ACK(43-r1 done)`、`27c 派单`+`ACK(27c done)`、`不派单`、标题日期)。
@@ -99,7 +99,7 @@ estimate: 2d
 
 ## 排除范围
 
-- `iteration_cap`/`patch_failed` 的 ra 侧发射点(另立 REQ-OLP-OBS 修订与契约)。
+- `iteration_cap`/`patch_failed` 的 RecurAgent 侧发射点(另立 REQ-OLP-OBS 修订与契约)。
 - 空 ACK(有 ACK 无 commit)的识别(需活板与 git 对账)。
 - LEP-004 canon `flaw` 类型;`/octoloop` skill 步骤文案(主审另片)。
 - 两个战役的运行验收(非机械场景)。

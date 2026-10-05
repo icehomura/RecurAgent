@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Play a ttfx-rendered OCTOS ASCII-logo animation on the main screen at startup (before `event_loop::run` claims the terminal), capped at 1.5s, skippable by any key, gated off for non-TTY/CI/`--no-splash`, ending in a full plain logo banner; all failures silent.
+**Goal:** Play a ttfx-rendered RA ASCII-logo animation on the main screen at startup (before `event_loop::run` claims the terminal), capped at 1.5s, skippable by any key, gated off for non-TTY/CI/`--no-splash`, ending in a full plain logo banner; all failures silent.
 
 **Architecture:** New `src/splash.rs` module drives ttfx's public engine primitives (`Effect::build`/`next_frame` + `EngineCtx`) with a custom raw-mode-safe frame printer (ttfx frames join rows with bare `\n`, which staircases under raw mode — we reposition with `\r\n` + cursor-up ourselves). Effect configs are obtained the same way ttfx's own `--random-effect` does: `clap try_parse_from(["ttfx", name])`. Gating, effect picking, and the frame loop are pure/injectable (Vec writer + virtual clock + frame_rate 0) so tests never sleep or touch a TTY; only `play()` touches crossterm raw mode and is verified manually.
 
@@ -87,9 +87,9 @@ In the existing `#[cfg(test)] mod tests` in `src/cli.rs`, next to `parses_theme_
 /// specs/task-startup-splash.spec: --no-splash disables the startup animation.
 #[test]
 fn cli_parses_no_splash_flag() {
-    let cli = Cli::try_parse_from(["octoscode", "--no-splash"]).expect("cli parses");
+    let cli = Cli::try_parse_from(["ra-tui", "--no-splash"]).expect("cli parses");
     assert!(cli.no_splash);
-    let cli = Cli::try_parse_from(["octoscode"]).expect("cli parses");
+    let cli = Cli::try_parse_from(["ra-tui"]).expect("cli parses");
     assert!(!cli.no_splash);
 }
 ```
@@ -105,7 +105,7 @@ In `pub struct Cli` (after `steer_mid_turn`):
 
 ```rust
     /// Skip the ttfx startup animation (also skipped for non-TTY/CI, or via
-    /// OCTOSCODE_NO_SPLASH).
+    /// RA_TUI_NO_SPLASH).
     pub no_splash: bool,
 ```
 
@@ -161,7 +161,7 @@ Create `tests/splash_contract.rs`:
 ```rust
 //! Contract tests for specs/task-startup-splash.spec.
 
-use octoscode::splash::{
+use ra-tui::splash::{
     pick_effect_name, should_play, splash_text, SplashGate, SPLASH_EFFECTS,
 };
 
@@ -232,18 +232,18 @@ fn splash_text_carries_logo_and_version() {
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `cargo test --test splash_contract 2>&1 | tail -5`
-Expected: FAIL — `could not find splash in octoscode`.
+Expected: FAIL — `could not find splash in ra-tui`.
 
 - [ ] **Step 3: Implement `src/splash.rs` (gating half)**
 
 ```rust
-//! Startup splash: a ttfx-rendered OCTOS logo animation played on the main
+//! Startup splash: a ttfx-rendered RA logo animation played on the main
 //! screen before the event loop claims the terminal.
 //! Contract: specs/task-startup-splash.spec.
 
 use unicode_width::UnicodeWidthStr;
 
-/// Block-letter OCTOS. 44 columns wide, 6 rows tall; all glyphs are
+/// Block-letter RA. 44 columns wide, 6 rows tall; all glyphs are
 /// single-width so ttfx canvas geometry matches `lines()`/width math.
 const LOGO: &str = "\
   ██████╗  ██████╗████████╗ ██████╗ ███████╗
@@ -260,7 +260,7 @@ pub const SPLASH_EFFECTS: [&str; 6] = ["decrypt", "beams", "sweep", "wipe", "sli
 
 /// The animated input: logo plus a version footer line.
 pub fn splash_text() -> String {
-    format!("{LOGO}\n\n         octoscode v{}", env!("CARGO_PKG_VERSION"))
+    format!("{LOGO}\n\n         ra-tui v{}", env!("CARGO_PKG_VERSION"))
 }
 
 /// Widest line / line count of the splash text, for the gate and printer.
@@ -275,7 +275,7 @@ pub(crate) fn text_dimensions(text: &str) -> (u16, u16) {
 #[derive(Debug, Clone, Copy)]
 pub struct SplashGate {
     pub no_splash_flag: bool,
-    /// OCTOSCODE_NO_SPLASH is set (any value).
+    /// RA_TUI_NO_SPLASH is set (any value).
     pub env_disabled: bool,
     pub stdout_is_tty: bool,
     /// CI env var is set (any value).
@@ -346,7 +346,7 @@ git commit -m "feat(splash): logo, gating, and curated effect picking"
 Append to `tests/splash_contract.rs`:
 
 ```rust
-use octoscode::splash::{SessionOpts, SplashSession};
+use ra-tui::splash::{SessionOpts, SplashSession};
 
 fn test_opts() -> SessionOpts {
     SessionOpts { frame_rate: 0, virtual_clock: true, seed: 7 }
@@ -569,7 +569,7 @@ git commit -m "feat(splash): ttfx engine session with raw-mode-safe frame loop"
 
 **Interfaces:**
 - Consumes: `SplashGate`/`should_play`, `pick_effect_name`, `SplashSession` (Tasks 3–4), `Cli.no_splash` (Task 2).
-- Produces: `splash::play(cli: &octoscode::cli::Cli)` — the only symbol `main.rs` uses.
+- Produces: `splash::play(cli: &ra-tui::cli::Cli)` — the only symbol `main.rs` uses.
 
 - [ ] **Step 1: Implement `play()` in `src/splash.rs`**
 
@@ -583,7 +583,7 @@ pub fn play(cli: &crate::cli::Cli) {
     let (term_cols, term_rows) = crossterm::terminal::size().unwrap_or((0, 0));
     let gate = SplashGate {
         no_splash_flag: cli.no_splash,
-        env_disabled: std::env::var_os("OCTOSCODE_NO_SPLASH").is_some(),
+        env_disabled: std::env::var_os("RA_TUI_NO_SPLASH").is_some(),
         stdout_is_tty: std::io::stdout().is_terminal(),
         ci: std::env::var_os("CI").is_some(),
         term_cols,
@@ -649,13 +649,13 @@ fn key_or_resize_pending() -> bool {
 
 - [ ] **Step 2: Wire into `src/main.rs`**
 
-In `main()`, between `backend_ensure::ensure_octos_backend(&mut cli)?;` and `event_loop::run(cli)`:
+In `main()`, between `backend_ensure::ensure_ra_backend(&mut cli)?;` and `event_loop::run(cli)`:
 
 ```rust
     // Startup splash: ttfx-rendered logo on the main screen, before the event
     // loop claims the terminal. Gated (non-TTY/CI/--no-splash) and best-effort;
     // see specs/task-startup-splash.spec.
-    octoscode::splash::play(&cli);
+    ra-tui::splash::play(&cli);
 ```
 
 Update the import line to include `splash`... (it uses the crate path directly, so no import change is needed).
@@ -668,7 +668,7 @@ Expected: clippy clean, all tests pass (including the pre-existing suite).
 - [ ] **Step 4: Manual verification (real terminal)**
 
 Run: `cargo run -- --mode mock` in an interactive terminal.
-Expected: logo animates below the prompt for ≤1.5s, then the full OCTOS logo + `octoscode v…` line stands still, then the TUI starts. Verify:
+Expected: logo animates below the prompt for ≤1.5s, then the full RA logo + `ra-tui v…` line stands still, then the TUI starts. Verify:
 - pressing a key mid-animation jumps straight to the full logo + TUI;
 - `cargo run -- --mode mock --no-splash` shows no animation;
 - `CI=1 cargo run -- --mode mock` shows no animation;

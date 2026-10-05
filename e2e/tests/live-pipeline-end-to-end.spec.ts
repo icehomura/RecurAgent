@@ -19,10 +19,10 @@
  *
  * Run from ~/home/ra/e2e:
  *
- *   OCTOS_TEST_URL=https://dspfac.bot.ominix.io \
- *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
- *   OCTOS_PROFILE=dspfac \
- *   OCTOS_TEST_EMAIL=dspfac@gmail.com \
+ *   ra_TEST_URL=https://dspfac.bot.ominix.io \
+ *   ra_AUTH_TOKEN=ra-admin-2026 \
+ *   ra_PROFILE=dspfac \
+ *   ra_TEST_EMAIL=dspfac@gmail.com \
  *     npx playwright test tests/live-pipeline-end-to-end.spec.ts --workers=1
  *
  * NEVER run against mini5 (`dspfac.ocean.ominix.io`) — that host is reserved
@@ -32,9 +32,9 @@
 import { test, expect } from '@playwright/test';
 import { chatWS, type ChatWsEvent } from '../lib/m9-ws-client';
 
-const BASE = process.env.OCTOS_TEST_URL || 'https://dspfac.bot.ominix.io';
-const TOKEN = process.env.OCTOS_AUTH_TOKEN || 'ra-admin-2026';
-const PROFILE = process.env.OCTOS_PROFILE || 'dspfac';
+const BASE = process.env.ra_TEST_URL || 'https://dspfac.bot.ominix.io';
+const TOKEN = process.env.ra_AUTH_TOKEN || 'ra-admin-2026';
+const PROFILE = process.env.ra_PROFILE || 'dspfac';
 
 // Refuse to run against mini5 — coding-green territory.
 if (BASE.includes('dspfac.ocean.ominix.io')) {

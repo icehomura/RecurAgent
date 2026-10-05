@@ -2,7 +2,7 @@
 
 ## Our commitment
 
-We are committed to making participation in octoscode respectful, inclusive,
+We are committed to making participation in ra-tui respectful, inclusive,
 and free from harassment for everyone, regardless of experience, identity,
 background, appearance, ability, or personal characteristics.
 
@@ -35,7 +35,7 @@ representing the project in public or private community spaces.
 ## Reporting and enforcement
 
 Do not put sensitive conduct details in a public issue. Open a
-[conduct contact request](https://github.com/your-org/ra-tui/issues/new?template=conduct_contact.yml)
+[conduct contact request](https://github.com/icehomura/ra-tui/issues/new?template=conduct_contact.yml)
 only to ask for a private channel; do not identify people or describe the
 incident in that public request.
 

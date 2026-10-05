@@ -302,7 +302,7 @@ write_serve_env_file() {
     token="${token//\"/\\\"}"
     # printf (not a heredoc) so the escaping reaches the remote file
     # byte-for-byte, exactly like install.sh's writer.
-    printf 'OCTOS_AUTH_TOKEN="%s"\n' "$token" |
+    printf 'ra_AUTH_TOKEN="%s"\n' "$token" |
         ssh_cmd "umask 077 && cat > '${RDATA}/serve.env' && chmod 600 '${RDATA}/serve.env'"
 }
 
@@ -344,9 +344,9 @@ write_remote_services() {
         <string>${RBIN}:${REMOTE_HOME}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
         <key>HOME</key>
         <string>${REMOTE_HOME}</string>
-        <key>OCTOS_DATA_DIR</key>
+        <key>ra_DATA_DIR</key>
         <string>${RDATA}</string>
-        <key>OCTOS_AUTH_TOKEN</key>
+        <key>ra_AUTH_TOKEN</key>
         <string>${AUTH_TOKEN}</string>
     </dict>
     <key>WorkingDirectory</key>
@@ -354,7 +354,7 @@ write_remote_services() {
 </dict>
 </plist>
 EOF
-        # #2496: the plist carries OCTOS_AUTH_TOKEN — install it 0600.
+        # #2496: the plist carries ra_AUTH_TOKEN — install it 0600.
         # The explicit chmod also fixes up re-runs, where cat > keeps the
         # previous file's mode.
         ssh_cmd "chmod 600 ~/Library/LaunchAgents/${PLIST_LABEL}.plist"
@@ -409,7 +409,7 @@ Type=simple
 User=$(echo "$SSH_TARGET" | cut -d@ -f1)
 Environment=HOME=${REMOTE_HOME}
 Environment=PATH=${RBIN}:${REMOTE_HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin
-Environment=OCTOS_DATA_DIR=${RDATA}
+Environment=ra_DATA_DIR=${RDATA}
 EnvironmentFile=${RDATA}/serve.env
 ExecStart=${RBIN}/ra serve --port ${SERVE_PORT} --host 0.0.0.0
 Restart=always

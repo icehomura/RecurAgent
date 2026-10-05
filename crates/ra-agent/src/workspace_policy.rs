@@ -257,7 +257,7 @@ fn is_default_phase(phase: &ValidatorPhaseKind) -> bool {
 /// of files the skill just produced), optionally filtered by an extension
 /// suffix.
 ///
-/// Issue ra #1034: the topic-suffixed plugin output paths
+/// Issue RecurAgent #1034: the topic-suffixed plugin output paths
 /// (e.g. `mofa-podcast-zhuyu/`) break globbing because the per-topic
 /// directory name is unpredictable. `files_to_send` carries the exact path
 /// the plugin wrote and is the canonical source of truth.
@@ -347,7 +347,7 @@ pub enum ValidatorSpec {
     /// `non_silent_samples / total_samples >= min_ratio`. WAV is supported
     /// natively. MP3 support requires the `audio_mp3` feature flag.
     ///
-    /// When `source = "spawn_only_files"` (ra #1034) the validator skips
+    /// When `source = "spawn_only_files"` (RecurAgent #1034) the validator skips
     /// the glob entirely and consumes the originating spawn_only tool's
     /// `files_to_send` list, optionally narrowed by `extension`
     /// (e.g. `extension = "mp3"`). This is the canonical mode for plugins
@@ -399,7 +399,7 @@ pub enum ValidatorSpec {
         #[serde(default)]
         require_at_least: usize,
         /// Where to source the candidate file list. See [`ValidatorFileSource`]
-        /// for the opt-in `spawn_only_files` mode (ra #1034) that bypasses
+        /// for the opt-in `spawn_only_files` mode (RecurAgent #1034) that bypasses
         /// the glob and consumes the plugin's `files_to_send` list verbatim.
         #[serde(default, skip_serializing_if = "ValidatorFileSource::is_default")]
         source: ValidatorFileSource,
@@ -415,7 +415,7 @@ pub enum ValidatorSpec {
     /// The format field is named `format` rather than `kind` to avoid
     /// colliding with serde's `kind` discriminator tag.
     ///
-    /// When `source = "spawn_only_files"` (ra #1034) the validator skips
+    /// When `source = "spawn_only_files"` (RecurAgent #1034) the validator skips
     /// the glob entirely and consumes the originating spawn_only tool's
     /// `files_to_send` list, optionally narrowed by `extension`.
     MagicBytes {
@@ -757,7 +757,7 @@ impl WorkspacePolicy {
                     // — the same path set the session-scope
                     // `mofa_slides_contract` uses.
                     on_completion: Vec::new(),
-                    // ra #997: gate the slides project on the PPTX
+                    // RecurAgent #997: gate the slides project on the PPTX
                     // magic-bytes signature so an HTML "success" deck
                     // trips the contract. Uses `SpawnOnlyFiles` source
                     // — the spawn loop wires `files_to_send` through to
@@ -840,7 +840,7 @@ impl WorkspacePolicy {
         // recursive `**/*.pptx` glob already used by the MagicBytes(Pptx)
         // validator on `on_completion`.
         artifacts.insert("slides_pptx".into(), "**/*.pptx".into());
-        // ra #1040 (follow-up to #1035 / #1037): `mofa_comic`,
+        // RecurAgent #1040 (follow-up to #1035 / #1037): `mofa_comic`,
         // `mofa_infographic`, and `mofa_frame` all emit a single PNG via
         // `files_to_send`. The `image_png` artifact gives those contracts
         // a target name so `bind_explicit_files_to_artifacts` can bind the
@@ -889,7 +889,7 @@ impl WorkspacePolicy {
             //   2. tool generated a valid MP3 header but a silent decoded
             //      stream (AudioNonSilent — whole final mix).
             //
-            // ra #1034: switched (1) and (2) to consume the plugin's
+            // RecurAgent #1034: switched (1) and (2) to consume the plugin's
             // `files_to_send` list (the canonical authoritative path set
             // emitted by the JSON envelope on stdout). The prior hardcoded
             // glob `skill-output/mofa-podcast/**/*.mp3` could not match
@@ -929,7 +929,7 @@ impl WorkspacePolicy {
         // Voice synthesis (LLM-driven TTS): assert the decoded audio is not
         // silent. Catches the "render produced empty audio" failure path.
         //
-        // ra #1038 (follow-up to #1037): consume the plugin's
+        // RecurAgent #1038 (follow-up to #1037): consume the plugin's
         // `files_to_send` envelope so the AudioNonSilent check runs against
         // the exact audio path the skill reported, not whatever happens to
         // match a recursive `skill-output/voice/**/*.{mp3,wav}` glob. The
@@ -983,10 +983,10 @@ impl WorkspacePolicy {
         //
         // The FileExists path uses `${args.name}` interpolation against
         // the spawn task's input args; mofa-fm writes the WAV to
-        // `${OCTOS_VOICE_DIR:-${OCTOS_DATA_DIR}/voice_profiles}/<name>.wav`,
+        // `${ra_VOICE_DIR:-${ra_DATA_DIR}/voice_profiles}/<name>.wav`,
         // which under the default session workspace resolves relative to
         // the workspace root via `voice_profiles/<name>.wav`. Operators
-        // who pin a non-default `OCTOS_VOICE_DIR` can override the path
+        // who pin a non-default `ra_VOICE_DIR` can override the path
         // in their workspace policy.
         let fm_voice_save_contract = WorkspaceSpawnTaskPolicy {
             artifact: None,
@@ -1027,7 +1027,7 @@ impl WorkspacePolicy {
         // MagicBytes validator uses, so the two checks see a consistent
         // set of paths.
         //
-        // ra #1036 (follow-up to #1034 / PR #1035): consume the plugin's
+        // RecurAgent #1036 (follow-up to #1034 / PR #1035): consume the plugin's
         // `files_to_send` envelope so the MagicBytes check runs against the
         // exact PPTX path the skill reported, not whatever happens to match
         // a recursive `**/*.pptx` glob. Two failure modes the prior glob
@@ -1056,7 +1056,7 @@ impl WorkspacePolicy {
         };
 
         // mofa_cards writes one PNG per card into a `card_dir` and now
-        // reports every generated PNG via `files_to_send` (ra #1041).
+        // reports every generated PNG via `files_to_send` (RecurAgent #1041).
         // Consume that explicit list so stale PNGs elsewhere in the
         // workspace cannot satisfy a failed card run.
         let mofa_cards_contract = WorkspaceSpawnTaskPolicy {
@@ -1080,7 +1080,7 @@ impl WorkspacePolicy {
         // `${args.out}`, which already supports template interpolation)
         // AND that the file at the plugin-reported path carries a valid
         // PNG header (MagicBytes against the `spawn_only_files` source —
-        // ra #1040, follow-up to #1035 / #1037).
+        // RecurAgent #1040, follow-up to #1035 / #1037).
         //
         // `detect_output_file` in `plugins/tool.rs:556-577` populates
         // `files_to_send` from the `args.out` argument when the plugin's
@@ -1146,7 +1146,7 @@ impl WorkspacePolicy {
         // the entry here lets the next spawn_only flip pick up the
         // contract automatically.
         //
-        // ra #1040: preemptively use the `spawn_only_files` source so
+        // RecurAgent #1040: preemptively use the `spawn_only_files` source so
         // the contract is on the right shape the moment the manifest
         // flips. The mofa-frame plugin script
         // (`mofa-skills/mofa-frame/main`) already emits `files_to_send`
@@ -2150,7 +2150,7 @@ ignore = []
         assert!(!MagicByteKind::Pptx.matches(b"<!DOCTYPE html>"));
     }
 
-    /// ra #1034: the podcast contract's MagicBytes + AudioNonSilent
+    /// RecurAgent #1034: the podcast contract's MagicBytes + AudioNonSilent
     /// validators must be declared with `source = SpawnOnlyFiles` so the
     /// plugin's reported `files_to_send` list drives the check rather than
     /// a hardcoded glob that misses topic-suffixed output directories
@@ -2160,7 +2160,7 @@ ignore = []
     /// files after assembly, so the gate hard-failed every podcast call
     /// (mini3 live regression 2026-05-18).
     #[test]
-    fn session_policy_podcast_validators_consume_spawn_only_files_for_octos_1034() {
+    fn session_policy_podcast_validators_consume_spawn_only_files_for_ra_1034() {
         let policy = WorkspacePolicy::for_session();
         let podcast = policy
             .spawn_tasks
@@ -2319,7 +2319,7 @@ ignore = []
         )));
     }
 
-    /// ra #1036 (follow-up to #1034 / PR #1035): `mofa_slides` must
+    /// RecurAgent #1036 (follow-up to #1034 / PR #1035): `mofa_slides` must
     /// consume the plugin's `files_to_send` envelope rather than a
     /// hardcoded glob. The legacy `**/*.pptx` glob silently matched stale
     /// PPTXs from earlier runs in the same session workspace, the same
@@ -2332,10 +2332,10 @@ ignore = []
     /// is not one of the prefixes `PluginTool::detect_output_file`
     /// recognises. The voice marker was fixed in PR #1039, and the
     /// voice_synthesize half is re-pinned by
-    /// `session_policy_voice_synthesize_consumes_spawn_only_files_for_octos_1038`
+    /// `session_policy_voice_synthesize_consumes_spawn_only_files_for_ra_1038`
     /// below.
     #[test]
-    fn session_policy_mofa_slides_consumes_spawn_only_files_for_octos_1036() {
+    fn session_policy_mofa_slides_consumes_spawn_only_files_for_ra_1036() {
         let policy = WorkspacePolicy::for_session();
         let slides = policy
             .spawn_tasks
@@ -2378,7 +2378,7 @@ ignore = []
         );
     }
 
-    /// ra #1038 (follow-up to #1037 / PR #1039): `voice_synthesize` must
+    /// RecurAgent #1038 (follow-up to #1037 / PR #1039): `voice_synthesize` must
     /// consume the plugin's `files_to_send` envelope rather than the
     /// hardcoded `skill-output/voice/**/*.{mp3,wav}` glob. The recursive
     /// glob silently matched stale audio from earlier runs in the same
@@ -2398,7 +2398,7 @@ ignore = []
     /// keep the .wav when ffmpeg is unavailable. The validator decodes
     /// both formats natively (WAV) or via the `audio_mp3` feature.
     #[test]
-    fn session_policy_voice_synthesize_consumes_spawn_only_files_for_octos_1038() {
+    fn session_policy_voice_synthesize_consumes_spawn_only_files_for_ra_1038() {
         let policy = WorkspacePolicy::for_session();
         let voice = policy
             .spawn_tasks
@@ -2530,8 +2530,8 @@ ignore = []
     }
 
     #[test]
-    fn session_policy_mofa_comic_infographic_frame_consume_spawn_only_files_for_octos_1040() {
-        // ra #1040 (follow-up to #1035 / #1037): the MagicBytes
+    fn session_policy_mofa_comic_infographic_frame_consume_spawn_only_files_for_ra_1040() {
+        // RecurAgent #1040 (follow-up to #1035 / #1037): the MagicBytes
         // validator on each of mofa_comic, mofa_infographic, and
         // mofa_frame must opt into `spawn_only_files` so the validator
         // consumes the plugin-reported `files_to_send` path directly
@@ -2583,8 +2583,8 @@ ignore = []
     }
 
     #[test]
-    fn session_policy_mofa_cards_consumes_spawn_only_files_for_octos_1041() {
-        // ra #1041: the deployed mofa_cards plugin emits all generated
+    fn session_policy_mofa_cards_consumes_spawn_only_files_for_ra_1041() {
+        // RecurAgent #1041: the deployed mofa_cards plugin emits all generated
         // PNGs via files_to_send, so the contract must consume that list
         // instead of a recursive workspace glob that could match stale
         // PNGs from a previous turn.

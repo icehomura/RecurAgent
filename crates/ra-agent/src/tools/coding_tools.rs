@@ -1,9 +1,9 @@
 //! Codex-compatible P0 coding tool shims.
 //!
 //! These tools expose the canonical Codex tool names to the model-visible
-//! registry. Where ra already has a native primitive, the implementation
+//! registry. Where RecurAgent already has a native primitive, the implementation
 //! delegates to that runtime shape. Where Codex expects an interactive host
-//! primitive that ra does not yet own as an agent tool, the shim returns a
+//! primitive that RecurAgent does not yet own as an agent tool, the shim returns a
 //! typed, non-mutating result instead of silently pretending work happened.
 
 use std::collections::{HashMap, HashSet};
@@ -1551,7 +1551,7 @@ impl Tool for SpawnAgentTool {
         // the dedicated redaction step from PR #1171 is unnecessary.
         let mut meta = json!({
             "codex_tool": "spawn_agent",
-            "octos_tool": "spawn",
+            "ra_tool": "spawn",
             "spawn_args": spawn_args.clone(),
         });
         if let Some(template) = role_template {
@@ -1866,7 +1866,7 @@ simple_codex_tool!(
 // #1172 — Codex naming-parity aliases: `bash`, `delegate`.
 //
 // Codex CLI exposes these model-visible names alongside the canonical
-// ra surface (`shell` / `exec_command`, `spawn_agent` + `wait_agent`).
+// RecurAgent surface (`shell` / `exec_command`, `spawn_agent` + `wait_agent`).
 // A Codex-trained model emitting `bash(cmd=…)` or `delegate(role=…)`
 // without these aliases hits "tool not found" first and recovers via
 // `tool_search` on the retry. Registering the aliases removes that
@@ -2161,7 +2161,7 @@ impl Tool for BashTool {
                     success: output.status.success(),
                     structured_metadata: Some(json!({
                         "codex_tool": "bash",
-                        "octos_tool": "exec_command",
+                        "ra_tool": "exec_command",
                         "exit_code": exit_code,
                     })),
                     ..Default::default()
@@ -3529,7 +3529,7 @@ impl Tool for ToolSuggestTool {
 // ---------------------------------------------------------------------------
 // #1149 / M14-B P2 tool: `image_generation`.
 //
-// Codex's optional image-generation surface. ra doesn't ship a native
+// Codex's optional image-generation surface. RecurAgent doesn't ship a native
 // image-generation backend yet (no MoFA media skill is bundled and the
 // `ra-llm` providers — Anthropic / Gemini / OpenRouter — don't expose
 // an image-generation endpoint; OpenAI does via DALL-E but isn't wired
@@ -3661,7 +3661,7 @@ impl Tool for ImageGenerationTool {
         Ok(ToolResult {
             output: json!({
                 "error": "image_generation has no native or skill backend bound on this profile",
-                "follow_up": "https://github.com/octos-org/octos/issues/1149",
+                "follow_up": "https://github.com/icehomura/ra/issues/1149",
                 "prompt": prompt,
             })
             .to_string(),
@@ -3670,7 +3670,7 @@ impl Tool for ImageGenerationTool {
                 "codex_tool": "image_generation",
                 "error_kind": "coding_tool_unsupported",
                 "reason": "no_backend_bound",
-                "follow_up_issue": "https://github.com/octos-org/octos/issues/1149",
+                "follow_up_issue": "https://github.com/icehomura/ra/issues/1149",
                 "accepted_input": {
                     "prompt": prompt,
                     "size": input.size,

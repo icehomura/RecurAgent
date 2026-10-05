@@ -1,7 +1,7 @@
 /**
  * M9 wire-level e2e: `turn/interrupt` happy-path.
  *
- * Issue: https://github.com/your-org/ra/issues/647
+ * Issue: https://github.com/icehomura/ra/issues/647
  * Spec  : api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md §7
  *
  * This file covers interrupt idempotency and deterministic terminal drain.

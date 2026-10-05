@@ -1,9 +1,9 @@
-//! Integration tests for the ra CLI.
+//! Integration tests for the RecurAgent CLI.
 
 use std::process::Command;
 
-/// Get the path to the ra binary.
-fn octos_binary() -> std::path::PathBuf {
+/// Get the path to the RecurAgent binary.
+fn ra_binary() -> std::path::PathBuf {
     let mut path = std::env::current_exe().unwrap();
     path.pop(); // Remove test binary name
     path.pop(); // Remove deps
@@ -29,7 +29,7 @@ fn clear_provider_env(cmd: &mut Command) {
 
 #[test]
 fn test_help_command() {
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .arg("--help")
         .output()
         .expect("Failed to execute command");
@@ -46,7 +46,7 @@ fn test_help_command() {
 
 #[test]
 fn test_version_command() {
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .arg("--version")
         .output()
         .expect("Failed to execute command");
@@ -58,7 +58,7 @@ fn test_version_command() {
 
 #[test]
 fn test_init_help() {
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .args(["init", "--help"])
         .output()
         .expect("Failed to execute command");
@@ -72,7 +72,7 @@ fn test_init_help() {
 
 #[test]
 fn test_chat_help() {
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .args(["chat", "--help"])
         .output()
         .expect("Failed to execute command");
@@ -87,7 +87,7 @@ fn test_chat_help() {
 
 #[test]
 fn test_clean_help() {
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .args(["clean", "--help"])
         .output()
         .expect("Failed to execute command");
@@ -101,7 +101,7 @@ fn test_clean_help() {
 
 #[test]
 fn test_completions_help() {
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .args(["completions", "--help"])
         .output()
         .expect("Failed to execute command");
@@ -120,7 +120,7 @@ const MODEL_CATALOG: &str = include_str!(concat!(
 
 /// Run the binary against the compiled-in catalog, not whatever catalog a
 /// developer's own `~/.ra` holds: catalog loading is disk-first, so a
-/// machine that has run ra would otherwise shadow the SSOT and break the
+/// machine that has run RecurAgent would otherwise shadow the SSOT and break the
 /// comparisons below. Also clears the completion channel (both the new and
 /// the legacy variable) so a globally exported var can't turn the invocation
 /// into a completion answer.
@@ -132,11 +132,11 @@ fn run_completions(args: &[&str]) -> String {
         CALL.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
     std::fs::create_dir_all(&scratch).expect("scratch dir is created");
-    let mut cmd = Command::new(octos_binary());
+    let mut cmd = Command::new(ra_binary());
     cmd.args(args)
         .current_dir(&scratch)
         .env_remove("RA_COMPLETE")
-        .env_remove("OCTOS_COMPLETE")
+        .env_remove("ra_COMPLETE")
         .env_remove("COMPLETE");
     for home_var in ["HOME", "USERPROFILE"] {
         cmd.env(home_var, &scratch);
@@ -228,7 +228,7 @@ fn test_completions_env_channel_wiring() {
     // the registration script the shell sources — and exits 0 (#2413).
     let scratch = std::env::temp_dir().join(format!("ra-cli-tests-{}", std::process::id()));
     std::fs::create_dir_all(&scratch).expect("scratch dir is created");
-    let answered = Command::new(octos_binary())
+    let answered = Command::new(ra_binary())
         .env("RA_COMPLETE", "bash")
         .current_dir(&scratch)
         .output()
@@ -240,11 +240,11 @@ fn test_completions_env_channel_wiring() {
         "the binary must answer the completion channel with the registration script"
     );
 
-    // The legacy `OCTOS_COMPLETE` name keeps shells registered before the
+    // The legacy `ra_COMPLETE` name keeps shells registered before the
     // rename working, so it must still answer the channel.
-    let legacy = Command::new(octos_binary())
+    let legacy = Command::new(ra_binary())
         .env_remove("RA_COMPLETE")
-        .env("OCTOS_COMPLETE", "bash")
+        .env("ra_COMPLETE", "bash")
         .current_dir(&scratch)
         .output()
         .expect("Failed to execute command");
@@ -252,16 +252,16 @@ fn test_completions_env_channel_wiring() {
     let stdout = String::from_utf8_lossy(&legacy.stdout);
     assert!(
         stdout.contains("_clap_complete_RA"),
-        "the legacy OCTOS_COMPLETE name must still answer the completion channel"
+        "the legacy ra_COMPLETE name must still answer the completion channel"
     );
 
     // The channel is namespaced: a generic COMPLETE exported for some other
-    // tool must not turn ra invocations into completion answers, and the
+    // tool must not turn RecurAgent invocations into completion answers, and the
     // empty value keeps the documented off switch.
-    let unaffected = Command::new(octos_binary())
+    let unaffected = Command::new(ra_binary())
         .env("COMPLETE", "bash")
         .env_remove("RA_COMPLETE")
-        .env_remove("OCTOS_COMPLETE")
+        .env_remove("ra_COMPLETE")
         .arg("--version")
         .output()
         .expect("Failed to execute command");
@@ -276,9 +276,9 @@ fn test_completions_env_channel_wiring() {
         "--version must still print a version"
     );
 
-    let disabled = Command::new(octos_binary())
+    let disabled = Command::new(ra_binary())
         .env("RA_COMPLETE", "")
-        .env_remove("OCTOS_COMPLETE")
+        .env_remove("ra_COMPLETE")
         .arg("--version")
         .output()
         .expect("Failed to execute command");
@@ -293,7 +293,7 @@ fn test_completions_env_channel_wiring() {
 
 #[test]
 fn test_completions_bash() {
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .args(["completions", "bash"])
         .output()
         .expect("Failed to execute command");
@@ -306,7 +306,7 @@ fn test_completions_bash() {
 
 #[test]
 fn test_completions_zsh() {
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .args(["completions", "zsh"])
         .output()
         .expect("Failed to execute command");
@@ -319,7 +319,7 @@ fn test_completions_zsh() {
 
 #[test]
 fn test_completions_fish() {
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .args(["completions", "fish"])
         .output()
         .expect("Failed to execute command");
@@ -340,7 +340,7 @@ fn test_auth_help_names_platform_secret_store() {
         ["auth", "remove-key"],
         ["auth", "unlock"],
     ] {
-        let output = Command::new(octos_binary())
+        let output = Command::new(ra_binary())
             .args(args)
             .arg("--help")
             .output()
@@ -371,7 +371,7 @@ fn test_auth_help_names_platform_secret_store() {
 fn test_status_reports_secret_store_backend() {
     let temp_dir = tempfile::tempdir().unwrap();
 
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .args(["status", "--cwd"])
         .arg(temp_dir.path())
         .output()
@@ -395,7 +395,7 @@ fn test_status_reports_secret_store_backend() {
 fn test_init_defaults_in_temp_dir() {
     let temp_dir = tempfile::tempdir().unwrap();
 
-    let mut cmd = Command::new(octos_binary());
+    let mut cmd = Command::new(ra_binary());
     clear_provider_env(&mut cmd);
     let output = cmd
         .env("ANTHROPIC_API_KEY", "test-ant-key")
@@ -417,17 +417,17 @@ fn test_init_defaults_in_temp_dir() {
 }
 
 #[test]
-fn test_init_defaults_uses_octos_home_when_cwd_not_provided() {
+fn test_init_defaults_uses_ra_home_when_cwd_not_provided() {
     let temp_dir = tempfile::tempdir().unwrap();
-    let octos_home = temp_dir.path().join("custom-home");
+    let ra_home = temp_dir.path().join("custom-home");
     let unrelated_cwd = temp_dir.path().join("workspace");
     std::fs::create_dir_all(&unrelated_cwd).unwrap();
 
-    let mut cmd = Command::new(octos_binary());
+    let mut cmd = Command::new(ra_binary());
     clear_provider_env(&mut cmd);
     let output = cmd
         .env("OPENAI_API_KEY", "test-openai-key")
-        .env("RA_HOME", &octos_home)
+        .env("RA_HOME", &ra_home)
         .current_dir(&unrelated_cwd)
         .args(["init", "--defaults"])
         .output()
@@ -435,7 +435,7 @@ fn test_init_defaults_uses_octos_home_when_cwd_not_provided() {
 
     assert!(output.status.success());
 
-    let home_config = octos_home.join("config.json");
+    let home_config = ra_home.join("config.json");
     assert!(
         home_config.exists(),
         "expected init to write config into RA_HOME"
@@ -454,13 +454,13 @@ fn test_init_defaults_uses_octos_home_when_cwd_not_provided() {
 #[test]
 fn test_init_defaults_refuses_to_overwrite_existing_config() {
     let temp_dir = tempfile::tempdir().unwrap();
-    let octos_dir = temp_dir.path().join(".ra");
-    std::fs::create_dir_all(&octos_dir).unwrap();
-    let config_path = octos_dir.join("config.json");
+    let ra_dir = temp_dir.path().join(".ra");
+    std::fs::create_dir_all(&ra_dir).unwrap();
+    let config_path = ra_dir.join("config.json");
     let original = r#"{"provider":"sentinel","model":"keep-me"}"#;
     std::fs::write(&config_path, original).unwrap();
 
-    let mut cmd = Command::new(octos_binary());
+    let mut cmd = Command::new(ra_binary());
     clear_provider_env(&mut cmd);
     let output = cmd
         .env("OPENAI_API_KEY", "test-openai-key")
@@ -478,16 +478,16 @@ fn test_init_defaults_refuses_to_overwrite_existing_config() {
 #[test]
 fn test_init_defaults_force_overwrites_existing_config() {
     let temp_dir = tempfile::tempdir().unwrap();
-    let octos_dir = temp_dir.path().join(".ra");
-    std::fs::create_dir_all(&octos_dir).unwrap();
-    let config_path = octos_dir.join("config.json");
+    let ra_dir = temp_dir.path().join(".ra");
+    std::fs::create_dir_all(&ra_dir).unwrap();
+    let config_path = ra_dir.join("config.json");
     std::fs::write(
         &config_path,
         r#"{"provider":"sentinel","model":"replace-me"}"#,
     )
     .unwrap();
 
-    let mut cmd = Command::new(octos_binary());
+    let mut cmd = Command::new(ra_binary());
     clear_provider_env(&mut cmd);
     let output = cmd
         .env("OPENAI_API_KEY", "test-openai-key")
@@ -504,10 +504,10 @@ fn test_init_defaults_force_overwrites_existing_config() {
 }
 
 #[test]
-fn test_clean_no_octos_dir() {
+fn test_clean_no_ra_dir() {
     let temp_dir = tempfile::tempdir().unwrap();
 
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .args(["clean", "--cwd"])
         .arg(temp_dir.path())
         .output()
@@ -519,11 +519,11 @@ fn test_clean_no_octos_dir() {
 }
 
 #[test]
-fn test_clean_empty_octos_dir() {
+fn test_clean_empty_ra_dir() {
     let temp_dir = tempfile::tempdir().unwrap();
     std::fs::create_dir(temp_dir.path().join(".ra")).unwrap();
 
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .args(["clean", "--cwd"])
         .arg(temp_dir.path())
         .output()
@@ -537,11 +537,11 @@ fn test_clean_empty_octos_dir() {
 #[test]
 fn test_clean_dry_run_with_all() {
     let temp_dir = tempfile::tempdir().unwrap();
-    let octos_dir = temp_dir.path().join(".ra");
-    std::fs::create_dir_all(&octos_dir).unwrap();
-    std::fs::write(octos_dir.join("episodes.redb"), "fake-db").unwrap();
+    let ra_dir = temp_dir.path().join(".ra");
+    std::fs::create_dir_all(&ra_dir).unwrap();
+    std::fs::write(ra_dir.join("episodes.redb"), "fake-db").unwrap();
 
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .args(["clean", "--all", "--dry-run", "--cwd"])
         .arg(temp_dir.path())
         .output()
@@ -553,14 +553,14 @@ fn test_clean_dry_run_with_all() {
     assert!(stdout.contains("Dry run"));
 
     // File should still exist
-    assert!(octos_dir.join("episodes.redb").exists());
+    assert!(ra_dir.join("episodes.redb").exists());
 }
 
 // ── Skill system tests ──────────────────────────────────────────────
 
 #[test]
 fn test_skills_help() {
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .args(["skills", "--help"])
         .output()
         .expect("Failed to execute command");
@@ -575,7 +575,7 @@ fn test_skills_help() {
 
 #[test]
 fn test_skills_list() {
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .args(["skills", "list"])
         .output()
         .expect("Failed to execute command");
@@ -593,7 +593,7 @@ fn test_skills_list() {
 #[test]
 #[ignore] // Requires network access to GitHub
 fn test_skills_search_registry() {
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .args(["skills", "search", "mofa"])
         .output()
         .expect("Failed to execute command");
@@ -614,7 +614,7 @@ fn test_skills_search_registry() {
 #[test]
 #[ignore] // Requires network access to GitHub
 fn test_skills_search_no_results() {
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .args(["skills", "search", "xyznonexistent99"])
         .output()
         .expect("Failed to execute command");
@@ -635,12 +635,12 @@ fn test_skills_install_and_remove() {
     let repo = "mofa-org/mofa-skills/mofa-cards";
 
     // Remove first in case it's already installed
-    let _ = Command::new(octos_binary())
+    let _ = Command::new(ra_binary())
         .args(["skills", "remove", skill_name])
         .output();
 
     // Install
-    let install_output = Command::new(octos_binary())
+    let install_output = Command::new(ra_binary())
         .args(["skills", "install", repo])
         .output()
         .expect("Failed to execute install");
@@ -654,7 +654,7 @@ fn test_skills_install_and_remove() {
     assert!(stdout.contains("Installed"), "should confirm installation");
 
     // Verify it shows in list
-    let list_output = Command::new(octos_binary())
+    let list_output = Command::new(ra_binary())
         .args(["skills", "list"])
         .output()
         .expect("Failed to execute list");
@@ -667,7 +667,7 @@ fn test_skills_install_and_remove() {
     );
 
     // Remove
-    let remove_output = Command::new(octos_binary())
+    let remove_output = Command::new(ra_binary())
         .args(["skills", "remove", skill_name])
         .output()
         .expect("Failed to execute remove");
@@ -677,7 +677,7 @@ fn test_skills_install_and_remove() {
     assert!(remove_stdout.contains("Removed"), "should confirm removal");
 
     // Verify it's gone from list
-    let list_after = Command::new(octos_binary())
+    let list_after = Command::new(ra_binary())
         .args(["skills", "list"])
         .output()
         .expect("Failed to execute list");
@@ -692,11 +692,11 @@ fn test_skills_install_and_remove() {
 #[test]
 fn test_clean_all_removes_redb() {
     let temp_dir = tempfile::tempdir().unwrap();
-    let octos_dir = temp_dir.path().join(".ra");
-    std::fs::create_dir_all(&octos_dir).unwrap();
-    std::fs::write(octos_dir.join("episodes.redb"), "fake-db").unwrap();
+    let ra_dir = temp_dir.path().join(".ra");
+    std::fs::create_dir_all(&ra_dir).unwrap();
+    std::fs::write(ra_dir.join("episodes.redb"), "fake-db").unwrap();
 
-    let output = Command::new(octos_binary())
+    let output = Command::new(ra_binary())
         .args(["clean", "--all", "--cwd"])
         .arg(temp_dir.path())
         .output()
@@ -707,5 +707,5 @@ fn test_clean_all_removes_redb() {
     assert!(stdout.contains("Cleaned"));
 
     // Database file should be deleted
-    assert!(!octos_dir.join("episodes.redb").exists());
+    assert!(!ra_dir.join("episodes.redb").exists());
 }

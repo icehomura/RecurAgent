@@ -8,7 +8,7 @@
 //
 // Tool contract:
 //   search       — runs web search + crawl; saves each page as a markdown file
-//                  under .octos/research/<query>/ and returns an index
+//                  under .ra/research/<query>/ and returns an index
 //   read_file    — reads search results and individual source files
 //   write_file   — used by synthesize node to save the final report
 

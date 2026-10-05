@@ -24,7 +24,7 @@ steer 从 transcript 撤回并重新入队，由既有的终态 drain 作为新 
 - 确认（reap）：`apply_user_row_echo` 的 promotion 分支按 `(session_id, content)`
   取最早匹配的 retained 条目移除——与 `withdraw_steered_user_prompt` 一样以内容
   为唯一 join key（steer 没有 client_message_id，且与 live turn 共享 turn_id）。
-- 协议分层（v2，随 ra `event.turn_steer_dropped.v1`）：服务端广告该 feature 时，
+- 协议分层（v2，随 RecurAgent `event.turn_steer_dropped.v1`）：服务端广告该 feature 时，
   它保证未消费的 steer 在终态帧之前以 `turn/steer_dropped` 返还，因此终态处
   **不再兜底 re-stage**，只把该 turn 剩余的 retained 视为已消费并清除（避免"已消费
   但 echo 丢失"被误重提）；未广告（旧服务端）才执行下面的终态 re-stage。
@@ -165,7 +165,7 @@ steer 从 transcript 撤回并重新入队，由既有的终态 drain 作为新 
 
 ## 排除范围
 
-- 服务端在 turn 退出时返还未消费 steer（ra F4）——落地后可把返还的输入
+- 服务端在 turn 退出时返还未消费 steer（RecurAgent F4）——落地后可把返还的输入
   作为更强的确认/否认信号接入本机制。
 - attributed-error 回退路径的既有行为（已由 `steer_error_frame_restages_the_prompt` 覆盖）。
 - 幻影态看门狗与 Esc 出口（另两个 task spec）。

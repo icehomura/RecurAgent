@@ -1,6 +1,6 @@
-//! # SessionScope — the single filesystem contract for ra components
+//! # SessionScope — the single filesystem contract for RecurAgent components
 //!
-//! Every component in ra that touches the filesystem on behalf of a
+//! Every component in RecurAgent that touches the filesystem on behalf of a
 //! user session — pipeline workers, plugin tools, file tools, sandboxes,
 //! shell, spawn — MUST derive its working directory and validate its
 //! file paths against the [`SessionScope`] for that session. No
@@ -13,7 +13,7 @@
 //!
 //! ## Why this exists
 //!
-//! Today (2026-05-23) ra has three separate places computing a
+//! Today (2026-05-23) RecurAgent has three separate places computing a
 //! session-or-tenant CWD: `chat.rs` for solo, `serve.rs`/`handlers.rs`
 //! for the AppUI/serve path, and an ad-hoc `working_dir: PathBuf`
 //! pinned at construction time inside `RunPipelineTool`. Plugins
@@ -41,10 +41,10 @@
 //!
 //! ## The two scope modes
 //!
-//! ra runs in two modes with different isolation contracts:
+//! RecurAgent runs in two modes with different isolation contracts:
 //!
 //! **Multi-tenant** (`ra serve` + AppUI web client):
-//! - Multiple tenants share one ra process. Each tenant has its
+//! - Multiple tenants share one RecurAgent process. Each tenant has its
 //!   own profile directory at `<config_dir>/profiles/<tenant_id>/`.
 //! - Within a tenant, multiple concurrent sessions share long-lived
 //!   state (skill installs, optionally research cache) but each
@@ -271,7 +271,7 @@ impl std::fmt::Display for SessionScopeError {
 impl std::error::Error for SessionScopeError {}
 
 /// Classification of a path relative to a [`SessionScope`]. Every
-/// path validator across ra must return this shape — there are no
+/// path validator across RecurAgent must return this shape — there are no
 /// custom validation results.
 ///
 /// `Serialize` only: deserialisation would let callers bypass the
@@ -362,7 +362,7 @@ pub enum ScopeMode {
     },
 }
 
-/// The single filesystem contract for an ra session.
+/// The single filesystem contract for an RecurAgent session.
 ///
 /// Constructed by the host (`ra serve` or `ra chat`) once per
 /// session and threaded into every component that needs a CWD or

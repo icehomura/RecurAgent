@@ -4,7 +4,7 @@ Status: proposed
 
 ## Purpose
 
-Octoscode currently has local one-off slash handlers for `/ps`, `/stop`, and
+ra-tui currently has local one-off slash handlers for `/ps`, `/stop`, and
 `/help`. That is not enough for Codex-style coding UX. Codex has a reusable
 command registry, slash autocomplete popup, selection-list framework,
 multi-select framework, nested submenu flow, and specialized menus for model
@@ -12,7 +12,7 @@ selection, status, theme, status line, title, keymap, permissions, MCP, and
 background terminals.
 
 This milestone defines the ra-native framework needed to reach that UX
-without coupling `octoscode` to Codex internals. The framework must let future
+without coupling `ra-tui` to Codex internals. The framework must let future
 menus be added by registering menu content and actions, not by rewriting the
 composer, renderer, event loop, or AppUI transport.
 
@@ -27,8 +27,8 @@ Codex reference source inspected locally:
 - `codex-rs/tui/src/bottom_pane/title_setup.rs`
 - `codex-rs/tui/src/keymap_setup/picker.rs`
 
-Codex is Apache-2.0. ra is Apache-2.0. We may borrow architecture and
-implementation ideas, but the ra implementation should be native to the
+Codex is Apache-2.0. RecurAgent is Apache-2.0. We may borrow architecture and
+implementation ideas, but the RecurAgent implementation should be native to the
 AppUI architecture. If code is copied directly, preserve required attribution
 and update notices.
 
@@ -48,7 +48,7 @@ and update notices.
 ## Non-Goals
 
 - Do not copy Codex UI branding or product names.
-- Do not make `octoscode` own model/provider/runtime state that belongs to
+- Do not make `ra-tui` own model/provider/runtime state that belongs to
   `ra serve`.
 - Do not introduce AppUI wire changes silently. Any server-backed menu that
   needs new runtime data must add an explicit AppUI contract change.
@@ -706,7 +706,7 @@ Live tmux tests:
 
 ## Known Risks
 
-- Copying Codex code too literally could couple ra to assumptions that do
+- Copying Codex code too literally could couple RecurAgent to assumptions that do
   not fit AppUI. Mitigation: port concepts, not internals, unless a small helper
   is worth attribution.
 - Server-backed menus may expose missing AppUI capabilities. Mitigation: render

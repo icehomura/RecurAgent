@@ -823,7 +823,7 @@ async fn http_probe_expected_contains_interpolates_args_and_output() {
     // both an LLM-supplied slug (args.repo_slug) and a tool-emitted
     // commit sha (output.commit_sha). Both must interpolate in the
     // expected_contains assertion.
-    let response = "HTTP/1.1 200 OK\r\nContent-Length: 26\r\n\r\nrepo=ra-site sha=abc123";
+    let response = "HTTP/1.1 200 OK\r\nContent-Length: 23\r\n\r\nrepo=ra-site sha=abc123";
     let addr = spawn_test_http_server(vec![response]);
     let dir = tempfile::tempdir().unwrap();
     let runner = ValidatorRunner::new(Arc::new(ToolRegistry::new()), dir.path().to_path_buf());
@@ -1739,7 +1739,7 @@ async fn per_file_non_silent_glob_excludes_placeholder_filenames() {
     );
 }
 
-// --- ra #1034: source = "spawn_only_files" --------------------------
+// --- RecurAgent #1034: source = "spawn_only_files" --------------------------
 //
 // The validator family below covers the file-list-driven source that
 // replaces the legacy glob when a contract opts in via
@@ -1751,7 +1751,7 @@ async fn per_file_non_silent_glob_excludes_placeholder_filenames() {
 
 /// MagicBytes + AudioNonSilent must accept a `files_to_send` list and
 /// run their checks against each file directly, bypassing the glob.
-/// This is the canonical happy-path for the ra #1034 refactor.
+/// This is the canonical happy-path for the RecurAgent #1034 refactor.
 #[tokio::test]
 async fn magic_bytes_uses_spawn_only_files_when_source_opted_in() {
     let dir = tempfile::tempdir().unwrap();
@@ -1950,9 +1950,9 @@ async fn spawn_only_files_source_fails_when_files_to_send_list_is_empty() {
     );
 }
 
-// --- ra #1036: mofa_slides sweep -----------------------------------
+// --- RecurAgent #1036: mofa_slides sweep -----------------------------------
 //
-// Mirror the ra #1034 podcast happy-path test for the mofa_slides
+// Mirror the RecurAgent #1034 podcast happy-path test for the mofa_slides
 // contract that PR #1035 left on the glob path. Failure mode being
 // closed: a recursive `**/*.pptx` glob would match unrelated stale
 // decks from earlier runs in the same session workspace.
@@ -2020,9 +2020,9 @@ async fn mofa_slides_uses_spawn_only_files_at_arbitrary_depth() {
     );
 }
 
-// --- ra #1038: voice_synthesize sweep ------------------------------
+// --- RecurAgent #1038: voice_synthesize sweep ------------------------------
 //
-// Mirror the ra #1036 mofa_slides happy-path test for the voice
+// Mirror the RecurAgent #1036 mofa_slides happy-path test for the voice
 // contract that PR #1037's revert (772783e7) left on the glob path.
 // Failure mode being closed: a recursive
 // `skill-output/voice/**/*.{mp3,wav}` glob would match unrelated

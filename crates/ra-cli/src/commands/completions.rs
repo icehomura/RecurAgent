@@ -10,7 +10,7 @@ use eyre::Result;
 use super::init::load_catalog_models;
 use super::{Args as CliArgs, Executable};
 
-/// Generate shell completions for ra CLI.
+/// Generate shell completions for RecurAgent CLI.
 ///
 /// The printed scripts are static (flags and subcommands only). For
 /// completions that call back into `ra` as you type, source

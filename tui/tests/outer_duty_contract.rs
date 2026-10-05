@@ -1,4 +1,4 @@
-//! Contract tests for `octoscode outer-duty` (#38 / #38-r1) — the
+//! Contract tests for `ra-tui outer-duty` (#38 / #38-r1) — the
 //! per-project session-lifetime OS-exclusive duty lock. Real subprocess
 //! (CARGO_BIN_EXE), temp HOME + project (locks never touch real state).
 #![cfg(target_os = "linux")]
@@ -14,12 +14,12 @@ fn bin() -> PathBuf {
     let candidates = [
         std::env::current_exe()
             .ok()
-            .and_then(|p| p.parent().map(|d| d.join("../../octoscode")))
+            .and_then(|p| p.parent().map(|d| d.join("../../ra-tui")))
             .map(|p| p.canonicalize().unwrap_or(p)),
         std::env::var("CARGO_BIN_EXE_ra-tui")
             .ok()
             .map(PathBuf::from),
-        Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/octoscode")),
+        Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/ra-tui")),
     ];
     for candidate in candidates.into_iter().flatten() {
         if candidate.exists() {
@@ -56,7 +56,7 @@ impl TempHome {
         use sha2::Digest as _;
         let canonical = std::fs::canonicalize(self.project()).unwrap();
         let mut hasher = sha2::Sha256::new();
-        hasher.update(b"octoscode/outer-duty/v1");
+        hasher.update(b"ra-tui/outer-duty/v1");
         hasher.update([0u8]);
         hasher.update(canonical.to_string_lossy().as_bytes());
         let digest_bytes = hasher.finalize();
@@ -648,10 +648,10 @@ fn duty_stdout_single_line_with_hostile_metadata() {
 /// symlink/relative convergence on the same canonical lock.
 #[test]
 fn duty_lock_digest_golden_and_convergence() {
-    // Golden: sha256("octoscode/outer-duty/v1\0" ++ "/tmp/duty-golden-proj")
+    // Golden: sha256("ra-tui/outer-duty/v1\0" ++ "/tmp/duty-golden-proj")
     // — computed out-of-band; the pure fn must reproduce it exactly.
     // FIXED out-of-band constant (printf ... | sha256sum, precomputed):
-    // sha256("octoscode/outer-duty/v1\0/tmp/duty-golden-proj")
+    // sha256("ra-tui/outer-duty/v1\0/tmp/duty-golden-proj")
     let golden = "d258b689203cfb1b3c95d56e0bbef32a436cb0952817f581c6bb3aed82461bbb";
     assert_eq!(
         ra_tui::outer_duty::lock_digest(b"/tmp/duty-golden-proj"),

@@ -9,14 +9,14 @@
 # Environment:
 #   FRPS_DASHBOARD_PASSWORD  (optional) Dashboard password (default: random)
 #   FRPS_VERSION             (optional) frp version to install (default: 0.65.0)
-#   OCTOS_SERVE_PORT         (optional) ra serve port for auth plugin (default: 8080)
+#   ra_SERVE_PORT         (optional) ra serve port for auth plugin (default: 8080)
 
 set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────
 FRPS_VERSION="${FRPS_VERSION:-0.65.0}"
 FRPS_DASHBOARD_PASSWORD="${FRPS_DASHBOARD_PASSWORD:-$(openssl rand -hex 16)}"
-OCTOS_SERVE_PORT="${OCTOS_SERVE_PORT:-8080}"
+ra_SERVE_PORT="${ra_SERVE_PORT:-8080}"
 FRPS_BIND_PORT="${FRPS_BIND_PORT:-7000}"
 FRPS_VHOST_HTTP_PORT="${FRPS_VHOST_HTTP_PORT:-8081}"
 FRPS_VHOST_HTTPS_PORT="${FRPS_VHOST_HTTPS_PORT:-8443}"
@@ -99,7 +99,7 @@ auth.token = ""
 
 [[httpPlugins]]
 name = "ra-auth"
-addr = "127.0.0.1:${OCTOS_SERVE_PORT}"
+addr = "127.0.0.1:${ra_SERVE_PORT}"
 path = "/api/internal/frps-auth"
 ops = ["Login", "NewProxy"]
 EOF

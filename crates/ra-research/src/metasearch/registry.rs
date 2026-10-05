@@ -63,12 +63,12 @@ macro_rules! builtin {
         &[$((
             $id,
             include_str!(concat!("../../engines/", $id, "/manifest.json")),
-            include_str!(concat!("../../engines/", $id, "/engine.octoscript")),
+            include_str!(concat!("../../engines/", $id, "/engine.rascript")),
         )),*]
     };
 }
 
-/// `(id, manifest.json, engine.octoscript)` of every built-in engine.
+/// `(id, manifest.json, engine.rascript)` of every built-in engine.
 pub const BUILTIN: &[(&str, &str, &str)] = builtin![
     "gdelt",
     "google_news",
@@ -141,7 +141,7 @@ impl Registry {
         r
     }
 
-    /// Load `dir/<id>/{manifest.json, engine.octoscript}`. Each engine must be
+    /// Load `dir/<id>/{manifest.json, engine.rascript}`. Each engine must be
     /// pinned: its digest must equal `pins[id]`. Pins come from the host
     /// (see [`read_pins`]), never from the engine directory itself, so write
     /// access to the directory is not enough to add or change an engine.
@@ -160,11 +160,11 @@ impl Registry {
         for path in paths {
             let shown = path.display().to_string();
             let read = |name: &str| std::fs::read_to_string(path.join(name));
-            let (Ok(manifest), Ok(source)) = (read("manifest.json"), read("engine.octoscript"))
+            let (Ok(manifest), Ok(source)) = (read("manifest.json"), read("engine.rascript"))
             else {
                 self.rejected.push(Rejected {
                     path: shown,
-                    reason: "missing manifest.json or engine.octoscript".into(),
+                    reason: "missing manifest.json or engine.rascript".into(),
                 });
                 continue;
             };
@@ -257,7 +257,7 @@ mod tests {
         for name in ["hn_mirror", "wrongname"] {
             std::fs::create_dir_all(dir.join(name)).unwrap();
             std::fs::write(dir.join(name).join("manifest.json"), &manifest).unwrap();
-            std::fs::write(dir.join(name).join("engine.octoscript"), source).unwrap();
+            std::fs::write(dir.join(name).join("engine.rascript"), source).unwrap();
         }
         let good = digest(&manifest, source);
 
@@ -320,7 +320,7 @@ mod tests {
         let (_, manifest, source) = BUILTIN.iter().find(|(id, _, _)| *id == "gdelt").unwrap();
         std::fs::create_dir_all(dir.join("gdelt")).unwrap();
         std::fs::write(dir.join("gdelt").join("manifest.json"), manifest).unwrap();
-        std::fs::write(dir.join("gdelt").join("engine.octoscript"), source).unwrap();
+        std::fs::write(dir.join("gdelt").join("engine.rascript"), source).unwrap();
         let pins = BTreeMap::from([("gdelt".to_string(), digest(manifest, source))]);
 
         let mut r = Registry::builtin();

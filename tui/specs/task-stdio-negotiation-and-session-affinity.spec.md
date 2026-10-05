@@ -4,7 +4,7 @@
 
 - A stdio connection sends the supported OUP `client_hello` RPC before any
   ordinary request. Its `supported_features` are the same feature tokens used
-  by WebSocket negotiation; `OCTOSCODE_OLD_SERVER_FEATURES=1` sends only the
+  by WebSocket negotiation; `RA_TUI_OLD_SERVER_FEATURES=1` sends only the
   compatibility baseline.
 - Both the default and compatibility feature sets request
   `auxiliary.rest_to_ws.v1`, which gates `session/list`. After the server
@@ -13,7 +13,7 @@
   (`session/rollback`). Commands remain gated by the methods actually returned
   by the server.
 - A server that rejects, malforms, or does not answer `client_hello` cannot
-  wedge startup. OctosCode falls back to the server's legacy stdio defaults
+  wedge startup. ra-tui falls back to the server's legacy stdio defaults
   and releases queued requests after a bounded timeout.
 - Every `session/open`, including a reconnect reopen and a local A-to-B tab
   switch, is a request-id-correlated barrier. No later session-bound command

@@ -46,14 +46,14 @@ class _UniffiRustBuffer(ctypes.Structure):
 
     @staticmethod
     def alloc(size):
-        return _uniffi_rust_call(_UniffiLib.ffi_octos_uniffi_rustbuffer_alloc, size)
+        return _uniffi_rust_call(_UniffiLib.ffi_ra_uniffi_rustbuffer_alloc, size)
 
     @staticmethod
     def reserve(rbuf, additional):
-        return _uniffi_rust_call(_UniffiLib.ffi_octos_uniffi_rustbuffer_reserve, rbuf, additional)
+        return _uniffi_rust_call(_UniffiLib.ffi_ra_uniffi_rustbuffer_reserve, rbuf, additional)
 
     def free(self):
-        return _uniffi_rust_call(_UniffiLib.ffi_octos_uniffi_rustbuffer_free, self)
+        return _uniffi_rust_call(_UniffiLib.ffi_ra_uniffi_rustbuffer_free, self)
 
     def __str__(self):
         return "_UniffiRustBuffer(capacity={}, len={}, data={})".format(
@@ -446,7 +446,7 @@ def _uniffi_load_indirect():
         # Anything else must be an ELF platform - Linux, *BSD, Solaris/illumos
         libname = "lib{}.so"
 
-    libname = libname.format("octos_uniffi")
+    libname = libname.format("ra_uniffi")
     path = os.path.join(os.path.dirname(__file__), libname)
     lib = ctypes.cdll.LoadLibrary(path)
     return lib
@@ -455,28 +455,28 @@ def _uniffi_check_contract_api_version(lib):
     # Get the bindings contract version from our ComponentInterface
     bindings_contract_version = 29
     # Get the scaffolding contract version by calling the into the dylib
-    scaffolding_contract_version = lib.ffi_octos_uniffi_uniffi_contract_version()
+    scaffolding_contract_version = lib.ffi_ra_uniffi_uniffi_contract_version()
     if bindings_contract_version != scaffolding_contract_version:
         raise InternalError("UniFFI contract version mismatch: try cleaning and rebuilding your project")
 
 def _uniffi_check_api_checksums(lib):
-    if lib.uniffi_octos_uniffi_checksum_func_embedding_model_ensure() != 45224:
+    if lib.uniffi_ra_uniffi_checksum_func_embedding_model_ensure() != 45224:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    if lib.uniffi_octos_uniffi_checksum_func_embedding_model_status() != 15934:
+    if lib.uniffi_ra_uniffi_checksum_func_embedding_model_status() != 15934:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    if lib.uniffi_octos_uniffi_checksum_method_runtime_embed() != 8927:
+    if lib.uniffi_ra_uniffi_checksum_method_runtime_embed() != 8927:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    if lib.uniffi_octos_uniffi_checksum_method_runtime_memory_load() != 55125:
+    if lib.uniffi_ra_uniffi_checksum_method_runtime_memory_load() != 55125:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    if lib.uniffi_octos_uniffi_checksum_method_runtime_memory_search() != 36497:
+    if lib.uniffi_ra_uniffi_checksum_method_runtime_memory_search() != 36497:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    if lib.uniffi_octos_uniffi_checksum_method_runtime_memory_stats() != 2345:
+    if lib.uniffi_ra_uniffi_checksum_method_runtime_memory_stats() != 2345:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    if lib.uniffi_octos_uniffi_checksum_method_runtime_memory_upsert() != 4504:
+    if lib.uniffi_ra_uniffi_checksum_method_runtime_memory_upsert() != 4504:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    if lib.uniffi_octos_uniffi_checksum_method_runtime_run_task() != 132:
+    if lib.uniffi_ra_uniffi_checksum_method_runtime_run_task() != 132:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    if lib.uniffi_octos_uniffi_checksum_constructor_runtime_new() != 17041:
+    if lib.uniffi_ra_uniffi_checksum_constructor_runtime_new() != 17041:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
 
 # A ctypes library to expose the extern-C FFI definitions.
@@ -584,365 +584,365 @@ class _UniffiForeignFutureStructVoid(ctypes.Structure):
     ]
 _UNIFFI_FOREIGN_FUTURE_COMPLETE_VOID = ctypes.CFUNCTYPE(None,ctypes.c_uint64,_UniffiForeignFutureStructVoid,
 )
-_UniffiLib.uniffi_octos_uniffi_fn_clone_runtime.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_fn_clone_runtime.argtypes = (
     ctypes.c_void_p,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.uniffi_octos_uniffi_fn_clone_runtime.restype = ctypes.c_void_p
-_UniffiLib.uniffi_octos_uniffi_fn_free_runtime.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_fn_clone_runtime.restype = ctypes.c_void_p
+_UniffiLib.uniffi_ra_uniffi_fn_free_runtime.argtypes = (
     ctypes.c_void_p,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.uniffi_octos_uniffi_fn_free_runtime.restype = None
-_UniffiLib.uniffi_octos_uniffi_fn_constructor_runtime_new.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_fn_free_runtime.restype = None
+_UniffiLib.uniffi_ra_uniffi_fn_constructor_runtime_new.argtypes = (
     _UniffiRustBuffer,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.uniffi_octos_uniffi_fn_constructor_runtime_new.restype = ctypes.c_void_p
-_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_embed.argtypes = (
-    ctypes.c_void_p,
-    _UniffiRustBuffer,
-    ctypes.POINTER(_UniffiRustCallStatus),
-)
-_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_embed.restype = _UniffiRustBuffer
-_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_memory_load.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_fn_constructor_runtime_new.restype = ctypes.c_void_p
+_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_embed.argtypes = (
     ctypes.c_void_p,
     _UniffiRustBuffer,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_memory_load.restype = _UniffiRustBuffer
-_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_memory_search.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_embed.restype = _UniffiRustBuffer
+_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_memory_load.argtypes = (
     ctypes.c_void_p,
     _UniffiRustBuffer,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_memory_search.restype = _UniffiRustBuffer
-_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_memory_stats.argtypes = (
-    ctypes.c_void_p,
-    ctypes.POINTER(_UniffiRustCallStatus),
-)
-_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_memory_stats.restype = _UniffiRustBuffer
-_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_memory_upsert.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_memory_load.restype = _UniffiRustBuffer
+_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_memory_search.argtypes = (
     ctypes.c_void_p,
     _UniffiRustBuffer,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_memory_upsert.restype = _UniffiRustBuffer
-_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_run_task.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_memory_search.restype = _UniffiRustBuffer
+_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_memory_stats.argtypes = (
+    ctypes.c_void_p,
+    ctypes.POINTER(_UniffiRustCallStatus),
+)
+_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_memory_stats.restype = _UniffiRustBuffer
+_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_memory_upsert.argtypes = (
     ctypes.c_void_p,
     _UniffiRustBuffer,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_run_task.restype = _UniffiRustBuffer
-_UniffiLib.uniffi_octos_uniffi_fn_func_embedding_model_ensure.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_memory_upsert.restype = _UniffiRustBuffer
+_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_run_task.argtypes = (
+    ctypes.c_void_p,
+    _UniffiRustBuffer,
+    ctypes.POINTER(_UniffiRustCallStatus),
+)
+_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_run_task.restype = _UniffiRustBuffer
+_UniffiLib.uniffi_ra_uniffi_fn_func_embedding_model_ensure.argtypes = (
     _UniffiRustBuffer,
     ctypes.c_int8,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.uniffi_octos_uniffi_fn_func_embedding_model_ensure.restype = _UniffiRustBuffer
-_UniffiLib.uniffi_octos_uniffi_fn_func_embedding_model_status.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_fn_func_embedding_model_ensure.restype = _UniffiRustBuffer
+_UniffiLib.uniffi_ra_uniffi_fn_func_embedding_model_status.argtypes = (
     _UniffiRustBuffer,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.uniffi_octos_uniffi_fn_func_embedding_model_status.restype = _UniffiRustBuffer
-_UniffiLib.ffi_octos_uniffi_rustbuffer_alloc.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_fn_func_embedding_model_status.restype = _UniffiRustBuffer
+_UniffiLib.ffi_ra_uniffi_rustbuffer_alloc.argtypes = (
     ctypes.c_uint64,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.ffi_octos_uniffi_rustbuffer_alloc.restype = _UniffiRustBuffer
-_UniffiLib.ffi_octos_uniffi_rustbuffer_from_bytes.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rustbuffer_alloc.restype = _UniffiRustBuffer
+_UniffiLib.ffi_ra_uniffi_rustbuffer_from_bytes.argtypes = (
     _UniffiForeignBytes,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.ffi_octos_uniffi_rustbuffer_from_bytes.restype = _UniffiRustBuffer
-_UniffiLib.ffi_octos_uniffi_rustbuffer_free.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rustbuffer_from_bytes.restype = _UniffiRustBuffer
+_UniffiLib.ffi_ra_uniffi_rustbuffer_free.argtypes = (
     _UniffiRustBuffer,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.ffi_octos_uniffi_rustbuffer_free.restype = None
-_UniffiLib.ffi_octos_uniffi_rustbuffer_reserve.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rustbuffer_free.restype = None
+_UniffiLib.ffi_ra_uniffi_rustbuffer_reserve.argtypes = (
     _UniffiRustBuffer,
     ctypes.c_uint64,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.ffi_octos_uniffi_rustbuffer_reserve.restype = _UniffiRustBuffer
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_u8.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rustbuffer_reserve.restype = _UniffiRustBuffer
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_u8.argtypes = (
     ctypes.c_uint64,
     _UNIFFI_RUST_FUTURE_CONTINUATION_CALLBACK,
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_u8.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_u8.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_u8.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_u8.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_u8.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_free_u8.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_u8.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_free_u8.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_free_u8.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_u8.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_free_u8.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_u8.argtypes = (
     ctypes.c_uint64,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_u8.restype = ctypes.c_uint8
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_i8.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_u8.restype = ctypes.c_uint8
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_i8.argtypes = (
     ctypes.c_uint64,
     _UNIFFI_RUST_FUTURE_CONTINUATION_CALLBACK,
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_i8.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_i8.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_i8.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_i8.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_i8.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_free_i8.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_i8.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_free_i8.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_free_i8.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_i8.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_free_i8.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_i8.argtypes = (
     ctypes.c_uint64,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_i8.restype = ctypes.c_int8
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_u16.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_i8.restype = ctypes.c_int8
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_u16.argtypes = (
     ctypes.c_uint64,
     _UNIFFI_RUST_FUTURE_CONTINUATION_CALLBACK,
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_u16.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_u16.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_u16.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_u16.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_u16.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_free_u16.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_u16.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_free_u16.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_free_u16.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_u16.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_free_u16.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_u16.argtypes = (
     ctypes.c_uint64,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_u16.restype = ctypes.c_uint16
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_i16.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_u16.restype = ctypes.c_uint16
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_i16.argtypes = (
     ctypes.c_uint64,
     _UNIFFI_RUST_FUTURE_CONTINUATION_CALLBACK,
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_i16.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_i16.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_i16.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_i16.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_i16.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_free_i16.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_i16.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_free_i16.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_free_i16.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_i16.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_free_i16.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_i16.argtypes = (
     ctypes.c_uint64,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_i16.restype = ctypes.c_int16
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_u32.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_i16.restype = ctypes.c_int16
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_u32.argtypes = (
     ctypes.c_uint64,
     _UNIFFI_RUST_FUTURE_CONTINUATION_CALLBACK,
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_u32.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_u32.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_u32.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_u32.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_u32.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_free_u32.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_u32.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_free_u32.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_free_u32.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_u32.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_free_u32.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_u32.argtypes = (
     ctypes.c_uint64,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_u32.restype = ctypes.c_uint32
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_i32.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_u32.restype = ctypes.c_uint32
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_i32.argtypes = (
     ctypes.c_uint64,
     _UNIFFI_RUST_FUTURE_CONTINUATION_CALLBACK,
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_i32.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_i32.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_i32.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_i32.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_i32.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_free_i32.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_i32.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_free_i32.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_free_i32.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_i32.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_free_i32.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_i32.argtypes = (
     ctypes.c_uint64,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_i32.restype = ctypes.c_int32
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_u64.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_i32.restype = ctypes.c_int32
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_u64.argtypes = (
     ctypes.c_uint64,
     _UNIFFI_RUST_FUTURE_CONTINUATION_CALLBACK,
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_u64.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_u64.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_u64.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_u64.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_u64.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_free_u64.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_u64.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_free_u64.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_free_u64.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_u64.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_free_u64.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_u64.argtypes = (
     ctypes.c_uint64,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_u64.restype = ctypes.c_uint64
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_i64.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_u64.restype = ctypes.c_uint64
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_i64.argtypes = (
     ctypes.c_uint64,
     _UNIFFI_RUST_FUTURE_CONTINUATION_CALLBACK,
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_i64.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_i64.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_i64.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_i64.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_i64.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_free_i64.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_i64.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_free_i64.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_free_i64.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_i64.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_free_i64.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_i64.argtypes = (
     ctypes.c_uint64,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_i64.restype = ctypes.c_int64
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_f32.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_i64.restype = ctypes.c_int64
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_f32.argtypes = (
     ctypes.c_uint64,
     _UNIFFI_RUST_FUTURE_CONTINUATION_CALLBACK,
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_f32.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_f32.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_f32.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_f32.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_f32.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_free_f32.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_f32.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_free_f32.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_free_f32.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_f32.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_free_f32.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_f32.argtypes = (
     ctypes.c_uint64,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_f32.restype = ctypes.c_float
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_f64.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_f32.restype = ctypes.c_float
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_f64.argtypes = (
     ctypes.c_uint64,
     _UNIFFI_RUST_FUTURE_CONTINUATION_CALLBACK,
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_f64.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_f64.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_f64.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_f64.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_f64.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_free_f64.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_f64.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_free_f64.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_free_f64.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_f64.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_free_f64.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_f64.argtypes = (
     ctypes.c_uint64,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_f64.restype = ctypes.c_double
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_pointer.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_f64.restype = ctypes.c_double
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_pointer.argtypes = (
     ctypes.c_uint64,
     _UNIFFI_RUST_FUTURE_CONTINUATION_CALLBACK,
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_pointer.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_pointer.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_pointer.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_pointer.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_pointer.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_free_pointer.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_pointer.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_free_pointer.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_free_pointer.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_pointer.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_free_pointer.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_pointer.argtypes = (
     ctypes.c_uint64,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_pointer.restype = ctypes.c_void_p
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_rust_buffer.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_pointer.restype = ctypes.c_void_p
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_rust_buffer.argtypes = (
     ctypes.c_uint64,
     _UNIFFI_RUST_FUTURE_CONTINUATION_CALLBACK,
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_rust_buffer.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_rust_buffer.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_rust_buffer.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_rust_buffer.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_rust_buffer.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_free_rust_buffer.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_rust_buffer.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_free_rust_buffer.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_free_rust_buffer.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_rust_buffer.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_free_rust_buffer.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_rust_buffer.argtypes = (
     ctypes.c_uint64,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_rust_buffer.restype = _UniffiRustBuffer
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_void.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_rust_buffer.restype = _UniffiRustBuffer
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_void.argtypes = (
     ctypes.c_uint64,
     _UNIFFI_RUST_FUTURE_CONTINUATION_CALLBACK,
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_poll_void.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_void.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_poll_void.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_void.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_cancel_void.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_free_void.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_cancel_void.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_free_void.argtypes = (
     ctypes.c_uint64,
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_free_void.restype = None
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_void.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_free_void.restype = None
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_void.argtypes = (
     ctypes.c_uint64,
     ctypes.POINTER(_UniffiRustCallStatus),
 )
-_UniffiLib.ffi_octos_uniffi_rust_future_complete_void.restype = None
-_UniffiLib.uniffi_octos_uniffi_checksum_func_embedding_model_ensure.argtypes = (
+_UniffiLib.ffi_ra_uniffi_rust_future_complete_void.restype = None
+_UniffiLib.uniffi_ra_uniffi_checksum_func_embedding_model_ensure.argtypes = (
 )
-_UniffiLib.uniffi_octos_uniffi_checksum_func_embedding_model_ensure.restype = ctypes.c_uint16
-_UniffiLib.uniffi_octos_uniffi_checksum_func_embedding_model_status.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_checksum_func_embedding_model_ensure.restype = ctypes.c_uint16
+_UniffiLib.uniffi_ra_uniffi_checksum_func_embedding_model_status.argtypes = (
 )
-_UniffiLib.uniffi_octos_uniffi_checksum_func_embedding_model_status.restype = ctypes.c_uint16
-_UniffiLib.uniffi_octos_uniffi_checksum_method_runtime_embed.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_checksum_func_embedding_model_status.restype = ctypes.c_uint16
+_UniffiLib.uniffi_ra_uniffi_checksum_method_runtime_embed.argtypes = (
 )
-_UniffiLib.uniffi_octos_uniffi_checksum_method_runtime_embed.restype = ctypes.c_uint16
-_UniffiLib.uniffi_octos_uniffi_checksum_method_runtime_memory_load.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_checksum_method_runtime_embed.restype = ctypes.c_uint16
+_UniffiLib.uniffi_ra_uniffi_checksum_method_runtime_memory_load.argtypes = (
 )
-_UniffiLib.uniffi_octos_uniffi_checksum_method_runtime_memory_load.restype = ctypes.c_uint16
-_UniffiLib.uniffi_octos_uniffi_checksum_method_runtime_memory_search.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_checksum_method_runtime_memory_load.restype = ctypes.c_uint16
+_UniffiLib.uniffi_ra_uniffi_checksum_method_runtime_memory_search.argtypes = (
 )
-_UniffiLib.uniffi_octos_uniffi_checksum_method_runtime_memory_search.restype = ctypes.c_uint16
-_UniffiLib.uniffi_octos_uniffi_checksum_method_runtime_memory_stats.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_checksum_method_runtime_memory_search.restype = ctypes.c_uint16
+_UniffiLib.uniffi_ra_uniffi_checksum_method_runtime_memory_stats.argtypes = (
 )
-_UniffiLib.uniffi_octos_uniffi_checksum_method_runtime_memory_stats.restype = ctypes.c_uint16
-_UniffiLib.uniffi_octos_uniffi_checksum_method_runtime_memory_upsert.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_checksum_method_runtime_memory_stats.restype = ctypes.c_uint16
+_UniffiLib.uniffi_ra_uniffi_checksum_method_runtime_memory_upsert.argtypes = (
 )
-_UniffiLib.uniffi_octos_uniffi_checksum_method_runtime_memory_upsert.restype = ctypes.c_uint16
-_UniffiLib.uniffi_octos_uniffi_checksum_method_runtime_run_task.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_checksum_method_runtime_memory_upsert.restype = ctypes.c_uint16
+_UniffiLib.uniffi_ra_uniffi_checksum_method_runtime_run_task.argtypes = (
 )
-_UniffiLib.uniffi_octos_uniffi_checksum_method_runtime_run_task.restype = ctypes.c_uint16
-_UniffiLib.uniffi_octos_uniffi_checksum_constructor_runtime_new.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_checksum_method_runtime_run_task.restype = ctypes.c_uint16
+_UniffiLib.uniffi_ra_uniffi_checksum_constructor_runtime_new.argtypes = (
 )
-_UniffiLib.uniffi_octos_uniffi_checksum_constructor_runtime_new.restype = ctypes.c_uint16
-_UniffiLib.ffi_octos_uniffi_uniffi_contract_version.argtypes = (
+_UniffiLib.uniffi_ra_uniffi_checksum_constructor_runtime_new.restype = ctypes.c_uint16
+_UniffiLib.ffi_ra_uniffi_uniffi_contract_version.argtypes = (
 )
-_UniffiLib.ffi_octos_uniffi_uniffi_contract_version.restype = ctypes.c_uint32
+_UniffiLib.ffi_ra_uniffi_uniffi_contract_version.restype = ctypes.c_uint32
 
 _uniffi_check_contract_api_version(_UniffiLib)
 # _uniffi_check_api_checksums(_UniffiLib)
@@ -1043,7 +1043,7 @@ class _UniffiConverterString:
 
 class Brief:
     """
-    A one-shot task brief. Maps onto [`octos_ffi::TaskBrief`].
+    A one-shot task brief. Maps onto [`ra_ffi::TaskBrief`].
     """
 
     prompt: "str"
@@ -1086,12 +1086,12 @@ class _UniffiConverterTypeBrief(_UniffiConverterRustBuffer):
 
 class Config:
     """
-    Runtime configuration. Maps directly onto [`octos_ffi::RuntimeConfig`].
+    Runtime configuration. Maps directly onto [`ra_ffi::RuntimeConfig`].
 
     Supply EITHER `api_key` (a literal key) OR `api_key_env` (the name of a
     process env var holding it). If neither is set, resolution falls back to the
     conventional `{PROVIDER}_API_KEY` env var and then the `ra auth login`
-    store — see the credential notes on [`octos_ffi::RaRuntime::from_config`].
+    store — see the credential notes on [`ra_ffi::RaRuntime::from_config`].
     """
 
     provider: "str"
@@ -1126,7 +1126,7 @@ class Config:
     Whether an `embed-llama` build may download the default embedding
     model (EmbeddingGemma-300M, 334 MB, once, into `<data_dir>/models/`)
     when `embedding_model_path` is unset and the file is not on disk.
-    Default `true` (`OCTOS_NO_MODEL_DOWNLOAD=1` in the environment forces
+    Default `true` (`ra_NO_MODEL_DOWNLOAD=1` in the environment forces
     `false`). The download blocks [`Runtime::new`]; hosts that want to
     control it call [`embedding_model_ensure`] first. With `false` and no
     model the runtime is keyword-only (`embed` raises `NoEmbedder`).
@@ -1372,13 +1372,13 @@ class _UniffiConverterTypeTokenUsage(_UniffiConverterRustBuffer):
         _UniffiConverterUInt64.write(value.cache_write, buf)
 
 
-# OctosError
+# RaError
 # We want to define each variant as a nested class that's also a subclass,
 # which is tricky in Python.  To accomplish this we're going to create each
 # class separately, then manually add the child classes to the base class's
 # __dict__.  All of this happens in dummy class to avoid polluting the module
 # namespace.
-class OctosError(Exception):
+class RaError(Exception):
     """
     Structured error surfaced to the foreign side. Each fallible message string
     is ALREADY credential-scrubbed by the core before it reaches here.
@@ -1386,15 +1386,15 @@ class OctosError(Exception):
 
     pass
 
-_UniffiTempOctosError = OctosError
+_UniffiTempRaError = RaError
 
-class OctosError:  # type: ignore
+class RaError:  # type: ignore
     """
     Structured error surfaced to the foreign side. Each fallible message string
     is ALREADY credential-scrubbed by the core before it reaches here.
     """
 
-    class Config(_UniffiTempOctosError):
+    class Config(_UniffiTempRaError):
         """
         Configuration / runtime-construction failure.
         """
@@ -1406,9 +1406,9 @@ class OctosError:  # type: ignore
             self.msg = msg
 
         def __repr__(self):
-            return "OctosError.Config({})".format(str(self))
-    _UniffiTempOctosError.Config = Config # type: ignore
-    class Provider(_UniffiTempOctosError):
+            return "RaError.Config({})".format(str(self))
+    _UniffiTempRaError.Config = Config # type: ignore
+    class Provider(_UniffiTempRaError):
         """
         Provider construction failure.
         """
@@ -1420,9 +1420,9 @@ class OctosError:  # type: ignore
             self.msg = msg
 
         def __repr__(self):
-            return "OctosError.Provider({})".format(str(self))
-    _UniffiTempOctosError.Provider = Provider # type: ignore
-    class Run(_UniffiTempOctosError):
+            return "RaError.Provider({})".format(str(self))
+    _UniffiTempRaError.Provider = Provider # type: ignore
+    class Run(_UniffiTempRaError):
         """
         Task-execution failure.
         """
@@ -1434,9 +1434,9 @@ class OctosError:  # type: ignore
             self.msg = msg
 
         def __repr__(self):
-            return "OctosError.Run({})".format(str(self))
-    _UniffiTempOctosError.Run = Run # type: ignore
-    class Embed(_UniffiTempOctosError):
+            return "RaError.Run({})".format(str(self))
+    _UniffiTempRaError.Run = Run # type: ignore
+    class Embed(_UniffiTempRaError):
         """
         Embedding failure.
         """
@@ -1448,9 +1448,9 @@ class OctosError:  # type: ignore
             self.msg = msg
 
         def __repr__(self):
-            return "OctosError.Embed({})".format(str(self))
-    _UniffiTempOctosError.Embed = Embed # type: ignore
-    class NoEmbedder(_UniffiTempOctosError):
+            return "RaError.Embed({})".format(str(self))
+    _UniffiTempRaError.Embed = Embed # type: ignore
+    class NoEmbedder(_UniffiTempRaError):
         """
         No embedder is available (no model path configured, or built without the
         `embed-llama` feature).
@@ -1460,9 +1460,9 @@ class OctosError:  # type: ignore
             pass
 
         def __repr__(self):
-            return "OctosError.NoEmbedder({})".format(str(self))
-    _UniffiTempOctosError.NoEmbedder = NoEmbedder # type: ignore
-    class Incomplete(_UniffiTempOctosError):
+            return "RaError.NoEmbedder({})".format(str(self))
+    _UniffiTempRaError.NoEmbedder = NoEmbedder # type: ignore
+    class Incomplete(_UniffiTempRaError):
         """
         Provider output was truncated. This remains a failure; partial output
         and consumed usage are available separately from the short diagnostic.
@@ -1475,9 +1475,9 @@ class OctosError:  # type: ignore
             self.partial = partial
 
         def __repr__(self):
-            return "OctosError.Incomplete({})".format(str(self))
-    _UniffiTempOctosError.Incomplete = Incomplete # type: ignore
-    class Memory(_UniffiTempOctosError):
+            return "RaError.Incomplete({})".format(str(self))
+    _UniffiTempRaError.Incomplete = Incomplete # type: ignore
+    class Memory(_UniffiTempRaError):
         """
         Recall-memory failure (`memory_*`): malformed request, rejected record,
         "no such record", or a store error. Appended after `Incomplete` to keep
@@ -1491,89 +1491,89 @@ class OctosError:  # type: ignore
             self.msg = msg
 
         def __repr__(self):
-            return "OctosError.Memory({})".format(str(self))
-    _UniffiTempOctosError.Memory = Memory # type: ignore
+            return "RaError.Memory({})".format(str(self))
+    _UniffiTempRaError.Memory = Memory # type: ignore
 
-OctosError = _UniffiTempOctosError # type: ignore
-del _UniffiTempOctosError
+RaError = _UniffiTempRaError # type: ignore
+del _UniffiTempRaError
 
 
-class _UniffiConverterTypeOctosError(_UniffiConverterRustBuffer):
+class _UniffiConverterTypeRaError(_UniffiConverterRustBuffer):
     @staticmethod
     def read(buf):
         variant = buf.read_i32()
         if variant == 1:
-            return OctosError.Config(
+            return RaError.Config(
                 _UniffiConverterString.read(buf),
             )
         if variant == 2:
-            return OctosError.Provider(
+            return RaError.Provider(
                 _UniffiConverterString.read(buf),
             )
         if variant == 3:
-            return OctosError.Run(
+            return RaError.Run(
                 _UniffiConverterString.read(buf),
             )
         if variant == 4:
-            return OctosError.Embed(
+            return RaError.Embed(
                 _UniffiConverterString.read(buf),
             )
         if variant == 5:
-            return OctosError.NoEmbedder(
+            return RaError.NoEmbedder(
             )
         if variant == 6:
-            return OctosError.Incomplete(
+            return RaError.Incomplete(
                 _UniffiConverterTypeTaskResult.read(buf),
             )
         if variant == 7:
-            return OctosError.Memory(
+            return RaError.Memory(
                 _UniffiConverterString.read(buf),
             )
         raise InternalError("Raw enum value doesn't match any cases")
 
     @staticmethod
     def check_lower(value):
-        if isinstance(value, OctosError.Config):
+        if isinstance(value, RaError.Config):
             _UniffiConverterString.check_lower(value.msg)
             return
-        if isinstance(value, OctosError.Provider):
+        if isinstance(value, RaError.Provider):
             _UniffiConverterString.check_lower(value.msg)
             return
-        if isinstance(value, OctosError.Run):
+        if isinstance(value, RaError.Run):
             _UniffiConverterString.check_lower(value.msg)
             return
-        if isinstance(value, OctosError.Embed):
+        if isinstance(value, RaError.Embed):
             _UniffiConverterString.check_lower(value.msg)
             return
-        if isinstance(value, OctosError.NoEmbedder):
+        if isinstance(value, RaError.NoEmbedder):
             return
-        if isinstance(value, OctosError.Incomplete):
+        if isinstance(value, RaError.Incomplete):
             _UniffiConverterTypeTaskResult.check_lower(value.partial)
             return
-        if isinstance(value, OctosError.Memory):
+        if isinstance(value, RaError.Memory):
             _UniffiConverterString.check_lower(value.msg)
             return
 
     @staticmethod
     def write(value, buf):
-        if isinstance(value, OctosError.Config):
+        if isinstance(value, RaError.Config):
             buf.write_i32(1)
             _UniffiConverterString.write(value.msg, buf)
-        if isinstance(value, OctosError.Provider):
+        if isinstance(value, RaError.Provider):
             buf.write_i32(2)
             _UniffiConverterString.write(value.msg, buf)
-        if isinstance(value, OctosError.Run):
+        if isinstance(value, RaError.Run):
             buf.write_i32(3)
             _UniffiConverterString.write(value.msg, buf)
-        if isinstance(value, OctosError.Embed):
+        if isinstance(value, RaError.Embed):
             buf.write_i32(4)
             _UniffiConverterString.write(value.msg, buf)
-        if isinstance(value, OctosError.NoEmbedder):
+        if isinstance(value, RaError.NoEmbedder):
             buf.write_i32(5)
-        if isinstance(value, OctosError.Incomplete):
+        if isinstance(value, RaError.Incomplete):
             buf.write_i32(6)
             _UniffiConverterTypeTaskResult.write(value.partial, buf)
-        if isinstance(value, OctosError.Memory):
+        if isinstance(value, RaError.Memory):
             buf.write_i32(7)
             _UniffiConverterString.write(value.msg, buf)
 
@@ -1701,14 +1701,14 @@ class RuntimeProtocol(typing.Protocol):
         """
         Embed `text`, returning the raw vector. Requires the `embed-llama`
         feature and an `embedding_model_path` in the [`Config`]; otherwise
-        [`OctosError::NoEmbedder`].
+        [`RaError::NoEmbedder`].
         """
 
         raise NotImplementedError
     def memory_load(self, id: "str"):
         """
         Load one Recall record by id (counting the visit). Returns
-        `{"record": Record}`; [`OctosError::Memory`] "no such record" when the
+        `{"record": Record}`; [`RaError::Memory`] "no such record" when the
         id is unknown.
         """
 
@@ -1717,7 +1717,7 @@ class RuntimeProtocol(typing.Protocol):
         """
         Search the Recall index. `json` is `{"query", "kinds"?, "sources"?,
         "since"?, "until"?, "limit"?}`; returns `{"hits": [Hit…]}`. See
-        [`octos_ffi::RaRuntime::memory_search`].
+        [`ra_ffi::RaRuntime::memory_search`].
         """
 
         raise NotImplementedError
@@ -1734,7 +1734,7 @@ class RuntimeProtocol(typing.Protocol):
         returns `{"inserted", "updated", "unchanged", "vectors_stored",
         "embedded"}`. At most 500 records per call; `kind: "knowledge"` is
         rejected; `trust` is forced to untrusted. See
-        [`octos_ffi::RaRuntime::memory_upsert`].
+        [`ra_ffi::RaRuntime::memory_upsert`].
         """
 
         raise NotImplementedError
@@ -1762,22 +1762,22 @@ class Runtime():
     def __init__(self, config: "Config"):
         """
         Build a runtime from a [`Config`]. Resolves and pins the credential
-        exactly once inside the core (see [`octos_ffi::RaRuntime::from_config`]).
+        exactly once inside the core (see [`ra_ffi::RaRuntime::from_config`]).
         """
 
         _UniffiConverterTypeConfig.check_lower(config)
 
-        self._pointer = _uniffi_rust_call_with_error(_UniffiConverterTypeOctosError,_UniffiLib.uniffi_octos_uniffi_fn_constructor_runtime_new,
+        self._pointer = _uniffi_rust_call_with_error(_UniffiConverterTypeRaError,_UniffiLib.uniffi_ra_uniffi_fn_constructor_runtime_new,
         _UniffiConverterTypeConfig.lower(config))
 
     def __del__(self):
         # In case of partial initialization of instances.
         pointer = getattr(self, "_pointer", None)
         if pointer is not None:
-            _uniffi_rust_call(_UniffiLib.uniffi_octos_uniffi_fn_free_runtime, pointer)
+            _uniffi_rust_call(_UniffiLib.uniffi_ra_uniffi_fn_free_runtime, pointer)
 
     def _uniffi_clone_pointer(self):
-        return _uniffi_rust_call(_UniffiLib.uniffi_octos_uniffi_fn_clone_runtime, self._pointer)
+        return _uniffi_rust_call(_UniffiLib.uniffi_ra_uniffi_fn_clone_runtime, self._pointer)
 
     # Used by alternative constructors or any methods which return this type.
     @classmethod
@@ -1793,13 +1793,13 @@ class Runtime():
         """
         Embed `text`, returning the raw vector. Requires the `embed-llama`
         feature and an `embedding_model_path` in the [`Config`]; otherwise
-        [`OctosError::NoEmbedder`].
+        [`RaError::NoEmbedder`].
         """
 
         _UniffiConverterString.check_lower(text)
 
         return _UniffiConverterSequenceFloat.lift(
-            _uniffi_rust_call_with_error(_UniffiConverterTypeOctosError,_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_embed,self._uniffi_clone_pointer(),
+            _uniffi_rust_call_with_error(_UniffiConverterTypeRaError,_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_embed,self._uniffi_clone_pointer(),
         _UniffiConverterString.lower(text))
         )
 
@@ -1810,14 +1810,14 @@ class Runtime():
     def memory_load(self, id: "str") -> "str":
         """
         Load one Recall record by id (counting the visit). Returns
-        `{"record": Record}`; [`OctosError::Memory`] "no such record" when the
+        `{"record": Record}`; [`RaError::Memory`] "no such record" when the
         id is unknown.
         """
 
         _UniffiConverterString.check_lower(id)
 
         return _UniffiConverterString.lift(
-            _uniffi_rust_call_with_error(_UniffiConverterTypeOctosError,_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_memory_load,self._uniffi_clone_pointer(),
+            _uniffi_rust_call_with_error(_UniffiConverterTypeRaError,_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_memory_load,self._uniffi_clone_pointer(),
         _UniffiConverterString.lower(id))
         )
 
@@ -1829,13 +1829,13 @@ class Runtime():
         """
         Search the Recall index. `json` is `{"query", "kinds"?, "sources"?,
         "since"?, "until"?, "limit"?}`; returns `{"hits": [Hit…]}`. See
-        [`octos_ffi::RaRuntime::memory_search`].
+        [`ra_ffi::RaRuntime::memory_search`].
         """
 
         _UniffiConverterString.check_lower(json)
 
         return _UniffiConverterString.lift(
-            _uniffi_rust_call_with_error(_UniffiConverterTypeOctosError,_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_memory_search,self._uniffi_clone_pointer(),
+            _uniffi_rust_call_with_error(_UniffiConverterTypeRaError,_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_memory_search,self._uniffi_clone_pointer(),
         _UniffiConverterString.lower(json))
         )
 
@@ -1849,7 +1849,7 @@ class Runtime():
         """
 
         return _UniffiConverterString.lift(
-            _uniffi_rust_call_with_error(_UniffiConverterTypeOctosError,_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_memory_stats,self._uniffi_clone_pointer(),)
+            _uniffi_rust_call_with_error(_UniffiConverterTypeRaError,_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_memory_stats,self._uniffi_clone_pointer(),)
         )
 
 
@@ -1863,13 +1863,13 @@ class Runtime():
         returns `{"inserted", "updated", "unchanged", "vectors_stored",
         "embedded"}`. At most 500 records per call; `kind: "knowledge"` is
         rejected; `trust` is forced to untrusted. See
-        [`octos_ffi::RaRuntime::memory_upsert`].
+        [`ra_ffi::RaRuntime::memory_upsert`].
         """
 
         _UniffiConverterString.check_lower(json)
 
         return _UniffiConverterString.lift(
-            _uniffi_rust_call_with_error(_UniffiConverterTypeOctosError,_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_memory_upsert,self._uniffi_clone_pointer(),
+            _uniffi_rust_call_with_error(_UniffiConverterTypeRaError,_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_memory_upsert,self._uniffi_clone_pointer(),
         _UniffiConverterString.lower(json))
         )
 
@@ -1885,7 +1885,7 @@ class Runtime():
         _UniffiConverterTypeBrief.check_lower(brief)
 
         return _UniffiConverterTypeTaskResult.lift(
-            _uniffi_rust_call_with_error(_UniffiConverterTypeOctosError,_UniffiLib.uniffi_octos_uniffi_fn_method_runtime_run_task,self._uniffi_clone_pointer(),
+            _uniffi_rust_call_with_error(_UniffiConverterTypeRaError,_UniffiLib.uniffi_ra_uniffi_fn_method_runtime_run_task,self._uniffi_clone_pointer(),
         _UniffiConverterTypeBrief.lower(brief))
         )
 
@@ -1931,15 +1931,15 @@ def embedding_model_ensure(data_dir: "str",download: "bool") -> "str":
     return JSON `{"path"}` — exactly the C-ABI's `ra_embedding_model_ensure`.
     Blocks for the whole transfer, so call it from a plain thread before
     [`Runtime::new`] when the host wants to own the timing. Raises
-    [`OctosError::Embed`] when the file is absent and `download` is false (or
-    `OCTOS_NO_MODEL_DOWNLOAD` is set), or the download fails to verify.
+    [`RaError::Embed`] when the file is absent and `download` is false (or
+    `ra_NO_MODEL_DOWNLOAD` is set), or the download fails to verify.
     """
 
     _UniffiConverterString.check_lower(data_dir)
 
     _UniffiConverterBool.check_lower(download)
 
-    return _UniffiConverterString.lift(_uniffi_rust_call_with_error(_UniffiConverterTypeOctosError,_UniffiLib.uniffi_octos_uniffi_fn_func_embedding_model_ensure,
+    return _UniffiConverterString.lift(_uniffi_rust_call_with_error(_UniffiConverterTypeRaError,_UniffiLib.uniffi_ra_uniffi_fn_func_embedding_model_ensure,
         _UniffiConverterString.lower(data_dir),
         _UniffiConverterBool.lower(download)))
 
@@ -1956,13 +1956,13 @@ def embedding_model_status(data_dir: "str") -> "str":
 
     _UniffiConverterString.check_lower(data_dir)
 
-    return _UniffiConverterString.lift(_uniffi_rust_call_with_error(_UniffiConverterTypeOctosError,_UniffiLib.uniffi_octos_uniffi_fn_func_embedding_model_status,
+    return _UniffiConverterString.lift(_uniffi_rust_call_with_error(_UniffiConverterTypeRaError,_UniffiLib.uniffi_ra_uniffi_fn_func_embedding_model_status,
         _UniffiConverterString.lower(data_dir)))
 
 
 __all__ = [
     "InternalError",
-    "OctosError",
+    "RaError",
     "Brief",
     "Config",
     "TaskResult",

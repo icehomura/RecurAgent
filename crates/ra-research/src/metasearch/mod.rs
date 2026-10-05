@@ -1,5 +1,5 @@
-//! ra metasearch: a Rust core that fans a query out to small search
-//! engines written as sandboxed OctoScript scripts, then merges and ranks
+//! RecurAgent metasearch: a Rust core that fans a query out to small search
+//! engines written as sandboxed Rascript scripts, then merges and ranks
 //! what they return.
 //!
 //! Clean-room: every engine is written from its provider's public API
@@ -9,9 +9,9 @@
 //! provider's published rate limit per host, honour `Retry-After`, and
 //! revalidate cached responses with ETag / Last-Modified. robots.txt is
 //! checked only when the operator turns it on ([`crate::RESPECT_ROBOTS_ENV`]):
-//! an ra agent acts for one person.
+//! an RecurAgent agent acts for one person.
 //!
-//! An engine is `engines/<id>/manifest.json` + `engine.octoscript` with:
+//! An engine is `engines/<id>/manifest.json` + `engine.rascript` with:
 //!
 //! ```text
 //! fn build_request(query, opts) -> {url, method, headers, body}
@@ -60,7 +60,7 @@ use manifest::KeyAuth;
 use merge::{RankOptions, RankedHit};
 use sandbox::SandboxEngine;
 
-/// Provider id of the metasearch in the ra provider chain.
+/// Provider id of the metasearch in the RecurAgent provider chain.
 pub const PROVIDER_ID: &str = "metasearch";
 
 /// Environment variable that turns the metasearch off (`0`/`false`/`no`).
@@ -68,21 +68,21 @@ pub const METASEARCH_ENV: &str = "RA_METASEARCH";
 
 /// The spelling the previous build used for [`METASEARCH_ENV`]; still
 /// honoured as a fallback.
-pub const LEGACY_METASEARCH_ENV: &str = "OCTOS_METASEARCH";
+pub const LEGACY_METASEARCH_ENV: &str = "ra_METASEARCH";
 
 /// Contact address for polite pools (OpenAlex `mailto`). Optional.
 pub const CONTACT_ENV: &str = "RA_RESEARCH_CONTACT";
 
 /// The spelling the previous build used for [`CONTACT_ENV`]; still honoured
 /// as a fallback.
-pub const LEGACY_CONTACT_ENV: &str = "OCTOS_RESEARCH_CONTACT";
+pub const LEGACY_CONTACT_ENV: &str = "ra_RESEARCH_CONTACT";
 
 /// Directory with extra engines (see [`Registry::load_dir`]).
 pub const ENGINES_DIR_ENV: &str = "RA_METASEARCH_ENGINES";
 
 /// The spelling the previous build used for [`ENGINES_DIR_ENV`]; still
 /// honoured as a fallback.
-pub const LEGACY_ENGINES_DIR_ENV: &str = "OCTOS_METASEARCH_ENGINES";
+pub const LEGACY_ENGINES_DIR_ENV: &str = "ra_METASEARCH_ENGINES";
 
 /// Pins file for [`ENGINES_DIR_ENV`] engines (`{"id": "sha256:..."}`); must
 /// live outside that directory.
@@ -90,7 +90,7 @@ pub const PINS_ENV: &str = "RA_METASEARCH_PINS";
 
 /// The spelling the previous build used for [`PINS_ENV`]; still honoured as
 /// a fallback.
-pub const LEGACY_PINS_ENV: &str = "OCTOS_METASEARCH_PINS";
+pub const LEGACY_PINS_ENV: &str = "ra_METASEARCH_PINS";
 
 /// Lets a pinned directory engine replace a built-in with the same id
 /// (`1`/`true`/`yes`; off by default).
@@ -98,13 +98,13 @@ pub const ALLOW_OVERRIDE_ENV: &str = "RA_METASEARCH_ALLOW_OVERRIDE";
 
 /// The spelling the previous build used for [`ALLOW_OVERRIDE_ENV`]; still
 /// honoured as a fallback.
-pub const LEGACY_ALLOW_OVERRIDE_ENV: &str = "OCTOS_METASEARCH_ALLOW_OVERRIDE";
+pub const LEGACY_ALLOW_OVERRIDE_ENV: &str = "ra_METASEARCH_ALLOW_OVERRIDE";
 
 /// Default [`SearchRequest::straggler_grace`].
 pub const DEFAULT_STRAGGLER_GRACE: Duration = Duration::from_secs(2);
 
 /// Whether the metasearch is enabled (default on). `RA_METASEARCH` wins over
-/// the legacy `OCTOS_METASEARCH`.
+/// the legacy `ra_METASEARCH`.
 pub fn enabled(lookup: impl Fn(&str) -> Option<String>) -> bool {
     !crate::resolve_env(&lookup, METASEARCH_ENV).is_some_and(|v| {
         matches!(
@@ -162,7 +162,7 @@ impl Default for Config {
 
 /// The value of an engine's `key_env`. Engine key names are plain
 /// (`BRAVE_API_KEY`); an ra-owned knob such as `RA_GOOGLE_CSE_CX` (legacy
-/// `OCTOS_GOOGLE_CSE_CX`) follows the brand fallback.
+/// `ra_GOOGLE_CSE_CX`) follows the brand fallback.
 fn engine_key_env(lookup: &impl Fn(&str) -> Option<String>, name: &str) -> Option<String> {
     let owned = name.starts_with(ra_core::brand::ENV_PREFIX)
         || name.starts_with(ra_core::brand::LEGACY_ENV_PREFIX);
@@ -177,7 +177,7 @@ fn engine_key_env(lookup: &impl Fn(&str) -> Option<String>, name: &str) -> Optio
 impl Config {
     /// Keys from each engine's `key_env`, settings from
     /// `RA_METASEARCH_<ENGINE>_<SETTING>` (the legacy
-    /// `OCTOS_METASEARCH_<ENGINE>_<SETTING>` is still honoured), contact from
+    /// `ra_METASEARCH_<ENGINE>_<SETTING>` is still honoured), contact from
     /// [`CONTACT_ENV`]. `extra_keys` (engine id → key, e.g. a profile's
     /// provider keys) win over the environment.
     pub fn from_env(

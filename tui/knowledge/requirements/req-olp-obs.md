@@ -4,7 +4,7 @@ id: REQ-OLP-OBS
 title: "外环观测面:只读状态 CLI、结构化事件流、稳定寻址"
 status: accepted
 liveness: auto
-tags: [olp, observability, ra]
+tags: [olp, observability, RecurAgent]
 ---
 
 ## Problem
@@ -26,7 +26,7 @@ kind 至少覆盖 peer_staged、finding_recorded、escalation、goal_transition�
 steer_consumed、turn_error;阶段 2 修订(2026-09-05,REQ-OLP-EVO-P2)追加
 fallback_switch(模型车道 failover,`model_lane` 为切入车道)与
 malformed_exhausted(malformed tool-call 自纠预算耗尽,与同 turn 的
-turn_error 并存),发射点契约见 ra `specs/task-olp-obs-p2-producers.spec.md`。
+turn_error 并存),发射点契约见 RecurAgent `specs/task-olp-obs-p2-producers.spec.md`。
 
 [REQ-OLP-OBS-ADDR] `ra` MUST 提供 `inbox path --session <key>` 查询
 命令,返回该 session 的 inbox 文件路径;外部消费者 MUST NOT 需要自行
@@ -39,7 +39,7 @@ lane(未指定时为 primary),使外环可审计成本分布。
 
 Scenario: serve 停止时仍可读 goal 状态
   Given 一个含已完成 goal_02 账本的数据目录且 serve 未运行
-  When 执行 ra goal status --goal goal_02 --json
+  When 执行 RecurAgent goal status --goal goal_02 --json
   Then 输出合法 JSON 且 status 字段为 "complete"
 
 Scenario: peer 交付产生结构化事件
@@ -48,8 +48,8 @@ Scenario: peer 交付产生结构化事件
   Then events.jsonl 追加一行 kind=finding_recorded 且含 goal_id 与 slug
 
 Scenario: 外部进程查询 inbox 路径
-  Given 会话 key ra:local:tui#coding
-  When 执行 ra inbox path --session ra:local:tui#coding
+  Given 会话 key RecurAgent:local:tui#coding
+  When 执行 RecurAgent inbox path --session RecurAgent:local:tui#coding
   Then 输出路径与 serve 实际读写的 notes 文件一致
 
 ## Dependencies

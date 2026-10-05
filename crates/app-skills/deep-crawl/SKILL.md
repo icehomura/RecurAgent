@@ -2,7 +2,7 @@
 name: deep-crawl
 description: Recursively crawl websites using headless Chrome. Triggers: crawl, scrape website, 爬取, crawl site, deep crawl, website content.
 version: 1.0.0
-author: ra
+author: RecurAgent
 requires_bins: google-chrome
 always: false
 ---
@@ -66,18 +66,18 @@ Results are saved to a research directory named `crawl-<hostname>/` under the cu
 
 - Only `http://` and `https://` URLs are allowed
 - Only same-origin links are followed (no cross-domain crawling)
-- robots.txt is **off by default** (operator setting `RA_RESPECT_ROBOTS=1`, legacy `OCTOS_RESPECT_ROBOTS` honoured; see Automation policy). When on, every page is checked (RFC 9309, product token `ra-research`): disallowed URLs are recorded as `skipped` and never opened; an unreachable robots.txt (5xx/network error) disallows the origin (re-checked after an hour); `Crawl-delay` is honoured (capped at 10s). When off, robots.txt is never requested and pages are crawled one at a time with the settle delay between them
+- robots.txt is **off by default** (operator setting `RA_RESPECT_ROBOTS=1`, legacy `ra_RESPECT_ROBOTS` honoured; see Automation policy). When on, every page is checked (RFC 9309, product token `ra-research`): disallowed URLs are recorded as `skipped` and never opened; an unreachable robots.txt (5xx/network error) disallows the origin (re-checked after an hour); `Crawl-delay` is honoured (capped at 10s). When off, robots.txt is never requested and pages are crawled one at a time with the settle delay between them
 - Pages that are still near-empty after the settle time get one more wait; a check that clears itself in a real browser ("Just a moment…", "正在进行安全检测…") is waited out for up to ~10 s; any other bot challenge is recorded as blocked, never solved. Sign-in, sign-up and account links are not followed
 - URL fragments are stripped and trailing slashes normalized to avoid duplicate visits
 - Private/internal addresses are blocked (SSRF protection), inside the browser too: every request Chrome makes (the page, each redirect, subresources) is paused via the CDP Fetch domain and only continued if its destination is public (no loopback, RFC 1918, link-local/cloud metadata, CGNAT or reserved address; DNS fail-closed). A page that redirects (HTTP, meta or JS) to a private address is recorded as blocked and its content discarded; the final URL and every main-frame navigation are re-checked before any text is returned
 
 ## Automation policy
 
-Defaults: robots.txt is **not** applied (maintainer decision: OctoSense agents are personal assistants reading on one person's behalf); an operator can enable it with `RA_RESPECT_ROBOTS=1` (legacy `OCTOS_RESPECT_ROBOTS` honoured). Always applied: the honest User-Agent below, sequential pages with a settle delay, timeouts and size caps, SSRF blocking inside the browser, and no paywall/login/CAPTCHA bypass.
+Defaults: robots.txt is **not** applied (maintainer decision: RecurAgent agents are personal assistants reading on one person's behalf); an operator can enable it with `RA_RESPECT_ROBOTS=1` (legacy `ra_RESPECT_ROBOTS` honoured). Always applied: the honest User-Agent below, sequential pages with a settle delay, timeouts and size caps, SSRF blocking inside the browser, and no paywall/login/CAPTCHA bypass.
 
-deep_crawl is a real browser for **reading** pages, not for getting around bot detection (OctoSense ADR 0002 §6: no disguised search):
+deep_crawl is a real browser for **reading** pages, not for getting around bot detection (RecurAgent ADR 0002 §6: no disguised search):
 
-- The browser is not disguised. There is no `navigator.webdriver` override, no `AutomationControlled` switches, no fake plugins/languages, and no spoofed desktop User-Agent. Chrome's own User-Agent is kept and `ra-research/1.0 (+https://github.com/your-org/ra)` is appended to it.
+- The browser is not disguised. There is no `navigator.webdriver` override, no `AutomationControlled` switches, no fake plugins/languages, and no spoofed desktop User-Agent. Chrome's own User-Agent is kept and `ra-research/1.0 (+https://github.com/icehomura/ra)` is appended to it.
 - No CAPTCHA solving, no human-behaviour imitation, no fingerprint spoofing. A bot challenge ends the attempt for that page.
 - Do not use deep_crawl to scrape search-engine results pages. Use a search provider (GDELT, Google News RSS, a self-hosted SearXNG, or a search API key) and crawl the result pages instead. (deep-search only renders a Bing results page through deep_crawl when an operator has set `RA_ALLOW_SERP_SCRAPE=1`.)
 - There is no flag to turn evasion back on; adding one requires a new ADR.

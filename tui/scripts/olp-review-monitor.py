@@ -19,7 +19,7 @@ runtime 复合身份(runtime+session+goal+profile,非裸 goal_01)。
   * 无 CURRENT authority 且无精确活跃 thread → unknown(即使旧 completed)。
   * peer 身份绑定: thread/快照 fallback 前先比对 peer 自身身份文件 ——
     originator 文件必须与当前 wire master 同源(真实 native originator 通常
-    无 cwd 后缀,如 `octosfix:local:tui#coding`;真实 thread session 带
+    无 cwd 后缀,如 `rafix:local:tui#coding`;真实 thread session 带
     NUL+~cwd-hash),goal 文件必须与当前 goal 一致;矛盾 → unknown,不晋升。
   * 快照自报 outcome/outcome_source 不是终止权威 —— 无 native result-N+turns
     交叉核对时 last-outcome=unknown(自报值仅作 notes 说明)。
@@ -432,7 +432,7 @@ def _wire_trunk_and_cwd(session_id: str) -> tuple[str, str | None]:
 def _wire_session_same_origin(a: str, b: str) -> bool:
     """两个 wire session 是否同一 originator(channel + master leaf)。
 
-    真实 native originator 文件通常无 cwd 后缀(`octosfix:local:tui#coding`),
+    真实 native originator 文件通常无 cwd 后缀(`rafix:local:tui#coding`),
     thread session 才带真实 NUL+~cwd-hash。双方 trunk(channel+master leaf)
     必须一致;双方都带 cwd 后缀时哈希还须相等(同 trunk 不同 cwd = 不同
     工作区,不绑定);只有一方带后缀时以 trunk 为准(该侧不携带 cwd 信息,

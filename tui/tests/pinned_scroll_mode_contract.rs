@@ -209,7 +209,7 @@ fn pinned_mode_wheel_down_at_bottom_exits_pager() {
 
 #[test]
 fn scroll_mode_parses_from_config_file() {
-    let dir = std::env::temp_dir().join(format!("octoscode-scroll-mode-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("ra-tui-scroll-mode-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("temp dir");
 
     let pinned_path = dir.join("pinned.json");

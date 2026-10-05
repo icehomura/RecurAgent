@@ -316,7 +316,7 @@ async fn mechanical_route_refit(
     if sys_end >= last {
         return None; // only system + one turn; nothing to drop
     }
-    // Orphan-safety depends on ra's invariant that a tool_result sits in the
+    // Orphan-safety depends on RecurAgent's invariant that a tool_result sits in the
     // contiguous block immediately after its assistant tool_call (see
     // message_repair::synthesize_missing_tool_results): because the only
     // dropped span is the contiguous middle `[sys_end, split)` and the kept

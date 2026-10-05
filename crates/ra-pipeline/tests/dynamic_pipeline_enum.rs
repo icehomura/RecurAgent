@@ -145,20 +145,20 @@ async fn fallback_advertised_deep_research_actually_resolves() {
     );
 }
 
-/// `with_octos_home` must add `<octos_home>/pipelines` as a discovery search
+/// `with_ra_home` must add `<ra_home>/pipelines` as a discovery search
 /// path so an operator-installed user pipeline written there is advertised in
 /// the enum. (NB: the BUNDLED generic pipelines now land in the dedicated
-/// `<octos_home>/bundled-pipelines` dir via `bootstrap_bundled_pipelines`, NOT
+/// `<ra_home>/bundled-pipelines` dir via `bootstrap_bundled_pipelines`, NOT
 /// here — see the bundled-fallback tests below.)
 #[tokio::test]
-async fn pipeline_enum_includes_octos_home_pipelines() {
+async fn pipeline_enum_includes_ra_home_pipelines() {
     let working = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();
-    let octos_home = tempfile::tempdir().unwrap();
+    let ra_home = tempfile::tempdir().unwrap();
 
-    // Operator-installed user pipeline lands in <octos_home>/pipelines.
+    // Operator-installed user pipeline lands in <RecurAgent_home>/pipelines.
     // Use a NON-baseline name so a hard-coded fallback can't satisfy this.
-    let home_pipelines = octos_home.path().join("pipelines");
+    let home_pipelines = ra_home.path().join("pipelines");
     std::fs::create_dir_all(&home_pipelines).unwrap();
     std::fs::write(
         home_pipelines.join("home_bundled_flow.dot"),
@@ -168,13 +168,13 @@ async fn pipeline_enum_includes_octos_home_pipelines() {
 
     let tool = make_tool_with_data(working.path(), data.path())
         .await
-        .with_octos_home(PathBuf::from(octos_home.path()));
+        .with_ra_home(PathBuf::from(ra_home.path()));
     let schema = tool.input_schema();
     let values = enum_values(&schema);
 
     assert!(
         values.iter().any(|v| v == "home_bundled_flow"),
-        "with_octos_home must surface <octos_home>/pipelines/home_bundled_flow.dot \
+        "with_ra_home must surface <ra_home>/pipelines/home_bundled_flow.dot \
          in the advertised enum, got {values:?}"
     );
 }
@@ -235,7 +235,7 @@ fn dot_tool_references(dot: &str) -> std::collections::BTreeSet<String> {
 /// Gap 4.1 BLOCKER 1 — the missing test class. Every tool a bundled
 /// `.dot` references (its `tools=` allow-list) MUST resolve to a tool
 /// the host actually registers. RED on e31665ca: `deep_research.dot`
-/// allow-listed `deep_search`, but ra registers that tool as `search`
+/// allow-listed `deep_search`, but RecurAgent registers that tool as `search`
 /// (the in-process `DeepSearchTool` names itself `search`; the
 /// deep-search app-skill manifest exports `search`). The pipeline worker
 /// applies the DOT allow-list (handler.rs), so `deep_search` was unknown
@@ -265,7 +265,7 @@ fn every_bundled_dot_tool_reference_is_registered() {
 
 /// Gap 4.1 BLOCKER 2 (chat/serve path) — those hosts bootstrap the bundle
 /// into `<data_dir>/bundled-pipelines` and register it via
-/// `with_bundled_pipelines_root(data_dir)` (NOT `with_octos_home`). The
+/// `with_bundled_pipelines_root(data_dir)` (NOT `with_ra_home`). The
 /// invariant: the dir bootstrap writes into is exactly the dir discovery
 /// searches. RED before the fix: chat wrote the bundle to
 /// `<data_dir>/pipelines` (which also shadowed installs) and never
@@ -296,27 +296,27 @@ async fn chat_path_bootstrap_dir_equals_search_dir() {
 }
 
 /// Gap 4.1 BLOCKER 2 + 3 (gateway path) — the gateway bootstraps into
-/// `<effective_octos_home>/bundled-pipelines` and registers discovery via
-/// `with_octos_home(effective_octos_home)`. An installed skill copy in
-/// `<octos_home>/skills/<x>/deep_research.dot` must WIN over the bundled
+/// `<effective_ra_home>/bundled-pipelines` and registers discovery via
+/// `with_ra_home(effective_ra_home)`. An installed skill copy in
+/// `<ra_home>/skills/<x>/deep_research.dot` must WIN over the bundled
 /// one, AND the bundled one must still resolve when no install exists.
 #[tokio::test]
 async fn gateway_path_installed_wins_and_bundled_discovers() {
     let working = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();
-    let octos_home = tempfile::tempdir().unwrap();
+    let ra_home = tempfile::tempdir().unwrap();
 
-    ra_agent::bootstrap::bootstrap_bundled_pipelines(octos_home.path());
+    ra_agent::bootstrap::bootstrap_bundled_pipelines(ra_home.path());
 
     // No install yet: bundled must resolve.
     {
         let tool = make_tool_with_data(working.path(), data.path())
             .await
-            .with_octos_home(PathBuf::from(octos_home.path()));
+            .with_ra_home(PathBuf::from(ra_home.path()));
         let dot = tool
             .resolve_named_for_test("deep_research")
             .await
-            .expect("bundled deep_research must resolve via with_octos_home");
+            .expect("bundled deep_research must resolve via with_ra_home");
         assert!(
             dot.contains("digraph deep_research"),
             "bundled copy must resolve when no install exists"
@@ -331,7 +331,7 @@ async fn gateway_path_installed_wins_and_bundled_discovers() {
     }
 
     // Install a skill copy of the same name — it must now win.
-    let skill_dir = octos_home.path().join("skills").join("mofa-research");
+    let skill_dir = ra_home.path().join("skills").join("mofa-research");
     std::fs::create_dir_all(&skill_dir).unwrap();
     std::fs::write(
         skill_dir.join("deep_research.dot"),
@@ -341,7 +341,7 @@ async fn gateway_path_installed_wins_and_bundled_discovers() {
 
     let tool = make_tool_with_data(working.path(), data.path())
         .await
-        .with_octos_home(PathBuf::from(octos_home.path()));
+        .with_ra_home(PathBuf::from(ra_home.path()));
     let dot = tool
         .resolve_named_for_test("deep_research")
         .await
@@ -367,13 +367,13 @@ async fn gateway_path_installed_wins_and_bundled_discovers() {
 async fn bare_name_obeys_installed_wins_and_dot_path_is_rejected() {
     let working = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();
-    let octos_home = tempfile::tempdir().unwrap();
+    let ra_home = tempfile::tempdir().unwrap();
 
     // Nothing installed: BOTH input forms fall to the embedded bundled bytes.
     {
         let tool = make_tool_with_data(working.path(), data.path())
             .await
-            .with_octos_home(PathBuf::from(octos_home.path()));
+            .with_ra_home(PathBuf::from(ra_home.path()));
         for input in ["deep_research"] {
             let dot = tool
                 .resolve_named_for_test(input)
@@ -390,7 +390,7 @@ async fn bare_name_obeys_installed_wins_and_dot_path_is_rejected() {
 
     // Install a skill copy of the same name — BOTH input forms must now win
     // it (installed-wins), never the embedded bundled bytes.
-    let skill_dir = octos_home.path().join("skills").join("mofa-research");
+    let skill_dir = ra_home.path().join("skills").join("mofa-research");
     std::fs::create_dir_all(&skill_dir).unwrap();
     std::fs::write(
         skill_dir.join("deep_research.dot"),
@@ -400,7 +400,7 @@ async fn bare_name_obeys_installed_wins_and_dot_path_is_rejected() {
 
     let tool = make_tool_with_data(working.path(), data.path())
         .await
-        .with_octos_home(PathBuf::from(octos_home.path()));
+        .with_ra_home(PathBuf::from(ra_home.path()));
     for input in ["deep_research"] {
         let dot = tool
             .resolve_named_for_test(input)
@@ -430,10 +430,10 @@ async fn bare_name_obeys_installed_wins_and_dot_path_is_rejected() {
 /// resolution boundary:
 ///
 /// On the standalone path (no `--ra-home`), the gateway bootstraps bundled
-/// pipelines into `effective_octos_home` (= `data_dir`), but the child-profile
+/// pipelines into `effective_ra_home` (= `data_dir`), but the child-profile
 /// factory historically rooted `run_pipeline` at `project_dir` (= `cwd/.ra`)
 /// — a DIFFERENT dir bootstrap never wrote. This test proves:
-///   1. A tool rooted at `effective_octos_home` (the bootstrap dir) discovers
+///   1. A tool rooted at `effective_ra_home` (the bootstrap dir) discovers
 ///      an installed GLOBAL pipeline there and lets it WIN over the bundled
 ///      fallback (bootstrap-dir == search-dir → installed-wins).
 ///   2. A tool rooted at the WRONG `project_dir` (where bootstrap never wrote)
@@ -442,22 +442,22 @@ async fn bare_name_obeys_installed_wins_and_dot_path_is_rejected() {
 #[tokio::test]
 async fn standalone_gateway_child_profile_roots_pipeline_at_bootstrap_dir() {
     // Standalone layout: cwd/.ra (project_dir) and data_dir
-    // (effective_octos_home) are DISTINCT dirs.
+    // (effective_RecurAgent_home) are DISTINCT dirs.
     let cwd = tempfile::tempdir().unwrap();
     let project_dir = cwd.path().join(".ra");
     std::fs::create_dir_all(&project_dir).unwrap();
     let data_dir = tempfile::tempdir().unwrap();
-    let effective_octos_home = data_dir.path();
+    let effective_ra_home = data_dir.path();
     // Separate per-session data dirs so the two RunPipelineTool instances
     // below each open their own EpisodeStore (redb is single-writer).
     let session_data_correct = tempfile::tempdir().unwrap();
     let session_data_wrong = tempfile::tempdir().unwrap();
 
-    // Gateway bootstraps the bundled pipelines into effective_octos_home.
-    ra_agent::bootstrap::bootstrap_bundled_pipelines(effective_octos_home);
+    // Gateway bootstraps the bundled pipelines into effective_RecurAgent_home.
+    ra_agent::bootstrap::bootstrap_bundled_pipelines(effective_ra_home);
 
-    // Operator installs a GLOBAL deep_research under effective_octos_home/skills.
-    let global_skill = effective_octos_home.join("skills").join("mofa-research");
+    // Operator installs a GLOBAL deep_research under effective_RecurAgent_home/skills.
+    let global_skill = effective_ra_home.join("skills").join("mofa-research");
     std::fs::create_dir_all(&global_skill).unwrap();
     std::fs::write(
         global_skill.join("deep_research.dot"),
@@ -465,18 +465,18 @@ async fn standalone_gateway_child_profile_roots_pipeline_at_bootstrap_dir() {
     )
     .unwrap();
 
-    // (1) CORRECT root = effective_octos_home (bootstrap-dir == search-dir):
+    // (1) CORRECT root = effective_RecurAgent_home (bootstrap-dir == search-dir):
     // the installed GLOBAL copy must win over the bundled fallback.
     let correct = make_tool_with_data(cwd.path(), session_data_correct.path())
         .await
-        .with_octos_home(PathBuf::from(effective_octos_home));
+        .with_ra_home(PathBuf::from(effective_ra_home));
     let dot = correct
         .resolve_named_for_test("deep_research")
         .await
         .expect("installed global deep_research must resolve at the bootstrap dir");
     assert!(
         dot.contains("GLOBAL_INSTALLED"),
-        "child-profile pipeline rooted at effective_octos_home must let the installed \
+        "child-profile pipeline rooted at effective_ra_home must let the installed \
          global pipeline win over the bundled fallback, got: {dot}"
     );
 
@@ -486,7 +486,7 @@ async fn standalone_gateway_child_profile_roots_pipeline_at_bootstrap_dir() {
     // bundled bytes instead of the installed global copy.
     let wrong = make_tool_with_data(cwd.path(), session_data_wrong.path())
         .await
-        .with_octos_home(project_dir.clone());
+        .with_ra_home(project_dir.clone());
     let dot_wrong = wrong
         .resolve_named_for_test("deep_research")
         .await
@@ -494,7 +494,7 @@ async fn standalone_gateway_child_profile_roots_pipeline_at_bootstrap_dir() {
     assert!(
         !dot_wrong.contains("GLOBAL_INSTALLED"),
         "rooting at project_dir must NOT see the global install under \
-         effective_octos_home — demonstrating why the wrong root breaks \
+         effective_ra_home — demonstrating why the wrong root breaks \
          installed-wins (it fell to the embedded bundled copy instead)"
     );
 }
@@ -524,22 +524,22 @@ async fn standalone_gateway_child_profile_roots_pipeline_at_bootstrap_dir() {
 async fn corrupt_installed_pipeline_is_not_masked_by_bundled_fallback() {
     let working = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();
-    let octos_home = tempfile::tempdir().unwrap();
+    let ra_home = tempfile::tempdir().unwrap();
 
     // Bootstrap the bundled fallback so the embedded bytes ARE available — the
     // whole point is that the fallback exists yet must NOT mask the broken
     // install.
-    ra_agent::bootstrap::bootstrap_bundled_pipelines(octos_home.path());
+    ra_agent::bootstrap::bootstrap_bundled_pipelines(ra_home.path());
 
     // Install a copy of the SAME pipeline name that discovery can LOCATE but
     // not READ: a directory named `deep_research.dot` (extension scan matches,
     // `read_to_string` on a dir errors).
-    let skill_dir = octos_home.path().join("skills").join("mofa-research");
+    let skill_dir = ra_home.path().join("skills").join("mofa-research");
     std::fs::create_dir_all(skill_dir.join("deep_research.dot")).unwrap();
 
     let tool = make_tool_with_data(working.path(), data.path())
         .await
-        .with_octos_home(PathBuf::from(octos_home.path()));
+        .with_ra_home(PathBuf::from(ra_home.path()));
 
     let result = tool.resolve_named_for_test("deep_research").await;
     assert!(
@@ -561,7 +561,7 @@ async fn corrupt_installed_pipeline_is_not_masked_by_bundled_fallback() {
 /// asserted at the TOOL boundary: a coincidental non-`.dot` entry that merely
 /// shares the bare pipeline name must NOT block the embedded bundled fallback.
 ///
-/// Setup: a DIRECTORY `<octos_home>/pipelines/deep_research` (coincidental,
+/// Setup: a DIRECTORY `<ra_home>/pipelines/deep_research` (coincidental,
 /// non-`.dot`) exists in a search path, but there is NO `deep_research.dot`
 /// installed anywhere. The embedded bundled bytes ARE available.
 ///
@@ -576,16 +576,16 @@ async fn corrupt_installed_pipeline_is_not_masked_by_bundled_fallback() {
 async fn coincidental_non_dot_path_does_not_block_bundled_fallback() {
     let working = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();
-    let octos_home = tempfile::tempdir().unwrap();
+    let ra_home = tempfile::tempdir().unwrap();
 
     // A coincidental DIRECTORY named exactly like the bare pipeline name in a
     // search path. There is NO `deep_research.dot` anywhere on disk.
-    let home_pipelines = octos_home.path().join("pipelines");
+    let home_pipelines = ra_home.path().join("pipelines");
     std::fs::create_dir_all(home_pipelines.join("deep_research")).unwrap();
 
     let tool = make_tool_with_data(working.path(), data.path())
         .await
-        .with_octos_home(PathBuf::from(octos_home.path()));
+        .with_ra_home(PathBuf::from(ra_home.path()));
 
     // The coincidental non-`.dot` path must NOT mis-classify as Read and block
     // the embedded bundled fallback — `deep_research` must resolve to the
@@ -633,21 +633,21 @@ fn bundled_pipelines_parse_and_validate_clean() {
 }
 
 /// End-to-end: after `bootstrap_bundled_pipelines` writes into
-/// `<octos_home>/bundled-pipelines`, a `RunPipelineTool` built with
-/// `with_octos_home` advertises `deep_research` AND can `resolve` it. This is
+/// `<ra_home>/bundled-pipelines`, a `RunPipelineTool` built with
+/// `with_ra_home` advertises `deep_research` AND can `resolve` it. This is
 /// the exact path the mini5 soak missed (skill drift → `Available: (none)`).
 #[tokio::test]
 async fn bootstrap_then_discover_deep_research_end_to_end() {
     let working = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();
-    let octos_home = tempfile::tempdir().unwrap();
+    let ra_home = tempfile::tempdir().unwrap();
 
-    let written = ra_agent::bootstrap::bootstrap_bundled_pipelines(octos_home.path());
+    let written = ra_agent::bootstrap::bootstrap_bundled_pipelines(ra_home.path());
     assert!(written >= 1, "bootstrap must write at least deep_research");
 
     let tool = make_tool_with_data(working.path(), data.path())
         .await
-        .with_octos_home(PathBuf::from(octos_home.path()));
+        .with_ra_home(PathBuf::from(ra_home.path()));
 
     let values = enum_values(&tool.input_schema());
     assert!(

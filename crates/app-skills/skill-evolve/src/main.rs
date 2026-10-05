@@ -581,8 +581,8 @@ fn resolve_llm_config() -> Option<(String, String, String)> {
 
 /// Resolve all skill directories (bundled + per-profile).
 fn resolve_skills_dirs() -> Vec<PathBuf> {
-    // `RA_HOME`/`OCTOS_HOME`, an existing `~/.ra`, or the legacy `~/.ra`
-    // the install already uses (see `ra_core::brand::state_home`).
+    // `RA_HOME`/`ra_HOME`, else `~/.ra` (see
+    // `ra_core::brand::state_home`). No legacy directory is consulted.
     let Some(state_home) = ra_core::brand::state_home() else {
         return vec![];
     };

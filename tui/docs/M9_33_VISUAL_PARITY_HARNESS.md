@@ -5,7 +5,7 @@ Status: accepted for the next parent `ra` tmux harness update.
 ## Scope
 
 The executable harness lives in the parent `ra` repository because it starts
-both `octos serve` and standalone `octoscode`. This repo owns the UI assertions
+both `ra serve` and standalone `ra-tui`. This repo owns the UI assertions
 that harness must check.
 
 ## Required State Matrix
@@ -26,8 +26,8 @@ The tmux harness must retain captures for each state:
 
 Each parity run must keep:
 
-- raw tmux capture for `octoscode`
-- cleaned/redacted tmux capture for `octoscode`
+- raw tmux capture for `ra-tui`
+- cleaned/redacted tmux capture for `ra-tui`
 - Codex comparison capture when enabled
 - server log
 - worktree diff
@@ -37,11 +37,11 @@ Each parity run must keep:
 
 ## Live Watch Contract
 
-When `OCTOS_TMUX_KEEP=1` or `OCTOSCODE_UX_KEEP_SESSIONS=1` is set, the runner
+When `ra_TMUX_KEEP=1` or `RA_TUI_UX_KEEP_SESSIONS=1` is set, the runner
 must print attach commands for both sessions and leave them alive:
 
 ```bash
-tmux attach -r -t <octoscode-client-session>
+tmux attach -r -t <ra-tui-client-session>
 tmux attach -r -t <codex-client-session>
 ```
 

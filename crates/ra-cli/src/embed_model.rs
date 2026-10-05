@@ -1,6 +1,6 @@
 //! Provisioning of the default in-process embedding model.
 //!
-//! ra ships the llama.cpp embedder in its default build (feature
+//! RecurAgent ships the llama.cpp embedder in its default build (feature
 //! `embed-llama`) and uses **EmbeddingGemma-300M** (Q8_0 GGUF, 768-d native,
 //! Matryoshka-truncated to 256-d for the Recall index — see
 //! `docs/adr/personal-memory-tiers.md`) when no `embedding` section is
@@ -10,7 +10,7 @@
 //! by every profile under that data dir.
 //!
 //! The download is opt-out (`embedding.auto_download = false` or
-//! `RA_NO_MODEL_DOWNLOAD=1`, legacy `OCTOS_NO_MODEL_DOWNLOAD=1`); without the
+//! `RA_NO_MODEL_DOWNLOAD=1`, legacy `ra_NO_MODEL_DOWNLOAD=1`); without the
 //! file the runtime stays keyword-only, which every memory path supports.
 
 use std::io::Write;

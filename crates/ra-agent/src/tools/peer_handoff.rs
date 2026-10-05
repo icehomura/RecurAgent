@@ -504,7 +504,7 @@ mod tests {
     ///
     /// "Do not wait" answers whether to BLOCK; it never answered whether to
     /// CONTINUE. Both surfaces must now say so explicitly, because they are the
-    /// only two the model sees — ra has no central role prompt to carry this.
+    /// only two the model sees — RecurAgent has no central role prompt to carry this.
     /// The result matters most: it is in context at the exact moment the model
     /// chooses between another tool call and ending the turn.
     #[tokio::test]

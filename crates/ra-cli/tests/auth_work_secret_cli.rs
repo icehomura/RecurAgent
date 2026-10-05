@@ -7,7 +7,7 @@ use std::process::Command;
 
 use ra_agent::bridge::work_secret::WorkSecret;
 
-fn run_octos(args: &[&str], data_dir: &Path) -> std::process::Output {
+fn run_ra(args: &[&str], data_dir: &Path) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_ra"))
         .args(args)
         .arg("--data-dir")
@@ -22,7 +22,7 @@ fn issue_stdout_stays_the_secret_and_list_never_shows_the_token() {
     let tmp = tempfile::tempdir().unwrap();
     let data = tmp.path();
 
-    let out = run_octos(
+    let out = run_ra(
         &[
             "auth",
             "issue-work-secret",
@@ -54,7 +54,7 @@ fn issue_stdout_stays_the_secret_and_list_never_shows_the_token() {
     assert!(!stdout.contains("expires"), "no notes may leak into stdout");
 
     // The listing shows the grant, by hash only — never the bearer token.
-    let list = run_octos(&["auth", "list-work-secrets"], data);
+    let list = run_ra(&["auth", "list-work-secrets"], data);
     assert!(list.status.success());
     let listed = String::from_utf8(list.stdout).unwrap();
     assert!(listed.contains("cli:audit"), "listed: {listed:?}");

@@ -239,12 +239,12 @@ fn live_soak_notes_remain_manual_and_bounded() {
     assert!(
         soak.requires_env
             .iter()
-            .any(|env| env.starts_with("OCTOSCODE_UX_LIVE_SOAK=1"))
+            .any(|env| env.starts_with("RA_TUI_UX_LIVE_SOAK=1"))
     );
     assert!(
         soak.requires_env
             .iter()
-            .any(|env| env.starts_with("OCTOSCODE_PROTOCOL_ENDPOINT="))
+            .any(|env| env.starts_with("RA_TUI_PROTOCOL_ENDPOINT="))
     );
     assert!(soak.artifact_dir.contains("test-results-tui-coding-ux"));
 }

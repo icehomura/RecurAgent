@@ -1,6 +1,6 @@
 //! In-process GGUF embedding provider backed by llama.cpp.
 //!
-//! The only embedding backend. It replaced `octos-embed-mlx`, a hand-written
+//! The only embedding backend. It replaced `ra-embed-mlx`, a hand-written
 //! port of one model (EmbeddingGemma-300M) onto Apple MLX, which was
 //! macOS+aarch64 only — so `provider = "mlx"` gave a Linux deployment nothing.
 //! This runs any GGUF embedding model anywhere llama.cpp builds, with a CPU

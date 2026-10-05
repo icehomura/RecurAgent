@@ -51,7 +51,7 @@ severity、repo)并归并锚点后,才落 `FLAW-NNN.md` 并更新 `memory.md`。
 等主审裁决是否进契约(不自行扩 harvest 触发面)。当前登记:
 
 - `iteration_cap` —— 内环单 turn 迭代上限耗尽(超限静默收工,外观像
-  "卡住";出处 2026-09-05 ra 活板 #48"48b 中断记录")。
+  "卡住";出处 2026-09-05 RecurAgent 活板 #48"48b 中断记录")。
 - `patch_failed` —— 修复片打回后未再派发即关闭(goal 以 blocked 收尾,
   缺陷未消;同上出处)。
 

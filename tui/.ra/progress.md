@@ -1,9 +1,9 @@
 # 进度 — behavior-review 任务 (goal_01 / runtime /private/tmp/oe9-review)
 
-worktree: /Users/zhangalex/.local/tmp/octoloop-evolution-20260909/octoscode-behavior-review
+worktree: /Users/zhangalex/.local/tmp/octoloop-evolution-20260909/ra-tui-behavior-review
 branch: feat/evo-behavior-review @ 2edb1ca(Phase 5 合约 commit)
 native goal: goal_01 (goal_create 2026-09-09, 无预算上限由 runtime 分配 100M)
-基线证据: /Users/zhangalex/Work/Projects/FW/octoscode/.ra/reviews/pr-627-630-20260909/
+基线证据: /Users/zhangalex/Work/Projects/FW/ra-tui/.ra/reviews/pr-627-630-20260909/
   - MANIFEST.json: PR627/628/630 head/base、8 反例、2383 passed/1 failed/4 ignored (GNU 全量轮)
   - 期望分类: #627/#628/#630 request-changes(阻塞), #629 conditional-approve-scope-and-specs(residual)
   - 4 个原 prNNN-glm peer outcome=errored，不得计入有效互审（回归数据集的一部分）
@@ -60,7 +60,7 @@ native goal: goal_01 (goal_create 2026-09-09, 无预算上限由 runtime 分配 
 
 - 禁止 Codex/Claude 子进程；peers 只读（worktree=false）
 - cargo: CARGO_BUILD_JOBS=4, --test-threads=8,
-  CARGO_TARGET_DIR=/Users/zhangalex/Work/Projects/FW/octoscode/target, df≥50GB ✓ (265G free)
+  CARGO_TARGET_DIR=/Users/zhangalex/Work/Projects/FW/ra-tui/target, df≥50GB ✓ (265G free)
 - 编译槽: 外层基线已跑完，当前无并发 cargo；本任务编译前再查
 - 没有运行的检查必须标"未验证"
 - 下一步: 等 monitor-impl-k3 交付监控两文件 → master 全量验证

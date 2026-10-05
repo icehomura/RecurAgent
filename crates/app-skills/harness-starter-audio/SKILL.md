@@ -2,7 +2,7 @@
 name: harness-starter-audio
 description: Harnessed audio-artifact starter. Synthesizes a minimal WAV file under audio/ and relies on the workspace contract to deliver it.
 version: 1.0.0
-author: ra
+author: RecurAgent
 always: false
 ---
 

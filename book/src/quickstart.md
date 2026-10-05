@@ -1,10 +1,10 @@
 # Quick Start
 
-This guide walks you through the essential steps to get ra running.
+This guide walks you through the essential steps to get RecurAgent running.
 
 ## 1. Initialize Your Workspace
 
-Navigate to your project directory and initialize ra:
+Navigate to your project directory and initialize RecurAgent:
 
 ```bash
 cd your-project
@@ -67,4 +67,4 @@ If you built with the `api` feature, start the web dashboard:
 ra serve
 ```
 
-Then open `http://localhost:50080` in your browser — it lands on the octos-web app (`/app/`). The admin dashboard stays available at `/admin/`.
+Then open `http://localhost:50080` in your browser — it lands on the ra-web app (`/app/`). The admin dashboard stays available at `/admin/`.

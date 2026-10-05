@@ -1,7 +1,7 @@
 //! Minimal **blocking** GitHub Releases client for `update --check` and the
 //! `doctor` network category (Stage 2). Behind the `github` feature → `reqwest`.
 //!
-//! Ported, product-agnostic, from octoscode's `cmd/github.rs`: a plain blocking
+//! Ported, product-agnostic, from ra-tui's `cmd/github.rs`: a plain blocking
 //! `reqwest` GET against the public Releases API. No auth is required for public
 //! repos, but the product's token env var (`spec.github_token_env`) is honored
 //! when set to dodge the unauthenticated rate limit — optional, never a hard
@@ -194,9 +194,9 @@ pub fn update_check(spec: &ProductSpec, method: &InstallMethod) -> Result<Update
 mod tests {
     use super::*;
 
-    fn octos_spec() -> ProductSpec {
-        ProductSpec::new("octos", "octos", "1.0.0", "your-org/ra", "octos-bundle")
-            .with_brew_formula("your-org/ra/octos")
+    fn ra_spec() -> ProductSpec {
+        ProductSpec::new("ra", "ra", "1.0.0", "icehomura/ra", "ra-bundle")
+            .with_brew_formula("icehomura/ra/ra")
             .with_cargo_dist_app("ra")
     }
 
@@ -210,15 +210,15 @@ mod tests {
             "assets": [
                 {
                     "name": "ra-bundle-aarch64-apple-darwin.tar.gz",
-                    "browser_download_url": "https://github.com/your-org/ra/releases/download/v9.9.9/octos-bundle-aarch64-apple-darwin.tar.gz"
+                    "browser_download_url": "https://github.com/icehomura/ra/releases/download/v9.9.9/ra-bundle-aarch64-apple-darwin.tar.gz"
                 },
                 {
                     "name": "ra-bundle-x86_64-unknown-linux-gnu.tar.gz",
-                    "browser_download_url": "https://github.com/your-org/ra/releases/download/v9.9.9/octos-bundle-x86_64-unknown-linux-gnu.tar.gz"
+                    "browser_download_url": "https://github.com/icehomura/ra/releases/download/v9.9.9/ra-bundle-x86_64-unknown-linux-gnu.tar.gz"
                 },
                 {
                     "name": "ra-bundle-x86_64-pc-windows-msvc.zip",
-                    "browser_download_url": "https://github.com/your-org/ra/releases/download/v9.9.9/octos-bundle-x86_64-pc-windows-msvc.zip"
+                    "browser_download_url": "https://github.com/icehomura/ra/releases/download/v9.9.9/ra-bundle-x86_64-pc-windows-msvc.zip"
                 }
             ]
         })
@@ -226,7 +226,7 @@ mod tests {
 
     #[test]
     fn parse_release_reads_tag_and_strips_v_prefix() {
-        let info = parse_release(&releases_fixture(), &octos_spec()).expect("parses");
+        let info = parse_release(&releases_fixture(), &ra_spec()).expect("parses");
         assert_eq!(info.tag, "v9.9.9");
         assert_eq!(info.version, "9.9.9");
     }
@@ -235,7 +235,7 @@ mod tests {
     fn parse_release_selects_asset_for_this_host_triple() {
         // The asset URL chosen must match THIS host's triple (whichever the test
         // runs on), proving asset selection uses the live triple + spec prefix.
-        let info = parse_release(&releases_fixture(), &octos_spec()).expect("parses");
+        let info = parse_release(&releases_fixture(), &ra_spec()).expect("parses");
         let triple = host_target_triple();
         let expected_prefix = format!("ra-bundle-{triple}");
         // Our fixture only carries darwin/linux-gnu/windows-msvc assets; on any
@@ -265,7 +265,7 @@ mod tests {
                 { "name": "SOURCE.tar.gz", "browser_download_url": "https://example.com/src" }
             ]
         });
-        let info = parse_release(&payload, &octos_spec()).expect("parses");
+        let info = parse_release(&payload, &ra_spec()).expect("parses");
         assert_eq!(info.version, "2.0.0");
         assert!(info.asset_url.is_none());
     }
@@ -293,7 +293,7 @@ mod tests {
                 }
             ]
         });
-        let info = parse_release(&payload, &octos_spec()).expect("parses");
+        let info = parse_release(&payload, &ra_spec()).expect("parses");
         assert_eq!(
             info.asset_url.as_deref(),
             Some("https://example.com/real.tar.gz")
@@ -303,7 +303,7 @@ mod tests {
     #[test]
     fn parse_release_errors_without_tag_name() {
         let payload = serde_json::json!({ "assets": [] });
-        assert!(parse_release(&payload, &octos_spec()).is_err());
+        assert!(parse_release(&payload, &ra_spec()).is_err());
     }
 
     #[test]
@@ -319,7 +319,7 @@ mod tests {
     #[test]
     fn token_reads_only_the_specs_env_var() {
         // No env var configured on the spec → never reads anything.
-        let mut spec = octos_spec();
+        let mut spec = ra_spec();
         assert!(token(&spec).is_none());
         spec.github_token_env = Some("RA_DIAG_TEST_TOKEN_UNSET_XYZ".into());
         // Unset → None (we don't fall through to a default var).
@@ -331,13 +331,13 @@ mod tests {
     #[test]
     #[ignore = "hits live api.github.com; run manually with --ignored"]
     fn live_reachability_is_reachable() {
-        assert_eq!(reachability(&octos_spec()), Reachability::Reachable);
+        assert_eq!(reachability(&ra_spec()), Reachability::Reachable);
     }
 
     #[test]
     #[ignore = "hits live api.github.com; run manually with --ignored"]
     fn live_latest_release_parses() {
-        let info = latest_release(&octos_spec()).expect("fetches latest");
+        let info = latest_release(&ra_spec()).expect("fetches latest");
         assert!(!info.version.is_empty());
         assert!(info.tag.starts_with('v') || !info.tag.is_empty());
     }
@@ -346,7 +346,7 @@ mod tests {
     #[ignore = "hits live api.github.com; run manually with --ignored"]
     fn live_update_check_returns_a_plan() {
         // Current version 0.0.0 forces "newer available" so we exercise planning.
-        let mut spec = octos_spec();
+        let mut spec = ra_spec();
         spec.current_version = "0.0.0".into();
         let plan = update_check(&spec, &InstallMethod::Unknown).expect("plans");
         assert_ne!(plan, UpdatePlan::UpToDate);

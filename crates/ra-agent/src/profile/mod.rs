@@ -38,7 +38,7 @@
 //!    filesystem path. The file is loaded directly.
 //! 2. Otherwise the argument is a profile id. The loader first checks
 //!    `<state home>/profiles/<id>/profile.{toml,json}` (the state home is
-//!    `~/.ra`, or an existing `~/.ra`).
+//!    `~/.ra`).
 //! 3. Finally the loader falls back to the crate-shipped built-in registry
 //!    (JSON files under `crates/ra-agent/src/assets/profiles/`).
 //!
@@ -404,9 +404,8 @@ impl ProfileDefinition {
     /// unit tests can exercise the user-dir lookup without touching the
     /// real filesystem.
     ///
-    /// Mirrors the product state-home rule under `home`: an existing
-    /// `<home>/.ra/profiles` wins, otherwise an existing `<home>/.ra/profiles`,
-    /// otherwise `<home>/.ra/profiles`. `home` is also the base for `~`
+    /// Mirrors the product state-home rule under `home`: profiles resolve
+    /// from `<home>/.ra/profiles`. `home` is also the base for `~`
     /// expansion in [`expand_tilde`].
     pub fn load_with_home(arg: &str, home: Option<&Path>) -> Result<(Self, ProfileSource)> {
         let profiles_dir = home.map(profiles_dir_under);
@@ -478,16 +477,10 @@ fn expand_tilde(arg: &str, home: Option<&Path>) -> PathBuf {
     PathBuf::from(arg)
 }
 
-/// Resolve the user profile directory under an explicit home, applying the
-/// product-rename rule: prefer an existing `<home>/.ra/profiles`, fall back to
-/// an existing `<home>/.ra/profiles` (legacy installs), and default to
-/// `<home>/.ra/profiles` when neither exists.
+/// Resolve the user profile directory under an explicit home:
+/// `<home>/.ra/profiles`.
 fn profiles_dir_under(home: &Path) -> PathBuf {
-    let new_dir = home.join(ra_core::brand::STATE_DIR).join("profiles");
-    let legacy_dir = home.join(ra_core::brand::LEGACY_STATE_DIR).join("profiles");
-    let new_exists = new_dir.is_dir();
-    let legacy_exists = legacy_dir.is_dir();
-    ra_core::brand::choose(None, None, new_dir, legacy_dir, new_exists, legacy_exists)
+    home.join(ra_core::brand::STATE_DIR).join("profiles")
 }
 
 #[cfg(test)]
@@ -665,15 +658,12 @@ mod tests {
     }
 
     #[test]
-    fn should_resolve_profile_name_via_legacy_user_dir() {
-        // Legacy fallback: a profile.json under `<home>/<legacy slug>/profiles/<name>/`
-        // (the pre-rename ra home) still resolves when no
-        // `<home>/<app slug>/profiles/<name>/` exists.
+    fn should_not_read_profile_from_legacy_ra_user_dir() {
+        // No backward compatibility: a `profile.json` under
+        // `<home>/.ra/profiles/<name>/` is not consulted, so the lookup
+        // falls through to the built-in registry and fails for an unknown id.
         let fake_home = tempfile::tempdir().expect("tempdir");
-        let profiles_dir = fake_home
-            .path()
-            .join(ra_core::brand::LEGACY_STATE_DIR)
-            .join("profiles/alpha");
+        let profiles_dir = fake_home.path().join(".ra").join("profiles/alpha");
         std::fs::create_dir_all(&profiles_dir).expect("mkdirs");
         std::fs::write(
             profiles_dir.join("profile.json"),
@@ -681,10 +671,9 @@ mod tests {
         )
         .expect("write");
 
-        let (def, source) = ProfileDefinition::load_with_home("alpha", Some(fake_home.path()))
-            .expect("load from user dir");
-        assert_eq!(def.name, "alpha");
-        assert_eq!(source, ProfileSource::UserDir);
+        let err = ProfileDefinition::load_with_home("alpha", Some(fake_home.path()))
+            .expect_err("the legacy ra profile dir must be ignored");
+        assert!(format!("{err:#}").contains("alpha"));
     }
 
     #[test]
@@ -711,9 +700,9 @@ mod tests {
     }
 
     #[test]
-    fn should_prefer_ra_user_dir_over_legacy_octos_dir() {
-        // Both directories exist: the new `<home>/<app slug>/profiles` MUST win
-        // over the legacy `<home>/<legacy slug>/profiles` copy.
+    fn should_prefer_ra_user_dir_over_legacy_ra_dir() {
+        // No backward compatibility: the legacy `<home>/.ra/profiles` copy
+        // is never read; only `<home>/.ra/profiles` is.
         let fake_home = tempfile::tempdir().expect("tempdir");
         let new_dir = fake_home
             .path()
@@ -725,10 +714,7 @@ mod tests {
             r#"{"name": "gamma", "version": 1, "description": "new"}"#,
         )
         .expect("write ra");
-        let legacy_dir = fake_home
-            .path()
-            .join(ra_core::brand::LEGACY_STATE_DIR)
-            .join("profiles/gamma");
+        let legacy_dir = fake_home.path().join(".ra").join("profiles/gamma");
         std::fs::create_dir_all(&legacy_dir).expect("mkdirs legacy");
         std::fs::write(
             legacy_dir.join("profile.json"),
@@ -1116,7 +1102,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Item 5 of OCTOS_M8_FIX_FIRST_CHECKLIST_2026-04-24:
+    // Item 5 of ra_M8_FIX_FIRST_CHECKLIST_2026-04-24:
     // Profiles and AgentDefinitions must be authoritative — fields that the
     // runtime does NOT enforce should be rejected/cleaned up so M9 clients
     // do not assume they are operational.

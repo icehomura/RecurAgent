@@ -1,7 +1,7 @@
 # M18 AppUI Stdio Transport Parity Contract
 
 Status: implementation verified; GitHub issue updates blocked by expired connector token
-Owner: Octos backend plus octoscode client workers
+Owner: RecurAgent backend plus ra-tui client workers
 Date: 2026-05-17
 
 ## Goal
@@ -121,7 +121,7 @@ Acceptance:
   Runtime-path differences such as advertised methods returning transport-only
   unsupported errors are not acceptable allowances.
 
-### M18-F: octoscode Stdio UX And Validation
+### M18-F: ra-tui Stdio UX And Validation
 
 Deliverables:
 
@@ -155,7 +155,7 @@ M18 is complete only when:
 
 1. Existing PR stack #819-#822 is merged, superseded, or closed with equivalent current-branch work landed.
 2. Backend AppUI stdio passes shared conformance tests.
-3. octoscode passes live tmux stdio UX soak against the real backend.
+3. ra-tui passes live tmux stdio UX soak against the real backend.
 4. The AppUI spec documents all supported and intentionally unsupported stdio behaviors.
 5. No issue can be closed with only a short happy-path model answer.
 
@@ -179,7 +179,7 @@ TUI verification:
   321 lib tests, 3 AppUI UX fixture tests, 2 solo-permissions tests.
 - `cargo clippy --all --workspace -- -D warnings` passed.
 - Live tmux UX soak passed:
-  `~/home/octoscode/e2e/test-results-m15-live-tmux-ux/m18-stdio-parity-20260518T011554Z/ux-validation.json`.
+  `~/home/ra-tui/e2e/test-results-m15-live-tmux-ux/m18-stdio-parity-20260518T011554Z/ux-validation.json`.
 
 Claude review:
 
@@ -197,18 +197,18 @@ Claude review:
 
 GitHub issue update status:
 
-- Attempted to comment on `octos-org/octos#1028`, but the GitHub connector
+- Attempted to comment on `icehomura/ra#1028`, but the GitHub connector
   returned `401 token_expired`: "Provided authentication token is expired.
   Please try signing in again."
-- Issue comments/closures for `octos#1028`-`#1032` and `octoscode#48`-`#49`
+- Issue comments/closures for `ra#1028`-`#1032` and `ra-tui#48`-`#49`
   still need to be posted after GitHub app authentication is refreshed.
 
 ## Backing-Store Replay Soak 2026-05-18
 
-Issue octos#1044 adds a second mode to the existing headless M18 AppUI transport parity soak:
+Issue RecurAgent#1044 adds a second mode to the existing headless M18 AppUI transport parity soak:
 
 - Default/headless mode remains unchanged and continues to verify matching typed -32140 session/messages_page failures when the sessions REST backing store is unavailable.
-- Backing-store mode runs with `OCTOS_M18_APPUI_PARITY_MODE=backing-store` or `node e2e/scripts/m18-appui-transport-parity-soak.mjs --backing-store`.
+- Backing-store mode runs with `ra_M18_APPUI_PARITY_MODE=backing-store` or `node e2e/scripts/m18-appui-transport-parity-soak.mjs --backing-store`.
 - The backing-store mode seeds deterministic local session JSONL history into both the WebSocket and stdio data dirs before opening the same session id over each transport.
 - The mode verifies populated `session/messages_page` first, middle, tail, beyond-end, and clamped-limit pages, plus typed invalid-params edge errors for malformed pagination requests.
 - Artifacts include `appui-ws-transcript.jsonl`, `appui-stdio-transcript.jsonl`, `normalized-diff.json`, `runtime-policy-stamp.json`, `backing-store-seed.json`, and `server.log` under the run directory.

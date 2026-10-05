@@ -1,4 +1,4 @@
-//! ra-pyo3: a **native** Python extension for embedding ra, built with
+//! ra-pyo3: a **native** Python extension for embedding RecurAgent, built with
 //! [pyo3](https://pyo3.rs/) over the native core exposed by `ra-ffi`
 //! ([`ra_ffi::RaRuntime`]).
 //!
@@ -17,7 +17,7 @@
 //!
 //! All pyo3 code lives in the [`bindings`] module behind the `python` feature.
 //! With the feature OFF — the default, and what `cargo build --workspace` uses
-//! on ra CI (self-hosted linux-x64/arm64 **and** Windows) — this crate is an
+//! on RecurAgent CI (self-hosted linux-x64/arm64 **and** Windows) — this crate is an
 //! essentially empty library that links **zero** libpython, so a Python-less CI
 //! lane cannot break. `maturin` turns the feature on (via `extension-module`) to
 //! build the wheel; `cargo test -p ra-pyo3 --features python` runs the Rust

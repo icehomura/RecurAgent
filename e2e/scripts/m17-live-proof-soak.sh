@@ -3,17 +3,17 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
-run_id="${OCTOS_M17_LIVE_PROOF_RUN_ID:-m17-live-proof-$(date -u +%Y%m%dT%H%M%SZ)}"
-out_root="${OCTOS_M17_LIVE_PROOF_OUT_ROOT:-$repo_root/e2e/test-results-m17-live-proof}"
-out_dir="${OCTOS_M17_LIVE_PROOF_OUT_DIR:-$out_root/$run_id}"
-native_dir="${OCTOS_M17_M15_NATIVE_DIR:-$out_dir/m15-native-review-start-stdio}"
-loop_dir="${OCTOS_M17_LOOP_DIR:-$out_dir/m15-loop-runtime-stdio}"
-goal_dir="${OCTOS_M17_GOAL_DIR:-$out_dir/m15-goal-runtime-stdio}"
-tmux_dir="${OCTOS_M17_TMUX_DIR:-$out_dir/m16-tmux-ux}"
-spawn_dir="${OCTOS_M17_SPAWN_DIR:-}"
-budget_grace_dir="${OCTOS_M17_BUDGET_GRACE_DIR:-}"
-validation_dir="${OCTOS_M17_VALIDATION_DIR:-$out_dir/validation}"
-octos_bin="${OCTOS_BIN:-$repo_root/target/debug/ra}"
+run_id="${ra_M17_LIVE_PROOF_RUN_ID:-m17-live-proof-$(date -u +%Y%m%dT%H%M%SZ)}"
+out_root="${ra_M17_LIVE_PROOF_OUT_ROOT:-$repo_root/e2e/test-results-m17-live-proof}"
+out_dir="${ra_M17_LIVE_PROOF_OUT_DIR:-$out_root/$run_id}"
+native_dir="${ra_M17_M15_NATIVE_DIR:-$out_dir/m15-native-review-start-stdio}"
+loop_dir="${ra_M17_LOOP_DIR:-$out_dir/m15-loop-runtime-stdio}"
+goal_dir="${ra_M17_GOAL_DIR:-$out_dir/m15-goal-runtime-stdio}"
+tmux_dir="${ra_M17_TMUX_DIR:-$out_dir/m16-tmux-ux}"
+spawn_dir="${ra_M17_SPAWN_DIR:-}"
+budget_grace_dir="${ra_M17_BUDGET_GRACE_DIR:-}"
+validation_dir="${ra_M17_VALIDATION_DIR:-$out_dir/validation}"
+ra_bin="${ra_BIN:-$repo_root/target/debug/ra}"
 
 usage() {
   cat <<'USAGE'
@@ -24,11 +24,11 @@ validate  Run only the M17 validator over supplied evidence directories.
 self-test Syntax-check scripts and exercise the validator with synthetic evidence.
 
 Live key inputs:
-  DEEPSEEK_API_KEY or OCTOS_M15_NATIVE_API_KEY     Required for run.
-  OCTOS_BIN                                       Default: target/debug/ra.
-  OCTOS_M17_SPAWN_DIR                             Optional direct spawn_agent evidence dir.
-  OCTOS_M17_BUDGET_GRACE_DIR                      Optional explicit budget grace evidence dir.
-  OCTOS_M17_SKIP_TUI=1                            Skip m16 tmux run when octoscode/tmux are unavailable.
+  DEEPSEEK_API_KEY or ra_M15_NATIVE_API_KEY     Required for run.
+  ra_BIN                                       Default: target/debug/ra.
+  ra_M17_SPAWN_DIR                             Optional direct spawn_agent evidence dir.
+  ra_M17_BUDGET_GRACE_DIR                      Optional explicit budget grace evidence dir.
+  ra_M17_SKIP_TUI=1                            Skip m16 tmux run when ra-tui/tmux are unavailable.
 USAGE
 }
 
@@ -42,14 +42,14 @@ require_cmd() {
 }
 
 has_provider_key() {
-  [[ -n "${OCTOS_M15_NATIVE_API_KEY:-${OCTOS_M16_NATIVE_API_KEY:-${DEEPSEEK_API_KEY:-}}}" ]]
+  [[ -n "${ra_M15_NATIVE_API_KEY:-${ra_M16_NATIVE_API_KEY:-${DEEPSEEK_API_KEY:-}}}" ]]
 }
 
-build_octos() {
-  if [[ "${OCTOS_M17_BUILD:-1}" == "1" ]]; then
+build_ra() {
+  if [[ "${ra_M17_BUILD:-1}" == "1" ]]; then
     (cd "$repo_root" && cargo build -p ra-cli --bin ra --features api)
   fi
-  [[ -x "$octos_bin" ]] || die "ra binary is not executable: $octos_bin"
+  [[ -x "$ra_bin" ]] || die "ra binary is not executable: $ra_bin"
 }
 
 validator_args=()
@@ -75,20 +75,20 @@ run_validator() {
 run_live() {
   require_cmd node
   require_cmd python3
-  has_provider_key || die "missing DeepSeek key; set DEEPSEEK_API_KEY or OCTOS_M15_NATIVE_API_KEY before live run"
+  has_provider_key || die "missing DeepSeek key; set DEEPSEEK_API_KEY or ra_M15_NATIVE_API_KEY before live run"
   mkdir -p "$out_dir"
-  build_octos
+  build_ra
 
   local status=0
-  OCTOS_M15_NATIVE_STDIO_SOAK_DIR="$native_dir" node "$script_dir/m15-native-review-start-stdio-soak.mjs" || status=$?
-  OCTOS_M15_LOOP_SOAK_DIR="$loop_dir" node "$script_dir/m15-loop-runtime-stdio-soak.mjs" || status=$?
-  OCTOS_M15_GOAL_SOAK_DIR="$goal_dir" node "$script_dir/m15-goal-runtime-stdio-soak.mjs" || status=$?
+  ra_M15_NATIVE_STDIO_SOAK_DIR="$native_dir" node "$script_dir/m15-native-review-start-stdio-soak.mjs" || status=$?
+  ra_M15_LOOP_SOAK_DIR="$loop_dir" node "$script_dir/m15-loop-runtime-stdio-soak.mjs" || status=$?
+  ra_M15_GOAL_SOAK_DIR="$goal_dir" node "$script_dir/m15-goal-runtime-stdio-soak.mjs" || status=$?
 
-  if [[ "${OCTOS_M17_SKIP_TUI:-0}" == "1" ]]; then
-    echo "Skipping m16 tmux soak because OCTOS_M17_SKIP_TUI=1" >&2
+  if [[ "${ra_M17_SKIP_TUI:-0}" == "1" ]]; then
+    echo "Skipping m16 tmux soak because ra_M17_SKIP_TUI=1" >&2
   else
     require_cmd tmux
-    OCTOS_M16_UX_OUT_DIR="$tmux_dir" bash "$script_dir/m16-live-tui-tmux-soak.sh" run || status=$?
+    ra_M16_UX_OUT_DIR="$tmux_dir" bash "$script_dir/m16-live-tui-tmux-soak.sh" run || status=$?
   fi
 
   run_validator || status=$?

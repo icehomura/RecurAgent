@@ -28,7 +28,7 @@
 //!
 //! - Never alters a tool's arguments, output, or success.
 //! - Records nothing unless armed (`RA_READ_PAGING_PROBE=1`; legacy
-//!   `OCTOS_READ_PAGING_PROBE` is still honoured).
+//!   `ra_READ_PAGING_PROBE` is still honoured).
 //! - Does not price anything. Reported spend is not cache-write-aware today,
 //!   so any cost conclusion drawn from it would be wrong; this records raw
 //!   shape instead and leaves pricing to a separate fix.

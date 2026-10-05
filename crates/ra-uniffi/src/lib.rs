@@ -1,4 +1,4 @@
-//! ra-uniffi: idiomatic Python / Swift / Kotlin bindings for embedding ra,
+//! ra-uniffi: idiomatic Python / Swift / Kotlin bindings for embedding RecurAgent,
 //! generated from ONE Rust definition by [uniffi](https://mozilla.github.io/uniffi-rs/).
 //!
 //! This crate is a thin, idiomatic wrapper over the **native core** exposed by
@@ -11,7 +11,7 @@
 //! The foreign surface:
 //! * [`Config`] / [`Brief`] — inputs (uniffi records → dictionaries/data classes).
 //! * [`TaskResult`] / [`TokenUsage`] — outputs.
-//! * [`OctosError`] — a structured error enum.
+//! * [`RaError`] — a structured error enum.
 //! * [`Runtime`] — an opaque object (`Arc`-shared) with `new`, `run_task`,
 //!   `embed`, and the Recall memory seam `memory_upsert` / `memory_search` /
 //!   `memory_load` / `memory_stats` (JSON strings in and out, same contracts as
@@ -82,7 +82,7 @@ pub struct Config {
     /// model (EmbeddingGemma-300M, 334 MB, once, into `<data_dir>/models/`)
     /// when `embedding_model_path` is unset and the file is not on disk.
     /// Default `true` (`RA_NO_MODEL_DOWNLOAD=1`, legacy
-    /// `OCTOS_NO_MODEL_DOWNLOAD=1`, in the environment forces
+    /// `ra_NO_MODEL_DOWNLOAD=1`, in the environment forces
     /// `false`). The download blocks [`Runtime::new`]; hosts that want to
     /// control it call [`embedding_model_ensure`] first. With `false` and no
     /// model the runtime is keyword-only (`embed` raises `NoEmbedder`).
@@ -117,7 +117,7 @@ impl From<Config> for ra_ffi::RuntimeConfig {
 /// network; `license_url` points at the Gemma Terms of Use that apply to the
 /// weights.
 #[uniffi::export]
-pub fn embedding_model_status(data_dir: String) -> Result<String, OctosError> {
+pub fn embedding_model_status(data_dir: String) -> Result<String, RaError> {
     Ok(ra_ffi::embedding_model_status(std::path::Path::new(
         &data_dir,
     ))?)
@@ -128,11 +128,11 @@ pub fn embedding_model_status(data_dir: String) -> Result<String, OctosError> {
 /// return JSON `{"path"}` — exactly the C-ABI's `ra_embedding_model_ensure`.
 /// Blocks for the whole transfer, so call it from a plain thread before
 /// [`Runtime::new`] when the host wants to own the timing. Raises
-/// [`OctosError::Embed`] when the file is absent and `download` is false (or
-/// `RA_NO_MODEL_DOWNLOAD`, legacy `OCTOS_NO_MODEL_DOWNLOAD`, is set), or the
+/// [`RaError::Embed`] when the file is absent and `download` is false (or
+/// `RA_NO_MODEL_DOWNLOAD`, legacy `ra_NO_MODEL_DOWNLOAD`, is set), or the
 /// download fails to verify.
 #[uniffi::export]
-pub fn embedding_model_ensure(data_dir: String, download: bool) -> Result<String, OctosError> {
+pub fn embedding_model_ensure(data_dir: String, download: bool) -> Result<String, RaError> {
     Ok(ra_ffi::embedding_model_ensure(
         std::path::Path::new(&data_dir),
         download,
@@ -199,7 +199,7 @@ impl From<ra_ffi::TaskResult> for TaskResult {
 /// Structured error surfaced to the foreign side. Each fallible message string
 /// is ALREADY credential-scrubbed by the core before it reaches here.
 #[derive(Debug, uniffi::Error)]
-pub enum OctosError {
+pub enum RaError {
     /// Configuration / runtime-construction failure.
     Config { msg: String },
     /// Provider construction failure.
@@ -220,23 +220,23 @@ pub enum OctosError {
     Memory { msg: String },
 }
 
-impl std::fmt::Display for OctosError {
+impl std::fmt::Display for RaError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            OctosError::Config { msg }
-            | OctosError::Provider { msg }
-            | OctosError::Run { msg }
-            | OctosError::Embed { msg }
-            | OctosError::Memory { msg } => f.write_str(msg),
-            OctosError::NoEmbedder => f.write_str("no embedder configured"),
-            OctosError::Incomplete { .. } => f.write_str(ra_ffi::INCOMPLETE_RESPONSE_MESSAGE),
+            RaError::Config { msg }
+            | RaError::Provider { msg }
+            | RaError::Run { msg }
+            | RaError::Embed { msg }
+            | RaError::Memory { msg } => f.write_str(msg),
+            RaError::NoEmbedder => f.write_str("no embedder configured"),
+            RaError::Incomplete { .. } => f.write_str(ra_ffi::INCOMPLETE_RESPONSE_MESSAGE),
         }
     }
 }
 
-impl std::error::Error for OctosError {}
+impl std::error::Error for RaError {}
 
-impl From<ra_ffi::CoreError> for OctosError {
+impl From<ra_ffi::CoreError> for RaError {
     fn from(e: ra_ffi::CoreError) -> Self {
         use ra_ffi::CoreError;
         // The caller's OWN key is already exact-scrubbed inside the core. Here we
@@ -247,20 +247,20 @@ impl From<ra_ffi::CoreError> for OctosError {
         // path's byte-for-byte `ra_last_error` output is unaffected.
         let redact = ra_ffi::sanitize_error_text;
         match e {
-            CoreError::Config(msg) => OctosError::Config { msg: redact(&msg) },
-            CoreError::Provider(msg) => OctosError::Provider { msg: redact(&msg) },
-            CoreError::Run(msg) => OctosError::Run { msg: redact(&msg) },
-            CoreError::Embed(msg) => OctosError::Embed { msg: redact(&msg) },
-            CoreError::NoEmbedder => OctosError::NoEmbedder,
-            CoreError::Incomplete { partial } => OctosError::Incomplete {
+            CoreError::Config(msg) => RaError::Config { msg: redact(&msg) },
+            CoreError::Provider(msg) => RaError::Provider { msg: redact(&msg) },
+            CoreError::Run(msg) => RaError::Run { msg: redact(&msg) },
+            CoreError::Embed(msg) => RaError::Embed { msg: redact(&msg) },
+            CoreError::NoEmbedder => RaError::NoEmbedder,
+            CoreError::Incomplete { partial } => RaError::Incomplete {
                 partial: partial.into(),
             },
-            CoreError::Memory(msg) => OctosError::Memory { msg: redact(&msg) },
+            CoreError::Memory(msg) => RaError::Memory { msg: redact(&msg) },
         }
     }
 }
 
-/// An embedded ra runtime — the idiomatic counterpart of the C-ABI's opaque
+/// An embedded RecurAgent runtime — the idiomatic counterpart of the C-ABI's opaque
 /// `RaRuntime*`. Shared as `Arc<Runtime>`; construct with [`Runtime::new`].
 ///
 /// Unlike the raw C handle (which the caller must manually free and never share
@@ -279,13 +279,13 @@ impl Runtime {
     /// Build a runtime from a [`Config`]. Resolves and pins the credential
     /// exactly once inside the core (see [`ra_ffi::RaRuntime::from_config`]).
     #[uniffi::constructor]
-    pub fn new(config: Config) -> Result<Arc<Self>, OctosError> {
+    pub fn new(config: Config) -> Result<Arc<Self>, RaError> {
         let inner = ra_ffi::RaRuntime::from_config(config.into())?;
         Ok(Arc::new(Runtime { inner }))
     }
 
     /// Run a one-shot task and return its output + token usage.
-    pub fn run_task(&self, brief: Brief) -> Result<TaskResult, OctosError> {
+    pub fn run_task(&self, brief: Brief) -> Result<TaskResult, RaError> {
         let native_brief: ra_ffi::TaskBrief = brief.into();
         let result = self.inner.run_task(&native_brief)?;
         Ok(result.into())
@@ -293,8 +293,8 @@ impl Runtime {
 
     /// Embed `text`, returning the raw vector. Requires the `embed-llama`
     /// feature and an `embedding_model_path` in the [`Config`]; otherwise
-    /// [`OctosError::NoEmbedder`].
-    pub fn embed(&self, text: String) -> Result<Vec<f32>, OctosError> {
+    /// [`RaError::NoEmbedder`].
+    pub fn embed(&self, text: String) -> Result<Vec<f32>, RaError> {
         Ok(self.inner.embed(&text)?)
     }
 
@@ -304,26 +304,26 @@ impl Runtime {
     /// "embedded"}`. At most 500 records per call; `kind: "knowledge"` is
     /// rejected; `trust` is forced to untrusted. See
     /// [`ra_ffi::RaRuntime::memory_upsert`].
-    pub fn memory_upsert(&self, json: String) -> Result<String, OctosError> {
+    pub fn memory_upsert(&self, json: String) -> Result<String, RaError> {
         Ok(self.inner.memory_upsert(&json)?)
     }
 
     /// Search the Recall index. `json` is `{"query", "kinds"?, "sources"?,
     /// "since"?, "until"?, "limit"?}`; returns `{"hits": [Hit…]}`. See
     /// [`ra_ffi::RaRuntime::memory_search`].
-    pub fn memory_search(&self, json: String) -> Result<String, OctosError> {
+    pub fn memory_search(&self, json: String) -> Result<String, RaError> {
         Ok(self.inner.memory_search(&json)?)
     }
 
     /// Load one Recall record by id (counting the visit). Returns
-    /// `{"record": Record}`; [`OctosError::Memory`] "no such record" when the
+    /// `{"record": Record}`; [`RaError::Memory`] "no such record" when the
     /// id is unknown.
-    pub fn memory_load(&self, id: String) -> Result<String, OctosError> {
+    pub fn memory_load(&self, id: String) -> Result<String, RaError> {
         Ok(self.inner.memory_load(&id)?)
     }
 
     /// Recall index statistics as JSON (`RecallStats`).
-    pub fn memory_stats(&self) -> Result<String, OctosError> {
+    pub fn memory_stats(&self) -> Result<String, RaError> {
         Ok(self.inner.memory_stats()?)
     }
 }
@@ -407,7 +407,7 @@ mod tests {
     fn embedding_model_ensure_without_download_raises_embed_error() {
         let dir = tempfile_dir("ensure");
         match embedding_model_ensure(dir.to_string_lossy().into_owned(), false) {
-            Err(OctosError::Embed { msg }) => {
+            Err(RaError::Embed { msg }) => {
                 assert!(msg.contains("automatic download is disabled"), "got: {msg}");
             }
             other => panic!("expected Embed error, got {other:?}"),
@@ -428,7 +428,7 @@ mod tests {
         assert!(!rt.inner.embedding_configured);
         assert!(matches!(
             rt.embed("hello".to_string()),
-            Err(OctosError::NoEmbedder)
+            Err(RaError::NoEmbedder)
         ));
         rt.memory_upsert(
             r#"{"records":[{"id":"doc:mail:1","kind":"document","source":"mail",
@@ -477,12 +477,12 @@ mod tests {
     #[test]
     fn memory_error_maps_and_redacts() {
         use ra_ffi::CoreError;
-        let err: OctosError = CoreError::Memory("no such record".into()).into();
-        assert!(matches!(&err, OctosError::Memory { msg } if msg == "no such record"));
+        let err: RaError = CoreError::Memory("no such record".into()).into();
+        assert!(matches!(&err, RaError::Memory { msg } if msg == "no such record"));
         assert_eq!(err.to_string(), "no such record");
         let leaked = "sk-abc123DEF456ghijkLMNOP789";
-        let err: OctosError = CoreError::Memory(format!("store said {leaked}")).into();
-        let OctosError::Memory { msg } = err else {
+        let err: RaError = CoreError::Memory(format!("store said {leaked}")).into();
+        let RaError::Memory { msg } = err else {
             panic!("expected Memory");
         };
         assert!(
@@ -526,7 +526,7 @@ mod tests {
         assert_eq!(stats["records"], 1);
 
         match rt.memory_load("doc:mail:none".to_string()) {
-            Err(OctosError::Memory { msg }) => assert_eq!(msg, "no such record"),
+            Err(RaError::Memory { msg }) => assert_eq!(msg, "no such record"),
             other => panic!("expected Memory error, got {other:?}"),
         }
     }
@@ -557,47 +557,47 @@ mod tests {
     }
 
     #[test]
-    fn core_error_variants_map_to_octos_error() {
+    fn core_error_variants_map_to_ra_error() {
         use ra_ffi::CoreError;
         assert!(matches!(
-            OctosError::from(CoreError::Config("c".into())),
-            OctosError::Config { msg } if msg == "c"
+            RaError::from(CoreError::Config("c".into())),
+            RaError::Config { msg } if msg == "c"
         ));
         assert!(matches!(
-            OctosError::from(CoreError::Provider("p".into())),
-            OctosError::Provider { msg } if msg == "p"
+            RaError::from(CoreError::Provider("p".into())),
+            RaError::Provider { msg } if msg == "p"
         ));
         assert!(matches!(
-            OctosError::from(CoreError::Run("r".into())),
-            OctosError::Run { msg } if msg == "r"
+            RaError::from(CoreError::Run("r".into())),
+            RaError::Run { msg } if msg == "r"
         ));
         assert!(matches!(
-            OctosError::from(CoreError::Embed("e".into())),
-            OctosError::Embed { msg } if msg == "e"
+            RaError::from(CoreError::Embed("e".into())),
+            RaError::Embed { msg } if msg == "e"
         ));
         assert!(matches!(
-            OctosError::from(CoreError::NoEmbedder),
-            OctosError::NoEmbedder
+            RaError::from(CoreError::NoEmbedder),
+            RaError::NoEmbedder
         ));
         // Display renders the scrubbed message / the fixed NoEmbedder text.
         assert_eq!(
-            OctosError::Provider { msg: "boom".into() }.to_string(),
+            RaError::Provider { msg: "boom".into() }.to_string(),
             "boom"
         );
-        assert_eq!(OctosError::NoEmbedder.to_string(), "no embedder configured");
+        assert_eq!(RaError::NoEmbedder.to_string(), "no embedder configured");
     }
 
     #[test]
-    fn octos_error_from_core_error_redacts_secret_shaped_tokens() {
+    fn ra_error_from_core_error_redacts_secret_shaped_tokens() {
         use ra_ffi::CoreError;
         // A provider error body can echo a credential the core did not know to
         // exact-scrub. The From<CoreError> conversion must apply ra-ffi's
         // heuristic redactor so it never reaches a uniffi caller verbatim.
         let leaked = "sk-abc123DEF456ghijkLMNOP789";
-        let err: OctosError =
+        let err: RaError =
             CoreError::Provider(format!("upstream 401: token {leaked} rejected")).into();
         match err {
-            OctosError::Provider { msg } => {
+            RaError::Provider { msg } => {
                 assert!(msg.contains("<redacted>"), "not redacted: {msg}");
                 assert!(!msg.contains(leaked), "leaked verbatim: {msg}");
             }
@@ -631,7 +631,7 @@ mod tests {
     #[test]
     fn incomplete_error_preserves_payload_without_sanitizing_it_as_a_diagnostic() {
         let output = format!("  模型 partial\n{}", "actual output ".repeat(100));
-        let error = OctosError::from(ra_ffi::CoreError::Incomplete {
+        let error = RaError::from(ra_ffi::CoreError::Incomplete {
             partial: ra_ffi::TaskResult {
                 output: output.clone(),
                 iterations: 2,
@@ -645,7 +645,7 @@ mod tests {
             },
         });
         assert!(!error.to_string().contains("模型"));
-        let OctosError::Incomplete { partial } = error else {
+        let RaError::Incomplete { partial } = error else {
             panic!("incomplete output must remain a structured error");
         };
         assert_eq!(partial.output, output);
@@ -670,7 +670,7 @@ mod tests {
         // which the opaque core deliberately does not implement).
         match Runtime::new(cfg) {
             Ok(_) => panic!("unknown provider must fail"),
-            Err(OctosError::Provider { msg }) => {
+            Err(RaError::Provider { msg }) => {
                 assert!(msg.contains("unknown provider"), "got: {msg}");
             }
             Err(other) => panic!("expected Provider error, got {other:?}"),
@@ -690,13 +690,13 @@ mod tests {
             .embed("hello".to_string())
             .expect_err("embed must fail without an embedder");
         assert!(
-            matches!(err, OctosError::NoEmbedder),
+            matches!(err, RaError::NoEmbedder),
             "expected NoEmbedder, got {err:?}"
         );
     }
 
     /// Real end-to-end run. Ignored: needs a live provider + network. Configure
-    /// via env `RA_UNIFFI_TEST_KEY_ENV` (legacy `OCTOS_UNIFFI_TEST_KEY_ENV`
+    /// via env `RA_UNIFFI_TEST_KEY_ENV` (legacy `ra_UNIFFI_TEST_KEY_ENV`
     /// still honoured; default `OPENAI_API_KEY`). Run with:
     ///   cargo test -p ra-uniffi -- --ignored real_run_task
     #[test]

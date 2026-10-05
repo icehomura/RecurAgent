@@ -1,6 +1,6 @@
-//! Authenticated exchange from an ra user session to a one-time private-ASR grant.
+//! Authenticated exchange from an RecurAgent user session to a one-time private-ASR grant.
 //!
-//! The long-lived service credential stays in the ra server environment. The
+//! The long-lived service credential stays in the RecurAgent server environment. The
 //! browser receives only the short-lived grant returned by the ASR control plane.
 
 use std::fmt;

@@ -1,26 +1,26 @@
 # Support
 
-octoscode is community-supported open-source software. Support is provided on a
+ra-tui is community-supported open-source software. Support is provided on a
 best-effort basis; no response time or service-level agreement is guaranteed.
 
 ## Where to ask
 
-- Use the [bug report form](https://github.com/your-org/ra-tui/issues/new?template=bug_report.yml)
-  for reproducible defects in octoscode.
-- Use the [feature request form](https://github.com/your-org/ra-tui/issues/new?template=feature_request.yml)
+- Use the [bug report form](https://github.com/icehomura/ra-tui/issues/new?template=bug_report.yml)
+  for reproducible defects in ra-tui.
+- Use the [feature request form](https://github.com/icehomura/ra-tui/issues/new?template=feature_request.yml)
   for proposed improvements.
 - Check the [README troubleshooting guide](README.md#troubleshooting) before
   opening an issue.
 - Report vulnerabilities privately according to [SECURITY.md](SECURITY.md).
 
-The ra server/runtime is maintained separately. Server-only defects belong
-in the [octos repository](https://github.com/your-org/ra/issues).
+The RecurAgent server/runtime is maintained separately. Server-only defects belong
+in the [RecurAgent repository](https://github.com/icehomura/ra/issues).
 
 ## Helpful diagnostic information
 
-Include the octoscode version, Octos server version, operating system,
+Include the ra-tui version, RecurAgent server version, operating system,
 installation method, exact command, expected and actual behavior, and minimal
-reproduction steps. `octoscode doctor --json` can help, but review and redact
+reproduction steps. `ra-tui doctor --json` can help, but review and redact
 its output before attaching it.
 
 Never post API keys, auth tokens, credentials, private prompts, session data,

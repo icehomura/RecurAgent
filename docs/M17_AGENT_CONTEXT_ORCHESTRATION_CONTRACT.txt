@@ -88,7 +88,7 @@ validator is `e2e/scripts/validate-m17-live-proof.py` and the orchestrator is
 
 Acceptance:
 
-- Live stdio tmux soak passes with the real ra backend, not a fixture backend.
+- Live stdio tmux soak passes with the real RecurAgent backend, not a fixture backend.
 - At least three child specialists spawn and complete.
 - Child context ledgers exist for every managed child.
 - Final joined answer is visible in the TUI capture.

@@ -303,7 +303,7 @@ impl GatewayRuntime {
         // bypasses `Config::from_file`, so call the same env-var OR-merge
         // helper here. A host-level `plugins.require_signed = true`
         // propagates to spawned gateways via
-        // `OCTOS_PLUGINS_REQUIRE_SIGNED=1` (set by `ProcessManager`).
+        // `ra_PLUGINS_REQUIRE_SIGNED=1` (set by `ProcessManager`).
         crate::config::merge_env_plugin_policy_pub(&mut config);
 
         // Track whether any CLI override (`--model`, `--provider`,
@@ -340,11 +340,11 @@ impl GatewayRuntime {
         println!("{}: {}", "Provider".green(), provider_name);
 
         // Open ProfileStore for /account commands and bot management.
-        // Derive octos_home from: --ra-home flag > data_dir (which already
+        // Derive RecurAgent_home from: --ra-home flag > data_dir (which already
         // resolves --data-dir > $RA_HOME > ~/.ra).
-        let effective_octos_home = cmd.octos_home.clone().unwrap_or_else(|| data_dir.clone());
+        let effective_ra_home = cmd.ra_home.clone().unwrap_or_else(|| data_dir.clone());
         let profile_store: Option<Arc<crate::profiles::ProfileStore>> =
-            crate::profiles::ProfileStore::open_unified(&effective_octos_home)
+            crate::profiles::ProfileStore::open_unified(&effective_ra_home)
                 .ok()
                 .map(Arc::new);
 
@@ -417,7 +417,7 @@ impl GatewayRuntime {
             // In the `--profile` managed path `config` is derived from the
             // profile JSON, so `config.plugins.require_signed` mirrors
             // whatever the profile declared. The host-level policy
-            // reaches this branch via `OCTOS_PLUGINS_REQUIRE_SIGNED`
+            // reaches this branch via `ra_PLUGINS_REQUIRE_SIGNED`
             // (set by `ProcessManager` in `ra serve`), which
             // `Config::from_file` already OR-merges onto `config.plugins`
             // for the `--config` path. We forward `config.plugins` here
@@ -433,7 +433,7 @@ impl GatewayRuntime {
             match ProfileRuntime::bootstrap_with_host_plugins(
                 &effective_profile,
                 &data_dir,
-                Some(&effective_octos_home),
+                Some(&effective_ra_home),
                 crate::runtime::BootstrapRole::Gateway,
                 Some(&config.plugins),
                 config.voice.as_ref(),
@@ -575,12 +575,12 @@ impl GatewayRuntime {
             .wrap_err("failed to open recall store")?
         };
 
-        // Derive project_dir from octos_home (when launched by process_manager)
-        // or fall back to cwd/.ra (standalone ra gateway / ra chat mode).
+        // Derive project_dir from RecurAgent_home (when launched by process_manager)
+        // or fall back to cwd/.ra (standalone RecurAgent gateway / RecurAgent chat mode).
         // This is decoupled from cwd so that narrowing cwd to data_dir for
         // per-profile file isolation doesn't break access to shared skills/configs.
-        let project_dir = if let Some(ref octos_home) = cmd.octos_home {
-            octos_home.clone()
+        let project_dir = if let Some(ref ra_home) = cmd.ra_home {
+            ra_home.clone()
         } else {
             cwd.join(".ra")
         };
@@ -595,17 +595,17 @@ impl GatewayRuntime {
             info!(count = n, "bootstrapped platform skills");
         }
         // Gap 4.1 BLOCKER 2: bundle generic pipelines (deep_research) into
-        // <effective_octos_home>/bundled-pipelines so `run_pipeline` always
+        // <effective_RecurAgent_home>/bundled-pipelines so `run_pipeline` always
         // discovers them even when the per-profile `mofa-research` skill has
         // drifted. The invariant is bootstrap-dir == search-dir: the
         // non-profile pipeline factory below calls
-        // `with_octos_home(effective_octos_home)` UNCONDITIONALLY, so the
+        // `with_ra_home(effective_ra_home)` UNCONDITIONALLY, so the
         // dir we bootstrap into here is exactly the dir discovery searches.
         // (Previously bootstrap used `project_dir` = cwd/.ra while the
         // factory only searched `<data_dir>/...` when `--ra-home` was set,
         // so the bundle landed where the tool never looked.) Installed
         // pipelines of the same name still win (bundled dir is searched last).
-        let n = ra_agent::bootstrap::bootstrap_bundled_pipelines(&effective_octos_home);
+        let n = ra_agent::bootstrap::bootstrap_bundled_pipelines(&effective_ra_home);
         if n > 0 {
             info!(count = n, "bootstrapped bundled pipelines");
         }
@@ -742,7 +742,7 @@ impl GatewayRuntime {
         push_runtime_plugin_env(
             &mut plugin_env,
             &data_dir,
-            &effective_octos_home,
+            &effective_ra_home,
             profile_id.as_deref(),
             ominix_url.as_deref(),
         );
@@ -1102,14 +1102,14 @@ impl GatewayRuntime {
                 let policy_c = tools.provider_policy().cloned();
                 let plugins_c = plugin_dirs_for_spawn.clone();
                 let router_c = provider_router.clone();
-                // Gap 4.1 BLOCKER 2: use `effective_octos_home` (always
+                // Gap 4.1 BLOCKER 2: use `effective_ra_home` (always
                 // resolved: --ra-home > data_dir) — NOT the raw
-                // `cmd.octos_home` Option — so discovery searches the exact
+                // `cmd.ra_home` Option — so discovery searches the exact
                 // root the bundle was bootstrapped into above. With the raw
                 // Option, the default (no --ra-home) path skipped
-                // `with_octos_home` entirely and the bundled `deep_research`
+                // `with_ra_home` entirely and the bundled `deep_research`
                 // was never discoverable.
-                let octos_home_c = effective_octos_home.clone();
+                let ra_home_c = effective_ra_home.clone();
                 // Section B (codex review follow-up): capture the host's
                 // strict-signing flag so per-session `RunPipelineTool`
                 // instances honour the same `plugins.require_signed` gate.
@@ -1123,13 +1123,13 @@ impl GatewayRuntime {
                     policy: Option<ra_agent::ToolPolicy>,
                     plugin_dirs: Vec<PathBuf>,
                     router: Option<Arc<ProviderRouter>>,
-                    /// Gap 4.1 BLOCKER 2: always-resolved ra root
-                    /// (--ra-home > data_dir). `with_octos_home` is
+                    /// Gap 4.1 BLOCKER 2: always-resolved RecurAgent root
+                    /// (--ra-home > data_dir). `with_ra_home` is
                     /// called UNCONDITIONALLY in `create`, so discovery
                     /// searches the same root the bundle was bootstrapped
                     /// into. Previously `Option<PathBuf>` from the raw flag,
                     /// which skipped discovery on the default path.
-                    octos_home: PathBuf,
+                    ra_home: PathBuf,
                     plugin_require_signed: bool,
                     /// NEW-06 fix: forwarded to every worker `Agent`
                     /// via `RunPipelineTool::with_embedder` so
@@ -1158,9 +1158,9 @@ impl GatewayRuntime {
                         // by the actor factory.
                         .with_sandbox(sandbox.clone())
                         // BLOCKER 2: unconditional — registers
-                        // <octos_home>/{skills,pipelines} (installed) and
-                        // <octos_home>/bundled-pipelines (bundled, last).
-                        .with_octos_home(self.octos_home.clone());
+                        // <RecurAgent_home>/{skills,pipelines} (installed) and
+                        // <RecurAgent_home>/bundled-pipelines (bundled, last).
+                        .with_ra_home(self.ra_home.clone());
                         if let Some(ref router) = self.router {
                             pt = pt.with_provider_router(router.clone());
                         }
@@ -1186,7 +1186,7 @@ impl GatewayRuntime {
                     policy: policy_c,
                     plugin_dirs: plugins_c,
                     router: router_c,
-                    octos_home: octos_home_c,
+                    ra_home: ra_home_c,
                     plugin_require_signed: plugin_require_signed_c,
                     embedder: embedder_c,
                     // #1607 (codex round 4): the session sandbox is now handed to
@@ -1479,13 +1479,13 @@ impl GatewayRuntime {
                 .map(|store| ProfileActorFactoryBuilder {
                     profile_store: store.clone(),
                     project_dir: project_dir.clone(),
-                    // Gap 4.1 BLOCKER 1: thread the SAME `effective_octos_home`
+                    // Gap 4.1 BLOCKER 1: thread the SAME `effective_ra_home`
                     // the bundled pipelines were bootstrapped into (line ~473)
                     // and the non-profile pipeline factory uses (line ~953) so
                     // the child-profile `run_pipeline` discovers exactly that
                     // dir. `project_dir` (= cwd/.ra when `--ra-home` is
                     // absent) would search a dir bootstrap never wrote.
-                    effective_octos_home: effective_octos_home.clone(),
+                    effective_ra_home: effective_ra_home.clone(),
                     tool_config: tool_config.clone(),
                     memory: memory.clone(),
                     memory_store: memory_store.clone(),
@@ -1554,7 +1554,7 @@ impl GatewayRuntime {
         // the same reload path as a profile edit.
         if cmd.profile.is_some() {
             watcher =
-                watcher.with_profile_defaults(effective_octos_home.join("profile-defaults.json"));
+                watcher.with_profile_defaults(effective_ra_home.join("profile-defaults.json"));
         }
         let _watcher_handle = watcher.spawn();
 

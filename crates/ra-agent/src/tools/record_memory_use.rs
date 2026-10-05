@@ -3,7 +3,7 @@
 //! keep useful memories alive and let dead ones age out (#1586).
 //!
 //! Why a tool and not a citation tail in the reply (codex's mechanism):
-//! ra has no single reply choke point — channel egress is scattered
+//! RecurAgent has no single reply choke point — channel egress is scattered
 //! across ~10 channels — so a `[[mem-used: …]]` tail would risk leaking to
 //! end users on any surface that missed the strip. A tool call is
 //! structural, never part of user-visible content, and handled uniformly

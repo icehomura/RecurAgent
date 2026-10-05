@@ -1660,7 +1660,7 @@ fn resolve_builtin_slides_styles_dir(data_dir: &std::path::Path) -> Option<std::
         .filter(|value| !value.is_empty())
         .map(|value| value.to_string());
 
-    let octos_home = data_dir
+    let ra_home = data_dir
         .ancestors()
         .nth(3)
         .map(std::path::Path::to_path_buf);
@@ -1668,7 +1668,7 @@ fn resolve_builtin_slides_styles_dir(data_dir: &std::path::Path) -> Option<std::
     let mut candidates = Vec::new();
     candidates.push(data_dir.join("skills").join("mofa-slides").join("styles"));
 
-    if let Some(ref home) = octos_home {
+    if let Some(ref home) = ra_home {
         candidates.push(home.join("skills").join("mofa-slides").join("styles"));
 
         if let Some(ref root_profile) = family_root_profile {

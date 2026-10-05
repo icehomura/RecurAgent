@@ -17,9 +17,9 @@ fn main() -> Result<()> {
     // it isn't installed — BEFORE the event loop claims the terminal, so the
     // installer's output prints cleanly. May rewrite `cli.stdio_command` to an
     // explicit `~/.ra/bin/ra` path when a fresh install isn't on PATH.
-    // No-op for WebSocket/mock launches, a user-managed ra path/command, or
+    // No-op for WebSocket/mock launches, a user-managed RecurAgent path/command, or
     // when a compatible backend is already present.
-    backend_ensure::ensure_octos_backend(&mut cli)?;
+    backend_ensure::ensure_ra_backend(&mut cli)?;
     // Startup splash: ttfx-rendered logo on the main screen, before the event
     // loop claims the terminal. Gated (non-TTY/CI/--no-splash) and best-effort;
     // see specs/task-startup-splash.spec.

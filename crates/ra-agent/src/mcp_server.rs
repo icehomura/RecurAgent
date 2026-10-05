@@ -1,13 +1,13 @@
 //! M7.2 — MCP server mode for `ra mcp-serve`.
 //!
-//! Exposes ra sessions as MCP tools so outer orchestrators (another
-//! ra instance, Codex, Claude Code, hermes) can invoke ra as a
+//! Exposes RecurAgent sessions as MCP tools so outer orchestrators (another
+//! RecurAgent instance, Codex, Claude Code, hermes) can invoke RecurAgent as a
 //! sub-agent. This is the mirror of M7.1 (MCP client mode in [`mcp`]).
 //!
 //! # Tool shape
 //!
 //! Exactly **one** MCP tool is advertised: `run_ra_session`. Each
-//! call runs a full ra session (contract + input → workspace contract
+//! call runs a full RecurAgent session (contract + input → workspace contract
 //! artifact) and returns the aggregate result to the caller. Internal
 //! tool calls, iteration events, and progress are **never** streamed to
 //! the outer MCP caller — the outer caller sees one request/response.
@@ -19,7 +19,7 @@
 //! * **stdio** — parent-trust auth. The parent process spawned us, so
 //!   no token is required.
 //! * **http** — bearer token required (via
-//!   `OCTOS_MCP_SERVER_TOKEN`). Missing or wrong → synchronous 401.
+//!   `ra_MCP_SERVER_TOKEN`). Missing or wrong → synchronous 401.
 //!
 //! # Invariants
 //!
@@ -63,10 +63,10 @@ use crate::validators::ValidatorOutcome;
 pub const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
 
 /// The single session-level MCP tool exposed by the server.
-pub const RUN_OCTOS_SESSION_TOOL: &str = "run_ra_session";
+pub const RUN_ra_SESSION_TOOL: &str = "run_ra_session";
 
 /// Environment variable name that the HTTP transport reads for its bearer token.
-pub const OCTOS_MCP_SERVER_TOKEN_ENV: &str = "OCTOS_MCP_SERVER_TOKEN";
+pub const ra_MCP_SERVER_TOKEN_ENV: &str = "ra_MCP_SERVER_TOKEN";
 
 /// Idle keep-alive for HTTP Streamable sessions. rmcp's 300s default reaps a
 /// session mid-call for a long synchronous `run_ra_session` (which emits no
@@ -145,7 +145,7 @@ pub trait SessionLifecycleObserver: Send + Sync {
     fn mark_state(&self, state: TaskLifecycleState);
 }
 
-/// Trait that runs a single ra session given an opaque contract name and
+/// Trait that runs a single RecurAgent session given an opaque contract name and
 /// an input payload, returning the aggregate outcome. This indirection keeps
 /// `mcp_server` testable without pulling the entire chat/gateway bring-up
 /// into the acceptance tests.
@@ -169,7 +169,7 @@ type EventSink = Arc<dyn Fn(HarnessEvent) + Send + Sync>;
 pub struct McpServer {
     dispatch: Arc<dyn McpSessionDispatch>,
     supervisor: Arc<TaskSupervisor>,
-    // `Arc` so the rmcp `OctosMcpHandler` (which must be `Clone` for the
+    // `Arc` so the rmcp `RaMcpHandler` (which must be `Clone` for the
     // per-session HTTP service factory) can share the same installed sink.
     event_sink: Arc<RwLock<Option<EventSink>>>,
 }
@@ -226,11 +226,11 @@ impl McpServer {
             .get("name")
             .and_then(Value::as_str)
             .unwrap_or_default();
-        if tool_name != RUN_OCTOS_SESSION_TOOL {
+        if tool_name != RUN_ra_SESSION_TOOL {
             return render_mcp_error(id, McpServerError::UnknownTool(tool_name.to_string()));
         }
 
-        let result = dispatch_run_octos_session(&*self.dispatch, &self.supervisor, params).await;
+        let result = dispatch_run_ra_session(&*self.dispatch, &self.supervisor, params).await;
         let sink = self.event_sink.read().await.clone();
         emit_call_outcome(&sink, transport, &result);
         match result {
@@ -241,7 +241,7 @@ impl McpServer {
 
     /// Build the rmcp Streamable HTTP tower service for this server.
     ///
-    /// The service factory clones a fresh [`OctosMcpHandler`] (tagged `http`)
+    /// The service factory clones a fresh [`RaMcpHandler`] (tagged `http`)
     /// per MCP session. When `allow_non_loopback` is `false`, rmcp's default
     /// config restricts requests to loopback `Host` values — a built-in
     /// DNS-rebinding guard appropriate for a `127.0.0.1` bind. Pass `true` when
@@ -269,7 +269,7 @@ impl McpServer {
         self,
         allow_non_loopback: bool,
     ) -> (
-        StreamableHttpService<OctosMcpHandler, LocalSessionManager>,
+        StreamableHttpService<RaMcpHandler, LocalSessionManager>,
         CancellationToken,
     ) {
         let dispatch = self.dispatch;
@@ -291,7 +291,7 @@ impl McpServer {
 
         let service = StreamableHttpService::new(
             move || {
-                Ok(OctosMcpHandler {
+                Ok(RaMcpHandler {
                     dispatch: dispatch.clone(),
                     supervisor: supervisor.clone(),
                     event_sink: event_sink.clone(),
@@ -314,7 +314,7 @@ impl McpServer {
         R: tokio::io::AsyncRead + Send + Unpin + 'static,
         W: tokio::io::AsyncWrite + Send + Unpin + 'static,
     {
-        let handler = OctosMcpHandler {
+        let handler = RaMcpHandler {
             dispatch: self.dispatch,
             supervisor: self.supervisor,
             event_sink: self.event_sink,
@@ -339,21 +339,21 @@ impl McpServer {
     }
 }
 
-/// rmcp [`ServerHandler`] exposing ra as a single-tool MCP server.
+/// rmcp [`ServerHandler`] exposing RecurAgent as a single-tool MCP server.
 ///
 /// Every transport (`serve_stdio` today, the streamable-HTTP service next)
 /// routes through this handler, which reuses the same
-/// [`dispatch_run_octos_session`] business logic, harness-event emission, and
+/// [`dispatch_run_ra_session`] business logic, harness-event emission, and
 /// `ra_mcp_server_call_total` metric as the legacy JSON-RPC path.
 #[derive(Clone)]
-pub struct OctosMcpHandler {
+pub struct RaMcpHandler {
     dispatch: Arc<dyn McpSessionDispatch>,
     supervisor: Arc<TaskSupervisor>,
     event_sink: Arc<RwLock<Option<EventSink>>>,
     transport_label: &'static str,
 }
 
-impl ServerHandler for OctosMcpHandler {
+impl ServerHandler for RaMcpHandler {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_protocol_version(ProtocolVersion::LATEST)
@@ -375,7 +375,7 @@ impl ServerHandler for OctosMcpHandler {
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
         Ok(ListToolsResult {
-            tools: vec![run_octos_session_tool()],
+            tools: vec![run_ra_session_tool()],
             ..Default::default()
         })
     }
@@ -385,10 +385,10 @@ impl ServerHandler for OctosMcpHandler {
         request: CallToolRequestParams,
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
-        if request.name.as_ref() != RUN_OCTOS_SESSION_TOOL {
+        if request.name.as_ref() != RUN_ra_SESSION_TOOL {
             return Err(ErrorData::invalid_params(
                 format!(
-                    "unknown tool '{}'; this server exposes only '{RUN_OCTOS_SESSION_TOOL}'",
+                    "unknown tool '{}'; this server exposes only '{RUN_ra_SESSION_TOOL}'",
                     request.name
                 ),
                 None,
@@ -402,7 +402,7 @@ impl ServerHandler for OctosMcpHandler {
             .arguments
             .map(Value::Object)
             .unwrap_or_else(|| Value::Object(Default::default()));
-        let params = json!({ "name": RUN_OCTOS_SESSION_TOOL, "arguments": arguments });
+        let params = json!({ "name": RUN_ra_SESSION_TOOL, "arguments": arguments });
 
         // Run the session, but abort it if rmcp cancels this request: a client
         // `notifications/cancelled`, a disconnect, or session teardown (e.g. the
@@ -411,7 +411,7 @@ impl ServerHandler for OctosMcpHandler {
         // its result. `context.ct` descends from the serve-loop token, so it
         // fires on all three; dropping the dispatch future cancels the agent.
         let result = tokio::select! {
-            result = dispatch_run_octos_session(&*self.dispatch, &self.supervisor, &params) => result,
+            result = dispatch_run_ra_session(&*self.dispatch, &self.supervisor, &params) => result,
             _ = context.ct.cancelled() => Err(McpServerError::SessionFailed(
                 "run_ra_session cancelled by the client or session teardown".to_string(),
             )),
@@ -428,11 +428,11 @@ impl ServerHandler for OctosMcpHandler {
 }
 
 /// The single MCP tool advertised by the server, as a typed rmcp [`Tool`].
-fn run_octos_session_tool() -> Tool {
-    let schema = run_octos_session_schema();
+fn run_ra_session_tool() -> Tool {
+    let schema = run_ra_session_schema();
     let input_schema = schema.as_object().cloned().unwrap_or_default();
     Tool::new(
-        RUN_OCTOS_SESSION_TOOL,
+        RUN_ra_SESSION_TOOL,
         "Run a complete ra session. The caller supplies a workspace contract name and an \
          input payload; ra runs its normal loop to completion (including workspace-contract \
          enforcement) and returns the resulting artifact. Internal tool calls and progress \
@@ -441,7 +441,7 @@ fn run_octos_session_tool() -> Tool {
     )
 }
 
-fn run_octos_session_schema() -> Value {
+fn run_ra_session_schema() -> Value {
     json!({
         "type": "object",
         "properties": {
@@ -532,7 +532,7 @@ fn emit_call_outcome(
         let event = HarnessEvent::mcp_server_call(
             format!("mcp:{transport}"),
             TaskId::new().to_string(),
-            RUN_OCTOS_SESSION_TOOL,
+            RUN_ra_SESSION_TOOL,
             caller_id_for_transport(transport),
             transport,
             &outcome_label,
@@ -543,7 +543,7 @@ fn emit_call_outcome(
     }
     counter!(
         "ra_mcp_server_call_total",
-        "tool" => RUN_OCTOS_SESSION_TOOL.to_string(),
+        "tool" => RUN_ra_SESSION_TOOL.to_string(),
         "outcome" => outcome_label,
     )
     .increment(1);
@@ -568,9 +568,9 @@ pub fn build_initialize_response(_server: &McpServer) -> Value {
 pub fn build_tools_list_response(_server: &McpServer) -> Value {
     json!({
         "tools": [{
-            "name": RUN_OCTOS_SESSION_TOOL,
+            "name": RUN_ra_SESSION_TOOL,
             "description": "Run a complete ra session. The caller supplies a workspace contract name and an input payload; ra runs its normal loop to completion (including workspace-contract enforcement) and returns the resulting artifact. Internal tool calls and progress events are not streamed to the caller.",
-            "inputSchema": run_octos_session_schema()
+            "inputSchema": run_ra_session_schema()
         }]
     })
 }
@@ -610,7 +610,7 @@ pub fn parse_bearer_token(header: Option<&str>) -> Option<String> {
 
 /// Dispatch a `run_ra_session` call by forwarding to the trait, then
 /// format the outcome into the standard MCP `tools/call` result.
-pub async fn dispatch_run_octos_session(
+pub async fn dispatch_run_ra_session(
     dispatch: &dyn McpSessionDispatch,
     supervisor: &TaskSupervisor,
     params: &Value,
@@ -627,7 +627,7 @@ pub async fn dispatch_run_octos_session(
         .cloned()
         .unwrap_or(Value::Object(Default::default()));
 
-    let task_id = supervisor.register(RUN_OCTOS_SESSION_TOOL, "mcp-call", Some("mcp:server"));
+    let task_id = supervisor.register(RUN_ra_SESSION_TOOL, "mcp-call", Some("mcp:server"));
     let observer = SupervisorObserver {
         supervisor,
         task_id: task_id.clone(),
@@ -743,7 +743,7 @@ fn extract_outcome_from_result(result: &Value) -> (String, Option<String>, Optio
 fn caller_id_for_transport(transport: &str) -> String {
     match transport {
         // Caller label injected by the parent: `RA_MCP_CALLER_LABEL` wins, the
-        // legacy `OCTOS_MCP_CALLER_LABEL` is still honoured.
+        // legacy `ra_MCP_CALLER_LABEL` is still honoured.
         "stdio" => ra_core::brand::env_compat_str("MCP_CALLER_LABEL")
             .unwrap_or_else(|| "parent-process".into()),
         "http" => "http-bearer".into(),
@@ -790,7 +790,7 @@ impl SessionLifecycleObserver for SupervisorObserver<'_> {
                 );
             }
             TaskLifecycleState::Ready => {
-                // Completed state is finalized by dispatch_run_octos_session
+                // Completed state is finalized by dispatch_run_RecurAgent_session
                 // with the output_files list. Do nothing here to avoid
                 // racing with the authoritative completion write.
             }
@@ -891,12 +891,12 @@ mod tests {
         }
     }
 
-    /// End-to-end proof that the rmcp [`OctosMcpHandler`] speaks the real MCP
+    /// End-to-end proof that the rmcp [`RaMcpHandler`] speaks the real MCP
     /// protocol: an rmcp client connected over an in-memory duplex completes
     /// the initialize handshake, sees exactly `run_ra_session` via
     /// `tools/list`, and receives a non-error `tools/call` result.
     #[tokio::test]
-    async fn serves_run_octos_session_over_real_rmcp_transport() {
+    async fn serves_run_ra_session_over_real_rmcp_transport() {
         use rmcp::model::{CallToolRequestParams, ClientInfo};
         use rmcp::service::serve_client;
 
@@ -915,10 +915,10 @@ mod tests {
         // tools/list advertises exactly the one session-level tool.
         let tools = client.list_all_tools().await.expect("tools/list");
         assert_eq!(tools.len(), 1);
-        assert_eq!(tools[0].name.as_ref(), RUN_OCTOS_SESSION_TOOL);
+        assert_eq!(tools[0].name.as_ref(), RUN_ra_SESSION_TOOL);
 
         // tools/call routes through the dispatch and returns a non-error bundle.
-        let mut param = CallToolRequestParams::new(RUN_OCTOS_SESSION_TOOL);
+        let mut param = CallToolRequestParams::new(RUN_ra_SESSION_TOOL);
         param.arguments = json!({ "contract": "coding", "input": {} })
             .as_object()
             .cloned();

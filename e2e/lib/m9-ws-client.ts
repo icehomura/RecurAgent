@@ -510,10 +510,10 @@ export async function waitForTurnTerminal(
 /**
  * Read live-server URL + token from the standard env vars.
  *
- * The URL falls back to `OCTOS_TEST_URL` the same way the token already fell
- * back to `OCTOS_AUTH_TOKEN`, and hard-errors when neither is set. It used to
+ * The URL falls back to `ra_TEST_URL` the same way the token already fell
+ * back to `ra_AUTH_TOKEN`, and hard-errors when neither is set. It used to
  * default to a hardcoded `http://127.0.0.1:56831`, which nothing in CI ever
- * listens on: `OCTOS_LIVE_URL` is set only by `e2e/tmux/run.sh`, so every
+ * listens on: `ra_LIVE_URL` is set only by `e2e/tmux/run.sh`, so every
  * m9-protocol spec in `e2e-live-nightly` dialled a dead port and failed with
  * ECONNREFUSED. Because the token fallback DID resolve, the harness reached
  * the connect attempt instead of reporting a missing precondition, and the
@@ -522,23 +522,23 @@ export async function waitForTurnTerminal(
  * worse than no default.
  */
 export function liveServerEnv(): { url: string; token: string; profileId?: string } {
-  const url = process.env.OCTOS_LIVE_URL || process.env.OCTOS_TEST_URL || "";
+  const url = process.env.ra_LIVE_URL || process.env.ra_TEST_URL || "";
   const token =
-    process.env.OCTOS_LIVE_TOKEN ||
-    process.env.OCTOS_AUTH_TOKEN ||
-    process.env.OCTOS_TEST_TOKEN ||
+    process.env.ra_LIVE_TOKEN ||
+    process.env.ra_AUTH_TOKEN ||
+    process.env.ra_TEST_TOKEN ||
     "";
   if (!url) {
     throw new Error(
-      "m9-ws: OCTOS_LIVE_URL (or OCTOS_TEST_URL) must be set to run the protocol harness.",
+      "m9-ws: ra_LIVE_URL (or ra_TEST_URL) must be set to run the protocol harness.",
     );
   }
   if (!token) {
     throw new Error(
-      "m9-ws: OCTOS_LIVE_TOKEN (or OCTOS_AUTH_TOKEN) must be set to run the protocol harness.",
+      "m9-ws: ra_LIVE_TOKEN (or ra_AUTH_TOKEN) must be set to run the protocol harness.",
     );
   }
-  return { url, token, profileId: process.env.OCTOS_LIVE_PROFILE };
+  return { url, token, profileId: process.env.ra_LIVE_PROFILE };
 }
 
 /** True if a typed RPC error has the expected JSON-RPC code. */

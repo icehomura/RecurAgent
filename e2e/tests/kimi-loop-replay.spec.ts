@@ -29,10 +29,10 @@
  *     new runtime guard didn't catch it in time).
  *
  * Run:
- *   OCTOS_TEST_URL=https://dspfac.ra.ominix.io \
- *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
- *   OCTOS_PROFILE=dspfac \
- *   OCTOS_TEST_EMAIL=dspfac@gmail.com \
+ *   ra_TEST_URL=https://dspfac.ra.ominix.io \
+ *   ra_AUTH_TOKEN=ra-admin-2026 \
+ *   ra_PROFILE=dspfac \
+ *   ra_TEST_EMAIL=dspfac@gmail.com \
  *   npx playwright test tests/kimi-loop-replay.spec.ts
  */
 import { expect, test } from '@playwright/test';

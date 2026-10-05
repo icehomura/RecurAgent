@@ -1,6 +1,6 @@
 //! Self-update module: download, verify, backup, replace, rollback.
 //!
-//! Fetches release tarballs from GitHub Releases for `your-org/ra`,
+//! Fetches release tarballs from GitHub Releases for `icehomura/ra`,
 //! verifies each download against the release's `.sha256` sidecar and the
 //! API-reported asset size — corruption protection only: the sidecar ships
 //! from the same release, so a compromised release channel is out of scope
@@ -14,13 +14,13 @@ use eyre::{Context, Result};
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 
-const GITHUB_REPO: &str = "your-org/ra";
+const GITHUB_REPO: &str = "icehomura/ra";
 const ASSET_NAME: &str = "ra-bundle-aarch64-apple-darwin.tar.gz";
 
 /// The top-level files a release bundle is allowed to install, mirroring
 /// `scripts/bundle-release.sh` (the single source of truth for what ships).
 /// Anything else found in the archive is refused: an update must never plant
-/// unlisted executables next to the ra binary. Pinned by
+/// unlisted executables next to the RecurAgent binary. Pinned by
 /// `bundle_whitelist_matches_bundle_release_script` below.
 const BUNDLE_ENTRIES: &[&str] = &[
     "ra",
@@ -379,7 +379,7 @@ impl Updater {
 
             // Only install files the bundle is known to ship
             // (scripts/bundle-release.sh). A planted extra executable in the
-            // archive must not land next to the ra binary.
+            // archive must not land next to the RecurAgent binary.
             if !BUNDLE_ENTRIES.contains(&name.as_str()) {
                 tracing::warn!(
                     entry = %name,
@@ -468,9 +468,8 @@ impl Updater {
 
     /// Clean skill dirs so bootstrap recreates them on next start.
     fn clean_skills(&self) {
-        // Production: the brand state home's `skills/` (`RA_HOME`/`OCTOS_HOME`,
-        // else the existing `~/.ra`, else the existing legacy `~/.ra`, else
-        // `~/.ra`). Tests override the *skills dir* itself via
+        // Production: the brand state home's `skills/` (`RA_HOME`/`ra_HOME`,
+        // else `~/.ra`). Tests override the *skills dir* itself via
         // `with_skills_root`.
         let skills_dir = match &self.skills_root {
             Some(root) => Some(root.clone()),
@@ -570,7 +569,7 @@ mod tests {
             "assets": [
                 {
                     "name": ASSET_NAME,
-                    "browser_download_url": "https://github.com/your-org/ra/releases/download/v0.3.1/ra-bundle-aarch64-apple-darwin.tar.gz",
+                    "browser_download_url": "https://github.com/icehomura/ra/releases/download/v0.3.1/ra-bundle-aarch64-apple-darwin.tar.gz",
                     "size": 12345678
                 }
             ]

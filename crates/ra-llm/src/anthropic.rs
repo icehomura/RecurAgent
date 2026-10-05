@@ -42,7 +42,7 @@ pub struct AnthropicProvider {
     /// round. The official endpoint defaults ON, while custom compatible
     /// endpoints require an explicit opt-in. The `RA_PROMPT_CACHING` env
     /// kill-switch can force the official default off at startup (the legacy
-    /// `OCTOS_PROMPT_CACHING` spelling is still honoured) — see
+    /// `ra_PROMPT_CACHING` spelling is still honoured) — see
     /// [`Self::with_prompt_caching`] and [`prompt_caching_default`].
     prompt_caching: bool,
     /// Whether a builder call explicitly selected the prompt-caching mode.
@@ -83,7 +83,7 @@ fn prompt_caching_default_from(env_value: Option<&str>) -> bool {
 }
 
 /// Default prompt-caching state, honoring the `RA_PROMPT_CACHING`
-/// kill-switch (legacy `OCTOS_PROMPT_CACHING` still honoured). See
+/// kill-switch (legacy `ra_PROMPT_CACHING` still honoured). See
 /// [`prompt_caching_default_from`].
 fn prompt_caching_default() -> bool {
     prompt_caching_default_for_base_url(OFFICIAL_ANTHROPIC_BASE_URL)
@@ -157,7 +157,7 @@ impl AnthropicProvider {
     /// wire shape (plain-string `system`, verbatim tools).
     ///
     /// Operators can flip the default OFF at startup without a rebuild via
-    /// `RA_PROMPT_CACHING=0` (legacy `OCTOS_PROMPT_CACHING` still honoured;
+    /// `RA_PROMPT_CACHING=0` (legacy `ra_PROMPT_CACHING` still honoured;
     /// see [`prompt_caching_default`]); this explicit builder still wins over
     /// the env default when called.
     pub fn with_prompt_caching(mut self, enabled: bool) -> Self {
@@ -356,7 +356,7 @@ impl AnthropicProvider {
     ///   warn never cries wolf.
     ///
     /// Rejecting-model suppression is logged at `debug`, not `warn`: stock
-    /// ra reaches it without operator input (compaction and rich_output
+    /// RecurAgent reaches it without operator input (compaction and rich_output
     /// both set `temperature: 0.2` and can target a Claude model), so a warn
     /// would fire on ordinary turns.
     fn sampling_fields<'a>(
@@ -466,7 +466,7 @@ impl LlmProvider for AnthropicProvider {
         let request = self.build_request(messages, tools, config);
         self.trace_prompt_cache_input(&request, config);
 
-        let response = self
+        let mut builder = self
             .client
             .post(format!("{}/v1/messages", self.base_url))
             .header("x-api-key", self.api_key.expose_secret())
@@ -475,7 +475,17 @@ impl LlmProvider for AnthropicProvider {
             .timeout(std::time::Duration::from_secs(
                 crate::provider::DEFAULT_LLM_TIMEOUT_SECS,
             ))
-            .json(&request)
+            .json(&request);
+        // OpenCode (Zen and Go tiers) requires a per-conversation session
+        // header before it will route the request.
+        for (name, value) in crate::attribution::opencode_headers(
+            &self.provider_label,
+            &self.base_url,
+            crate::attribution::current_session_id().as_deref(),
+        ) {
+            builder = builder.header(name, value);
+        }
+        let response = builder
             .send()
             .await
             .wrap_err_with(|| {
@@ -530,13 +540,23 @@ impl LlmProvider for AnthropicProvider {
         // Stream client: no total timeout, so a long healthy generation is not
         // cut off. Stalls are bounded by the client's per-read timeout and the
         // agent's stream-timeout guards (see build_streaming_http_client).
-        let response = self
+        let mut builder = self
             .stream_client
             .post(format!("{}/v1/messages", self.base_url))
             .header("x-api-key", self.api_key.expose_secret())
             .header("anthropic-version", "2023-06-01")
             .header("content-type", "application/json")
-            .json(&body)
+            .json(&body);
+        // OpenCode (Zen and Go tiers) requires a per-conversation session
+        // header before it will route the request.
+        for (name, value) in crate::attribution::opencode_headers(
+            &self.provider_label,
+            &self.base_url,
+            crate::attribution::current_session_id().as_deref(),
+        ) {
+            builder = builder.header(name, value);
+        }
+        let response = builder
             .send()
             .await
             .wrap_err_with(|| {
@@ -2918,7 +2938,7 @@ mod tests {
 
     #[test]
     fn should_drop_modeled_keys_when_smuggled_via_sampling_params_on_glm() {
-        // Defense-in-depth, mirroring the OpenAI path (#2172): keys ra
+        // Defense-in-depth, mirroring the OpenAI path (#2172): keys RecurAgent
         // models with dedicated fields cannot sneak in through
         // sampling_params and emit duplicate/divergent top-level keys.
         let (provider, tools, messages) = glm_fixture();

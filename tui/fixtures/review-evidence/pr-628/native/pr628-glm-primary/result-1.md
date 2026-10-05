@@ -5,7 +5,7 @@ updated_unix: 1788921685
 turn: 1
 ---
 
-独立初审完成。报告已写入 `/private/tmp/octoloop-glm-k3-20260909/pr-628/.octos/independent-glm.md`（frontmatter：reviewer=pr628-glm-primary, model_lane=primary(glm-5.3), head=0c22365, base=fbb59c3, verification=static+tests-read, protocol=olp/v2），native result.md 与 `peer` sidecar 已落位。
+独立初审完成。报告已写入 `/private/tmp/octoloop-glm-k3-20260909/pr-628/.ra/independent-glm.md`（frontmatter：reviewer=pr628-glm-primary, model_lane=primary(glm-5.3), head=0c22365, base=fbb59c3, verification=static+tests-read, protocol=olp/v2），native result.md 与 `peer` sidecar 已落位。
 
 核心结论：
 
@@ -15,4 +15,4 @@ turn: 1
 - **F5（minor，测试缺口）**：未断言活动总数（双重发布不会被测出）、detail 含 draft、`Err` 路径、accepted 无 Warning。
 - **3 条 info**：`Ok(None)` 出口经唯一调用方实际不可达（防御性）；parse 错误 reason 为硬编码英文（遗留 l10n，本 PR 扩大到 transcript）；`stop` 别名 `complete`/`done` 历来未列帮助文案。
 
-遵守限制：只读源码、未碰 `.octos/independent-k3.md`、未执行编译/测试（动态复现方案已写入报告）。本轮结束。
+遵守限制：只读源码、未碰 `.ra/independent-k3.md`、未执行编译/测试（动态复现方案已写入报告）。本轮结束。

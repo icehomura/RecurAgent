@@ -1,14 +1,14 @@
-# ra 技能开发指南
+# RecurAgent 技能开发指南
 
 [English](app-skill-dev-guide.md) | [中文](app-skill-dev-guide-zh.md)
 
-本指南涵盖构建、注册和部署 ra 技能所需的全部内容。
+本指南涵盖构建、注册和部署 RecurAgent 技能所需的全部内容。
 
 ---
 
 ## 架构概述
 
-技能是一个**独立可执行二进制文件**，通过简单的 **stdin/stdout JSON 协议**与 ra 网关通信。网关为每次工具调用生成技能进程，通过 stdin 传递 JSON 参数，从 stdout 读取 JSON 结果。
+技能是一个**独立可执行二进制文件**，通过简单的 **stdin/stdout JSON 协议**与 RecurAgent 网关通信。网关为每次工具调用生成技能进程，通过 stdin 传递 JSON 参数，从 stdout 读取 JSON 结果。
 
 ```
 用户消息 → LLM → tool_use("get_weather", {"city": "巴黎"})
@@ -285,7 +285,7 @@ manage_skills(action="search", query="comic")
 
 ### 发布到注册中心
 
-外部技能可通过 [octos-hub](https://github.com/your-org/ra-hub) 注册中心被发现。
+外部技能可通过 [ra-hub](https://github.com/icehomura/ra-hub) 注册中心被发现。
 
 1. 将技能仓库推送到 GitHub
 2. 通过 PR 向 `registry.json` 添加条目：
@@ -342,7 +342,7 @@ ra skills --profile alice install your-user/your-repo/skill-a
 - 主提供商的 API 密钥（如 `DASHSCOPE_API_KEY`）
 - 备用提供商密钥（如 `GEMINI_API_KEY`、`OPENAI_API_KEY`）
 - 非标准端点的 Base URL
-- `OCTOS_DATA_DIR` 和 `OCTOS_WORK_DIR`
+- `ra_DATA_DIR` 和 `ra_WORK_DIR`
 
 密钥在网关启动时从 macOS 钥匙串解析。技能二进制通过环境变量接收 — 无需手动导出。
 

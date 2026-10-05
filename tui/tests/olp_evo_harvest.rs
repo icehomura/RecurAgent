@@ -1283,7 +1283,7 @@ fn olp_evo_init_appends_evolution_gitignore_once() {
             .unwrap()
     };
     // Exit 0 (all deps present) or 2 (dependency check found gaps, e.g. a
-    // CI runner without octoscode) — both are the script's defined
+    // CI runner without ra-tui) — both are the script's defined
     // semantics; the contract Then pins only the .gitignore content.
     let out = run();
     let diag = |o: &std::process::Output| {
@@ -1317,7 +1317,7 @@ fn olp_evo_init_appends_evolution_gitignore_once() {
 /// Scenario: olp-init 对整目录已忽略的项目不追加
 #[test]
 
-fn olp_evo_init_skips_when_octos_dir_ignored() {
+fn olp_evo_init_skips_when_ra_dir_ignored() {
     let root = std::env::temp_dir().join(format!("olp-evo-init-skip-{}", std::process::id()));
     let repo = root.join("repo");
     std::fs::create_dir_all(repo.join(".ra")).unwrap();

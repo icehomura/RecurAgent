@@ -8,7 +8,7 @@ It is the serve counterpart of [`ra acp --host-managed`](HOST_MANAGED_ACP.md):
 opt-in, fail-closed, and without effect on ordinary `ra serve`.
 
 The protocol-visible parts are specified in
-[UPCR-2026-036](OCTOS_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_036_HOST_MANAGED_SERVE.md).
+[UPCR-2026-036](ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_036_HOST_MANAGED_SERVE.md).
 
 ## Threat model
 
@@ -28,13 +28,13 @@ by itself.
 | External token | stdin, second line (empty: none) | user `_main`, role user | `GET /api/ui-protocol/ws`, and there only the allowlist below |
 
 - Only these two tokens authenticate. There is no solo login (not even with
-  `OCTOS_SOLO_LOGIN`), no trusted-proxy `X-Profile-Id`, no hashed admin-token
-  store, no `OCTOS_TEST_TOKEN` and no OTP session.
+  `ra_SOLO_LOGIN`), no trusted-proxy `X-Profile-Id`, no hashed admin-token
+  store, no `ra_TEST_TOKEN` and no OTP session.
 - The host writes both tokens as the first two lines of the server's stdin,
   then keeps stdin open (the lifeline, below). Tokens never go in the
   environment: any process of the same user can read `/proc/<pid>/environ`,
-  and on Android that includes this app's own tools. `OCTOS_AUTH_TOKEN` and
-  `OCTOS_HOST_EXTERNAL_TOKEN` in the environment, `--auth-token` and the
+  and on Android that includes this app's own tools. `ra_AUTH_TOKEN` and
+  `ra_HOST_EXTERNAL_TOKEN` in the environment, `--auth-token` and the
   config file's `auth_token` are all refused. Tokens must be at least 32
   characters of RFC 7230 `tchar`, and the two must differ.
 - Neither token is printed, logged or returned by a route. The only exception
@@ -72,7 +72,7 @@ An external identity:
   handlers fold a topic into the session key, so it could name an app peer's
   session), and may attach turn media only as upload handles (`up/…`):
   `external_parameter_denied`. `session.workspace_cwd.v1` is never negotiated
-  for it, so its sessions stay in the workspace ra bound them to (for a
+  for it, so its sessions stay in the workspace RecurAgent bound them to (for a
   new session, `<data dir>/users/<session>/workspace`);
 - steers, interrupts, and answers approvals and questions only for turns its
   own connection started: `external_turn_denied` for any other turn, such as
@@ -90,10 +90,10 @@ An external identity:
   connection, the host included, fails with `external_approval_owner_only`
   or `external_question_owner_only`. A remembered approve scope never
   answers it. So the host's automation (developer mode, standing rules)
-  never decides for an external client (OctoSense ADR 0004, gap G1). The
+  never decides for an external client (RecurAgent ADR 0004, gap G1). The
   ownership survives a restart: the ledger records of these prompts are
   stored with an `external_prompt` marker, and after a restart they are
-  replayed to nobody, the host included. Records written by an ra
+  replayed to nobody, the host included. Records written by an RecurAgent
   older than #2625 have no marker and replay as before;
 - learns no other turn's id from a refusal: a `turn/start` on a session that
   is already running a turn fails with `data.kind: "turn_in_progress"` and no
@@ -149,7 +149,7 @@ re-checked, and DNS answers are pinned.
   answered 421 before routing. This blocks DNS rebinding. A tunnel into the
   device must preserve the port number (for example `adb forward tcp:P tcp:P`).
 - **Origin.** CORS and the WebSocket upgrade trust only the configured origins
-  (`appui.allowed_origins` or `OCTOS_APPUI_ALLOWED_ORIGINS`), without the
+  (`appui.allowed_origins` or `ra_APPUI_ALLOWED_ORIGINS`), without the
   built-in development, ominix or per-tenant origins, and without the
   listener's own loopback origins. A WebSocket upgrade that carries the
   browser-only `Sec-Fetch-*` headers but no `Origin` is refused. A client that

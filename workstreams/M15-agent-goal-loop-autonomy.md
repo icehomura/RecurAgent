@@ -165,18 +165,18 @@ Milestone status is tracked in GitHub and in this table. "Partial" means code
 or fixture evidence exists, but the production wiring is not sufficient to
 claim Codex-style multi-agent parity.
 
-Central tracker: [octos#992](https://github.com/your-org/ra/issues/992).
+Central tracker: [RecurAgent#992](https://github.com/icehomura/ra/issues/992).
 
 | Milestone | Repo | Issue | Status | Current wiring status |
 | --- | --- | --- | --- | --- |
-| M15-A: AppUI autonomy protocol | `octos` | [#990](https://github.com/your-org/ra/issues/990) | Open | Partial: method/capability constants exist; typed durable agent/goal/loop notifications and complete fixtures are not done. |
-| M15-B: Backend AgentOrchestrator runtime | `octos` | [#991](https://github.com/your-org/ra/issues/991) | Open | Partial: in-memory inspection state and fixture CLI agents exist; production native/CLI/MCP child-agent runtime is not wired. |
-| M15-C2/C3: Goal scheduler and policy | `octos` | [#979](https://github.com/your-org/ra/issues/979) | Open | Partial: goal CRUD/status exists; idle continuation, budget policy, and model wrap-up are not wired. |
-| M15-D2/D3: Loop scheduler and policy | `octos` | [#977](https://github.com/your-org/ra/issues/977) | Open | Partial: loop CRUD/control exists; loop fires enqueue only and do not execute production master turns. |
-| M15-G1/G2/G3/G4: Master continuation and scatter-join summaries | `octos` | [#976](https://github.com/your-org/ra/issues/976) | Open | Partial: scheduler primitive exists; no production consumer wakes the master LLM or generates child/final summaries. |
-| M15-H: Durable supervisor runtime | `octos` | [#978](https://github.com/your-org/ra/issues/978) | Open | Partial: `SupervisorStore` exists; it is not wired into session/orchestrator state or restart recovery. |
-| M15-E: TUI autonomy UX | `octos-tui` | [#47](https://github.com/your-org/ra-tui/issues/47) | Open | Partial: slash commands and projection state exist; must be validated against the typed production backend surface. |
-| M15-F5: Production autonomy live tmux soak | `octos-tui` | [#44](https://github.com/your-org/ra-tui/issues/44) | Open | Partial: fixture and real-stdio evidence exists; production non-fixture continuations/goal/loop/restart parity are not proven. |
+| M15-A: AppUI autonomy protocol | `ra` | [#990](https://github.com/icehomura/ra/issues/990) | Open | Partial: method/capability constants exist; typed durable agent/goal/loop notifications and complete fixtures are not done. |
+| M15-B: Backend AgentOrchestrator runtime | `ra` | [#991](https://github.com/icehomura/ra/issues/991) | Open | Partial: in-memory inspection state and fixture CLI agents exist; production native/CLI/MCP child-agent runtime is not wired. |
+| M15-C2/C3: Goal scheduler and policy | `ra` | [#979](https://github.com/icehomura/ra/issues/979) | Open | Partial: goal CRUD/status exists; idle continuation, budget policy, and model wrap-up are not wired. |
+| M15-D2/D3: Loop scheduler and policy | `ra` | [#977](https://github.com/icehomura/ra/issues/977) | Open | Partial: loop CRUD/control exists; loop fires enqueue only and do not execute production master turns. |
+| M15-G1/G2/G3/G4: Master continuation and scatter-join summaries | `ra` | [#976](https://github.com/icehomura/ra/issues/976) | Open | Partial: scheduler primitive exists; no production consumer wakes the master LLM or generates child/final summaries. |
+| M15-H: Durable supervisor runtime | `ra` | [#978](https://github.com/icehomura/ra/issues/978) | Open | Partial: `SupervisorStore` exists; it is not wired into session/orchestrator state or restart recovery. |
+| M15-E: TUI autonomy UX | `ra-tui` | [#47](https://github.com/icehomura/ra-tui/issues/47) | Open | Partial: slash commands and projection state exist; must be validated against the typed production backend surface. |
+| M15-F5: Production autonomy live tmux soak | `ra-tui` | [#44](https://github.com/icehomura/ra-tui/issues/44) | Open | Partial: fixture and real-stdio evidence exists; production non-fixture continuations/goal/loop/restart parity are not proven. |
 
 Dependency order:
 
@@ -401,7 +401,7 @@ Acceptance:
 
 ### M15-E: TUI Autonomy UX
 
-Repository: `octos-tui`
+Repository: `ra-tui`
 
 Owns:
 
@@ -456,7 +456,7 @@ Acceptance:
 
 ### M15-F1: Live Stdio Autonomy Soak
 
-Repository: `octos` and `octos-tui`
+Repository: `ra` and `ra-tui`
 
 Owns:
 
@@ -476,7 +476,7 @@ Acceptance:
 
 ### M15-F2: Live WebSocket Autonomy Soak
 
-Repository: `octos` and `octos-tui`
+Repository: `ra` and `ra-tui`
 
 Owns:
 
@@ -496,7 +496,7 @@ Acceptance:
 
 ### M15-F3: Reconnect And Hydration Autonomy Soak
 
-Repository: `octos` and `octos-tui`
+Repository: `ra` and `ra-tui`
 
 Owns:
 
@@ -556,7 +556,7 @@ Acceptance:
 
 ### M15-F4: Live Tmux UX Feature Soak Validation
 
-Repository: `octos-tui`
+Repository: `ra-tui`
 
 Owns:
 
@@ -574,7 +574,7 @@ Allowed areas:
 
 Deliverables:
 
-- Add a live tmux UX soak that drives a real `octos-tui` session with scripted
+- Add a live tmux UX soak that drives a real `ra-tui` session with scripted
   keystrokes and paste events.
 - Capture terminal frames after each step using tmux capture-pane with stable
   dimensions: narrow, standard, and tall layouts.

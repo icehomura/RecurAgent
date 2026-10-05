@@ -1,4 +1,4 @@
-//! ra-wasm: a **browser/JS client-side** binding of ra's protocol +
+//! ra-wasm: a **browser/JS client-side** binding of RecurAgent's protocol +
 //! utility types ([`ra_core`]).
 //!
 //! Use it from a web frontend to (de)serialize the `ra serve` WS/REST

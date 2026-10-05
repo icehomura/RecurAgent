@@ -50,7 +50,7 @@ estimate: 0.5d
 
 场景: 链接渲染为高亮文字加灰色 URL
   测试: link_renders_text_and_muted_url
-  假设 正文含 [Octos](https://example.com)
+  假设 正文含 [Ra](https://example.com)
   当 渲染行内 span
   那么 出现 accent/selected 色的链接文字 span 与 muted 色的 URL span
 

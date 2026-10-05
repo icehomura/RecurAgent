@@ -1,6 +1,6 @@
-//! Runs engine scripts in the bounded OctoScript runtime.
+//! Runs engine scripts in the bounded Rascript runtime.
 //!
-//! Each call gets a fresh `octoscript-core` runtime with bounded
+//! Each call gets a fresh `rascript-core` runtime with bounded
 //! instructions, heap, strings, stack and wall-clock time. Besides the
 //! frozen, effect-free `mod.std.*` library, the host installs exactly two
 //! frozen modules:
@@ -30,7 +30,7 @@ use makepad_script::{
     LiveId, NIL, ScriptIp, ScriptValue, id, id_lut, script_args_def, script_err_not_allowed,
     script_value,
 };
-use octoscript_core::{
+use rascript_core::{
     ExecutionLimits, Runtime, decode_bounded_script_json, encode_bounded_script_json, vm,
 };
 use serde_json::{Value, json};
@@ -612,7 +612,7 @@ pub fn parse_response(
         .iter()
         .map(|(k, v)| (k.to_ascii_lowercase().replace('-', "_"), json!(v)))
         .collect();
-    // JSON is decoded here, under the host's bounds: OctoScript's own
+    // JSON is decoded here, under the host's bounds: Rascript's own
     // `parse_json` stops at 64 KiB, less than many API responses.
     let data: Option<Value> = serde_json::from_str(body.trim()).ok();
     let is_json = data.is_some();
@@ -669,7 +669,7 @@ pub fn parse_response(
 
 /// Syntax check plus the two required functions.
 pub fn check_engine_source(source: &str) -> Result<(), String> {
-    let report = octoscript_core::check_syntax(source).map_err(|e| e.to_string())?;
+    let report = rascript_core::check_syntax(source).map_err(|e| e.to_string())?;
     if !report.valid {
         let d = report
             .diagnostics
@@ -677,12 +677,12 @@ pub fn check_engine_source(source: &str) -> Result<(), String> {
             .map(|d| format!("{}:{}: {}", d.line, d.column, d.message))
             .collect::<Vec<_>>()
             .join("; ");
-        return Err(format!("engine.octoscript: {d}"));
+        return Err(format!("engine.rascript: {d}"));
     }
-    let decls = octoscript_core::top_level_declarations(source).map_err(|e| e.to_string())?;
+    let decls = rascript_core::top_level_declarations(source).map_err(|e| e.to_string())?;
     for f in ["build_request", "parse_response"] {
         if !decls.iter().any(|d| d.name == f) {
-            return Err(format!("engine.octoscript must define fn {f}"));
+            return Err(format!("engine.rascript must define fn {f}"));
         }
     }
     Ok(())

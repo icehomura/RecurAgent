@@ -222,11 +222,10 @@ struct DoctorCli {
     #[arg(long = "endpoint", value_name = "WS_URL")]
     endpoint: Option<String>,
     /// Bearer token for UI Protocol authentication. Falls back to RA_AUTH_TOKEN
-    /// (legacy OCTOS_AUTH_TOKEN).
+    /// (legacy ra_AUTH_TOKEN).
     #[arg(long = "auth-token", value_name = "TOKEN")]
     auth_token: Option<String>,
-    /// Data dir to check (defaults to ~/.ra, or a legacy ~/.ra when only
-    /// that exists).
+    /// Data dir to check (defaults to `~/.ra`).
     #[arg(long = "data-dir", value_name = "DIR")]
     data_dir: Option<std::path::PathBuf>,
 }

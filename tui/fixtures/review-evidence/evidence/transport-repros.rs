@@ -17,7 +17,7 @@ while IFS= read -r line; do
     *'"method":"config/capabilities/list"'*)
       n=$((n+1))
       if { [ "$silent" = no ] && [ "$n" -eq 1 ]; } || { [ "$silent" = yes ] && [ "$n" -eq 2 ]; }; then
-        printf '{"jsonrpc":"2.0","id":"%s","result":{"capabilities":{"version":{"protocol":"octos-ui/v1alpha1","schema_version":1,"jsonrpc":"2.0"},"capabilities_schema_version":2,"supported_methods":["profile/llm/catalog"],"supported_notifications":[],"supported_features":[]}}}\n' "$id"
+        printf '{"jsonrpc":"2.0","id":"%s","result":{"capabilities":{"version":{"protocol":"ra-ui/v1alpha1","schema_version":1,"jsonrpc":"2.0"},"capabilities_schema_version":2,"supported_methods":["profile/llm/catalog"],"supported_notifications":[],"supported_features":[]}}}\n' "$id"
       fi
       printf 'CAPS\n' >> "$marker"
       ;;

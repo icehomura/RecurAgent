@@ -1,20 +1,20 @@
 import { test, type Page } from "@playwright/test";
 
-const BASE_URL = process.env.OCTOS_TEST_URL || "https://dspfac.ocean.ominix.io";
-const TOKEN = process.env.OCTOS_USER_TOKEN!;
-const PROFILE = process.env.OCTOS_PROFILE || "dspfac";
+const BASE_URL = process.env.ra_TEST_URL || "https://dspfac.ocean.ominix.io";
+const TOKEN = process.env.ra_USER_TOKEN!;
+const PROFILE = process.env.ra_PROFILE || "dspfac";
 
 if (!TOKEN) {
-  throw new Error("Set OCTOS_USER_TOKEN");
+  throw new Error("Set ra_USER_TOKEN");
 }
 
 async function seed(page: Page) {
   await page.addInitScript(
     ([t, p]) => {
       try {
-        localStorage.setItem("octos_session_token", t as string);
+        localStorage.setItem("ra_session_token", t as string);
         localStorage.setItem("selected_profile", p as string);
-        localStorage.removeItem("octos_auth_token");
+        localStorage.removeItem("ra_auth_token");
       } catch {}
     },
     [TOKEN, PROFILE],

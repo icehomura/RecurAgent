@@ -1,6 +1,6 @@
 //! Three-tier compaction surface (M8.5, issue #540).
 //!
-//! Today ra ships a single tier of compaction: the declarative
+//! Today RecurAgent ships a single tier of compaction: the declarative
 //! [`crate::compaction::CompactionRunner`] with contract-gated artifacts,
 //! placeholder replacement, and token budgets.  Claude Code, by contrast,
 //! runs three tiers and the cheap tier-1 pass alone keeps 20-40% of turns

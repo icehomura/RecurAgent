@@ -55,7 +55,7 @@ const REQUIRED_ARTIFACTS = [
 ];
 
 function makeEnv({
-  tools = new Set(["tmux", "octos", "octoscode"]),
+  tools = new Set(["tmux", "ra", "ra-tui"]),
   envVars = new Set(),
   capabilities = new Set(),
 } = {}) {
@@ -149,7 +149,7 @@ test("duplicate scenario id raises typed error", () => {
       'transport = "stdio"\n' +
       'provider = "fixture"\n' +
       'terminal = "80x24"\n' +
-      'tui_binary = "octoscode"\n' +
+      'tui_binary = "ra-tui"\n' +
       'tmux_command = "x"\n' +
       "required_tools = []\n" +
       "required_capabilities = []\n" +
@@ -203,7 +203,7 @@ test("classifyRunnability reports skipped when host tool missing", () => {
   const manifest = loadManifest({ path: MANIFEST });
   const scenario = manifest.scenarios.find((s) => s.id === "stdio-happy-path");
   const env = makeEnv({
-    tools: new Set(["octos", "octoscode"]), // tmux missing
+    tools: new Set(["ra", "ra-tui"]), // tmux missing
     capabilities: new Set(scenario.requiredCapabilities),
   });
   const r = classifyRunnability(scenario, env);

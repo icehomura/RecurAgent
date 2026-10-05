@@ -5,7 +5,7 @@ updated_unix: 1788923330
 turn: 3
 ---
 
-**互审报告路径**：`/private/tmp/octoloop-glm-k3-20260909/pr-627/.octos/cross-glm.md`（未读取/写入其他报告文件，盲审约束保持）
+**互审报告路径**：`/private/tmp/octoloop-glm-k3-20260909/pr-627/.ra/cross-glm.md`（未读取/写入其他报告文件，盲审约束保持）
 
 ## k3 发现逐项裁定摘要
 

@@ -1,4 +1,4 @@
-//! Admin tool for checking and applying ra updates via the serve API.
+//! Admin tool for checking and applying RecurAgent updates via the serve API.
 
 use std::sync::Arc;
 
@@ -8,11 +8,11 @@ use serde::Deserialize;
 
 use super::{AdminApiContext, Tool, ToolResult};
 
-pub struct UpdateOctosTool {
+pub struct UpdateRaTool {
     ctx: Arc<AdminApiContext>,
 }
 
-impl UpdateOctosTool {
+impl UpdateRaTool {
     pub fn new(ctx: Arc<AdminApiContext>) -> Self {
         Self { ctx }
     }
@@ -28,9 +28,9 @@ struct UpdateInput {
 }
 
 #[async_trait]
-impl Tool for UpdateOctosTool {
+impl Tool for UpdateRaTool {
     fn name(&self) -> &str {
-        "admin_update_octos"
+        "admin_update_ra"
     }
     fn description(&self) -> &str {
         "Check for ra updates or apply an update. Actions: 'check' to see current/latest version, 'update' to download and install the latest (or a specific) version. The service restarts automatically after update. Requires 'github_token' for private repos — ask the user if not provided."
@@ -76,7 +76,7 @@ impl Tool for UpdateOctosTool {
     }
 }
 
-impl UpdateOctosTool {
+impl UpdateRaTool {
     async fn check_version(&self, token: Option<&str>) -> Result<ToolResult> {
         // Pass token via POST so it doesn't leak in query strings/logs
         let body = serde_json::json!({ "github_token": token });
@@ -189,15 +189,15 @@ mod tests {
     }
 
     #[test]
-    fn update_octos_metadata() {
-        let tool = UpdateOctosTool::new(ctx());
-        assert_eq!(tool.name(), "admin_update_octos");
+    fn update_ra_metadata() {
+        let tool = UpdateRaTool::new(ctx());
+        assert_eq!(tool.name(), "admin_update_ra");
         assert!(tool.description().contains("update"));
     }
 
     #[test]
-    fn update_octos_schema_action_enum() {
-        let tool = UpdateOctosTool::new(ctx());
+    fn update_ra_schema_action_enum() {
+        let tool = UpdateRaTool::new(ctx());
         let schema = tool.input_schema();
         let enums: Vec<&str> = schema["properties"]["action"]["enum"]
             .as_array()
@@ -209,8 +209,8 @@ mod tests {
     }
 
     #[test]
-    fn update_octos_schema_required_action() {
-        let tool = UpdateOctosTool::new(ctx());
+    fn update_ra_schema_required_action() {
+        let tool = UpdateRaTool::new(ctx());
         let schema = tool.input_schema();
         let required: Vec<&str> = schema["required"]
             .as_array()
@@ -222,8 +222,8 @@ mod tests {
     }
 
     #[test]
-    fn update_octos_schema_has_version_field() {
-        let tool = UpdateOctosTool::new(ctx());
+    fn update_ra_schema_has_version_field() {
+        let tool = UpdateRaTool::new(ctx());
         let schema = tool.input_schema();
         assert_eq!(schema["properties"]["version"]["type"], "string");
     }

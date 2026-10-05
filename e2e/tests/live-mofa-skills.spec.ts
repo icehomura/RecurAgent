@@ -2,18 +2,18 @@
  * Live browser validation for profile skill install/remove via dashboard UI.
  *
  * Run:
- *   OCTOS_TEST_URL=https://dspfac.crew.ominix.io \
- *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
- *   OCTOS_PROFILE=dspfac \
+ *   ra_TEST_URL=https://dspfac.crew.ominix.io \
+ *   ra_AUTH_TOKEN=ra-admin-2026 \
+ *   ra_PROFILE=dspfac \
  *   npx playwright test tests/live-mofa-skills.spec.ts
  */
 import { expect, test, type Page } from '@playwright/test';
 
 import { ensureAdminTokenRotated } from './live-browser-helpers';
 
-const PROFILE_ID = process.env.OCTOS_PROFILE || 'dspfac';
-const INSTALL_SOURCE = process.env.OCTOS_MOFA_INSTALL_SOURCE || 'mofa-org/mofa-skills/mofa-cli';
-const SKILL_NAME = process.env.OCTOS_MOFA_SKILL_NAME || 'mofa-cli';
+const PROFILE_ID = process.env.ra_PROFILE || 'dspfac';
+const INSTALL_SOURCE = process.env.ra_MOFA_INSTALL_SOURCE || 'mofa-org/mofa-skills/mofa-cli';
+const SKILL_NAME = process.env.ra_MOFA_SKILL_NAME || 'mofa-cli';
 
 function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -39,8 +39,8 @@ async function loginToDashboard(page: Page) {
 
   await page.addInitScript(
     ({ token, profile }) => {
-      localStorage.setItem('octos_session_token', token);
-      localStorage.setItem('octos_auth_token', token);
+      localStorage.setItem('ra_session_token', token);
+      localStorage.setItem('ra_auth_token', token);
       localStorage.setItem('selected_profile', profile);
     },
     { token: effectiveToken, profile: PROFILE_ID },
@@ -107,7 +107,7 @@ test.describe('Live mofa skills install/remove via dashboard', () => {
     console.log(`preinstalled_removed=${wasPreinstalled}`);
 
     const sourceInput = page.getByPlaceholder(
-      /your-org\/system-skills, https:\/\/host\/org\/repo\.git, or \.\/skills\/my-skill/i,
+      /icehomura\/system-skills, https:\/\/host\/org\/repo\.git, or \.\/skills\/my-skill/i,
     );
     await sourceInput.fill(INSTALL_SOURCE);
 

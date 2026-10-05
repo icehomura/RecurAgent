@@ -104,28 +104,28 @@ pub const APPUI_METHOD_PROFILE_SUB_PROVIDERS_LIST: &str = "profile/sub_providers
 /// #1768 workspace snapshot undo.
 pub const APPUI_METHOD_SNAPSHOT_LIST: &str = "snapshot/list";
 pub const APPUI_METHOD_SNAPSHOT_RESTORE: &str = "snapshot/restore";
-/// #395 peer agents v1 (octos#1800): prepare a peer session (durable brief
+/// #395 peer agents v1 (RecurAgent#1800): prepare a peer session (durable brief
 /// file + slug/topic + optional worktree) for `/peer`. A MUTATING method.
 pub const APPUI_METHOD_PEER_PREPARE: &str = "peer/prepare";
-/// octos#1801 peer v2: read the profile's peer blackboard — every staged
+/// RecurAgent#1801 peer v2: read the profile's peer blackboard — every staged
 /// peer's brief + latest result file (written server-side on the peer's turn
 /// terminals). Backs `/gather`. A READ (non-mutating) method, allowed in
 /// read-only mode like [`APPUI_METHOD_SNAPSHOT_LIST`].
 pub const APPUI_METHOD_PEER_GATHER: &str = "peer/gather";
-/// octos#1801 peer v3: durable SERVER→CLIENT notification — a server-side
+/// RecurAgent#1801 peer v3: durable SERVER→CLIENT notification — a server-side
 /// agent staged a peer via its `peer_spawn` tool; the client auto-opens it in
 /// the background. Not a request method (never appears in
 /// `AppUiCommand::method()`); decoded tui-locally in the transport because
 /// the vendored ra-core rev predates the variant.
 pub const APPUI_METHOD_PEER_STAGED: &str = "peer/staged";
-/// octos#1801 peer v3: durable SERVER→CLIENT notification — a peer session the
+/// RecurAgent#1801 peer v3: durable SERVER→CLIENT notification — a peer session the
 /// server tore down (its turn ended, or it was reaped). The client removes the
 /// matching `peer-<slug>` session from the peer dock and the session switcher.
 /// Not a request method (never appears in `AppUiCommand::method()`); decoded
 /// tui-locally in the transport because the vendored ra-core rev predates
 /// the variant, mirroring [`APPUI_METHOD_PEER_STAGED`].
 pub const APPUI_METHOD_PEER_CLOSED: &str = "peer/closed";
-/// octos#2019: durable SERVER→CLIENT notification — one background event that
+/// RecurAgent#2019: durable SERVER→CLIENT notification — one background event that
 /// woke the model, surfaced to the HUMAN. Monitor event lines and claimed
 /// fleet outbox events already exist and are already durable, but their only
 /// consumer is the model, so a monitor that fires forty times during a loop is
@@ -134,7 +134,7 @@ pub const APPUI_METHOD_PEER_CLOSED: &str = "peer/closed";
 /// vendored ra-core rev predates the variant, mirroring
 /// [`APPUI_METHOD_PEER_STAGED`].
 pub const APPUI_METHOD_BACKGROUND_ACTIVITY: &str = "background/activity";
-/// octos#1807: `turn/steer` — mid-turn prompt injection into the ACTIVE
+/// RecurAgent#1807: `turn/steer` — mid-turn prompt injection into the ACTIVE
 /// turn. Params `{session_id, expected_turn_id?, input}`; result
 /// `{turn_id, steered}`. `steered:true` = the text joined the live turn
 /// (the id echoes THAT turn; the server persists it at drain time as a
@@ -274,7 +274,7 @@ pub const APPUI_FEATURE_CODING_AGENT_CONTROL_V1: &str = "coding.agent_control.v1
 pub const APPUI_FEATURE_CODING_GOAL_RUNTIME_V1: &str = "coding.goal_runtime.v1";
 pub const APPUI_FEATURE_CODING_LOOP_RUNTIME_V1: &str = "coding.loop_runtime.v1";
 
-/// octos#2019 human sink over background events that today only wake the
+/// RecurAgent#2019 human sink over background events that today only wake the
 /// model. When negotiated the server pushes `background/activity`; when it is
 /// NOT negotiated the server never sends the frame, so an older TUI can never
 /// receive a notification it cannot render. Tui-local mirror: the vendored
@@ -721,7 +721,7 @@ pub struct SessionAutonomyState {
     pub terminal_seen: Vec<(String, std::time::Instant)>,
     /// Agent Dock unread badges (#323): agents that reached a TERMINAL status
     /// via a live `agent/updated` while the user was NOT viewing them
-    /// (ra's `has_updates` semantics, one level down). Cleared when the
+    /// (RecurAgent's `has_updates` semantics, one level down). Cleared when the
     /// user peeks/switches to the agent ([`AppState::set_chat_view`]), when
     /// the agent resurrects non-terminal, or when its chip is pruned. Unseen
     /// chips are exempt from the timed linger sweep so a result can't vanish
@@ -904,12 +904,12 @@ pub enum AppUiCommand {
     /// [`ProtocolAppUiBackend::readonly_allows_command`], so it is blocked in
     /// read-only mode (like `SnapshotRestore` and the config upserts).
     PeerPrepare(PeerPrepareParams),
-    /// octos#1807: steer typed input into the ACTIVE turn instead of staging
+    /// RecurAgent#1807: steer typed input into the ACTIVE turn instead of staging
     /// it until turn-end. A MUTATING method — NOT listed in
     /// [`ProtocolAppUiBackend::readonly_allows_command`] (it injects input
     /// into a running turn, the same class as `turn/start`).
     TurnSteer(TurnSteerParams),
-    /// octos#1801 v2: read the peer blackboard for `/gather`. A READ
+    /// RecurAgent#1801 v2: read the peer blackboard for `/gather`. A READ
     /// (non-mutating) method — listed in
     /// [`ProtocolAppUiBackend::readonly_allows_command`] like `SnapshotList`.
     PeerGather(PeerGatherParams),
@@ -1261,7 +1261,7 @@ pub struct SessionStatusReadResult {
 
 /// Skew-tolerant decoder for [`SessionStatusReadResult::model`].
 ///
-/// ra servers up to protocol 1.1.0 answer `session/status/read` with
+/// RecurAgent servers up to protocol 1.1.0 answer `session/status/read` with
 /// `"model": {"model": null, "provider": null, "selected": true}` when the
 /// runtime policy has no resolved model (fresh data dir, onboarding before a
 /// provider is saved). [`ModelStatus::model`]/[`ModelStatus::provider`] are
@@ -1748,7 +1748,7 @@ pub struct ContextNormalizationSummary {
 /// Additive OUP cache/semantic-boundary diagnostics carried inside
 /// `context_state`. The pinned `ra-core` predates these optional fields, so
 /// the transport extracts them from the raw JSON frame before the vendored
-/// decoder discards unknown fields. They are display-only: ra remains the
+/// decoder discards unknown fields. They are display-only: RecurAgent remains the
 /// sole owner of cache epochs, invalidation, and boundary policy.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContextCacheDiagnostics {
@@ -3686,7 +3686,7 @@ pub struct SubProviderView {
     pub api_type: Option<String>,
 }
 
-/// `peer/prepare` request (#395, octos#1800 peer agents v1). `brief` is the
+/// `peer/prepare` request (#395, RecurAgent#1800 peer agents v1). `brief` is the
 /// raw peer brief text (required, non-empty, ≤64 KiB server-side); `worktree`
 /// asks the server to spin the peer up on its own git worktree; `cwd` pins an
 /// explicit workspace. `session_id` carries the ACTIVE session so the server
@@ -3695,7 +3695,7 @@ pub struct SubProviderView {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PeerPrepareParams {
     pub brief: String,
-    /// octos#1801 v2 fleet staging: ask the server for N peers from this ONE
+    /// RecurAgent#1801 v2 fleet staging: ask the server for N peers from this ONE
     /// brief (suffixed slugs, per-peer worktrees when `worktree`). `None`
     /// keeps the v1 single-peer wire shape (omitted entirely, so old servers
     /// never see an unknown field with `deny_unknown_fields`-style parsing).
@@ -3716,7 +3716,7 @@ pub struct PeerPrepareParams {
 /// `peer/prepare` result: the server-minted `slug`, its `topic`
 /// (`peer-<slug>`), the durable brief file path, the resolved workspace
 /// `cwd`, the worktree branch (when one was created), and the profile the
-/// peer session must open under. octos#1801 v2 adds `peers` — the whole
+/// peer session must open under. RecurAgent#1801 v2 adds `peers` — the whole
 /// staged fleet (the scalar fields mirror its FIRST entry); serde-defaulted
 /// to empty so v1 servers' scalar-only responses still decode.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3732,7 +3732,7 @@ pub struct PeerPrepareResult {
     pub peers: Vec<PeerFleetEntry>,
 }
 
-/// One staged peer of a `peer/prepare` fleet (octos#1801 v2) — the same
+/// One staged peer of a `peer/prepare` fleet (RecurAgent#1801 v2) — the same
 /// fields as the scalar [`PeerPrepareResult`] head, per peer.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PeerFleetEntry {
@@ -3746,7 +3746,7 @@ pub struct PeerFleetEntry {
 }
 
 /// Params of the durable [`APPUI_METHOD_PEER_STAGED`] notification
-/// (octos#1801 v3): a server-side agent staged a peer and the client
+/// (RecurAgent#1801 v3): a server-side agent staged a peer and the client
 /// auto-opens it in the background. `session_id` is the ORIGINATING session
 /// (the one whose agent ran `peer_spawn`), NOT the peer's — the peer key is
 /// minted client-side from `profile_id` + `topic` exactly like the `/peer`
@@ -3783,11 +3783,11 @@ pub struct PeerClosedParams {
 }
 
 /// Params of the durable [`APPUI_METHOD_BACKGROUND_ACTIVITY`] notification
-/// (octos#2019): one background event that woke the model, surfaced to the
+/// (RecurAgent#2019): one background event that woke the model, surfaced to the
 /// HUMAN.
 ///
 /// `session_id` is REQUIRED and is the routing key — the session that OWNS the
-/// emitter, never "whichever session is focused" (the octos-tui#461 / #466 /
+/// emitter, never "whichever session is focused" (the ra-tui#461 / #466 /
 /// #483 bug class). `origin_kind` + `origin_id` (+ `origin_label`) attribute
 /// the line: an unattributed monitor line reads as the master speaking.
 /// `dropped_count` / `suppressed` carry the server-side per-origin cap's
@@ -3837,7 +3837,7 @@ impl BackgroundActivityParams {
 /// backstop so a long-lived session cannot grow the transcript without bound.
 pub const MAX_BACKGROUND_ACTIVITY_ROWS: usize = 200;
 
-/// `peer/gather` request (octos#1801 v2): read the peer blackboard.
+/// `peer/gather` request (RecurAgent#1801 v2): read the peer blackboard.
 /// `slugs: None` = every staged peer; `session_id` carries the ACTIVE
 /// session so the server scopes the profile (mirrors
 /// [`PeerPrepareParams`]); `profile_id` stays `None` in the TUI flow.
@@ -3861,7 +3861,7 @@ pub struct PeerGatherResult {
     pub peers: Vec<PeerGatherEntry>,
 }
 
-/// One blackboard row of a `peer/gather` result (octos#1801 v2).
+/// One blackboard row of a `peer/gather` result (RecurAgent#1801 v2).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PeerGatherEntry {
     pub slug: String,
@@ -3880,7 +3880,7 @@ pub struct PeerGatherEntry {
     pub has_worktree: bool,
 }
 
-/// `turn/steer` request (octos#1807): mid-turn prompt injection into the
+/// `turn/steer` request (RecurAgent#1807): mid-turn prompt injection into the
 /// ACTIVE turn. `expected_turn_id` pins the turn the client believes is live
 /// — a mismatch is rejected server-side (`invalid_params`) and the client
 /// falls back to staging; an ABSENT id steers whatever turn is live. `input`
@@ -3893,7 +3893,7 @@ pub struct TurnSteerParams {
     pub input: Vec<InputItem>,
 }
 
-/// `turn/steer` result (octos#1807). `steered:true` = appended into the
+/// `turn/steer` result (RecurAgent#1807). `steered:true` = appended into the
 /// ACTIVE turn (`turn_id` echoes that turn; the text is persisted
 /// server-side AT DRAIN TIME as a normal v2 `UserMessage` envelope, so it
 /// echoes back like any persisted user row). `steered:false` = no active
@@ -3906,7 +3906,7 @@ pub struct TurnSteerResult {
     pub steered: bool,
 }
 
-/// An in-flight `turn/steer` (octos#1807): the client-local copy of the
+/// An in-flight `turn/steer` (RecurAgent#1807): the client-local copy of the
 /// steered text so a steer that positively DIES (server rejection /
 /// cancel-all / send-layer failure) can fall back to STAGING the prompt
 /// without losing what the user typed. FIFO — the `TurnSteered` result and
@@ -4165,7 +4165,7 @@ impl ProfileLlmCatalogResult {
     /// PRESENT family an empty string, JSON null, or absent `env` all mean
     /// "no key required"; an unknown family stays keyed (fail closed).
     /// Keyless families save and test without an API key; requiring one
-    /// dead-ended their onboarding (octos#2096 review round).
+    /// dead-ended their onboarding (RecurAgent#2096 review round).
     pub fn family_is_keyless(&self, family_id: &str) -> bool {
         self.family_entry(family_id).is_some() && self.family_key_env(family_id).is_none()
     }
@@ -4875,7 +4875,7 @@ pub struct AppState {
     /// plain text field (equivalent to always-Insert); `composer_mode` is only
     /// consulted when this is true.
     pub vim_mode: bool,
-    /// octos#1807 steering as an OPT-IN: when true, a prompt typed while a
+    /// RecurAgent#1807 steering as an OPT-IN: when true, a prompt typed while a
     /// turn is running is injected into the LIVE turn via `turn/steer`. The
     /// default is false — mid-turn prompts stage FIFO in `pending_messages`
     /// and each drains as its OWN turn at turn-end, so every prompt is
@@ -4956,8 +4956,7 @@ pub struct AppState {
     /// the `file-picker` menu build; rebuilt on every `@` (never stale-served).
     pub file_picker: Option<crate::file_picker::FilePickerState>,
     /// Cross-session command history for Up/Down recall (codex/claude-code
-    /// style); persisted to `~/.config/ra-tui/history.jsonl` (or the legacy
-    /// `~/.config/octoscode/history.jsonl` when only that exists). See
+    /// style); persisted to `~/.config/ra-tui/history.jsonl`. See
     /// [`crate::history::ComposerHistory`].
     pub composer_history: crate::history::ComposerHistory,
     /// Prompts staged while the ACTIVE session's turn was running, submitted
@@ -5032,13 +5031,13 @@ pub struct AppState {
     /// Renders the "Compacting conversation…" block with an honest
     /// fullness bar.
     pub live_compaction: std::collections::HashMap<SessionKey, LiveCompaction>,
-    /// octos#2019 human sink: background events that woke the model, keyed by
+    /// RecurAgent#2019 human sink: background events that woke the model, keyed by
     /// the session that OWNS the emitter.
     ///
     /// Deliberately a per-session map rather than one global `Vec` like
     /// [`AppState::activity`]: the render path reads ONLY the rendered
     /// session's bucket, so a row can never leak into whichever session
-    /// happens to be focused (octos-tui#461 / #466 / #483 — `flow_activity_items`
+    /// happens to be focused (ra-tui#461 / #466 / #483 — `flow_activity_items`
     /// filters on `turn_id` alone and has exactly that failure mode). Routing
     /// is structural here, not a filter that can be forgotten.
     pub background_activity: std::collections::HashMap<SessionKey, Vec<BackgroundActivityParams>>,
@@ -5137,7 +5136,7 @@ pub struct AppState {
     /// terminal while the session was NOT focused. Incremented by the store's
     /// terminal appliers, cleared when the session gains focus.
     pub unread_turns: std::collections::HashMap<SessionKey, usize>,
-    /// octos#1807: in-flight `turn/steer` dispatches, FIFO. Each steer's
+    /// RecurAgent#1807: in-flight `turn/steer` dispatches, FIFO. Each steer's
     /// prompt lives ONLY here between dispatch and its result/error — a steer
     /// that positively dies (attributed error frame) is re-staged from this
     /// stash so the typed text is never lost, and a `steered:false` result
@@ -8500,7 +8499,7 @@ impl AppState {
     }
 
     /// Stage a prompt at the BACK of its session's queue — the `turn/steer`
-    /// error fallback (octos#1807). Unlike the dead staged-DRAIN re-stage
+    /// error fallback (RecurAgent#1807). Unlike the dead staged-DRAIN re-stage
     /// (front — the drain had already dequeued it), a failed steer's text was
     /// typed AFTER anything already staged, so appending preserves the
     /// chronological order the user produced it in.
@@ -8518,7 +8517,7 @@ impl AppState {
         }
     }
 
-    /// Withdraw the optimistic row a DEAD `turn/steer` recorded (octos#1807):
+    /// Withdraw the optimistic row a DEAD `turn/steer` recorded (RecurAgent#1807):
     /// like [`Self::withdraw_optimistic_user_prompt`], but content-matched —
     /// the steer shares its turn id with the LIVE turn, whose ORIGINAL
     /// prompt's optimistic entry (same session + turn, different content)
@@ -8565,7 +8564,7 @@ impl AppState {
 
     /// Re-key the optimistic row (and its turn-prompt anchor) a steer
     /// recorded under the EXPECTED turn onto the REAL turn the server minted
-    /// (octos#1807 `steered:false`): the expected turn had already settled
+    /// (RecurAgent#1807 `steered:false`): the expected turn had already settled
     /// server-side, so the text actually started `to_turn` — interrupt
     /// restore and the turn card must resolve it under that id.
     pub fn rekey_turn_prompt_records(
@@ -9794,12 +9793,12 @@ impl AppState {
             .is_some_and(|session| &session.id == session_id)
     }
 
-    /// octos#2019 — record one background event on the session that OWNS its
+    /// RecurAgent#2019 — record one background event on the session that OWNS its
     /// emitter. Never touches any other session's bucket, so the row cannot
     /// render under whichever session happens to be focused.
     ///
     /// Rows with a blank routing key are DROPPED: an unroutable row is exactly
-    /// the octos-tui#461 / #466 / #483 bug (it would have to fall back to the
+    /// the ra-tui#461 / #466 / #483 bug (it would have to fall back to the
     /// focused session), so refuse it rather than misattribute it.
     pub fn push_background_activity(&mut self, event: BackgroundActivityParams) {
         if event.session_id.0.trim().is_empty() {
@@ -9816,7 +9815,7 @@ impl AppState {
         }
     }
 
-    /// octos#2019 — the background events for `session_id`, grouped by
+    /// RecurAgent#2019 — the background events for `session_id`, grouped by
     /// emitting origin in first-seen order. One group per origin so a 50-round
     /// monitor loop folds into ONE header rather than 50 loose lines.
     ///
@@ -11683,7 +11682,7 @@ mod tests {
     };
 
     /// A `loop/list` carrying one unmodellable record must still yield the
-    /// others. Both payloads come from the mock_octos scenario fuzzer
+    /// others. Both payloads come from the mock_RecurAgent scenario fuzzer
     /// (`loops-no-loop-id`, `loops-interval-negative`), which drove the real
     /// TUI into "failed to decode UI protocol result for loop/list: missing
     /// field `loop_id`" with an empty loops surface — every well-formed loop
@@ -13023,8 +13022,8 @@ mod tests {
     #[test]
     fn peer_slug_display_decodes_utf8_percent_encoding_without_changing_invalid_input() {
         assert_eq!(
-            peer_slug_for_display("%E5%88%86%E6%9E%90octos%E6%9E%B6%E6%9E%84"),
-            "分析octos架构"
+            peer_slug_for_display("%E5%88%86%E6%9E%90ra%E6%9E%B6%E6%9E%84"),
+            "分析ra架构"
         );
         assert_eq!(peer_slug_for_display("%FF"), "%FF");
     }

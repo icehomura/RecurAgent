@@ -2,7 +2,7 @@
  * Live UI contract for long-running background task state.
  *
  * Run against mini2:
- *   OCTOS_TEST_URL=https://dspfac.bot.ominix.io npx playwright test tests/background-task-header-switching.spec.ts --workers=1
+ *   ra_TEST_URL=https://dspfac.bot.ominix.io npx playwright test tests/background-task-header-switching.spec.ts --workers=1
  */
 import { expect, test, type Page } from '@playwright/test';
 import {
@@ -112,8 +112,8 @@ async function switchToSession(page: Page, sessionId: string) {
 async function getSessionMedia(page: Page, sessionId: string): Promise<string[]> {
   return page.evaluate(async ({ sessionId: sid }) => {
     const token =
-      localStorage.getItem('octos_session_token') ||
-      localStorage.getItem('octos_auth_token') ||
+      localStorage.getItem('ra_session_token') ||
+      localStorage.getItem('ra_auth_token') ||
       '';
     const profile = localStorage.getItem('selected_profile') || '';
     const headers: Record<string, string> = {};

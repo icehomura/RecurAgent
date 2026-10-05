@@ -1,7 +1,7 @@
 //! WeChat Bridge — persistent subprocess that maintains the WeChat long-poll connection.
 //!
 //! Architecture:
-//!   WeChat server <-(HTTP long-poll)-> this bridge <-(WebSocket)-> ra gateway channel
+//!   WeChat server <-(HTTP long-poll)-> this bridge <-(WebSocket)-> RecurAgent gateway channel
 //!
 //! The bridge never restarts, so the WeChat session stays alive even when the gateway restarts.
 //!

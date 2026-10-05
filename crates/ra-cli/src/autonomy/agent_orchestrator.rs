@@ -13235,7 +13235,7 @@ struct AutonomyRuntimeState {
     /// goal-store key. `clear_goal` removes the live record and stamps the
     /// durable row `cleared` immediately (crash-safe: the row must stop
     /// claiming `active` the moment the user cleared, #1973 fix B), but the
-    /// running turn's spend is unknowable until the turn ends — ra charges
+    /// running turn's spend is unknowable until the turn ends — RecurAgent charges
     /// from turn OUTPUT, so there is nothing to flush at clear time. The
     /// tombstone keeps the cleared snapshot + the resolved ledger dir so the
     /// turn-end accountants (`charge_goal_tokens_gated`, `record_goal_turn`)
@@ -21267,8 +21267,8 @@ fn resolve_maintenance_prompt_at_fire_time() -> MaintenancePromptResolution {
 /// #38 — the cwd-parameterized core of the fire-time prompt resolution.
 fn resolve_maintenance_prompt_at_fire_time_in(cwd: &Path) -> MaintenancePromptResolution {
     let project = std::fs::read_to_string(cwd.join(PROJECT_MAINTENANCE_PROMPT_PATH)).ok();
-    // User-level fallback: the brand state home's `loop.md` (`~/.ra`, or the
-    // existing legacy `~/.ra` — see `ra_core::brand::state_home`).
+    // User-level fallback: the brand state home's `loop.md` (`~/.ra` —
+    // see `ra_core::brand::state_home`).
     let user = std::fs::read_to_string(ra_core::brand::state_path("loop.md")).ok();
     // `resolve_maintenance_prompt` only errors when *every* candidate is
     // empty; we always pass the built-in as the final fallback, so the
@@ -21327,9 +21327,9 @@ mod tests {
     #[test]
     fn maintenance_prompt_core_resolves_project_doc_from_injected_cwd() {
         let temp = tempfile::TempDir::new().expect("temp dir");
-        let octos_dir = temp.path().join(".ra");
-        std::fs::create_dir_all(&octos_dir).expect("mkdir .ra");
-        std::fs::write(octos_dir.join("loop.md"), "  project maintenance steps\n  ")
+        let ra_dir = temp.path().join(".ra");
+        std::fs::create_dir_all(&ra_dir).expect("mkdir .ra");
+        std::fs::write(ra_dir.join("loop.md"), "  project maintenance steps\n  ")
             .expect("write loop.md");
         let resolution = resolve_maintenance_prompt_at_fire_time_in(temp.path());
         assert_eq!(
@@ -21349,10 +21349,10 @@ mod tests {
     #[test]
     fn scheduled_maintenance_core_resolves_project_doc_from_injected_cwd() {
         let temp = tempfile::TempDir::new().expect("temp dir");
-        let octos_dir = temp.path().join(".ra");
-        std::fs::create_dir_all(&octos_dir).expect("mkdir .ra");
+        let ra_dir = temp.path().join(".ra");
+        std::fs::create_dir_all(&ra_dir).expect("mkdir .ra");
         std::fs::write(
-            octos_dir.join("loop.md"),
+            ra_dir.join("loop.md"),
             "scheduled project maintenance steps\n",
         )
         .expect("write loop.md");
@@ -45344,7 +45344,7 @@ mod tests {
     /// This asserts ROUTING, not merely emission: two monitors on two
     /// different sessions fire in an interleaved order, and each event must
     /// land on ITS OWN session. Activity without a correct routing key renders
-    /// in whichever session happens to be focused (octos-tui#461, #466, #483)
+    /// in whichever session happens to be focused (ra-tui#461, #466, #483)
     /// — the exact bug class this event must not re-ship.
     #[test]
     fn should_emit_attributed_human_activity_on_the_owning_session_when_a_monitor_fires() {

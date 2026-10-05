@@ -1,6 +1,6 @@
 spec: task
 name: "Global 运行时阶段 1:驾驶舱脚本(herdr 优先 / tmux 回退)"
-tags: [olp, lifecycle, herdr, tmux, octoscode]
+tags: [olp, lifecycle, herdr, tmux, ra-tui]
 satisfies: [REQ-OLP-LIFE]
 estimate: 1d
 ---
@@ -10,18 +10,18 @@ estimate: 1d
 外环能观测、能指导,但拉起运行时仍要 operator 手动开终端。本任务落地
 LEP-002 阶段 1:`scripts/ra-global.sh` 驾驶舱脚本,封装
 launch/inject/read/attach 四原语,把注入纪律与锁检查做成机制。零上游
-依赖,octoscode 仓库即可完成;阶段 2(--headless)见
+依赖,ra-tui 仓库即可完成;阶段 2(--headless)见
 task-req-olp-life-headless-client。
 
 ## 已定决策
 
 - 脚本子命令即四原语:`launch`、`inject <text>`、`read`、`attach`,外加
   `status` 与 `stop`;session 名固定 `ra-global`,`launch` 以仓库根为
-  cwd 启动 octoscode。
+  cwd 启动 ra-tui。
 - 后端抽象与优先序(2026-08-23 二次修订):**herdr 优先,tmux 回退**。
   herdr 的注入闸门(named-agent 名单 + 前台进程签名,均硬编码)已通过
-  fork 补丁解决:Ti-Agent-OS/herdr feat/octoscode-agent(fc414dd8)把
-  octoscode 加入 Agent 枚举并附 bundled 屏幕检测清单;实测端到端通过
+  fork 补丁解决:Ti-Agent-OS/herdr feat/ra-tui-agent(fc414dd8)把
+  ra-tui 加入 Agent 枚举并附 bundled 屏幕检测清单;实测端到端通过
   (自动识别 idle/working/blocked、`agent prompt` 注入 → composer 提交
   → turn 启动)。herdr 后端要求 herdr ≥ 该 fork 构建,探测不到能力时
   回退 tmux(`send-keys`/`capture-pane`);两后端四原语行为契约一致,

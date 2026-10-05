@@ -44,18 +44,18 @@ The AppUI surface in this UPCR is not complete until the backend runtime below
 exists. The current in-process state and M15 live fixture prove protocol shape
 and scatter-join evidence only.
 
-Central tracker: https://github.com/your-org/ra/issues/992
+Central tracker: https://github.com/icehomura/ra/issues/992
 
 - **M15-A: AppUI autonomy protocol.** Capability gates, method names,
   notifications, typed errors, and runtime policy stamp. Tracking:
-  https://github.com/your-org/ra/issues/990
+  https://github.com/icehomura/ra/issues/990
 - **M15-B: Backend AgentControl runtime.** Server-owned agent lifecycle,
   status, output, artifacts, interrupt, and close over native/CLI/MCP agents.
-  Tracking: https://github.com/your-org/ra/issues/991
+  Tracking: https://github.com/icehomura/ra/issues/991
 - **M15-G1: MasterContinuationScheduler.** Durable backend queue that wakes
   the master turn for child completion, scatter-join completion, loop fires,
   and eligible goal continuations. Tracking:
-  https://github.com/your-org/ra/issues/976
+  https://github.com/icehomura/ra/issues/976
 - **M15-G2: Child-completion wakeup.** A terminal child event enqueues a master
   continuation with compact child-result context. Prompt history alone is not
   treated as a scheduler.
@@ -68,7 +68,7 @@ Central tracker: https://github.com/your-org/ra/issues/992
 - **M15-H: Durable supervisor runtime.** Persist supervised groups, children,
   heartbeats, terminal states, pending continuations, artifacts, and join state
   across restart and reconnect. Tracking:
-  https://github.com/your-org/ra/issues/978
+  https://github.com/icehomura/ra/issues/978
 - **M15-C: Backend GoalRuntime API.** Goal CRUD/status, transition actor,
   policy metadata, and AppUI notifications.
 - **M15-C2: Goal continuation scheduler.** Active goals continue only when the
@@ -76,7 +76,7 @@ Central tracker: https://github.com/your-org/ra/issues/992
   and child-completion continuations are clear.
 - **M15-C3: Goal execution policy.** Enforce token/time budget, pause/resume,
   interruption behavior, model-complete transitions, and budget-exhaustion
-  wrap-up. Tracking: https://github.com/your-org/ra/issues/979
+  wrap-up. Tracking: https://github.com/icehomura/ra/issues/979
 - **M15-D: Backend LoopRuntime API.** Loop CRUD/status, parsing, controls, and
   AppUI notifications.
 - **M15-D2: Loop fire scheduler.** Fixed, self-paced, maintenance, and manual
@@ -85,11 +85,11 @@ Central tracker: https://github.com/your-org/ra/issues/992
 - **M15-D3: Loop execution policy.** Resolve maintenance prompts at fire time,
   re-authorize slash commands on every fire, enforce pause/idle/busy policy,
   and persist next-run decisions. Tracking:
-  https://github.com/your-org/ra/issues/977
+  https://github.com/icehomura/ra/issues/977
 - **M15-F5: Production autonomy live tmux soak.** TUI/e2e proof for real master
   continuations, goal continuation, loop fires, restart hydration, and
   stdio/WebSocket parity. Tracking:
-  https://github.com/your-org/ra-tui/issues/44
+  https://github.com/icehomura/ra-tui/issues/44
 
 ## Capabilities
 
@@ -118,7 +118,7 @@ handles, and reconnect hydration.
 
 Supported backend kinds:
 
-- `native`: in-process ra subagent created by the server runtime factory.
+- `native`: in-process RecurAgent subagent created by the server runtime factory.
 - `cli`: subprocess-backed agent with backend-owned lifecycle and artifact
   capture.
 - `mcp`: stdio or HTTP MCP-backed agent normalized into the same lifecycle

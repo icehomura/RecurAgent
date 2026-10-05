@@ -7,10 +7,10 @@
  *
  * Usage:
  *
- *   OCTOS_TEST_URL=https://dspfac.bot.ominix.io \
- *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
- *   OCTOS_PROFILE=dspfac \
- *   OCTOS_TEST_EMAIL=dspfac@gmail.com \
+ *   ra_TEST_URL=https://dspfac.bot.ominix.io \
+ *   ra_AUTH_TOKEN=ra-admin-2026 \
+ *   ra_PROFILE=dspfac \
+ *   ra_TEST_EMAIL=dspfac@gmail.com \
  *   npx playwright test tests/live-deep-search-quality.spec.ts
  *
  * What this test asserts:
@@ -39,7 +39,7 @@ import {
 } from './live-browser-helpers';
 
 const QUALITY_PROMPT =
-  process.env.OCTOS_DEEP_SEARCH_QUERY ||
+  process.env.ra_DEEP_SEARCH_QUERY ||
   'Do a deep research on the latest developments in Rust async runtimes in 2026. Run the deep_search pipeline directly.';
 
 const PER_RUN_TIMEOUT_MS = 12 * 60 * 1000;
@@ -184,8 +184,8 @@ async function waitForReportContent(page: Page, timeoutMs: number): Promise<stri
       const fetched = await page.evaluate(async (href) => {
         try {
           const token =
-            localStorage.getItem('octos_session_token') ||
-            localStorage.getItem('octos_auth_token') ||
+            localStorage.getItem('ra_session_token') ||
+            localStorage.getItem('ra_auth_token') ||
             '';
           const profile = localStorage.getItem('selected_profile') || '';
           const headers: Record<string, string> = {};

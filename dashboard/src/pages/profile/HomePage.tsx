@@ -44,7 +44,7 @@ export default function HomePage() {
   const [usageLoading, setUsageLoading] = useState(false)
   const [usageError, setUsageError] = useState<string | null>(null)
   // Public base domain advertised by the server — drives the preview
-  // URL so mini2/3/5 render `*.bot./*.octos./*.ocean.ominix.io` instead
+  // URL so mini2/3/5 render `*.bot./*.ra./*.ocean.ominix.io` instead
   // of mini1's `*.crew.ominix.io`. Falls back to `DEFAULT_BASE_DOMAIN`
   // while the status request is in flight or if it fails.
   const [baseDomain, setBaseDomain] = useState<string>(DEFAULT_BASE_DOMAIN)

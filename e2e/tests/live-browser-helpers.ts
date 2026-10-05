@@ -1,10 +1,10 @@
 import { expect, type Page } from '@playwright/test';
 import type { CaptureHandle } from '../lib/capture-replay';
 
-const AUTH_TOKEN = process.env.OCTOS_AUTH_TOKEN || 'ra-admin-2026';
-const PROFILE_ID = process.env.OCTOS_PROFILE || 'dspfac';
-const TEST_EMAIL = process.env.OCTOS_TEST_EMAIL || 'dspfac@gmail.com';
-const BASE_URL = process.env.OCTOS_TEST_URL || 'http://localhost:3000';
+const AUTH_TOKEN = process.env.ra_AUTH_TOKEN || 'ra-admin-2026';
+const PROFILE_ID = process.env.ra_PROFILE || 'dspfac';
+const TEST_EMAIL = process.env.ra_TEST_EMAIL || 'dspfac@gmail.com';
+const BASE_URL = process.env.ra_TEST_URL || 'http://localhost:3000';
 
 // When the daemon comes up with no `admin_token.json` (bootstrap mode), the
 // dashboard's BootstrapGate redirects every `/admin/*` route to
@@ -14,7 +14,7 @@ const BASE_URL = process.env.OCTOS_TEST_URL || 'http://localhost:3000';
 // daemon's strength check (>=32 chars, >=3 char classes from
 // {lowercase, uppercase, digits, symbols}).
 const STRONG_ADMIN_TOKEN =
-  process.env.OCTOS_TEST_ADMIN_TOKEN || 'ra-E2E-Strong-Token-2026-XYZ-123!';
+  process.env.ra_TEST_ADMIN_TOKEN || 'ra-E2E-Strong-Token-2026-XYZ-123!';
 
 // Cache of `host -> effective token`. The token rotation flow is per-host
 // because every mini in the fleet has its own `admin_token.json`. Memoising
@@ -45,7 +45,7 @@ const tokenCacheByHost: Map<string, Promise<string>> = new Map();
  *
  *  2. **Wrong base URL**: the previous probe used the env-derived
  *     `BASE_URL` (default `http://localhost:3000`). When tests run against
- *     a remote mini without `OCTOS_TEST_URL` set, the probe hit a
+ *     a remote mini without `ra_TEST_URL` set, the probe hit a
  *     non-existent local daemon and silently returned the bootstrap token
  *     unchanged — guaranteeing 401 against the actual target.
  *
@@ -96,7 +96,7 @@ export async function ensureAdminTokenRotated(
     // 1) Caller passed the right token directly (e.g. fresh local daemon
     //    where `currentToken` IS the bootstrap token AND no rotation has
     //    happened yet, OR the caller threaded a known-rotated token via
-    //    `OCTOS_AUTH_TOKEN`).
+    //    `ra_AUTH_TOKEN`).
     if (await meProbe(currentToken)) return currentToken;
 
     // 2) Bootstrap mode — `/api/admin/token/status` says `rotated: false`,
@@ -141,7 +141,7 @@ export async function ensureAdminTokenRotated(
     // eslint-disable-next-line no-console
     console.warn(
       `[live-browser-helpers] no admin Bearer authenticates against ${host}/api/auth/me ` +
-        `(tried STRONG_ADMIN_TOKEN and OCTOS_AUTH_TOKEN). Set OCTOS_TEST_ADMIN_TOKEN ` +
+        `(tried STRONG_ADMIN_TOKEN and ra_AUTH_TOKEN). Set ra_TEST_ADMIN_TOKEN ` +
         `to the rotated admin secret for this host.`,
     );
     return STRONG_ADMIN_TOKEN;
@@ -185,12 +185,12 @@ function pageBaseUrl(page: Page): string {
 
 /**
  * The token consumers should use for `Authorization: Bearer ...` and for the
- * `octos_session_token` / `octos_auth_token` localStorage entries. Resolves
+ * `ra_session_token` / `ra_auth_token` localStorage entries. Resolves
  * to the rotated strong token when the helper had to bootstrap the daemon,
- * otherwise to whatever `OCTOS_AUTH_TOKEN` was passed in.
+ * otherwise to whatever `ra_AUTH_TOKEN` was passed in.
  *
  * Pass `baseUrl` when the caller targets a host that doesn't match
- * `OCTOS_TEST_URL` (e.g. when a spec uses its own `BASE` constant or
+ * `ra_TEST_URL` (e.g. when a spec uses its own `BASE` constant or
  * threads the page baseURL through). Defaults preserve the previous
  * env-only behaviour so this call is backward compatible.
  */
@@ -225,8 +225,8 @@ export async function login(page: Page) {
 
   await page.addInitScript(
     ({ token, profile }) => {
-      localStorage.setItem('octos_session_token', token);
-      localStorage.setItem('octos_auth_token', token);
+      localStorage.setItem('ra_session_token', token);
+      localStorage.setItem('ra_auth_token', token);
       localStorage.setItem('selected_profile', profile);
     },
     { token: effectiveToken, profile: PROFILE_ID },
@@ -277,7 +277,7 @@ export async function login(page: Page) {
         if (!resp.ok) return null;
         const data = await resp.json();
         if (!data.ok || !data.token) return null;
-        localStorage.setItem('octos_session_token', data.token);
+        localStorage.setItem('ra_session_token', data.token);
         return data.token as string;
       },
       { email: TEST_EMAIL, code: effectiveToken },

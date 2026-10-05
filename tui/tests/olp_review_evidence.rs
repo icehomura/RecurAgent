@@ -2683,7 +2683,7 @@ fn k3_rescue_freeze_rejects_foreign_originator_goal() {
     // foreign 身份: originator 属于别的 master/session,goal 属于别的 goal
     std::fs::write(
         native_root(d).join("glm").join("originator"),
-        "octosfix:local:tui#foreign",
+        "rafix:local:tui#foreign",
     )
     .unwrap();
     std::fs::write(native_root(d).join("glm").join("goal"), "goal_99").unwrap();
@@ -3433,13 +3433,13 @@ fn olp_review_identity_cwd_trunk_normalization() {
     let state = dp.join("review-state.json");
     let mut st: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&state).unwrap()).unwrap();
-    st["session"] = serde_json::json!("octosfix:local:tui#coding\u{0}~cwd-abc");
+    st["session"] = serde_json::json!("rafix:local:tui#coding\u{0}~cwd-abc");
     std::fs::write(&state, serde_json::to_string(&st).unwrap()).unwrap();
     // 双 lane originator 均为真实 wire 形状(glm 无 cwd 后缀;k3 带后缀)。
     let (glmp, k3p, gdirp) =
-        m35_native_baseline_with_k3_originator(&dp, &h, "octosfix:local:tui#coding\u{0}~cwd-abc");
+        m35_native_baseline_with_k3_originator(&dp, &h, "rafix:local:tui#coding\u{0}~cwd-abc");
     // 真实 native 形状: originator 无 cwd 后缀。
-    std::fs::write(gdirp.join("originator"), "octosfix:local:tui#coding\n").unwrap();
+    std::fs::write(gdirp.join("originator"), "rafix:local:tui#coding\n").unwrap();
     let (ok, so, se) = m35_freeze(&dp, &h, &glmp, &k3p);
     assert!(ok, "cwd 主干归一: 真实 wire 形状应通过: {so} {se}");
 
@@ -3450,13 +3450,13 @@ fn olp_review_identity_cwd_trunk_normalization() {
     let state2 = dn.join("review-state.json");
     let mut st2: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&state2).unwrap()).unwrap();
-    st2["session"] = serde_json::json!("octosfix:local:tui#coding\u{0}~cwd-abc");
+    st2["session"] = serde_json::json!("rafix:local:tui#coding\u{0}~cwd-abc");
     std::fs::write(&state2, serde_json::to_string(&st2).unwrap()).unwrap();
     let (glmn, k3n, gdirn) =
-        m35_native_baseline_with_k3_originator(&dn, &h, "octosfix:local:tui#coding\u{0}~cwd-abc");
+        m35_native_baseline_with_k3_originator(&dn, &h, "rafix:local:tui#coding\u{0}~cwd-abc");
     std::fs::write(
         gdirn.join("originator"),
-        "octosfix:local:tui#other-master\n",
+        "rafix:local:tui#other-master\n",
     )
     .unwrap();
     let (ok2, so2, _) = m35_freeze(&dn, &h, &glmn, &k3n);

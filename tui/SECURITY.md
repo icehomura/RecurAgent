@@ -1,6 +1,6 @@
 # Security Policy
 
-The ra maintainers take security reports seriously. Please do not disclose a
+The RecurAgent maintainers take security reports seriously. Please do not disclose a
 suspected vulnerability in a public issue, pull request, discussion, commit
 message, or log attachment.
 
@@ -25,7 +25,7 @@ backport. Pre-release builds and unreleased commits are evaluated case by case.
 1. On the repository's **Security** page, use **Report a vulnerability** if that
    private reporting option is available.
 2. If it is unavailable, open a
-   [security contact request](https://github.com/your-org/ra-tui/issues/new?template=security_contact.yml).
+   [security contact request](https://github.com/icehomura/ra-tui/issues/new?template=security_contact.yml).
    Include only contact information and a one-line, non-sensitive category.
    **Do not include exploit steps, logs, secrets, affected paths, or technical
    details.** A maintainer will establish a private channel before details are
@@ -40,9 +40,9 @@ Include the following only in the private report:
 - suggested remediation, if available; and
 - your preferred credit and disclosure timeline.
 
-If a report affects the ra server rather than this terminal client, say so;
+If a report affects the RecurAgent server rather than this terminal client, say so;
 the maintainers will coordinate with the
-[octos repository](https://github.com/your-org/ra).
+[RecurAgent repository](https://github.com/icehomura/ra).
 
 ## What to expect
 
@@ -60,15 +60,15 @@ non-security, or out-of-scope reports may be closed with an explanation.
 
 In scope:
 
-- octoscode source and official release artifacts;
-- credential or token exposure caused by octoscode;
+- ra-tui source and official release artifacts;
+- credential or token exposure caused by ra-tui;
 - command execution, path traversal, permission-boundary, update, archive, or
   dependency-integrity vulnerabilities; and
 - protocol handling in this client that creates a security impact.
 
 Generally out of scope:
 
-- vulnerabilities only in the separate ra server or a third-party provider;
+- vulnerabilities only in the separate RecurAgent server or a third-party provider;
 - unsupported, end-of-life versions;
 - social engineering, denial of service requiring unrealistic resources, or
   reports without a plausible security impact; and

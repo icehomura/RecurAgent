@@ -1,7 +1,7 @@
 /**
  * M9 wire-level e2e: tool event correlation.
  *
- * Issue: https://github.com/your-org/ra/issues/647
+ * Issue: https://github.com/icehomura/ra/issues/647
  * Spec  : api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md §8
  *
  * Asserts that when a turn fires a tool, the wire stream includes a

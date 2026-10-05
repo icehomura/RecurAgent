@@ -8,7 +8,7 @@ Status: implemented (branch `feat/mcp-rmcp-oauth`) — all four increments lande
 
 ## Context
 
-ra's MCP client (`crates/ra-agent/src/mcp.rs`) is hand-rolled and, per the
+RecurAgent's MCP client (`crates/ra-agent/src/mcp.rs`) is hand-rolled and, per the
 2026-07-09 deep review, has real protocol gaps: it never sends
 `notifications/initialized`, hardcodes `protocolVersion` `2024-11-05`, reads
 exactly one line per request (desyncs on any interleaved server notification),
@@ -26,12 +26,12 @@ Replace the hand-rolled client with an `rmcp`-backed one supporting three
 transports, preserving the existing public surface (`McpServerConfig`,
 `McpClient::start`, `register_tools`) so the 5 call sites are untouched.
 
-Dependencies (vetted — compile cleanly in ra's tree, exit 0):
+Dependencies (vetted — compile cleanly in RecurAgent's tree, exit 0):
 `rmcp = "1.8"` features `client, auth, macros, base64, transport-async-rw,
 transport-child-process, transport-streamable-http-client-reqwest`; `oauth2 = "5"`;
 reuse existing `keyring = "3"`. (rmcp pulls its own reqwest 0.13.2 alongside
-ra's 0.12.28 — both coexist; at the transport boundary use rmcp's internal
-client construction, not ra's reqwest type.)
+RecurAgent's 0.12.28 — both coexist; at the transport boundary use rmcp's internal
+client construction, not RecurAgent's reqwest type.)
 
 ## Behaviors to preserve (from the current mcp.rs)
 
@@ -110,7 +110,7 @@ the OAuth path is SSRF-guarded end to end.
   async `kill()` reaper (clean reap while the runtime is alive); if the runtime
   is already gone, dropping that closure drops the tokio `Child`, and
   `kill_on_drop` fires a synchronous SIGKILL — so **the child is never left
-  running** (worst case: a brief zombie the OS reaps when ra exits).
+  running** (worst case: a brief zombie the OS reaps when RecurAgent exits).
   `RunningService::drop` also cancels the service via a drop-guard. An explicit
   `await`-cancel on graceful shutdown (via `RunningService::cancellation_token()`)
   is an optional clean-reap nicety; it would require threading a shutdown handle
@@ -119,16 +119,16 @@ the OAuth path is SSRF-guarded end to end.
 
 ### Known limitations
 
-- **Refresh-token rotation across restarts.** ra persists tokens after the
+- **Refresh-token rotation across restarts.** RecurAgent persists tokens after the
   connect-time refresh, but rmcp's `AuthClient` may auto-refresh *mid-session*
   and that new token stays only in memory. A provider that rotates the refresh
   token on every use will leave the keyring with a stale refresh token, so a
-  later ra run must `ra mcp login` again. Most providers don't rotate on
+  later RecurAgent run must `ra mcp login` again. Most providers don't rotate on
   every refresh; a full fix is codex's `OAuthPersistor` (persist after each op).
 - **Linux keyring is session-scoped.** The Linux backend is `linux-native`
   (kernel keyutils) — chosen because a Secret-Service backend pulls
   `libdbus-sys`, which needs system `libdbus-1-dev` (absent on stock CI). Tokens
-  persist across ra invocations within a login session but not across
+  persist across RecurAgent invocations within a login session but not across
   reboot/logout; a Linux user re-runs `ra mcp login` after a reboot. macOS
   (`apple-native`) and Windows (`windows-native`) are fully persistent.
 - **Unbounded stdio frame read.** rmcp's child-process transport uses
@@ -143,5 +143,5 @@ the OAuth path is SSRF-guarded end to end.
 
 - No third-party aggregator services (per direction). rmcp is a crate, self-hosted.
 - Google upstream (Drive) still requires a Google OAuth client at the **server**
-  (workspace-mcp); that's the server's concern. This ADR delivers the ra
+  (workspace-mcp); that's the server's concern. This ADR delivers the RecurAgent
   **client** OAuth capability, which is provider-agnostic.

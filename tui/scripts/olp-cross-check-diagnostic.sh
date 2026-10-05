@@ -10,8 +10,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 TARGET="${1:-x86_64-pc-windows-msvc}"
-OUT=$(cargo check --target "$TARGET" -p octoscode --no-default-features 2>&1 || true)
-echo "$OUT" | grep -q "Compiling octoscode v0.3.0" || { echo "DIAGNOSTIC-INCOMPLETE: octoscode never reached compilation"; echo "$OUT" | tail -5; exit 1; }
+OUT=$(cargo check --target "$TARGET" -p ra-tui --no-default-features 2>&1 || true)
+echo "$OUT" | grep -q "Compiling ra-tui v0.3.0" || { echo "DIAGNOSTIC-INCOMPLETE: ra-tui never reached compilation"; echo "$OUT" | tail -5; exit 1; }
 NONDEP=$(echo "$OUT" | grep -E "^error" | grep -vcE "ring|aws-lc-sys|custom build command" || true)
 [ "$NONDEP" -eq 0 ] || { echo "DIAGNOSTIC-ERROR: $NONDEP non-dependency error(s):"; echo "$OUT" | grep -E "^error" | grep -vE "ring|aws-lc-sys" | head; exit 1; }
 echo "DIAGNOSTIC: cargo reached Compiling marker for $TARGET; full type-check NOT proven"

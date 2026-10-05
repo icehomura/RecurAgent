@@ -10,7 +10,7 @@
 //!
 //! Checks implemented here:
 //! - **Binary & version**: ra-tui on PATH, duplicate installs, and the update
-//!   channel (this build ships from the ra repository — updates are source
+//!   channel (this build ships from the RecurAgent repository — updates are source
 //!   rebuilds; no upstream release query).
 //! - **Terminal**: TERM/terminfo, UTF-8 locale, CJK width, color support.
 //! - **Config & data**: config dir + data dir writability.
@@ -60,7 +60,7 @@ pub const TUI_REQUIRED_FEATURES: &[&str] = &[
     UI_PROTOCOL_FEATURE_CONTEXT_LIFECYCLE_V1,
 ];
 
-/// Parsed `octoscode doctor` flags.
+/// Parsed `ra-tui doctor` flags.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DoctorArgs {
     /// Emit machine-readable JSON (support bundle).
@@ -73,7 +73,7 @@ pub struct DoctorArgs {
     pub stdio_command: Option<String>,
     /// WS endpoint, if configured.
     pub endpoint: Option<String>,
-    /// Bearer token for UI Protocol authentication. Falls back to OCTOS_AUTH_TOKEN.
+    /// Bearer token for UI Protocol authentication. Falls back to ra_AUTH_TOKEN.
     pub auth_token: Option<String>,
     /// Data dir override (defaults to `~/.ra`).
     pub data_dir: Option<PathBuf>,
@@ -344,7 +344,7 @@ fn binary_checks(_args: &DoctorArgs) -> Vec<Check> {
     checks.push(on_path_check(&located, current_exe.as_deref()));
     checks.push(shadow_check(&located));
 
-    // Update channel: informational, local-only. This fork ships from the ra
+    // Update channel: informational, local-only. This fork ships from the RecurAgent
     // repository, so there is no upstream release to query and the fix for
     // "out of date" is always a source rebuild.
     checks.push(build_source_check());
@@ -473,10 +473,9 @@ pub fn locate_ra_tui() -> LocatedBinaries {
 }
 
 /// `ra` (the backend) discovered across `$PATH` + the known install prefixes,
-/// plus the sibling of the running `ra-tui`, `$RA_PREFIX`/`~/.ra/bin`, and a
-/// legacy `$OCTOS_PREFIX`/`~/.ra/bin`. Same candidate set as
-/// `backend_ensure`'s resolver. Same PATH-vs-off-PATH bookkeeping as
-/// [`locate_ra_tui`].
+/// plus the sibling of the running `ra-tui` and `$RA_PREFIX`/`$ra_PREFIX` /
+/// `~/.ra/bin`. Same candidate set as `backend_ensure`'s resolver. Same
+/// PATH-vs-off-PATH bookkeeping as [`locate_ra_tui`].
 fn locate_backend() -> LocatedBinaries {
     let exe_name = if cfg!(windows) { "ra.exe" } else { "ra" };
     let mut dirs = default_install_dirs();
@@ -486,11 +485,10 @@ fn locate_backend() -> LocatedBinaries {
     {
         dirs.push(sibling_dir);
     }
-    if let Some(prefix) = crate::env::env_compat("RA_PREFIX", "OCTOS_PREFIX") {
+    if let Some(prefix) = crate::env::env_compat("RA_PREFIX", "ra_PREFIX") {
         dirs.push(PathBuf::from(prefix));
     }
     if let Some(home) = std::env::var_os("HOME") {
-        dirs.push(PathBuf::from(&home).join(".ra").join("bin"));
         dirs.push(PathBuf::from(&home).join(".ra").join("bin"));
     }
     locate_binary(exe_name, &dirs)
@@ -547,7 +545,7 @@ fn locate_binary(exe_name: &str, extra_dirs: &[PathBuf]) -> LocatedBinaries {
 }
 
 // ---------------------------------------------------------------------------
-// Installations (every ra-tui + ra on the machine, with versions)
+// Installations (every ra-tui + RecurAgent on the machine, with versions)
 // ---------------------------------------------------------------------------
 
 const CAT_INSTALLS: &str = "Installations";
@@ -565,8 +563,6 @@ fn install_location_label(path: &Path) -> &'static str {
         "brew"
     } else if p.contains("/.ra/bin/") {
         "ra install dir"
-    } else if p.contains("/.octos/bin/") {
-        "legacy ra install"
     } else if p.contains("/.local/bin/") {
         "shell installer"
     } else if p.starts_with("/usr/bin/") || p.starts_with("/bin/") {
@@ -639,11 +635,10 @@ fn installs_check(display_name: &str, located: &LocatedBinaries) -> Check {
     }
 }
 
-/// #5: enumerate every ra-tui AND ra server on the machine (across `$PATH`,
-/// Homebrew, cargo, the shell installer's `~/.local/bin`, and the ra /
-/// legacy-ra install dirs), showing each copy's version + location, plus
-/// the server version this client needs — so duplicate/mismatched installs are
-/// visible at a glance.
+/// #5: enumerate every ra-tui AND RecurAgent server on the machine (across `$PATH`,
+/// Homebrew, cargo, the shell installer's `~/.local/bin`, and the RecurAgent install
+/// dir), showing each copy's version + location, plus the server version this
+/// client needs — so duplicate/mismatched installs are visible at a glance.
 fn installations_checks() -> Vec<Check> {
     vec![
         Check::pass(
@@ -663,9 +658,9 @@ fn installations_checks() -> Vec<Check> {
 }
 
 /// Report which candidate `backend_ensure` would actually launch — the same
-/// candidate order as the resolver (sibling of `ra-tui`, `PATH`, ra install
-/// dir, legacy ra install) — so a doctor run names the backend a launch
-/// would use instead of leaving the user to infer it from the install list.
+/// candidate order as the resolver (sibling of `ra-tui`, `PATH`, RecurAgent install
+/// dir) — so a doctor run names the backend a launch would use instead of
+/// leaving the user to infer it from the install list.
 fn resolved_backend_check() -> Check {
     match crate::backend_ensure::resolved_backend_report() {
         Some((path, label)) => {
@@ -791,7 +786,7 @@ fn locale_check(lang: Option<&str>, lc_all: Option<&str>, lc_ctype: Option<&str>
 }
 
 fn cjk_check() -> Check {
-    // Informational: octoscode uses `unicode-width` for CJK double-width; the
+    // Informational: ra-tui uses `unicode-width` for CJK double-width; the
     // visible result also depends on the terminal font, so this never fails.
     Check::pass(
         CAT_TERM,
@@ -834,7 +829,7 @@ fn config_checks(args: &DoctorArgs) -> Vec<Check> {
     vec![writability_check("ra data dir", &data_dir)]
 }
 
-/// Pure resolver for the ra data dir: explicit `--data-dir` first, then
+/// Pure resolver for the RecurAgent data dir: explicit `--data-dir` first, then
 /// `HOME`, then `USERPROFILE`. Native Windows shells set no `HOME`, so the old
 /// HOME-only probe silently fell back to a CWD-relative `.ra` there.
 /// Mirrors `crate::history`'s home resolution (empty values ignored); split
@@ -896,7 +891,7 @@ fn writability_check(name: &'static str, dir: &Path) -> Check {
 }
 
 fn is_writable(dir: &Path) -> bool {
-    let probe = dir.join(".octoscode-doctor-write-probe");
+    let probe = dir.join(".ra-tui-doctor-write-probe");
     match std::fs::File::create(&probe) {
         Ok(_) => {
             let _ = std::fs::remove_file(&probe);
@@ -1097,7 +1092,7 @@ fn backend_checks(args: &DoctorArgs) -> Vec<Check> {
         checks.push(stdio_command_check(cmd));
     } else if let Some(endpoint) = &args.endpoint {
         let auth_token = args.auth_token.clone().or_else(|| {
-            std::env::var("OCTOS_AUTH_TOKEN")
+            std::env::var("ra_AUTH_TOKEN")
                 .ok()
                 .filter(|t| !t.is_empty())
         });
@@ -1277,7 +1272,7 @@ const WS_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 /// non-conforming endpoint that streams unrelated notifications could keep
 /// the probe alive forever without this.
 const WS_PROBE_OVERALL_TIMEOUT: Duration = Duration::from_secs(10);
-const WS_PROBE_ID: &str = "octoscode-doctor-capabilities";
+const WS_PROBE_ID: &str = "ra-tui-doctor-capabilities";
 
 fn probe_ws_capabilities(
     endpoint: &str,
@@ -1443,7 +1438,7 @@ fn protocol_skew_check() -> Check {
                 "TUI requires features absent from its ra-core build: {}",
                 unknown.join(", ")
             ),
-            "re-pin octoscode's ra-core revision to one that defines these features",
+            "re-pin ra-tui's ra-core revision to one that defines these features",
         )
     }
 }
@@ -1834,14 +1829,10 @@ mod tests {
             install_location_label(Path::new("/home/u/.ra/bin/ra")),
             "ra install dir"
         );
-        assert_eq!(
-            install_location_label(Path::new("/home/u/.octos/bin/ra")),
-            "legacy ra install"
-        );
         assert_eq!(install_location_label(Path::new("/usr/bin/ra")), "system");
         assert_eq!(
             install_location_label(Path::new(
-                "/x/node_modules/@octos-org/octoscode/.bin_real/octoscode"
+                "/x/node_modules/@icehomura/ra-tui/.bin_real/ra-tui"
             )),
             "npm"
         );
@@ -1878,7 +1869,7 @@ mod tests {
     }
 
     #[test]
-    fn installations_checks_surface_required_octos_and_both_binaries() {
+    fn installations_checks_surface_required_ra_and_both_binaries() {
         let checks = installations_checks();
         let needs = checks
             .iter()
@@ -2071,7 +2062,7 @@ mod tests {
 
     #[test]
     fn writability_check_warns_for_missing_dir() {
-        let missing = std::env::temp_dir().join("octoscode-doctor-nope-xyz-12345");
+        let missing = std::env::temp_dir().join("ra-tui-doctor-nope-xyz-12345");
         let _ = std::fs::remove_dir_all(&missing);
         let check = writability_check("missing", &missing);
         assert_eq!(check.status, CheckStatus::Warn);
@@ -2084,7 +2075,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         // Finding #4: a non-executable file on PATH must not count as a match,
         // since launching it would fail with EACCES.
-        let base = std::env::temp_dir().join("octoscode-doctor-exec-probe-13579");
+        let base = std::env::temp_dir().join("ra-tui-doctor-exec-probe-13579");
         let _ = std::fs::remove_file(&base);
         std::fs::write(&base, b"#!/bin/sh\n").expect("create probe");
 
@@ -2104,7 +2095,7 @@ mod tests {
 
     #[test]
     fn is_executable_file_rejects_directory_and_missing() {
-        let missing = std::env::temp_dir().join("octoscode-doctor-exec-missing-24680");
+        let missing = std::env::temp_dir().join("ra-tui-doctor-exec-missing-24680");
         let _ = std::fs::remove_file(&missing);
         assert!(!is_executable_file(&missing));
         // A directory is not a runnable file even though it "exists".
@@ -2187,7 +2178,7 @@ mod tests {
         // A path that exists as a regular file must NOT report "does not exist
         // yet (mkdir -p)" — `mkdir -p` would fail. It is a [✗] failure with a
         // remove/relocate fix (finding #3).
-        let file = std::env::temp_dir().join("octoscode-doctor-datadir-as-file-98765");
+        let file = std::env::temp_dir().join("ra-tui-doctor-datadir-as-file-98765");
         let _ = std::fs::remove_file(&file);
         std::fs::write(&file, b"not a dir").expect("create probe file");
         let check = writability_check("data dir", &file);
@@ -2207,7 +2198,7 @@ mod tests {
         fn new(tag: &str) -> Self {
             let mut dir = std::env::temp_dir();
             dir.push(format!(
-                "octoscode-doctor-{tag}-{}-{:?}",
+                "ra-tui-doctor-{tag}-{}-{:?}",
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)

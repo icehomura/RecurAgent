@@ -1,6 +1,6 @@
-# ra (Python)
+# RecurAgent (Python)
 
-Native Python bindings for embedding [octos](https://github.com/your-org/ra)
+Native Python bindings for embedding [RecurAgent](https://github.com/icehomura/ra)
 — a Rust-native agentic OS — in a Python process. Built with
 [pyo3](https://pyo3.rs/) over the shared **native core** in `ra-ffi`.
 
@@ -64,12 +64,12 @@ print(result.tokens.input, result.tokens.output)
 `Runtime`, `Config`, and `Brief` accept keyword arguments. `Config` includes
 `api_type` (`"anthropic"` / `"responses"`) — set it when driving a custom
 Anthropic-compatible endpoint, otherwise the factory defaults to the OpenAI
-protocol. Every failure raises `ra.OctosError`:
+protocol. Every failure raises `ra.RaError`:
 
 ```python
 try:
     rt = ra.Runtime(ra.Config(provider="nope", model="x"))
-except ra.OctosError as e:
+except ra.RaError as e:
     print("failed:", e)
 ```
 
@@ -91,7 +91,7 @@ a `Runtime` on a tokio task (e.g. Python running under `tokio::spawn`), the
 shared core panics when its internal tokio runtime is dropped inside another
 tokio context, and the episodic-memory scratch dir may not be cleaned up. Build
 and drop the runtime from a plain, non-async thread — the same contract as the
-ra C-ABI.
+RecurAgent C-ABI.
 
 ## API
 
@@ -105,13 +105,13 @@ ra C-ABI.
 | `Runtime.embed(text) -> list[float]` | Embed text (needs the `embed-llama` build feature + `embedding_model_path`). Releases the GIL. |
 | `TaskResult` | `.output: str`, `.iterations: int`, `.tokens: TokenUsage` |
 | `TokenUsage` | `.input`, `.output`, `.reasoning`, `.cache_read`, `.cache_write` |
-| `OctosError` | Raised by every failure. |
+| `RaError` | Raised by every failure. |
 
 ### Embeddings
 
 `Runtime.embed` returns a real vector only when the extension is built with the
 `embed-llama` feature (an in-process GGUF embedder via llama.cpp) and `Config`
-sets `embedding_model_path`. Otherwise it raises `OctosError` ("no embedder
+sets `embedding_model_path`. Otherwise it raises `RaError` ("no embedder
 configured"). Build it with:
 
 ```bash

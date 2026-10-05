@@ -7,8 +7,8 @@
 // `ra` executable, so they must all land in the same dir (vendor/).
 //
 // Escapes:
-//   OCTOS_SKIP_DOWNLOAD=1   skip the download entirely (CI / offline installs)
-//   OCTOS_BUNDLE_URL=<url>  override the download URL (file:// supported for tests)
+//   ra_SKIP_DOWNLOAD=1   skip the download entirely (CI / offline installs)
+//   ra_BUNDLE_URL=<url>  override the download URL (file:// supported for tests)
 
 "use strict";
 
@@ -21,7 +21,7 @@ const { spawnSync } = require("child_process");
 const { URL } = require("url");
 
 const VENDOR_DIR = path.join(__dirname, "vendor");
-const REPO = "your-org/ra";
+const REPO = "icehomura/ra";
 
 // Every binary the release bundle is expected to contain. `ra` is the
 // server; the rest are the bundled skills discovered as siblings at runtime.
@@ -39,7 +39,7 @@ const EXPECTED_BINS = [
 ];
 
 function fail(msg) {
-  console.error("\n[@your-org/ra] install failed: " + msg + "\n");
+  console.error("\n[@icehomura/ra] install failed: " + msg + "\n");
   process.exit(1);
 }
 
@@ -84,15 +84,15 @@ function resolveTag() {
     fail(
       "package version is the unmanaged placeholder (0.0.0-managed); " +
         "this build was not produced by the publish workflow. " +
-        "Set OCTOS_BUNDLE_URL to install manually."
+        "Set ra_BUNDLE_URL to install manually."
     );
   }
   return version.startsWith("v") ? version : "v" + version;
 }
 
 function bundleUrl(target) {
-  if (process.env.OCTOS_BUNDLE_URL) {
-    return process.env.OCTOS_BUNDLE_URL;
+  if (process.env.ra_BUNDLE_URL) {
+    return process.env.ra_BUNDLE_URL;
   }
   const tag = resolveTag();
   return (
@@ -135,8 +135,8 @@ function download(urlStr, destFile, redirects, cb) {
   // Direct request only. Corporate HTTP/HTTPS proxies are NOT supported here
   // (Node core has no CONNECT helper, and absolute-form GET to an HTTP proxy
   // fails for https targets). Behind a proxy: pre-download the bundle and point
-  // the installer at it with OCTOS_BUNDLE_URL=file:///path, or set
-  // OCTOS_SKIP_DOWNLOAD=1 and place the binaries under vendor/ yourself.
+  // the installer at it with ra_BUNDLE_URL=file:///path, or set
+  // ra_SKIP_DOWNLOAD=1 and place the binaries under vendor/ yourself.
   const transport = url.protocol === "https:" ? https : http;
   const requestOptions = {
     protocol: url.protocol,
@@ -235,16 +235,16 @@ function finalizeAndVerify() {
 }
 
 function main() {
-  if (process.env.OCTOS_SKIP_DOWNLOAD === "1") {
+  if (process.env.ra_SKIP_DOWNLOAD === "1") {
     console.log(
-      "[@your-org/ra] OCTOS_SKIP_DOWNLOAD=1 set; skipping bundle download."
+      "[@icehomura/ra] ra_SKIP_DOWNLOAD=1 set; skipping bundle download."
     );
     return;
   }
 
   const target = resolveTarget();
   const url = bundleUrl(target);
-  console.log("[@your-org/ra] downloading " + url);
+  console.log("[@icehomura/ra] downloading " + url);
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ra-npm-"));
   const archiveFile = path.join(tmpDir, "bundle." + target.ext);
@@ -261,7 +261,7 @@ function main() {
       // non-fatal cleanup failure
     }
     console.log(
-      "[@your-org/ra] installed octos + " +
+      "[@icehomura/ra] installed ra + " +
         (EXPECTED_BINS.length - 1) +
         " bundled skills into vendor/"
     );

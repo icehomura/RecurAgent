@@ -23,17 +23,17 @@
  *      it's gone from the DOM.
  *
  * Required env:
- *   OCTOS_TEST_URL=https://dspfac.crew.ominix.io
- *   OCTOS_AUTH_TOKEN=ra-admin-2026
- *   OCTOS_PROFILE=dspfac
+ *   ra_TEST_URL=https://dspfac.crew.ominix.io
+ *   ra_AUTH_TOKEN=ra-admin-2026
+ *   ra_PROFILE=dspfac
  *
  * Optional env:
- *   OCTOS_MOFA_INSTALL_SOURCE  default: mofa-org/mofa-skills/mofa-cli
- *   OCTOS_MOFA_SKILL_NAME      default: mofa-cli
- *   OCTOS_MOFA_BUILTIN_VOICE   default: vivian
- *   OCTOS_MOFA_CLONED_VOICE    default: yangmi
- *   OCTOS_MOFA_SKIP_INSTALL=1  reuse an already-installed skill
- *   OCTOS_MOFA_SKIP_REMOVE=1   leave skill installed for later runs
+ *   ra_MOFA_INSTALL_SOURCE  default: mofa-org/mofa-skills/mofa-cli
+ *   ra_MOFA_SKILL_NAME      default: mofa-cli
+ *   ra_MOFA_BUILTIN_VOICE   default: vivian
+ *   ra_MOFA_CLONED_VOICE    default: yangmi
+ *   ra_MOFA_SKIP_INSTALL=1  reuse an already-installed skill
+ *   ra_MOFA_SKIP_REMOVE=1   leave skill installed for later runs
  *
  * NEVER point at mini5 — that host is reserved for coding-green.
  */
@@ -50,17 +50,17 @@ import {
   login,
 } from './live-browser-helpers';
 
-const AUTH_TOKEN = process.env.OCTOS_AUTH_TOKEN || 'ra-admin-2026';
-const PROFILE_ID = process.env.OCTOS_PROFILE || 'dspfac';
+const AUTH_TOKEN = process.env.ra_AUTH_TOKEN || 'ra-admin-2026';
+const PROFILE_ID = process.env.ra_PROFILE || 'dspfac';
 const INSTALL_SOURCE =
-  process.env.OCTOS_MOFA_INSTALL_SOURCE || 'mofa-org/mofa-skills/mofa-cli';
-const SKILL_NAME = process.env.OCTOS_MOFA_SKILL_NAME || 'mofa-cli';
-const BUILTIN_VOICE = process.env.OCTOS_MOFA_BUILTIN_VOICE || 'vivian';
-const CLONED_VOICE = process.env.OCTOS_MOFA_CLONED_VOICE || 'yangmi';
-const SKIP_INSTALL = process.env.OCTOS_MOFA_SKIP_INSTALL === '1';
-const SKIP_REMOVE = process.env.OCTOS_MOFA_SKIP_REMOVE === '1';
+  process.env.ra_MOFA_INSTALL_SOURCE || 'mofa-org/mofa-skills/mofa-cli';
+const SKILL_NAME = process.env.ra_MOFA_SKILL_NAME || 'mofa-cli';
+const BUILTIN_VOICE = process.env.ra_MOFA_BUILTIN_VOICE || 'vivian';
+const CLONED_VOICE = process.env.ra_MOFA_CLONED_VOICE || 'yangmi';
+const SKIP_INSTALL = process.env.ra_MOFA_SKIP_INSTALL === '1';
+const SKIP_REMOVE = process.env.ra_MOFA_SKIP_REMOVE === '1';
 
-const FLAG_KEY = 'octos_thread_store_v2';
+const FLAG_KEY = 'ra_thread_store_v2';
 
 function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -81,8 +81,8 @@ function removeButtonForSkill(page: Page, skillName: string) {
 async function loginToDashboard(page: Page) {
   await page.addInitScript(
     ({ token, profile, flagKey }) => {
-      localStorage.setItem('octos_session_token', token);
-      localStorage.setItem('octos_auth_token', token);
+      localStorage.setItem('ra_session_token', token);
+      localStorage.setItem('ra_auth_token', token);
       localStorage.setItem('selected_profile', profile);
       localStorage.setItem(flagKey, '1');
     },
@@ -144,7 +144,7 @@ async function installSkillFresh(page: Page) {
   console.log(`mofa-flow: preinstalled_removed=${wasPreinstalled}`);
 
   const sourceInput = page.getByPlaceholder(
-    /your-org\/system-skills, https:\/\/host\/org\/repo\.git, or \.\/skills\/my-skill/i,
+    /icehomura\/system-skills, https:\/\/host\/org\/repo\.git, or \.\/skills\/my-skill/i,
   );
   await sourceInput.fill(INSTALL_SOURCE);
 

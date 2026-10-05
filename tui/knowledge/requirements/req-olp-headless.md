@@ -1,10 +1,10 @@
 ---
 kind: requirement
 id: REQ-OLP-HEADLESS
-title: "Global 运行时阶段 2:octoscode --headless client"
+title: "Global 运行时阶段 2:ra-tui --headless client"
 status: accepted
 liveness: auto
-tags: [olp, lifecycle, headless, octoscode]
+tags: [olp, lifecycle, headless, ra-tui]
 ---
 
 ## Problem
@@ -15,12 +15,12 @@ tags: [olp, lifecycle, headless, octoscode]
 
 ## Requirements
 
-[REQ-OLP-HEADLESS-MODE] octoscode MUST 提供 `--headless` 标志:复用既有
+[REQ-OLP-HEADLESS-MODE] ra-tui MUST 提供 `--headless` 标志:复用既有
 transport/store 协议栈,承担全部 client 职责(capabilities 握手、
 session/open、消费 peer/staged 打开 peer 会话、事件泵),不初始化终端、
 不渲染、不读键盘。
 
-[REQ-OLP-HEADLESS-STEER-ONLY] headless 模式的指令入口 MUST 仅为 ra
+[REQ-OLP-HEADLESS-STEER-ONLY] headless 模式的指令入口 MUST 仅为 RecurAgent
 侧 steer(REQ-OLP-CTRL);approval/question MUST 一律 park 并走
 escalation,MUST NOT 存在任何自动应答路径。
 
@@ -33,7 +33,7 @@ MUST NOT 绕过锁或引入共享后端(另行提案)。
 ## Scenarios
 
 Scenario: headless 打开 staged peer 会话
-  Given octoscode --headless 连接 backend 且收到 peer/staged
+  Given ra-tui --headless 连接 backend 且收到 peer/staged
   When 事件泵处理该通知
   Then peer 会话被打开,全程无终端渲染调用
 

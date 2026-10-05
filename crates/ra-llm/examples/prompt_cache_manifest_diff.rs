@@ -2,7 +2,7 @@
 //!
 //! Input may be legacy JSONL with one `PromptCacheInputManifest` per line or
 //! the runtime observer JSONL selected by `RA_PROMPT_CACHE_MANIFEST_JSONL`
-//! (legacy `OCTOS_PROMPT_CACHE_MANIFEST_JSONL` still honoured).
+//! (legacy `ra_PROMPT_CACHE_MANIFEST_JSONL` still honoured).
 //! Runtime comparisons come from the observer's per-stream predecessor, even
 //! across interleaved requests and daemon restarts. Usage rows are skipped.
 //! Only legacy raw manifests use adjacent-row comparison. The output contains

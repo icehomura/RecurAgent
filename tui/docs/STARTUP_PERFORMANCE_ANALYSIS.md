@@ -1,4 +1,4 @@
-# octoscode 启动性能分析
+# ra-tui 启动性能分析
 
 ## 启动流程（src/main.rs）
 
@@ -8,7 +8,7 @@ main()
   ├─ install_terminal_restoring_panic_hook()  <1ms
   ├─ cmd::dispatch()                    <1ms（拦截 update/doctor）
   ├─ Cli::parse()                       <1ms
-  ├─ backend_ensure::ensure_octos_backend()  可能慢（下载 ra server）
+  ├─ backend_ensure::ensure_ra_backend()  可能慢（下载 ra server）
   ├─ splash::play()                     明显瓶颈（2.15-4.15s）
   └─ event_loop::run()                  取决于 backend 连接速度
 ```
@@ -41,9 +41,9 @@ pub const SPLASH_HOLD: Duration = Duration::from_millis(450);
 
 **backend_ensure 下载**（`src/backend_ensure.rs`）：
 
-- 如果 ra server 不在 PATH 或版本不匹配，会从 GitHub 下载（慢，取决于网络）
+- 如果 RecurAgent server 不在 PATH 或版本不匹配，会从 GitHub 下载（慢，取决于网络）
 - 有 fast path：PATH 上可用就直接返回，不探测 legacy dir
-- 有 opt-out：`OCTOSCODE_NO_AUTO_INSTALL=1` 跳过下载
+- 有 opt-out：`RA_TUI_NO_AUTO_INSTALL=1` 跳过下载
 
 ## 瓶颈排序
 
@@ -66,9 +66,9 @@ pub const SPLASH_HOLD: Duration = Duration::from_millis(450);
 
 ### 2. backend_ensure 下载（优先级：中）
 
-**问题**：如果 ra server 不在 PATH 或版本不匹配，会从 GitHub 下载（慢）。
+**问题**：如果 RecurAgent server 不在 PATH 或版本不匹配，会从 GitHub 下载（慢）。
 
-**现状**：已有 fast path（PATH 上可用就直接返回）和 opt-out（`OCTOSCODE_NO_AUTO_INSTALL=1`）。
+**现状**：已有 fast path（PATH 上可用就直接返回）和 opt-out（`RA_TUI_NO_AUTO_INSTALL=1`）。
 
 **方案**：
 - 缓存版本检查结果（比如 1 小时内不重复检查）

@@ -2,7 +2,7 @@
 # Self-contained: no repo clone, Rust, or Node.js needed.
 #
 # Usage:
-#   irm https://github.com/your-org/ra/releases/latest/download/install.ps1 | iex
+#   irm https://github.com/icehomura/ra/releases/latest/download/install.ps1 | iex
 #
 #   # Or download and run with options:
 #   .\install.ps1 -Version v0.5.0
@@ -10,8 +10,8 @@
 #   .\install.ps1 -Uninstall
 #
 # Environment variables (for piped installs):
-#   $env:OCTOS_VERSION   - Release version (default: latest)
-#   $env:OCTOS_PREFIX    - Install prefix (default: ~\.ra\bin)
+#   $env:ra_VERSION   - Release version (default: latest)
+#   $env:ra_PREFIX    - Install prefix (default: ~\.ra\bin)
 
 [CmdletBinding(DefaultParameterSetName = 'Install')]
 param(
@@ -73,7 +73,7 @@ if ($Help) {
 install.ps1 - Install ra from pre-built binaries on Windows.
 
 USAGE
-  Piped:     irm https://github.com/your-org/ra/releases/latest/download/install.ps1 | iex
+  Piped:     irm https://github.com/icehomura/ra/releases/latest/download/install.ps1 | iex
   Download:  .\install.ps1 [options]
   Tunnel:    .\install.ps1 -Tunnel -TenantName alice -FrpsToken <token>
 
@@ -101,23 +101,23 @@ OPTIONAL TUNNEL (frpc)
   -TunnelDomain <domain> Tunnel domain (default: ra-cloud.org)
 
 ENVIRONMENT VARIABLES
-  OCTOS_VERSION      Release version override
-  OCTOS_PREFIX       Install prefix override
-  OCTOS_HOME         Data directory override (default: ~\.ra)
-  OCTOS_AUTH_TOKEN   Auth token override
-  OCTOS_DOWNLOAD_URL Local/self-hosted download directory
+  ra_VERSION      Release version override
+  ra_PREFIX       Install prefix override
+  ra_HOME         Data directory override (default: ~\.ra)
+  ra_AUTH_TOKEN   Auth token override
+  ra_DOWNLOAD_URL Local/self-hosted download directory
   FRPS_SERVER        Tunnel relay (frps) server address (no default)
 "@
     exit 0
 }
 
 # -- Defaults ----------------------------------------------------------
-$GithubRepo = "your-org/ra"
+$GithubRepo = "icehomura/ra"
 
-if (-not $Version)   { $Version = if ($env:OCTOS_VERSION) { $env:OCTOS_VERSION } else { "latest" } }
-if (-not $Prefix)    { $Prefix  = if ($env:OCTOS_PREFIX)  { $env:OCTOS_PREFIX }  else { Join-Path $HOME ".ra\bin" } }
+if (-not $Version)   { $Version = if ($env:ra_VERSION) { $env:ra_VERSION } else { "latest" } }
+if (-not $Prefix)    { $Prefix  = if ($env:ra_PREFIX)  { $env:ra_PREFIX }  else { Join-Path $HOME ".ra\bin" } }
 
-$DataDir = if ($env:OCTOS_HOME) { $env:OCTOS_HOME } else { Join-Path $HOME ".ra" }
+$DataDir = if ($env:ra_HOME) { $env:ra_HOME } else { Join-Path $HOME ".ra" }
 
 # -- Tunnel defaults --------------------------------------------------
 $FrpcVersion = "0.65.0"
@@ -164,7 +164,7 @@ function Err($msg) {
         Write-Host "    ERROR: $msg" -ForegroundColor Red
         Write-Host ""
         Write-Host "    Run diagnostics:"
-        Write-Host "      irm https://github.com/your-org/ra/releases/latest/download/install.ps1 -OutFile install.ps1; .\install.ps1 -Doctor"
+        Write-Host "      irm https://github.com/icehomura/ra/releases/latest/download/install.ps1 -OutFile install.ps1; .\install.ps1 -Doctor"
         exit 1
     }
 }
@@ -421,8 +421,8 @@ Validate-Inputs
 # If ra binary exists and tunnel is explicitly enabled,
 # skip the full install and just update the tunnel configuration.
 
-$octosBinCheck = Join-Path $Prefix "ra.exe"
-if ((Test-Path $octosBinCheck) -and $Tunnel) {
+$raBinCheck = Join-Path $Prefix "ra.exe"
+if ((Test-Path $raBinCheck) -and $Tunnel) {
     Section "Updating tunnel configuration"
 
     # Fill in missing values from existing frpc config
@@ -528,21 +528,21 @@ if ($Doctor) {
     # -- Binary -------------------------------------------------------
     Section "ra binary"
 
-    $OctosBin = Join-Path $Prefix "ra.exe"
-    if (Test-Path $OctosBin) {
-        Ok "found: $OctosBin"
+    $RaBin = Join-Path $Prefix "ra.exe"
+    if (Test-Path $RaBin) {
+        Ok "found: $RaBin"
         try {
-            $ver = & $OctosBin --version 2>&1 | Select-Object -First 1
+            $ver = & $RaBin --version 2>&1 | Select-Object -First 1
             Ok "version: $ver"
         } catch {
             Err "binary exists but failed to run"
-            Hint "Try reinstalling: irm https://github.com/your-org/ra/releases/latest/download/install.ps1 | iex"
+            Hint "Try reinstalling: irm https://github.com/icehomura/ra/releases/latest/download/install.ps1 | iex"
         }
     } else {
         if (Test-Command "ra") {
             $found = (Get-Command ra).Source
-            Warn "not found at $OctosBin, but found at $found"
-            Hint "Set `$env:OCTOS_PREFIX or check your PATH"
+            Warn "not found at $RaBin, but found at $found"
+            Hint "Set `$env:ra_PREFIX or check your PATH"
         } else {
             Err "ra binary not found"
             Hint "Run install.ps1 to install"
@@ -569,14 +569,14 @@ if ($Doctor) {
     # -- ra serve process ------------------------------------------
     Section "ra serve"
 
-    $octosProc = Get-Process -Name "ra" -ErrorAction SilentlyContinue |
+    $raProc = Get-Process -Name "ra" -ErrorAction SilentlyContinue |
         Where-Object { $_.CommandLine -match "serve" } |
         Select-Object -First 1
-    if ($octosProc) {
-        Ok "running (PID: $($octosProc.Id))"
+    if ($raProc) {
+        Ok "running (PID: $($raProc.Id))"
     } else {
         Err "ra serve is not running"
-        Hint "Start: Start-ScheduledTask -TaskName OctosServe"
+        Hint "Start: Start-ScheduledTask -TaskName RaServe"
     }
 
     # -- Port check ---------------------------------------------------
@@ -595,7 +595,7 @@ if ($Doctor) {
             Warn "port $Port in use but owning process not found"
         }
     } else {
-        if ($octosProc) {
+        if ($raProc) {
             Err "ra serve is running but nothing is listening on $Port"
         } else {
             Warn "nothing listening on port $Port"
@@ -682,9 +682,9 @@ if ($Doctor) {
     # -- Service configuration ----------------------------------------
     Section "Service configuration"
 
-    $task = Get-ScheduledTask -TaskName "OctosServe" -ErrorAction SilentlyContinue
+    $task = Get-ScheduledTask -TaskName "RaServe" -ErrorAction SilentlyContinue
     if ($task) {
-        Ok "OctosServe task registered"
+        Ok "RaServe task registered"
         $taskInfo = $task | Get-ScheduledTaskInfo -ErrorAction SilentlyContinue
         if ($taskInfo -and $taskInfo.LastRunTime) {
             Ok "last run: $($taskInfo.LastRunTime)"
@@ -701,7 +701,7 @@ if ($Doctor) {
             Hint "Re-run install.ps1 to recreate it"
         }
     } else {
-        Err "OctosServe scheduled task not found"
+        Err "RaServe scheduled task not found"
         Hint "Re-run install.ps1 to create it"
     }
 
@@ -860,15 +860,15 @@ if ($Uninstall) {
     }
 
     # Remove scheduled tasks
-    $task = Get-ScheduledTask -TaskName "OctosServe" -ErrorAction SilentlyContinue
+    $task = Get-ScheduledTask -TaskName "RaServe" -ErrorAction SilentlyContinue
     if ($task) {
-        Unregister-ScheduledTask -TaskName "OctosServe" -Confirm:$false -ErrorAction SilentlyContinue
-        Ok "removed OctosServe scheduled task"
+        Unregister-ScheduledTask -TaskName "RaServe" -Confirm:$false -ErrorAction SilentlyContinue
+        Ok "removed RaServe scheduled task"
     }
-    $caddyTask = Get-ScheduledTask -TaskName "OctosCaddy" -ErrorAction SilentlyContinue
+    $caddyTask = Get-ScheduledTask -TaskName "RaCaddy" -ErrorAction SilentlyContinue
     if ($caddyTask) {
-        Unregister-ScheduledTask -TaskName "OctosCaddy" -Confirm:$false -ErrorAction SilentlyContinue
-        Ok "removed OctosCaddy scheduled task"
+        Unregister-ScheduledTask -TaskName "RaCaddy" -Confirm:$false -ErrorAction SilentlyContinue
+        Ok "removed RaCaddy scheduled task"
     }
 
     # Stop ra and caddy processes
@@ -1070,7 +1070,7 @@ if (Test-Command "caddy") {
 Section "Resolving release"
 
 $Zipfile = "ra-bundle-${Triple}.zip"
-$DownloadBase = $env:OCTOS_DOWNLOAD_URL
+$DownloadBase = $env:ra_DOWNLOAD_URL
 
 # Auto-detect: check if zip is next to the script or in the current directory
 if (-not $DownloadBase) {
@@ -1199,17 +1199,17 @@ if (-not ($userPath -split ";" | Where-Object { $_ -eq $Prefix })) {
 # -- Initialize ra workspace ----------------------------------------
 Section "Initializing ra"
 
-$env:OCTOS_HOME = $DataDir
-$octosBin = Join-Path $Prefix "ra.exe"
+$env:ra_HOME = $DataDir
+$raBin = Join-Path $Prefix "ra.exe"
 
 if (-not (Test-Path $DataDir)) {
     if ($DataDir -eq (Join-Path $HOME ".ra")) {
         try {
-            & $octosBin init --cwd $HOME --defaults 2>&1 | Out-Null
+            & $raBin init --cwd $HOME --defaults 2>&1 | Out-Null
             Ok "workspace initialized via ra init"
         } catch {
             try {
-                & $octosBin init --cwd $HOME 2>&1 | Out-Null
+                & $raBin init --cwd $HOME 2>&1 | Out-Null
                 Ok "workspace initialized via ra init"
             } catch {
                 New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
@@ -1303,7 +1303,7 @@ if (-not (Test-Path $userPath2)) {
 Ok "data directory: $DataDir"
 
 # -- Generate auth token ----------------------------------------------
-if (-not $AuthToken) { $AuthToken = if ($env:OCTOS_AUTH_TOKEN) { $env:OCTOS_AUTH_TOKEN } else { "" } }
+if (-not $AuthToken) { $AuthToken = if ($env:ra_AUTH_TOKEN) { $env:ra_AUTH_TOKEN } else { "" } }
 if (-not $AuthToken) {
     # Generate 32-byte hex token
     $bytes = New-Object byte[] 32
@@ -1315,7 +1315,7 @@ if (-not $AuthToken) {
 Section "Setting up ra serve"
 
 $serveLog = Join-Path $DataDir "serve.log"
-$taskName = "OctosServe"
+$taskName = "RaServe"
 
 # Remove existing task if present
 $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -1339,8 +1339,8 @@ $settings = New-ScheduledTaskSettingsSet `
     -ExecutionTimeLimit ([TimeSpan]::Zero)
 
 # The bearer token must not be embedded in the wrapper (#2388): the
-# launcher lives in OCTOS_HOME, which keeps profile ACLs when left at its
-# default but is world-readable the moment an operator points OCTOS_HOME
+# launcher lives in ra_HOME, which keeps profile ACLs when left at its
+# default but is world-readable the moment an operator points ra_HOME
 # elsewhere. Keep the token in a sibling file restricted to the invoking
 # user + SYSTEM/Administrators (SIDs, not localized group names): lock
 # down the empty file FIRST, then write into it, so no world-readable
@@ -1367,14 +1367,14 @@ try {
 $wrapperPath = Join-Path $DataDir "serve-launcher.cmd"
 $wrapperContent = @"
 @echo off
-set "OCTOS_HOME=$DataDir"
-set "OCTOS_DATA_DIR=$DataDir"
-set /p OCTOS_AUTH_TOKEN=<"$DataDir\serve-token"
-if not defined OCTOS_AUTH_TOKEN (
+set "ra_HOME=$DataDir"
+set "ra_DATA_DIR=$DataDir"
+set /p ra_AUTH_TOKEN=<"$DataDir\serve-token"
+if not defined ra_AUTH_TOKEN (
     echo [ra] serve-token file missing or empty; re-run install.ps1 >> "$serveLog"
     exit /b 1
 )
-"$octosBin" serve --port $Port --host 0.0.0.0 >> "$serveLog" 2>&1
+"$raBin" serve --port $Port --host 0.0.0.0 >> "$serveLog" 2>&1
 "@
 [System.IO.File]::WriteAllText($wrapperPath, $wrapperContent, [System.Text.UTF8Encoding]::new($false))
 
@@ -1458,8 +1458,8 @@ if ($Domain -and (Test-Command "caddy")) {
     # boundary that prevents arbitrary DNS pointed at this server
     # from burning ACME rate limits. See codex P1 follow-up to
     # #380 / #1070, and #1124 for the apex+single-label tightening.
-    @octos_tls expression ``{query.domain}.matches("^([^.]+\\.)?$DomainRe`$")``
-    respond @octos_tls 200
+    @ra_tls expression ``{query.domain}.matches("^([^.]+\\.)?$DomainRe`$")``
+    respond @ra_tls 200
     respond /check 403
 }
 
@@ -1531,7 +1531,7 @@ https:// {
     }
 
     # Register Caddy as scheduled task
-    $caddyTask = "OctosCaddy"
+    $caddyTask = "RaCaddy"
     Unregister-ScheduledTask -TaskName $caddyTask -Confirm:$false -ErrorAction SilentlyContinue
 
     # Reload if already running, otherwise start via scheduled task
@@ -1592,7 +1592,7 @@ if ($Tunnel) {
 # -- Summary -----------------------------------------------------------
 Section "Installation complete!"
 Write-Host ""
-Write-Host "    Binary:     $octosBin"
+Write-Host "    Binary:     $raBin"
 Write-Host "    Data dir:   $DataDir"
 Write-Host "    Config:     $configPath"
 Write-Host "    Auth token: $AuthToken"
@@ -1605,9 +1605,9 @@ Write-Host "    3. Start chatting:    ra chat"
 Write-Host "    4. Open local dashboard: http://localhost:${Port}/admin/"
 Write-Host ""
 Write-Host "  Manage service:"
-Write-Host "    Status:  Get-ScheduledTask -TaskName OctosServe"
-Write-Host "    Stop:    Stop-ScheduledTask -TaskName OctosServe"
-Write-Host "    Start:   Start-ScheduledTask -TaskName OctosServe"
+Write-Host "    Status:  Get-ScheduledTask -TaskName RaServe"
+Write-Host "    Stop:    Stop-ScheduledTask -TaskName RaServe"
+Write-Host "    Start:   Start-ScheduledTask -TaskName RaServe"
 Write-Host ""
 if ($Tunnel -and $TenantName) {
     Write-Host "  Public tunnel:"

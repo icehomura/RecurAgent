@@ -2,7 +2,7 @@
 
 CARGO ?= cargo
 FEATURES ?= api
-OCTOS_DIR ?= $(CURDIR)/.ra
+ra_DIR ?= $(CURDIR)/.ra
 HOST ?= 127.0.0.1
 PORT ?= 50080
 SERVE_FLAGS ?= --solo
@@ -16,12 +16,12 @@ init: ## Interactively create project-local .ra/config.json.
 	$(CARGO) run -p ra-cli -- init --cwd "$(CURDIR)"
 
 serve: ## Start the local API server (default: password-free local login).
-	$(CARGO) run -p ra-cli --features "$(FEATURES)" -- serve --cwd "$(CURDIR)" --data-dir "$(OCTOS_DIR)" --host "$(HOST)" --port "$(PORT)" $(SERVE_FLAGS)
+	$(CARGO) run -p ra-cli --features "$(FEATURES)" -- serve --cwd "$(CURDIR)" --data-dir "$(ra_DIR)" --host "$(HOST)" --port "$(PORT)" $(SERVE_FLAGS)
 
 dashboard-build: ## Build the embedded /admin/ dashboard.
 	./scripts/build-dashboard.sh
 
-# There is no bundled web client in this fork: the upstream `octos-web` SPA
+# There is no bundled web client in this fork: the upstream `ra-web` SPA
 # submodule was removed, so `ra serve` answers 503 "web_bundle_missing" at /app
 # until a client is built into crates/ra-cli/static/web/. Use `ra-tui` instead.
 app-build: dashboard-build ## Build the embedded browser assets (/admin/).

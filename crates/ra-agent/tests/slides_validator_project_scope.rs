@@ -1,4 +1,4 @@
-//! Regression coverage for ra #997 — the slides-kind project-scope
+//! Regression coverage for RecurAgent #997 — the slides-kind project-scope
 //! `WorkspacePolicy` must wire the `mofa_slides` PPTX `MagicBytes` validator
 //! into `validation.validators` so the contract-gate rejects HTML "success"
 //! decks (the user-visible failure mode where `mofa_slides` writes an HTML
@@ -183,7 +183,7 @@ async fn valid_pptx_passes_slides_kind_project_scope_validator_gate() {
 
 #[tokio::test]
 async fn project_root_validators_write_to_project_ledger_without_manual_seeding() {
-    // ra #997 (round-2 fix): the load-bearing test for codex's review.
+    // RecurAgent #997 (round-2 fix): the load-bearing test for codex's review.
     //
     // Codex flagged that pre-round-2, the validator was DECLARED at the
     // slides-kind project policy but never RUN at the project root —
@@ -236,7 +236,7 @@ async fn project_root_validators_write_to_project_ledger_without_manual_seeding(
     std::fs::create_dir_all(&imgs_dir).unwrap();
 
     // The slides-kind policy declares the hard-required PPTX MagicBytes
-    // validator (ra #997). Persist it under the project root, as
+    // validator (RecurAgent #997). Persist it under the project root, as
     // `create_slides_project` would in production.
     write_workspace_policy(
         &project_root,
@@ -330,7 +330,7 @@ async fn project_root_validators_write_to_project_ledger_without_manual_seeding(
     );
 }
 
-// ra #997 (round-3 fix): codex flagged TWO more bypass paths still
+// RecurAgent #997 (round-3 fix): codex flagged TWO more bypass paths still
 // uncovered by the round-2 wiring. These tests drive the production
 // code paths end-to-end so the spawn loop ACTUALLY writes the
 // `<session>/slides/<slug>/.ra/validator_outcomes.jsonl` row that
@@ -583,7 +583,7 @@ async fn spawn_only_mofa_slides_writes_project_ledger() {
 /// `run_project_root_validators`, so a slides workflow that dispatches
 /// through MCP completes without writing the project ledger.
 ///
-/// ra #997 (round-4 fix): omitting `terminal_output` masks the
+/// RecurAgent #997 (round-4 fix): omitting `terminal_output` masks the
 /// real production gap because `workflow_uses_contract_terminal_delivery`
 /// returns `false` when `required_artifact_kind` is absent, so the
 /// `resolve_contract_terminal_files` block is skipped entirely. The
@@ -701,7 +701,7 @@ async fn agent_mcp_slides_writes_project_ledger() {
 
     // ── Dispatch through the agent_mcp branch. ─────────────────────
     //
-    // ra #997 (round-4 fix): set `terminal_output.required_artifact_kind`
+    // RecurAgent #997 (round-4 fix): set `terminal_output.required_artifact_kind`
     // to match production `slides_delivery` shape. This makes
     // `workflow_uses_contract_terminal_delivery` return `true` so the
     // `resolve_contract_terminal_files` block at `spawn.rs:2059` runs.

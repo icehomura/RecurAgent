@@ -40,7 +40,7 @@ const SESSION_PROMPTS_DIR: &str = "session_prompts";
 ///
 /// `output/` is NOT scaffolded — generated decks land under
 /// `<workspace>/skill-output/slides/<slug>/output/` via the host's
-/// plugin work-dir rebind (the canonical ra plugin output path).
+/// plugin work-dir rebind (the canonical RecurAgent plugin output path).
 /// The previous empty `<project>/output/` was a ghost folder the
 /// project-scope validator never found anything in.
 pub fn scaffold_slides_project(data_dir: &Path, project_name: &str) -> Result<PathBuf, String> {
@@ -309,8 +309,8 @@ fn site_preset_from_topic(session_topic: &str) -> Option<SitePreset> {
             site_name: "React Lab",
             description: "Lean React/Vite shell for prototypes, interface experiments, and lightweight tools.",
             accent: "#be123c",
-            reference: "adooctos-website",
-            reference_label: "adooctos-website",
+            reference: "adora-web",
+            reference_label: "adora-web",
         },
         _ => SitePreset {
             preset_key: "learning",

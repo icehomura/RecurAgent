@@ -1,7 +1,7 @@
-# ra Harness Event Emitters
+# RecurAgent Harness Event Emitters
 
 These copyable helpers emit `ra.harness.event.v1` JSON records for non-Rust
-tools. They write to `OCTOS_EVENT_SINK` when it is set and do nothing when the
+tools. They write to `ra_EVENT_SINK` when it is set and do nothing when the
 sink is missing.
 
 The contract is:
@@ -13,7 +13,7 @@ The contract is:
 ## Python
 
 ```bash
-export OCTOS_EVENT_SINK="file:///tmp/ra-events.jsonl"
+export ra_EVENT_SINK="file:///tmp/ra-events.jsonl"
 python3 examples/harness-event/python/emit_progress.py \
   --session-id sess-123 \
   --task-id task-456 \
@@ -26,7 +26,7 @@ python3 examples/harness-event/python/emit_progress.py \
 ## JavaScript / Node
 
 ```bash
-export OCTOS_EVENT_SINK="file:///tmp/ra-events.jsonl"
+export ra_EVENT_SINK="file:///tmp/ra-events.jsonl"
 node examples/harness-event/node/emit_progress.mjs \
   --session-id sess-123 \
   --task-id task-456 \

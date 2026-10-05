@@ -391,7 +391,7 @@ mod i18n_tests {
         }
     }
 
-    /// #395 + octos#1801 v2: the `/peer` + `/gather` command strings
+    /// #395 + RecurAgent#1801 v2: the `/peer` + `/gather` command strings
     /// (registry descriptions + dispatch / kickoff / fan-in status lines)
     /// resolve in BOTH locales.
     #[test]
@@ -429,7 +429,7 @@ mod i18n_tests {
         }
     }
 
-    /// octoscode#532: the awaiting-fleet strings (status-bar segment, softened
+    /// ra-tui#532: the awaiting-fleet strings (status-bar segment, softened
     /// budget chip, dock landing progress, waiting-on-fleet summary card)
     /// resolve in BOTH locales.
     #[test]
@@ -456,7 +456,7 @@ mod i18n_tests {
         }
     }
 
-    /// octos#1807: the `turn/steer` status string resolves in BOTH locales
+    /// RecurAgent#1807: the `turn/steer` status string resolves in BOTH locales
     /// (rust-i18n echoes the key back on a miss).
     #[test]
     fn turn_steer_keys_resolve_in_en_and_zh() {

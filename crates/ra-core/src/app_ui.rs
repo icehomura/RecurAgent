@@ -1,4 +1,4 @@
-//! Stable app-facing UI API for ra clients.
+//! Stable app-facing UI API for RecurAgent clients.
 //!
 //! This layer is intentionally above the draft JSON-RPC wire protocol. TUI and
 //! future app surfaces should depend on these app concepts, while transports can

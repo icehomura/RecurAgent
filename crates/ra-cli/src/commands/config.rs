@@ -2,8 +2,8 @@
 //! (`config.json` → the `cli.<cmd>` block).
 //!
 //! The interactive wizard was removed — operators hand-edit `config.json`
-//! directly. `ra config show` prints the saved config and `ra config
-//! path` prints the resolved `config.json` path; bare `ra config` prints a
+//! directly. `ra config show` prints the saved config and `RecurAgent config
+//! path` prints the resolved `config.json` path; bare `RecurAgent config` prints a
 //! short overview pointing at both plus the file location and an "edit it
 //! directly" hint (it does NOT launch a wizard).
 //!

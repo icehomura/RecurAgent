@@ -96,7 +96,7 @@ pub fn cors_allowlist_for_base_domain(base: Option<&str>) -> Vec<String> {
         format!("https://api.{base}"),
         "http://localhost:3000".to_string(),
         "http://localhost:5173".to_string(),
-        // octos-web Vite dev server (embedded same-origin at /app in prod, so
+        // ra-web Vite dev server (embedded same-origin at /app in prod, so
         // CORS is only needed when running the web app from `vite dev`).
         "http://localhost:5174".to_string(),
     ]
@@ -388,7 +388,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         // M7.9 / W2 — task supervisor exposure (kept REST). NOT an AppUI
         // duplicate of the WS `task/cancel` method: this is the channel/CLI
         // task-cancel path, also backed by the ra-bus API channel
-        // (crates/ra-bus/src/api_channel.rs). See octos#1371 + spec §11.
+        // (crates/ra-bus/src/api_channel.rs). See RecurAgent#1371 + spec §11.
         .route("/api/tasks/{task_id}/cancel", post(handlers::cancel_task))
         .route(
             "/api/tasks/{task_id}/restart-from-node",
@@ -513,7 +513,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         // Admin/config plane (kept REST): consumed by the admin dashboard SPA
         // (dashboard/src/api.ts), not the AppUI WS client. These functionally
         // overlap `profile/llm/*` but serve the REST-based admin surface, which
-        // is intentionally outside the M12 WS migration scope. See octos#1371.
+        // is intentionally outside the M12 WS migration scope. See RecurAgent#1371.
         .route("/api/my/test-provider", post(admin::test_provider))
         .route("/api/my/provider-models", post(admin::provider_models))
         .route("/api/my/test-search", post(admin::test_search))
@@ -1183,7 +1183,7 @@ pub(crate) fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 ///
 /// Query path: `?token=<value>` or `?_token=<value>` — used by SSE,
 /// `EventSource`, `<img src>`, and WebSocket clients that cannot set
-/// custom headers. Per [issue #1010](https://github.com/octos-org/octos/issues/1010),
+/// custom headers. Per [issue #1010](https://github.com/icehomura/ra/issues/1010),
 /// the raw query value is **percent-decoded** before comparison. The
 /// raw URI fragment may contain `%21` for `!`, `%2B` for `+`, `%2F`
 /// for `/`, etc. — without decoding, a token like
@@ -1739,7 +1739,7 @@ mod tests {
         assert_eq!(extract_token(&req), "");
     }
 
-    /// Issue [#1010](https://github.com/octos-org/octos/issues/1010):
+    /// Issue [#1010](https://github.com/icehomura/ra/issues/1010):
     /// browsers and curl percent-encode special characters in query
     /// string values. The raw query string contains `%21` for `!`, so
     /// the extractor must percent-decode the value before handing it to

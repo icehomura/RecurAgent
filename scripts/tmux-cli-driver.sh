@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
 # Shell primitives for deterministic tmux-driven CLI/TUI acceptance tests.
 
-if [ -n "${OCTOS_TMUX_DRIVER_SH:-}" ]; then
+if [ -n "${ra_TMUX_DRIVER_SH:-}" ]; then
   return 0 2>/dev/null || exit 0
 fi
-OCTOS_TMUX_DRIVER_SH=1
+ra_TMUX_DRIVER_SH=1
 
 set -euo pipefail
 
-OCTOS_TMUX_ROOT="${OCTOS_TMUX_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-OCTOS_TMUX_COLS="${OCTOS_TMUX_COLS:-140}"
-OCTOS_TMUX_ROWS="${OCTOS_TMUX_ROWS:-40}"
-OCTOS_TMUX_PREFIX="${OCTOS_TMUX_PREFIX:-ra-tmux-}"
-OCTOS_TMUX_RUN_ID="${OCTOS_TMUX_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
-OCTOS_TMUX_RUN_PREFIX="${OCTOS_TMUX_PREFIX}${OCTOS_TMUX_RUN_ID}-"
-OCTOS_TMUX_ARTIFACT_ROOT="${OCTOS_TMUX_ARTIFACT_ROOT:-${OCTOS_TMUX_ROOT}/e2e/test-results-tmux}"
-OCTOS_TMUX_ARTIFACT_DIR="${OCTOS_TMUX_ARTIFACT_DIR:-${OCTOS_TMUX_ARTIFACT_ROOT}/${OCTOS_TMUX_RUN_ID}}"
-OCTOS_TMUX_KEEP="${OCTOS_TMUX_KEEP:-0}"
+ra_TMUX_ROOT="${ra_TMUX_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ra_TMUX_COLS="${ra_TMUX_COLS:-140}"
+ra_TMUX_ROWS="${ra_TMUX_ROWS:-40}"
+ra_TMUX_PREFIX="${ra_TMUX_PREFIX:-ra-tmux-}"
+ra_TMUX_RUN_ID="${ra_TMUX_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
+ra_TMUX_RUN_PREFIX="${ra_TMUX_PREFIX}${ra_TMUX_RUN_ID}-"
+ra_TMUX_ARTIFACT_ROOT="${ra_TMUX_ARTIFACT_ROOT:-${ra_TMUX_ROOT}/e2e/test-results-tmux}"
+ra_TMUX_ARTIFACT_DIR="${ra_TMUX_ARTIFACT_DIR:-${ra_TMUX_ARTIFACT_ROOT}/${ra_TMUX_RUN_ID}}"
+ra_TMUX_KEEP="${ra_TMUX_KEEP:-0}"
 
-declare -a OCTOS_TMUX_SESSIONS=()
-declare -i OCTOS_TMUX_CAPTURE_SEQ=0
+declare -a ra_TMUX_SESSIONS=()
+declare -i ra_TMUX_CAPTURE_SEQ=0
 
 tmux_log() {
   printf '[tmux] %s\n' "$*"
@@ -37,13 +37,13 @@ tmux_require() {
 }
 
 tmux_init_artifacts() {
-  mkdir -p "$OCTOS_TMUX_ARTIFACT_DIR"
+  mkdir -p "$ra_TMUX_ARTIFACT_DIR"
 }
 
 tmux_session_name() {
   local slug="${1:-session}"
   slug="${slug//[^a-zA-Z0-9_-]/-}"
-  printf '%s%s' "$OCTOS_TMUX_RUN_PREFIX" "$slug"
+  printf '%s%s' "$ra_TMUX_RUN_PREFIX" "$slug"
 }
 
 tmux_quote_command() {
@@ -69,7 +69,7 @@ tmux_quote_command() {
 
 tmux_register_session() {
   local session="$1"
-  OCTOS_TMUX_SESSIONS+=("$session")
+  ra_TMUX_SESSIONS+=("$session")
 }
 
 tmux_unregister_session() {
@@ -77,15 +77,15 @@ tmux_unregister_session() {
   local next=()
   local item
 
-  for item in "${OCTOS_TMUX_SESSIONS[@]}"; do
+  for item in "${ra_TMUX_SESSIONS[@]}"; do
     if [ "$item" != "$session" ]; then
       next+=("$item")
     fi
   done
   if [ "${#next[@]}" -eq 0 ]; then
-    OCTOS_TMUX_SESSIONS=()
+    ra_TMUX_SESSIONS=()
   else
-    OCTOS_TMUX_SESSIONS=("${next[@]}")
+    ra_TMUX_SESSIONS=("${next[@]}")
   fi
 }
 
@@ -108,7 +108,7 @@ tmux_new() {
 tmux_new_default() {
   local session="$1"
   shift
-  tmux_new "$session" "$OCTOS_TMUX_COLS" "$OCTOS_TMUX_ROWS" "$@"
+  tmux_new "$session" "$ra_TMUX_COLS" "$ra_TMUX_ROWS" "$@"
 }
 
 tmux_send() {
@@ -126,14 +126,14 @@ tmux_key() {
 tmux_redact() {
   perl -0pe '
     BEGIN {
-      @tokens = grep { defined && length } ($ENV{OCTOS_AUTH_TOKEN}, $ENV{OCTOS_TMUX_AUTH_TOKEN});
+      @tokens = grep { defined && length } ($ENV{ra_AUTH_TOKEN}, $ENV{ra_TMUX_AUTH_TOKEN});
     }
     for my $token (@tokens) {
       s/\Q$token\E/[REDACTED]/g;
     }
     s/(Authorization:\s*Bearer\s+)[^\s]+/${1}[REDACTED]/gi;
     s/(--auth-token(?:=|\s+))[^\s]+/${1}[REDACTED]/g;
-    s/(OCTOS_AUTH_TOKEN=)[^\s]+/${1}[REDACTED]/g;
+    s/(ra_AUTH_TOKEN=)[^\s]+/${1}[REDACTED]/g;
   '
 }
 
@@ -148,8 +148,8 @@ tmux_artifact_path() {
   local safe_session="${session//[^a-zA-Z0-9_.-]/-}"
   local safe_label="${label//[^a-zA-Z0-9_.-]/-}"
   printf '%s/%03d-%s-%s.%s.log' \
-    "$OCTOS_TMUX_ARTIFACT_DIR" \
-    "$OCTOS_TMUX_CAPTURE_SEQ" \
+    "$ra_TMUX_ARTIFACT_DIR" \
+    "$ra_TMUX_CAPTURE_SEQ" \
     "$safe_session" \
     "$safe_label" \
     "$suffix"
@@ -160,7 +160,7 @@ tmux_capture() {
   local label="${2:-capture}"
 
   tmux_init_artifacts
-  OCTOS_TMUX_CAPTURE_SEQ=$((OCTOS_TMUX_CAPTURE_SEQ + 1))
+  ra_TMUX_CAPTURE_SEQ=$((ra_TMUX_CAPTURE_SEQ + 1))
 
   local raw_path
   raw_path="$(tmux_artifact_path "$session" "$label" "raw")"
@@ -181,7 +181,7 @@ tmux_capture_clean() {
   local label="${2:-capture}"
 
   tmux_init_artifacts
-  OCTOS_TMUX_CAPTURE_SEQ=$((OCTOS_TMUX_CAPTURE_SEQ + 1))
+  ra_TMUX_CAPTURE_SEQ=$((ra_TMUX_CAPTURE_SEQ + 1))
 
   local raw_path
   local clean_path
@@ -207,7 +207,7 @@ tmux_print_failure_capture() {
   printf '\nFAIL: %s\n' "$message" >&2
   printf -- '--- last clean tmux capture: %s ---\n' "$session" >&2
   tmux_capture_clean "$session" "failure" >&2 || true
-  printf -- '--- artifacts: %s ---\n' "$OCTOS_TMUX_ARTIFACT_DIR" >&2
+  printf -- '--- artifacts: %s ---\n' "$ra_TMUX_ARTIFACT_DIR" >&2
 }
 
 tmux_fail() {
@@ -265,17 +265,17 @@ tmux_kill() {
 
 tmux_cleanup() {
   local session
-  if [ "${OCTOS_TMUX_KEEP:-0}" = "1" ]; then
+  if [ "${ra_TMUX_KEEP:-0}" = "1" ]; then
     set +u
-    if [ "${#OCTOS_TMUX_SESSIONS[@]}" -gt 0 ]; then
-      tmux_log "OCTOS_TMUX_KEEP=1; keeping sessions: ${OCTOS_TMUX_SESSIONS[*]}"
+    if [ "${#ra_TMUX_SESSIONS[@]}" -gt 0 ]; then
+      tmux_log "ra_TMUX_KEEP=1; keeping sessions: ${ra_TMUX_SESSIONS[*]}"
     fi
     set -u
     return 0
   fi
 
   set +u
-  for session in "${OCTOS_TMUX_SESSIONS[@]}"; do
+  for session in "${ra_TMUX_SESSIONS[@]}"; do
     tmux kill-session -t "$session" 2>/dev/null || true
   done
   set -u
@@ -292,14 +292,14 @@ tmux_run_line_command() {
   local command
   command="$(tmux_quote_command "$@")"
   local wrapped
-  printf -v wrapped '%s\nrc=$?\nprintf "\\n__OCTOS_TMUX_EXIT:%%s__\\n" "$rc"\nwhile :; do sleep 3600; done\n' "$command"
+  printf -v wrapped '%s\nrc=$?\nprintf "\\n__ra_TMUX_EXIT:%%s__\\n" "$rc"\nwhile :; do sleep 3600; done\n' "$command"
   tmux_new_default "$session" bash -lc "$wrapped"
 }
 
 tmux_wait_for_exit() {
   local session="$1"
   local timeout="${2:-20}"
-  tmux_wait_for "$session" '__OCTOS_TMUX_EXIT:[0-9]+__' "$timeout"
+  tmux_wait_for "$session" '__ra_TMUX_EXIT:[0-9]+__' "$timeout"
 }
 
 tmux_assert_exit_status() {
@@ -307,7 +307,7 @@ tmux_assert_exit_status() {
   local expected="$2"
   local capture
   capture="$(tmux_capture_clean "$session" "exit-status" || true)"
-  if ! printf '%s\n' "$capture" | grep -E -q -- "__OCTOS_TMUX_EXIT:${expected}__"; then
+  if ! printf '%s\n' "$capture" | grep -E -q -- "__ra_TMUX_EXIT:${expected}__"; then
     tmux_fail "$session" "expected exit status ${expected}"
   fi
 }
@@ -316,7 +316,7 @@ tmux_assert_no_registered_sessions() {
   local live=()
   local session
   set +u
-  for session in "${OCTOS_TMUX_SESSIONS[@]}"; do
+  for session in "${ra_TMUX_SESSIONS[@]}"; do
     if tmux has-session -t "$session" 2>/dev/null; then
       live+=("$session")
     fi
@@ -333,7 +333,7 @@ tmux_assert_no_orphan_sessions() {
   local live=()
   local session
   while IFS= read -r session; do
-    if [[ "$session" == "$OCTOS_TMUX_RUN_PREFIX"* ]]; then
+    if [[ "$session" == "$ra_TMUX_RUN_PREFIX"* ]]; then
       live+=("$session")
     fi
   done < <(tmux list-sessions -F '#S' 2>/dev/null || true)

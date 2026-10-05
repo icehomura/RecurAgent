@@ -60,7 +60,7 @@ can take several minutes for large models.
 ### voice_synthesize
 
 - `text` (required)
-- `output_path` (optional): default auto-generated in `RA_WORK_DIR` (legacy `OCTOS_WORK_DIR` honoured)
+- `output_path` (optional): default auto-generated in `RA_WORK_DIR` (legacy `ra_WORK_DIR` honoured)
 - `language` (optional, default `"chinese"`): `"chinese"`, `"english"`,
   `"japanese"`, `"korean"`
 - `speaker` (optional, default `"vivian"`): one of the preset names above

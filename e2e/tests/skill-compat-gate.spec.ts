@@ -11,24 +11,24 @@
  * The supervisor dispatches the canary run. This spec only authors the flow.
  *
  * Run:
- *   OCTOS_TEST_URL=https://dspfac.crew.ominix.io \
- *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
- *   OCTOS_PROFILE=dspfac \
- *   OCTOS_COMPAT_SKILL_SOURCE=./e2e/fixtures/compat-test-skill \
- *   OCTOS_COMPAT_SKILL_NAME=compat-test-skill \
+ *   ra_TEST_URL=https://dspfac.crew.ominix.io \
+ *   ra_AUTH_TOKEN=ra-admin-2026 \
+ *   ra_PROFILE=dspfac \
+ *   ra_COMPAT_SKILL_SOURCE=./e2e/fixtures/compat-test-skill \
+ *   ra_COMPAT_SKILL_NAME=compat-test-skill \
  *   npx playwright test tests/skill-compat-gate.spec.ts
  *
  * The canary host must have the fixture directory reachable at the
- * `OCTOS_COMPAT_SKILL_SOURCE` path. For a default canary deploy the tree
+ * `ra_COMPAT_SKILL_SOURCE` path. For a default canary deploy the tree
  * is checked into the repo at `e2e/fixtures/compat-test-skill/`.
  */
 import { expect, test, type Page } from '@playwright/test';
 
-const AUTH_TOKEN = process.env.OCTOS_AUTH_TOKEN || 'ra-admin-2026';
-const PROFILE_ID = process.env.OCTOS_PROFILE || 'dspfac';
-const SKILL_NAME = process.env.OCTOS_COMPAT_SKILL_NAME || 'compat-test-skill';
+const AUTH_TOKEN = process.env.ra_AUTH_TOKEN || 'ra-admin-2026';
+const PROFILE_ID = process.env.ra_PROFILE || 'dspfac';
+const SKILL_NAME = process.env.ra_COMPAT_SKILL_NAME || 'compat-test-skill';
 const SKILL_SOURCE =
-  process.env.OCTOS_COMPAT_SKILL_SOURCE || './e2e/fixtures/compat-test-skill';
+  process.env.ra_COMPAT_SKILL_SOURCE || './e2e/fixtures/compat-test-skill';
 
 function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -49,8 +49,8 @@ function removeButtonForSkill(page: Page, skillName: string) {
 async function loginToDashboard(page: Page) {
   await page.addInitScript(
     ({ token, profile }) => {
-      localStorage.setItem('octos_session_token', token);
-      localStorage.setItem('octos_auth_token', token);
+      localStorage.setItem('ra_session_token', token);
+      localStorage.setItem('ra_auth_token', token);
       localStorage.setItem('selected_profile', profile);
     },
     { token: AUTH_TOKEN, profile: PROFILE_ID },
@@ -173,7 +173,7 @@ test.describe('Harness M4.4: third-party skill compatibility gate', () => {
 
     // ── Phase 1: install from the documented source (local path or repo) ──
     const sourceInput = page.getByPlaceholder(
-      /your-org\/system-skills, https:\/\/host\/org\/repo\.git, or \.\/skills\/my-skill/i,
+      /icehomura\/system-skills, https:\/\/host\/org\/repo\.git, or \.\/skills\/my-skill/i,
     );
     await sourceInput.fill(SKILL_SOURCE);
 

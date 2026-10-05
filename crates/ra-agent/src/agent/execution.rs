@@ -1327,7 +1327,7 @@ impl Agent {
                             .await
                             {
                                 SpawnTaskContractResult::Satisfied { output_files } => {
-                                    // ra #997 (round-3 fix): the session-scope
+                                    // RecurAgent #997 (round-3 fix): the session-scope
                                     // contract above runs validators at the SESSION
                                     // root and writes
                                     // `<session>/.ra/validator_outcomes.jsonl`,
@@ -1339,7 +1339,7 @@ impl Agent {
                                     // but never writes the project ledger — so a
                                     // subsequent contract gate surfaces
                                     // `ready = false` even when the hard-required
-                                    // validator (ra #997:
+                                    // validator (RecurAgent #997:
                                     // `slides.mofa_slides.pptx_magic_bytes`)
                                     // would have passed at the project root.
                                     //

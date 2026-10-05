@@ -741,7 +741,7 @@ fn session_strip_height(app: &AppState) -> u16 {
     if app.sessions.len() >= 2 { 1 } else { 0 }
 }
 
-/// ra figlet wordmark shown in the MAIN window on the first-launch
+/// RecurAgent figlet wordmark shown in the MAIN window on the first-launch
 /// onboarding entry screen (it used to live in a right-side preview pane).
 const ONBOARDING_LOGO_ART: &str = "\
 ██████╗  █████╗ 
@@ -761,7 +761,7 @@ fn onboarding_logo_art_width() -> usize {
         .unwrap_or(0)
 }
 
-/// UX2 A.1: rows to spend on the ra banner HEADER across the top of every
+/// UX2 A.1: rows to spend on the RecurAgent banner HEADER across the top of every
 /// onboarding step. Taken ONLY from the surplus above what the menu itself
 /// needs (`menu_needed`) so the step list, its inputs, and the explanation pane
 /// are never clipped on short terminals. Full bordered figlet box when there is
@@ -2143,7 +2143,7 @@ fn compact_file_path(path: &str) -> String {
     format!(".../{}", components[components.len() - keep..].join("/"))
 }
 
-/// ra exposes several shell-family tools that all run a command string:
+/// RecurAgent exposes several shell-family tools that all run a command string:
 /// `shell`/`sh`/`exec`/`exec_command` (field `command`) and the
 /// codex-compatible `bash` (field `cmd`, falling back to `command`). They all
 /// render as a real command line, never the raw JSON arguments blob. Kept in
@@ -3629,7 +3629,7 @@ fn goal_objective_body_width(width: u16) -> usize {
 /// #532 (defect 2): a bare `⚠ budget limited` read as "everything stopped" —
 /// two experienced readers concluded the master had died and one recommended
 /// raising the budget, which was unnecessary. The budget only halts SELF-PACED
-/// `GoalContinue` ticks; ra's goal-status gate admits BOTH
+/// `GoalContinue` ticks; RecurAgent's goal-status gate admits BOTH
 /// `"active" | "budget_limited"`, so external wakes (fleet synthesis,
 /// peer-awaiting-input, child-completed) stay schedulable. While the focused
 /// master still has peers in flight, the chip says so instead of reading as a
@@ -4538,7 +4538,7 @@ const FLEET_OUTSTANDING_NAMES: usize = 2;
 ///
 /// A peer has LANDED when its last turn terminated and it is neither live nor
 /// blocked ([`AppState::peer_is_done`]). That is deliberately the same
-/// condition ra's `evaluate_peer_fleet_synthesis` holds on ("every owned
+/// condition RecurAgent's `evaluate_peer_fleet_synthesis` holds on ("every owned
 /// peer must be DONE (has a result) and SETTLED (not mid-turn)"), so
 /// `landed`/`total` tracks the gate that actually decides when the master
 /// wakes to synthesize — rather than inventing a second notion of progress.
@@ -5479,7 +5479,7 @@ fn session_model_id(app: &AppState, session_id: &SessionKey) -> Option<String> {
 
 /// A model-aware context-window fallback denominator for the `ctx N%` gauge,
 /// used ONLY until the first `token_cost` update carries the real per-model
-/// window (`session_context_window`). Mirrors the ra server's
+/// window (`session_context_window`). Mirrors the RecurAgent server's
 /// `context::context_window_tokens` heuristic for the well-known long-context
 /// models, so a fresh MiniMax-M3 / DeepSeek-V4 / Kimi-K3 / GLM session shows its
 /// real ~1M window instead of the generic 128K placeholder. The authoritative
@@ -5852,7 +5852,7 @@ fn status_bar_work_text(app: &AppState) -> String {
         parts.push(t!("app.statusbar.ps_to_view").into_owned());
     }
     // #532 (defect 1): a master that has staged peers goes SILENT while it
-    // holds for the fleet — ra's `evaluate_peer_fleet_synthesis` waits for
+    // holds for the fleet — RecurAgent's `evaluate_peer_fleet_synthesis` waits for
     // every owned peer to be DONE and SETTLED before it wakes to synthesize.
     // Nothing surfaced that hold, so the master read as dead ("apparently
     // master agent stopped working even it said it would continue"). Shown only

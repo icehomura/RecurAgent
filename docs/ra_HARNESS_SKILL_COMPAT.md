@@ -1,8 +1,8 @@
-# ra Harness — Third-Party Skill Compatibility Contract
+# RecurAgent Harness — Third-Party Skill Compatibility Contract
 
 This document defines the compatibility contract a third-party skill must
 uphold in order to be safely installed, executed, reloaded, and removed
-through the ra harness. It is the productization boundary for M4.4 of the
+through the RecurAgent harness. It is the productization boundary for M4.4 of the
 harness master plan and must stay truthful about what the runtime actually
 enforces today.
 
@@ -14,7 +14,7 @@ path.
 
 The contract covers:
 
-- installable skill packages (Git, ra Hub registry, or local path)
+- installable skill packages (Git, RecurAgent Hub registry, or local path)
 - custom-app skills that produce deliverable artifacts
 - one non-slides reference fixture — the summary app at
   `e2e/fixtures/compat-test-skill/`
@@ -76,7 +76,7 @@ artifacts. See "Secret handling" below.
 ## Lifecycle guarantees
 
 When installed through any supported source (Git URL, GitHub shorthand, or
-local path) the ra runtime guarantees that the following lifecycle
+local path) the RecurAgent runtime guarantees that the following lifecycle
 operations work without per-skill runtime branches:
 
 1. **Install** copies the skill tree into the target profile's
@@ -119,7 +119,7 @@ status codes (400/404), and through the in-chat `/skills remove` surface.
 
 ## Sandbox expectations
 
-Skill binaries inherit the ra sandbox policy, which is enforced uniformly
+Skill binaries inherit the RecurAgent sandbox policy, which is enforced uniformly
 regardless of skill origin:
 
 - the runtime uses the active sandbox backend (`Bwrap`, `Macos`,

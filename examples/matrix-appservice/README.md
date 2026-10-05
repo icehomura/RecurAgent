@@ -1,6 +1,6 @@
 # Matrix Appservice Configuration
 
-This directory contains example configuration files for running ra as a
+This directory contains example configuration files for running RecurAgent as a
 Matrix appservice with the BotFather architecture.
 
 ## Architecture
@@ -17,7 +17,7 @@ BotFather through `/createbot` / `/deletebot` / `/listbots`.
 | File | Purpose |
 |------|---------|
 | `registration.yaml` | Homeserver-side appservice registration |
-| `botfather.json` | ra profile for the BotFather gateway |
+| `botfather.json` | RecurAgent profile for the BotFather gateway |
 
 ## Configuration Reference
 
@@ -28,14 +28,14 @@ Place this file in the homeserver's appservice registration directory.
 | Field | Description |
 |-------|-------------|
 | `id` | Unique appservice identifier (arbitrary string, must be unique per homeserver) |
-| `url` | URL where homeserver pushes events to ra (must match gateway's appservice port) |
-| `as_token` | Appservice token — ra uses this when calling homeserver API |
-| `hs_token` | Homeserver token — homeserver uses this when pushing events to ra |
+| `url` | URL where homeserver pushes events to RecurAgent (must match gateway's appservice port) |
+| `as_token` | Appservice token — RecurAgent uses this when calling homeserver API |
+| `hs_token` | Homeserver token — homeserver uses this when pushing events to RecurAgent |
 | `sender_localpart` | Localpart of the main bot user (e.g. `bot` → `@bot:server`) |
 | `rate_limited` | Whether homeserver rate-limits this appservice (recommended: `false`) |
 | `namespaces.users` | Regex defining which user IDs this appservice exclusively controls |
 
-### botfather.json (ra side)
+### botfather.json (RecurAgent side)
 
 Place this file at `~/.ra/profiles/botfather.json` or pass via `--profile`.
 
@@ -99,7 +99,7 @@ cp examples/matrix-appservice/botfather.json ~/.ra/profiles/
 cd /path/to/palpo && cargo run --release
 
 # 4. Start ra gateway
-unset OCTOS_SERVE_URL
+unset ra_SERVE_URL
 DEEPSEEK_API_KEY="your-key" \
   ra gateway --profile ~/.ra/profiles/botfather.json --data-dir ~/.ra
 ```

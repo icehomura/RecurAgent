@@ -98,7 +98,7 @@ mod tests {
         viewport::ScrollbackTracker,
     };
 
-    // ── background/activity — the human sink (octos#2019) ────────────────
+    // ── background/activity — the human sink (RecurAgent#2019) ────────────────
 
     fn background_activity_row(
         session: &str,
@@ -166,9 +166,9 @@ mod tests {
         )
     }
 
-    /// octos#2019 — background events render under the session that OWNS the
+    /// RecurAgent#2019 — background events render under the session that OWNS the
     /// emitter, NOT under whichever session happens to be focused. That
-    /// failure mode has shipped three times (octos-tui#461, #466, #483), so
+    /// failure mode has shipped three times (ra-tui#461, #466, #483), so
     /// this asserts ROUTING: session B's line must be absent from session A's
     /// transcript while A is focused, and vice versa.
     #[test]
@@ -217,7 +217,7 @@ mod tests {
         );
     }
 
-    /// octos#2019 — a 50-round loop must be ONE foldable group, not 50 loose
+    /// RecurAgent#2019 — a 50-round loop must be ONE foldable group, not 50 loose
     /// lines, and every group must name its origin (an unattributed line reads
     /// as the master speaking).
     #[test]
@@ -255,7 +255,7 @@ mod tests {
         assert!(expanded.iter().any(|line| line.contains("round 49")));
     }
 
-    /// octos#2019 — a capped stream must SAY it was capped. Silent truncation
+    /// RecurAgent#2019 — a capped stream must SAY it was capped. Silent truncation
     /// reads as "nothing more happened".
     #[test]
     fn should_show_the_drop_marker_when_background_activity_was_capped() {
@@ -289,8 +289,8 @@ mod tests {
         );
     }
 
-    /// octos#2019 — a row with no routing key would have to fall back to the
-    /// focused session (the octos-tui#461/#466/#483 bug). Drop it instead.
+    /// RecurAgent#2019 — a row with no routing key would have to fall back to the
+    /// focused session (the ra-tui#461/#466/#483 bug). Drop it instead.
     #[test]
     fn should_drop_background_activity_when_it_carries_no_session_key() {
         let mut app = two_session_app();
@@ -2135,7 +2135,7 @@ mod tests {
 
         let text = rendered_text(&app);
 
-        assert!(!text.contains("Octoscode"));
+        assert!(!text.contains("ra-tui"));
         assert!(!text.contains("Protocol session"));
         assert!(!text.contains("ws://"));
         assert!(!text.contains("Transcript"));
@@ -4593,7 +4593,7 @@ mod tests {
         assert!(!text.contains("Ask ra to change code"));
     }
 
-    /// M22 (#58): the first-run onboarding surface renders the ASCII ra
+    /// M22 (#58): the first-run onboarding surface renders the ASCII RecurAgent
     /// wordmark in the MAIN window (not a right-side preview pane). This pins
     /// the splash so a future refactor cannot quietly drop the distinctive
     /// identity.
@@ -4627,7 +4627,7 @@ mod tests {
         assert!(text.contains("Welcome to ra — Your Coding Buddy"));
     }
 
-    /// At the soak's narrow 80x24 first-launch size, the OCTOS logo shows in the
+    /// At the soak's narrow 80x24 first-launch size, the RA logo shows in the
     /// main window AND the onboarding menu — through its Continue action — stays
     /// fully visible (codex P2: the logo must never clip the menu).
     #[test]
@@ -4664,7 +4664,7 @@ mod tests {
         );
     }
 
-    /// UX2 A.1: the OCTOS banner header only consumes rows ABOVE what the menu
+    /// UX2 A.1: the RA banner header only consumes rows ABOVE what the menu
     /// needs, so the step list, its inputs, and the explanation pane are never
     /// clipped on short terminals. Full figlet box (11 rows) only with real
     /// surplus AND width; otherwise the compact tagline box (3 rows), then
@@ -4679,7 +4679,7 @@ mod tests {
         assert_eq!(onboarding_header_height(16, 120, 14), 0);
         // No surplus → no header at all (the menu takes everything).
         assert_eq!(onboarding_header_height(14, 120, 14), 0);
-        // Narrow terminal (below the 16-col ra wordmark + padding) → never the
+        // Narrow terminal (below the 16-col RecurAgent wordmark + padding) → never the
         // wide figlet; compact box at most.
         assert_eq!(onboarding_header_height(40, 18, 5), 3);
     }
@@ -12290,7 +12290,7 @@ mod tests {
     }
 
     /// #532: the derivation itself — "landed" is `peer_is_done` (turn
-    /// terminated, not live, not blocked), which mirrors ra's
+    /// terminated, not live, not blocked), which mirrors RecurAgent's
     /// `evaluate_peer_fleet_synthesis` hold ("DONE and SETTLED"). A peer still
     /// OPENING has no slug yet, so it counts toward `total`/outstanding without
     /// appearing in the name list; the label caps names and never renders blank.

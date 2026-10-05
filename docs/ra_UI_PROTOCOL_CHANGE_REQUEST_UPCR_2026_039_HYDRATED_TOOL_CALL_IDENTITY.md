@@ -21,7 +21,7 @@ projection dropped them.
 The v2 tool envelopes (`replayed_tool_envelopes`) carry the names, but only
 for a connection that negotiated `projection.envelope.v2`, and only for the
 retained replay window. A client without them cannot label a reloaded tool
-row. OctoSense's shell is such a client: a stdio host on the stdio default
+row. RecurAgent's shell is such a client: a stdio host on the stdio default
 features, which leave out `projection.envelope.v2`. After a reload it shows
 each tool row as "tool" instead of, say, `peer_send_input`.
 

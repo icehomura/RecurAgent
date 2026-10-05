@@ -39,7 +39,7 @@ mod static_files;
 pub mod swarm;
 mod ui_protocol_alpha2_bridge;
 mod ui_protocol_alpha9_bridge;
-// Relocated to crate::contracts (Phase 3 of goal-in-chat) so `ra chat
+// Relocated to crate::contracts (Phase 3 of goal-in-chat) so `RecurAgent chat
 // --peers` can share the SAME process-global pending-prompt registry the WS
 // path uses without the `api` feature; re-exported here so api-internal paths
 // keep working unchanged.
@@ -358,7 +358,7 @@ pub struct AppState {
     pub deployment_mode: crate::config::DeploymentMode,
     /// One-time pairing state (WEB-PAIRING-CONTRACT-5100): the single
     /// per-process pairing code, the API token it can be exchanged for, and
-    /// the loopback origin to hand back. `Some` only for an HTTP `ra
+    /// the loopback origin to hand back. `Some` only for an HTTP `RecurAgent
     /// serve`; `None` in tests, stdio serves and embedded transports, where
     /// `/pair/info` and `/pair/claim` answer 404 ("pairing not supported")
     /// and the client falls back to the manual origin+token form.
@@ -387,7 +387,7 @@ pub struct AppState {
     /// `--danger-full-access`: sessions with NO explicit `/permissions`
     /// selection default to the dangerous full-access profile (sandbox off,
     /// network allowed, approvals never) instead of the gated
-    /// workspace-write default — ra's analogue of Claude Code's
+    /// workspace-write default — RecurAgent's analogue of Claude Code's
     /// `--dangerously-skip-permissions`. Solo-gated at serve startup (the
     /// same keystone that gates selecting the profile from the menu); an
     /// explicit per-session `/permissions` choice always overrides it.

@@ -29,7 +29,7 @@ function hasExplicitTestSelection(argv: string[]): boolean {
 }
 
 const includeLiveE2e =
-  process.env.OCTOS_PLAYWRIGHT_LIVE === '1' ||
+  process.env.ra_PLAYWRIGHT_LIVE === '1' ||
   hasExplicitTestSelection(process.argv);
 
 /**
@@ -37,14 +37,14 @@ const includeLiveE2e =
  *
  * Prerequisites:
  *   cargo build --release -p ra-cli --features "ra-cli/api,ra-cli/telegram"
- *   # Start the server (tests assume it's running on OCTOS_TEST_URL or localhost:3000)
+ *   # Start the server (tests assume it's running on ra_TEST_URL or localhost:3000)
  *
  * Run:
  *   npx playwright test
  *
  * Default discovery excludes live/fleet/mini suites so a normal e2e run cannot
  * accidentally hit production hosts. Pass an explicit test path/glob, or set
- * OCTOS_PLAYWRIGHT_LIVE=1, for intentional live validation.
+ * ra_PLAYWRIGHT_LIVE=1, for intentional live validation.
  */
 export default defineConfig({
   testDir: './tests',
@@ -58,6 +58,6 @@ export default defineConfig({
   timeout: 60_000,
   retries: 0,
   use: {
-    baseURL: process.env.OCTOS_TEST_URL || 'http://localhost:3000',
+    baseURL: process.env.ra_TEST_URL || 'http://localhost:3000',
   },
 });

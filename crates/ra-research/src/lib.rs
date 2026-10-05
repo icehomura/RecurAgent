@@ -1,7 +1,7 @@
-//! Research building blocks shared by the ra search tools (the built-in
+//! Research building blocks shared by the RecurAgent search tools (the built-in
 //! `web_search` / `search` tools and the `deep-search` / `deep-crawl` skills).
 //!
-//! Policy (OctoSense ADR 0002, section 6): free structured sources first
+//! Policy (RecurAgent ADR 0002, section 6): free structured sources first
 //! (GDELT, Google News RSS), then a self-hosted SearXNG if one is configured,
 //! then search API keys the person chose to add, then search engines'
 //! results pages for general web search (on by default; an operator can turn
@@ -57,10 +57,10 @@ pub const AGENT_TOKEN: &str = "ra-research";
 /// their own behalf (provider APIs, robots.txt, page reads). It names the
 /// software and where to learn about it, instead of posing as a desktop
 /// browser.
-pub const USER_AGENT: &str = "ra-research/1.0 (+https://github.com/your-org/ra)";
+pub const USER_AGENT: &str = "ra-research/1.0 (+https://github.com/icehomura/ra)";
 
 /// The environment lookup the research tools use in production: `RA_<NAME>`
-/// wins over the legacy `OCTOS_<NAME>`, and both spellings are honoured
+/// wins over the legacy `RA_<NAME>`, and both spellings are honoured
 /// (see [`ra_core::brand::env_compat_str`]).
 ///
 /// Accepts the bare suffix (`RESPECT_ROBOTS`) or either fully-prefixed
@@ -70,20 +70,20 @@ pub fn env_lookup(name: &str) -> Option<String> {
     ra_core::brand::env_compat_str(env_suffix(name))
 }
 
-/// `RA_FOO`/`OCTOS_FOO`/`FOO` → `FOO`.
+/// `RA_FOO`/`ra_FOO`/`FOO` → `FOO`.
 fn env_suffix(name: &str) -> &str {
     name.strip_prefix(ra_core::brand::ENV_PREFIX)
         .or_else(|| name.strip_prefix(ra_core::brand::LEGACY_ENV_PREFIX))
         .unwrap_or(name)
 }
 
-/// The legacy `OCTOS_` spelling of `name`.
+/// The legacy `RA_` spelling of `name`.
 pub fn legacy_env_name(name: &str) -> String {
     format!("{}{}", ra_core::brand::LEGACY_ENV_PREFIX, env_suffix(name))
 }
 
 /// Resolve `name` through an injected lookup: the new spelling first, the
-/// legacy `OCTOS_` spelling as the fallback. Production passes
+/// legacy `RA_` spelling as the fallback. Production passes
 /// [`env_lookup`]; tests pass a map keyed by the names they care about.
 pub(crate) fn resolve_env(lookup: &impl Fn(&str) -> Option<String>, name: &str) -> Option<String> {
     lookup(name).or_else(|| lookup(&legacy_env_name(name)))
@@ -91,7 +91,7 @@ pub(crate) fn resolve_env(lookup: &impl Fn(&str) -> Option<String>, name: &str) 
 
 /// Environment variable for results-page search: the metasearch's engines
 /// that read search engines' own pages (DuckDuckGo, Bing, Bing News, Brave,
-/// Google). **On by default** (OctoSense ADR 0002 §6 as amended: search the
+/// Google). **On by default** (RecurAgent ADR 0002 §6 as amended: search the
 /// way SearXNG does, no person in the loop); set it to `0`/`false`/`no`/
 /// `off` to turn it off. Most of these engines identify as ra-research.
 /// Google's
@@ -104,17 +104,17 @@ pub const SERP_SCRAPE_ENV: &str = "RA_ALLOW_SERP_SCRAPE";
 
 /// The spelling the previous build used for [`SERP_SCRAPE_ENV`]; still
 /// honoured as a fallback.
-pub const LEGACY_SERP_SCRAPE_ENV: &str = "OCTOS_ALLOW_SERP_SCRAPE";
+pub const LEGACY_SERP_SCRAPE_ENV: &str = "ra_ALLOW_SERP_SCRAPE";
 
 /// Earlier name of [`SERP_SCRAPE_ENV`], still honoured as an alias.
 pub const BROWSER_SERP_ENV: &str = "RA_ALLOW_BROWSER_SERP";
 
 /// The spelling the previous build used for [`BROWSER_SERP_ENV`]; still
 /// honoured as a fallback.
-pub const LEGACY_BROWSER_SERP_ENV: &str = "OCTOS_ALLOW_BROWSER_SERP";
+pub const LEGACY_BROWSER_SERP_ENV: &str = "ra_ALLOW_BROWSER_SERP";
 
 /// Operator setting that turns robots.txt checks **on** for the research
-/// tools (`1`/`true`/`yes`). Default off: OctoSense agents are personal
+/// tools (`1`/`true`/`yes`). Default off: RecurAgent agents are personal
 /// assistants reading on behalf of one person (a product decision by the
 /// maintainer). When off, robots.txt is never fetched or consulted; the
 /// honest User-Agent, per-host spacing, 429/503 backoff, timeouts, size
@@ -123,10 +123,10 @@ pub const RESPECT_ROBOTS_ENV: &str = "RA_RESPECT_ROBOTS";
 
 /// The spelling the previous build used for [`RESPECT_ROBOTS_ENV`]; still
 /// honoured as a fallback.
-pub const LEGACY_RESPECT_ROBOTS_ENV: &str = "OCTOS_RESPECT_ROBOTS";
+pub const LEGACY_RESPECT_ROBOTS_ENV: &str = "ra_RESPECT_ROBOTS";
 
 /// Whether robots.txt checks are enabled (env lookup injected for tests).
-/// `RA_RESPECT_ROBOTS` wins over the legacy `OCTOS_RESPECT_ROBOTS`.
+/// `RA_RESPECT_ROBOTS` wins over the legacy `ra_RESPECT_ROBOTS`.
 pub fn respect_robots(lookup: impl Fn(&str) -> Option<String>) -> bool {
     resolve_env(&lookup, RESPECT_ROBOTS_ENV)
         .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
@@ -140,13 +140,13 @@ pub const BROWSER_ENV: &str = "RA_BROWSER";
 
 /// The spelling the previous build used for [`BROWSER_ENV`]; still honoured
 /// as a fallback.
-pub const LEGACY_BROWSER_ENV: &str = "OCTOS_BROWSER";
+pub const LEGACY_BROWSER_ENV: &str = "ra_BROWSER";
 
 /// Shown with results whenever a search used the person's browser (and
 /// logged once when the browser starts): what that means for their account
 /// and how to turn it off.
 pub const BROWSER_SEARCH_NOTICE: &str = "Some results were loaded in the ra browser profile \
-     (~/.ra/browser-profile; an existing ~/.ra/browser-profile is kept). If you signed in to \
+     (~/.ra/browser-profile). If you signed in to \
      Google there, those searches ran as your \
      Google account: results may be personalised and are saved to its search activity. Search \
      engines' terms may not allow automated queries. Set RA_BROWSER=off to stop using the \
@@ -154,18 +154,18 @@ pub const BROWSER_SEARCH_NOTICE: &str = "Some results were loaded in the ra brow
 
 /// Operator switch for reading a page that plain HTTP was blocked on (a bot
 /// challenge, 401 or 403) once in the configured browser renderer. Unset:
-/// on (OctoSense ADR 0002 §6 as amended 2026-09-29: the maintainer decided
-/// ra searches and reads the way SearXNG does, with no person in the
+/// on (RecurAgent ADR 0002 §6 as amended 2026-09-29: the maintainer decided
+/// RecurAgent searches and reads the way SearXNG does, with no person in the
 /// loop; a real browser may read a page a plain client was refused, and
 /// nothing is solved or clicked). Set: on only for `1`/`true`/`yes`/`on`;
 /// any other value turns it off, so a mistyped opt-out fails safe. Before
-/// this switch (octos#2590 to #2637) a challenge over plain HTTP was never
+/// this switch (RecurAgent#2590 to #2637) a challenge over plain HTTP was never
 /// retried in the browser; set it to `0` to keep that behaviour.
 pub const READ_BLOCKED_IN_BROWSER_ENV: &str = "RA_READ_BLOCKED_IN_BROWSER";
 
 /// The spelling the previous build used for
 /// [`READ_BLOCKED_IN_BROWSER_ENV`]; still honoured as a fallback.
-pub const LEGACY_READ_BLOCKED_IN_BROWSER_ENV: &str = "OCTOS_READ_BLOCKED_IN_BROWSER";
+pub const LEGACY_READ_BLOCKED_IN_BROWSER_ENV: &str = "ra_READ_BLOCKED_IN_BROWSER";
 
 /// Whether a page blocked over plain HTTP may be read once in the browser
 /// ([`READ_BLOCKED_IN_BROWSER_ENV`]; env lookup injected for tests).
@@ -183,12 +183,12 @@ pub fn read_blocked_in_browser(lookup: impl Fn(&str) -> Option<String>) -> bool 
 pub const SEARXNG_URL_ENV: &str = "SEARXNG_URL";
 
 /// Whether results-page search (see [`SERP_SCRAPE_ENV`]) is on.
-/// Unset: on (the default, OctoSense ADR 0002 §6 amendment). Set: on only
+/// Unset: on (the default, RecurAgent ADR 0002 §6 amendment). Set: on only
 /// for `1`/`true`/`yes`/`on`; any other value, including an empty or
 /// unrecognised one, turns it **off**, so a mistyped opt-out fails safe.
 /// If either [`SERP_SCRAPE_ENV`] or its alias [`BROWSER_SERP_ENV`] turns it
 /// off, it is off; for each, the `RA_` spelling wins over the legacy
-/// `OCTOS_` one. The env lookup is injected so tests never touch process
+/// `RA_` one. The env lookup is injected so tests never touch process
 /// env.
 pub fn serp_scrape_allowed(lookup: impl Fn(&str) -> Option<String>) -> bool {
     [SERP_SCRAPE_ENV, BROWSER_SERP_ENV].iter().all(|k| {
@@ -211,7 +211,7 @@ pub fn serp_scrape_default_notice(lookup: impl Fn(&str) -> Option<String>) -> Op
         .all(|k| resolve_env(&lookup, k).is_none());
     unset.then_some(
         "Results-page search (DuckDuckGo, Bing, Brave and Google results pages) is on by \
-         default for general web results, the way SearXNG searches (OctoSense ADR 0002 \
+         default for general web results, the way SearXNG searches (RecurAgent ADR 0002 \
          amendment). Google's page is fetched with a browser-like client (a feature-phone \
          User-Agent over a Chrome TLS fingerprint). Search engines' terms may not allow \
          automated queries (Google and Bing: high risk; DuckDuckGo: its robots.txt allows the \
@@ -260,7 +260,7 @@ mod tests {
             assert!(!serp_scrape_allowed(only(SERP_SCRAPE_ENV, off)), "{off:?}");
         }
         assert!(!serp_scrape_allowed(only(BROWSER_SERP_ENV, "0")), "alias");
-        // The legacy `OCTOS_` spellings are still honoured…
+        // The legacy `RA_` spellings are still honoured…
         assert!(!serp_scrape_allowed(only(LEGACY_SERP_SCRAPE_ENV, "0")), "legacy");
         assert!(
             !serp_scrape_allowed(only(LEGACY_BROWSER_SERP_ENV, "0")),
@@ -349,11 +349,11 @@ mod tests {
 
     #[test]
     fn env_lookup_accepts_bare_and_prefixed_names_without_inventing_values() {
-        // Pure: neither the `RA_` nor the legacy `OCTOS_` spelling is set, so
+        // Pure: neither the `RA_` nor the legacy `RA_` spelling is set, so
         // the helper must not invent a value (no process env is touched).
         assert_eq!(env_lookup("NOT_SET_XYZ"), None);
         assert_eq!(env_lookup("RA_NOT_SET_XYZ"), None);
-        assert_eq!(env_lookup("OCTOS_NOT_SET_XYZ"), None);
+        assert_eq!(env_lookup("ra_NOT_SET_XYZ"), None);
         assert_eq!(legacy_env_name("RA_RESPECT_ROBOTS"), LEGACY_RESPECT_ROBOTS_ENV);
         assert_eq!(legacy_env_name("RESPECT_ROBOTS"), LEGACY_RESPECT_ROBOTS_ENV);
         assert_eq!(
@@ -365,7 +365,7 @@ mod tests {
     #[test]
     fn should_identify_itself_in_user_agent() {
         assert!(USER_AGENT.starts_with(AGENT_TOKEN));
-        assert!(USER_AGENT.contains("https://github.com/your-org/ra"));
+        assert!(USER_AGENT.contains("https://github.com/icehomura/ra"));
         assert!(!USER_AGENT.contains("Mozilla") && !USER_AGENT.contains("Chrome/"));
     }
 }

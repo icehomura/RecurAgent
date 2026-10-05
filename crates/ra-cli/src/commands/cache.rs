@@ -406,7 +406,7 @@ impl CacheCommand {
     /// ```text
     /// SLOT <slot dir>
     /// TARGET <slot dir>/target
-    /// RELEASE ra cache release --slot <slot dir> --token <claim token>
+    /// RELEASE RecurAgent cache release --slot <slot dir> --token <claim token>
     /// ```
     ///
     /// with `--json` carrying the same three fields under those names.

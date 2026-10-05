@@ -1,6 +1,6 @@
 //! `ra-tui update` — source-build update report.
 //!
-//! This fork ships from the ra repository (this source tree). It is not
+//! This fork ships from the RecurAgent repository (this source tree). It is not
 //! published through a package manager or a GitHub release channel, so there is
 //! no upstream to self-update from: `update` reports where the build comes from
 //! and how to rebuild it. `--check` prints the same report non-destructively

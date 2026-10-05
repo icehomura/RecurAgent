@@ -1,4 +1,4 @@
-//! Policy check (OctoSense ADR 0002 §6, review of octos#2568): the research
+//! Policy check (RecurAgent ADR 0002 §6, review of RecurAgent#2568): the research
 //! fetch paths identify as ra-research. No hard-coded desktop-browser User-Agent
 //! (`Mozilla/5.0 (...) ... Chrome/...`, `AppleWebKit`, `Safari/`) may appear
 //! in the research crates or the built-in search tools, nor in the
@@ -44,7 +44,7 @@ fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
             }
         } else if path
             .extension()
-            .is_some_and(|e| e == "rs" || e == "octoscript" || e == "json")
+            .is_some_and(|e| e == "rs" || e == "rascript" || e == "json")
         {
             out.push(path);
         }

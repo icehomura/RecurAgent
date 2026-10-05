@@ -4,7 +4,7 @@
 //! Uses a helper binary (`ra-sandbox`) to avoid changing the `Sandbox` trait,
 //! since AppContainer requires `CreateProcessW` with extended startup info.
 //!
-//! Each ra profile gets its own AppContainer profile (SID), providing:
+//! Each RecurAgent profile gets its own AppContainer profile (SID), providing:
 //! - Deny-by-default filesystem access
 //! - Network isolation (configurable)
 //! - Cross-profile data isolation via persistent ACLs
@@ -24,7 +24,7 @@ pub struct AppContainerSandbox {
     pub allow_network: bool,
     /// Additional paths to grant read access to.
     pub read_allow_paths: Vec<String>,
-    /// Profile name for the AppContainer (typically the ra profile ID).
+    /// Profile name for the AppContainer (typically the RecurAgent profile ID).
     pub profile_name: Option<String>,
     /// When `false`, the workspace cwd is granted READ-ONLY (the helper is
     /// invoked with `--readonly-cwd`) so shell commands cannot mutate the

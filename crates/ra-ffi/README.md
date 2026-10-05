@@ -1,6 +1,6 @@
 # ra-ffi
 
-A C-ABI surface (`cdylib` + `staticlib`) for embedding ra in non-Rust hosts
+A C-ABI surface (`cdylib` + `staticlib`) for embedding RecurAgent in non-Rust hosts
 — Python, Node, Go, or plain C. It reuses the same provider-construction and
 agent loop the `ra` CLI uses, exposed as a small one-shot task runner plus an
 optional embedder.
@@ -90,7 +90,7 @@ Resolution at `ra_runtime_new`, when `embedding_model_path` is unset:
 
 1. the file is complete under the data dir → it is loaded;
 2. else, if `embedding_auto_download` is not `false` and
-   `RA_NO_MODEL_DOWNLOAD` (legacy `OCTOS_NO_MODEL_DOWNLOAD`) is not set in
+   `RA_NO_MODEL_DOWNLOAD` (legacy `ra_NO_MODEL_DOWNLOAD`) is not set in
    the environment → it is
    downloaded **synchronously, blocking `ra_runtime_new`** for the whole
    transfer, then loaded; a failed download is logged (`tracing` warn) and
@@ -120,7 +120,7 @@ ra_string_free(s);
 
 char *p = ra_embedding_model_ensure("/data/ra", true);   /* blocks; {"path": "..."} */
 if (!p) { /* ra_last_error(): absent + download=false, download vetoed by
-             OCTOS_NO_MODEL_DOWNLOAD, or a download that did not verify */ }
+             ra_NO_MODEL_DOWNLOAD, or a download that did not verify */ }
 ra_string_free(p);
 /* then ra_runtime_new with "data_dir": "/data/ra" finds the file and
    never downloads. Pass "embedding_auto_download": false to be certain. */
@@ -131,7 +131,7 @@ but not `complete`; `ensure` re-fetches it). Both functions exist in every
 build (they only inspect disk / fetch a file); the model is only *used* when
 the library was built with `embed-llama`. Opt-out summary: per runtime with
 `"embedding_auto_download": false`, or process-wide with
-`RA_NO_MODEL_DOWNLOAD=1` (legacy `OCTOS_NO_MODEL_DOWNLOAD` still honoured;
+`RA_NO_MODEL_DOWNLOAD=1` (legacy `ra_NO_MODEL_DOWNLOAD` still honoured;
 it also vetoes an explicit
 `ra_embedding_model_ensure(dir, true)`).
 
@@ -271,7 +271,7 @@ other error kinds retain their existing behavior.
 
 ### Credentials
 
-Resolution reuses ra's `Config`. An **explicitly-passed `api_key` (or
+Resolution reuses RecurAgent's `Config`. An **explicitly-passed `api_key` (or
 `api_key_env`) wins**: the FFI marks the config to bypass the global
 `ra auth login` AuthStore for that call, so a host that happens to be logged
 in cannot silently shadow the caller's key. If you supply neither, resolution
@@ -280,14 +280,14 @@ AuthStore, in that order. The key is resolved exactly once and pinned so the
 provider is built with that same value (no second, possibly-rotated read).
 
 > **Do not supply a raw API key that begins with `keychain:`.** The resolved key
-> is pinned into the config's `env_vars`, which ra then passes through its
+> is pinned into the config's `env_vars`, which RecurAgent then passes through its
 > normal value resolution — so a value beginning with `keychain:` is interpreted
-> as a keychain *reference* (ra's standard secret-indirection convention),
-> not used verbatim. This is inherent to ra's config model, not FFI-specific.
+> as a keychain *reference* (RecurAgent's standard secret-indirection convention),
+> not used verbatim. This is inherent to RecurAgent's config model, not FFI-specific.
 
 ### Security: provider error logging
 
-`ra_last_error` is redacted, but ra and its LLM providers may also log
+`ra_last_error` is redacted, but RecurAgent and its LLM providers may also log
 provider error bodies at **debug/trace** level via `tracing`. A misbehaving
 "OpenAI-compatible" endpoint that echoes your request credential in a 4xx body
 would then land in those logs (not in `ra_last_error`, which is redacted).

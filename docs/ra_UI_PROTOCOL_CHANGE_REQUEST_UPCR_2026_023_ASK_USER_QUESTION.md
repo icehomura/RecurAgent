@@ -5,7 +5,7 @@ Date: 2026-06-03
 
 ## Summary
 
-Let an ra agent ask the user a structured multiple-choice question mid-turn
+Let an RecurAgent agent ask the user a structured multiple-choice question mid-turn
 and block on the answer, instead of guessing or emitting an unstructured text
 prompt the client cannot reliably render or route a reply for.
 
@@ -29,7 +29,7 @@ mechanism and is not wired to agent turns here.
 ## Decision
 
 Do add a model-visible `ask_user_question` backend tool, resolved through the
-same profile runtime factory as every other ra tool (profile, memory, MCP,
+same profile runtime factory as every other RecurAgent tool (profile, memory, MCP,
 skill, sandbox, approval, QoE, and model-portfolio policy apply).
 
 Do add one server→client notification (`user_question/requested`) and one

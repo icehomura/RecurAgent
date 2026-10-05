@@ -1,8 +1,8 @@
 # Coding UX Prompt Contract
 
-`octoscode` must render AppUI events defensively, but some coding UX quality
+`ra-tui` must render AppUI events defensively, but some coding UX quality
 depends on the agent emitting predictable human-facing text. This contract is
-intended for the ra server profile, coding harness, or agent system prompt.
+intended for the RecurAgent server profile, coding harness, or agent system prompt.
 It should not be injected by the TUI client.
 
 ## Output Shape

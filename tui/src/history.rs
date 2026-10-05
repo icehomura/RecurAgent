@@ -14,7 +14,7 @@
 //!   with this crate's per-session drafts on a session switch.
 //!
 //! Entries are global across sessions and persisted to
-//! `~/.config/octoscode/history.jsonl` (one JSON-encoded string per line,
+//! `~/.config/ra-tui/history.jsonl` (one JSON-encoded string per line,
 //! newest last), mirroring the TUI config-dir convention in
 //! [`crate::cli::default_config_path`]. Persistence is **opt-in via
 //! [`ComposerHistory::persist_path`]**: it is `None` by default (and after
@@ -157,9 +157,7 @@ impl ComposerHistory {
     // ---- persistence (best-effort; never panics, never blocks a turn) ----
 
     /// `~/.config/ra-tui/history.jsonl` (HOME, then USERPROFILE on Windows),
-    /// mirroring [`crate::cli::default_config_path`]: a legacy
-    /// `~/.config/octoscode/history.jsonl` home keeps being used when only it
-    /// exists (never migrated).
+    /// mirroring [`crate::cli::default_config_path`] (new spelling only).
     pub fn default_path() -> Option<PathBuf> {
         history_path_from_home(std::env::var_os("HOME"), std::env::var_os("USERPROFILE"))
     }
@@ -255,7 +253,7 @@ fn rewrite_history_file(path: &Path, entries: &[String]) -> std::io::Result<()> 
 
 /// Per-process compaction temp beside `path`. The name embeds the pid: the old
 /// FIXED `history.jsonl.compact` name was shared across processes, so two
-/// `octoscode` instances compacting the same file interleaved their writes and
+/// `ra-tui` instances compacting the same file interleaved their writes and
 /// could publish a torn file via rename.
 fn compaction_temp_path(path: &Path) -> PathBuf {
     path.with_extension(format!("jsonl.compact.{}", std::process::id()))
@@ -297,10 +295,9 @@ fn history_path_from_home(
     Some(history_path_from_base(Path::new(&base)))
 }
 
-/// Pick `~/.config/ra-tui/history.jsonl` unless only the legacy
-/// `~/.config/octoscode` home exists — then keep appending there.
+/// `~/.config/ra-tui/history.jsonl` under `base`.
 fn history_path_from_base(base: &Path) -> PathBuf {
-    crate::env::pick_home_entry(base, ".config/ra-tui", ".config/octoscode").join("history.jsonl")
+    crate::env::home_entry(base, ".config/ra-tui").join("history.jsonl")
 }
 
 /// Append a single JSON-encoded line, creating the dir/file with owner-only
@@ -308,7 +305,7 @@ fn history_path_from_base(base: &Path) -> PathBuf {
 /// pasted, so keep it unreadable by other users. The JSON line + trailing
 /// newline are written in ONE `write_all`, which is atomic with `O_APPEND` for
 /// the small lines we write (avoids interleaved/torn lines when more than one
-/// `octoscode` shares the file).
+/// `ra-tui` shares the file).
 fn append_entry(path: &Path, entry: &str) -> std::io::Result<()> {
     let trimmed = entry.trim();
     if trimmed.is_empty() {
@@ -370,7 +367,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("clock is valid")
             .as_nanos();
-        std::env::temp_dir().join(format!("octoscode-hist-{name}-{nonce}.jsonl"))
+        std::env::temp_dir().join(format!("ra-tui-hist-{name}-{nonce}.jsonl"))
     }
 
     #[test]
@@ -506,9 +503,9 @@ mod tests {
     #[test]
     fn compaction_temp_path_is_unique_per_process() {
         // Fix #9 (b): the old fixed `history.jsonl.compact` name was shared
-        // across processes — two octoscode instances compacting the same file
+        // across processes — two ra-tui instances compacting the same file
         // interleave writes / publish a torn file via rename.
-        let path = PathBuf::from("/tmp/octoscode-hist/history.jsonl");
+        let path = PathBuf::from("/tmp/ra-tui-hist/history.jsonl");
         let tmp = compaction_temp_path(&path);
         let name = tmp.file_name().unwrap().to_string_lossy().into_owned();
         assert!(
@@ -745,19 +742,14 @@ mod tests {
     }
 
     #[test]
-    fn history_path_prefers_new_config_dir_but_keeps_legacy() {
-        // New base wins; a legacy-only home keeps being used (no migration).
+    fn history_path_is_the_new_config_dir() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let base = tmp.path();
         assert_eq!(
             history_path_from_base(base),
             base.join(".config").join("ra-tui").join("history.jsonl")
         );
-        std::fs::create_dir_all(base.join(".config").join("octoscode")).unwrap();
-        assert_eq!(
-            history_path_from_base(base),
-            base.join(".config").join("octoscode").join("history.jsonl")
-        );
+        // A stray legacy dir is never consulted (no backward-compat).
         std::fs::create_dir_all(base.join(".config").join("ra-tui")).unwrap();
         assert_eq!(
             history_path_from_base(base),

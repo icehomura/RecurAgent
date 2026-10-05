@@ -7,10 +7,10 @@
 # 计划 — OctoLoop 行为证据互审流程 + Herdr pane 监控入口 (goal_01)
 
 日期: 2026-09-09(Phase 5 修订版)
-worktree: /Users/zhangalex/.local/tmp/octoloop-evolution-20260909/octoscode-behavior-review
+worktree: /Users/zhangalex/.local/tmp/octoloop-evolution-20260909/ra-tui-behavior-review
 HEAD 基线: 0a174d95ddec2b123adb3498432e29eb13affb81
 契约: specs/task-evo-review-evidence.spec.md (lint 100%, --min-score 0.7 通过, 23 场景)
-证据源: /Users/zhangalex/Work/Projects/FW/octoscode/.ra/reviews/pr-627-630-20260909/
+证据源: /Users/zhangalex/Work/Projects/FW/ra-tui/.ra/reviews/pr-627-630-20260909/
 Phase 5 裁决纪要: .ra/cross-design-dispositions.md(GLM/k3/外层逐条采纳/驳回)
 
 ## 阶段分步

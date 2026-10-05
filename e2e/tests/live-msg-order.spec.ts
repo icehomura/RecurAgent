@@ -4,11 +4,11 @@
 // PR I capture-replay harness wired in. The assertion is purposefully
 // loose: the real point is to demonstrate that `attachCapture` records
 // SSE frames + DOM state into a JSON fixture under
-// `e2e/fixtures/captured/` when run with `OCTOS_CAPTURE_FIXTURE=1`.
+// `e2e/fixtures/captured/` when run with `ra_CAPTURE_FIXTURE=1`.
 //
 // Run:
-//   OCTOS_TEST_URL=https://<host>.ra.ominix.io \
-//   OCTOS_CAPTURE_FIXTURE=1 \
+//   ra_TEST_URL=https://<host>.ra.ominix.io \
+//   ra_CAPTURE_FIXTURE=1 \
 //     npx playwright test tests/live-msg-order.spec.ts --reporter=line
 //
 // The fixture lands at e2e/fixtures/captured/<slug>-<timestamp>.json.

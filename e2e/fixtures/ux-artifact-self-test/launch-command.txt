@@ -1,1 +1,1 @@
-octoscode --mode protocol --stdio-command 'octos serve --stdio'
+ra-tui --mode protocol --stdio-command 'RecurAgent serve --stdio'

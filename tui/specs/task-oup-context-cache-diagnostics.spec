@@ -7,7 +7,7 @@ estimate: 0.25d
 
 ## 意图
 
-OctosCode 应显示由 OUP 决定的缓存代次、最近失效原因和语义头部，帮助操作者判断
+RaCode 应显示由 OUP 决定的缓存代次、最近失效原因和语义头部，帮助操作者判断
 上下文压缩后是否仍在复用稳定前缀。客户端只负责兼容解码和展示，不参与缓存、
 compaction 或 semantic-boundary 策略，也不得把诊断信息写进对话正文。
 
@@ -18,12 +18,12 @@ compaction 或 semantic-boundary 策略，也不得把诊断信息写进对话�
   通知继续走原有 lifecycle reducer。
 - 客户端只在双方协商 `context.semantic_cache.v1` 后解释和显示加法字段；modern
   WebSocket header 与 stdio client capability 都请求它，old-server 模式不请求。
-- 当前 `octos-core` pin 尚不知道这些字段，因此 transport 在 raw JSON 层先提取它们，
+- 当前 `ra-core` pin 尚不知道这些字段，因此 transport 在 raw JSON 层先提取它们，
   同时仍让原通知通过 pinned core 完成结构验证和既有状态更新。
 - wire label 在接收时移除终端控制序列并限制长度。
 - `/context` 的右侧诊断 preview 显示缩短后的 cache epoch、semantic head 以及人类可读的
   invalidation reason；正常 transcript 与可操作菜单行不显示这些值。
-- OUP 是所有策略和状态的权威，OctosCode 不推断 epoch、边界或 cache hit。
+- OUP 是所有策略和状态的权威，RaCode 不推断 epoch、边界或 cache hit。
 
 ## 边界
 
@@ -47,7 +47,7 @@ compaction 或 semantic-boundary 策略，也不得把诊断信息写进对话�
 
 场景: 新 OUP 通知跨越旧 core pin 保留诊断字段
   测试: lifecycle_notification_retains_additive_cache_diagnostics
-  假设 pinned octos-core 不认识新的 context_state 字段
+  假设 pinned ra-core 不认识新的 context_state 字段
   当 transport 收到含 cache epoch、失效原因和 semantic head 的 normalization 通知
   那么原 typed notification 和四个加法字段都被保留
 

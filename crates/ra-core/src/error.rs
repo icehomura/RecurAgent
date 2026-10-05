@@ -1,11 +1,11 @@
-//! Error types for ra with actionable messages.
+//! Error types for RecurAgent with actionable messages.
 
 use std::fmt;
 
-/// Result type for ra operations.
+/// Result type for RecurAgent operations.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Error type for ra operations.
+/// Error type for RecurAgent operations.
 #[derive(Debug)]
 pub struct Error {
     /// The error kind.

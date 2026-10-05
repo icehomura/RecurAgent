@@ -1,6 +1,6 @@
 //! Web search tool with multiple provider support.
 //!
-//! Provider priority (free structured sources first, OctoSense ADR 0002 §6):
+//! Provider priority (free structured sources first, RecurAgent ADR 0002 §6):
 //! 0a. GDELT DOC 2.0 + Google News RSS (no key) — for news-ish queries
 //!     (`category: "news"`, a `since` of 31 days or less, or news words)
 //! 0b. SearXNG (`SEARXNG_URL`, or the profile's `searxng` search provider) —
@@ -31,7 +31,7 @@
 //! DuckDuckGo HTML and Bing-in-Chrome read search engines' results pages (ADR
 //! 0002 §6: honest User-Agent, a challenge is a miss, no CAPTCHA solving).
 //! They are on unless the operator sets `RA_ALLOW_SERP_SCRAPE=0` (alias
-//! `RA_ALLOW_BROWSER_SERP`; the legacy `OCTOS_` spellings are still
+//! `RA_ALLOW_BROWSER_SERP`; the legacy `RA_` spellings are still
 //! honoured). Bing drives the
 //! same in-process `chromiumoxide`
 //! headless browser the `browser` tool uses and is gated behind the `browser`
@@ -85,7 +85,7 @@ pub(crate) fn is_quota_or_rate_limit_error(result: &ToolResult) -> bool {
 }
 
 /// Env lookup for the research knobs: `RA_<NAME>` wins over the legacy
-/// `OCTOS_<NAME>`. Accepts the bare suffix or either fully-prefixed spelling,
+/// `RA_<NAME>`. Accepts the bare suffix or either fully-prefixed spelling,
 /// so callers (including a future ra-research that resolves names itself)
 /// cannot end up double-prefixing.
 pub(crate) fn compat_env_lookup(name: &str) -> Option<String> {
@@ -103,7 +103,7 @@ pub struct WebSearchTool {
     research_client: Client,
     config: Option<Arc<super::tool_config::ToolConfigStore>>,
     provider_keys: HashMap<String, String>,
-    /// ra metasearch, built on first use (it takes the provider keys).
+    /// RecurAgent metasearch, built on first use (it takes the provider keys).
     metasearch: Arc<std::sync::OnceLock<ra_research::metasearch::Metasearch>>,
     /// Results-page search override; `None` = the environment decides.
     serp_scrape: Option<bool>,
@@ -281,13 +281,13 @@ pub(crate) fn serp_scrape_opted_in(lookup: impl Fn(&str) -> Option<String>) -> b
     ra_research::serp_scrape_allowed(lookup)
 }
 
-/// Whether the ra metasearch is on (`RA_METASEARCH`, default on; legacy
-/// `OCTOS_METASEARCH` is still honoured).
+/// Whether the RecurAgent metasearch is on (`RA_METASEARCH`, default on; legacy
+/// `ra_METASEARCH` is still honoured).
 fn metasearch_on() -> bool {
     ra_research::metasearch::enabled(compat_env_lookup)
 }
 
-/// Free-tier providers in order: the ra metasearch (every category), or
+/// Free-tier providers in order: the RecurAgent metasearch (every category), or
 /// GDELT + Google News for news-ish queries when it is off; then SearXNG
 /// when configured.
 pub(crate) fn free_tier_providers(
@@ -450,7 +450,7 @@ impl FreeTierAnswer {
             output.push_str(&format!("Note: {note}\n"));
         }
         // A search engine asked to confirm a person is searching: say so
-        // (ra does not solve or work around these).
+        // (RecurAgent does not solve or work around these).
         for line in &self.challenges {
             output.push_str(&format!("Note: {line}\n"));
         }
@@ -1782,7 +1782,7 @@ pub(super) fn detect_browser_executable() -> Option<std::path::PathBuf> {
 pub(super) async fn set_identifiable_user_agent(page: &chromiumoxide::Page) {
     use chromiumoxide::cdp::browser_protocol::network::SetUserAgentOverrideParams;
     let base = page.user_agent().await.unwrap_or_default();
-    let ua = format!("{base} ra-research/1.0 (+https://github.com/octos-org/octos)");
+    let ua = format!("{base} ra-research/1.0 (+https://github.com/icehomura/ra)");
     let _ = page
         .set_user_agent(SetUserAgentOverrideParams::new(ua.trim().to_string()))
         .await;
@@ -1802,7 +1802,7 @@ async fn render_and_parse_bing(
     use futures::StreamExt;
 
     let temp_dir = tempfile::Builder::new()
-        .prefix("octos-websearch-cdp-")
+        .prefix("ra-websearch-cdp-")
         .tempdir()
         .wrap_err("failed to create temp dir for Chrome")?;
 
@@ -2477,10 +2477,10 @@ mod tests {
 
     #[test]
     fn compat_env_lookup_resolves_unset_names_to_none() {
-        // Pure: neither the `RA_` nor the legacy `OCTOS_` spelling is set,
+        // Pure: neither the `RA_` nor the legacy `RA_` spelling is set,
         // so the helper must not invent a value (no process env is touched).
         assert_eq!(compat_env_lookup("NOT_SET_XYZ"), None);
-        assert_eq!(compat_env_lookup("OCTOS_NOT_SET_XYZ"), None);
+        assert_eq!(compat_env_lookup("ra_NOT_SET_XYZ"), None);
         assert_eq!(compat_env_lookup("RA_NOT_SET_XYZ"), None);
     }
 

@@ -1,11 +1,11 @@
-# ra Robotics — PR #270 Delivery Family (RP)
+# RecurAgent Robotics — PR #270 Delivery Family (RP)
 
 See also:
 
-- [OCTOS_ROBOTICS_ARCHITECTURE.md](./OCTOS_ROBOTICS_ARCHITECTURE.md) — aspirational architecture targets (R-family)
-- [OCTOS_ROBOTICS_FAMILY.md](./OCTOS_ROBOTICS_FAMILY.md) — long-horizon R-family program plan
-- [OCTOS_ROBOTICS_CONTRACTS.md](./OCTOS_ROBOTICS_CONTRACTS.md) — R-family per-issue contracts
-- [OCTOS_HARNESS_MASTER_PLAN.md](./OCTOS_HARNESS_MASTER_PLAN.md)
+- [ra_ROBOTICS_ARCHITECTURE.md](./ra_ROBOTICS_ARCHITECTURE.md) — aspirational architecture targets (R-family)
+- [ra_ROBOTICS_FAMILY.md](./ra_ROBOTICS_FAMILY.md) — long-horizon R-family program plan
+- [ra_ROBOTICS_CONTRACTS.md](./ra_ROBOTICS_CONTRACTS.md) — R-family per-issue contracts
+- [ra_HARNESS_MASTER_PLAN.md](./ra_HARNESS_MASTER_PLAN.md)
 
 ## Purpose
 
@@ -112,13 +112,13 @@ Files from PR `#270` that are **explicitly rejected** from reuse:
 - `crates/ra-agent/src/hooks.rs` robot `HookEvent` variants — superseded by `BeforeSpawnVerify` + domain payload (RP03)
 - `crates/ra-pipeline/src/graph.rs` `Invariant` struct + 5 new `HandlerKind` variants — unparsed / undispatched
 - `typos.toml` allowlist additions for short typo tokens — mask real typos; if needed, use `extend-identifiers`
-- `examples/slam-nav-sim/` entire directory — 7,631 LOC including Python reimplementation of ra internals; move to separate repo
+- `examples/slam-nav-sim/` entire directory — 7,631 LOC including Python reimplementation of RecurAgent internals; move to separate repo
 - `crates/ra-cli/static/admin/*` bundle swaps — no source changes
 - `crates/ra-dora-mcp/src/lib.rs` duplicate `SafetyTier` — use `ra_agent::permissions::SafetyTier`
 
 ## Roles
 
-Inherited from `OCTOS_ROBOTICS_FAMILY.md`:
+Inherited from `ra_ROBOTICS_FAMILY.md`:
 
 - **Architect** — owns contracts + final merge
 - **Program manager** — phase sequencing, dispatch
@@ -144,7 +144,7 @@ lands (RP05 uses the payload extension; RP06 is optional).
 
 ## Required invariants for every RP slice
 
-Inherited from `OCTOS_ROBOTICS_FAMILY.md` plus:
+Inherited from `ra_ROBOTICS_FAMILY.md` plus:
 
 1. No file touched outside the RP issue's allowed-files list.
 2. All acceptance tests in the contract green.
@@ -170,7 +170,7 @@ Inherited from `OCTOS_ROBOTICS_FAMILY.md` plus:
 
 Robot integrators need to declare, per tool, the minimum supervisory tier
 required to execute that tool (observe, safe motion, full actuation,
-emergency override). Today ra has no way to express this declaratively.
+emergency override). Today RecurAgent has no way to express this declaratively.
 The PR `#270` approach added a trait method and a standalone policy
 struct that the agent loop never consults — declaration without
 enforcement is worse than no declaration.
@@ -247,7 +247,7 @@ The robot groups are additive. Profiles that don't set `allow_groups` continue t
 
 Robot plugins need declarative pre-flight, init, ready-check, shutdown,
 and emergency-shutdown phases. The PR `#270` design is right-shaped but
-the executor bypasses every safety primitive ra documents: no
+the executor bypasses every safety primitive RecurAgent documents: no
 `BLOCKED_ENV_VARS`, no `SafePolicy`, no sandbox, no kill-on-drop, not
 cross-platform.
 
@@ -549,7 +549,7 @@ none of them to the agent loop. The types existed; no consumer did.
 
 - Counter `ra_realtime_heartbeat_beats_total`
 - Counter `ra_realtime_heartbeat_stalls_total`
-- Histogram `octos_realtime_sensor_injection_tokens`
+- Histogram `ra_realtime_sensor_injection_tokens`
 - Operator summary key `realtime.stalls_last_minute`
 
 ### Rollback
@@ -644,7 +644,7 @@ The contract owner picks A or B before slice opens. No middle path.
 - `should_forward_execute_to_dora_runtime_and_return_output`
 - `should_drop_on_overflow_when_queue_full`
 - `should_reject_malformed_dora_message`
-- `should_use_octos_agent_safety_tier_not_duplicate`
+- `should_use_ra_agent_safety_tier_not_duplicate`
 - `dora_bridge_config_example_runs_end_to_end`
 
 ### Observability (Option A)

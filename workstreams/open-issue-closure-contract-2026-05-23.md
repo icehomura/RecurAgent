@@ -2,7 +2,7 @@
 
 Status: active closure contract
 Date: 2026-05-23
-Repository: your-org/ra
+Repository: icehomura/ra
 Input snapshot: 70 open GitHub issues from `gh issue list --state open`
 
 ## Goal
@@ -166,7 +166,7 @@ that sit above the backend protocol.
 |---|---|---|---|
 | #716 | Protocol docs/testing | Closure PR open - review gate | PR #1228 carries `Closes #716` and is mergeable with green checks, but is blocked by `REVIEW_REQUIRED`. PR #1302 is related non-closing UPCR coverage. Merge only the accepted closure path after required review. |
 | #573 | Web client migration | Pending coding | Complete web client adoption of UI Protocol v1. Close with protocol fixture tests and manual/web smoke showing no legacy dependency. |
-| #383 | Web task tracker bug | Pending coding | Rehydrate octos-web cross-session background task tracker on page load. Add reconnect/reload test and close. |
+| #383 | Web task tracker bug | Pending coding | Rehydrate ra-web cross-session background task tracker on page load. Add reconnect/reload test and close. |
 | #334 | Chat title UX | Closed | Closed on 2026-05-26. Do not select for new closure work. |
 | #333 | Chat layout UX | Pending coding | Improve chat sidebar and file panel layout behavior. Add responsive tests or screenshots for narrow/wide layouts. |
 | #332 | Chat shell redesign | Pending coding | Redesign web chat shell with intentional motion and glass-panel style only if still desired. Close with screenshots and accessibility pass. |

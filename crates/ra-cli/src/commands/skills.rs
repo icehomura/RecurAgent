@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use super::Executable;
 
 /// RFC-2 (issue #1291): validate a skill directory's `manifest.json`
-/// against the strict ra JSON schema validator before we commit
+/// against the strict RecurAgent JSON schema validator before we commit
 /// the install to disk.
 ///
 /// Behaviour
@@ -21,7 +21,7 @@ use super::Executable;
 ///   we bail with the structured violation list so the operator sees
 ///   every problem at once.
 /// - Operators who need to install a known-bad manifest can set
-///   `OCTOS_MANIFEST_VALIDATION=lenient` (Draft 07 sanity only) or
+///   `ra_MANIFEST_VALIDATION=lenient` (Draft 07 sanity only) or
 ///   `=off` (skip entirely). Default is `strict`.
 fn validate_skill_manifest(skill_dir: &Path) -> Result<()> {
     let manifest_path = skill_dir.join("manifest.json");
@@ -29,13 +29,13 @@ fn validate_skill_manifest(skill_dir: &Path) -> Result<()> {
         return Ok(());
     }
     // `PluginManifest::from_file` runs both structural and schema
-    // validation, threading through `OCTOS_MANIFEST_VALIDATION` for
+    // validation, threading through `ra_MANIFEST_VALIDATION` for
     // the strict-rule layer.
     ra_plugin::PluginManifest::from_file(&manifest_path)
         .map(|_| ())
         .wrap_err_with(|| {
             format!(
-                "manifest at {} failed RFC-2 schema validation\n\nSet OCTOS_MANIFEST_VALIDATION=lenient to skip the strict ra rules, or =off to skip validation entirely.",
+                "manifest at {} failed RFC-2 schema validation\n\nSet ra_MANIFEST_VALIDATION=lenient to skip the strict ra rules, or =off to skip validation entirely.",
                 manifest_path.display()
             )
         })
@@ -61,7 +61,7 @@ pub struct InstallResult {
 }
 
 const DEFAULT_REGISTRY_URL: &str =
-    "https://raw.githubusercontent.com/octos-org/octos-hub/main/registry.json";
+    "https://raw.githubusercontent.com/icehomura/ra-hub/main/registry.json";
 
 /// Pre-built binary info for a specific platform.
 #[derive(Debug, Clone, Deserialize)]
@@ -482,7 +482,7 @@ fn cmd_list(skills_dir: &Path) -> Result<()> {
         println!();
         println!(
             "  Install system skills: {}",
-            "ra skills install octos-org/system-skills".cyan()
+            "ra skills install icehomura/system-skills".cyan()
         );
         println!();
         return Ok(());
@@ -537,7 +537,7 @@ fn cmd_list(skills_dir: &Path) -> Result<()> {
         println!();
         println!(
             "  Install system skills: {}",
-            "ra skills install octos-org/system-skills".cyan()
+            "ra skills install icehomura/system-skills".cyan()
         );
     }
 
@@ -1798,11 +1798,11 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
 }
 
 /// Scan SKILL.md for references to sibling directories (shared deps).
-/// Looks for patterns like `~/.ra/skills/XXX/` (or the legacy `~/.ra/skills/XXX/`)
-/// where XXX is a sibling dir in the clone.
+/// Looks for patterns like `~/.ra/skills/XXX/` where XXX is a sibling dir in
+/// the clone.
 fn find_shared_deps(skill_md: &str, clone_dir: &Path, self_name: &str) -> Vec<String> {
     let mut deps = Vec::new();
-    let re = regex::Regex::new(r"~/\.(?:ra|ra)/skills/([a-zA-Z0-9_-]+)/").unwrap();
+    let re = regex::Regex::new(r"~/\.ra/skills/([a-zA-Z0-9_-]+)/").unwrap();
     for cap in re.captures_iter(skill_md) {
         let dep_name = cap[1].to_string();
         if dep_name == self_name {
@@ -1908,13 +1908,13 @@ mod tests {
 
     #[test]
     fn resolve_install_source_supports_github_shorthand() {
-        let source = resolve_install_source("octos-org/system-skills").unwrap();
+        let source = resolve_install_source("icehomura/system-skills").unwrap();
         let InstallSource::Repo(spec) = source else {
             panic!("expected repo source");
         };
 
-        assert_eq!(spec.source, "octos-org/system-skills");
-        assert_eq!(spec.requested_source, "octos-org/system-skills");
+        assert_eq!(spec.source, "icehomura/system-skills");
+        assert_eq!(spec.requested_source, "icehomura/system-skills");
         assert_eq!(spec.repo_name, "system-skills");
         assert_eq!(spec.subdir, None);
         assert!(spec.github_shorthand);
@@ -1922,15 +1922,15 @@ mod tests {
 
     #[test]
     fn resolve_install_source_tracks_subdir_separately() {
-        let source = resolve_install_source("octos-org/system-skills/custom-skill").unwrap();
+        let source = resolve_install_source("icehomura/system-skills/custom-skill").unwrap();
         let InstallSource::Repo(spec) = source else {
             panic!("expected repo source");
         };
 
-        assert_eq!(spec.source, "octos-org/system-skills");
+        assert_eq!(spec.source, "icehomura/system-skills");
         assert_eq!(
             spec.requested_source,
-            "octos-org/system-skills/custom-skill"
+            "icehomura/system-skills/custom-skill"
         );
         assert_eq!(spec.subdir.as_deref(), Some("custom-skill"));
     }
@@ -1958,12 +1958,12 @@ mod tests {
 
     #[test]
     fn resolve_install_source_supports_ssh_git_url() {
-        let source = resolve_install_source("git@github.com:octos-org/system-skills.git").unwrap();
+        let source = resolve_install_source("git@github.com:icehomura/system-skills.git").unwrap();
         let InstallSource::Repo(spec) = source else {
             panic!("expected repo source");
         };
 
-        assert_eq!(spec.source, "git@github.com:octos-org/system-skills.git");
+        assert_eq!(spec.source, "git@github.com:icehomura/system-skills.git");
         assert_eq!(spec.repo_name, "system-skills");
         assert_eq!(spec.subdir, None);
         assert!(!spec.github_shorthand);
@@ -2064,7 +2064,7 @@ fi
     }
 
     /// Installing a local skill with `hardware_lifecycle.init` containing
-    /// `touch $OCTOS_SKILL_DIR/init_marker` must produce `init_marker` in the
+    /// `touch $ra_SKILL_DIR/init_marker` must produce `init_marker` in the
     /// installed skill directory.
     ///
     /// Uses a fake skill source (local temp dir) so no network or git is needed.
@@ -2081,14 +2081,14 @@ fi
         std::fs::write(src_dir.join("SKILL.md"), "# hw-test-skill\n").unwrap();
 
         // manifest.json with a hardware_lifecycle.init step that writes a
-        // sentinel file into $OCTOS_SKILL_DIR.
+        // sentinel file into $ra_SKILL_DIR.
         let manifest = r#"{
             "name": "hw-test-skill",
             "version": "0.1.0",
             "tools": [],
             "hardware_lifecycle": {
                 "init": [
-                    {"label": "write-marker", "command": "touch \"$OCTOS_SKILL_DIR/init_marker\""}
+                    {"label": "write-marker", "command": "touch \"$ra_SKILL_DIR/init_marker\""}
                 ]
             }
         }"#;

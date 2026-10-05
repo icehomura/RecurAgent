@@ -1,6 +1,6 @@
 //! The person's browser: results pages that need a real browser (Google)
-//! are loaded in a Chrome that ra runs with its own persistent profile,
-//! as the person would load them (OctoSense ADR 0002 §6 amendment, octos
+//! are loaded in a Chrome that RecurAgent runs with its own persistent profile,
+//! as the person would load them (RecurAgent ADR 0002 §6 amendment, RecurAgent
 //! issue #2608).
 //!
 //! What that means here:
@@ -9,12 +9,12 @@
 //!   the person (headless Chrome says it is headless). `chromiumoxide`'s
 //!   test-harness defaults (`--enable-automation` and friends) are left out
 //!   because this is not a test browser.
-//! - One persistent profile (`~/.ra/browser-profile`, or an existing
-//!   `~/.ra/browser-profile`; [`BROWSER_PROFILE_ENV`]). Cookies, consent
+//! - One persistent profile (`~/.ra/browser-profile`; [`BROWSER_PROFILE_ENV`]).
+//!   Cookies, consent
 //!   choices and a sign-in persist.
 //!   Google refuses sign-in in a browser under remote control, so the person
 //!   signs in by opening a plain Chrome on the same profile once. A second
-//!   ra process connects to the running browser instead of launching
+//!   RecurAgent process connects to the running browser instead of launching
 //!   another.
 //! - Challenges ("unusual traffic", CAPTCHAs) are never solved or worked
 //!   around. Where there is a display they are shown to the person
@@ -24,12 +24,12 @@
 //!   activity). Every search that used the browser says so, with the terms
 //!   caveat and the opt-out ([`crate::BROWSER_SEARCH_NOTICE`]), and it is
 //!   logged once when the browser starts. `RA_BROWSER=off` stops it.
-//! - Never a browser's own profile: the DevTools port ra attaches to is
+//! - Never a browser's own profile: the DevTools port RecurAgent attaches to is
 //!   unauthenticated (loopback only) and gives full control of every
 //!   signed-in session in that profile. [`check_profile`] refuses browsers'
 //!   user-data directories, and a custom location must be new, empty or
-//!   already an ra browser profile ([`PROFILE_MARKER`]).
-//! - A browser ra launched closes after [`IDLE_CLOSE`] without use, and
+//!   already an RecurAgent browser profile ([`PROFILE_MARKER`]).
+//! - A browser RecurAgent launched closes after [`IDLE_CLOSE`] without use, and
 //!   short-lived hosts close it on exit ([`close_shared`]).
 //!
 //! Modes ([`BROWSER_ENV`]): `off` (default: searching needs no browser and
@@ -57,19 +57,18 @@ use crate::metasearch::http::{Fetch, FetchFuture, HandOverFuture, HttpRequest, H
 /// `off` (default) | `auto` | `window` | `headless`.
 pub use crate::BROWSER_ENV;
 
-/// Profile directory override (default `~/.ra/browser-profile`, or an
-/// existing `~/.ra/browser-profile`).
+/// Profile directory override (default `~/.ra/browser-profile`).
 pub const BROWSER_PROFILE_ENV: &str = "RA_BROWSER_PROFILE";
 
 /// The spelling the previous build used for [`BROWSER_PROFILE_ENV`]; still
 /// honoured as a fallback.
-pub const LEGACY_BROWSER_PROFILE_ENV: &str = "OCTOS_BROWSER_PROFILE";
+pub const LEGACY_BROWSER_PROFILE_ENV: &str = "ra_BROWSER_PROFILE";
 
 /// Chrome/Chromium executable override (same variable the `browser` tool
 /// honours).
 pub const CHROME_ENV: &str = "CHROME";
 
-/// A browser ra launched closes after this long without use.
+/// A browser RecurAgent launched closes after this long without use.
 pub const IDLE_CLOSE: Duration = Duration::from_secs(5 * 60);
 
 /// Rendered pages larger than this are cut: the engine sandbox parses at
@@ -145,15 +144,15 @@ pub fn has_display(lookup: impl Fn(&str) -> Option<String>) -> bool {
         .any(|k| lookup(k).is_some_and(|v| !v.is_empty()))
 }
 
-/// Marker ra writes into a profile it launched a browser on. A custom
+/// Marker RecurAgent writes into a profile it launched a browser on. A custom
 /// profile ([`BROWSER_PROFILE_ENV`]) must carry it, or be empty/new.
 ///
-/// The name predates the ra rename and is kept: it is the on-disk marker of
+/// The name predates the RecurAgent rename and is kept: it is the on-disk marker of
 /// profiles the previous build already created, and a profile carries the
 /// person's sign-in state, so it must not be orphaned.
 pub const PROFILE_MARKER: &str = ".ra-browser-profile";
 
-/// Browsers' own user-data directories (relative to home). ra never uses
+/// Browsers' own user-data directories (relative to home). RecurAgent never uses
 /// one: attaching to a browser there over the DevTools port (loopback, no
 /// authentication) would give full control of every signed-in session in
 /// it, far beyond searching.
@@ -180,8 +179,8 @@ const REAL_PROFILE_DIRS: &[&str] = &[
     "AppData/Local/Vivaldi",
 ];
 
-/// Whether ra may use `profile`: never a browser's own profile; a custom
-/// location only if it is new, empty, or already an ra browser profile.
+/// Whether RecurAgent may use `profile`: never a browser's own profile; a custom
+/// location only if it is new, empty, or already an RecurAgent browser profile.
 /// `default` is the ra-owned default location.
 pub fn check_profile(profile: &Path, default: bool, home: Option<&Path>) -> Result<(), String> {
     let resolve = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
@@ -219,28 +218,15 @@ pub fn check_profile(profile: &Path, default: bool, home: Option<&Path>) -> Resu
     ))
 }
 
-/// Default profile directory: `~/.ra/browser-profile`; an existing
-/// `~/.ra/browser-profile` (a profile created before the rename, with the
-/// person's cookies and sign-in) keeps being used, else a fresh install gets
-/// `~/.ra/browser-profile`. The same "prefer the existing directory" rule as
-/// [`ra_core::brand::state_home`].
+/// Default profile directory: `~/.ra/browser-profile`. Only the new-name state
+/// home is consulted — a profile created before the rename is not reused.
 pub fn default_profile(lookup: impl Fn(&str) -> Option<String>) -> Option<PathBuf> {
     if let Some(p) = crate::resolve_env(&lookup, BROWSER_PROFILE_ENV).filter(|p| !p.trim().is_empty())
     {
         return Some(PathBuf::from(p));
     }
     let home = lookup("HOME").or_else(|| lookup("USERPROFILE"))?;
-    let home = Path::new(&home);
-    let new_dir = home.join(ra_core::brand::STATE_DIR);
-    let legacy_dir = home.join(ra_core::brand::LEGACY_STATE_DIR);
-    Some(ra_core::brand::choose(
-        None,
-        None,
-        new_dir.join("browser-profile"),
-        legacy_dir.join("browser-profile"),
-        new_dir.is_dir(),
-        legacy_dir.is_dir(),
-    ))
+    Some(Path::new(&home).join(ra_core::brand::STATE_DIR).join("browser-profile"))
 }
 
 /// Chrome's `DevToolsActivePort` file (first line port, second line the
@@ -291,7 +277,7 @@ struct Session {
     browser: Browser,
     handler: tokio::task::JoinHandle<()>,
     /// Launched by this process (it owns the Chrome child) rather than
-    /// connected to one another ra process started.
+    /// connected to one another RecurAgent process started.
     launched: bool,
     headless: bool,
 }
@@ -785,24 +771,19 @@ mod tests {
     }
 
     #[test]
-    fn should_keep_using_an_existing_legacy_state_home() {
+    fn should_default_to_the_new_state_home_ignoring_legacy() {
         let home = std::env::temp_dir().join(format!("ra-browser-home-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
+        // A pre-rename home is present, but the default is always the new one.
         std::fs::create_dir_all(home.join(".ra")).unwrap();
         let lookup = {
             let home = home.to_string_lossy().into_owned();
             move |k: &str| (k == "HOME").then(|| home.clone())
         };
         assert_eq!(
-            default_profile(lookup.clone()),
-            Some(home.join(".ra/browser-profile")),
-            "an existing ~/.ra keeps its profile"
-        );
-        std::fs::create_dir_all(home.join(".ra")).unwrap();
-        assert_eq!(
             default_profile(lookup),
             Some(home.join(".ra/browser-profile")),
-            "~/.ra wins once it exists"
+            "a legacy ~/.ra directory is never consulted"
         );
         let _ = std::fs::remove_dir_all(&home);
     }

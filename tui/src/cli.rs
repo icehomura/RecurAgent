@@ -139,7 +139,7 @@ pub struct Cli {
     /// Workspace cwd to request for this AppUi session. Defaults to the launch directory.
     pub cwd: Option<PathBuf>,
     /// Bearer token for UI Protocol authentication. Falls back to RA_AUTH_TOKEN
-    /// (legacy OCTOS_AUTH_TOKEN).
+    /// (legacy ra_AUTH_TOKEN).
     pub auth_token: Option<String>,
     /// Disable turn/start sends and use the client as a read-only viewer.
     pub readonly: bool,
@@ -164,24 +164,24 @@ pub struct Cli {
 
 /// Version string like `0.2.2-rc.7 (94e43fd 2026-07-17)` — the Cargo version
 /// plus the git short hash + build date captured by `build.rs`. Mirrors the
-/// ra server so an unreleased branch build is distinguishable from the
+/// RecurAgent server so an unreleased branch build is distinguishable from the
 /// published release of the same Cargo version (the hash is empty for a build
 /// outside a git checkout, in which case only the bare version is shown).
 fn version_string() -> &'static str {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
     // Build metadata set by `build.rs` under the new names; the pre-rename
-    // `OCTOSCODE_*` spellings still resolve for a build.rs that predates the
+    // `RA_TUI_*` spellings still resolve for a build.rs that predates the
     // rename (belt-and-braces — both files ship together).
     const GIT_HASH: &str = match option_env!("RA_TUI_GIT_HASH") {
         Some(v) => v,
-        None => match option_env!("OCTOSCODE_GIT_HASH") {
+        None => match option_env!("RA_TUI_GIT_HASH") {
             Some(v) => v,
             None => "",
         },
     };
     const BUILD_DATE: &str = match option_env!("RA_TUI_BUILD_DATE") {
         Some(v) => v,
-        None => match option_env!("OCTOSCODE_BUILD_DATE") {
+        None => match option_env!("RA_TUI_BUILD_DATE") {
             Some(v) => v,
             None => "",
         },
@@ -248,7 +248,7 @@ struct CliArgs {
     pub cwd: Option<PathBuf>,
 
     /// Bearer token for UI Protocol authentication. Falls back to RA_AUTH_TOKEN
-    /// (legacy OCTOS_AUTH_TOKEN).
+    /// (legacy ra_AUTH_TOKEN).
     #[arg(long = "auth-token", value_name = "TOKEN")]
     pub auth_token: Option<String>,
 
@@ -292,7 +292,7 @@ struct CliArgs {
     #[arg(long = "vim-mode")]
     pub vim_mode: bool,
 
-    /// Steer a prompt typed mid-turn into the RUNNING turn (octos#1807)
+    /// Steer a prompt typed mid-turn into the RUNNING turn (RecurAgent#1807)
     /// instead of queueing it. Off by default: queued prompts each run as
     /// their own turn, in the order typed. Also toggled at runtime with
     /// `/steer` (persist with `/saveconfig`).
@@ -450,7 +450,7 @@ impl Cli {
                 .lang
                 .or(file_config.lang)
                 .or_else(|| {
-                    crate::env::env_compat("RA_LANG", "OCTOS_LANG")
+                    crate::env::env_compat("RA_LANG", "ra_LANG")
                         .and_then(|v| Lang::from_env_value(&v))
                 })
                 .or_else(|| {
@@ -529,12 +529,10 @@ fn load_config_file_if_present(path: &Path) -> (Option<CliFileConfig>, Option<St
 }
 
 /// Default config path used by `/saveconfig` when the session was launched
-/// without an explicit `--config`. ra writes and reads
-/// `~/.config/ra-tui/config.json`; a legacy `~/.config/octoscode/config.json`
-/// keeps being used when only that file's directory exists, so saved settings
-/// survive the rename (legacy state is never migrated or deleted). Falls back
-/// to `USERPROFILE` on Windows, where `HOME` is usually unset, so `/saveconfig`
-/// still has a default home to write to there.
+/// without an explicit `--config`. RecurAgent writes and reads
+/// `~/.config/ra-tui/config.json` (new spelling only — no legacy config dir is
+/// read). Falls back to `USERPROFILE` on Windows, where `HOME` is usually
+/// unset, so `/saveconfig` still has a default home to write to there.
 pub fn default_config_path() -> Option<PathBuf> {
     config_path_from_home(std::env::var_os("HOME"), std::env::var_os("USERPROFILE"))
 }
@@ -553,11 +551,9 @@ fn config_path_from_home(
     Some(config_path_from_base(Path::new(&base)))
 }
 
-/// Pick `~/.config/ra-tui/config.json` unless only the legacy
-/// `~/.config/octoscode/config.json` home exists — then keep using that file
-/// (see [`crate::env::pick_home_entry`] for the preference rule).
+/// `~/.config/ra-tui/config.json` under `base` (see [`crate::env::home_entry`]).
 fn config_path_from_base(base: &Path) -> PathBuf {
-    crate::env::pick_home_entry(base, ".config/ra-tui", ".config/octoscode").join("config.json")
+    crate::env::home_entry(base, ".config/ra-tui").join("config.json")
 }
 
 /// Persist the runtime UI settings (theme / lang / scroll-mode / vim-mode /
@@ -723,9 +719,8 @@ mod tests {
 
         let suffix: PathBuf = ["config.json"].iter().collect();
 
-        // HOME wins when set. (The `.config/ra-tui` vs legacy `.config/octoscode`
-        // preference depends on which dir exists on the host — covered
-        // deterministically by `config_path_prefers_new_dir_but_keeps_legacy`.)
+        // HOME wins when set. (The resolved config dir is pinned by
+        // `config_path_is_the_new_dir`.)
         let from_home = config_path_from_home(Some(OsString::from("/home/u")), None)
             .expect("HOME resolves a path");
         assert!(from_home.starts_with("/home/u") && from_home.ends_with(&suffix));
@@ -748,27 +743,20 @@ mod tests {
     }
 
     #[test]
-    fn config_path_prefers_new_dir_but_keeps_legacy() {
+    fn config_path_is_the_new_dir() {
         use super::config_path_from_base;
 
         let tmp = tempfile::tempdir().expect("tempdir");
         let base = tmp.path();
 
-        // Neither dir exists → the new ra path is the read/write default.
         assert_eq!(
             config_path_from_base(base),
             base.join(".config").join("ra-tui").join("config.json")
         );
 
-        // Only the legacy dir exists → keep using it (no migration).
-        fs::create_dir_all(base.join(".config").join("octoscode")).expect("legacy dir");
-        assert_eq!(
-            config_path_from_base(base),
-            base.join(".config").join("octoscode").join("config.json")
-        );
-
-        // New dir appears → it wins.
-        fs::create_dir_all(base.join(".config").join("ra-tui")).expect("new dir");
+        // A stray legacy dir is never consulted (state dirs have no
+        // backward-compat).
+        fs::create_dir_all(base.join(".config").join("ra-tui")).expect("legacy dir");
         assert_eq!(
             config_path_from_base(base),
             base.join(".config").join("ra-tui").join("config.json")

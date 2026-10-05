@@ -1,6 +1,6 @@
 # 网关与频道
 
-ra 以**网关**模式运行，将各消息平台桥接到你的 LLM 智能体。每个平台连接称为一个**频道**。你可以在同一个网关进程中同时运行多个频道——例如同时接入 Telegram 和 Slack。
+RecurAgent 以**网关**模式运行，将各消息平台桥接到你的 LLM 智能体。每个平台连接称为一个**频道**。你可以在同一个网关进程中同时运行多个频道——例如同时接入 Telegram 和 Slack。
 
 ## 频道概览
 
@@ -278,7 +278,7 @@ export WECOM_AGENT_SECRET="..."
 
 ## 微信（通过 WorkBuddy 桥接）
 
-普通微信用户可以通过 WorkBuddy 桌面端桥接连接到你的智能体。WorkBuddy 负责微信传输层；ra 通过其 WeCom Bot 频道处理 AI 逻辑。
+普通微信用户可以通过 WorkBuddy 桌面端桥接连接到你的智能体。WorkBuddy 负责微信传输层；RecurAgent 通过其 WeCom Bot 频道处理 AI 逻辑。
 
 ```
 微信（手机） --> WorkBuddy（桌面端） --> 企业微信群机器人（WSS） --> ra wecom-bot 频道
@@ -331,7 +331,7 @@ ra gateway
 
 - **仅支持文本** -- 语音和图片消息以占位符形式传递
 - **不支持消息编辑** -- 回复以新消息形式发送
-- **单向触发** -- 微信到 ra 自动触发；主动推送需使用定时任务
+- **单向触发** -- 微信到 RecurAgent 自动触发；主动推送需使用定时任务
 
 ---
 
@@ -360,9 +360,9 @@ export DINGTALK_BOT_SECRET="SEC..."
 
 ```text
 # 在 ra serve 之后（代理）
-https://YOUR_OCTOS_HOST/webhook/dingtalk/<profile_id>
+https://YOUR_RA_HOST/webhook/dingtalk/<profile_id>
 # 独立的 ra gateway
-http://YOUR_OCTOS_HOST:<webhook_port>/dingtalk/webhook
+http://YOUR_RA_HOST:<webhook_port>/dingtalk/webhook
 ```
 
 使用 `dingtalk` 特性标志编译：
@@ -445,7 +445,7 @@ export LINE_CHANNEL_ACCESS_TOKEN="..."
 }
 ```
 
-在独立的 `ra gateway` 模式下，LINE 将事件推送到该渠道自带的 webhook 服务器 `http://YOUR_OCTOS_HOST:<webhook_port>/line/webhook`；在 `ra serve` 之后，则改用代理路由 `https://YOUR_OCTOS_HOST/webhook/line/<profile_id>`。入站签名针对请求**体**用 channel secret 校验（HMAC-SHA256），因此两种 URL 均可用。使用 `line` 特性标志编译。
+在独立的 `ra gateway` 模式下，LINE 将事件推送到该渠道自带的 webhook 服务器 `http://YOUR_RA_HOST:<webhook_port>/line/webhook`；在 `ra serve` 之后，则改用代理路由 `https://YOUR_RA_HOST/webhook/line/<profile_id>`。入站签名针对请求**体**用 channel secret 校验（HMAC-SHA256），因此两种 URL 均可用。使用 `line` 特性标志编译。
 
 ---
 
@@ -470,7 +470,7 @@ export TWILIO_AUTH_TOKEN="..."
 }
 ```
 
-将你的 Twilio 号码的入站 webhook 指向该渠道自带的 webhook 服务器：`http://YOUR_OCTOS_HOST:<webhook_port>/twilio/webhook`。Twilio 的 `X-Twilio-Signature` 会针对完整重建的 URL 校验，而该 URL 由请求的 `Host` 与 `X-Forwarded-Proto` 头构建（scheme 默认为 `http`）。在 HTTPS 反向代理之后，代理必须保留 `/twilio/webhook` 路径，并转发公网主机名与 `X-Forwarded-Proto: https`——否则重建出的 URL 是 `http://…`，签名校验会失败（403）。使用 `twilio` 特性标志编译。
+将你的 Twilio 号码的入站 webhook 指向该渠道自带的 webhook 服务器：`http://YOUR_RA_HOST:<webhook_port>/twilio/webhook`。Twilio 的 `X-Twilio-Signature` 会针对完整重建的 URL 校验，而该 URL 由请求的 `Host` 与 `X-Forwarded-Proto` 头构建（scheme 默认为 `http`）。在 HTTPS 反向代理之后，代理必须保留 `/twilio/webhook` 路径，并转发公网主机名与 `X-Forwarded-Proto: https`——否则重建出的 URL 是 `http://…`，签名校验会失败（403）。使用 `twilio` 特性标志编译。
 
 ---
 

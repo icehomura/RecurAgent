@@ -39,7 +39,7 @@ const CURRENT_TASK_LEDGER_SCHEMA: u32 = 1;
 /// poisoned state and stop submitting.
 ///
 /// Override at process start by setting the `RA_MAX_CHILDREN_PER_PARENT` env
-/// var (legacy `OCTOS_MAX_CHILDREN_PER_PARENT` still honoured) to a positive
+/// var (legacy `ra_MAX_CHILDREN_PER_PARENT` still honoured) to a positive
 /// integer; the value is parsed once and cached.
 pub const MAX_CHILDREN_PER_PARENT: usize = 200;
 
@@ -3039,7 +3039,7 @@ impl TaskSupervisor {
                     // loop kept running) is provisional, not authoritative —
                     // the caller of mark_completed IS the owner watching the
                     // worker actually finish, so its verdict corrects the
-                    // premature failure (mini4 `review-octos-web-v3`: chip
+                    // premature failure (mini4 `review-ra-web-v3`: chip
                     // stuck "failed: unknown tool: write_file" although the
                     // worker completed). `Cancelled`, `Completed`, and
                     // owner-reported `Failed` remain final: a late worker
@@ -3184,7 +3184,7 @@ impl TaskSupervisor {
     /// The failure is recorded and propagated exactly like an owner failure,
     /// but stamped `failed_by_observer` so the owner's later
     /// [`Self::mark_completed`] may override it when the worker demonstrably
-    /// survived and finished (mini4 `review-octos-web-v3` regression).
+    /// survived and finished (mini4 `review-ra-web-v3` regression).
     pub fn mark_failed_observed(&self, task_id: &str, error: String) {
         self.mark_failed_inner(task_id, error, true)
     }

@@ -4,7 +4,7 @@ id: REQ-OLP-EXEC
 title: "执行硬化:peer 工具链、默认隔离、机制化验证"
 status: accepted
 liveness: auto
-tags: [olp, peer, verification, ra]
+tags: [olp, peer, verification, RecurAgent]
 ---
 
 ## Problem

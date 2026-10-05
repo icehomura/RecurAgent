@@ -9,7 +9,7 @@ turn: 3
 
 **Session Summary**
 
-- **产出**：`.octos/cross-glm.md`（60 行）——只写了这一个文件，未覆盖 independent-*.md 或其他 cross 文件；native result.md 已更新（outcome: completed）
+- **产出**：`.ra/cross-glm.md`（60 行）——只写了这一个文件，未覆盖 independent-*.md 或其他 cross 文件；native result.md 已更新（outcome: completed）
 
 - **互审裁决**：k3 报告 **22 项主张 → 22 采纳 / 0 驳回 / 0 待验证转投**
   - 根因核对、gate 行号（4931/5016/5049）、上游定位（types.rs:494、profiles.rs:2693/1786、transport 12992/13090）与我独立核对互相印证
@@ -21,4 +21,4 @@ turn: 3
 
 - **一致性**：双方独立盲审同一判定 Approve、无新增回归；无实质分歧，互补不冲突
 
-- **约束**：只读、无 cargo、未读 .octos/result.md 或外层综合
+- **约束**：只读、无 cargo、未读 .RecurAgent/result.md 或外层综合

@@ -8,7 +8,7 @@ turn: 1
 PR #630 第一阶段盲审已完成，两份交付物已落盘：
 
 **交付物**
-1. 独立报告：`.octos/independent-glm.md`（117 行，v1 frontmatter：slug=pr630-glm-primary / outcome=pass-with-observations / updated_unix=1788921572 / turn=1 / verified=partially-verified / protocol=blind-independent-review-v1）
+1. 独立报告：`.ra/independent-glm.md`（117 行，v1 frontmatter：slug=pr630-glm-primary / outcome=pass-with-observations / updated_unix=1788921572 / turn=1 / verified=partially-verified / protocol=blind-independent-review-v1）
 2. Native result：`runtime-630/.../peers/pr630-glm-primary/result.md`（报告路径 + 结论摘要）
 
 **审查结论：pass-with-observations**

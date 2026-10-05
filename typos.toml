@@ -7,14 +7,34 @@ extend-ignore-identifiers-re = [
 [default.extend-identifiers]
 # *sigh* this just isn't worth the cost of fixing
 AttributeIDSupressMenu = "AttributeIDSupressMenu"
+# `nd` is a local "node dir" binding in the TUI evidence tests; `pendings` is
+# the deliberate plural of a pending-summary list in ra-cli's peer registry.
+nd = "nd"
+pendings = "pendings"
 
 [default.extend-words]
+# Fixture/demo strings that are deliberate, not typos:
+#   pypass/fo/caf/continu   — test fixture slugs, a base64 literal ("fo" -> Zm8=)
+#                             and a truncated-substring assertion
+#   ba                      — appears inside a hex commit id in a review note
+#   transitionable          — deliberate wording in store.rs doc comments
+#   pendings                — the plural of a pending-summary list
+pypass = "pypass"
+fo = "fo"
+caf = "caf"
+continu = "continu"
+ba = "ba"
+transitionable = "transitionable"
+pendings = "pendings"
+nd = "nd"
+# Spanish text inside a deep-search fixture ("... otra frase." = another phrase).
+frase = "frase"
 # Intentional typo fixture in mcp.rs / m8_integration_concurrency.rs:
 # both tests assert that the parser correctly REJECTS "exlusive" as
 # an invalid concurrency_class value. Allowlist the misspelling so
 # the typos lint doesn't flag the negative-test JSON literal.
 exlusive = "exlusive"
-# "OLL" (ra Lesson Language): the learning-coach skill's tool names
+# "OLL" (RecurAgent Lesson Language): the learning-coach skill's tool names
 # (`oll_generate_lesson`) and output paths used by the acceptance tests.
 oll = "oll"
 # Don't correct the surname "Teh"
@@ -80,4 +100,9 @@ extend-exclude = [
     # Recorded provider responses (metasearch engine fixtures): third-party
     # text and encoded IDs, replayed byte-for-byte by the fixture tests.
     "crates/ra-research/engines/*/fixtures/**",
+    # Vendored third-party sources: kept byte-faithful to their upstream
+    # revision, so their prose and identifiers are not ours to lint.
+    "vendor/**",
+    "tui/vendor/**",
+    "references/**",
 ]

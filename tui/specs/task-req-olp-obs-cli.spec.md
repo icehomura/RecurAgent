@@ -1,6 +1,6 @@
 spec: task
-name: "外环观测面:只读状态 CLI、事件流、inbox 寻址(ra)"
-tags: [olp, observability, ra, upstream]
+name: "外环观测面:只读状态 CLI、事件流、inbox 寻址(RecurAgent)"
+tags: [olp, observability, RecurAgent, upstream]
 satisfies: [REQ-OLP-OBS]
 estimate: 2d
 ---
@@ -9,9 +9,9 @@ estimate: 2d
 
 外环模型今天靠"翻 per-instance 目录 + 自算跨版本不稳定的 session hash +
 grep 人类日志"观测内环,三件套全部脆弱(实测:日志按进程启动日期滚动、
-DefaultHasher 上游自认不稳定、ugrep 缓冲吞事件)。本任务给 ra 增加
+DefaultHasher 上游自认不稳定、ugrep 缓冲吞事件)。本任务给 RecurAgent 增加
 机器可读的只读观测面:三个 `--json` 子命令、结构化事件流、inbox 路径
-查询。实施仓库为 **ra**(本合约随 workstream 提交上游)。
+查询。实施仓库为 **RecurAgent**(本合约随 workstream 提交上游)。
 
 ## 已定决策
 
@@ -32,7 +32,7 @@ DefaultHasher 上游自认不稳定、ugrep 缓冲吞事件)。本任务给 ra �
 
 ## 边界
 
-### Allowed Changes(ra 仓库)
+### Allowed Changes(RecurAgent 仓库)
 - crates/ra-cli/src/commands/**
 - crates/ra-cli/src/autonomy/**
 - crates/ra-cli/src/api/ui_protocol_transport.rs
@@ -58,7 +58,7 @@ DefaultHasher 上游自认不稳定、ugrep 缓冲吞事件)。本任务给 ra �
     包: ra-cli
     过滤: olp_obs_goal_status_json_without_serve
   假设 一个含已完成 goal 账本的数据目录且 serve 未运行
-  当 执行 ra goal status --goal <id> --json
+  当 执行 RecurAgent goal status --goal <id> --json
   那么 输出合法 JSON 且 status 字段为 "complete"
 
 场景: 未知 goal id 报结构化错误
@@ -66,7 +66,7 @@ DefaultHasher 上游自认不稳定、ugrep 缓冲吞事件)。本任务给 ra �
     包: ra-cli
     过滤: olp_obs_goal_status_unknown_id_errors
   假设 数据目录中不存在 goal_nonexistent
-  当 执行 ra goal status --goal goal_nonexistent --json
+  当 执行 RecurAgent goal status --goal goal_nonexistent --json
   那么 进程以非零退出且 stderr 输出含 error 字段的 JSON
 
 场景: peer 交付追加结构化事件且带 model_lane
@@ -89,8 +89,8 @@ DefaultHasher 上游自认不稳定、ugrep 缓冲吞事件)。本任务给 ra �
   测试:
     包: ra-cli
     过滤: olp_obs_inbox_path_matches_serve
-  假设 会话 key ra:local:tui#coding
-  当 执行 ra inbox path --session ra:local:tui#coding
+  假设 会话 key RecurAgent:local:tui#coding
+  当 执行 RecurAgent inbox path --session RecurAgent:local:tui#coding
   那么 输出路径与 serve 写入 wake note 的实际路径一致
 
 场景: ledger tail 对空账本输出空数组
@@ -98,5 +98,5 @@ DefaultHasher 上游自认不稳定、ugrep 缓冲吞事件)。本任务给 ra �
     包: ra-cli
     过滤: olp_obs_ledger_tail_empty_goal
   假设 goal 存在但账本无 finding
-  当 执行 ra ledger tail <goal_id> --json
+  当 执行 RecurAgent ledger tail <goal_id> --json
   那么 输出为合法 JSON 空数组且退出码为 0

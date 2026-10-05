@@ -14,7 +14,7 @@ fn outer_review_627_failed_archive_must_not_replay_on_new_goal() {
     store.state.set_session_goal(&SessionKey("local:test".into()), Some(goal_record("complete")), None);
     store.state.composer = "/goal archive".into();
     assert!(matches!(store.compose_command(), Some(AppUiCommand::GetSessionGoal(_))));
-    store.apply_event(AppUiEvent::Error(octos_core::app_ui::AppUiError {
+    store.apply_event(AppUiEvent::Error(ra_core::app_ui::AppUiError {
         code: "goal_unavailable".into(), message: "session/goal/get request tui-1 failed: goal unavailable".into(),
     }));
     store.state.composer = "/goal new task".into();
@@ -37,7 +37,7 @@ fn outer_review_627_cancelled_archive_must_not_replay_after_reconnect() {
     store.state.set_session_goal(&SessionKey("local:test".into()), Some(goal_record("active")), None);
     store.state.composer = "/goal archive".into();
     assert!(matches!(store.compose_command(), Some(AppUiCommand::GetSessionGoal(_))));
-    store.apply_event(AppUiEvent::Error(octos_core::app_ui::AppUiError {
+    store.apply_event(AppUiEvent::Error(ra_core::app_ui::AppUiError {
         code:"request_cancelled".into(), message:"session/goal/get request tui-1 cancelled because connection was lost".into(),
     }));
     store.apply_client_event(ClientEvent::BackendConnectionEpoch);

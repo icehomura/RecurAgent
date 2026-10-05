@@ -1,7 +1,7 @@
 ---
 name: news
 version: 1.0.0
-author: ra
+author: RecurAgent
 always: true
 ---
 

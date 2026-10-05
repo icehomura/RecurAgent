@@ -1,15 +1,15 @@
-# Working in ra
+# Working in RecurAgent
 
 Start with [README.md](README.md), [runtime architecture](docs/ARCHITECTURE.md),
 and, for app hosts, the
-[OctoSense integration walkthrough](docs/octosense-integration-walkthrough.md).
+[RecurAgent integration walkthrough](docs/recuragent-integration-walkthrough.md).
 See [CLAUDE.md](CLAUDE.md) for build commands and
 [.ra/AGENTS.md](.ra/AGENTS.md) for release rules.
 
-- ra owns agent execution and OUP runtime contracts. A product host owns UI,
+- RecurAgent owns agent execution and OUP runtime contracts. A product host owns UI,
   app records and adapters and its app authorization policy. Keep that boundary
   explicit; tool declarations or model text do not themselves authorize access.
-- Pin related ra crates together in consumers. Distinguish this checkout
+- Pin related RecurAgent crates together in consumers. Distinguish this checkout
   from a consumer's selected revision in integration documentation.
 - For host-owned app peers read `peers/app_binding.rs`, `peers/host_tools.rs`,
   `peers/turn_origin.rs`, `peers/shared_history.rs` and their dispatcher call

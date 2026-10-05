@@ -10,19 +10,19 @@ import readline from 'node:readline';
 const repoRoot = path.resolve(import.meta.dirname, '..', '..');
 const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z');
 const runRoot = path.resolve(
-  process.env.OCTOS_M15_NATIVE_STDIO_SOAK_DIR
+  process.env.ra_M15_NATIVE_STDIO_SOAK_DIR
     || path.join(repoRoot, 'e2e', 'test-results-m15-native-review-start-stdio', stamp),
 );
 const dataDir = path.join(runRoot, 'data');
 const workspace = path.join(runRoot, 'workspace');
-const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
-const profileId = process.env.OCTOS_M15_NATIVE_PROFILE || 'm15-native';
+const raBin = process.env.ra_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
+const profileId = process.env.ra_M15_NATIVE_PROFILE || 'm15-native';
 const sessionId =
-  process.env.OCTOS_M15_NATIVE_SESSION || `${profileId}:local:m15-native-review-${stamp}`;
-const timeoutMs = Number(process.env.OCTOS_M15_NATIVE_TIMEOUT_MS || 180_000);
-const providerFamily = process.env.OCTOS_M15_NATIVE_PROVIDER || 'deepseek';
-const modelId = process.env.OCTOS_M15_NATIVE_MODEL || 'deepseek-chat';
-const providerKey = process.env.OCTOS_M15_NATIVE_API_KEY || process.env.DEEPSEEK_API_KEY || '';
+  process.env.ra_M15_NATIVE_SESSION || `${profileId}:local:m15-native-review-${stamp}`;
+const timeoutMs = Number(process.env.ra_M15_NATIVE_TIMEOUT_MS || 180_000);
+const providerFamily = process.env.ra_M15_NATIVE_PROVIDER || 'deepseek';
+const modelId = process.env.ra_M15_NATIVE_MODEL || 'deepseek-chat';
+const providerKey = process.env.ra_M15_NATIVE_API_KEY || process.env.DEEPSEEK_API_KEY || '';
 
 const observedTranscript = path.join(runRoot, 'client-observed-appui-transcript.jsonl');
 const serverStderr = path.join(runRoot, 'server-stderr.log');
@@ -78,7 +78,7 @@ if (!providerKey) {
   const failure = {
     ok: false,
     error:
-      'Missing provider key. Set OCTOS_M15_NATIVE_API_KEY or DEEPSEEK_API_KEY before running the native review/start soak.',
+      'Missing provider key. Set ra_M15_NATIVE_API_KEY or DEEPSEEK_API_KEY before running the native review/start soak.',
     runRoot,
   };
   writeJson(path.join(runRoot, 'm15-native-review-start-summary.json'), failure);
@@ -113,13 +113,13 @@ fs.writeFileSync(
     '#!/usr/bin/env node',
     "import fs from 'node:fs';",
     "import path from 'node:path';",
-    "const artifactPath = process.env.OCTOS_REVIEW_ARTIFACT_PATH;",
+    "const artifactPath = process.env.ra_REVIEW_ARTIFACT_PATH;",
     "if (!artifactPath) {",
-    "  console.error('missing OCTOS_REVIEW_ARTIFACT_PATH');",
+    "  console.error('missing ra_REVIEW_ARTIFACT_PATH');",
     '  process.exit(2);',
     '}',
-    "const target = process.env.OCTOS_REVIEW_TARGET || 'unknown-target';",
-    "const objective = process.env.OCTOS_REVIEW_OBJECTIVE || 'unknown-objective';",
+    "const target = process.env.ra_REVIEW_TARGET || 'unknown-target';",
+    "const objective = process.env.ra_REVIEW_OBJECTIVE || 'unknown-objective';",
     "const text = [`# Grace Hopper CLI Review`, '', `Medium: CLI specialist fixture reviewed ${target}.`, '', `Objective excerpt: ${objective.slice(0, 240)}`].join('\\n');",
     'fs.mkdirSync(path.dirname(artifactPath), { recursive: true });',
     'fs.writeFileSync(artifactPath, `${text}\\n`, "utf8");',
@@ -168,7 +168,7 @@ fs.writeFileSync(
 );
 fs.chmodSync(mcpFixture, 0o755);
 
-const child = spawn(octosBin, [
+const child = spawn(raBin, [
   'serve',
   '--stdio',
   '--data-dir',
@@ -184,8 +184,8 @@ const child = spawn(octosBin, [
   env: {
     ...process.env,
     RUST_BACKTRACE: process.env.RUST_BACKTRACE || '1',
-    OCTOS_REVIEW_CLI_SPECIALIST_ARGV_JSON: JSON.stringify([cliFixture]),
-    OCTOS_REVIEW_MCP_TIMEOUT_SECS: process.env.OCTOS_REVIEW_MCP_TIMEOUT_SECS || '30',
+    ra_REVIEW_CLI_SPECIALIST_ARGV_JSON: JSON.stringify([cliFixture]),
+    ra_REVIEW_MCP_TIMEOUT_SECS: process.env.ra_REVIEW_MCP_TIMEOUT_SECS || '30',
   },
   stdio: ['pipe', 'pipe', 'pipe'],
 });

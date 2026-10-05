@@ -7,15 +7,15 @@
 //! env vars when set (forwarded by the gateway/serve runtime from the resolved
 //! profile, or exported by hand in `ra chat`), falling back to reading the
 //! profile JSON directly from `$RA_HOME/profiles/<id>.json` (the legacy
-//! `$OCTOS_HOME` is still honoured; same
+//! `$ra_HOME` is still honoured; same
 //! convention as the `account-manager` skill). Either way this talks to the
-//! bridge itself rather than proxying through the running ra server,
+//! bridge itself rather than proxying through the running RecurAgent server,
 //! mirroring the wire contract in
 //! `crates/ra-cli/src/api/smart_home_bridge.rs` (`GET {base}/devices`,
 //! `POST {base}/devices/{id}` form-encoded, Bearer auth, same
 //! token/token_env resolution precedence). Camera streaming is deliberately
 //! NOT exposed here: an LLM tool call can't consume a live video stream, so
-//! that stays a human-driven, WS-only feature in octos-web
+//! that stays a human-driven, WS-only feature in ra-web
 //! (`smart_home/camera.*`).
 
 use std::collections::HashMap;
@@ -113,8 +113,8 @@ fn http_client() -> reqwest::blocking::Client {
 ///    gateway/serve runtime forwards these from the RESOLVED profile
 ///    (parent + defaults merged, keychain markers resolved) via
 ///    `profile_plugin_env`, and `ra chat` users can export them by hand.
-/// 2. `$RA_HOME/profiles/$RA_PROFILE_ID.json` (legacy `$OCTOS_HOME` /
-///    `$OCTOS_PROFILE_ID` still honoured) read directly (same
+/// 2. `$RA_HOME/profiles/$RA_PROFILE_ID.json` (legacy `$ra_HOME` /
+///    `$ra_PROFILE_ID` still honoured) read directly (same
 ///    convention as the `account-manager` skill) — fallback for runtimes
 ///    that predate the env forwarding. This path cannot see parent/defaults
 ///    inheritance or keychain-stored tokens.
@@ -151,7 +151,7 @@ fn resolve_bridge_from_profile() -> Result<BridgeConfig, String> {
         Some(v) => v,
         None => {
             return Err(
-                "RA_PROFILE_ID (legacy OCTOS_PROFILE_ID) is not set — run from a gateway, or set \
+                "RA_PROFILE_ID (legacy ra_PROFILE_ID) is not set — run from a gateway, or set \
                  SMART_HOME_BRIDGE_URL (and SMART_HOME_BRIDGE_TOKEN) directly"
                     .to_string(),
             )

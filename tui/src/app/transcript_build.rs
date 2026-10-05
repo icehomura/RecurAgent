@@ -1266,7 +1266,7 @@ pub(super) fn push_turn_flow(
         push_activity_section_with_finalization(lines, palette, app, live_finalization, width);
     }
 
-    // octos#2019: the human sink over background events that only wake the
+    // RecurAgent#2019: the human sink over background events that only wake the
     // model. Rendered AFTER the turn's own activity (it is out-of-band by
     // nature — a monitor fires between turns), attributed to its origin, and
     // read from THIS session's bucket only.
@@ -2704,13 +2704,13 @@ pub(super) fn push_user_question_option_row(
     );
 }
 
-/// octos#2019 — render the HUMAN sink over background events that today only
+/// RecurAgent#2019 — render the HUMAN sink over background events that today only
 /// wake the model: monitor event lines and claimed fleet outbox events.
 ///
 /// Three properties the issue calls out, all structural here:
 /// - **Routing.** Rows are read from `session.id`'s own bucket, so a row can
 ///   never render under whichever session happens to be focused
-///   (octos-tui#461 / #466 / #483 — `flow_activity_items` filters on `turn_id`
+///   (ra-tui#461 / #466 / #483 — `flow_activity_items` filters on `turn_id`
 ///   alone and has exactly that failure mode).
 /// - **Attribution.** Every group is headed by its origin
 ///   (`monitor ci-tail`, `fleet <id>`); an unattributed line reads as the

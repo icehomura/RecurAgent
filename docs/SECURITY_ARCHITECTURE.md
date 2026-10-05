@@ -1,12 +1,12 @@
 # Security Architecture
 
-ra multi-tenant AI agent gateway security reference. Last updated: 2026-04-30.
+RecurAgent multi-tenant AI agent gateway security reference. Last updated: 2026-04-30.
 
 ---
 
 ## 1. Threat Model
 
-ra runs multiple AI agent profiles on a single host, each with access to shell execution, file I/O, web requests, and LLM APIs. The security surface includes:
+RecurAgent runs multiple AI agent profiles on a single host, each with access to shell execution, file I/O, web requests, and LLM APIs. The security surface includes:
 
 | Threat | Vector | Impact |
 |--------|--------|--------|
@@ -84,7 +84,7 @@ Within a profile, each user (identified by `channel:chat_id`) gets a dedicated `
 
 Each session is an independent JSONL store (an active file plus sealed `<name>.segments/` segments) with the following protections:
 
-- Bounded memory without a size cliff: the active file seals into 8 MiB segments (`OCTOS_SESSION_SEGMENT_BYTES`), and loads read at most `OCTOS_SESSION_LOAD_BUDGET_BYTES` (32 MiB, 0 = unlimited) of newest-first history.
+- Bounded memory without a size cliff: the active file seals into 8 MiB segments (`ra_SESSION_SEGMENT_BYTES`), and loads read at most `ra_SESSION_LOAD_BUDGET_BYTES` (32 MiB, 0 = unlimited) of newest-first history.
 - Atomic write-then-rename for crash safety.
 - No cross-session file access — `SessionHandle` only reads/writes within its `sessions_dir`.
 
@@ -347,13 +347,13 @@ On macOS, the shell sandbox SBPL profile supports a `read_allow_paths` list. Whe
 ```scheme
 ;; Instead of (allow file-read*), generate:
 (allow file-read* (subpath "{data_dir}"))        ;; profile's own data
-(allow file-read* (subpath "{octos_home}"))        ;; shared skills, configs
+(allow file-read* (subpath "{ra_home}"))        ;; shared skills, configs
 (allow file-read* (subpath "/usr"))               ;; system paths
 (allow file-read* (subpath "/bin"))
 ;; ... other system paths
 ```
 
-This restricts shell command reads at the kernel level to the profile's data, shared ra resources, and system paths. A shell command in profile A cannot `cat` files from profile B's data directory.
+This restricts shell command reads at the kernel level to the profile's data, shared RecurAgent resources, and system paths. A shell command in profile A cannot `cat` files from profile B's data directory.
 
 #### SendFileTool base_dir validation
 
@@ -411,7 +411,7 @@ Shared resources such as deployment-scoped skills, platform skills, global confi
 
 **Issue**: `read_no_follow` reads the entire file into memory before any slicing or offset is applied. A large file (e.g., multi-GB log) can cause OOM.
 
-**Mitigation**: Session files roll into segments at `OCTOS_SESSION_SEGMENT_BYTES` (8 MiB), so no single session file grows unbounded. For general file reads, the tool should implement streaming or size-check-before-read. Currently relies on the LLM not targeting excessively large files.
+**Mitigation**: Session files roll into segments at `ra_SESSION_SEGMENT_BYTES` (8 MiB), so no single session file grows unbounded. For general file reads, the tool should implement streaming or size-check-before-read. Currently relies on the LLM not targeting excessively large files.
 
 ### 4.7 Sandbox Enabled by Default
 
@@ -455,7 +455,7 @@ Plugins that opt into protocol v2 emit structured events on stderr (`LogEvent`, 
 
 ## 5. Hardening Recommendations
 
-Inspired by LAMP shared hosting's 25-year-old multi-tenant isolation model, which ra is essentially re-solving for AI agents. LAMP's key insight: **the kernel should enforce isolation, not application code**. Application-level checks (`resolve_path()`, tool policy) are defense-in-depth, not the primary boundary.
+Inspired by LAMP shared hosting's 25-year-old multi-tenant isolation model, which RecurAgent is essentially re-solving for AI agents. LAMP's key insight: **the kernel should enforce isolation, not application code**. Application-level checks (`resolve_path()`, tool policy) are defense-in-depth, not the primary boundary.
 
 ### 5.1 ~~Enable sandbox by default~~ (DONE)
 
@@ -465,22 +465,22 @@ Completed. `SandboxConfig::default()` now has `enabled: true`. A warning is logg
 
 **LAMP equivalent**: Each PHP-FPM pool runs as a separate Unix user (`webA`, `webB`). The kernel enforces everything — file permissions, process visibility, signal delivery.
 
-**ra target**: `ra serve` spawns each profile's gateway child process as a dedicated Unix user.
+**RecurAgent target**: `ra serve` spawns each profile's gateway child process as a dedicated Unix user.
 
 ```rust
 // In process_manager.rs, when spawning a profile gateway:
 pub struct ProfileProcess {
-    pub run_as_user: Option<String>,  // e.g., "octos_profile_abc"
+    pub run_as_user: Option<String>,  // e.g., "ra_profile_abc"
 }
 
 // Spawn with UID switch:
-// Option A: sudo -u octos_profile_abc ra gateway --profile abc
+// Option A: sudo -u ra_profile_abc ra gateway --profile abc
 // Option B: setuid() after fork (requires root parent)
 // Option C: macOS launchd per-user plist
 ```
 
 **What this gives us for free (kernel-enforced)**:
-- File isolation: `chmod 700 /home/octos_abc/` — other profiles can't read or write
+- File isolation: `chmod 700 /home/ra_abc/` — other profiles can't read or write
 - Process isolation: `kill()` fails across UIDs without root
 - Signal isolation: can't `SIGKILL` another profile's processes
 - Socket isolation: Unix sockets owned by UID
@@ -489,23 +489,23 @@ pub struct ProfileProcess {
 **Profile user provisioning** (in `ra serve` or admin API):
 ```bash
 # Create profile user (one-time, requires admin)
-sudo useradd -r -m -d /home/octos_abc -s /usr/sbin/nologin octos_profile_abc
-sudo chown -R octos_profile_abc:octos_profile_abc /home/octos_abc/
-sudo chmod 700 /home/octos_abc/
+sudo useradd -r -m -d /home/ra_abc -s /usr/sbin/nologin ra_profile_abc
+sudo chown -R ra_profile_abc:ra_profile_abc /home/ra_abc/
+sudo chmod 700 /home/ra_abc/
 
 # ra serve spawns:
-sudo -u octos_profile_abc ra gateway \
-  --data-dir /home/octos_abc/.ra \
-  --cwd /home/octos_abc/workspace
+sudo -u ra_profile_abc ra gateway \
+  --data-dir /home/ra_abc/.ra \
+  --cwd /home/ra_abc/workspace
 ```
 
 **Config** (`~/.ra/profiles/{id}.json`):
 ```json
 {
   "isolation": {
-    "run_as_user": "octos_profile_abc",
-    "data_dir": "/home/octos_abc/.ra",
-    "cwd": "/home/octos_abc/workspace"
+    "run_as_user": "ra_profile_abc",
+    "data_dir": "/home/ra_abc/.ra",
+    "cwd": "/home/ra_abc/workspace"
   }
 }
 ```
@@ -575,7 +575,7 @@ ruleset.restrict_self()?;
 sudo quotaon -u /home
 
 # Set per-profile quota
-sudo setquota -u octos_profile_abc \
+sudo setquota -u ra_profile_abc \
   5242880 5767168 \  # 5GB soft / 5.5GB hard (in KB)
   0 0 \              # no inode limit
   /home
@@ -704,7 +704,7 @@ ra serve (host)
 #### The network problem
 
 Profile containers need selective network access:
-- **Must reach**: LLM APIs (api.moonshot.ai), channel APIs (api.telegram.org), control plane (ra serve)
+- **Must reach**: LLM APIs (api.moonshot.ai), channel APIs (api.telegram.org), control plane (RecurAgent serve)
 - **Must NOT reach**: cloud metadata (169.254.169.254), local network (192.168.0.0/16), other profile containers
 
 `--network none` blocks everything (broken). `--network bridge` allows everything (no isolation). Neither works.
@@ -843,7 +843,7 @@ impl AllowlistProxy {
 
 ## 6. LAMP Stack Comparison
 
-ra is solving the same multi-tenant isolation problem that PHP shared hosting solved 25+ years ago. This comparison identifies gaps and guides the hardening roadmap.
+RecurAgent is solving the same multi-tenant isolation problem that PHP shared hosting solved 25+ years ago. This comparison identifies gaps and guides the hardening roadmap.
 
 ### Isolation model comparison
 
@@ -864,7 +864,7 @@ Apache/nginx (root)                    ra serve (control plane)
 
 ### Gap analysis
 
-| LAMP Feature | Enforcement | ra Equivalent | Enforcement | Gap | Planned Fix |
+| LAMP Feature | Enforcement | RecurAgent Equivalent | Enforcement | Gap | Planned Fix |
 |-------------|-------------|-------------------|-------------|-----|-------------|
 | Per-tenant Unix UID | Kernel (DAC) | Per-profile OS process | Process boundary only | **No UID isolation** | §5.2 per-profile UID |
 | `chroot` / bind mount | Kernel | Per-user workspace | Application + SBPL writes | **Reads not restricted** | §5.3 read isolation (Landlock/SBPL) |
@@ -876,9 +876,9 @@ Apache/nginx (root)                    ra serve (control plane)
 | Network ACL (iptables) | Kernel | SSRF check in app | Application code | **No per-profile network** | §5.7 proxy allowlist |
 | Bandwidth metering | Kernel/iptables | None | — | **No metering** | §5.7 proxy can meter |
 
-### What ra already does better than LAMP
+### What RecurAgent already does better than LAMP
 
-| Area | ra Advantage |
+| Area | RecurAgent Advantage |
 |------|-------------------|
 | **SSRF protection** | DNS-resolved private IP blocking — PHP has no built-in SSRF guard |
 | **Symlink safety** | `O_NOFOLLOW` atomic rejection — PHP historically vulnerable to symlink races |

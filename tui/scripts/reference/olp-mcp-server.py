@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ARCHIVED (OUTER_LOOP_REVIEW #31): superseded by the Rust implementation —
-# `octoscode olp-mcp-serve` (src/olp_mcp.rs + src/cmd/olp_mcp.rs), tested by
+# `ra-tui olp-mcp-serve` (src/olp_mcp.rs + src/cmd/olp_mcp.rs), tested by
 # tests/olp_mcp_contract.rs. Kept as the campaign-night reference only; the
-# live profile mount points at the octoscode binary, not this script.
+# live profile mount points at the ra-tui binary, not this script.
 #!/usr/bin/env python3
 """OLP-MCP outer-loop server (#29 S1, specs/task-req-olp-mcp.spec.md).
 

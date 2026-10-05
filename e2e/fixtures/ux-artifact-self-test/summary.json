@@ -1,5 +1,5 @@
 {
-  "schema": "octos.ux.summary.v1",
+  "schema": "ra.ux.summary.v1",
   "status": "passed",
   "mode": "self-test",
   "scenario_id": "ux-artifact-self-test",

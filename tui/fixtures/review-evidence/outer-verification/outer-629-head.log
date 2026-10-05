@@ -1,6 +1,6 @@
-   Compiling octoscode v0.3.0-rc.10 (/Users/zhangalex/.local/tmp/octoloop-evolution-20260909/verify-octoscode)
+   Compiling ra-tui v0.3.0-rc.10 (/Users/zhangalex/.local/tmp/octoloop-evolution-20260909/verify-ra-tui)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 13.86s
-     Running unittests src/lib.rs (/Users/zhangalex/Work/Projects/FW/octoscode/target/debug/deps/octoscode-3107b0dea26f3ccf)
+     Running unittests src/lib.rs (/Users/zhangalex/Work/Projects/FW/ra-tui/target/debug/deps/ra-tui-3107b0dea26f3ccf)
 
 running 1 test
 test store::tests::outer_review_629_runtime_main_list_must_not_enable_invalid_save ... 

@@ -1,15 +1,17 @@
 # Changelog
 
-All notable changes to ra will be documented in this file.
+All notable changes to RecurAgent will be documented in this file.
 ## [Unreleased]
 
 ### Features
 
-- Smart Home control — list and control smart-home devices (lights, thermostats, curtains, etc.) via a per-profile bridge (e.g. Home Assistant), through both the UI Protocol (`smart_home/*` WS methods, backing octos-web's Smart Home panel) and a new bundled `smart-home` agent skill (`smart_home_list_devices`, `smart_home_control_device`). Camera video streaming stays a human-facing, WebSocket-only feature and is not exposed to the agent.
+- Smart Home control — list and control smart-home devices (lights, thermostats, curtains, etc.) via a per-profile bridge (e.g. Home Assistant), through both the UI Protocol (`smart_home/*` WS methods, backing ra-web's Smart Home panel) and a new bundled `smart-home` agent skill (`smart_home_list_devices`, `smart_home_control_device`). Camera video streaming stays a human-facing, WebSocket-only feature and is not exposed to the agent.
+
+- OpenCode Zen and OpenCode Go provider families (`opencode`, alias `opencode-zen`, and `opencode-go`), routed per model across the OpenAI Chat Completions, Anthropic Messages, OpenAI Responses and Gemini protocols. Every request to an OpenCode endpoint now carries the per-conversation `x-opencode-session` header the gateway requires.
 
 ### Changed
 
-- Per-tenant frps tunnel authentication via `metadatas.token`. Each tenant now has its own `tunnel_token` (UUID generated at registration) validated by the ra frps server plugin; the previous shared FRPS auth token is no longer needed and `auth.token` is set to `""` on both frps and frpc. `scripts/install.sh` and `scripts/install.ps1` recover the per-tenant token from an existing `/etc/frp/frpc.toml` on rerun and have updated prompt wording to reflect the per-tenant model.
+- Per-tenant frps tunnel authentication via `metadatas.token`. Each tenant now has its own `tunnel_token` (UUID generated at registration) validated by the RecurAgent frps server plugin; the previous shared FRPS auth token is no longer needed and `auth.token` is set to `""` on both frps and frpc. `scripts/install.sh` and `scripts/install.ps1` recover the per-tenant token from an existing `/etc/frp/frpc.toml` on rerun and have updated prompt wording to reflect the per-tenant model.
 - README "Quick Start" restructured into a three-step cloud-deployment walkthrough (VPS bootstrap → portal registration → tenant install) with explicit uninstall instructions for both cloud and tenant machines. The developer build flow moved under a new "Build from source" heading.
 
 ## [0.1.1] - 2026-04-07
@@ -69,7 +71,7 @@ All notable changes to ra will be documented in this file.
 - Plugin loader returns MCP servers, hooks, and prompt fragments from skills
 - Version check on skill install, add update action
 - Pre-clone version check for skill updates — skip clone if already up to date
-- Deep-search saves to OCTOS_WORK_DIR, agent sends report via send_file
+- Deep-search saves to ra_WORK_DIR, agent sends report via send_file
 - HTML boilerplate cleaning, adaptive stream timeout, GLM-5 provider
 - Voice cloning with x-vector profiles
 - Streaming support for WeCom bot channel
@@ -111,7 +113,7 @@ All notable changes to ra will be documented in this file.
 
 - Version management with cargo-release and git-cliff
 - GitHub Actions bumped: checkout@v6, upload-artifact@v7, download-artifact@v8, setup-node@v6
-- Caddy config updated to proxy all requests to ra serve
+- Caddy config updated to proxy all requests to RecurAgent serve
 - Cloud host deploy script and local-tenant-deploy.sh added
 
 ## [0.1.0] - 2026-03-05
@@ -206,7 +208,7 @@ All notable changes to ra will be documented in this file.
 - Add interactive chat, system status, Zhipu provider, and onboard (Phase 8)
 - Add ListDir tool, cron expressions, CLI subcommands, built-in skills, config migration (Phase 9)
 - Add media handling, vision, voice transcription, skills CLI, Docker, WhatsApp login
-- Add OAuth login (ra auth) and email channel (IMAP/SMTP)
+- Add OAuth login (RecurAgent auth) and email channel (IMAP/SMTP)
 - Add streaming responses and context window compaction
 - Add full roadmap — pricing, MCP, sandbox, plugins, REST API
 - Add tool policies, context compaction, and config hot-reload

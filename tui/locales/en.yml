@@ -10,14 +10,14 @@
 # are converted incrementally (the `t!()` pattern + these files are the
 # template).
 composer:
-  placeholder: "Ask ra to change code..."
+  placeholder: "Ask RecurAgent to change code..."
 
 app:
   banner:
-    title: "Welcome to ra — Your Coding Buddy"
+    title: "Welcome to RecurAgent — Your Coding Buddy"
     greeting_named: "Welcome back — %{profile}"
-    greeting_default: "Welcome to ra"
-    hint: "Ask ra anything to begin."
+    greeting_default: "Welcome to RecurAgent"
+    hint: "Ask RecurAgent anything to begin."
     onboarding_setup: "Onboarding setup..."
   pane:
     sessions: "Sessions"
@@ -209,10 +209,10 @@ app:
     status_active: "active"
     status_paused: "paused"
     status_budget_limited: "budget limited"
-    # octoscode#532: a bare "budget limited" reads as "the goal is dead". It is
+    # ra-tui#532: a bare "budget limited" reads as "the goal is dead". It is
     # not — the budget only halts SELF-PACED goal ticks; external wakes (fleet
     # synthesis, peer-awaiting-input, child-completed) stay schedulable because
-    # ra's goal-status gate admits both "active" and "budget_limited".
+    # RecurAgent's goal-status gate admits both "active" and "budget_limited".
     status_budget_limited_fleet: "budget limited · peers still running"
     status_blocked: "blocked"
     status_complete: "complete"
@@ -230,7 +230,7 @@ app:
     ps_to_view: "/ps to view"
     esc_interrupt: "Esc interrupt"
     stop_to_close: "/stop to close"
-    # octoscode#532: the master goes silent while it holds for its fleet. Shown
+    # ra-tui#532: the master goes silent while it holds for its fleet. Shown
     # only while the master's own turn is settled — the window that looked dead.
     awaiting_fleet: "waiting on %{outstanding} of %{total} peers: %{peers}"
     pending_decision_help: "Waiting on you — Ctrl+R/Alt+A answer · Ctrl+C interrupt"
@@ -293,7 +293,7 @@ app:
     peer_dock_pill_unread: " · %{count}● unread"
     peer_dock_toggle_hint: "Alt+P/Ctrl+L peek"
     peer_dock_title: " peers "
-    # octoscode#532: fleet landing progress — "3 of 5 landed" was derivable
+    # ra-tui#532: fleet landing progress — "3 of 5 landed" was derivable
     # client-side and rendered nowhere.
     peer_dock_landed: "%{landed}/%{total} landed"
     peer_dock_row_blocked: "waiting on you: %{reason}"
@@ -416,7 +416,7 @@ onboarding:
     server_rejected_email: "Server rejected the email: %{reason}. Edit it with /onboard email <address>."
     server_rejected_fields: "Server rejected the profile fields as invalid: %{reason}. Edit them with /onboard name|username|email."
     local_profile_create_failed: "profile/local/create failed: %{reason}"
-  welcome_title: "Welcome to ra"
+  welcome_title: "Welcome to RecurAgent"
   value_saved: "%{value} (saved)"
   value_suggested: "%{value} (suggested)"
   api_key_saved: "saved in profile"
@@ -436,7 +436,7 @@ onboarding:
     profile_name_desc: "Enter to edit — a short id like glm or deepseek (used to store this setup)."
     existing_profile: "Use existing profile (ID)"
   local:
-    title: "Create your local ra profile"
+    title: "Create your local RecurAgent profile"
     description: "This stays on this machine; no email OTP is sent."
     subtitle: "Set up a local solo profile to continue."
     continue: "Continue"
@@ -526,7 +526,7 @@ onboarding:
       permissions_hint: "/onboard permissions <default|read-only|workspace-write|full-access>"
   wizard:
     # Wizard chrome shared by the local-profile and provider-setup screens.
-    setup_title: "ra Setup Wizard"
+    setup_title: "RecurAgent Setup Wizard"
     progress_title: "Setup progress"
     header: "Step %{number} of %{total} — %{title}"
     subtitle: "%{header} · %{purpose}"
@@ -544,10 +544,10 @@ onboarding:
     purpose:
       language: "Choose the UI language. English is selected by default."
       profile: "Create a local identity for ra. Stays on this machine; no email is sent."
-      provider: "Pick which AI model ra talks to (model family, model, and provider route)."
+      provider: "Pick which AI model RecurAgent talks to (model family, model, and provider route)."
       connect: "Paste the provider API key and run a live test so we know the model answers."
       save: "Save the verified provider into your profile so it persists."
-      workspace: "Choose and validate the folder ra may read and edit while coding."
+      workspace: "Choose and validate the folder RecurAgent may read and edit while coding."
       activate: "Activate the workspace: open the coding session and start working."
     # Right-pane TEACHING panel (A.3). `explain_title` heads the pane;
     # `explain_progress` is the compact progress line; `explain_now` heads the
@@ -557,21 +557,21 @@ onboarding:
     explain_progress: "Setup progress — step %{number} of %{total}"
     explain_now: "Now: %{title}"
     explain:
-      language: "Choose the language ra uses while you finish setup.\nEnglish is selected by default. Pick 中文 if you want the rest of onboarding and the app to switch immediately.\nYou can change this later with `/lang`."
-      profile: "ra needs a local profile to attach your settings, providers, and history to.\nGive it a short name (like work or research) and continue. The name is just a label — it has nothing to do with which model you run; you choose that next, and can add or change models anytime with /add-model. (Older servers ask for name, username, and email instead.)\nThis profile stays on this machine; nothing is sent."
-      provider: "Choose which AI model powers ra.\nPick a model family (e.g. GPT, Claude), then a specific model, then the provider route that serves it (official or an alternative).\nThis decides who ra talks to and how good the coding help is — you can change it later."
-      connect: "Prove the model actually answers before you rely on it.\nPaste your provider API key, then run the live test. ra sends one small request and reports success or the exact error.\nThis catches a bad key or wrong route now, not mid-task."
+      language: "Choose the language RecurAgent uses while you finish setup.\nEnglish is selected by default. Pick 中文 if you want the rest of onboarding and the app to switch immediately.\nYou can change this later with `/lang`."
+      profile: "RecurAgent needs a local profile to attach your settings, providers, and history to.\nGive it a short name (like work or research) and continue. The name is just a label — it has nothing to do with which model you run; you choose that next, and can add or change models anytime with /add-model. (Older servers ask for name, username, and email instead.)\nThis profile stays on this machine; nothing is sent."
+      provider: "Choose which AI model powers ra.\nPick a model family (e.g. GPT, Claude), then a specific model, then the provider route that serves it (official or an alternative).\nThis decides who RecurAgent talks to and how good the coding help is — you can change it later."
+      connect: "Prove the model actually answers before you rely on it.\nPaste your provider API key, then run the live test. RecurAgent sends one small request and reports success or the exact error.\nThis catches a bad key or wrong route now, not mid-task."
       save: "Persist the verified provider into your profile JSON so it survives restarts.\nSave it as your primary provider (or add it as a fallback). Until you save, the route lives only in this session.\nAfter saving, the workspace step unlocks."
-      workspace: "Pick the project folder ra may read and edit while coding.\nIt defaults to the folder you launched from; override it with `/onboard workspace <path>` (try `.` for the current folder). Then validate — ra checks the path exists, is a directory, and is writable.\nA valid workspace is required before you can activate."
+      workspace: "Pick the project folder RecurAgent may read and edit while coding.\nIt defaults to the folder you launched from; override it with `/onboard workspace <path>` (try `.` for the current folder). Then validate — RecurAgent checks the path exists, is a directory, and is writable.\nA valid workspace is required before you can activate."
       activate: "Open the coding session and drop into the working surface.\nEverything above is done: profile created, provider saved and tested, workspace validated. Press Enter on Activate to start.\nThis is the finish line — after it you are coding with ra."
     # Workspace step screen (B.2): its own title + the row on the provider
     # screen that opens it.
-    workspace_title: "ra Setup — Workspace"
+    workspace_title: "RecurAgent Setup — Workspace"
     workspace_open_label: "Continue to Workspace →"
-    workspace_open_description: "Stage and validate the project folder ra will code in, then activate."
+    workspace_open_description: "Stage and validate the project folder RecurAgent will code in, then activate."
     workspace_locked_reason: "save a provider first"
     finish_label: "Finish — brain ready →"
-    finish_description: "Your brain is set up. Relaunch ra here to start a session with it."
+    finish_description: "Your brain is set up. Relaunch RecurAgent here to start a session with it."
     # Activate row (provider-setup screen) label + description.
     activate_ready_label: "▶ Activate workspace — open coding session (Enter)"
     activate_blocked_label: "Activate workspace — open coding session"
@@ -911,7 +911,7 @@ status:
   doctor_no_provider_recovery: "Use /onboard family / model / route, /onboard key, /onboard save."
   doctor_workspace_resolvable: "workspace cwd resolvable from `%{root}`"
   doctor_workspace_unusable: "workspace cwd is `%{root}` (not a usable path)"
-  doctor_workspace_unusable_recovery: "Restart ra with `--cwd <path>` or set workspace.root via the transport launch."
+  doctor_workspace_unusable_recovery: "Restart RecurAgent with `--cwd <path>` or set workspace.root via the transport launch."
   doctor_methods_advertised: "%{advertised}/%{total} onboarding methods advertised"
   doctor_caps_not_received: "ra UI capabilities not yet received"
   doctor_caps_not_received_recovery: "Wait for `config/capabilities/list` or reconnect the transport."
@@ -1703,7 +1703,7 @@ menu:
         desc: Load dashboard model families and provider routes
         label: Load provider catalog
       catalog_refresh:
-        desc: Uses profile/llm/catalog. The catalog schema is owned by the ra dashboard.
+        desc: Uses profile/llm/catalog. The catalog schema is owned by the RecurAgent dashboard.
         label: Refresh dashboard provider catalog
       catalog_reload:
         label: Reload provider catalog

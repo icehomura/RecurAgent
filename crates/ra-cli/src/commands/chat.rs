@@ -100,7 +100,7 @@ pub struct ChatCommand {
     /// JSON/TOML file.
     ///
     /// If the id names a stored serve/onboarding profile (one created by
-    /// `ra serve` or octoscode, saved as `~/.ra/profiles/<id>.json`),
+    /// `ra serve` or ra-tui, saved as `~/.ra/profiles/<id>.json`),
     /// its LLM provider/model, route, and API key (`env_vars`) are reused too —
     /// so you don't re-enter a model or key that a profile already holds.
     /// `--config`, `--provider`, and `--model` still override.
@@ -197,7 +197,7 @@ pub struct ChatCommand {
     pub prompt: Option<String>,
 }
 
-/// `--sandbox` choices, mirroring codex's sandbox modes and ra's
+/// `--sandbox` choices, mirroring codex's sandbox modes and RecurAgent's
 /// [`PermissionProfile`](ra_agent::PermissionProfile).
 ///
 /// `rename_all = "kebab-case"` makes the serde encoding (`"workspace-write"`,
@@ -855,7 +855,7 @@ pub(crate) fn resolve_profile(
 }
 
 /// Load the LLM config from a stored serve/onboarding profile so
-/// `ra chat --profile <id>` can reuse an octoscode / `serve` profile's
+/// `ra chat --profile <id>` can reuse an ra-tui / `serve` profile's
 /// provider, model, route (base URL + API type), API key (`config.env_vars`),
 /// and fallbacks — without a separate flat config or a duplicated key.
 ///
@@ -927,7 +927,7 @@ pub(crate) fn resolve_provider_policy(
 /// the bundled in-process embedder is used: EmbeddingGemma-300M under
 /// `<data_dir>/models/`, fetched on first use unless downloads are disabled
 /// (`embedding.auto_download = false` / `RA_NO_MODEL_DOWNLOAD`, legacy
-/// `OCTOS_NO_MODEL_DOWNLOAD`). Without
+/// `ra_NO_MODEL_DOWNLOAD`). Without
 /// the model the runtime stays keyword-only.
 pub(crate) fn create_embedder(config: &Config) -> Option<Arc<dyn EmbeddingProvider>> {
     let data_dir = ra_services::config_context::resolve_config_context(None).data_dir;

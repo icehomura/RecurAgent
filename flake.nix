@@ -88,13 +88,13 @@
           # Darwin Module Evaluation (Cross-platform)
           darwin-module = pkgs.callPackage ./nix/tests/darwin.nix {
             inherit (inputs) nix-darwin;
-            octosModule = self.darwinModules.default;
+            raModule = self.darwinModules.default;
           };
         }
         // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
           # NixOS VM Test (Linux only, full E2E)
           nixos-module-vm = pkgs.callPackage ./nix/tests/nixos.nix {
-            octosModule = self.nixosModules.default;
+            raModule = self.nixosModules.default;
           };
         }
       );

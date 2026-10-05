@@ -7,7 +7,7 @@ estimate: 0.25d
 
 ## 意图
 
-Octos 的 Codex-style 交互回合不再使用任意的固定迭代上限。客户端必须让用户
+Ra 的 Codex-style 交互回合不再使用任意的固定迭代上限。客户端必须让用户
 看见真实的 LLM step、累计活跃 token 和经过时间，同时避免这些高频遥测把
 Activity 历史刷满。
 

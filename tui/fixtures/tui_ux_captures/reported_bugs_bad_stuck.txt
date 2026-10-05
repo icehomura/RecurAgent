@@ -12,7 +12,7 @@
 └──────────────────────────────────────────────────────────────────────────────┘
 ┌Composer  Enter send | Tab inspector  ●───────────────────────────────────────┐
 │Queued messages (3) after active turn | Esc interrupt/send | Ctrl+U clear     │
-│ ›  Ask Octos to change code...                                               │
+│ ›  Ask RecurAgent to change code...                                               │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
  state ◒ Working (34m 22s | Esc interrupt | /stop to close) | approval gated | dspfac | 5 msgs/0 tasks

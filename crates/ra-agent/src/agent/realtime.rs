@@ -322,12 +322,12 @@ impl SensorContextInjector {
     /// Render a short context summary bounded by `budget_tokens` (rough 4-bytes
     /// per token ceiling). Oversize summaries are truncated, never omitted, so
     /// the LLM always sees at least a header. Emits the
-    /// `octos_realtime_sensor_injection_tokens` histogram.
+    /// `ra_realtime_sensor_injection_tokens` histogram.
     pub fn summarize(&self, budget_tokens: u32) -> String {
         let block = self.to_context_block();
         let summary = enforce_token_budget(&block, budget_tokens);
         let approx_tokens = approx_tokens_from_bytes(summary.len()) as f64;
-        histogram!("octos_realtime_sensor_injection_tokens").record(approx_tokens);
+        histogram!("ra_realtime_sensor_injection_tokens").record(approx_tokens);
         summary
     }
 }
@@ -473,7 +473,7 @@ impl HookPayloadEnricher for RealtimeHookEnricher {
             .map(|s| serde_json::to_value(s).unwrap_or(serde_json::Value::Null))
             .collect();
         payload.domain_data = Some(serde_json::json!({
-            "source": "octos_realtime",
+            "source": "ra_realtime",
             "snapshots": snapshots_json,
         }));
     }
@@ -587,7 +587,7 @@ mod tests {
         let mut payload = HookPayload::on_resume(None);
         enricher.enrich(&HookEvent::BeforeToolCall, &mut payload);
         let data = payload.domain_data.expect("domain_data should be set");
-        assert_eq!(data["source"], "octos_realtime");
+        assert_eq!(data["source"], "ra_realtime");
         assert_eq!(data["snapshots"][0]["sensor_id"], "force_torque");
     }
 

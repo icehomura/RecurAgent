@@ -34,7 +34,7 @@ impl AssetStore for EmbeddedAssets {
 /// The React SPA uses `basename="/admin"`, so all UI paths must start with `/admin/`.
 /// The swarm-app SPA uses `basename="/swarm"` and is served from the parallel
 /// `/swarm/` mount for the M7.6 PM+supervisor orchestrator. Non-matching
-/// paths are redirected to the default UI — `/app/` (octos-web) when its
+/// paths are redirected to the default UI — `/app/` (ra-web) when its
 /// bundle is embedded, `/admin/` otherwise — so that React Router can
 /// handle them.
 ///
@@ -72,7 +72,7 @@ async fn serve_with<A: AssetStore>(assets: &A, state: &AppState, request_path: &
     }
 
     // Root "/" → serve landing page only in cloud mode, otherwise
-    // redirect to the default UI: /app/ (octos-web) when its bundle is
+    // redirect to the default UI: /app/ (ra-web) when its bundle is
     // embedded, /admin/ as fallback (or 503 when no bundle is present —
     // see Bug 2 below). The README quickstart onboards users through
     // /app/'s one-step local sign-in; landing them on the admin
@@ -121,7 +121,7 @@ async fn serve_with<A: AssetStore>(assets: &A, state: &AppState, request_path: &
             .into_response();
     }
 
-    // octos-web SPA: under /app/* with its own asset tree (built by
+    // ra-web SPA: under /app/* with its own asset tree (built by
     // a web client into static/web/ with BASE_URL=/app/). Same
     // pattern as the swarm branch: segment-match so `/application` etc. fall
     // through to admin; serve the embedded asset, else the SPA index for
@@ -205,7 +205,7 @@ async fn serve_with<A: AssetStore>(assets: &A, state: &AppState, request_path: &
     redirect_to_default_ui_or_503(assets)
 }
 
-/// Redirect to the default UI: prefer the octos-web app (`/app/`) when its
+/// Redirect to the default UI: prefer the ra-web app (`/app/`) when its
 /// bundle is embedded, fall back to the admin dashboard otherwise. The
 /// fallback keeps binaries built without a bundled web client (older
 /// checkouts, dashboard-only builds) on the previous `/admin/` behavior,
@@ -701,7 +701,7 @@ mod tests {
         assert!(admin_index_missing_assets(&assets, html).is_none());
     }
 
-    /// Default-entry: when the octos-web bundle is embedded, root `/`
+    /// Default-entry: when the ra-web bundle is embedded, root `/`
     /// (local deployment mode) must redirect to `/app/` — the README
     /// quickstart sends new users there, and the admin dashboard's
     /// token login is the wrong first screen for onboarding.
@@ -722,7 +722,7 @@ mod tests {
         assert_eq!(location, "/app/");
     }
 
-    /// Default-entry fallback: a binary built without the octos-web
+    /// Default-entry fallback: a binary built without the ra-web
     /// bundle (older checkouts, `--skip-web` style builds) must keep
     /// the previous behavior — root redirects to `/admin/`.
     #[tokio::test]

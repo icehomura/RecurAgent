@@ -8,7 +8,7 @@
 //! default disposition and `stop_all()` never ran. The fix installs a
 //! stop-signal watcher BEFORE the gateway auto-start loop and routes either
 //! signal into the same graceful-shutdown → `stop_all()` → exit(0) sequence
-//! ctrl-c already used. These tests drive the REAL ra binary:
+//! ctrl-c already used. These tests drive the REAL RecurAgent binary:
 //!
 //! - `serve_sigterm_reaps_gateway_children` — steady state (HTTP serving),
 //!   one enabled profile → one spawned gateway, SIGTERM, assert the gateway
@@ -44,14 +44,14 @@ mod serve_sigterm {
         }
     }
 
-    /// Path to a real ra binary that includes the `serve` subcommand.
+    /// Path to a real RecurAgent binary that includes the `serve` subcommand.
     ///
     /// When this harness itself is compiled WITH the `api` feature, Cargo
     /// already built `CARGO_BIN_EXE_ra` with `serve` — reuse it directly.
     /// When compiled WITHOUT `api`, bootstrap one via `cargo build` so the
-    /// spawned process is always the REAL ra binary with production code
-    /// (same strategy as `serve_broken_pipe::octos_binary`).
-    fn octos_binary() -> std::path::PathBuf {
+    /// spawned process is always the REAL RecurAgent binary with production code
+    /// (same strategy as `serve_broken_pipe::ra_binary`).
+    fn ra_binary() -> std::path::PathBuf {
         if cfg!(feature = "api") {
             return env!("CARGO_BIN_EXE_ra").into();
         }
@@ -75,10 +75,10 @@ mod serve_sigterm {
     /// Build a serve Command with a private instance data dir, mirroring
     /// `serve_broken_pipe::serve_command`. `pre_exec(setsid)` detaches the
     /// child from the test runner's process group so SIGTERM reaches the
-    /// real ra process (not suppressed by shell job control).
-    /// child.id() IS the real ra PID.
+    /// real RecurAgent process (not suppressed by shell job control).
+    /// child.id() IS the real RecurAgent PID.
     fn serve_command(port: u16, data_dir: &std::path::Path) -> Command {
-        let mut cmd = Command::new(octos_binary());
+        let mut cmd = Command::new(ra_binary());
         cmd.args([
             "serve",
             "--instance-data-dir",
@@ -104,9 +104,9 @@ mod serve_sigterm {
         // lock). Remove it so the child uses ONLY our private --instance-data-dir.
         .env_remove("RA_INSTANCE_DATA_DIR")
         .env_remove("RA_HOME")
-        .env_remove("OCTOS_HOME")
+        .env_remove("ra_HOME")
         .env_remove("RA_DATA_DIR")
-        .env_remove("OCTOS_DATA_DIR");
+        .env_remove("ra_DATA_DIR");
         #[cfg(unix)]
         unsafe {
             use std::os::unix::process::CommandExt;
@@ -368,7 +368,7 @@ mod serve_sigterm {
     fn serve_sigterm_reaps_gateway_children() {
         let _guard = serial_guard();
         let port = find_free_port();
-        let data_dir = std::env::temp_dir().join(format!("octos_sigterm_{}", std::process::id()));
+        let data_dir = std::env::temp_dir().join(format!("ra_sigterm_{}", std::process::id()));
         std::fs::create_dir_all(data_dir.join("profiles")).unwrap();
 
         // One enabled profile → boot spawns exactly one gateway child.
@@ -497,7 +497,7 @@ mod serve_sigterm {
         let _guard = serial_guard();
         let port = find_free_port();
         let data_dir =
-            std::env::temp_dir().join(format!("octos_sigterm_startup_{}", std::process::id()));
+            std::env::temp_dir().join(format!("ra_sigterm_startup_{}", std::process::id()));
         std::fs::create_dir_all(data_dir.join("profiles")).unwrap();
 
         let profile_prefix = format!("sigterm-startup-{}", std::process::id());
@@ -606,7 +606,7 @@ mod serve_sigterm {
         let _guard = serial_guard();
         let port = find_free_port();
         let data_dir =
-            std::env::temp_dir().join(format!("octos_sigterm_sse_{}", std::process::id()));
+            std::env::temp_dir().join(format!("ra_sigterm_sse_{}", std::process::id()));
         std::fs::create_dir_all(data_dir.join("profiles")).unwrap();
 
         let profile_prefix = format!("sigterm-sse-{}", std::process::id());

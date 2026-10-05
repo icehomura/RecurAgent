@@ -1,6 +1,6 @@
 # Skill Development
 
-This guide covers the full lifecycle of an ra skill — from development to publication to end-user installation — similar to building an app, submitting it to an app store, and distributing it to users.
+This guide covers the full lifecycle of an RecurAgent skill — from development to publication to end-user installation — similar to building an app, submitting it to an app store, and distributing it to users.
 
 ---
 
@@ -14,11 +14,11 @@ This guide covers the full lifecycle of an ra skill — from development to publ
                                                             7. Update
 ```
 
-| Concept | App Store Analogy | ra Equivalent |
+| Concept | App Store Analogy | RecurAgent Equivalent |
 |---------|-------------------|------------------|
 | **App** | iOS/Android app | Skill (binary + manifest + docs) |
 | **SDK** | Xcode / Android Studio | Rust + `manifest.json` + `SKILL.md` |
-| **App Store** | Apple App Store | [octos-hub](https://github.com/your-org/ra-hub) registry |
+| **App Store** | Apple App Store | [ra-hub](https://github.com/icehomura/ra-hub) registry |
 | **Distribution** | App Store binary delivery | Pre-built binaries in GitHub Releases |
 | **Install** | Tap "Get" | `ra skills install user/repo` |
 | **Sideload** | Ad-hoc / TestFlight | `ra skills --profile <profile> install ./my-skill` |
@@ -361,7 +361,7 @@ fi
 
 ### Step 4: For Bundled Skills (Rust Crate)
 
-If contributing a skill to the core ra distribution:
+If contributing a skill to the core RecurAgent distribution:
 
 ```bash
 mkdir -p crates/app-skills/my-skill/src
@@ -467,7 +467,7 @@ ra gateway
 
 ## Part 3: Publish
 
-Publishing makes your skill discoverable to all ra users — like submitting an app to the App Store.
+Publishing makes your skill discoverable to all RecurAgent users — like submitting an app to the App Store.
 
 ### Push to GitHub
 
@@ -501,7 +501,7 @@ my-skills/                   ← repo root
 
 ### Submit to the Registry
 
-The [octos-hub](https://github.com/your-org/ra-hub) registry is the central catalog for discoverable skills. Submit a PR to add your entry to `registry.json`:
+The [ra-hub](https://github.com/icehomura/ra-hub) registry is the central catalog for discoverable skills. Submit a PR to add your entry to `registry.json`:
 
 ```json
 {
@@ -810,7 +810,7 @@ requires_env: MY_API_KEY,MY_SECRET
 ---
 ```
 
-The gateway auto-injects provider API keys (e.g., `DASHSCOPE_API_KEY`, `OPENAI_API_KEY`) plus `OCTOS_DATA_DIR` and `OCTOS_WORK_DIR`.
+The gateway auto-injects provider API keys (e.g., `DASHSCOPE_API_KEY`, `OPENAI_API_KEY`) plus `RA_DATA_DIR` and `ra_WORK_DIR`.
 
 ### Bundled Assets
 
@@ -993,7 +993,7 @@ crates/app-skills/send-email/
 ### Publishing
 
 - [ ] Repo pushed to GitHub with `manifest.json` and `SKILL.md` at expected paths
-- [ ] Registry PR submitted to [octos-hub](https://github.com/your-org/ra-hub)
+- [ ] Registry PR submitted to [ra-hub](https://github.com/icehomura/ra-hub)
 - [ ] (Optional) Pre-built binaries for `darwin-aarch64`, `linux-x86_64`
 - [ ] (Optional) SHA-256 hashes in `manifest.json` `binaries` section
 - [ ] (Optional) GitHub Actions workflow for automated binary builds on release tags

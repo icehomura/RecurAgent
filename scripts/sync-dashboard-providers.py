@@ -18,7 +18,7 @@ Behavior (idempotent, append-only):
     the catalog and this file can legitimately differ on those and reconciling
     them is a data-accuracy question that needs a human, not a blind sync.
   - Family `env` (the API-key env var) is preserved — it is not part of the
-    catalog — and must mirror `octos_llm::registry`.
+    catalog — and must mirror `ra_llm::registry`.
 
 Run from the repo root:  python3 scripts/sync-dashboard-providers.py
 Fails (non-zero) if it had to CREATE a family or drop a web-only model, so those

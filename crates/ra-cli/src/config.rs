@@ -1,4 +1,4 @@
-//! Configuration file support for the ra CLI.
+//! Configuration file support for the RecurAgent CLI.
 
 use std::path::{Path, PathBuf};
 
@@ -97,7 +97,7 @@ pub struct Config {
     pub api_type: Option<String>,
 
     /// Admin auth token (for dashboard login). Also settable via --auth-token CLI arg
-    /// or `RA_AUTH_TOKEN` env var (legacy `OCTOS_AUTH_TOKEN`).
+    /// or `RA_AUTH_TOKEN` env var (legacy `ra_AUTH_TOKEN`).
     #[serde(default)]
     pub auth_token: Option<String>,
 
@@ -225,7 +225,7 @@ pub struct Config {
     /// Used to compose CORS allowlist entries and surface preview URLs
     /// in the admin dashboard. When `None` the server defaults to
     /// `"crew.ominix.io"` for backward compatibility. Also read from
-    /// `RA_BASE_DOMAIN` env var (legacy `OCTOS_BASE_DOMAIN`), which takes
+    /// `RA_BASE_DOMAIN` env var (legacy `ra_BASE_DOMAIN`), which takes
     /// precedence over the
     /// value in `config.json` when both are set.
     #[serde(default)]
@@ -267,7 +267,7 @@ pub struct Config {
     #[serde(default)]
     pub content_routing: Option<ra_llm::RoutingConfig>,
 
-    /// AppUi (octos-app, octoscode, etc.) session defaults applied by
+    /// AppUi (ra-app, ra-tui, etc.) session defaults applied by
     /// `ra serve`. Operators can anchor every AppUi session that
     /// does not advertise the `session.workspace_cwd.v1` capability to
     /// a chosen folder via `appui.default_session_cwd` — the Tier-2
@@ -354,7 +354,7 @@ pub struct AppUiConfig {
     /// Every entry must be an exact `http://` or `https://` origin (scheme,
     /// host, and optional port only). `ra serve` validates and normalizes the
     /// list at startup. `RA_APPUI_ALLOWED_ORIGINS` (legacy
-    /// `OCTOS_APPUI_ALLOWED_ORIGINS`), when non-empty,
+    /// `ra_APPUI_ALLOWED_ORIGINS`), when non-empty,
     /// replaces this list with a comma-separated deployment override.
     #[serde(default)]
     pub allowed_origins: Vec<String>,
@@ -698,9 +698,9 @@ pub struct EmbeddingConfig {
     #[serde(default)]
     pub model_path: Option<String>,
 
-    /// Allow ra to download the default embedding model when it is missing
+    /// Allow RecurAgent to download the default embedding model when it is missing
     /// (default true; `RA_NO_MODEL_DOWNLOAD=1` — legacy
-    /// `OCTOS_NO_MODEL_DOWNLOAD=1` — also disables it).
+    /// `ra_NO_MODEL_DOWNLOAD=1` — also disables it).
     #[serde(default)]
     pub auto_download: Option<bool>,
 }
@@ -742,7 +742,7 @@ pub struct MemoryRefreshConfig {
     /// Master switch for the capture layer + read-side refresh + the
     /// background extraction sweep. DEFAULT-ON: `None` means enabled —
     /// automatic memory is the product behavior; set `false` (or
-    /// `RA_MEMORY_REFRESH_ENABLED=0`, legacy `OCTOS_MEMORY_REFRESH_ENABLED=0`) to opt out.
+    /// `RA_MEMORY_REFRESH_ENABLED=0`, legacy `ra_MEMORY_REFRESH_ENABLED=0`) to opt out.
     #[serde(default)]
     pub enabled: Option<bool>,
 
@@ -1356,16 +1356,10 @@ impl Config {
     /// Directories to scan for plugins and skill packages with tools.
     ///
     /// Scans deployment-scoped dirs under `project_dir` (typically the state
-    /// home) plus dirs added via `RA_SKILLS_PATH` (legacy `OCTOS_SKILLS_PATH`).
-    /// The legacy HOME-rooted globals (`~/.ra/skills`, `~/.ra/plugins`)
-    /// are NO LONGER scanned — installs are per-profile only under
-    /// `<data_dir>/skills/`. The bundled platform skills
-    /// (`<state home>/platform-skills/`, admin-only) are loaded explicitly in
-    /// serve.rs.
-    ///
-    /// When this function detects that the legacy global `skills/` directory
-    /// still exists on disk it emits a one-shot `tracing::warn!` so operators
-    /// migrating from older deployments see a clear migration prompt.
+    /// home) plus dirs added via `RA_SKILLS_PATH` (legacy `ra_SKILLS_PATH`).
+    /// Installs are per-profile only under `<data_dir>/skills/`. The bundled
+    /// platform skills (`<state home>/platform-skills/`, admin-only) are loaded
+    /// explicitly in serve.rs.
     ///
     /// The `project_dir` is typically the state home (for managed gateways) or
     /// `cwd/.ra` (for standalone `ra chat`). This is intentionally decoupled
@@ -1387,13 +1381,7 @@ impl Config {
             dirs.push(bundled);
         }
         // Note: platform-skills/ (voice, etc.) are admin-only — loaded explicitly in serve.rs
-        // Legacy HOME-rooted globals (`~/.ra/skills`, or the pre-rename
-        // `~/.ra/skills`) are deprecated: all skill installs now live under
-        // `<data_dir>/skills/` for per-profile isolation. We still warn ONCE per
-        // process if the directory is present so operators migrating from older
-        // deployments notice it.
-        warn_once_if_legacy_global_skills_exist();
-        // Extra dirs from RA_SKILLS_PATH env var (legacy OCTOS_SKILLS_PATH;
+        // Extra dirs from RA_SKILLS_PATH env var (legacy ra_SKILLS_PATH;
         // colon-separated)
         if let Some(extra) = ra_core::brand::env_compat_str("SKILLS_PATH") {
             for p in extra.split(':') {
@@ -1412,7 +1400,7 @@ impl Config {
 }
 
 /// Section B (codex review round-5 P1.2): OR-merge
-/// `RA_PLUGINS_REQUIRE_SIGNED` (legacy `OCTOS_PLUGINS_REQUIRE_SIGNED`; set by
+/// `RA_PLUGINS_REQUIRE_SIGNED` (legacy `ra_PLUGINS_REQUIRE_SIGNED`; set by
 /// `ProcessManager` when the parent
 /// serve enabled strict signing) onto the loaded Config. Spawned gateway
 /// processes pick up the policy via env, even when the profile JSON they
@@ -1423,7 +1411,7 @@ pub(crate) fn merge_env_plugin_policy_pub(config: &mut Config) {
 }
 
 /// Fill `memory.max_inject_tokens` from `RA_MEMORY_MAX_INJECT_TOKENS`
-/// (legacy `OCTOS_MEMORY_MAX_INJECT_TOKENS`)
+/// (legacy `ra_MEMORY_MAX_INJECT_TOKENS`)
 /// (set by `ProcessManager` from the host config.json) when the loaded
 /// config leaves it unset. Field-level merge: an explicit value in the
 /// loaded config always wins; the env var only fills the gap, so spawned
@@ -1450,7 +1438,7 @@ fn merge_env_memory_policy(config: &mut Config) {
     // (block absent OR the tri-state left unset). With the DEFAULT-ON
     // semantics the OFF direction matters most: a host that disabled
     // memory mirrors `RA_MEMORY_REFRESH_ENABLED=0` (legacy
-    // `OCTOS_MEMORY_REFRESH_ENABLED=0`) to spawned
+    // `ra_MEMORY_REFRESH_ENABLED=0`) to spawned
     // subprocesses, and that must beat the child's default-on. An explicit
     // `enabled` in the config file still wins over the env.
     if config
@@ -1499,30 +1487,6 @@ fn merge_env_plugin_policy(config: &mut Config) {
             config.plugins.require_signed = true;
         }
     }
-}
-
-/// One-shot warning when the state home's `skills/`/`plugins/` still exist on
-/// disk after we stopped scanning them (the brand state home is `~/.ra`, or the
-/// existing legacy `~/.ra`). Emitted at most once per process so operators
-/// see a single migration hint rather than spamming every profile bootstrap.
-fn warn_once_if_legacy_global_skills_exist() {
-    use std::sync::Once;
-    static WARN_ONCE: Once = Once::new();
-    WARN_ONCE.call_once(|| {
-        let legacy_skills = ra_core::brand::state_path("skills");
-        let legacy_plugins = ra_core::brand::state_path("plugins");
-        for legacy in [&legacy_skills, &legacy_plugins] {
-            if legacy.exists() {
-                tracing::warn!(
-                    path = %legacy.display(),
-                    "legacy global skill directory is no longer scanned; \
-                     migrate contents into your profile's `<data_dir>/skills/` \
-                     (e.g. `~/.ra/profiles/<id>/data/skills/`) — installs \
-                     are per-profile only"
-                );
-            }
-        }
-    });
 }
 
 /// Message queue mode for handling messages arriving during active agent runs.
@@ -1625,7 +1589,7 @@ pub struct GatewayConfig {
 
     /// Extra sampler params for OpenAI-compatible servers, flattened verbatim
     /// into the request body — e.g. `{"repeat_penalty": 1.1, "top_p": 0.95}`.
-    /// For params ra does not model. `None` → nothing added, so cloud
+    /// For params RecurAgent does not model. `None` → nothing added, so cloud
     /// requests are unchanged. The robust fix for local-model repetition
     /// collapse (temperature alone is only a partial mitigation). #2172.
     #[serde(default)]
@@ -1725,8 +1689,7 @@ where
 /// 1. `config_override` (an explicit `--config <FILE>`),
 /// 2. (default installs only) project-local `cwd/.ra/config.json`,
 /// 3. `ctx.config_home/config.json`,
-/// 4. (default installs only) the state home's `config.json` (`~/.ra`, or the
-///    existing legacy `~/.ra`).
+/// 4. (default installs only) the state home's `config.json` (`~/.ra`).
 ///
 /// Falls back to the canonical `config_home/config.json` (the write location)
 /// when no file exists yet.
@@ -1787,8 +1750,7 @@ impl Config {
     /// Core loader. Precedence:
     /// 1. (only when `is_default`) project-local `cwd/.ra/config.json`
     /// 2. `config_home/config.json`
-    /// 3. (only when `is_default`) the state home's `config.json` (`~/.ra`, or
-    ///    the existing legacy `~/.ra`)
+    /// 3. (only when `is_default`) the state home's `config.json` (`~/.ra`)
     /// 4. defaults (with `merge_env_plugin_policy`)
     ///
     /// Explicit / tenant contexts (`is_default == false`) read ONLY from
@@ -1824,24 +1786,23 @@ impl Config {
             return Ok((Self::from_file(&home_config)?, Some(home_config)));
         }
 
-        // 3. State-home back-compat: only for default installs, and only when
+        // 3. State-home fallback: only for default installs, and only when
         //    the path differs from config_home (so we don't double-check the
         //    same file). Explicit/tenant contexts never reach here. The path
-        //    comes from the brand state home, so an existing legacy `~/.ra`
-        //    keeps being read and a fresh install looks under `~/.ra`.
+        //    comes from the brand state home (`~/.ra`).
         if is_default {
-            let legacy_config = ra_core::brand::state_path("config.json");
-            if legacy_config != home_config && legacy_config.exists() {
+            let state_home_config = ra_core::brand::state_path("config.json");
+            if state_home_config != home_config && state_home_config.exists() {
                 tracing::info!(
-                    path = %legacy_config.display(),
-                    "loading config (state home — consider running `ra init` to migrate)"
+                    path = %state_home_config.display(),
+                    "loading config (state home)"
                 );
-                return Ok((Self::from_file(&legacy_config)?, Some(legacy_config)));
+                return Ok((Self::from_file(&state_home_config)?, Some(state_home_config)));
             }
         }
 
         // 4. No config found, use defaults. Even on the no-file path, honour
-        // `OCTOS_PLUGINS_REQUIRE_SIGNED` so spawned gateways without a
+        // `ra_PLUGINS_REQUIRE_SIGNED` so spawned gateways without a
         // config.json still inherit the host's strict-signing policy.
         tracing::info!("no config.json found, using defaults");
         let mut config = Self::default();
@@ -1871,12 +1832,12 @@ impl Config {
         // Section B (codex review round-5 P1.2): the host's
         // `plugins.require_signed` policy must reach spawned gateway
         // processes too. `ProcessManager` sets `RA_PLUGINS_REQUIRE_SIGNED=1`
-        // (legacy `OCTOS_PLUGINS_REQUIRE_SIGNED`)
+        // (legacy `ra_PLUGINS_REQUIRE_SIGNED`)
         // when the parent serve was launched with strict signing; we
         // OR-merge that into every Config so a profile JSON that omits
         // the new block still inherits the strict policy. The host memory
         // budget rides the same mechanism via
-        // `RA_MEMORY_MAX_INJECT_TOKENS` (legacy `OCTOS_MEMORY_MAX_INJECT_TOKENS`).
+        // `RA_MEMORY_MAX_INJECT_TOKENS` (legacy `ra_MEMORY_MAX_INJECT_TOKENS`).
         merge_env_plugin_policy(&mut config);
         merge_env_memory_policy(&mut config);
 
@@ -1960,7 +1921,7 @@ impl Config {
     pub fn get_api_key_with_env(&self, provider: &str, env_var: Option<&str>) -> Result<String> {
         match env_var {
             // A CUSTOM var means "use this variable": the provider-scoped
-            // auth store must not win, or a stored `ra auth login -p
+            // auth store must not win, or a stored `RecurAgent auth login -p
             // openai` token would be sent to the custom OpenAI-compatible
             // endpoint the override targets. But when the override IS the
             // provider's default var name (a redundant-but-legal config),
@@ -1978,7 +1939,7 @@ impl Config {
                 self.resolve_api_key(provider, var.to_string())
             }
             // A genuinely custom var means "use this variable": the
-            // provider-scoped auth store must not win, or a stored `ra auth
+            // provider-scoped auth store must not win, or a stored `RecurAgent auth
             // login -p openai` token would be sent to the custom
             // OpenAI-compatible endpoint the override targets.
             Some(var) => self.resolve_env_var_only(var),
@@ -2277,7 +2238,7 @@ mod tests {
     use super::*;
 
     /// Crate-wide lock for EVERY test that pivots the global `HOME` /
-    /// `RA_HOME` / `OCTOS_HOME` / `RA_CONFIG_DIR` / `OCTOS_CONFIG_DIR` env vars.
+    /// `RA_HOME` / `ra_HOME` / `RA_CONFIG_DIR` / `ra_CONFIG_DIR` env vars.
     /// These are process-global, so all such tests (here and in
     /// `config_context`) must serialize against the SAME mutex — per-module
     /// locks would let env-mutating tests race across modules (a
@@ -2710,13 +2671,14 @@ mod tests {
         assert!(path.is_none());
     }
 
-    /// Gate 1: default install + XDG config present + an intact legacy
-    /// ~/.ra/config.json → XDG wins (legacy is the lower-precedence
-    /// fallback, not consulted when config_home has a file).
+    /// Gate 1: default install + XDG config present → XDG wins (the state-home
+    /// `~/.ra/config.json` is the lower-precedence fallback, not consulted when
+    /// config_home has a file).
     #[test]
-    fn load_default_prefers_xdg_config_home_over_legacy() {
-        // config_home (XDG) holds a config; legacy is a *different* path that
-        // also holds one. With is_default == true, config_home must win.
+    fn load_default_prefers_xdg_config_home_over_state_home() {
+        // config_home (XDG) holds a config; the state home is a *different*
+        // path that could also hold one. With is_default == true, config_home
+        // must win.
         let cwd = tempfile::tempdir().unwrap();
         let xdg = tempfile::tempdir().unwrap();
         let xdg_config = xdg.path().join("config.json");
@@ -2727,15 +2689,15 @@ mod tests {
         assert_eq!(path.as_deref(), Some(xdg_config.as_path()));
     }
 
-    /// Gate 2 (back-compat): default install where config_home (XDG) has NO
-    /// config but the legacy state-home `config.json` does → legacy loads.
+    /// Gate 2 (defaults): default install where config_home (XDG) has NO
+    /// config but the state-home `~/.ra/config.json` does → state home loads.
     ///
     /// Unix-only: the state home resolves through `dirs::home_dir()`, which
     /// reads the OS profile on Windows and ignores the `HOME` pivot.
     #[test]
     #[cfg(not(windows))]
     #[allow(unsafe_code)]
-    fn load_default_falls_back_to_legacy_home_octos() {
+    fn load_default_falls_back_to_state_home_config() {
         let _g = HOME_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
         let tmp = tempfile::tempdir().unwrap();
@@ -2743,7 +2705,7 @@ mod tests {
         let cwd = fake_home.join("work");
         std::fs::create_dir_all(&cwd).unwrap();
 
-        // Legacy ~/.ra/config.json present; XDG (config_home) empty.
+        // State-home ~/.ra/config.json present; XDG (config_home) empty.
         let legacy = fake_home.join(".ra").join("config.json");
         std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
         std::fs::write(&legacy, r#"{"provider":"gemini"}"#).unwrap();
@@ -2768,7 +2730,7 @@ mod tests {
 
     /// Gate 2 (defaults): default install, neither config home nor state home →
     /// defaults. Unix-only for the same reason as
-    /// [`load_default_falls_back_to_legacy_home_octos`].
+    /// [`load_default_falls_back_to_state_home_config`].
     #[test]
     #[cfg(not(windows))]
     #[allow(unsafe_code)]
@@ -2798,15 +2760,15 @@ mod tests {
     }
 
     /// Gate 3 (tenant isolation): explicit context (is_default == false) with
-    /// an empty config_home MUST NOT fall through to the host's legacy
-    /// state-home `config.json` — it loads defaults instead.
+    /// an empty config_home MUST NOT fall through to the host's state-home
+    /// `config.json` — it loads defaults instead.
     ///
     /// Unix-only: the host state home resolves through `dirs::home_dir()`,
     /// which ignores the `HOME` pivot on Windows.
     #[test]
     #[cfg(not(windows))]
     #[allow(unsafe_code)]
-    fn load_explicit_never_reads_host_legacy_octos() {
+    fn load_explicit_never_reads_host_state_home_config() {
         let _g = HOME_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
         let tmp = tempfile::tempdir().unwrap();
@@ -2846,7 +2808,7 @@ mod tests {
     /// `get_api_key` resolves the GLOBAL auth store (`auth_home`), NOT a
     /// per-profile `data_dir/auth.json`. We seed a credential at the global
     /// location and prove the API-key lookup finds it. `RA_CONFIG_DIR` /
-    /// `RA_CONFIG_DIR` / `OCTOS_CONFIG_DIR` must be unset for the default case, so this
+    /// `ra_CONFIG_DIR` must be unset for the default case, so this
     /// test serializes on the shared env lock and clears both name generations
     /// of every override.
     #[test]
@@ -2860,9 +2822,9 @@ mod tests {
         let keys = [
             "HOME",
             "RA_HOME",
-            "OCTOS_HOME",
+            "ra_HOME",
             "RA_CONFIG_DIR",
-            "OCTOS_CONFIG_DIR",
+            "ra_CONFIG_DIR",
             "XDG_CONFIG_HOME",
         ];
         let saved: Vec<(&str, Option<std::ffi::OsString>)> =
@@ -2871,9 +2833,9 @@ mod tests {
         unsafe {
             std::env::set_var("HOME", fake_home);
             std::env::remove_var("RA_HOME");
-            std::env::remove_var("OCTOS_HOME");
+            std::env::remove_var("ra_HOME");
             std::env::remove_var("RA_CONFIG_DIR");
-            std::env::remove_var("OCTOS_CONFIG_DIR");
+            std::env::remove_var("ra_CONFIG_DIR");
             // Must also clear XDG_CONFIG_HOME: auth_home derives from it, so an
             // ambient absolute value would write auth.json outside the temp HOME.
             std::env::remove_var("XDG_CONFIG_HOME");
@@ -2926,9 +2888,9 @@ mod tests {
         let keys = [
             "HOME",
             "RA_HOME",
-            "OCTOS_HOME",
+            "ra_HOME",
             "RA_CONFIG_DIR",
-            "OCTOS_CONFIG_DIR",
+            "ra_CONFIG_DIR",
             "XDG_CONFIG_HOME",
             "MOONSHOT_API_KEY",
             "KIMI_API_KEY",
@@ -3611,7 +3573,7 @@ mod tests {
         // api_key_env to ITS key; the embedding override naming the
         // embedding provider's default var must still read THAT var.
         // Auth-home isolated (codex R5): the default-name path consults
-        // the GLOBAL auth store first, so an ambient `ra auth login
+        // the GLOBAL auth store first, so an ambient `RecurAgent auth login
         // -p openai` on a dev/CI machine would shadow the env_vars
         // assertion nondeterministically.
         let _g = HOME_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -3619,9 +3581,9 @@ mod tests {
         let keys = [
             "HOME",
             "RA_HOME",
-            "OCTOS_HOME",
+            "ra_HOME",
             "RA_CONFIG_DIR",
-            "OCTOS_CONFIG_DIR",
+            "ra_CONFIG_DIR",
             "XDG_CONFIG_HOME",
         ];
         let saved: Vec<(&str, Option<std::ffi::OsString>)> =
@@ -3630,9 +3592,9 @@ mod tests {
         unsafe {
             std::env::set_var("HOME", tmp.path());
             std::env::remove_var("RA_HOME");
-            std::env::remove_var("OCTOS_HOME");
+            std::env::remove_var("ra_HOME");
             std::env::remove_var("RA_CONFIG_DIR");
-            std::env::remove_var("OCTOS_CONFIG_DIR");
+            std::env::remove_var("ra_CONFIG_DIR");
             std::env::remove_var("XDG_CONFIG_HOME");
         }
 
@@ -3743,7 +3705,7 @@ mod tests {
     #[allow(unsafe_code)]
     fn should_let_env_disable_refresh_when_config_silent() {
         // Host mirroring: RA_MEMORY_REFRESH_ENABLED=0 (legacy
-        // OCTOS_MEMORY_REFRESH_ENABLED still honoured) must beat the child's
+        // ra_MEMORY_REFRESH_ENABLED still honoured) must beat the child's
         // default-on when the config file says nothing.
         // Serialized: process-env mutation races every parallel test that
         // loads a Config (same rule as the HOME-mutating tests).

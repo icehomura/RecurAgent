@@ -1,6 +1,6 @@
 # Memory & Skills
 
-ra has a layered memory system and an extensible skill framework. Memory gives the agent persistent context across sessions. Skills give the agent new tools and capabilities.
+RecurAgent has a layered memory system and an extensible skill framework. Memory gives the agent persistent context across sessions. Skills give the agent new tools and capabilities.
 
 ## Bootstrap Files
 
@@ -18,7 +18,7 @@ Bootstrap files are hot-reloaded -- edit them and the agent picks up changes wit
 
 ## Memory System
 
-ra uses a 3-layer memory architecture that combines automatic recording with agent-driven knowledge management:
+RecurAgent uses a 3-layer memory architecture that combines automatic recording with agent-driven knowledge management:
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -61,7 +61,7 @@ At the start of each new task, the agent queries the episode store for up to **6
 
 When configured, the agent embeds each episode summary in a fire-and-forget background task and stores the vector alongside the episode. At query time, the task instruction is embedded and used for vector search.
 
-When the `embedding` section is omitted, the default build uses the bundled in-process embedder (llama.cpp, feature `embed-llama`, on by default) with **EmbeddingGemma-300M**: the 334 MB GGUF is downloaded once into `<data_dir>/models/` on first use (`ra memory embedder --fetch` does it ahead of time; `embedding.auto_download = false` or `OCTOS_NO_MODEL_DOWNLOAD=1` opts out). Without a model the system falls back to BM25-only keyword matching. Licence and controls: `docs/THIRD_PARTY_MODELS.md`.
+When the `embedding` section is omitted, the default build uses the bundled in-process embedder (llama.cpp, feature `embed-llama`, on by default) with **EmbeddingGemma-300M**: the 334 MB GGUF is downloaded once into `<data_dir>/models/` on first use (`ra memory embedder --fetch` does it ahead of time; `embedding.auto_download = false` or `RA_NO_MODEL_DOWNLOAD=1` opts out). Without a model the system falls back to BM25-only keyword matching. Licence and controls: `docs/THIRD_PARTY_MODELS.md`.
 
 ### Layer 2: Long-Term Memory & Daily Notes (file-based)
 
@@ -73,7 +73,7 @@ When the `embedding` section is omitted, the default build uses the bundled in-p
 
 ### Automatic Memory Refresh (capture + consolidation)
 
-ra ships an automatic memory pipeline that reads durable facts out of your conversations and consolidates them into `MEMORY.md` — so long-term memory grows without you hand-editing files. It is **on by default**.
+RecurAgent ships an automatic memory pipeline that reads durable facts out of your conversations and consolidates them into `MEMORY.md` — so long-term memory grows without you hand-editing files. It is **on by default**.
 
 **Where it runs.** The background sweep runs only inside the long-running process that owns the profile's refresh lock — `ra serve` or `ra gateway`. Plain `ra chat` never runs background passes (it would contend the lock). The pipeline has three parts:
 
@@ -116,7 +116,7 @@ ra memory forget --id ^m4k2abq   # Hard-delete an exact MEMORY.md entry
 }
 ```
 
-- **`enabled`** is tri-state: **absent means ON** (the product default). Set `false` — or `OCTOS_MEMORY_REFRESH_ENABLED=0` — to opt out entirely (no capture tool, no per-turn re-read, no sweep). A host-level opt-out is inherited by sub-profiles.
+- **`enabled`** is tri-state: **absent means ON** (the product default). Set `false` — or `RA_MEMORY_REFRESH_ENABLED=0` — to opt out entirely (no capture tool, no per-turn re-read, no sweep). A host-level opt-out is inherited by sub-profiles.
 - **`extract_model` / `consolidate_model`** default to the profile's provider; point them at a cheap model to keep refresh costs low.
 - Daily budgets (`max_extractions_per_day`, `max_consolidations_per_day`, `max_daily_tokens`) are per-profile and reset on local-date rollover; durable state lives in `memory/refresh_state.json`.
 
@@ -165,7 +165,7 @@ The entity bank is a structured knowledge store at `.ra/memory/bank/entities/`. 
 
 ## Built-in System Skills
 
-ra bundles 3 system skills at compile time:
+RecurAgent bundles 3 system skills at compile time:
 
 | Skill | Description |
 |-------|-------------|
@@ -379,8 +379,8 @@ ra skills search "web scraping"   # Search the online registry
 Profile gateways load skills from these directories (highest priority first):
 
 1. `~/.ra/profiles/<profile>/data/skills/` (profile-scoped custom skills)
-2. `<octos_home>/bundled-app-skills/` (bundled app skills)
-3. `<octos_home>/platform-skills/` (admin-loaded platform skills)
+2. `<ra_home>/bundled-app-skills/` (bundled app skills)
+3. `<ra_home>/platform-skills/` (admin-loaded platform skills)
 
 Standalone project runs can also load `<project>/.ra/plugins/` and
 `<project>/.ra/skills/`. The old HOME-rooted global directories are

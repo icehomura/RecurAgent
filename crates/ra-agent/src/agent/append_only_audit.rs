@@ -86,7 +86,7 @@ static FORCED_ON: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool:
 /// Whether the audit is armed.
 ///
 /// Opt-in because it is a measurement, not a guard: it exists to establish how
-/// far ra already is from the append-only prefix `pi` keeps and
+/// far RecurAgent already is from the append-only prefix `pi` keeps and
 /// `deepseek-harness` enforces, before committing to either.
 pub(crate) fn enabled() -> bool {
     #[cfg(test)]
@@ -317,7 +317,7 @@ mod tests {
     /// sent — while the durable session keeps the full text. If the audit
     /// cannot see THAT, it cannot see anything that matters.
     #[test]
-    fn should_report_the_real_in_place_truncation_octos_performs_today() {
+    fn should_report_the_real_in_place_truncation_ra_performs_today() {
         let mut audit = AppendOnlyAudit::default();
         let mut messages = vec![
             Message::system("prompt"),

@@ -1,4 +1,4 @@
-# ra Harness ABI Versioning
+# RecurAgent Harness ABI Versioning
 
 Date: 2026-04-19
 

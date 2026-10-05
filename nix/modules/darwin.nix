@@ -24,8 +24,8 @@ in
       '';
 
       environment = {
-        OCTOS_DATA_DIR = serviceCfg.dataDir;
-        OCTOS_AUTH_TOKEN = serviceCfg.authToken;
+        ra_DATA_DIR = serviceCfg.dataDir;
+        ra_AUTH_TOKEN = serviceCfg.authToken;
       };
 
       serviceConfig = {

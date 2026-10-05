@@ -44,7 +44,7 @@ pub(crate) fn apply_context_window_override(
 /// context-window / pricing floor. It ships next to the binary at release time
 /// (see `scripts/build-local-bundle.sh`), but is also embedded so a fresh
 /// install — one with no per-profile data-dir catalog and no `~/.ra`
-/// (legacy `~/.ra`) catalog yet — still seeds the adaptive router, the
+/// catalog yet — still seeds the adaptive router, the
 /// context-window table, and
 /// the pricing table with researched values instead of cold-start zeros.
 ///
@@ -238,7 +238,7 @@ pub(crate) enum ExporterMode {
 ///    `config.adaptive_routing`. Otherwise falls back to
 ///    `ProviderChain` (or the bare `RetryProvider` when no fallbacks).
 /// 3. Loads `provider_baseline.json` from `data_dir` first, then
-///    `~/.ra/` (legacy `~/.ra/`). Seeds the router with the parsed entries. Logs an
+///    `~/.ra/`. Seeds the router with the parsed entries. Logs an
 ///    info line either way.
 /// 4. Seeds the router with the model catalog from
 ///    `load_seed_qos_catalog`.

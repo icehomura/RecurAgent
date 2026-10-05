@@ -10,11 +10,11 @@ use tracing::debug;
 /// Default cap on a single inbound media download (50 MiB). A malicious or
 /// misbehaving homeserver could otherwise stream an unbounded body and
 /// exhaust memory/disk. Overridable via `RA_MAX_MEDIA_BYTES` (legacy
-/// `OCTOS_MAX_MEDIA_BYTES` still honoured).
+/// `ra_MAX_MEDIA_BYTES` still honoured).
 pub const DEFAULT_MAX_MEDIA_BYTES: u64 = 50 * 1024 * 1024;
 
 /// Resolve the inbound-media download cap, honoring `RA_MAX_MEDIA_BYTES`
-/// (legacy `OCTOS_MAX_MEDIA_BYTES` still honoured).
+/// (legacy `ra_MAX_MEDIA_BYTES` still honoured).
 pub fn max_media_bytes() -> u64 {
     ra_core::brand::env_compat_str("MAX_MEDIA_BYTES")
         .and_then(|raw| raw.parse::<u64>().ok())

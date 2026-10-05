@@ -34,7 +34,7 @@ cargo install --path crates/ra-cli \
 
 ## Architecture
 
-ra is a Rust-native, API-first Agentic OS — multi-tenant AI agent platform. 8-crate workspace + bundled skills, layered:
+RecurAgent is a Rust-native, API-first Agentic OS — multi-tenant AI agent platform. 8-crate workspace + bundled skills, layered:
 
 ```
 ra-cli  (CLI: clap commands, config loading, config watcher)
@@ -115,7 +115,7 @@ Splits long messages into channel-safe chunks (paragraph > newline > sentence > 
 
 ### Session Management (`ra-bus/src/session.rs`)
 
-JSONL persistence with LRU in-memory cache. Session forking (`/new` command) with parent_key tracking. Percent-encoded filenames with hash suffix on truncation (prevents collisions). Files roll into `<name>.segments/NNNNNN.jsonl` at `OCTOS_SESSION_SEGMENT_BYTES` (8 MiB); loads read the newest segments up to `OCTOS_SESSION_LOAD_BUDGET_BYTES` (32 MiB, 0 = all). Atomic write-then-rename for crash safety.
+JSONL persistence with LRU in-memory cache. Session forking (`/new` command) with parent_key tracking. Percent-encoded filenames with hash suffix on truncation (prevents collisions). Files roll into `<name>.segments/NNNNNN.jsonl` at `ra_SESSION_SEGMENT_BYTES` (8 MiB); loads read the newest segments up to `ra_SESSION_LOAD_BUDGET_BYTES` (32 MiB, 0 = all). Atomic write-then-rename for crash safety.
 
 ### Hooks (`ra-agent/src/hooks.rs`)
 

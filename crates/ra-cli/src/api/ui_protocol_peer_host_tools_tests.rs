@@ -4123,7 +4123,7 @@ async fn should_give_the_system_agent_the_app_tools_the_host_registers_on_its_se
     assert!(after.get("calendar_today").is_none());
 }
 
-/// OctoSense#146: the host's own connection (the private `serve --stdio`
+/// RecurAgent#146: the host's own connection (the private `serve --stdio`
 /// pipe, or the host token's connection of `serve --host-managed`) registers
 /// a host session's tools with no app peer's token, so the system agent's
 /// host tools do not wait for an app peer to exist; it answers the calls

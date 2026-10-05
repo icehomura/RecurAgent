@@ -1,10 +1,10 @@
-# @your-org/ra
+# @icehomura/ra
 
-One-line installer for the [Octos](https://github.com/your-org/ra) server — a
+One-line installer for the [RecurAgent](https://github.com/icehomura/ra) server — a
 Rust-native, API-first Agentic OS.
 
 ```bash
-npm install -g @your-org/ra
+npm install -g @icehomura/ra
 ra serve
 ```
 
@@ -25,16 +25,16 @@ macOS Intel is not supported (no prebuilt build is published).
 
 ## Environment overrides
 
-- `OCTOS_SKIP_DOWNLOAD=1` — skip the postinstall download (offline / CI).
-- `OCTOS_BUNDLE_URL=<url>` — install from a specific bundle URL (`file://` works).
+- `ra_SKIP_DOWNLOAD=1` — skip the postinstall download (offline / CI).
+- `ra_BUNDLE_URL=<url>` — install from a specific bundle URL (`file://` works).
 - `HTTPS_PROXY` — honored when downloading.
 
 ## Alternatives
 
 ```bash
 # Homebrew
-brew install your-org/ra/octos
+brew install icehomura/ra/ra
 
 # Shell installer (sets up ra serve as a service)
-curl -fsSL https://github.com/your-org/ra/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/icehomura/ra/releases/latest/download/install.sh | bash
 ```

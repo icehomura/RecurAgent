@@ -115,7 +115,7 @@ pub struct NotifyResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, agent_client_protocol::JsonRpcRequest)]
-#[request(method = "_octos/host/model", response = ModelResponse)]
+#[request(method = "_ra/host/model", response = ModelResponse)]
 #[serde(transparent)]
 struct ModelCall(ModelRequest);
 
@@ -124,7 +124,7 @@ struct ModelCall(ModelRequest);
 struct ModelResponse(ChatResponse);
 
 #[derive(Debug, Clone, Serialize, Deserialize, agent_client_protocol::JsonRpcRequest)]
-#[request(method = "_octos/host/tools/list", response = ToolsResponse)]
+#[request(method = "_ra/host/tools/list", response = ToolsResponse)]
 #[serde(transparent)]
 struct ListTools(host::ToolsListRequest);
 
@@ -133,7 +133,7 @@ struct ListTools(host::ToolsListRequest);
 struct ToolsResponse(ToolsListResponse);
 
 #[derive(Debug, Clone, Serialize, Deserialize, agent_client_protocol::JsonRpcRequest)]
-#[request(method = "_octos/host/tools/call", response = ToolResponse)]
+#[request(method = "_ra/host/tools/call", response = ToolResponse)]
 #[serde(transparent)]
 struct CallTool(ToolCallRequest);
 

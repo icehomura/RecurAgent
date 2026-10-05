@@ -1,16 +1,16 @@
-# ra Server Feature Requirements
+# RecurAgent Server Feature Requirements
 
 Status: proposed test contract.
-Owner: ra server/runtime.
+Owner: RecurAgent server/runtime.
 Applies to: `ra serve`, AppUI/UI Protocol, harness runtime, task supervisor,
 approval gate, durable ledger, dashboard/API surfaces, and client integration.
 
 ## Purpose
 
-This document defines the server-side feature requirements that ra must
+This document defines the server-side feature requirements that RecurAgent must
 satisfy before the server can be treated as a production AppUI/harness runtime.
 It is intended to be used as a merge gate for `ra` main and as a shared
-contract for `octoscode`, `octos-app`, dashboard, API clients, and future app
+contract for `ra-tui`, `ra-app`, dashboard, API clients, and future app
 harnesses.
 
 The server is responsible for runtime truth. Clients may render, organize, and
@@ -204,7 +204,7 @@ Expected flow:
 - Multi-agent/swarm session where task registry shows all child work.
 - Server restart/reconnect during active or recently completed background work.
 - Dashboard/API/TUI compatibility smoke.
-- Downstream `octoscode` and `octos-app` compile and protocol smoke after
+- Downstream `ra-tui` and `ra-app` compile and protocol smoke after
   AppUI changes.
 
 ## Current Implementation Notes
@@ -226,7 +226,7 @@ preserved and tested:
 
 Known gaps to track against this document:
 
-- AppUI task-control support must be merged only with compatible `octoscode`
+- AppUI task-control support must be merged only with compatible `ra-tui`
   and `ra-app` client handling.
 - `task/output/read` is currently a snapshot projection; true disk-routed
   stdout/stderr live-tail is a separate feature.
@@ -250,5 +250,5 @@ No server branch should merge to main as AppUI/harness complete unless:
 - terminal states survive backpressure in tests
 - replay/ledger changes include stale snapshot regression coverage
 - approval and sandbox policy behavior is preserved
-- downstream `octoscode` and `octos-app` compatibility is verified or the
+- downstream `ra-tui` and `ra-app` compatibility is verified or the
   branch is explicitly marked server-only with a migration plan

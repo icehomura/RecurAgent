@@ -371,8 +371,8 @@ export function parseContractBody(body: string): {
 function authHeaders(): HeadersInit {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   const token =
-    localStorage.getItem('octos_session_token') ||
-    localStorage.getItem('octos_auth_token')
+    localStorage.getItem('ra_session_token') ||
+    localStorage.getItem('ra_auth_token')
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
@@ -435,8 +435,8 @@ export function subscribeToEvents(
     'sub_agent_dispatch',
   ].join(',')
   const token =
-    localStorage.getItem('octos_session_token') ||
-    localStorage.getItem('octos_auth_token') ||
+    localStorage.getItem('ra_session_token') ||
+    localStorage.getItem('ra_auth_token') ||
     ''
   const params = new URLSearchParams({ kinds: eventKinds })
   if (token) {

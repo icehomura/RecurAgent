@@ -5989,7 +5989,7 @@ fn make_managed_slides_workspace(tmp_root: &std::path::Path, slug: &str, ready: 
     std::fs::write(repo_root.join("changelog.md"), "# changelog").unwrap();
     if ready {
         std::fs::create_dir_all(repo_root.join("output/imgs")).unwrap();
-        // ra #997: write real PPTX magic bytes so the project-scope
+        // RecurAgent #997: write real PPTX magic bytes so the project-scope
         // PPTX `MagicBytes` validator wired in
         // `WorkspacePolicy::for_kind(Slides)` does not fail the gate.
         let mut pptx = vec![0x50, 0x4B, 0x03, 0x04];
@@ -6002,7 +6002,7 @@ fn make_managed_slides_workspace(tmp_root: &std::path::Path, slug: &str, ready: 
     }
 }
 
-/// ra #997 (round-2 fix): async variant — exercise the production
+/// RecurAgent #997 (round-2 fix): async variant — exercise the production
 /// project-root validator helper so the ready fixture writes a Pass row
 /// into the same project ledger that the spawn loop writes to in
 /// production. Pre-round-2 the fixture manually `ledger.append(...)`ed a
@@ -7614,7 +7614,7 @@ async fn user_prompt_submit_hook_injects_stdout_as_turn_context() {
     // into the model's input for this turn.
     let hooks = Arc::new(HookExecutor::new(vec![HookConfig {
         event: HookEvent::UserPromptSubmit,
-        command: vec!["sh".into(), "-c".into(), "echo OCTOS_CTX_MARKER_42".into()],
+        command: vec!["sh".into(), "-c".into(), "echo ra_CTX_MARKER_42".into()],
         timeout_ms: 5000,
         tool_filter: vec![],
         path_filter: vec![],
@@ -7632,7 +7632,7 @@ async fn user_prompt_submit_hook_injects_stdout_as_turn_context() {
     assert!(
         prompts[0]
             .iter()
-            .any(|content| content.contains("OCTOS_CTX_MARKER_42")),
+            .any(|content| content.contains("ra_CTX_MARKER_42")),
         "injected context must reach the model input; got {:?}",
         prompts[0]
     );
@@ -7641,7 +7641,7 @@ async fn user_prompt_submit_hook_injects_stdout_as_turn_context() {
         result
             .messages
             .iter()
-            .all(|m| !m.content.contains("OCTOS_CTX_MARKER_42")),
+            .all(|m| !m.content.contains("ra_CTX_MARKER_42")),
         "injected context must not be persisted as a message"
     );
 }
@@ -8189,7 +8189,7 @@ fn repeated_identical_failing_command_still_trips_the_retry_limit() {
 /// Append-only measurement, end to end through the real loop.
 ///
 /// The point of the audit is to answer one question with evidence rather than
-/// argument: does ra already rewrite request history in place? This drives
+/// argument: does RecurAgent already rewrite request history in place? This drives
 /// two real turns on one agent — the second carrying the first's oversized
 /// tool result as history — which is the shape `truncate_old_tool_results`
 /// acts on, and asserts the audit both RAN and reported it.

@@ -2,8 +2,8 @@
 # Register voice clones with ominix-api on each fleet host.
 #
 # Fleet addresses and passwords are intentionally not stored in this repository.
-# Set OCTOS_MINI<N>_HOST (for example user@host) and, only when key auth is not
-# available, OCTOS_MINI<N>_PASSWORD in the invoking environment or secret store.
+# Set ra_MINI<N>_HOST (for example user@host) and, only when key auth is not
+# available, ra_MINI<N>_PASSWORD in the invoking environment or secret store.
 #
 # Usage:
 #   ./scripts/register-fleet-voices.sh
@@ -14,11 +14,11 @@
 # it unless --force-mini5 is supplied.
 set -euo pipefail
 
-HOST_1="${OCTOS_MINI1_HOST:-}"; PW_1="${OCTOS_MINI1_PASSWORD:-}"
-HOST_2="${OCTOS_MINI2_HOST:-}"; PW_2="${OCTOS_MINI2_PASSWORD:-}"
-HOST_3="${OCTOS_MINI3_HOST:-}"; PW_3="${OCTOS_MINI3_PASSWORD:-}"
-HOST_4="${OCTOS_MINI4_HOST:-}"; PW_4="${OCTOS_MINI4_PASSWORD:-}"
-HOST_5="${OCTOS_MINI5_HOST:-}"; PW_5="${OCTOS_MINI5_PASSWORD:-}"
+HOST_1="${ra_MINI1_HOST:-}"; PW_1="${ra_MINI1_PASSWORD:-}"
+HOST_2="${ra_MINI2_HOST:-}"; PW_2="${ra_MINI2_PASSWORD:-}"
+HOST_3="${ra_MINI3_HOST:-}"; PW_3="${ra_MINI3_PASSWORD:-}"
+HOST_4="${ra_MINI4_HOST:-}"; PW_4="${ra_MINI4_PASSWORD:-}"
+HOST_5="${ra_MINI5_HOST:-}"; PW_5="${ra_MINI5_PASSWORD:-}"
 
 FORCE_MINI5=false
 TARGETS=()
@@ -118,7 +118,7 @@ exit 1
 run_one() {
     local label="$1" host="$2" pw="$3"
     if [[ -z "$host" ]]; then
-        echo "ERROR: $label host is unset; configure the matching OCTOS_MINI<N>_HOST variable" >&2
+        echo "ERROR: $label host is unset; configure the matching ra_MINI<N>_HOST variable" >&2
         return 2
     fi
     echo

@@ -4,7 +4,7 @@
  * The dashboard is read-only — every number here comes from the
  * `OperatorSummaryResponse` exposed by
  * `/api/admin/operator/summary`. If a field should appear here, the backend
- * has to expose it via `octos-cli/src/api/metrics.rs`. See `api/harness.ts`
+ * has to expose it via `ra-cli/src/api/metrics.rs`. See `api/harness.ts`
  * for the typed helpers that shape the Prometheus breakdown rows.
  */
 import {
@@ -64,7 +64,7 @@ export function RetryBucketPanel({
     return (
       <SectionCard
         title="Retry bucket state (M6.2)"
-        description="Counter octos_loop_retry_total{variant, decision} — every entry is a bounded observation from LoopRetryState."
+        description="Counter ra_loop_retry_total{variant, decision} — every entry is a bounded observation from LoopRetryState."
         testId="retry-bucket-panel"
         empty
       >
@@ -78,7 +78,7 @@ export function RetryBucketPanel({
   return (
     <SectionCard
       title="Retry bucket state (M6.2)"
-      description="Counter octos_loop_retry_total{variant, decision} — every entry is a bounded observation from LoopRetryState. Rows with exhausted_share > 50% are highlighted."
+      description="Counter ra_loop_retry_total{variant, decision} — every entry is a bounded observation from LoopRetryState. Rows with exhausted_share > 50% are highlighted."
       testId="retry-bucket-panel"
     >
       <div className="px-5 py-2 text-[11px] text-gray-500">
@@ -168,7 +168,7 @@ export function CompactionPanel({
   return (
     <SectionCard
       title="Compaction events (M6.3)"
-      description="Counter octos_compaction_preservation_violations_total{phase} — non-zero rows are preservation-contract bugs."
+      description="Counter ra_compaction_preservation_violations_total{phase} — non-zero rows are preservation-contract bugs."
       testId="compaction-panel"
       empty={rows.length === 0}
     >
@@ -241,7 +241,7 @@ export function CredentialPoolPanel({
   return (
     <SectionCard
       title="Credential pool (M6.5)"
-      description="Counter octos_llm_credential_rotation_total{reason, strategy} — rotations per reason. cooldown = rate_limit_cooldown + auth_failure."
+      description="Counter ra_llm_credential_rotation_total{reason, strategy} — rotations per reason. cooldown = rate_limit_cooldown + auth_failure."
       testId="credential-panel"
       empty={total === 0}
     >
@@ -337,7 +337,7 @@ export function RoutingDecisionPanel({
   return (
     <SectionCard
       title="Routing decisions (M6.6)"
-      description="Counter octos_routing_decision_total{tier, lane} — cheap vs strong share, per-lane breakdown."
+      description="Counter ra_routing_decision_total{tier, lane} — cheap vs strong share, per-lane breakdown."
       testId="routing-panel"
       empty={s.total === 0}
     >

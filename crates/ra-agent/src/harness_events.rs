@@ -1,7 +1,7 @@
 //! Structured harness event ABI and local sink transport.
 //!
 //! Child tools/workflows write newline-delimited JSON events to the local
-//! transport URI exposed through `OCTOS_EVENT_SINK`. The runtime consumes those
+//! transport URI exposed through `ra_EVENT_SINK`. The runtime consumes those
 //! events and folds them into durable task snapshots.
 
 use std::collections::HashMap;
@@ -27,11 +27,11 @@ use crate::task_supervisor::TaskSupervisor;
 use crate::validators::VALIDATOR_RESULT_SCHEMA_VERSION;
 
 pub const HARNESS_EVENT_SCHEMA_V1: &str = "ra.harness.event.v1";
-pub const OCTOS_EVENT_SINK_ENV: &str = "OCTOS_EVENT_SINK";
-pub const OCTOS_SESSION_ID_ENV: &str = "OCTOS_SESSION_ID";
-pub const OCTOS_TASK_ID_ENV: &str = "OCTOS_TASK_ID";
-pub const OCTOS_HARNESS_SESSION_ID_ENV: &str = "OCTOS_HARNESS_SESSION_ID";
-pub const OCTOS_HARNESS_TASK_ID_ENV: &str = "OCTOS_HARNESS_TASK_ID";
+pub const ra_EVENT_SINK_ENV: &str = "ra_EVENT_SINK";
+pub const ra_SESSION_ID_ENV: &str = "ra_SESSION_ID";
+pub const ra_TASK_ID_ENV: &str = "ra_TASK_ID";
+pub const ra_HARNESS_SESSION_ID_ENV: &str = "ra_HARNESS_SESSION_ID";
+pub const ra_HARNESS_TASK_ID_ENV: &str = "ra_HARNESS_TASK_ID";
 pub const MAX_HARNESS_EVENT_LINE_BYTES: usize = 16 * 1024;
 const MAX_SESSION_ID_BYTES: usize = 256;
 const MAX_TASK_ID_BYTES: usize = 128;
@@ -1801,7 +1801,7 @@ impl HarnessEventSink {
         self.sink_file.path()
     }
 
-    /// Return the transport URI child processes should receive in OCTOS_EVENT_SINK.
+    /// Return the transport URI child processes should receive in ra_EVENT_SINK.
     pub fn uri(&self) -> String {
         format!("file://{}", self.path().display())
     }

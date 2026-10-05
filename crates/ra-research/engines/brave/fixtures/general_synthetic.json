@@ -5,15 +5,15 @@
       "lang": "en",
       "published": "2026-09-20T10:00:00Z",
       "source": "GitHub",
-      "title": "octos: a Rust-native agentic OS",
-      "url": "https://github.com/your-org/ra"
+      "title": "ra: a Rust-native agentic OS",
+      "url": "https://github.com/icehomura/ra"
     },
     {
       "lang": "en",
       "published": null,
-      "source": "your-org.github.io",
-      "title": "octos documentation",
-      "url": "https://your-org.github.io/octos"
+      "source": "icehomura.github.io",
+      "title": "ra documentation",
+      "url": "https://icehomura.github.io/ra"
     }
   ],
   "http": {
@@ -21,7 +21,7 @@
       "accept": "application/json"
     },
     "method": "GET",
-    "url": "https://api.search.brave.com/res/v1/web/search?q=octos+agent&count=5&offset=0&search_lang=en"
+    "url": "https://api.search.brave.com/res/v1/web/search?q=ra+agent&count=5&offset=0&search_lang=en"
   },
   "recorded": "synthetic body, shaped after the documented web search response (needs a key)",
   "request": {
@@ -31,7 +31,7 @@
       "en"
     ],
     "now": "2026-09-27T22:00:00Z",
-    "query": "octos agent",
+    "query": "ra agent",
     "since": null
   }
 }

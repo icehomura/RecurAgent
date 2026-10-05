@@ -2,7 +2,7 @@
 name: account-manager
 description: Manage sub-accounts under the current profile. Triggers: create account, 创建账号, sub account, manage account, list accounts, 子账号.
 version: 1.1.0
-author: ra
+author: RecurAgent
 always: false
 ---
 
@@ -106,4 +106,4 @@ Supported fields: `telegram_token`, `telegram_senders`, `whatsapp` (bool), `feis
 
 ## Environment Variables
 
-This tool reads `RA_HOME` and `RA_PROFILE_ID` from the environment (set automatically by the gateway; the legacy `OCTOS_HOME`/`OCTOS_PROFILE_ID` spellings are still honoured). No manual configuration is needed.
+This tool reads `RA_HOME` and `RA_PROFILE_ID` from the environment (set automatically by the gateway; the legacy `ra_HOME`/`ra_PROFILE_ID` spellings are still honoured). No manual configuration is needed.

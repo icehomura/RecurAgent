@@ -1,20 +1,20 @@
-# ra
+# RecurAgent
 
 **An embeddable AI agent harness kernel, written in Rust.**
 
-ra provides the execution loop, context management, memory, tools, skills,
+RecurAgent provides the execution loop, context management, memory, tools, skills,
 workflows, and agent coordination for applications built around AI agents.
 Compile the kernel into your own application, or host it behind **OUP — the
 ra UI Protocol** — and control it from a native app, a terminal, a browser,
 or another agent.
 
 The defining architecture is **a reusable kernel with a programmable protocol
-boundary**. Your application owns its interface and product workflow; ra
+boundary**. Your application owns its interface and product workflow; RecurAgent
 owns agent execution and runtime state. The same OUP contract lets a human-facing
 client and an automated controller operate that runtime.
 
-[Build with ra](#build-with-ra) · [Control through OUP](#control-through-oup) ·
-[Documentation](https://your-org.github.io/ra/) · [中文](README-zh.md)
+[Build with RecurAgent](#build-with-recuragent) · [Control through OUP](#control-through-oup) ·
+[Documentation](https://icehomura.github.io/ra/) · [中文](README-zh.md)
 
 <a id="start-here"></a>
 <a id="quick-start"></a>
@@ -25,18 +25,18 @@ Start with an application built on the kernel:
 
 | Application | Where to start |
 | --- | --- |
-| **[ra-tui](https://github.com/your-org/ra-tui)** | Install the terminal client. It provisions a compatible local `ra` runtime on first launch. |
-| **[ra-tui-web](https://github.com/your-org/ra-tui-web)** | Set up the browser client using its [getting-started guide](https://github.com/your-org/ra-tui-web/blob/main/docs/getting-started.md), and connect it to a `ra` runtime. |
+| **[ra-tui](https://github.com/icehomura/ra-tui)** | Install the terminal client. It provisions a compatible local `ra` runtime on first launch. |
+| **[ra-tui-web](https://github.com/icehomura/ra-tui-web)** | Set up the browser client using its [getting-started guide](https://github.com/icehomura/ra-tui-web/blob/main/docs/getting-started.md), and connect it to a `ra` runtime. |
 
 This repository is for developers embedding, extending, or integrating the
 harness kernel. Application installation and everyday coding workflows belong
 in the client repositories above.
 
-<a id="embed-ra"></a>
+<a id="embed-recuragent"></a>
 
-## Build with ra
+## Build with RecurAgent
 
-Use ra as the foundation for a coding application, an agent-powered desktop
+Use RecurAgent as the foundation for a coding application, an agent-powered desktop
 app, a research service, a workflow engine, or a fleet of cooperating agents.
 Bring your own interface, model providers, tools, and host environment.
 
@@ -46,7 +46,7 @@ Embed the Rust crates or task bindings in your application, or connect through
 OUP to a hosted runtime. OUP carries both commands into the kernel and responses
 and events back to the client or controller.
 
-![ra harness kernel architecture](docs/assets/readme/architecture.svg)
+![RecurAgent harness kernel architecture](docs/assets/readme/architecture.svg)
 
 ### Native kernel and libraries
 
@@ -69,7 +69,7 @@ cargo build --release -p ra-agent
 cargo build --release -p ra-ffi
 ```
 
-Pin related ra crates to the same Git revision when integrating them into
+Pin related RecurAgent crates to the same Git revision when integrating them into
 another workspace. For other host languages, use the
 [C ABI](crates/ra-ffi/README.md), [native Python binding](crates/ra-pyo3/README.md),
 or [Swift/Kotlin bindings](crates/ra-uniffi/README.md). The C ABI produces
@@ -111,11 +111,11 @@ capabilities to choose controls and event formats. The runtime owns conversation
 compaction, permissions, and committed results; clients render or act on that
 state through the protocol.
 
-### Drive ra from another agent
+### Drive RecurAgent from another agent
 
 A controller integration can expose OUP requests as tools callable by **Codex,
 Claude Code, or another agent**. This gives the controlling agent a way to
-assign work to ra agents, observe execution, intervene, and collect results.
+assign work to RecurAgent agents, observe execution, intervene, and collect results.
 The integration supplies the OUP client or bridge.
 
 A typical controller flow is:
@@ -162,7 +162,7 @@ a new UUID for each turn:
 }
 ```
 
-The same controller can let ra perform research or implementation, inspect
+The same controller can let RecurAgent perform research or implementation, inspect
 its findings, then steer the next turn. OUP exposes the controls and evidence
 needed to build that collaboration into your own application.
 
@@ -182,7 +182,7 @@ discovery lets an integration adapt to the runtime it is actually connected to.
 ### Context management
 
 Long tasks accumulate conversation, tool output, and intermediate results.
-ra manages the model's context budget, compacts older material, and preserves
+RecurAgent manages the model's context budget, compacts older material, and preserves
 recent tool-call/result relationships. Compaction can use LLM summarization or
 heuristics. Stable prompt prefixes support provider cache reuse, while changing
 task state remains part of the evolving conversation.
@@ -216,7 +216,7 @@ conventions, decisions, and useful task outcomes across sessions.
 
 ### Durable sessions and recovery
 
-ra owns session identity, workspace scope, conversation history, and committed
+RecurAgent owns session identity, workspace scope, conversation history, and committed
 events. A client can reconstruct the runtime's view of a conversation after a
 reload, or build a different interface over the same stored session.
 
@@ -292,7 +292,7 @@ and its output, then request an appropriate retry and track the successor task.
 
 ### Sub-agents and peers
 
-ra supports several forms of concurrent work. A child agent handles a
+RecurAgent supports several forms of concurrent work. A child agent handles a
 delegated task and returns its result to its parent. A peer owns an independent
 session that a client or controller can inspect and steer. A supervised
 background tool task can run without creating another LLM loop.
@@ -367,12 +367,12 @@ controller around these primitives:
 5. Retain session identities and durable cursors so the interface can rehydrate
    committed state when it reconnects.
 
-The host implements the coordination policy. ra supplies the execution,
+The host implements the coordination policy. RecurAgent supplies the execution,
 state, and control primitives that make that policy observable through OUP.
 
 ## Developer documentation
 
-Follow one Calendar request through admission, Tokio tasks, a host tool and its answer in the [OctoSense integration code walkthrough](docs/octosense-integration-walkthrough.md). It also explains app peers, human and system conversations, storage boundaries, and which source revision to read for OctoSense. Contributor guidance is in [AGENTS.md](AGENTS.md).
+Follow one Calendar request through admission, Tokio tasks, a host tool and its answer in the [RecurAgent integration code walkthrough](docs/recuragent-integration-walkthrough.md). It also explains app peers, human and system conversations, storage boundaries, and which source revision to read for RecurAgent. Contributor guidance is in [AGENTS.md](AGENTS.md).
 
 - [OUP specification](api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md)
 - [OUP types and codecs](crates/ra-core/src/ui_protocol.rs)
@@ -380,7 +380,7 @@ Follow one Calendar request through admission, Tokio tasks, a host tool and its 
 - [Harness developer interface](docs/ra_HARNESS_DEVELOPER_INTERFACE.md)
 - [Artifact and workflow integration guide](docs/ra_HARNESS_DEVELOPER_GUIDE.md)
 - [Harness compatibility and versioning](docs/ra_HARNESS_ABI_VERSIONING.md)
-- [Documentation site](https://your-org.github.io/ra/)
+- [Documentation site](https://icehomura.github.io/ra/)
 
 ## Contributing
 

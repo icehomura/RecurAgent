@@ -1,13 +1,13 @@
 {
   pkgs,
-  octosModule,
+  raModule,
 }:
 
 pkgs.testers.nixosTest {
   name = "ra-nixos-test";
 
   nodes.machine = {
-    imports = [ octosModule ];
+    imports = [ raModule ];
     programs.ra = {
       enable = true;
       # enableExtraPackages = true;  # Skipped to avoid resource bloat (chromium/ffmpeg/libreoffice/etc.) in VM test

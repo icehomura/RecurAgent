@@ -10,15 +10,15 @@ import readline from 'node:readline';
 const repoRoot = path.resolve(import.meta.dirname, '..', '..');
 const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z');
 const runRoot = path.resolve(
-  process.env.OCTOS_M15_STDIO_SOAK_DIR || path.join(repoRoot, 'e2e', 'test-results-m15-live-stdio', stamp),
+  process.env.ra_M15_STDIO_SOAK_DIR || path.join(repoRoot, 'e2e', 'test-results-m15-live-stdio', stamp),
 );
 const dataDir = path.join(runRoot, 'data');
 const workspace = path.join(runRoot, 'workspace');
 const evidenceDir = path.join(runRoot, 'evidence');
-const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
-const sessionId = process.env.OCTOS_M15_STDIO_SESSION || `api:m15-live-stdio-${stamp}`;
-const profileId = process.env.OCTOS_M15_STDIO_PROFILE || '_main';
-const timeoutMs = Number(process.env.OCTOS_M15_STDIO_TIMEOUT_MS || 45_000);
+const raBin = process.env.ra_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
+const sessionId = process.env.ra_M15_STDIO_SESSION || `api:m15-live-stdio-${stamp}`;
+const profileId = process.env.ra_M15_STDIO_PROFILE || '_main';
+const timeoutMs = Number(process.env.ra_M15_STDIO_TIMEOUT_MS || 45_000);
 
 fs.mkdirSync(workspace, { recursive: true });
 fs.mkdirSync(evidenceDir, { recursive: true });
@@ -36,13 +36,13 @@ function writeJson(file, value) {
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-const child = spawn(octosBin, ['serve', '--stdio', '--data-dir', dataDir, '--cwd', workspace], {
+const child = spawn(raBin, ['serve', '--stdio', '--data-dir', dataDir, '--cwd', workspace], {
   cwd: repoRoot,
   env: {
     ...process.env,
-    OCTOS_M15_LIVE_SUBAGENT_FIXTURE: '1',
-    OCTOSCODE_M15_UX_OUTPUT_DIR: evidenceDir,
-    OCTOSCODE_M15_UX_WORKDIR: workspace,
+    ra_M15_LIVE_SUBAGENT_FIXTURE: '1',
+    RA_TUI_M15_UX_OUTPUT_DIR: evidenceDir,
+    RA_TUI_M15_UX_WORKDIR: workspace,
     RUST_BACKTRACE: process.env.RUST_BACKTRACE || '1',
   },
   stdio: ['pipe', 'pipe', 'pipe'],

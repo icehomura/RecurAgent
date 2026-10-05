@@ -11,8 +11,8 @@ export default function WeChatTab({ config, onChange, profileId }: Props) {
   const channel = config.channels.find((c) => c.type === "wechat")
   const getAuthHeaders = (): HeadersInit => {
     const headers: HeadersInit = { 'Content-Type': 'application/json' }
-    const token = localStorage.getItem('octos_session_token')
-      || localStorage.getItem('octos_auth_token')
+    const token = localStorage.getItem('ra_session_token')
+      || localStorage.getItem('ra_auth_token')
     if (token) {
       headers['Authorization'] = `Bearer ${token}`
     }

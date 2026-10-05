@@ -8,7 +8,7 @@
 
 ┌Composer  Enter send | Tab inspector  ●───────────────────────────────────────┐
 │                                                                              │
-│ ›  Ask Octos to change code...                                               │
+│ ›  Ask RecurAgent to change code...                                               │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
  state ✓ Done  | approval gated | dspfac | 3 msgs/0 tasks | Turn completed in Protocol session at seq 206

@@ -151,12 +151,14 @@ pub struct CacheRates {
 ///
 /// Native `anthropic` plus the relabeled proxies that construct an
 /// `AnthropicProvider` under a custom label: `zai` / `zai-coding` (GLM over
-/// the Anthropic API) and `r9s` when it is serving a `claude-*` model (r9s
+/// the Anthropic API), `r9s` when it is serving a `claude-*` model (r9s
 /// auto-selects the Anthropic protocol for claude models and OpenAI for the
-/// rest — see `registry/r9s.rs`). A label CONTAINING "anthropic" also counts,
-/// covering custom Anthropic-compatible endpoints. zhipu / dashscope /
-/// minimax / moonshot-coding are OpenAI-protocol re-hosts and are
-/// deliberately excluded.
+/// rest — see `registry/r9s.rs`), and `opencode` / `opencode-go` when the
+/// selected model id is routed to OpenCode's Anthropic-compatible lane
+/// (OpenCode picks the protocol per model id — see `registry/opencode.rs`).
+/// A label CONTAINING "anthropic" also counts, covering custom
+/// Anthropic-compatible endpoints. zhipu / dashscope / minimax /
+/// moonshot-coding are OpenAI-protocol re-hosts and are deliberately excluded.
 fn speaks_anthropic_protocol(provider: &str, model: &str) -> bool {
     let p = provider.to_ascii_lowercase();
     p.contains("anthropic")
@@ -166,6 +168,11 @@ fn speaks_anthropic_protocol(provider: &str, model: &str) -> bool {
         // on the RAW model): r9s speaks the Anthropic protocol only for the models
         // it actually builds an `AnthropicProvider` for — see `registry::r9s`.
         || (p == "r9s" && crate::registry::r9s::prefers_anthropic(model))
+        // OpenCode (Zen + Go tiers) has the same model-keyed split, so pricing
+        // must read the family's OWN table — the ids that speak Anthropic there
+        // are not just `claude-*` (qwen*-plus/max on Zen, minimax-m3 on Go).
+        || ((p == "opencode" || p == "opencode-go")
+            && crate::registry::opencode::prefers_anthropic(&p, model))
 }
 
 /// The prompt-cache rate card for the answering slot, keyed on its
@@ -183,7 +190,7 @@ fn speaks_anthropic_protocol(provider: &str, model: &str) -> bool {
 /// - `gemini` / `vertex` / `google`: implicit caching bills cached tokens at
 ///   25% of the input rate (catalog row gemini-2.5-flash: 0.0375/0.15 =
 ///   0.25x). No per-token write charge — explicit-cache STORAGE is
-///   time-billed, ra never creates explicit caches, and the Gemini parser
+///   time-billed, RecurAgent never creates explicit caches, and the Gemini parser
 ///   never reports write tokens, so 0.0 writes can never make a real token
 ///   vanish.
 /// - everything else (openai, openrouter, deepseek, local, unknown/empty):
@@ -576,6 +583,42 @@ mod tests {
             1.0,
             "a 'claude'-prefixed-but-not-'claude-' model is OpenAI protocol at r9s",
         );
+    }
+
+    #[test]
+    fn should_mirror_opencode_dialect_when_pricing_cache() {
+        // OpenCode's Zen + Go tiers pick the protocol per MODEL ID from the
+        // tables in registry/opencode.rs. The Anthropic-dialect ids (claude-*
+        // and the qwen plus/max ids on Zen; minimax-m3 / qwen3.8-flash on Go)
+        // report Anthropic cache accounting, so they price at Anthropic rates.
+        for (family, model) in [
+            ("opencode", "claude-sonnet-4-6"),
+            ("opencode", "qwen3.7-max"),
+            ("opencode", "qwen3.8-flash"),
+            ("opencode-go", "minimax-m3"),
+            ("opencode-go", "qwen3.8-flash"),
+        ] {
+            assert_eq!(
+                cache_rates(family, model).read_multiplier,
+                CACHE_READ_INPUT_MULTIPLIER,
+                "{family}/{model} is an Anthropic-dialect lane -> 0.1x cache reads",
+            );
+        }
+        // Mixed-case ids and ids OpenCode serves over its OpenAI / Gemini /
+        // Responses lanes must NOT be handed Anthropic rates.
+        for (family, model) in [
+            ("opencode", "Claude-3"),
+            ("opencode", "gpt-5.1"),
+            ("opencode", "gemini-2.5-flash"),
+            ("opencode-go", "claude-sonnet-4-6"),
+            ("opencode-go", "gemini-2.5-flash"),
+        ] {
+            assert_eq!(
+                cache_rates(family, model).read_multiplier,
+                1.0,
+                "{family}/{model} is not an Anthropic-dialect lane",
+            );
+        }
     }
 
     #[test]

@@ -1,8 +1,8 @@
 # Host-managed ACP workers
 
-`ra acp --host-managed` runs the existing ra agent loop in a confined
+`ra acp --host-managed` runs the existing RecurAgent agent loop in a confined
 process. The parent supplies model completions and tools over the same ACP
-connection. This mode does not load ra configuration, provider credentials,
+connection. This mode does not load RecurAgent configuration, provider credentials,
 plugins, bootstrap files, native tools, embeddings, or persistent conversation
 history. Ordinary `ra acp` and embedded factories keep their existing behavior.
 Host-managed turns default to 20 model-loop iterations; a positive
@@ -16,7 +16,7 @@ executable starts. The worker then calls `confine_host_managed()` before creatin
 runtime threads or accepting input. Failure is fatal; there is no unconfined
 fallback. The capability response reports this startup state, and is not a
 cryptographic attestation of an arbitrary executable. Hosts must select a trusted
-ra binary and use the parent launcher, rather than trusting the response alone.
+RecurAgent binary and use the parent launcher, rather than trusting the response alone.
 
 Only macOS and Linux with the required kernel confinement facilities are
 supported. See `ra-sandbox` for the exact platform restrictions. One worker is
@@ -30,15 +30,15 @@ handle; all of it disappears when the worker exits.
 Host-managed execution is a distinct, opt-in mode. It does not replace ordinary
 ACP execution or its configured runtime. Upstream moved ordinary ACP turns into
 the ra UI Protocol (OUP) dispatcher in
-[#2265](https://github.com/your-org/ra/pull/2265). The ordinary adapter stays
+[#2265](https://github.com/icehomura/ra/pull/2265). The ordinary adapter stays
 on that dispatcher. Host-managed mode uses the current shared `ra_agent::Agent`
 loop through a separate ACP adapter with private, memory-only session bookkeeping.
 
 | Operation | Host-managed worker | Ordinary ACP on upstream after #2265 |
 |---|---|---|
 | Prompt, progress, cancellation | ACP handlers drive the confined agent loop and cancel outstanding broker waits. | The ACP adapter submits turns to the OUP runtime and translates its events. |
-| Model inference, including compaction | `HostProvider` sends `_octos/host/model`; the parent authorizes and performs provider I/O. | The configured runtime resolves and invokes providers. |
-| Tool discovery and execution | `_octos/host/tools/list` and `_octos/host/tools/call`; the parent rechecks every call. No native tool registry is populated. | The configured runtime resolves tools and applies its execution policy. |
+| Model inference, including compaction | `HostProvider` sends `_ra/host/model`; the parent authorizes and performs provider I/O. | The configured runtime resolves and invokes providers. |
+| Tool discovery and execution | `_ra/host/tools/list` and `_ra/host/tools/call`; the parent rechecks every call. No native tool registry is populated. | The configured runtime resolves tools and applies its execution policy. |
 | Credentials, configuration, history | No worker credential/configuration lookup; one memory-only session, with persistent session loading rejected. | Owned by the configured runtime and its stores. |
 
 No host-managed model or tool request is forwarded to an ordinary local
@@ -92,9 +92,9 @@ JSON-RPC requests:
 
 | Method | Parameters | Result |
 |---|---|---|
-| `_octos/host/model` | `ModelRequest { messages, tools, config }` | `ChatResponse` |
-| `_octos/host/tools/list` | `{}` | `ToolsListResponse { tools }` |
-| `_octos/host/tools/call` | `ToolCallRequest { name, arguments }` | `ToolCallResponse { content, is_error }` |
+| `_ra/host/model` | `ModelRequest { messages, tools, config }` | `ChatResponse` |
+| `_ra/host/tools/list` | `{}` | `ToolsListResponse { tools }` |
+| `_ra/host/tools/call` | `ToolCallRequest { name, arguments }` | `ToolCallResponse { content, is_error }` |
 
 Version 1 transports a bounded complete model response. The existing agent
 streaming adapter preserves text, reasoning, tool metadata and usage; responses

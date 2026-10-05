@@ -1,6 +1,6 @@
 spec: task
-name: "Global 运行时阶段 2:octoscode --headless client"
-tags: [olp, lifecycle, headless, octoscode]
+name: "Global 运行时阶段 2:ra-tui --headless client"
+tags: [olp, lifecycle, headless, ra-tui]
 depends: [task-req-olp-ctrl-steer, task-req-olp-obs-cli, task-req-olp-life-cockpit-script]
 satisfies: [REQ-OLP-HEADLESS]
 estimate: 2d
@@ -9,8 +9,8 @@ estimate: 2d
 ## 意图
 
 阶段 1 的驾驶舱脚本仍以 TUI 为载体(键盘模拟、画面解析)。本任务落地
-LEP-002 阶段 2:octoscode 增加 `--headless` client 模式——承担全部
-client 协议职责但不渲染不读键盘,指令入口只走 steer(ra 侧)、观测
+LEP-002 阶段 2:ra-tui 增加 `--headless` client 模式——承担全部
+client 协议职责但不渲染不读键盘,指令入口只走 steer(RecurAgent 侧)、观测
 只走 OBS 的 --json/事件流。落地后 tmux/herdr 桥退役为调试手段。
 operator 已拍板:`--headless` 标志复用现有协议栈;与 TUI 抢锁互斥。
 
@@ -22,7 +22,7 @@ operator 已拍板:`--headless` 标志复用现有协议栈;与 TUI 抢锁互斥
   splash、无渲染循环、无键盘读取)。
 - headless 进程的生命周期:前台常驻,SIGTERM/SIGINT 走既有优雅关停;
   退出码非零当且仅当 backend 不可恢复(与 TUI 的 reconnect 语义一致)。
-- 指令入口:headless 模式不读 stdin;唯一指令路径是 ra 侧 steer
+- 指令入口:headless 模式不读 stdin;唯一指令路径是 RecurAgent 侧 steer
   (依赖 task-req-olp-ctrl-steer)。审批在 headless 下永远 park 并走
   escalation 通知(依赖同合约),无任何自动应答。
 - 与 TUI 互斥:沿用 serve 排他锁语义,不做共享后端(operator 拍板;
@@ -57,7 +57,7 @@ operator 已拍板:`--headless` 标志复用现有协议栈;与 TUI 抢锁互斥
 
 场景: headless 打开 peer 会话(critical)
   测试: olp_headless_opens_staged_peer
-  假设 octoscode --headless 连接 mock backend 且收到 peer/staged 通知
+  假设 ra-tui --headless 连接 mock backend 且收到 peer/staged 通知
   当 事件泵处理该通知
   那么 peer 会话被打开并开始事件流,无任何终端渲染调用
 

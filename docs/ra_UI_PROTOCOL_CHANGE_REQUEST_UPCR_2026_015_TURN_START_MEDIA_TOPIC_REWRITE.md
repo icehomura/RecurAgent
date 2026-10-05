@@ -8,7 +8,7 @@
 - Date: 2026-05-10
 - Target protocol: `ra-ui/v1alpha1`
 - Status: accepted
-- Related issues: `#834` (web-side α-5/α-6 stubs), `#845` (atomic SSE delete audit), follow-up note in `octos-web-live/src/runtime/ui-protocol-send.ts:81-92`
+- Related issues: `#834` (web-side α-5/α-6 stubs), `#845` (atomic SSE delete audit), follow-up note in `ra-web-live/src/runtime/ui-protocol-send.ts:81-92`
 - Related ADR: M9-α SSE-removal ADR (PR #830)
 - Sibling UPCRs: `UPCR-2026-014` (M9-γ projection envelope — defines the `FileRef` shape this UPCR reuses)
 
@@ -32,7 +32,7 @@ But three chat-flow features rode along on the SSE request body that the WS shap
 - `topic` — query/body field routing the send to a topic-scoped session bucket
 - `rewrite_for` (legacy `request_text` semantic via the `/queue` slash-command) — the server-side rewrite of the queued user prompt
 
-The α-5/α-6 web-side closed PR #834 surfaced this gap by replacing the affected sends with three explicit error strings in `octos-web-live/src/runtime/ui-protocol-send.ts:83-89`:
+The α-5/α-6 web-side closed PR #834 surfaced this gap by replacing the affected sends with three explicit error strings in `ra-web-live/src/runtime/ui-protocol-send.ts:83-89`:
 
 ```text
 "media uploads are not yet supported on the WS chat transport
@@ -114,7 +114,7 @@ These lock the wire shape (serde round-trip, snake_case discriminator presence, 
 
 ## Client-side
 
-TS counterparts land in `octos-web/src/runtime/ui-protocol-types.ts` and `ui-protocol-bridge.ts`. The three error strings in `ui-protocol-send.ts:83-89` are deleted; sends populate the new fields directly.
+TS counterparts land in `ra-web/src/runtime/ui-protocol-types.ts` and `ui-protocol-bridge.ts`. The three error strings in `ui-protocol-send.ts:83-89` are deleted; sends populate the new fields directly.
 
 ## Rollout
 
@@ -143,7 +143,7 @@ TS counterparts land in `octos-web/src/runtime/ui-protocol-types.ts` and `ui-pro
 - [x] `ra-cli::api::ui_protocol::tests` covers the two new acceptance cases (and the legacy-shape back-compat case).
 - [x] `handle_turn_start` folds `topic` into `session_id` before scope validation.
 - [x] `run_standalone_turn` passes `media[*].path` into `Agent::process_message`.
-- [x] `octos-web/src/runtime/ui-protocol-types.ts::TurnStartInput` and `bridge.sendTurn` propagate the new fields.
-- [x] The three error strings at `octos-web-live/src/runtime/ui-protocol-send.ts:83-89` are deleted.
+- [x] `ra-web/src/runtime/ui-protocol-types.ts::TurnStartInput` and `bridge.sendTurn` propagate the new fields.
+- [x] The three error strings at `ra-web-live/src/runtime/ui-protocol-send.ts:83-89` are deleted.
 - [x] No existing test broken by the additive change (full `cargo test -p ra-core` + `cargo test -p ra-cli --features api --lib` green).
 - [x] Status flipped to `accepted` once the server PR lands; web PR opened second per the M9 dependency rule (server wire shape is locked first).

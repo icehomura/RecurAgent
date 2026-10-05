@@ -27,8 +27,8 @@ const BACKGROUND_DEADLINE: std::time::Duration = std::time::Duration::from_secs(
 
 #[test]
 fn frame_subagent_task_leads_with_identity_and_directive() {
-    let out = frame_subagent_task("review-octos-web", "Clone and review the repo.");
-    assert!(out.starts_with("You are a delegated SUB-AGENT named \"review-octos-web\""));
+    let out = frame_subagent_task("review-ra-web", "Clone and review the repo.");
+    assert!(out.starts_with("You are a delegated SUB-AGENT named \"review-ra-web\""));
     assert!(out.contains("do NOT respond to it"));
     // The real task is present and clearly delimited AFTER the framing.
     let task_pos = out.find("=== YOUR TASK ===").expect("task delimiter");
@@ -45,7 +45,7 @@ fn role_task_warning_fires_for_readonly_role_with_clone_and_write_task() {
     ];
     let note = role_task_capability_warning(
         &reviewer,
-        "Clone the repo and write a review to octos-web-review.md",
+        "Clone the repo and write a review to ra-web-review.md",
     )
     .expect("mismatch must warn");
     assert!(
@@ -69,7 +69,7 @@ fn role_task_warning_silent_when_tools_are_sufficient() {
     assert!(
         role_task_capability_warning(
             &equipped,
-            "Clone the repo and write a review to octos-web-review.md"
+            "Clone the repo and write a review to ra-web-review.md"
         )
         .is_none()
     );
@@ -91,8 +91,8 @@ fn role_task_warning_silent_for_unconstrained_and_for_pure_read_task() {
 fn derive_deliverable_filename_matches_the_declared_glob() {
     // The single-* review glob → slug from label's first word.
     assert_eq!(
-        derive_deliverable_filename("*-review.md", "octos-web review"),
-        "octos-web-review.md"
+        derive_deliverable_filename("*-review.md", "ra-web review"),
+        "ra-web-review.md"
     );
     assert_eq!(
         derive_deliverable_filename("*.md", "ra-one review"),
@@ -104,8 +104,8 @@ fn derive_deliverable_filename_matches_the_declared_glob() {
         "report.md"
     );
     // Odd/multi-* glob → sensible fallback that matches *-review.md / *.md.
-    let fb = derive_deliverable_filename("**/*.md", "octos-web review");
-    assert_eq!(fb, "octos-web-review.md");
+    let fb = derive_deliverable_filename("**/*.md", "ra-web review");
+    assert_eq!(fb, "ra-web-review.md");
     // Non-alnum label sanitized; empty → output.
     assert_eq!(
         derive_deliverable_filename("*-review.md", "  "),
@@ -170,8 +170,8 @@ async fn background_deliverable_auto_materializes_inline_final_output() {
 
     let result = tool
         .execute(&serde_json::json!({
-            "task": "review the repo and write octos-web-review.md",
-            "label": "octos-web review",
+            "task": "review the repo and write ra-web-review.md",
+            "label": "ra-web review",
             "mode": "background",
             "allowed_tools": ["read_file"],
             "deliverable": "*-review.md"
@@ -209,7 +209,7 @@ async fn background_deliverable_auto_materializes_inline_final_output() {
         "inline review must be auto-materialized into a deliverable file: {:?}",
         task.output_files
     );
-    assert!(task.output_files[0].ends_with("octos-web-review.md"));
+    assert!(task.output_files[0].ends_with("ra-web-review.md"));
     let written = std::fs::read_to_string(&task.output_files[0]).unwrap();
     assert!(written.contains("# Code Review"));
 }
@@ -599,7 +599,7 @@ async fn test_background_spawn_uses_contract_selected_slides_artifact_for_persis
     std::fs::write(repo_root.join("script.js"), "// slides").unwrap();
     std::fs::write(repo_root.join("memory.md"), "# memory").unwrap();
     std::fs::write(repo_root.join("changelog.md"), "# changelog").unwrap();
-    // ra #997 (round-2): real PPTX magic bytes ONLY. The spawn loop
+    // RecurAgent #997 (round-2): real PPTX magic bytes ONLY. The spawn loop
     // itself runs the slides-kind project-scope validator at the project
     // root after `run_task` succeeds — that production wiring writes the
     // Pass row into `slides/demo/.ra/validator_outcomes.jsonl`, which
@@ -1281,15 +1281,15 @@ fn write_mock_podcast_plugin(root: &std::path::Path, script_seen: &std::path::Pa
 set -euo pipefail
 INPUT="$(cat)"
 SCRIPT_SEEN="{script_seen}"
-OCTOS_PLUGIN_INPUT="$INPUT" SCRIPT_SEEN="$SCRIPT_SEEN" python3 - <<'PY'
+ra_PLUGIN_INPUT="$INPUT" SCRIPT_SEEN="$SCRIPT_SEEN" python3 - <<'PY'
 import json
 import os
 
-payload = json.loads(os.environ.get("OCTOS_PLUGIN_INPUT") or "{{}}")
+payload = json.loads(os.environ.get("ra_PLUGIN_INPUT") or "{{}}")
 with open(os.environ["SCRIPT_SEEN"], "w", encoding="utf-8") as handle:
     handle.write(str(payload.get("script") or ""))
 
-base = os.environ.get("OCTOS_WORK_DIR") or os.getcwd()
+base = os.environ.get("ra_WORK_DIR") or os.getcwd()
 out_dir = os.path.join(base, "skill-output", "mofa-podcast")
 os.makedirs(out_dir, exist_ok=True)
 out = os.path.join(out_dir, "podcast_full_test.mp3")
@@ -1329,7 +1329,7 @@ $raw = [System.Text.Encoding]::UTF8.GetString($ms.ToArray())
 $script = $raw
 try { $p = $raw | ConvertFrom-Json; if ($null -ne $p.script) { $script = [string]$p.script } } catch { }
 [System.IO.File]::WriteAllText('@@SCRIPT_SEEN@@', $script, (New-Object System.Text.UTF8Encoding($false)))
-$base = $env:OCTOS_WORK_DIR
+$base = $env:ra_WORK_DIR
 if ([string]::IsNullOrEmpty($base)) { $base = (Get-Location).Path }
 $dir = Join-Path (Join-Path $base 'skill-output') 'mofa-podcast'
 New-Item -ItemType Directory -Force -Path $dir > $null
@@ -1385,7 +1385,7 @@ async fn should_bind_native_spawn_in_child_registry_for_nested_delegation() {
     // Regression: a spawned subagent's registry must carry the native
     // `spawn` tool so the `ToolRegistry` swap binds `spawn_agent` /
     // `delegate` behind it. Without it a child that nested a spawn hit
-    // "No native ra spawn tool is bound behind spawn_agent in this
+    // "No native RecurAgent spawn tool is bound behind spawn_agent in this
     // ToolRegistry.", and the second-round agents were orphaned with
     // empty output_files (the exact failure a live review session hit).
     //
@@ -1457,7 +1457,7 @@ async fn child_spawn_clone_is_named_spawn_and_binds_spawn_agent_via_registry_swa
 
     // A bare builtins registry (what every child registry starts from)
     // carries only the delegate-LESS builtin spawn_agent — the reason a
-    // nested spawn failed with "No native ra spawn tool is bound".
+    // nested spawn failed with "No native RecurAgent spawn tool is bound".
     let mut registry = ToolRegistry::with_builtins("/tmp");
     assert!(
         registry.get("spawn").is_none(),
@@ -1506,7 +1506,7 @@ async fn nested_spawn_agent_resolves_a_real_agent_id_through_the_bound_delegate(
     //
     // Then drive `spawn_agent` the way a nesting child would: with
     // `ctx.task_supervisor` == that registry supervisor. It must (a) reach
-    // the bound delegate instead of failing "No native ra spawn tool is
+    // the bound delegate instead of failing "No native RecurAgent spawn tool is
     // bound", and (b) resolve a concrete `agent_id` — proving the
     // before/after task lookup and the delegate register into the SAME
     // supervisor.
@@ -1572,7 +1572,7 @@ fn contract_terminal_output_prefers_declared_slides_deck_name_over_newer_draft()
     std::fs::write(repo_root.join("script.js"), "// slides").unwrap();
     std::fs::write(repo_root.join("memory.md"), "# memory").unwrap();
     std::fs::write(repo_root.join("changelog.md"), "# changelog").unwrap();
-    // ra #997: real PPTX magic bytes so the slides-kind project-scope
+    // RecurAgent #997: real PPTX magic bytes so the slides-kind project-scope
     // `MagicBytes` validator does not block delivery on a fake-bytes deck.
     let mut pptx_final = vec![0x50, 0x4B, 0x03, 0x04];
     pptx_final.extend_from_slice(b"final");
@@ -1582,7 +1582,7 @@ fn contract_terminal_output_prefers_declared_slides_deck_name_over_newer_draft()
     pptx_draft.extend_from_slice(b"draft");
     std::fs::write(repo_root.join("output/deck-draft.pptx"), pptx_draft).unwrap();
     std::fs::write(repo_root.join("output/slide-01.png"), "png").unwrap();
-    // ra #997 (round-2): exercise the production project-root
+    // RecurAgent #997 (round-2): exercise the production project-root
     // validator helper so `inspect_workspace_contract_at_root` sees a
     // real `Pass` row in the project ledger. Pre-round-2 this fixture
     // manually `ledger.append(...)`ed a Pass — codex flagged that as

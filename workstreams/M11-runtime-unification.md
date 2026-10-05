@@ -85,7 +85,7 @@ Deliverables:
   - `adaptive_router: Option<Arc<AdaptiveRouter>>` — from `qos_catalog::AdaptiveProviderBundle`
   - `credentials: HashMap<String, String>`
   - `skills_dir: Option<PathBuf>`
-  - `plugin_env_template: Vec<(String, String)>` — `OCTOS_PROFILE_ID`, `OCTOS_VOICE_DIR`, etc.
+  - `plugin_env_template: Vec<(String, String)>` — `ra_PROFILE_ID`, `ra_VOICE_DIR`, etc.
   - `tool_policy: Option<ToolPolicy>`
   - `default_sandbox: SandboxConfig`
   - `tool_specs: Arc<ToolRegistry>` — base registry, NO workspace bound
@@ -404,7 +404,7 @@ Blocks: M11-H.
 
 ### M11-G: Coding-agent multi-session e2e
 
-Repository: `ra` + `octos-web` (if needed for client driver)
+Repository: `ra` + `ra-web` (if needed for client driver)
 
 Owns:
 

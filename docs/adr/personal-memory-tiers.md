@@ -3,13 +3,13 @@
 - Date: 2026-09-16 (proposal) / 2026-09-17 (implementation landed with the
   record; see "Implementation" below)
 - Status: **Accepted — implemented through phase 3** on this branch. Phase 1
-  (plugin skill, no kernel change) lives in Octoscript-AppCard
+  (plugin skill, no kernel change) lives in rascript-AppCard
   (`apps/personal-data`, PR #98); phases 2–3 are in `ra-memory`,
   `ra-agent`, `ra-cli`, `ra-ffi`/`ra-uniffi` in the same PR as
   this record. Phase 4 (cross-device) stays optional and unimplemented.
 - Scope: `ra-memory`, `ra-agent` tools, `ra-cli` runtime/profile,
-  plugin skills; app-side ingestion in Octoscript-AppCard (Mail, Calendar) and
-  the OctoSense phone shell.
+  plugin skills; app-side ingestion in rascript-AppCard (Mail, Calendar) and
+  the RecurAgent phone shell.
 - Branch: `design/personal-memory-tiers` → `main`.
 
 ## Context
@@ -61,14 +61,14 @@ Never index credentials or app secrets. Mail bodies are indexed only on opt-in (
 
 ## Plan
 
-1. **Search without kernel changes** — a `personal-data` plugin skill under `<data_dir>/skills/` with `mail_search`, `calendar_query`, `contacts_lookup`; Mail and Calendar maintain their own small index (FTS5 BM25, optional vectors) and answer over the skill protocol. Acceptance: on Mac and phone the agent answers "when is my dentist / what did Sam mail about the hike"; zero growth of ra memory.
+1. **Search without kernel changes** — a `personal-data` plugin skill under `<data_dir>/skills/` with `mail_search`, `calendar_query`, `contacts_lookup`; Mail and Calendar maintain their own small index (FTS5 BM25, optional vectors) and answer over the skill protocol. Acceptance: on Mac and phone the agent answers "when is my dentist / what did Sam mail about the hike"; zero growth of RecurAgent memory.
 2. **Recall tier in the kernel** — `Document` record kind beside `Episode`; `memory/ingest` UI-protocol method and FFI `ra_memory_upsert/search`; `memory_search`/`memory_load` tools; `save_episodes` on for the embedded runtime; persisted HNSW, int8 vectors, MRL truncation, heat aging, per-source caps. Acceptance: 10 k mails within the budget above, cold start < 1 s, p95 search < 50 ms on a OnePlus 6, BM25-only works.
 3. **Knowledge indexed and fed** — bank indexing, relevance-selected injection, heat-driven promotion through consolidation with provenance. Acceptance: a 500-page bank selects the right pages ≥ 90 % on a small eval set; the guard blocks the injection corpus.
 4. **Cross-device (optional)** — derived records carried by the calendar-style sync server; redb single-writer means the kernel owns the index and apps ingest through it.
 
 ## Implementation
 
-What landed with this record (phase 1 in Octoscript-AppCard, phases 2–3 here):
+What landed with this record (phase 1 in rascript-AppCard, phases 2–3 here):
 
 - **Records and quantised vectors** — `ra_memory::{Record, RecordKind, Trust}`
   (`record.rs`: title ≤ 120 B, abstract ≤ 300 B, optional body ≤ 16 KiB,
@@ -108,7 +108,7 @@ What landed with this record (phase 1 in Octoscript-AppCard, phases 2–3 here):
   nominates hot Documents (≥ N loads, never twice) into the staging area as
   host fact notes carrying provenance, where the existing consolidation and
   guard decide what reaches `MEMORY.md`.
-- **Bundled embedder** — `embed-llama` is a default feature of `ra-cli`, `ra-ffi` and `ra-uniffi` (release builds include it; macOS adds Metal). With no `embedding` config the runtime uses EmbeddingGemma-300M Q8_0, fetched once into `<data_dir>/models/` from the public ggml-org release, SHA-256-pinned (`ra-cli/src/embed_model.rs`; `ra memory embedder [--fetch]`; `ra doctor` reports it; `embedding.auto_download=false` / `OCTOS_NO_MODEL_DOWNLOAD=1` opt out; licence in `docs/THIRD_PARTY_MODELS.md`). The Recall index records it as `llamacpp/embeddinggemma-300M-Q8_0`.
+- **Bundled embedder** — `embed-llama` is a default feature of `ra-cli`, `ra-ffi` and `ra-uniffi` (release builds include it; macOS adds Metal). With no `embedding` config the runtime uses EmbeddingGemma-300M Q8_0, fetched once into `<data_dir>/models/` from the public ggml-org release, SHA-256-pinned (`ra-cli/src/embed_model.rs`; `ra memory embedder [--fetch]`; `ra doctor` reports it; `embedding.auto_download=false` / `ra_NO_MODEL_DOWNLOAD=1` opt out; licence in `docs/THIRD_PARTY_MODELS.md`). The Recall index records it as `llamacpp/embeddinggemma-300M-Q8_0`.
 - **Upkeep** — profile bootstrap spawns bank sync, vector backfill and aging;
   `ra memory search|ingest|promote` operate on the same store.
 - **Not done** — phase 4 (cross-device sync of derived records); the
@@ -126,5 +126,5 @@ What landed with this record (phase 1 in Octoscript-AppCard, phases 2–3 here):
 ## References
 
 - `crates/ra-memory/src/{hybrid_search,store,memory_store,guard}.rs`; `crates/ra-agent/src/agent/memory.rs`; `crates/ra-cli/src/commands/memory.rs`
-- Octoscript-AppCard `docs/LEDGER-ARCHITECTURE.md` §13 (multi-device: unresolved); `apps/mail/README.md` (isolation of mail and credentials)
+- rascript-AppCard `docs/LEDGER-ARCHITECTURE.md` §13 (multi-device: unresolved); `apps/mail/README.md` (isolation of mail and credentials)
 - Kang, Ji, Zhao, Bai. *Memory OS of AI Agent*. arXiv:2506.06326, 2025.

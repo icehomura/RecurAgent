@@ -131,26 +131,26 @@ if [ "$SKIP_E2E" = true ]; then
     skip "E2E tests (--skip-e2e)"
 else
     if [ "$PROFILE" = "release" ]; then
-        OCTOS="$ROOT/target/release/ra"
+        RA="$ROOT/target/release/ra"
     else
-        OCTOS="$ROOT/target/debug/ra"
+        RA="$ROOT/target/debug/ra"
     fi
 
-    if [ ! -f "$OCTOS" ]; then
-        fail "binary not found at $OCTOS (run without --skip-build)"
+    if [ ! -f "$RA" ]; then
+        fail "binary not found at $RA (run without --skip-build)"
     else
         E2E_DIR=$(mktemp -d)
         trap 'rm -rf "$E2E_DIR"' EXIT
 
         # 5a. Version output
-        if $OCTOS --version 2>&1 | grep -q "^ra [0-9]"; then
+        if $RA --version 2>&1 | grep -q "^ra [0-9]"; then
             pass "ra --version"
         else
             fail "ra --version"
         fi
 
         # 5b. Help output
-        if $OCTOS --help 2>&1 | grep -q "Usage:"; then
+        if $RA --help 2>&1 | grep -q "Usage:"; then
             pass "ra --help"
         else
             fail "ra --help"
@@ -158,56 +158,56 @@ else
 
         # 5c. Init creates .ra directory
         pushd "$E2E_DIR" > /dev/null
-        if $OCTOS init 2>&1 && [ -d ".ra" ]; then
+        if $RA init 2>&1 && [ -d ".ra" ]; then
             pass "ra init (creates .ra/)"
         else
             fail "ra init"
         fi
 
         # 5d. Status runs without crash
-        if $OCTOS status 2>/dev/null; then
+        if $RA status 2>/dev/null; then
             pass "ra status"
         else
             fail "ra status"
         fi
 
         # 5e. Skills list runs without crash
-        if $OCTOS skills list 2>/dev/null; then
+        if $RA skills list 2>/dev/null; then
             pass "ra skills list"
         else
             fail "ra skills list"
         fi
 
         # 5f. Cron list runs without crash
-        if $OCTOS cron list 2>/dev/null; then
+        if $RA cron list 2>/dev/null; then
             pass "ra cron list"
         else
             fail "ra cron list"
         fi
 
         # 5g. Channels status runs without crash
-        if $OCTOS channels status 2>/dev/null; then
+        if $RA channels status 2>/dev/null; then
             pass "ra channels status"
         else
             fail "ra channels status"
         fi
 
         # 5h. Completions generate without error
-        if $OCTOS completions bash > /dev/null 2>&1; then
+        if $RA completions bash > /dev/null 2>&1; then
             pass "ra completions bash"
         else
             fail "ra completions bash"
         fi
 
         # 5i. Docs generates tool documentation
-        if $OCTOS docs 2>&1 | grep -qi "tool\|provider\|Available"; then
+        if $RA docs 2>&1 | grep -qi "tool\|provider\|Available"; then
             pass "ra docs"
         else
             fail "ra docs"
         fi
 
         # 5j. Clean runs without crash
-        if $OCTOS clean 2>/dev/null; then
+        if $RA clean 2>/dev/null; then
             pass "ra clean"
         else
             fail "ra clean"
@@ -225,7 +225,7 @@ else
         fi
 
         # 5l. Auth status runs (no crash even without auth)
-        if $OCTOS auth status 2>&1; then
+        if $RA auth status 2>&1; then
             pass "ra auth status"
         else
             # auth status may exit 1 if not logged in, that's fine

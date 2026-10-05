@@ -1,5 +1,5 @@
 spec: task
-name: "启动动画：ttfx 渲染 OCTOS logo splash"
+name: "启动动画：ttfx 渲染 RA logo splash"
 inherits: project
 tags: [tui, startup, splash, ttfx, branding]
 estimate: 1d
@@ -7,9 +7,9 @@ estimate: 1d
 
 ## 意图
 
-octoscode 启动时（`backend_ensure` 之后、`event_loop::run` 接管终端之前）在主屏播放
-一段 OCTOS ASCII logo 动画，用 [ttfx](https://github.com/omacom-io/ttfx) 引擎的公开
-原语（`Effect::build`/`next_frame` + `Terminal` 帧原语）在 octos-tui 侧自建帧循环渲染。
+ra-tui 启动时（`backend_ensure` 之后、`event_loop::run` 接管终端之前）在主屏播放
+一段 RA ASCII logo 动画，用 [ttfx](https://github.com/omacom-io/ttfx) 引擎的公开
+原语（`Effect::build`/`next_frame` + `Terminal` 帧原语）在 ra-tui 侧自建帧循环渲染。
 每次启动从精选效果列表随机抽一个并**自然播完**（精选成员以自然时长 ~1.7–4.5s 为准入
 标准），按键可随时跳过，8000ms 仅作防挂安全网；结束时（无论跑完还是截断）在原地留下
 完整 logo + 版本号作为 banner，自然跑完后停顿 450ms 再进入 TUI（按键可打断停顿）。
@@ -24,20 +24,20 @@ octoscode 启动时（`backend_ensure` 之后、`event_loop::run` 接管终端�
   （原决策：以 git 依赖 pin 到 main tip 的 rev，外加 `.cargo/config.toml.example`
   里的本地 patch 示例；2026-10-05 去第三方 git 依赖时改为 vendor，patch 示例随之删除，
   本地开发直接改 `vendor/ttfx/`。）
-- **挂载点**：`src/main.rs` 中 `backend_ensure::ensure_octos_backend` 之后、
+- **挂载点**：`src/main.rs` 中 `backend_ensure::ensure_ra_backend` 之后、
   `event_loop::run(cli)` 之前调用 `splash::play(&cli)`；`update`/`doctor` 在更早的
   `cmd::dispatch` 已退出，天然不播。
 - **门控**：`splash::should_play(inputs) -> bool` 为纯函数（入参打包 no_splash 标志、
-  `OCTOSCODE_NO_SPLASH` 环境变量、stdout `IsTerminal`、`CI` 环境变量、终端宽高与 logo
+  `RA_TUI_NO_SPLASH` 环境变量、stdout `IsTerminal`、`CI` 环境变量、终端宽高与 logo
   尺寸），任一跳过条件命中即返回 false。CLI 新增 `--no-splash` 标志。
-- **内容**：`OCTOS` figlet 风格 ASCII art（const 字符串，约 40 列宽）+ 尾行
-  `octoscode v{CARGO_PKG_VERSION}`。
+- **内容**：`RA` figlet 风格 ASCII art（const 字符串，约 40 列宽）+ 尾行
+  `ra-tui v{CARGO_PKG_VERSION}`。
 - **随机效果**：从精选列表 `SPLASH_EFFECTS`（ttfx CLI 参数列表形式，支持按效果调参）
   随机抽取；准入标准为在本 logo 输入上 60fps 自然时长 ~1.7–4.5s（虚拟时钟实测；如
   `decrypt` 12.4s 被淘汰）。现行成员：`beams`、`sweep`、`wipe`、`rain`、`slide`、
   `scattered`、`middleout`、`highlight`，以及墙钟驱动、经 `--rain-time 1` 等参数
   调短的 `matrix`（release 约 3s）。随机种子取 `SystemTime` 纳秒，选择函数
-  `pick_effect_args(seed)` 可用固定种子单测。`OCTOSCODE_SPLASH_EFFECT=<name>` 可按名
+  `pick_effect_args(seed)` 可用固定种子单测。`RA_TUI_SPLASH_EFFECT=<name>` 可按名
   钉选精选条目（保留其调参；仅限精选列表，未知名回落随机——时长保证不被绕过）。
 - **帧循环**：`run_splash(effect, ctx, out, should_stop)` 使用 ttfx 公开原语
   `prep_canvas` → 循环 { `should_stop()` 为真即中断；`next_frame` → `print_frame` →
@@ -96,7 +96,7 @@ octoscode 启动时（`backend_ensure` 之后、`event_loop::run` 接管终端�
 
 场景: --no-splash 与环境变量关闭
   测试: should_play_false_on_flag_or_env
-  假设 门控入参 no_splash 标志为 true 或 OCTOSCODE_NO_SPLASH 已设置
+  假设 门控入参 no_splash 标志为 true 或 RA_TUI_NO_SPLASH 已设置
   当 调用 should_play
   那么 返回 false
 
@@ -120,7 +120,7 @@ octoscode 启动时（`backend_ensure` 之后、`event_loop::run` 接管终端�
 
 场景: 钉选效果仅解析精选名
   测试: effect_pin_resolves_curated_names_only
-  假设 OCTOSCODE_SPLASH_EFFECT 语义由 effect_args_for 实现
+  假设 RA_TUI_SPLASH_EFFECT 语义由 effect_args_for 实现
   当 以 "matrix" 与非精选名 "decrypt" 分别查询
   那么 "matrix" 返回含调参的精选条目、"decrypt" 返回 None
 

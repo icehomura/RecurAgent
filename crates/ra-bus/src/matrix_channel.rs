@@ -125,7 +125,7 @@ pub enum BotVisibility {
     Private,
 }
 
-/// Routes Matrix virtual user IDs to ra profile IDs.
+/// Routes Matrix virtual user IDs to RecurAgent profile IDs.
 /// Thread-safe, supports dynamic registration/unregistration.
 ///
 /// Also tracks room → bot mappings for DM routing: when a bot is invited to a
@@ -2946,7 +2946,7 @@ impl MatrixChannel {
 //
 // Register sub-agents as Matrix puppet users, route harness events to per-swarm
 // rooms, and accept supervisor replies as steering input. The human uses any
-// Matrix client (Element on desktop/mobile/web) as the swarm dashboard — ra
+// Matrix client (Element on desktop/mobile/web) as the swarm dashboard — RecurAgent
 // only emits typed events and listens for replies. Zero net-new UI code.
 //
 // When [`MatrixChannel::swarm_supervisor`] is `None` (no `ensure_swarm_room` or

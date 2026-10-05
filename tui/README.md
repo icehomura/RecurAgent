@@ -1,4 +1,4 @@
-# octoscode
+# ra-tui
 
 <div align="center">
 <pre>
@@ -10,49 +10,49 @@
 ╚██████╔╝╚██████╗   ██║   ╚██████╔╝███████║
  ╚═════╝  ╚═════╝   ╚═╝    ╚═════╝ ╚══════╝
 </pre>
-<em>Welcome to Octoscode — Your Coding Buddy</em>
+<em>Welcome to ra-tui — Your Coding Buddy</em>
 </div>
 
-`octoscode` is the terminal app for [Octos](https://github.com/your-org/ra)
+`ra-tui` is the terminal app for [RecurAgent](https://github.com/icehomura/ra)
 — an AI coding assistant in your terminal, in the spirit of Claude Code and
-Codex. The Octos server runs the agent, the models, and the tools; `octoscode`
+Codex. The RecurAgent server runs the agent, the models, and the tools; `ra-tui`
 is the fast, keyboard-driven way to talk to it: chat, diffs, tool approvals,
 background tasks — all without leaving the shell.
 
 ## Start here
 
-Install **just the TUI** — it auto-provisions the ra **server** (the brain)
+Install **just the TUI** — it auto-provisions the RecurAgent **server** (the brain)
 on first launch, so there's nothing else to set up:
 
 ```bash
-npm install -g @your-org/ra-tui
+npm install -g @icehomura/ra-tui
 # or Homebrew (this repo is its own tap):
-#   brew tap your-org/ra-tui https://github.com/your-org/ra-tui
-#   brew install your-org/ra-tui/octoscode
+#   brew tap icehomura/ra-tui https://github.com/icehomura/ra-tui
+#   brew install icehomura/ra-tui/ra-tui
 # (or the shell / PowerShell installer — see Install below)
 ```
 
 Then just run it:
 
 ```bash
-octoscode
+ra-tui
 ```
 
-On first launch the TUI downloads the matching ra server into `~/.ra/bin`
+On first launch the TUI downloads the matching RecurAgent server into `~/.ra/bin`
 (binary-only — **no** background service) and spawns it over stdio, then drops
-you on the **"Welcome to ra"** screen. In the next five minutes: create your
+you on the **"Welcome to RecurAgent"** screen. In the next five minutes: create your
 local profile (three fields — the email is local metadata only), pick an AI
 provider, paste its API key, and open your first coding chat. The
 [Quickstart](#quickstart-solo-onboarding) below walks every screen.
 
-> **Just looking?** `octoscode --mode mock` opens a mock demo with canned
-> replies — no server, connected to nothing. Plain `octoscode` is the real
+> **Just looking?** `ra-tui --mode mock` opens a mock demo with canned
+> replies — no server, connected to nothing. Plain `ra-tui` is the real
 > thing.
 
 > **Want it in a browser too?** The solo launch above talks to its server over
 > stdio, which serves exactly one client. Run the server on a port instead and
 > the terminal and
-> [octoscode-web](https://github.com/your-org/ra-tui-web) can both attach —
+> [ra-tui-web](https://github.com/icehomura/ra-tui-web) can both attach —
 > to the same sessions, at the same time. See
 > [Two ways to run](#two-ways-to-run).
 
@@ -60,19 +60,19 @@ provider, paste its API key, and open your first coding chat. The
 
 | Symptom | Fix |
 |---|---|
-| First launch can't fetch the server | Auto-install needs network. Offline / behind a proxy? Install octos yourself (`npm i -g @your-org/ra`, or the [server guide](https://github.com/your-org/ra#start-here)) — the TUI then finds it. Set `OCTOSCODE_NO_AUTO_INSTALL=1` to disable auto-install. |
-| Replies are instant and feel canned | You launched with `--mode mock`. Run plain `octoscode` for the real backend. |
+| First launch can't fetch the server | Auto-install needs network. Offline / behind a proxy? Install RecurAgent yourself (`npm i -g @icehomura/ra`, or the [server guide](https://github.com/icehomura/ra#start-here)) — the TUI then finds it. Set `RA_TUI_NO_AUTO_INSTALL=1` to disable auto-install. |
+| Replies are instant and feel canned | You launched with `--mode mock`. Run plain `ra-tui` for the real backend. |
 | "Test provider" fails during onboarding | Re-check the API key and the provider choice; you can redo it anytime with `/onboard` or `/setup`. |
 
 More in the full [Troubleshooting](#troubleshooting) table below.
 
 ---
 
-On a fresh first launch the main window shows the **OCTOS** block-letter
-wordmark with the tagline *"Welcome to ra — Your Coding Buddy"* above a
+On a fresh first launch the main window shows the **RA** block-letter
+wordmark with the tagline *"Welcome to RecurAgent — Your Coding Buddy"* above a
 short onboarding menu — your starting point for the walkthrough below.
 
-`octoscode` is intentionally separate from `octos-cli`: the `octos` repo owns
+`ra-tui` is intentionally separate from `ra-cli`: the `ra` repo owns
 the server/runtime and the shared `ra-core` protocol types; this repo owns
 the terminal client. Architecture and ownership boundaries live in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -81,12 +81,12 @@ the terminal client. Architecture and ownership boundaries live in
 
 ## 📦 Install
 
-Every method installs a single self-contained `octoscode` binary. Then run
-`octoscode --help`.
+Every method installs a single self-contained `ra-tui` binary. Then run
+`ra-tui --help`.
 
 ### ⬇️ Prebuilt binary — no Rust toolchain needed (recommended)
 
-Same model as Claude Code and Codex: each [GitHub Release](https://github.com/your-org/ra-tui/releases)
+Same model as Claude Code and Codex: each [GitHub Release](https://github.com/icehomura/ra-tui/releases)
 ships prebuilt binaries for macOS (Apple Silicon), Linux (x86-64 +
 arm64), and Windows (x86-64). Pick one — each block has its own **copy button**
 (top-right corner, on hover) that copies just that command:
@@ -94,33 +94,33 @@ arm64), and Windows (x86-64). Pick one — each block has its own **copy button*
 **📦 npm**
 
 ```bash
-npm install -g @your-org/ra-tui
+npm install -g @icehomura/ra-tui
 ```
 
 **🍺 Homebrew** — this repo is its own tap
 
 ```bash
-brew tap your-org/ra-tui https://github.com/your-org/ra-tui
-brew install your-org/ra-tui/octoscode
+brew tap icehomura/ra-tui https://github.com/icehomura/ra-tui
+brew install icehomura/ra-tui/ra-tui
 ```
 
 **🐚 Shell installer** — macOS / Linux
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/your-org/ra-tui/releases/latest/download/octoscode-installer.sh | sh
+  https://github.com/icehomura/ra-tui/releases/latest/download/ra-tui-installer.sh | sh
 ```
 
 **🪟 PowerShell installer** — Windows
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/your-org/ra-tui/releases/latest/download/octoscode-installer.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/icehomura/ra-tui/releases/latest/download/ra-tui-installer.ps1 | iex"
 ```
 
-Once installed, `octoscode update` checks for a newer release — and for
+Once installed, `ra-tui update` checks for a newer release — and for
 shell/PowerShell-installer installs it self-updates in place; npm/brew/cargo
 installs are owned by their package manager, so it prints the matching
-upgrade command instead. `octoscode doctor` diagnoses the local environment
+upgrade command instead. `ra-tui doctor` diagnoses the local environment
 and connection prerequisites.
 
 ### 🔧 From source with Cargo (needs Rust 1.85+)
@@ -128,13 +128,13 @@ and connection prerequisites.
 **From git** — no crates.io publish required
 
 ```bash
-cargo install --git https://github.com/your-org/ra-tui octoscode
+cargo install --git https://github.com/icehomura/ra-tui ra-tui
 ```
 
 **From crates.io** — once published
 
 ```bash
-cargo install octoscode
+cargo install ra-tui
 ```
 
 > `ra-core` (the shared protocol crate) is pulled automatically as a git
@@ -153,8 +153,8 @@ an LLM provider, and a live coding session — no dashboard, no email OTP.
 
 ### 1. Install the TUI
 
-Install `octoscode` as shown in [Start here](#start-here) — that's all you need.
-On first launch it downloads the matching ra **server** into `~/.ra/bin`
+Install `ra-tui` as shown in [Start here](#start-here) — that's all you need.
+On first launch it downloads the matching RecurAgent **server** into `~/.ra/bin`
 automatically (binary-only, no service), so there's no separate server install.
 (Already have `ra` on your `PATH`? The TUI uses it, as long as it's a
 compatible version.)
@@ -164,10 +164,10 @@ pulled automatically as a git dependency, so a plain clone builds with **no
 sibling checkout** required (needs Rust 1.85+):
 
 ```bash
-git clone https://github.com/your-org/ra-tui.git
-cd octoscode
+git clone https://github.com/icehomura/ra-tui.git
+cd ra-tui
 cargo build --release
-# produces ./target/release/octoscode — substitute it for `octoscode` below
+# produces ./target/release/ra-tui — substitute it for `ra-tui` below
 ```
 
 > **Developing against a local `ra`?** To build against an uncommitted
@@ -181,11 +181,11 @@ cargo build --release
 Just run it — the TUI provisions and launches the server for you:
 
 ```bash
-octoscode
+ra-tui
 ```
 
-You land on the **"Welcome to ra"** screen (subtitle *"Set up a local solo
-profile to continue."*), with the OCTOS wordmark above the menu.
+You land on the **"Welcome to RecurAgent"** screen (subtitle *"Set up a local solo
+profile to continue."*), with the RA wordmark above the menu.
 
 Notes:
 
@@ -194,7 +194,7 @@ Notes:
   install, no background service.
 - A fresh setup (no prior profile in `~/.ra`) lands on the welcome screen; if
   you already have a profile there, it opens straight into a session.
-- **Advanced** — point at your own server instead: `--stdio-command "ra serve
+- **Advanced** — point at your own server instead: `--stdio-command "RecurAgent serve
   --stdio --solo --data-dir <dir>"` for a custom local backend, or `--endpoint
   ws://host:port/api/ui-protocol/ws` for a remote one. Do **not** pass
   `--profile-id` on a true first run — it selects an existing profile and skips
@@ -211,7 +211,7 @@ no OTP is sent):
 | **Username** | select the row and type, or `/onboard username <handle>` |
 | **Email** | select the row and type, or `/onboard email <address>` |
 
-Then choose **"Create your local ra profile" / Continue**. This calls
+Then choose **"Create your local RecurAgent profile" / Continue**. This calls
 `profile/local/create` and advances to provider setup.
 
 ### 4. Set up an LLM provider
@@ -257,7 +257,7 @@ Access is offered only on solo/local backends**, never on a shared `ra serve`.
 
 For **headless / scripted** code review and for running **many review or edit
 agents in parallel**, use the `ra chat` CLI in the main
-[octos](https://github.com/your-org/ra) repo (`--sandbox`, `--yolo`,
+[RecurAgent](https://github.com/icehomura/ra) repo (`--sandbox`, `--yolo`,
 `--profile`, `--no-session-persistence`) — see its README's *Headless agent mode
 & code review* section.
 
@@ -276,7 +276,7 @@ strong model reviews it from the outside. The protocol underneath is **OLP**
 │         ▲                                          │
 │    .ra/OUTER_LOOP_REVIEW.md (the blackboard)     │  herdr prompt / ra steer
 │         │                                          ▼
-└─ INNER loop (octoscode + octos serve, running a cheap model such as kimi)
+└─ INNER loop (ra-tui + ra serve, running a cheap model such as kimi)
      read board → execute → commit (never push) → ACK(done|wontdo|blocked)
 ```
 
@@ -294,7 +294,7 @@ re-run freely, and expensive tokens only on review and adjudication.
 
 ```bash
 cd your-project/
-curl -fsSL https://raw.githubusercontent.com/your-org/ra-tui/main/scripts/olp-init.sh | bash
+curl -fsSL https://raw.githubusercontent.com/icehomura/ra-tui/main/scripts/olp-init.sh | bash
 ```
 
 It is idempotent and never overwrites an existing file. It lays down:
@@ -309,7 +309,7 @@ It is idempotent and never overwrites an existing file. It lays down:
 Then start the inner loop:
 
 ```bash
-octoscode --stdio-command 'octos serve --stdio --solo --danger-full-access'
+ra-tui --stdio-command 'ra serve --stdio --solo --danger-full-access'
 ```
 
 `--solo` is the safety gate for a single-person local box; without it serve
@@ -327,7 +327,7 @@ decision; see [Agent permissions](#agent-permissions--code-review).
 file and take a role without opening the rest of the docs. It covers role
 selection, the ACK grammar, dispatch, waking the inner loop, three-layer
 observation, isolated re-verification, and the red lines. It is also the
-protocol's own resident channel: ra injects `AGENTS.md` into every session.
+protocol's own resident channel: RecurAgent injects `AGENTS.md` into every session.
 
 ### Drive the inner loop from the outside
 
@@ -374,10 +374,10 @@ two talk, and that decides whether anything else can join.
 
 | | **Solo (stdio)** | **Server (WebSocket)** |
 | --- | --- | --- |
-| Start it with | `octoscode` | `octos serve --host … --port …`, then `octoscode --endpoint …` |
+| Start it with | `ra-tui` | `ra serve --host … --port …`, then `ra-tui --endpoint …` |
 | Who runs the server | the TUI spawns and auto-provisions it | you do, and it outlives the client |
 | How many clients | exactly one | as many as you point at it |
-| Browser client | no | yes — [octoscode-web](https://github.com/your-org/ra-tui-web) |
+| Browser client | no | yes — [ra-tui-web](https://github.com/icehomura/ra-tui-web) |
 | Setup | none | a port and a shared token |
 
 Solo is the default because it is the shortest path to a working session.
@@ -392,12 +392,12 @@ WebSocket instead of spawning a child:
 
 ```bash
 # terminal 1 — the server, bound to a port
-# (~/.ra/bin is where octoscode installs it; it is not on your PATH)
-export OCTOS_AUTH_TOKEN=local-dev-token
-~/.ra/bin/ra serve --host 127.0.0.1 --port 50080 --auth-token "$OCTOS_AUTH_TOKEN"
+# (~/.ra/bin is where ra-tui installs it; it is not on your PATH)
+export ra_AUTH_TOKEN=local-dev-token
+~/.ra/bin/ra serve --host 127.0.0.1 --port 50080 --auth-token "$ra_AUTH_TOKEN"
 
 # terminal 2 — the TUI, attaching to it
-octoscode --endpoint ws://127.0.0.1:50080/api/ui-protocol/ws
+ra-tui --endpoint ws://127.0.0.1:50080/api/ui-protocol/ws
 ```
 
 With `--endpoint` the TUI provisions **nothing**: it does not download a server
@@ -409,18 +409,18 @@ Or from a source checkout of the sibling repo:
 
 ```bash
 cd ../ra
-export OCTOS_AUTH_TOKEN=local-dev-token
+export ra_AUTH_TOKEN=local-dev-token
 cargo run -p ra-cli --features api --bin ra -- serve \
   --host 127.0.0.1 --port 50080 \
   --cwd "$PWD" \
-  --data-dir /tmp/octoscode-dev-data \
-  --auth-token "$OCTOS_AUTH_TOKEN"
+  --data-dir /tmp/ra-tui-dev-data \
+  --auth-token "$ra_AUTH_TOKEN"
 ```
 
 Then connect in another terminal:
 
 ```bash
-octoscode \
+ra-tui \
   --mode protocol \
   --endpoint ws://127.0.0.1:50080/api/ui-protocol/ws \
   --auth-token local-dev-token \
@@ -428,7 +428,7 @@ octoscode \
 ```
 
 Use the **same** token for `--auth-token` on both sides (or set
-`OCTOS_AUTH_TOKEN`). Add `--profile-id <id>` to open an existing profile and
+`ra_AUTH_TOKEN`). Add `--profile-id <id>` to open an existing profile and
 skip onboarding; add `--readonly` for a view-only session that never sends
 turns.
 
@@ -437,7 +437,7 @@ turns.
 Three terminals, one server. Pick a token — any string you like — and use the
 same one everywhere below.
 
-**Before you start.** Run `octoscode` once on its own (see
+**Before you start.** Run `ra-tui` once on its own (see
 [Start here](#start-here)). That downloads the server to `~/.ra/bin/ra`.
 It is **not** added to your `PATH`, so the commands below spell out the full
 path. You also need [Node.js 22+](https://nodejs.org) and pnpm for the browser
@@ -446,9 +446,9 @@ client; `corepack enable` installs the right pnpm.
 **1. Start the server** — terminal 1:
 
 ```bash
-export OCTOS_AUTH_TOKEN=my-local-token
+export ra_AUTH_TOKEN=my-local-token
 ~/.ra/bin/ra serve --host 127.0.0.1 --port 50080 \
-  --auth-token "$OCTOS_AUTH_TOKEN" --solo
+  --auth-token "$ra_AUTH_TOKEN" --solo
 ```
 
 `--solo` is what lets the browser set up your profile on first run. Leave it
@@ -457,15 +457,15 @@ out and a fresh server answers "This server cannot onboard from the Web".
 **2. Start the browser client** — terminal 2:
 
 ```bash
-git clone https://github.com/your-org/ra-tui-web.git
-cd octoscode-web
+git clone https://github.com/icehomura/ra-tui-web.git
+cd ra-tui-web
 pnpm install --frozen-lockfile
-OCTOSCODE_DEV_PROXY_TARGET=http://127.0.0.1:50080 \
-OCTOSCODE_DEV_PROXY_ORIGIN=http://127.0.0.1:50080 \
+RA_TUI_DEV_PROXY_TARGET=http://127.0.0.1:50080 \
+RA_TUI_DEV_PROXY_ORIGIN=http://127.0.0.1:50080 \
 pnpm dev
 ```
 
-Keep both `OCTOSCODE_DEV_PROXY_*` variables. They make the browser talk only to
+Keep both `RA_TUI_DEV_PROXY_*` variables. They make the browser talk only to
 the web client's own address, which forwards to the server. Leave them out and
 the server refuses the browser, because by default it trusts only its own
 address — and the page says "Could not connect", blaming your server and token
@@ -485,7 +485,7 @@ even though both are fine.
 **4. Attach the terminal** — terminal 3, using the **Profile ID** from step 3:
 
 ```bash
-OCTOS_AUTH_TOKEN=my-local-token octoscode \
+ra_AUTH_TOKEN=my-local-token ra-tui \
   --endpoint ws://127.0.0.1:50080/api/ui-protocol/ws --profile-id main
 ```
 
@@ -499,16 +499,16 @@ the browser.
 | --- | --- |
 | `command not found: ra` | Use the full path, `~/.ra/bin/ra` — see *Before you start* |
 | "This server cannot onboard from the Web" | Restart the server with `--solo` (step 1) |
-| "Could not connect" in the browser, though the server is running and the token is right | Restart step 2 with both `OCTOSCODE_DEV_PROXY_*` variables set |
-| The TUI will not start: "endpoint and stdio-command cannot both be configured" | Your `~/.config/octoscode/config.json` has a `stdio_command`; see [Config file](#config-file) |
+| "Could not connect" in the browser, though the server is running and the token is right | Restart step 2 with both `RA_TUI_DEV_PROXY_*` variables set |
+| The TUI will not start: "endpoint and stdio-command cannot both be configured" | Your `~/.config/ra-tui/config.json` has a `stdio_command`; see [Config file](#config-file) |
 | Nothing happens after `/resume` | The browser session has not finished a turn yet — send one message there first |
 
 **Hosting the browser client somewhere else?** If you serve it without that
 proxy, the server has to be told to trust its address: set
-`OCTOS_APPUI_ALLOWED_ORIGINS=http://<client host>:<port>` on the server, or
+`ra_APPUI_ALLOWED_ORIGINS=http://<client host>:<port>` on the server, or
 `appui.allowed_origins` in its config. It trusts only its own address otherwise.
 
-> ra `v0.1.0` can print a one-time pairing link with
+> RecurAgent `v0.1.0` can print a one-time pairing link with
 > `ra serve --web-url …`; the browser can open it without copying a token.
 
 Both clients can open the **same session**. Pass `--session <id>` here and pick
@@ -535,7 +535,7 @@ produced confusing sessions:
 
 - **No pairing link.** The TUI is token-only. `ra serve --web-url` prints a
   link for the *browser*; the TUI has no `/pair/claim` support, so give it
-  `--auth-token` or `OCTOS_AUTH_TOKEN`. The token rides an
+  `--auth-token` or `ra_AUTH_TOKEN`. The token rides an
   `Authorization: Bearer` header on the WebSocket upgrade, not a query
   parameter.
 - **No local profile discovery.** Attached launches skip the profiles data dir,
@@ -552,7 +552,7 @@ produced confusing sessions:
   does not is not. Use a profile-prefixed session id, or authenticate as that
   profile's user rather than with an admin token.
 
-`octoscode doctor` probes a configured endpoint with `config/capabilities/list`
+`ra-tui doctor` probes a configured endpoint with `config/capabilities/list`
 and is the fastest way to tell a bad address from a bad token.
 
 ### Mock mode (no server)
@@ -566,7 +566,7 @@ cargo run -- --mode mock --theme claude
 
 `--mode mock` is an explicit opt-in. A bare launch (no `--mode`/`--endpoint`/
 `--stdio-command`) defaults to **protocol** and auto-provisions a local server —
-so plain `octoscode` is the real thing, not the mock.
+so plain `ra-tui` is the real thing, not the mock.
 
 ---
 
@@ -583,10 +583,10 @@ so plain `octoscode` is the real thing, not the mock.
 --session <session-id>   session to open first
 --profile-id <id>        existing profile to use (skips onboarding)
 --cwd <dir>              workspace cwd to request; defaults to the launch dir
---auth-token <token>     bearer token; falls back to OCTOS_AUTH_TOKEN
+--auth-token <token>     bearer token; falls back to ra_AUTH_TOKEN
 --readonly / --no-readonly   open as a view-only session, or force read-write
 --theme <name>           codex | claude | slate | solarized | terminal
---lang en|zh             UI language; falls back to OCTOS_LANG / LANG. Default: en
+--lang en|zh             UI language; falls back to ra_LANG / LANG. Default: en
 --scroll-mode <mode>     native (terminal scrollback, default) | pinned (composer pinned)
 --vim-mode               enable Vim modal editing in the composer (default off)
 --steer-mid-turn         inject a prompt typed mid-turn into the RUNNING turn
@@ -596,14 +596,14 @@ so plain `octoscode` is the real thing, not the mock.
 ```
 
 `--endpoint` and `--stdio-command` are mutually exclusive — pick one transport.
-Do **not** put `provider` or `model` anywhere: those are server-owned ra
+Do **not** put `provider` or `model` anywhere: those are server-owned RecurAgent
 settings loaded by `ra serve`, and the TUI config rejects them.
 
 ### Config file
 
-`~/.config/octoscode/config.json` is read on **every** launch, with no flag —
+`~/.config/ra-tui/config.json` is read on **every** launch, with no flag —
 `--config FILE` points at a different one. CLI flags win on conflict. Print the
-path with `octoscode config path`.
+path with `ra-tui config path`.
 
 ```json
 {
@@ -624,7 +624,7 @@ path with `octoscode config path`.
 `/saveconfig` writes the active `theme` / `lang` / `scroll-mode` / `vim-mode` / `steer-mid-turn`
 back into this file (merging — it never clobbers transport keys like
 `stdio_command`); without `--config` it falls back to
-`~/.config/octoscode/config.json`.
+`~/.config/ra-tui/config.json`.
 
 To attach to a running server instead, swap the transport key (the file is
 strict JSON — unknown keys are rejected, and there are no comments):
@@ -639,7 +639,7 @@ strict JSON — unknown keys are rejected, and there are no comments):
 ```
 
 `endpoint` and `stdio_command` are one choice, here as on the command line. A
-config file carrying `stdio_command` makes `octoscode --endpoint …` **fail to
+config file carrying `stdio_command` makes `ra-tui --endpoint …` **fail to
 start** — "endpoint and stdio-command cannot both be configured" — because the
 flag and the file each supply one half. Remove the key, or point `--config` at
 a file that omits it.
@@ -659,7 +659,7 @@ Set the palette at launch with `--theme <name>`, or switch live with `/theme`
 ### Startup splash
 
 Every interactive launch opens with a short [ttfx](https://github.com/omacom-io/ttfx)-rendered
-OCTOS logo animation on the main screen, picked at random from a curated set:
+RA logo animation on the main screen, picked at random from a curated set:
 
 ```text
 beams, sweep, wipe, rain, slide, scattered, middleout, highlight, matrix
@@ -671,8 +671,8 @@ never blocks startup: it is skipped automatically when stdout is not a TTY,
 when `CI` is set, or when the terminal is smaller than the logo, and any
 internal error silently falls through to a normal launch.
 
-- `--no-splash` or `OCTOSCODE_NO_SPLASH=1` turns it off.
-- `OCTOSCODE_SPLASH_EFFECT=matrix` pins a specific effect (any name from the
+- `--no-splash` or `RA_TUI_NO_SPLASH=1` turns it off.
+- `RA_TUI_SPLASH_EFFECT=matrix` pins a specific effect (any name from the
   curated set; unknown names fall back to the random pick).
 
 ### In-session keys and slash commands
@@ -805,7 +805,7 @@ replaces it when the answer starts. Control the effort with `/thinking`.
 
 The UI is fully localized in **English** and **Simplified Chinese (中文)** — menus,
 the command palette, the onboarding wizard, transcript/status surfaces. Pick the
-language at launch with `--lang {en,zh}` (or `OCTOS_LANG` / `LANG`), or switch at
+language at launch with `--lang {en,zh}` (or `ra_LANG` / `LANG`), or switch at
 runtime with `/lang` (a `*`-marked menu) — no restart needed. English is the
 source/fallback locale, so any untranslated string falls back to English.
 
@@ -813,26 +813,26 @@ source/fallback locale, so any untranslated string falls back to English.
 
 | Variable | Purpose |
 |---|---|
-| `OCTOS_AUTH_TOKEN` | Fallback bearer token for the UI Protocol WebSocket. |
-| `OCTOS_LANG` / `LANG` | UI language fallback when `--lang` is unset. |
+| `ra_AUTH_TOKEN` | Fallback bearer token for the UI Protocol WebSocket. |
+| `ra_LANG` / `LANG` | UI language fallback when `--lang` is unset. |
 | `RUST_LOG=off` | Keeps terminal output clean for live visual runs. |
 | `TERM=xterm-256color` | Avoids missing terminfo/color issues on remote hosts. |
-| `OCTOSCODE_BIN` | Forces a specific built `octoscode` binary for harnesses. |
-| `OCTOSCODE_DIR` | Points ra harness scripts at this standalone TUI repo. |
-| `OCTOSCODE_NO_AUTO_INSTALL` | Disables backend auto-install (a missing `ra` then errors). |
-| `OCTOSCODE_NO_SPLASH` | Disables the startup logo animation (same as `--no-splash`). |
-| `OCTOSCODE_SPLASH_EFFECT` | Pins the splash to one curated effect, e.g. `matrix`. |
+| `RA_TUI_BIN` | Forces a specific built `ra-tui` binary for harnesses. |
+| `RA_TUI_DIR` | Points RecurAgent harness scripts at this standalone TUI repo. |
+| `RA_TUI_NO_AUTO_INSTALL` | Disables backend auto-install (a missing `ra` then errors). |
+| `RA_TUI_NO_SPLASH` | Disables the startup logo animation (same as `--no-splash`). |
+| `RA_TUI_SPLASH_EFFECT` | Pins the splash to one curated effect, e.g. `matrix`. |
 
-> **Renamed from `octos-tui`.** Every `OCTOS_TUI_*` variable is now
-> `OCTOSCODE_*`. The one exception that still works is
-> `OCTOS_TUI_NO_AUTO_INSTALL` — it is honoured with a one-time deprecation
+> **Renamed from `ra-tui`.** Every `ra_TUI_*` variable is now
+> `RA_TUI_*`. The one exception that still works is
+> `ra_TUI_NO_AUTO_INSTALL` — it is honoured with a one-time deprecation
 > notice so an existing CI job or shell profile does not silently get
 > auto-install switched back on. Rename it; the fallback goes away a release or
 > two after the rename settles.
 
 ### Workspace (cwd) behavior
 
-`octoscode` requests a session cwd through `session/open`. By default that is the
+`ra-tui` requests a session cwd through `session/open`. By default that is the
 terminal launch directory; `--cwd DIR` overrides it. `ra serve`
 canonicalizes the requested path and accepts it only if it is inside the
 server-approved roots — so start the server with a `--cwd` that contains the
@@ -1087,7 +1087,7 @@ auto-delivered to the chat.
 
 `ra serve` scans, in order: the project-local `plugins/` and `skills/`
 directories, the bundled system skills, per-profile installs under
-`<data-dir>/skills/`, and any colon-separated paths in `OCTOS_SKILLS_PATH`. Drop
+`<data-dir>/skills/`, and any colon-separated paths in `ra_SKILLS_PATH`. Drop
 the `greeter/` directory into your project's `skills/` (or the profile's
 `<data-dir>/skills/`) and restart the server. The legacy global
 `~/.ra/skills` and `~/.ra/plugins` directories are **deprecated** and no
@@ -1168,15 +1168,15 @@ one — so a profile can re-enable a skill the global defaults disabled:
 
 | Symptom | Fix |
 |---|---|
-| `octos-core` dependency not found | Keep `octos` and `octoscode` as sibling directories. |
+| `ra-core` dependency not found | Keep `ra` and `ra-tui` as sibling directories. |
 | Welcome screen never appears | Use a fresh empty `--data-dir` and omit `--profile-id`. |
 | Endpoint rejected | Use a `ws://` or `wss://` URL; HTTP URLs are rejected. |
-| Auth failure | Use the same token on `ra serve --auth-token` and the TUI (`--auth-token` or `OCTOS_AUTH_TOKEN`). |
+| Auth failure | Use the same token on `ra serve --auth-token` and the TUI (`--auth-token` or `ra_AUTH_TOKEN`). |
 | TUI opens but no live answer | Confirm the server has a provider/model/key and restart it after config changes. |
 | Wrong workspace | Start `ra serve` with the desired `--cwd`. |
 | `can't find terminfo database` | Set `TERM=xterm-256color` or install terminfo on the host. |
 | Raw logs/timestamps in the UI | Start both server and TUI with `RUST_LOG=off`. |
-| `target` lock or permission error | Run with `CARGO_TARGET_DIR=/tmp/octoscode-target`. |
+| `target` lock or permission error | Run with `CARGO_TARGET_DIR=/tmp/ra-tui-target`. |
 
 ---
 
@@ -1186,26 +1186,26 @@ Run the complete unit/integration suite (mock-backed, no server needed):
 
 ```bash
 cargo test --all-targets
-# CARGO_TARGET_DIR=/tmp/octoscode-target cargo test --all-targets   # on shared/locked hosts
+# CARGO_TARGET_DIR=/tmp/ra-tui-target cargo test --all-targets   # on shared/locked hosts
 ```
 
 Heavier live and visual harnesses live alongside the code:
 
 - `scripts/run-onboarding-tmux-soak.sh` — reference end-to-end onboarding flow:
-  starts a server, launches the TUI, and waits for the "Welcome to ra"
+  starts a server, launches the TUI, and waits for the "Welcome to RecurAgent"
   splash. See [`docs/ONBOARDING_TMUX_SOAK.md`](docs/ONBOARDING_TMUX_SOAK.md).
 - The tmux AppUi smoke and live Codex-parity harnesses live in the sibling
   `ra` repo (they start both the server and the TUI); point them at this repo
-  with `OCTOSCODE_DIR="$PWD/../octoscode"`.
+  with `RA_TUI_DIR="$PWD/../ra-tui"`.
 
-For release packaging, pin `ra-core` to the matching ra git tag or
+For release packaging, pin `ra-core` to the matching RecurAgent git tag or
 published crate version instead of the sibling path.
 
 ---
 
 ## Protocol contract
 
-`octoscode` consumes Octos UI Protocol fields from `octos-core` and must not
+`ra-tui` consumes ra UI Protocol fields from `ra-core` and must not
 invent local wire extensions. Any protocol change must land through a formal UI
 Protocol change request with shared types, server tests, golden protocol tests,
 and TUI reducer/rendering tests.

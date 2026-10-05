@@ -1,6 +1,6 @@
 spec: task
-name: "控制面:带回执的 steer、审查者通道、升级通知(ra)"
-tags: [olp, steer, escalation, ra, upstream]
+name: "控制面:带回执的 steer、审查者通道、升级通知(RecurAgent)"
+tags: [olp, steer, escalation, RecurAgent, upstream]
 depends: [task-req-olp-obs-cli]
 satisfies: [REQ-OLP-CTRL]
 estimate: 2d
@@ -10,9 +10,9 @@ estimate: 2d
 
 外环对 idle 内环的唯一唤起方式是"inbox 门铃 + operator 说一句话"
 (实测:goal complete 后 master 完全 idle,黑板新条目无人读)。本任务
-给 ra 增加可编程的 steer 通道(CLI 落盘 + 唤醒 + 机器可读回执)与
+给 RecurAgent 增加可编程的 steer 通道(CLI 落盘 + 唤醒 + 机器可读回执)与
 escalation 外部通知,消除无人值守长程的最后一个人工环节。实施仓库为
-**ra**。operator 已拍板:CLI 落盘唤醒,不新增网络端点。
+**RecurAgent**。operator 已拍板:CLI 落盘唤醒,不新增网络端点。
 
 ## 已定决策
 
@@ -33,7 +33,7 @@ escalation 外部通知,消除无人值守长程的最后一个人工环节。�
 
 ## 边界
 
-### Allowed Changes(ra 仓库)
+### Allowed Changes(RecurAgent 仓库)
 - crates/ra-cli/src/commands/**
 - crates/ra-cli/src/autonomy/**
 - crates/ra-cli/src/api/ui_protocol_transport.rs
@@ -59,7 +59,7 @@ escalation 外部通知,消除无人值守长程的最后一个人工环节。�
     包: ra-cli
     过滤: olp_ctrl_steer_wakes_and_receipts
   假设 master 无 active goal 且处于 idle
-  当 执行 ra steer --session <master> --text "读黑板第 7 条"
+  当 执行 RecurAgent steer --session <master> --text "读黑板第 7 条"
   那么 下一 turn 的 prompt 含该指令与 External reviewer 头,且
        events.jsonl 出现 steer_consumed
 
@@ -68,7 +68,7 @@ escalation 外部通知,消除无人值守长程的最后一个人工环节。�
     包: ra-cli
     过滤: olp_ctrl_steer_unknown_session_errors
   假设 给定的 session key 无任何持久状态
-  当 执行 ra steer --session unknown --text hi
+  当 执行 RecurAgent steer --session unknown --text hi
   那么 进程非零退出且不产生队列文件
 
 场景: 超限 steer 在入队时被拒绝
@@ -76,7 +76,7 @@ escalation 外部通知,消除无人值守长程的最后一个人工环节。�
     包: ra-cli
     过滤: olp_ctrl_steer_oversize_rejected
   假设 一条超过 64KiB 的 steer 文本
-  当 执行 ra steer
+  当 执行 RecurAgent steer
   那么 进程非零退出且队列未追加任何内容
 
 场景: steer 不越权改配置

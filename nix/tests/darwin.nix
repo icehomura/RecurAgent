@@ -2,14 +2,14 @@
   pkgs,
   lib,
   nix-darwin,
-  octosModule,
+  raModule,
 }:
 
 let
   eval = nix-darwin.lib.darwinSystem {
     inherit (pkgs.stdenv.hostPlatform) system;
     modules = [
-      octosModule
+      raModule
       {
         programs.ra = {
           enable = true;

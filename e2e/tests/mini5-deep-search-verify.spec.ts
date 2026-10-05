@@ -4,10 +4,10 @@
  *
  * Usage:
  *
- *   OCTOS_TEST_URL=https://dspfac.ocean.ominix.io \
- *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
- *   OCTOS_PROFILE=dspfac \
- *   OCTOS_TEST_EMAIL=dspfac@gmail.com \
+ *   ra_TEST_URL=https://dspfac.ocean.ominix.io \
+ *   ra_AUTH_TOKEN=ra-admin-2026 \
+ *   ra_PROFILE=dspfac \
+ *   ra_TEST_EMAIL=dspfac@gmail.com \
  *   npx playwright test tests/mini5-deep-search-verify.spec.ts \
  *     --headed=false --reporter=list
  *
@@ -220,8 +220,8 @@ async function fetchMdBody(page: Page, href: string): Promise<string | null> {
   const fetched = await page.evaluate(async (url) => {
     try {
       const token =
-        localStorage.getItem('octos_session_token') ||
-        localStorage.getItem('octos_auth_token') ||
+        localStorage.getItem('ra_session_token') ||
+        localStorage.getItem('ra_auth_token') ||
         '';
       const profile = localStorage.getItem('selected_profile') || '';
       const headers: Record<string, string> = {};

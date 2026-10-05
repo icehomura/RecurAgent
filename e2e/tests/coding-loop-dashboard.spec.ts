@@ -21,7 +21,7 @@
 
 import { test, expect, type Page } from '@playwright/test';
 
-const ADMIN_TOKEN = process.env.OCTOS_ADMIN_TOKEN || 'coding-loop-dashboard-test';
+const ADMIN_TOKEN = process.env.ra_ADMIN_TOKEN || 'coding-loop-dashboard-test';
 const FIXTURE_NOW = '2026-04-19T12:10:00Z';
 
 type LifecycleState = 'queued' | 'running' | 'verifying' | 'ready' | 'failed';
@@ -303,8 +303,8 @@ async function installMocks(
 
 async function authenticate(page: Page) {
   await page.addInitScript((token) => {
-    localStorage.setItem('octos_session_token', token);
-    localStorage.setItem('octos_auth_token', token);
+    localStorage.setItem('ra_session_token', token);
+    localStorage.setItem('ra_auth_token', token);
   }, ADMIN_TOKEN);
 }
 

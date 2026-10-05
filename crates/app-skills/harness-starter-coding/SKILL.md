@@ -2,7 +2,7 @@
 name: harness-starter-coding
 description: Harnessed coding-assistant starter. Produces a unified-diff artifact and a file-list preview under patches/.
 version: 1.0.0
-author: ra
+author: RecurAgent
 always: false
 ---
 

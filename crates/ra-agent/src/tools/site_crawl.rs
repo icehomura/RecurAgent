@@ -35,7 +35,7 @@ const MAX_EMPTY_RETRIES: u32 = 2;
 /// Minimum spacing between page loads on the crawled site.
 const PAGE_INTERVAL: Duration = Duration::from_secs(1);
 
-/// Chrome flags for the crawler. Automation is not hidden (OctoSense
+/// Chrome flags for the crawler. Automation is not hidden (RecurAgent
 /// ADR 0002): no `AutomationControlled` switches, no spoofed `--user-agent`,
 /// no `--disable-infobars`, no script that rewrites `navigator.webdriver`.
 /// The tab identifies itself with Chrome's own User-Agent plus the
@@ -290,7 +290,7 @@ fn challenged(url: &str) -> CrawledPage {
 }
 
 /// robots.txt verdict for `url` when the operator turned robots checks on
-/// (`RA_RESPECT_ROBOTS`; legacy `OCTOS_RESPECT_ROBOTS` is still honoured);
+/// (`RA_RESPECT_ROBOTS`; legacy `ra_RESPECT_ROBOTS` is still honoured);
 /// `None` = allowed or checks off.
 async fn robots_refusal(cache: &ra_research::RobotsCache, url: &str) -> Option<String> {
     if !ra_research::respect_robots(super::web_search::compat_env_lookup) {

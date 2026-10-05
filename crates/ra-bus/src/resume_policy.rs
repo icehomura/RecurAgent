@@ -1,6 +1,6 @@
 //! Structured resume pipeline (M8.6).
 //!
-//! When ra reloads a session from JSONL at startup or after a crash, the
+//! When RecurAgent reloads a session from JSONL at startup or after a crash, the
 //! transcript may contain state that the provider will reject (unresolved
 //! tool uses → 400), orphaned thinking-only assistant messages, whitespace-
 //! only assistant messages, or stale worktree references. [`ResumePolicy`]
@@ -883,7 +883,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Item 2 of OCTOS_M8_FIX_FIRST_CHECKLIST_2026-04-24: per-call filtering
+    // Item 2 of ra_M8_FIX_FIRST_CHECKLIST_2026-04-24: per-call filtering
     // for partial resolution. The legacy `all_resolved` branch dropped or
     // stripped the entire `tool_calls` vector if any sibling was unresolved,
     // orphaning matching tool results. The fix keeps resolved/pinned calls

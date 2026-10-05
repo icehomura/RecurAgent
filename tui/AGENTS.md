@@ -1,4 +1,4 @@
-# octoscode 仓库 agent 守则
+# ra-tui 仓库 agent 守则
 
 > protocol: olp/v2 — 完整协议见 `docs/OUTER_LOOP_PROTOCOL.md`
 >
@@ -50,7 +50,7 @@
 
 ## 外环主审权锁(R7,olp/v2)
 
-多外环并存时主审权以 `octoscode outer-duty hold` 的 OS 独占锁为
+多外环并存时主审权以 `ra-tui outer-duty hold` 的 OS 独占锁为
 authority(Linux-only:守护式死亡耦合——wrapper 唯一持 fd,agent 经
 PR_SET_PDEATHSIG 与 wrapper 同死;`check` 仅观察;活锁接管归
 operator;metadata/TTL 仅诊断;非 Linux 平台 unsupported)。详见协议 R7。

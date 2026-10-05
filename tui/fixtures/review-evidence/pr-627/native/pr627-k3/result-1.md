@@ -8,8 +8,8 @@ turn: 1
 PR #627 k3 车道独立初审完成。
 
 **产出**
-- 报告全文：`.octos/independent-k3.md`
-- result.md：`.octos/result-k3.md`
+- 报告全文：`.ra/independent-k3.md`
+- result.md：`.ra/result-k3.md`
 
 **结论：Approve with minor comments — 无 blocker / 无 major。** 验证级别 partially-verified（静态 + 上游 `d51601d` 权威源码逐条对照，动态未验证）。
 

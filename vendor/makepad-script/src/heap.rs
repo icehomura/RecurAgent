@@ -117,7 +117,7 @@ pub struct ScriptHeap {
     pub(crate) allocation_poison_object: ScriptObject,
     pub(crate) allocation_poison_array: ScriptArray,
 
-    /// Octoscript's aggregate retained-heap cap, expressed as a persistent
+    /// Rascript's aggregate retained-heap cap, expressed as a persistent
     /// allocation budget that outlives any one `with_heap_allocation_limit`
     /// scope. `None` preserves the inherited unrestricted VM behavior.
     pub(crate) heap_cap: Option<ScriptAllocationBudget>,
@@ -235,10 +235,10 @@ impl ScriptHeap {
         self.pending_string_limit_error.take()
     }
 
-    // Octoscript retained-heap cap.
+    // Rascript retained-heap cap.
     //
     // The inherited `with_heap_allocation_limit` budget is execution scoped:
-    // it meters one eval or tick and is discarded afterwards. Octoscript's
+    // it meters one eval or tick and is discarded afterwards. Rascript's
     // runtime instead bounds the *retained* VM heap across evaluations. That
     // contract is expressed here as a persistent budget whose headroom is
     // `max_heap_bytes - estimated retained capacity`, re-derived by
@@ -1299,7 +1299,7 @@ mod tests {
             ("string-read", "values[\"0\"]"),
             ("nan-read", "values[0 / 0]"),
         ] {
-            let result = eval(&mut vm, &format!("{file}.octoscript"), code);
+            let result = eval(&mut vm, &format!("{file}.rascript"), code);
             assert!(result.is_err(), "{file}: {code} must error, got {result:?}");
             let _ = vm.take_errors();
             let storage = vm.bx.heap.array_storage(array);
@@ -1311,7 +1311,7 @@ mod tests {
         }
 
         // Valid integral indexes, including float-typed integers, still work.
-        let result = eval(&mut vm, "valid-write.octoscript", "values[3.0] = 4\nvalues[3]");
+        let result = eval(&mut vm, "valid-write.rascript", "values[3.0] = 4\nvalues[3]");
         assert_eq!(result.as_number(), Some(4.0), "{result:?} {:?}", vm.take_errors());
         assert_eq!(vm.bx.heap.array_len(array), 4);
     }
@@ -1325,7 +1325,7 @@ mod tests {
         };
         let result = eval(
             &mut vm,
-            "insertion-order.octoscript",
+            "insertion-order.rascript",
             "let o = {a: 1, b: 2, c: 3}\no.a = 10\no.b = 20\no.to_json()",
         );
         assert_eq!(
@@ -1368,7 +1368,7 @@ mod tests {
 
         let result = eval(
             &mut vm,
-            "heap-limit.octoscript",
+            "heap-limit.rascript",
             "try { values[268435456] = 1 } { \"ok\" }",
         );
         assert!(result.is_err(), "the cap refusal is uncatchable: {result:?}");
@@ -1382,7 +1382,7 @@ mod tests {
         assert!(!vm.bx.heap.take_heap_limit_exceeded());
 
         // Once the flag is taken the cap re-opens for ordinary work.
-        let result = eval(&mut vm, "after-cap.octoscript", "values[2] = 1\nvalues.len()");
+        let result = eval(&mut vm, "after-cap.rascript", "values[2] = 1\nvalues.len()");
         assert_eq!(result.as_number(), Some(3.0));
         assert!(vm.bx.heap.accounted_heap_bytes() > baseline);
         assert!(vm.bx.heap.accounted_heap_bytes() <= baseline + 256 * 1024);
@@ -1429,7 +1429,7 @@ mod tests {
         vm.bx.heap.set_max_heap_bytes(Some(usize::MAX));
         let before = vm.bx.heap.accounted_heap_bytes();
         let (_, report) = vm.with_heap_allocation_limit(64, |vm| {
-            eval(vm, "scoped.octoscript", "let values = []\nvalues[4096] = 1")
+            eval(vm, "scoped.rascript", "let values = []\nvalues[4096] = 1")
         });
         assert!(report.exceeded);
         let _ = vm.take_errors();
@@ -1450,7 +1450,7 @@ mod tests {
 
         let result = eval(
             &mut vm,
-            "string-limit.octoscript",
+            "string-limit.rascript",
             "let payload = \"x\"\n\
              let index = 0\n\
              while (index < 3) {\n\
@@ -1485,7 +1485,7 @@ mod tests {
 
         let result = eval(
             &mut vm,
-            "byte-array-string-limit.octoscript",
+            "byte-array-string-limit.rascript",
             "try { bytes.to_string() } { \"ok\" }",
         );
 
@@ -1507,7 +1507,7 @@ mod tests {
         let bytes = vm.bx.heap.new_array_from_vec_u8(vec![b'a', 0xFF, b'b']);
         vm.set_injected_global(id!(bytes), bytes.into());
 
-        let result = eval(&mut vm, "byte-array-lossy-utf8.octoscript", "bytes.to_string()");
+        let result = eval(&mut vm, "byte-array-lossy-utf8.rascript", "bytes.to_string()");
         assert_eq!(string_of(&vm, result), Some("a\u{FFFD}b".to_owned()));
     }
 
@@ -1523,27 +1523,27 @@ mod tests {
 
         for (file, code, expected) in [
             (
-                "string-replace.octoscript",
+                "string-replace.rascript",
                 "\"abcd\".replace(\"b\", \"XX\")",
                 "aXXcd",
             ),
             (
-                "string-url-encode.octoscript",
+                "string-url-encode.rascript",
                 "\"a b!\".url_encode()",
                 "a%20b%21",
             ),
             (
-                "string-url-decode.octoscript",
+                "string-url-decode.rascript",
                 "\"a%20b%21\".url_decode()",
                 "a b!",
             ),
             (
-                "string-concat.octoscript",
+                "string-concat.rascript",
                 "\"hello \" + \"world, this is a heap string\"",
                 "hello world, this is a heap string",
             ),
             (
-                "json-roundtrip.octoscript",
+                "json-roundtrip.rascript",
                 "{a: [1, 2, \"three\"], b: {c: true}}.to_json()",
                 r#"{"a":[1,2,"three"],"b":{"c":true}}"#,
             ),
@@ -1573,7 +1573,7 @@ mod tests {
 
         let result = eval(
             &mut vm,
-            "byte-array-json-limit.octoscript",
+            "byte-array-json-limit.rascript",
             "try { bytes.parse_json() } { \"ok\" }",
         );
 
@@ -1599,7 +1599,7 @@ mod tests {
             .new_array_from_vec_u8(br#"{"value": 12345}"#.to_vec());
         vm.set_injected_global(id!(bytes), bytes.into());
 
-        let result = eval(&mut vm, "byte-array-json.octoscript", "bytes.parse_json().value");
+        let result = eval(&mut vm, "byte-array-json.rascript", "bytes.parse_json().value");
         assert_eq!(result.as_number(), Some(12345.0));
         assert!(!vm.bx.heap.take_string_limit_exceeded());
     }

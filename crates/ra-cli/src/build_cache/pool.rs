@@ -1231,7 +1231,7 @@ fn reclaim_one(
     let target = dir.join(TARGET_LEAF);
     if !policy.apply || !target.exists() {
         // D1: report-only (or nothing left to delete) must still name the
-        // slot as stale and carry the bytes --apply would free, so `ra
+        // slot as stale and carry the bytes --apply would free, so `RecurAgent
         // cache gc` output (and the outer loop consuming it in #6) can see
         // exactly what a subsequent --apply would reclaim.
         return Ok((ReclaimOutcome::Stale, 0, dir_size(&target)));

@@ -18,12 +18,12 @@ protocol: olp/v2
 
 | 车道 | peer slug | model_lane | 首审 | 互审 | native outcome |
 |---|---|---|---|---|---|
-| GLM | pr628-glm-primary | primary(glm-5.3) | .octos/independent-glm.md | .octos/cross-glm.md（outer_evidence=adjudicated） | completed |
-| k3 | pr628-k3 | strong(moonshot/k3-256k) | .octos/independent-k3.md | .octos/cross-k3.md（outer_evidence=adjudicated） | completed |
+| GLM | pr628-glm-primary | primary(glm-5.3) | .RecurAgent/independent-glm.md | .RecurAgent/cross-glm.md（outer_evidence=adjudicated） | completed |
+| k3 | pr628-k3 | strong(moonshot/k3-256k) | .RecurAgent/independent-k3.md | .RecurAgent/cross-k3.md（outer_evidence=adjudicated） | completed |
 
 （原 pr628-glm review 车道 native outcome=errored，已关闭并由 primary 车道替代，见活板 #2。）
 
-外层新增证据：.octos/outer-evidence.md + .octos/outer-repros.rs（外层在隔离合成树实际运行 cargo test，三例 outer_review_628* 全部失败；日志 /private/tmp/octoloop-codex-20260909/adversarial.log）。外层已独立读 transcript_build.rs:974 与 3369 核实 idle 场景直接原因是 settled-group 折叠。
+外层新增证据：.RecurAgent/outer-evidence.md + .RecurAgent/outer-repros.rs（外层在隔离合成树实际运行 cargo test，三例 outer_review_628* 全部失败；日志 /private/tmp/octoloop-codex-20260909/adversarial.log）。外层已独立读 transcript_build.rs:974 与 3369 核实 idle 场景直接原因是 settled-group 折叠。
 
 ## 证据来源分层（每条结论均标注）
 

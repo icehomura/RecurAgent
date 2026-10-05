@@ -80,6 +80,8 @@ mod moonshot_coding;
 mod nvidia;
 mod ollama;
 mod openai;
+pub(crate) mod opencode;
+mod opencode_go;
 mod openrouter;
 pub(crate) mod r9s;
 mod vertex;
@@ -216,6 +218,8 @@ static ALL: &[ProviderEntry] = &[
     ollama::ENTRY,
     vllm::ENTRY,
     local::ENTRY,
+    opencode::ENTRY,
+    opencode_go::ENTRY,
 ];
 
 // ── Public API ──────────────────────────────────────────────────────────────
@@ -445,7 +449,7 @@ mod tests {
 
     #[test]
     fn all_entries_count() {
-        assert_eq!(all_entries().len(), 20);
+        assert_eq!(all_entries().len(), 22);
     }
 
     /// Keyless = provider construction succeeds with no API key. The
@@ -488,7 +492,7 @@ mod tests {
     /// The China region family resolves to the api.minimaxi.com endpoint with
     /// the Token-plan default model, its alias + key-env alias work, and it
     /// neither shadows the international family nor steals its model
-    /// auto-detection (region selection is explicit, octos#2125).
+    /// auto-detection (region selection is explicit, RecurAgent#2125).
     #[test]
     fn minimax_cn_resolves_to_the_china_endpoint() {
         let cn = lookup("minimax-cn").expect("minimax-cn registered");

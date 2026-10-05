@@ -53,7 +53,7 @@ pub enum LaunchDecision {
         existing_profiles: Vec<String>,
     },
     /// No profile exists on the machine at all — the client must send the
-    /// user to `octoscode onboard`.
+    /// user to `ra-tui onboard`.
     NoProfile,
 }
 
@@ -145,8 +145,8 @@ pub fn resolve_launch_decision(
 /// The store location is derived with the SAME
 /// [`super::session::project_sessions_root`] the write path uses.
 pub fn scan_folder_sessions(cwd: &Path, known_profiles: &[String]) -> FolderSessions {
-    let octos_dir = cwd.join(".ra");
-    let active_profile = std::fs::read_to_string(octos_dir.join("active-profile"))
+    let ra_dir = cwd.join(".ra");
+    let active_profile = std::fs::read_to_string(ra_dir.join("active-profile"))
         .ok()
         .map(|marker| marker.trim().to_string())
         .filter(|marker| !marker.is_empty());

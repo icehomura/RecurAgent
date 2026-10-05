@@ -27,17 +27,8 @@ use tokio::time::timeout;
 
 use crate::mcp::{McpServerConfig, McpService};
 
-/// OS keyring service name under which ra stores MCP OAuth tokens.
+/// OS keyring service name under which RecurAgent stores MCP OAuth tokens.
 pub const KEYRING_SERVICE: &str = "ra MCP Credentials";
-
-/// Pre-rename keyring service still read from and cleared by [`load_tokens`] /
-/// [`delete_tokens`] so an existing install keeps its tokens across the rename.
-/// Nothing is migrated or deleted implicitly; new writes always go to
-/// [`KEYRING_SERVICE`].
-const LEGACY_KEYRING_SERVICE: &str = "ra MCP Credentials";
-
-/// Services consulted in order on load/delete: current first, legacy fallback.
-const KEYRING_SERVICES: [&str; 2] = [KEYRING_SERVICE, LEGACY_KEYRING_SERVICE];
 
 /// How long to wait for the OAuth `initialize` handshake.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -90,40 +81,31 @@ pub fn save_tokens(url: &str, tokens: &StoredTokens) -> Result<()> {
 
 /// Load tokens for a server from the OS keyring, if present.
 ///
-/// Tries [`KEYRING_SERVICE`] first and falls back to [`LEGACY_KEYRING_SERVICE`]
-/// so installs from before the rename keep their stored tokens. The fallback
-/// entry is only read — never migrated or rewritten.
+/// Reads only [`KEYRING_SERVICE`]; tokens stored under any pre-rename service
+/// name are not consulted.
 pub fn load_tokens(url: &str) -> Result<Option<StoredTokens>> {
-    for service in KEYRING_SERVICES {
-        let entry = keyring_entry(service, url)?;
-        match entry.get_password() {
-            Ok(json) => {
-                let tokens: StoredTokens = serde_json::from_str(&json)
-                    .map_err(|e| eyre::eyre!("parse stored tokens: {e}"))?;
-                return Ok(Some(tokens));
-            }
-            Err(keyring::Error::NoEntry) => continue,
-            Err(e) => return Err(eyre::eyre!("read tokens from keyring: {e}")),
+    let entry = keyring_entry(KEYRING_SERVICE, url)?;
+    match entry.get_password() {
+        Ok(json) => {
+            let tokens: StoredTokens = serde_json::from_str(&json)
+                .map_err(|e| eyre::eyre!("parse stored tokens: {e}"))?;
+            Ok(Some(tokens))
         }
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(eyre::eyre!("read tokens from keyring: {e}")),
     }
-    Ok(None)
 }
 
 /// Delete stored tokens for a server (used by `ra mcp logout`).
 ///
-/// Clears both the current and the legacy service so a logout never leaves
-/// credentials behind; returns `true` when either service had an entry.
+/// Clears only [`KEYRING_SERVICE`]; returns `true` when it had an entry.
 pub fn delete_tokens(url: &str) -> Result<bool> {
-    let mut deleted = false;
-    for service in KEYRING_SERVICES {
-        let entry = keyring_entry(service, url)?;
-        match entry.delete_credential() {
-            Ok(()) => deleted = true,
-            Err(keyring::Error::NoEntry) => {}
-            Err(e) => return Err(eyre::eyre!("delete tokens from keyring: {e}")),
-        }
+    let entry = keyring_entry(KEYRING_SERVICE, url)?;
+    match entry.delete_credential() {
+        Ok(()) => Ok(true),
+        Err(keyring::Error::NoEntry) => Ok(false),
+        Err(e) => Err(eyre::eyre!("delete tokens from keyring: {e}")),
     }
-    Ok(deleted)
 }
 
 /// Connect to an OAuth-gated streamable-HTTP MCP server using keyring-stored
@@ -406,13 +388,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn keyring_services_prefer_current_and_keep_legacy() {
-        // Pin the OS-keyring contract: current service first, then the
-        // pre-rename one. Changes here silently orphan (or re-read) stored
-        // tokens for every existing install.
-        assert_eq!(KEYRING_SERVICES, ["ra MCP Credentials", "ra MCP Credentials"]);
-        assert_eq!(KEYRING_SERVICES[0], KEYRING_SERVICE);
-        assert_eq!(KEYRING_SERVICES[1], LEGACY_KEYRING_SERVICE);
+    fn keyring_uses_the_single_current_service() {
+        // Pin the OS-keyring contract: exactly one service name, with no
+        // pre-rename fallback. Changes here silently orphan stored tokens
+        // for every existing install.
+        assert_eq!(KEYRING_SERVICE, "ra MCP Credentials");
     }
 
     #[test]

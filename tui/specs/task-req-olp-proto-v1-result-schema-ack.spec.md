@@ -1,6 +1,6 @@
 spec: task
-name: "OLP v1:ACK 语法、车道模板、协议契约测试(octoscode)"
-tags: [olp, protocol, octoscode]
+name: "OLP v1:ACK 语法、车道模板、协议契约测试(ra-tui)"
+tags: [olp, protocol, ra-tui]
 satisfies: [REQ-OLP-PROTO]
 estimate: 1d
 ---
@@ -8,10 +8,10 @@ estimate: 1d
 ## 意图
 
 OLP v0 的 R1(ACK)与 R2(诚实验证)靠自然语言约定;分歧路径从未定形;
-苦力车道机制存在但无开箱配置。本任务在 **octoscode 仓库**落地协议 v1 的
+苦力车道机制存在但无开箱配置。本任务在 **ra-tui 仓库**落地协议 v1 的
 客户端侧:ACK 定式语法(含 wontdo 分歧分支)、sub_providers 车道配置
 模板与搭配矩阵、以及把协议文档本身钉住的契约测试。result.md 的
-`verified`/`protocol` 字段由 ra 侧写入(task-req-olp-exec-peer),
+`verified`/`protocol` 字段由 RecurAgent 侧写入(task-req-olp-exec-peer),
 本合约只固化 schema 文档与消费侧约定。
 
 ## 已定决策
@@ -25,7 +25,7 @@ OLP v0 的 R1(ACK)与 R2(诚实验证)靠自然语言约定;分歧路径从未�
 - `sub_providers` 车道模板落 `docs/OUTER_LOOP_PROTOCOL.md` 附录:
   cheap/strong 两例,description 写明选道标准;附双环搭配矩阵
   (分析/验证→cheap,实施→primary,keeper→primary)。
-- 新增契约测试 `tests/olp_contract.rs`(纯文档契约,不依赖 ra):
+- 新增契约测试 `tests/olp_contract.rs`(纯文档契约,不依赖 RecurAgent):
   校验黑板 ACK 行全部匹配 v1 语法、车道模板 TOML 片段可解析、OLP 文档
   声明的 schema 字段清单与本合约一致、AGENTS.md 引用的协议版本与 OLP
   文档一致。
@@ -46,8 +46,8 @@ OLP v0 的 R1(ACK)与 R2(诚实验证)靠自然语言约定;分歧路径从未�
 
 ## 排除范围
 
-- verified 字段的写入(ra 侧,task-req-olp-exec-peer)。
-- octoscode 对 result.md 的运行时消费/渲染。
+- verified 字段的写入(RecurAgent 侧,task-req-olp-exec-peer)。
+- ra-tui 对 result.md 的运行时消费/渲染。
 - steer/observability 相关文档(随各自合约更新)。
 
 ## 完成条件

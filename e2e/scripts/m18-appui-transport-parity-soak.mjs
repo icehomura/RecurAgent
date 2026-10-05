@@ -13,9 +13,9 @@ import WebSocket from 'ws';
 const repoRoot = path.resolve(import.meta.dirname, '..', '..');
 const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z');
 const cliArgs = process.argv.slice(2);
-const codexP0Soak = process.env.OCTOS_M18_CODEX_P0_SOAK === '1';
+const codexP0Soak = process.env.ra_M18_CODEX_P0_SOAK === '1';
 const modeArgIndex = cliArgs.findIndex((arg) => arg === '--mode');
-const scenarioMode = process.env.OCTOS_M18_APPUI_PARITY_MODE
+const scenarioMode = process.env.ra_M18_APPUI_PARITY_MODE
   || (cliArgs.includes('--backing-store') ? 'backing-store' : null)
   || (modeArgIndex >= 0 ? cliArgs[modeArgIndex + 1] : null)
   || 'headless';
@@ -23,7 +23,7 @@ if (!['headless', 'backing-store'].includes(scenarioMode)) {
   throw new Error(`Unsupported M18 AppUI parity mode: ${scenarioMode}`);
 }
 const runRoot = path.resolve(
-  process.env.OCTOS_M18_APPUI_PARITY_DIR
+  process.env.ra_M18_APPUI_PARITY_DIR
     || path.join(
       repoRoot,
       'e2e',
@@ -47,11 +47,11 @@ const taskLedgerPath = path.join(runRoot, 'task-ledger.jsonl');
 const tuiCapturePath = path.join(runRoot, 'tui-capture.txt');
 const routeInventoryPath = path.join(repoRoot, 'e2e', 'fixtures', 'appui-conformance', 'm18-route-inventory.json');
 const allowlistPath = path.join(repoRoot, 'e2e', 'fixtures', 'appui-conformance', 'm18-conformance-allowlist.json');
-const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
-const authToken = process.env.OCTOS_M18_APPUI_AUTH_TOKEN || `m18-${crypto.randomBytes(8).toString('hex')}`;
-const profileId = process.env.OCTOS_M18_APPUI_PROFILE || 'm18-parity';
-const sessionId = process.env.OCTOS_M18_APPUI_SESSION || `${profileId}:local:appui-parity-${stamp}`;
-const timeoutMs = Number(process.env.OCTOS_M18_APPUI_TIMEOUT_MS || 45_000);
+const raBin = process.env.ra_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
+const authToken = process.env.ra_M18_APPUI_AUTH_TOKEN || `m18-${crypto.randomBytes(8).toString('hex')}`;
+const profileId = process.env.ra_M18_APPUI_PROFILE || 'm18-parity';
+const sessionId = process.env.ra_M18_APPUI_SESSION || `${profileId}:local:appui-parity-${stamp}`;
+const timeoutMs = Number(process.env.ra_M18_APPUI_TIMEOUT_MS || 45_000);
 const wsUiFeatures = [
   'approval.typed.v1',
   'pane.snapshots.v1',
@@ -311,7 +311,7 @@ function seedBackingStores() {
   }
   return {
     schema: 'ra-m18-backing-store-seed-v1',
-    issue: 'octos#1044',
+    issue: 'ra#1044',
     sessionId,
     profileId,
     mode: scenarioMode,
@@ -605,13 +605,13 @@ class StdioClient extends AppUiClient {
     // the spawned server must enable it or the soak dies at capability
     // negotiation. --solo is the danger-surface keystone: fine for this
     // throwaway stdio child, but never copy it to a network-exposed serve.
-    this.child = spawn(octosBin, ['serve', '--stdio', '--solo', '--data-dir', stdioDataDir, '--cwd', workspace], {
+    this.child = spawn(raBin, ['serve', '--stdio', '--solo', '--data-dir', stdioDataDir, '--cwd', workspace], {
       cwd: repoRoot,
       env: {
         ...process.env,
-        OCTOS_M9_PROTOCOL_FIXTURES: '1',
-        OCTOSCODE_M15_UX_OUTPUT_DIR: runRoot,
-        OCTOSCODE_M15_UX_WORKDIR: workspace,
+        ra_M9_PROTOCOL_FIXTURES: '1',
+        RA_TUI_M15_UX_OUTPUT_DIR: runRoot,
+        RA_TUI_M15_UX_WORKDIR: workspace,
         RUST_BACKTRACE: process.env.RUST_BACKTRACE || '1',
       },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -718,7 +718,7 @@ class StdioClient extends AppUiClient {
 }
 
 async function startWsServer(port) {
-  const child = spawn(octosBin, [
+  const child = spawn(raBin, [
     'serve',
     '--host',
     '127.0.0.1',
@@ -739,9 +739,9 @@ async function startWsServer(port) {
     cwd: repoRoot,
     env: {
       ...process.env,
-      OCTOS_M9_PROTOCOL_FIXTURES: '1',
-      OCTOSCODE_M15_UX_OUTPUT_DIR: runRoot,
-      OCTOSCODE_M15_UX_WORKDIR: workspace,
+      ra_M9_PROTOCOL_FIXTURES: '1',
+      RA_TUI_M15_UX_OUTPUT_DIR: runRoot,
+      RA_TUI_M15_UX_WORKDIR: workspace,
       RUST_BACKTRACE: process.env.RUST_BACKTRACE || '1',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -2101,7 +2101,7 @@ async function main() {
     ? seedBackingStores()
     : {
       schema: 'ra-m18-backing-store-seed-v1',
-      issue: 'octos#1032',
+      issue: 'ra#1032',
       mode: scenarioMode,
       seeded: false,
       reason: 'headless mode preserves the expected -32140 sessions-unavailable parity case',
@@ -2158,7 +2158,7 @@ async function main() {
     const stdioNorm = normalizeTranscript(stdioTranscript);
     const diff = {
       ...diffNormalized(wsNorm, stdioNorm, wsResult, stdioResult, allowlist, routeInventory),
-      issue: scenarioMode === 'backing-store' ? 'octos#1044' : 'octos#1032',
+      issue: scenarioMode === 'backing-store' ? 'ra#1044' : 'ra#1032',
       mode: scenarioMode,
       host: os.hostname(),
       routeInventoryMethodCount: routeInventory.methods.length,

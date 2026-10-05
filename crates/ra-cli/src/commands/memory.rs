@@ -425,7 +425,7 @@ async fn run_search(
 
 async fn run_embedder(fetch: bool, data_dir: Option<PathBuf>) -> Result<()> {
     use crate::embed_model as em;
-    // The model cache is shared by every profile under the ra data root.
+    // The model cache is shared by every profile under the RecurAgent data root.
     let root = match data_dir {
         Some(d) => d,
         None => ra_services::config_context::resolve_config_context(None).data_dir,

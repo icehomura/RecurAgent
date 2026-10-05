@@ -30,7 +30,7 @@ ra auth issue-work-secret \
   --api-base-url http://127.0.0.1:50080
 ```
 
-The command writes a hashed grant to `$OCTOS_HOME/work_secrets.json` (or
+The command writes a hashed grant to `$RA_HOME/work_secrets.json` (or
 `~/.ra/work_secrets.json`) and prints the encoded secret to stdout.
 Operator notes (expiry, the replacement semantics, how to revoke) go to
 stderr, so stdout stays scriptable. Re-issuing for the same session replaces

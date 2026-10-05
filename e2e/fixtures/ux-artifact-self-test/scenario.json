@@ -1,8 +1,8 @@
 {
-  "schema": "octos.ux.scenario.v1",
+  "schema": "ra.ux.scenario.v1",
   "id": "ux-artifact-self-test",
   "name": "UX artifact validator self-test",
-  "artifact_abi": "octos.ux.artifacts.v1",
+  "artifact_abi": "ra.ux.artifacts.v1",
   "transport": "stdio",
   "required_artifacts": [
     "scenario.json",

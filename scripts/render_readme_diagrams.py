@@ -98,12 +98,12 @@ def architecture(zh=False):
             "应用和 Agent 控制端通过 OUP 接入；原生宿主嵌入库。两条路径连接 ra Harness 内核，使用状态、执行与协作能力。",
         ),
     )
-    c.text(48, 53, choose("OCTOS / ARCHITECTURE", "OCTOS / 内核架构"), 14, BLUE, 650)
+    c.text(48, 53, choose("RA / ARCHITECTURE", "RA / 内核架构"), 14, BLUE, 650)
     c.text(48, 101, choose("Your application, powered by ra", "用 ra 内核构建你的应用"), 34, weight=650)
     c.text(48, 135, choose("Embed the libraries or control a runtime through OUP.", "将库嵌入应用，或通过 OUP 控制运行时。"), 19, MUTED)
 
     entries = [
-        (48, "app", choose("Applications", "应用客户端"), "Octoscode · Octoscode Web"),
+        (48, "app", choose("Applications", "应用客户端"), "ra-tui · ra-tui Web"),
         (424, "agents", choose("Agent controllers", "Agent 控制端"), "Codex · Claude Code"),
         (800, "code", choose("Your native app", "你的原生应用"), choose("Desktop · service · device", "桌面应用 · 服务 · 设备")),
     ]
@@ -164,7 +164,7 @@ def workflow(zh=False):
             "连接、分配、监督、收集。控制端与内核交换命令和事件，内核按需准备上下文、调用模型和执行工具。接纳请求后，轮次最终以完成、失败或中断结束。",
         ),
     )
-    c.text(48, 53, choose("OCTOS / WORKFLOW", "OCTOS / 执行流程"), 14, BLUE, 650)
+    c.text(48, 53, choose("RA / WORKFLOW", "RA / 执行流程"), 14, BLUE, 650)
     c.text(48, 101, choose("From a request to a recorded result", "从任务请求到可追踪的结果"), 34, weight=650)
     c.text(48, 135, choose("Your controller directs the work. The kernel runs it.", "控制端组织工作，内核负责执行。"), 19, MUTED)
     stages = [

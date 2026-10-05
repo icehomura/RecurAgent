@@ -24,7 +24,7 @@
 ## 从源码编译
 
 ```bash
-git clone https://github.com/your-org/ra
+git clone https://github.com/icehomura/ra
 cd ra
 
 # 推荐：规范特性集（与 scripts/milestone-ci.sh 一致）。
@@ -83,7 +83,7 @@ ra --version
 
 ### NixOS
 
-如果你使用 Nix，ra 提供了包含软件包、开发环境以及 NixOS / nix-darwin 模块的 Flake。详见 [Nix](nix.md) 页面。
+如果你使用 Nix，RecurAgent 提供了包含软件包、开发环境以及 NixOS / nix-darwin 模块的 Flake。详见 [Nix](nix.md) 页面。
 
 ### macOS
 
@@ -97,7 +97,7 @@ brew install node ffmpeg poppler
 brew install --cask libreoffice
 
 # 3. 克隆并部署
-git clone https://github.com/your-org/ra.git
+git clone https://github.com/icehomura/ra.git
 cd ra
 ./scripts/local-tenant-deploy.sh --full
 
@@ -139,7 +139,7 @@ source "$HOME/.cargo/env"
 sudo apt install -y nodejs npm ffmpeg poppler-utils
 
 # 4. 克隆并部署
-git clone https://github.com/your-org/ra.git
+git clone https://github.com/icehomura/ra.git
 cd ra
 ./scripts/local-tenant-deploy.sh --full
 
@@ -180,7 +180,7 @@ sudo dnf install -y gcc pkg-config openssl-devel
 
 ### Windows（原生）
 
-ra 支持在 Windows 上原生编译和运行。Shell 命令通过 `cmd /C` 执行。
+RecurAgent 支持在 Windows 上原生编译和运行。Shell 命令通过 `cmd /C` 执行。
 
 ```powershell
 # 1. 安装 Rust（从 https://rustup.rs 下载 rustup-init.exe）
@@ -188,7 +188,7 @@ rustup-init.exe
 
 # 2. 克隆并使用规范特性集编译
 #    （若只想要 `ra chat` 可省略特性；`ra serve` 需要 api 特性）
-git clone https://github.com/your-org/ra.git
+git clone https://github.com/icehomura/ra.git
 cd ra
 cargo install --path crates/ra-cli `
     --features "api,telegram,discord,dingtalk,whatsapp,feishu,twilio,wecom,wecom-bot,audio_mp3"

@@ -24,10 +24,10 @@ def main():
     args = parser.parse_args()
     library_dir = args.library_dir.resolve()
     suffix = ".dylib" if sys.platform == "darwin" else ".so"
-    library = library_dir / f"liboctos_uniffi{suffix}"
+    library = library_dir / f"libra_uniffi{suffix}"
     bindgen = library_dir / "uniffi-bindgen"
     if sys.platform.startswith("win"):
-        library = library_dir / "octos_uniffi.dll"
+        library = library_dir / "ra_uniffi.dll"
         bindgen = bindgen.with_suffix(".exe")
     with tempfile.TemporaryDirectory(prefix="ra-binding-parity-") as output:
         subprocess.run([str(bindgen), "generate", "--library", str(library),

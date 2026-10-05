@@ -1,15 +1,15 @@
-# 架构文档：ra
+# 架构文档：RecurAgent
 
 ## 概述
 
-ra 是一个包含 27 个成员的 Rust 工作区（Edition 2024，rust-version 1.85.0），提供编码 Agent CLI 和多频道消息网关。通过 rustls 实现纯 Rust TLS（无 OpenSSL 依赖）。错误处理使用 `eyre`/`color-eyre`。
+RecurAgent 是一个包含 27 个成员的 Rust 工作区（Edition 2024，rust-version 1.85.0），提供编码 Agent CLI 和多频道消息网关。通过 rustls 实现纯 Rust TLS（无 OpenSSL 依赖）。错误处理使用 `eyre`/`color-eyre`。
 
 **工作区成员**（取自 `Cargo.toml`）：
 - **分层核心**（7 个）：`ra-core`（共享类型）→ `ra-memory` + `ra-llm` → `ra-agent`（agent 循环、工具、沙箱、MCP、压缩）→ `ra-cli`（命令、配置、serve/API），外加 `ra-bus`（14 个渠道、会话、合并、cron）与 `ra-diagnostics`（支撑 `ra doctor`）。
 - **agent 周边**（5 个）：`ra-pipeline`（DOT 图工作流）、`ra-plugin`（插件/技能 SDK）、`ra-swarm`（多 agent 契约创作）、`ra-sandbox`、`ra-dora-mcp`。
 - **内置技能 crate**（15 个）：`crates/app-skills/` 下每个应用技能都是独立 crate——`news`、`deep-search`、`deep-crawl`、`send-email`、`account-manager`、`time`、`weather`、`smart-home`、`wechat-bridge`、`skill-evolve`，以及 `harness-starter-{generic,report,audio,coding}` 模板——再加上 `platform-skills/voice`（ASR/TTS）。
 
-（Web SPA 与终端客户端分别位于独立的 `octos-web` 和 `octoscode` 仓库，通过 UI Protocol 与 `octos serve` 通信。）
+（Web SPA 与终端客户端分别位于独立的 `ra-web` 和 `ra-tui` 仓库，通过 UI Protocol 与 `ra serve` 通信。）
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -816,16 +816,16 @@ pub const BUILTIN_SKILLS: &[BuiltinSkill] = &[...];
 #### 目录布局
 
 ```
-<octos_home>/plugins/                 # 部署级插件
-<octos_home>/skills/                  # 部署级技能
-<octos_home>/bundled-app-skills/      # 内置应用技能
+<ra_home>/plugins/                 # 部署级插件
+<ra_home>/skills/                  # 部署级技能
+<ra_home>/bundled-app-skills/      # 内置应用技能
 ~/.ra/profiles/<profile>/data/skills/
   └── my-plugin/
       ├── manifest.json  # 插件元数据 + 工具定义
       └── my-plugin      # 可执行文件（或 "main" 作为回退）
 ```
 
-**发现顺序**：`Config::plugin_dirs_from_project()` 扫描部署级 `<octos_home>/plugins`、`<octos_home>/skills`、`<octos_home>/bundled-app-skills` 和 `OCTOS_SKILLS_PATH`；托管 profile gateway 再叠加平台技能和当前 profile 的 `data/skills/` 目录。旧的 HOME 全局目录（`~/.ra/plugins`、`~/.ra/skills`）不再作为常规扫描路径，只会触发一次迁移警告。
+**发现顺序**：`Config::plugin_dirs_from_project()` 扫描部署级 `<ra_home>/plugins`、`<ra_home>/skills`、`<ra_home>/bundled-app-skills` 和 `RA_SKILLS_PATH`；托管 profile gateway 再叠加平台技能和当前 profile 的 `data/skills/` 目录。旧的 HOME 全局目录（`~/.ra/plugins`、`~/.ra/skills`）不再作为常规扫描路径，只会触发一次迁移警告。
 
 #### PluginManifest
 
@@ -1097,7 +1097,7 @@ JSONL 持久化位于 `.ra/sessions/{key}.jsonl`。
 
 - **内存缓存**：LRU + 写入时同步到磁盘
 - **文件名**：百分号编码的 SessionKey，截断到 183 字符，截断时添加 `_{hash:016X}` 后缀防止冲突
-- **滚动分段**：文件在 `OCTOS_SESSION_SEGMENT_BYTES`（8 MiB）时滚入 `<name>.segments/NNNNNN.jsonl`；普通加载读取活跃文件，并按新到旧纳入不超过 `OCTOS_SESSION_LOAD_BUDGET_BYTES`（32 MiB，0 = 不限）的封存分段
+- **滚动分段**：文件在 `RA_SESSION_SEGMENT_BYTES`（8 MiB）时滚入 `<name>.segments/NNNNNN.jsonl`；普通加载读取活跃文件，并按新到旧纳入不超过 `RA_SESSION_LOAD_BUDGET_BYTES`（32 MiB，0 = 不限）的封存分段
 - **崩溃安全**：原子写入-重命名
 - **分支**：`fork()` 创建带 `parent_key` 追踪的子会话，复制最后 N 条消息
 
@@ -1198,7 +1198,7 @@ JSON 持久化位于 `.ra/cron.json`。
 
 **Web UI**：通过 `rust-embed` 嵌入的 SPA，作为回退处理器提供服务。会话侧边栏、聊天界面、UI Protocol WebSocket 流式传输以及 dashboard/admin 页面共用同一个 `ra serve` 进程。
 
-**Prometheus 指标**：`ra_tool_calls_total`（计数器，标签：tool, success）、`octos_tool_call_duration_seconds`（直方图，标签：tool）、`ra_llm_tokens_total`（计数器，标签：direction）。由 `metrics` + `metrics-exporter-prometheus` crate 驱动。
+**Prometheus 指标**：`ra_tool_calls_total`（计数器，标签：tool, success）、`ra_tool_call_duration_seconds`（直方图，标签：tool）、`ra_llm_tokens_total`（计数器，标签：direction）。由 `metrics` + `metrics-exporter-prometheus` crate 驱动。
 
 ### 会话压缩（网关）
 
@@ -1384,7 +1384,7 @@ crates/
 - 工具输出清理（`sanitize.rs`）：剥离 base64 数据 URI、长十六进制字符串（64+ 字符），以及**凭据脱敏** — 7 个正则表达式覆盖 OpenAI（`sk-...`）、Anthropic（`sk-ant-...`）、AWS（`AKIA...`）、GitHub（`ghp_/gho_/ghs_/ghr_/github_pat_...`）、GitLab（`glpat-...`）、Bearer token 和通用 `password`/`api_key` 赋值
 - 通过 `truncate_utf8()` 在所有工具输出和邮件正文中实现 UTF-8 安全截断
 - 通过百分号编码文件名 + 截断时的哈希后缀防止会话文件冲突
-- 会话文件按 8 MiB 滚动分段，加载上限为 `OCTOS_SESSION_LOAD_BUDGET_BYTES`（32 MiB），防止超大历史导致 OOM
+- 会话文件按 8 MiB 滚动分段，加载上限为 `RA_SESSION_LOAD_BUDGET_BYTES`（32 MiB），防止超大历史导致 OOM
 - 原子写入-重命名用于会话持久化（崩溃安全）
 - API 服务器默认绑定到 127.0.0.1（非 0.0.0.0）
 - 通过 `allowed_senders` 列表进行频道访问控制
@@ -1398,9 +1398,9 @@ crates/
 
 ### 为什么选择 Rust
 
-ra 使用 Rust + tokio 异步运行时，与 Python（OpenClaw 等）和 Node.js（NanoCloud 等）Agent 框架相比，在并发会话处理方面具有显著优势：
+RecurAgent 使用 Rust + tokio 异步运行时，与 Python（OpenClaw 等）和 Node.js（NanoCloud 等）Agent 框架相比，在并发会话处理方面具有显著优势：
 
-**真正的并行** — Tokio 任务跨所有 CPU 核心同时运行。Python 有 GIL，即使使用 asyncio，CPU 密集型工作（JSON 解析、上下文压缩、token 计数）也是单核的。Node.js 完全是单线程的。在 ra 中，10 个并发会话进行上下文压缩实际上会跨核心并行执行。
+**真正的并行** — Tokio 任务跨所有 CPU 核心同时运行。Python 有 GIL，即使使用 asyncio，CPU 密集型工作（JSON 解析、上下文压缩、token 计数）也是单核的。Node.js 完全是单线程的。在 RecurAgent 中，10 个并发会话进行上下文压缩实际上会跨核心并行执行。
 
 **内存效率** — 无垃圾回收器，无每对象运行时开销。Agent 会话是堆上的紧凑结构体。Python Agent 会话携带解释器开销、每个对象的 GC 元数据和基于 dict 的属性查找。在数百个会话和大量对话历史都在内存中时，这一点很重要。
 
@@ -1453,7 +1453,7 @@ LLM 响应：[web_search, read_file, send_email]
 
 ### 子 Agent 与对等 Agent
 
-ra 支持两种归属模型相反的多 Agent 形态。
+RecurAgent 支持两种归属模型相反的多 Agent 形态。
 
 **子 Agent**（`spawn` 工具）是当前轮次的子代：
 

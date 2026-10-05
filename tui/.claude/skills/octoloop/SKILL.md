@@ -1,6 +1,6 @@
 ---
 name: octoloop
-description: OctoLoop 一键入口——一个 skill 上手双环全能力。三模式:init(引导铺设脚手架并核依赖)/outer(外环上岗:派单、观测、复验、代推)/inner(内环形态选型:octoscode 标准、免审批窗格、强档车道)
+description: OctoLoop 一键入口——一个 skill 上手双环全能力。三模式:init(引导铺设脚手架并核依赖)/outer(外环上岗:派单、观测、复验、代推)/inner(内环形态选型:ra-tui 标准、免审批窗格、强档车道)
 ---
 
 # /octoloop — 双环一键入口
@@ -18,9 +18,9 @@ bash scripts/olp-init.sh          # 铺脚手架(黑板/信箱/监视器接线)
 ```
 
 脚本按需询问(不假设环境);完成后逐项核对
-`docs/OLP_QUICKSTART.md` §1 环境依赖清单(octos/octoscode 可执行、
+`docs/OLP_QUICKSTART.md` §1 环境依赖清单(RecurAgent/ra-tui 可执行、
 herdr 或 tmux、外环模型 CLI)。herdr 来源与分支钉在 §1 依赖表
-(hagency-org/herdr,octoscode 识别当前在 feat/octoscode-agent 分支)。任何缺口按 §6 故障速查处理,再跑
+(hagency-org/herdr,ra-tui 识别当前在 feat/ra-tui-agent 分支)。任何缺口按 §6 故障速查处理,再跑
 §5 冒烟验证(两分钟)。**全部发现式:本卡零硬编码路径**,一切以
 QUICKSTART 的发现命令为准。
 
@@ -40,7 +40,7 @@ QUICKSTART 的发现命令为准。
    (试锁见下步)。默认主审域 = 启动 cwd 项目;发现现场照旧全机
    扫描,但**发现 ≠ 接管**。
 4. **接管职责(主审权锁,R7/olp-v2)**:上岗必须经
-   `octoscode outer-duty hold --project <项目> --signature <署名>
+   `ra-tui outer-duty hold --project <项目> --signature <署名>
    --duties <职责> -- <你的 agent 启动命令>` 包裹启动——锁即
    authority,**守护式死亡耦合**(wrapper 唯一持 fd;agent 经
    PR_SET_PDEATHSIG 与 wrapper 同死,wrapper 亡⇒agent 必亡⇒VACANT;
@@ -76,7 +76,7 @@ QUICKSTART 的发现命令为准。
 
 | 形态 | 适用 | 关键点 |
 |---|---|---|
-| **octoscode 标准** | 仓库内编码主路径 | octos serve stdio 挂载,全工具面 + MCP 第五信道(ask_outer/report_blocked) |
+| **ra-tui 标准** | 仓库内编码主路径 | RecurAgent serve stdio 挂载,全工具面 + MCP 第五信道(ask_outer/report_blocked) |
 | **claude / codex 免审批窗格** | 快轨修订、外环同级复审 | herdr 窗格隔离,绕内环审批链;分支纪律照旧 |
 | **强档车道** | 大型战役/多 peer 并行 | profile `config.llm.primary`/`fallbacks` 多模型 lane(QUICKSTART §3),sub_providers 供 pipeline 按节点选档 |
 
@@ -105,7 +105,7 @@ operator 点破的教训。上岗即遵守,不要重蹈:
    引用文字/历史同号 ACK),一次漏报(`### ` 前缀没猜到,哨空转数小时
    致复验迟到);非板面哨锚定唯一新信号:行号基线+署名、产物文件
    存在、agent 状态转 idle,**严禁数子串**。
-3. **上岗先做权限预检**:把本轮可预期的高频操作(herdr CLI、ra
+3. **上岗先做权限预检**:把本轮可预期的高频操作(herdr CLI、RecurAgent
    CLI、git push 到 fork)预先配入 harness 允许清单,别撞墙后摆命令
    等人。两类永远留给 operator 亲手:免沙箱启动、agent 修改自己的
    权限配置(自我提权,harness 会拦且应该拦)。
@@ -142,7 +142,7 @@ operator 点破的教训。上岗即遵守,不要重蹈:
 
 ## 规模化扇出纪律(实战沉淀:20+ 车道、三天百余任务的一次移植战役)
 
-一个外环 + 二十余条 octoscode 车道,3.3 天派出 113 张任务卡、合入 131
+一个外环 + 二十余条 ra-tui 车道,3.3 天派出 113 张任务卡、合入 131
 个任务分支,吞吐约为同一外环单干期的 2 倍,且把真实环境端到端从"不通"
 推到全绿。**瓶颈不在车道,而在外环独占的两件事:采认复验与真实环境
 e2e。**下面每条都是这次战役里的一次真实掉链。

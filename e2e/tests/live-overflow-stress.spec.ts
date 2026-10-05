@@ -26,12 +26,12 @@
  * each user bubble in DOM order matches the prompt by content.
  *
  * Required env:
- *   OCTOS_TEST_URL=https://dspfac.ra.ominix.io   (mini3, pre-#649)
- *   OCTOS_AUTH_TOKEN=ra-admin-2026
- *   OCTOS_PROFILE=dspfac
+ *   ra_TEST_URL=https://dspfac.ra.ominix.io   (mini3, pre-#649)
+ *   ra_AUTH_TOKEN=ra-admin-2026
+ *   ra_PROFILE=dspfac
  *
  * Behind the same v2 flag as live-thread-interleave: the new thread-by-cmid
- * renderer is gated by `localStorage.octos_thread_store_v2 = '1'`.
+ * renderer is gated by `localStorage.ra_thread_store_v2 = '1'`.
  *
  * NEVER point at mini5 — that host is reserved for coding-green tests.
  *
@@ -60,7 +60,7 @@ import {
   normalizeBubbleText,
 } from './live-browser-helpers';
 
-const FLAG_KEY = 'octos_thread_store_v2';
+const FLAG_KEY = 'ra_thread_store_v2';
 
 interface ScenarioMessage {
   gap_ms: number;

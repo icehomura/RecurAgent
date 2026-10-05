@@ -1,5 +1,5 @@
 //! Contract tests for the OLP-MCP Rust server (OUTER_LOOP_REVIEW #31),
-//! `octoscode olp-mcp-serve`. One test per Scenario selector pinned in
+//! `ra-tui olp-mcp-serve`. One test per Scenario selector pinned in
 //! `specs/task-req-olp-mcp.spec.md` — driven through a REAL subprocess
 //! (newline-delimited JSON-RPC over stdio), with a temp outer root
 //! (`OLP_MCP_OUTER_ROOT`) and a compressed clock (`OLP_MCP_TIMEOUT_SECS`).
@@ -35,7 +35,7 @@ impl ServerProc {
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
-            .expect("spawn octoscode olp-mcp-serve");
+            .expect("spawn ra-tui olp-mcp-serve");
         let stdout = child.stdout.take().expect("stdout piped");
         Self {
             child,
@@ -95,7 +95,7 @@ fn board_text(root: &std::path::Path) -> String {
 }
 
 /// Scenario: initialize 握手 — legal capabilities (tools non-empty), protocol
-/// version matches the ra mcp handshake.
+/// version matches the RecurAgent mcp handshake.
 #[test]
 fn self_test_initialize_handshake() {
     let root = temp_outer_root("init");

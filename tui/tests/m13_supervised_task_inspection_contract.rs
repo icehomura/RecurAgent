@@ -25,7 +25,7 @@ fn m13_capability_and_method_constants_match_upcr_2026_019() {
 /// Guard test: `SupervisedTaskEntry` deserializes the new
 /// `source`/`role`/`summary`/`artifact_count`/`runtime_policy_stamp`
 /// fields from the wire shape backend sibling shipped on
-/// `task/list`/`task/updated` (ra PR #1103). Without this the TUI
+/// `task/list`/`task/updated` (RecurAgent PR #1103). Without this the TUI
 /// would either ignore the new metadata or panic on the next live
 /// supervised review.
 #[test]

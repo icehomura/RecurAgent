@@ -6,7 +6,7 @@ estimate: 1.5d
 
 ## Intent
 
-进化环(octoscode LEP-003)的采集哨消费 `events.jsonl`,但两类内环摩擦今天没有事件:模型
+进化环(ra-tui LEP-003)的采集哨消费 `events.jsonl`,但两类内环摩擦今天没有事件:模型
 车道 failover(`RouterFailoverEvent` 只推给客户端做协议通知,gateway 与 serve/UI 两条转发路径都
 不写事件)与 malformed tool-call 自纠预算耗尽(agent 侧超过 3 次后落入通用错误分派,CLI 的
 `events.jsonl` 今日只在连接断开路径写 `turn_error`,agent 失败终态不写事件)。本任务给
@@ -17,7 +17,7 @@ kind 的字段、文案与发射时机,不改 wire 协议。契约 v3.1 已并�
 
 <!-- lint-ack: decision-coverage — 白名单文档注释更新由"事件流文档"场景整体行使 -->
 
-- `fallback_switch` 在**两条**转发路径都写(缺一条则 octoscode 内环主路径采集为空):
+- `fallback_switch` 在**两条**转发路径都写(缺一条则 ra-tui 内环主路径采集为空):
   ① gateway:`crates/ra-cli/src/session_actor.rs` 的 `forward_router_failovers`,在
   `originating_session_id == Some(session_id)` 过滤成功之后、`last_push` debounce 判定之前;
   `FailoverForwarderParams` 新增 `profile_data_dir: PathBuf`,spawn 处以 `self.data_dir.clone()`
@@ -85,7 +85,7 @@ kind 的字段、文案与发射时机,不改 wire 协议。契约 v3.1 已并�
 
 ## Out of Scope
 
-- 采集哨对新 kind 的识别(octoscode 侧)。
+- 采集哨对新 kind 的识别(ra-tui 侧)。
 - events.jsonl 轮转;broadcast Lagged 的补偿。
 - 其它候选 kind。
 

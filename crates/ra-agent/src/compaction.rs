@@ -59,10 +59,6 @@ pub const TOOL_RESULT_PLACEHOLDER_SCHEMA_VERSION: u32 = 1;
 /// the M6.3 shape.
 pub const TOOL_RESULT_PLACEHOLDER_PREFIX: &str = "[RA_TOOL_RESULT_PLACEHOLDER]";
 
-/// Legacy prefix emitted before the ra→ra rename. Durable transcripts
-/// written by an older build still carry it, so the parser accepts both.
-const LEGACY_TOOL_RESULT_PLACEHOLDER_PREFIX: &str = "[OCTOS_TOOL_RESULT_PLACEHOLDER]";
-
 const TOOL_RESULT_PLACEHOLDER_SCHEMA_V1: &str = "ra.tool_result_placeholder.v1";
 
 /// Find the boundary between old (compactable) and recent (kept verbatim) messages.
@@ -547,7 +543,6 @@ impl ToolResultPlaceholder {
     pub fn from_placeholder_content(content: &str) -> Result<Self, ToolResultPlaceholderError> {
         let rest = content
             .strip_prefix(TOOL_RESULT_PLACEHOLDER_PREFIX)
-            .or_else(|| content.strip_prefix(LEGACY_TOOL_RESULT_PLACEHOLDER_PREFIX))
             .ok_or(ToolResultPlaceholderError::NotAPlaceholder)?;
         let value: serde_json::Value =
             serde_json::from_str(rest).map_err(ToolResultPlaceholderError::InvalidJson)?;
@@ -2026,27 +2021,6 @@ mod tests {
         // The placeholder carries tool_call_id (the recall handle).
         assert!(content.contains("id1"), "{content}");
         let parsed = ToolResultPlaceholder::from_placeholder_content(&content).unwrap();
-        assert_eq!(parsed, p);
-    }
-
-    /// Durable transcripts written before the ra→ra rename carry the old
-    /// bracket; the parser must still recognise them.
-    #[test]
-    fn tool_result_placeholder_parses_legacy_octos_prefix() {
-        let p = ToolResultPlaceholder {
-            schema_version: TOOL_RESULT_PLACEHOLDER_SCHEMA_VERSION,
-            tool_name: "shell".into(),
-            tool_call_id: "legacy1".into(),
-            turn_id: Some(7),
-            original_byte_len: Some(42),
-            reason: "pruned_after_turns".into(),
-        };
-        let content = p.to_placeholder_content();
-        let body = content
-            .strip_prefix(TOOL_RESULT_PLACEHOLDER_PREFIX)
-            .expect("new prefix");
-        let legacy = format!("{LEGACY_TOOL_RESULT_PLACEHOLDER_PREFIX}{body}");
-        let parsed = ToolResultPlaceholder::from_placeholder_content(&legacy).unwrap();
         assert_eq!(parsed, p);
     }
 

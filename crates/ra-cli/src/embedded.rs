@@ -39,31 +39,12 @@ where
     W: AsyncWrite + Unpin + Send + 'static,
 {
     use crate::runtime::local_oup::{LocalOupOptions, bootstrap, resolve_stored_profile};
-    // The caller supplies the private home; apply the brand existence rule
-    // inside it (an existing new dir wins, else an existing legacy `.ra`
-    // keeps being used, else the new name) instead of hardcoding the legacy
-    // layout. `brand::state_home`/`config_home` are env-based and would read
-    // the *host* process env, which is not this home.
-    let new_state = home.join(ra_core::brand::STATE_DIR);
-    let legacy_state = home.join(ra_core::brand::LEGACY_STATE_DIR);
-    let data_dir = ra_core::brand::choose(
-        None,
-        None,
-        new_state.clone(),
-        legacy_state.clone(),
-        new_state.is_dir(),
-        legacy_state.is_dir(),
-    );
-    let new_config = home.join(".config").join(ra_core::brand::APP_SLUG);
-    let legacy_config = home.join(".config").join(ra_core::brand::LEGACY_SLUG);
-    let config_home = ra_core::brand::choose(
-        None,
-        None,
-        new_config.clone(),
-        legacy_config.clone(),
-        new_config.is_dir(),
-        legacy_config.is_dir(),
-    );
+    // The caller supplies the private home; resolve the `ra` state/config
+    // directories inside it instead of hardcoding the layout.
+    // `brand::state_home`/`config_home` are env-based and would read the
+    // *host* process env, which is not this home.
+    let data_dir = home.join(ra_core::brand::STATE_DIR);
+    let config_home = home.join(".config").join(ra_core::brand::APP_SLUG);
     let context = crate::config_context::ConfigContext {
         config_home: config_home.clone(),
         auth_home: config_home.clone(),

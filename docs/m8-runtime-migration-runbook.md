@@ -59,7 +59,7 @@ Each track's PR follows the same merge-and-deploy template:
 
 **W1 (pipeline host + frontend cards/cost)**
 
-- Merging this changes both backend and `octos-web`. The web bundle is
+- Merging this changes both backend and `ra-web`. The web bundle is
   served from `crates/ra-cli/static/admin/`; ensure the new bundle is
   in the release build (cargo wraps it via `build.rs`).
 - Smoke: trigger `run_pipeline` from the chat UI, verify NodeCards appear
@@ -89,7 +89,7 @@ Each track's PR follows the same merge-and-deploy template:
 
 - Adopts v2 in mofa_slides, podcast_generate, fm_tts (via the external
   mofa-skills repos — separate PR per plugin). When the upstream plugin
-  PR merges, ra picks up the new binary on the next `ra skills
+  PR merges, RecurAgent picks up the new binary on the next `RecurAgent skills
   upgrade` run.
 - The host-side integration tests in `e2e/tests/live-{pipeline,spawn,cost}-end-to-end.spec.ts`
   require all four tracks merged to fully pass.
@@ -185,9 +185,9 @@ fleet-wide deploy (§6).
 
 ```bash
 cd ~/home/ra/e2e
-OCTOS_TEST_URL=https://dspfac.bot.ominix.io \
-OCTOS_AUTH_TOKEN=ra-admin-2026 \
-OCTOS_PROFILE=dspfac \
+ra_TEST_URL=https://dspfac.bot.ominix.io \
+ra_AUTH_TOKEN=ra-admin-2026 \
+ra_PROFILE=dspfac \
   npx playwright test tests/runtime-regression.spec.ts --workers=1
 ```
 
@@ -198,8 +198,8 @@ events, slides project init, cross-session isolation. ~3 minutes.
 
 ```bash
 cd ~/home/ra/e2e
-OCTOS_TEST_URL=https://dspfac.bot.ominix.io \
-OCTOS_PROFILE=dspfac \
+ra_TEST_URL=https://dspfac.bot.ominix.io \
+ra_PROFILE=dspfac \
   npx playwright test tests/m8-runtime-invariants-live.spec.ts --workers=1
 ```
 
@@ -226,10 +226,10 @@ binary). This is the final gate before declaring the epic done.
 
 ```bash
 cd ~/home/ra/e2e
-OCTOS_TEST_URL=https://dspfac.bot.ominix.io \
-OCTOS_AUTH_TOKEN=ra-admin-2026 \
-OCTOS_PROFILE=dspfac \
-OCTOS_TEST_EMAIL=dspfac@gmail.com \
+ra_TEST_URL=https://dspfac.bot.ominix.io \
+ra_AUTH_TOKEN=ra-admin-2026 \
+ra_PROFILE=dspfac \
+ra_TEST_EMAIL=dspfac@gmail.com \
   npx playwright test --workers=2 \
     tests/live-pipeline-end-to-end.spec.ts \
     tests/live-spawn-end-to-end.spec.ts \
@@ -353,8 +353,8 @@ Replace ad-hoc `eprintln!("status: ...")` with v2 events:
 
 ```rust
 fn emit_progress(phase: &str, message: &str, progress: Option<f64>) {
-    let session_id = std::env::var("OCTOS_HARNESS_SESSION_ID").unwrap_or_default();
-    let task_id    = std::env::var("OCTOS_HARNESS_TASK_ID").unwrap_or_default();
+    let session_id = std::env::var("ra_HARNESS_SESSION_ID").unwrap_or_default();
+    let task_id    = std::env::var("ra_HARNESS_TASK_ID").unwrap_or_default();
     let event = serde_json::json!({
         "schema":   "ra.harness.event.v1",
         "kind":     "progress",
@@ -376,8 +376,8 @@ working unchanged. You can adopt incrementally.
 
 ```rust
 fn emit_cost(model: &str, tokens_in: u32, tokens_out: u32, usd: f64) {
-    let session_id = std::env::var("OCTOS_HARNESS_SESSION_ID").unwrap_or_default();
-    let task_id    = std::env::var("OCTOS_HARNESS_TASK_ID").unwrap_or_default();
+    let session_id = std::env::var("ra_HARNESS_SESSION_ID").unwrap_or_default();
+    let task_id    = std::env::var("ra_HARNESS_TASK_ID").unwrap_or_default();
     let event = serde_json::json!({
         "schema":         "ra.harness.event.v1",
         "kind":           "cost_attribution",
@@ -426,8 +426,8 @@ The `summary` field feeds the chat UI's per-task summary card.
 cd ~/home/mofa-skills/mofa-fm && cargo build --release
 
 # Run with the v2 contract env vars set
-OCTOS_HARNESS_SESSION_ID=test-sess \
-OCTOS_HARNESS_TASK_ID=test-task \
+ra_HARNESS_SESSION_ID=test-sess \
+ra_HARNESS_TASK_ID=test-task \
 echo '{"voice":"vivian","text":"hello"}' | \
   ./target/release/mofa-fm fm_tts
 
@@ -536,6 +536,6 @@ curl -s -H 'Authorization: Bearer ra-admin-2026' \
   https://dspfac.bot.ominix.io/api/health | jq .
 
 # run the M8 invariants suite
-cd e2e && OCTOS_TEST_URL=https://dspfac.bot.ominix.io OCTOS_PROFILE=dspfac \
+cd e2e && ra_TEST_URL=https://dspfac.bot.ominix.io ra_PROFILE=dspfac \
   npx playwright test tests/m8-runtime-invariants-live.spec.ts --workers=1
 ```

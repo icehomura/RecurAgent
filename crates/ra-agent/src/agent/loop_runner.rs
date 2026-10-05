@@ -2967,7 +2967,7 @@ impl Agent {
                         // the result output so the caller (or LLM next turn)
                         // sees the contract failure.
                         //
-                        // ra #997 (round-2 fix): RUN declared project-root
+                        // RecurAgent #997 (round-2 fix): RUN declared project-root
                         // validators BEFORE inspecting the contract. The
                         // contract gate reads
                         // `<kind>/<slug>/.ra/validator_outcomes.jsonl` — a
@@ -2975,7 +2975,7 @@ impl Agent {
                         // pre-round-2 because the declared validator chain
                         // was only invoked at the SESSION root. Without this
                         // call, a real valid deck whose project policy
-                        // declares a hard-required validator (ra #997:
+                        // declares a hard-required validator (RecurAgent #997:
                         // `slides.mofa_slides.pptx_magic_bytes`) shows
                         // `ready = false` purely because the persisted
                         // outcome is missing.

@@ -36,7 +36,7 @@ run:
 scripts/import-session-fixture.sh <mini-host> <remote-jsonl-path> <local-fixture-name>
 # e.g.
 scripts/import-session-fixture.sh mini3 \
-  /var/lib/octos/sessions/web-1777402538752.jsonl \
+  /var/lib/ra/sessions/web-1777402538752.jsonl \
   fixed-three-user-overflow.jsonl
 ```
 

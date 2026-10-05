@@ -1,7 +1,7 @@
 target/
 .git/
-.octos/
+.ra/
 *.md
-!crates/octos-agent/skills/**/SKILL.md
+!crates/ra-agent/skills/**/SKILL.md
 docs/
 .github/

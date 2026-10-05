@@ -29,7 +29,7 @@ pkgs.buildEnv {
 
   meta = with lib; {
     description = "ra - Agentic OS";
-    homepage = "https://github.com/your-org/ra";
+    homepage = "https://github.com/icehomura/ra";
     license = licenses.asl20;
     maintainers = [ ];
     platforms = platforms.linux ++ platforms.darwin;

@@ -3,7 +3,7 @@
 
 This validator checks the production review/start path:
 
-- octoscode sends review/start to octos serve --stdio.
+- ra-tui sends review/start to ra serve --stdio.
 - ra emits AppUI agent lifecycle/output/artifact events.
 - native, CLI, and MCP specialists all participate.
 - tmux captures show user-visible orchestration traces.
@@ -236,7 +236,7 @@ class Validator:
         no_secret_literal = not self.secret_leaks
         ok = launch_has_stdio_serve and capabilities_advertise_review and no_secret_literal
         self.add(
-            "real_octos_serve_stdio_backend",
+            "real_ra_serve_stdio_backend",
             ok,
             "TUI launched against ra serve --stdio with review/start and stdio MCP swarm backend"
             if ok

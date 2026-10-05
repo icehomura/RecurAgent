@@ -7,7 +7,7 @@ turn: 6
 
 互审收尾轮 v2 完成：
 
-- **`/private/tmp/octoloop-glm-k3-20260909/pr-628/.octos/cross-glm.md`**（唯一新写入文件，frontmatter 含 `outer_evidence=adjudicated`），含三节：A) k3 报告逐项裁决（v1 结论维持）、B) 外层反例裁决、C) 双方结论修订。
+- **`/private/tmp/octoloop-glm-k3-20260909/pr-628/.ra/cross-glm.md`**（唯一新写入文件，frontmatter 含 `outer_evidence=adjudicated`），含三节：A) k3 报告逐项裁决（v1 结论维持）、B) 外层反例裁决、C) 双方结论修订。
 - **native result.md + `.result-owner`（peer）** 已更新。
 
 三条反例的裁决核心：

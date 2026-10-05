@@ -1,13 +1,13 @@
 # Workspace for the crates vendored under `vendor/` for `ra-research`'s
-# `metasearch` feature (OctoScript core + the Makepad VM it re-exports).
+# `metasearch` feature (Rascript core + the Makepad VM it re-exports).
 #
 # Keeping them in their own workspace lets the tree be inspected/built
 # standalone; the root workspace pulls them in as path dependencies.
 [workspace]
 resolver = "2"
 members = [
-    "octoscript-core",
-    "octoscript-ui-l0",
+    "rascript-core",
+    "rascript-ui-l0",
     "makepad-script",
     "makepad-script-derive",
     "makepad-error-log",

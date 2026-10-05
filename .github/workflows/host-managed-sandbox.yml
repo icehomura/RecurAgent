@@ -48,4 +48,4 @@ jobs:
       - name: Build actual host-managed worker
         run: cargo build -p ra-cli --no-default-features --locked
       - name: Run confined ra model and tool turns
-        run: OCTOS_HOST_MANAGED_BINARY="$PWD/target/debug/ra" cargo test -p ra-sandbox --test host_managed --locked
+        run: ra_HOST_MANAGED_BINARY="$PWD/target/debug/ra" cargo test -p ra-sandbox --test host_managed --locked

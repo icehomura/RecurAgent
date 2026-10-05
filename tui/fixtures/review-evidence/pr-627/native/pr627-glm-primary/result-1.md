@@ -5,9 +5,9 @@ updated_unix: 1788923129
 turn: 1
 ---
 
-**报告文件**：`/private/tmp/octoloop-glm-k3-20260909/pr-627/.octos/independent-glm.md`
+**报告文件**：`/private/tmp/octoloop-glm-k3-20260909/pr-627/.ra/independent-glm.md`
 
-**审查范围**：`git diff 0a174d9..fbb59c3`（HEAD 已核验为 fbb59c32f5f830c5a63e409de6dbe123bafeb922），上游契约对照 `d51601df`（octos-core rev 与 Cargo.lock 一致）。验证级别：partially-verified，动态未验证（未跑 cargo）。
+**审查范围**：`git diff 0a174d9..fbb59c3`（HEAD 已核验为 fbb59c32f5f830c5a63e409de6dbe123bafeb922），上游契约对照 `d51601df`（ra-core rev 与 Cargo.lock 一致）。验证级别：partially-verified，动态未验证（未跑 cargo）。
 
 ## 逐项发现（无 blocker / 无 major）
 
@@ -32,4 +32,4 @@ turn: 1
 
 **建议可合并（no blocker / no major）**。核心链路与上游 d51601df 契约逐项对齐，6+4 个新测试的断言目标与 PR 承诺真实对应（含非法路径：劫持防护、状态漂移中止、裸动词解析），向后兼容处理正确。3 个 minor（F1/F2/F3）与 F7 测试缺口适合作为跟进 PR，不阻塞。
 
-盲审约束已遵守：未读取 `.octos/` 下任何其他报告或先前 Codex 报告；未修改源码、未 commit/push、未启动子进程、未跑 cargo。
+盲审约束已遵守：未读取 `.ra/` 下任何其他报告或先前 Codex 报告；未修改源码、未 commit/push、未启动子进程、未跑 cargo。

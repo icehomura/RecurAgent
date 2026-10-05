@@ -3,45 +3,45 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
-octos_repo="${OCTOS_REPO:-$(cd "$repo_root/../ra" 2>/dev/null && pwd || true)}"
+ra_repo="${ra_REPO:-$(cd "$repo_root/../ra" 2>/dev/null && pwd || true)}"
 
-run_id="${OCTOSCODE_SOAK_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
-artifact_root="${OCTOSCODE_SOAK_ARTIFACT_ROOT:-$repo_root/e2e/test-results-tui-onboarding}"
-artifact_dir="${OCTOSCODE_SOAK_ARTIFACT_DIR:-$artifact_root/$run_id}"
-runtime_root="${OCTOSCODE_SOAK_RUNTIME_ROOT:-/tmp/octoscode-onboarding-$run_id}"
-workspace="${OCTOSCODE_SOAK_WORKSPACE:-$runtime_root/workspace}"
-data_dir="${OCTOSCODE_SOAK_DATA_DIR:-$runtime_root/data}"
-logs_dir="${OCTOSCODE_SOAK_LOGS_DIR:-$runtime_root/logs}"
+run_id="${RA_TUI_SOAK_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
+artifact_root="${RA_TUI_SOAK_ARTIFACT_ROOT:-$repo_root/e2e/test-results-tui-onboarding}"
+artifact_dir="${RA_TUI_SOAK_ARTIFACT_DIR:-$artifact_root/$run_id}"
+runtime_root="${RA_TUI_SOAK_RUNTIME_ROOT:-/tmp/ra-tui-onboarding-$run_id}"
+workspace="${RA_TUI_SOAK_WORKSPACE:-$runtime_root/workspace}"
+data_dir="${RA_TUI_SOAK_DATA_DIR:-$runtime_root/data}"
+logs_dir="${RA_TUI_SOAK_LOGS_DIR:-$runtime_root/logs}"
 
-octos_bin="${OCTOS_BIN:-${octos_repo:+$octos_repo/target/debug/ra}}"
-octoscode_bin="${OCTOSCODE_BIN:-$repo_root/target/debug/octoscode}"
-transport="${OCTOSCODE_SOAK_TRANSPORT:-ws}"
+ra_bin="${ra_BIN:-${ra_repo:+$ra_repo/target/debug/ra}}"
+ra_tui_bin="${RA_TUI_BIN:-$repo_root/target/debug/ra-tui}"
+transport="${RA_TUI_SOAK_TRANSPORT:-ws}"
 if [ "$transport" = "stdio" ]; then
   default_solo_probe_data_dir="$runtime_root/solo-probe-data"
 else
   default_solo_probe_data_dir="$data_dir"
 fi
-solo_probe_data_dir="${OCTOSCODE_SOAK_SOLO_PROBE_DATA_DIR:-$default_solo_probe_data_dir}"
-solo_probe_server_log="${OCTOSCODE_SOAK_SOLO_PROBE_SERVER_LOG:-$logs_dir/solo-probe-server.log}"
-host="${OCTOSCODE_SOAK_HOST:-127.0.0.1}"
-port="${OCTOSCODE_SOAK_PORT:-50179}"
-auth_token="${OCTOSCODE_SOAK_AUTH_TOKEN:-octoscode-onboarding-soak-token}"
-profile_id="${OCTOSCODE_SOAK_PROFILE:-coding}"
-session_id="${OCTOSCODE_SOAK_SESSION:-$profile_id:local:onboarding#$run_id}"
-open_session="${OCTOSCODE_SOAK_OPEN_SESSION:-auto}"
-theme="${OCTOSCODE_SOAK_THEME:-codex}"
-serve_args="${OCTOSCODE_SOAK_SERVE_ARGS:-}"
-server_session="${OCTOSCODE_SOAK_SERVER_SESSION:-ra-onboard-server-$run_id}"
-tui_session="${OCTOSCODE_SOAK_TUI_SESSION:-ra-onboard-tui-$run_id}"
-fake_openai="${OCTOSCODE_SOAK_FAKE_OPENAI:-0}"
-fake_openai_host="${OCTOSCODE_SOAK_FAKE_OPENAI_HOST:-127.0.0.1}"
-fake_openai_port="${OCTOSCODE_SOAK_FAKE_OPENAI_PORT:-50180}"
-fake_openai_session="${OCTOSCODE_SOAK_FAKE_OPENAI_SESSION:-ra-onboard-fake-openai-$run_id}"
-fake_openai_delay_secs="${OCTOSCODE_SOAK_FAKE_OPENAI_DELAY_SECS:-0}"
-provider_env_vars="${OCTOSCODE_SOAK_PROVIDER_ENV_VARS:-OPENAI_API_KEY ANTHROPIC_API_KEY DEEPSEEK_API_KEY OPENROUTER_API_KEY MOONSHOT_API_KEY KIMI_API_KEY AUTODL_API_KEY}"
-require_live_provider="${OCTOSCODE_SOAK_REQUIRE_LIVE_PROVIDER:-1}"
-transport_parity_mode="${OCTOSCODE_SOAK_TRANSPORT_PARITY_MODE:-sequence}"
-first_launch_capture="${OCTOSCODE_SOAK_FIRST_LAUNCH_CAPTURE:-0}"
+solo_probe_data_dir="${RA_TUI_SOAK_SOLO_PROBE_DATA_DIR:-$default_solo_probe_data_dir}"
+solo_probe_server_log="${RA_TUI_SOAK_SOLO_PROBE_SERVER_LOG:-$logs_dir/solo-probe-server.log}"
+host="${RA_TUI_SOAK_HOST:-127.0.0.1}"
+port="${RA_TUI_SOAK_PORT:-50179}"
+auth_token="${RA_TUI_SOAK_AUTH_TOKEN:-ra-tui-onboarding-soak-token}"
+profile_id="${RA_TUI_SOAK_PROFILE:-coding}"
+session_id="${RA_TUI_SOAK_SESSION:-$profile_id:local:onboarding#$run_id}"
+open_session="${RA_TUI_SOAK_OPEN_SESSION:-auto}"
+theme="${RA_TUI_SOAK_THEME:-codex}"
+serve_args="${RA_TUI_SOAK_SERVE_ARGS:-}"
+server_session="${RA_TUI_SOAK_SERVER_SESSION:-ra-onboard-server-$run_id}"
+tui_session="${RA_TUI_SOAK_TUI_SESSION:-ra-onboard-tui-$run_id}"
+fake_openai="${RA_TUI_SOAK_FAKE_OPENAI:-0}"
+fake_openai_host="${RA_TUI_SOAK_FAKE_OPENAI_HOST:-127.0.0.1}"
+fake_openai_port="${RA_TUI_SOAK_FAKE_OPENAI_PORT:-50180}"
+fake_openai_session="${RA_TUI_SOAK_FAKE_OPENAI_SESSION:-ra-onboard-fake-openai-$run_id}"
+fake_openai_delay_secs="${RA_TUI_SOAK_FAKE_OPENAI_DELAY_SECS:-0}"
+provider_env_vars="${RA_TUI_SOAK_PROVIDER_ENV_VARS:-OPENAI_API_KEY ANTHROPIC_API_KEY DEEPSEEK_API_KEY OPENROUTER_API_KEY MOONSHOT_API_KEY KIMI_API_KEY AUTODL_API_KEY}"
+require_live_provider="${RA_TUI_SOAK_REQUIRE_LIVE_PROVIDER:-1}"
+transport_parity_mode="${RA_TUI_SOAK_TRANSPORT_PARITY_MODE:-sequence}"
+first_launch_capture="${RA_TUI_SOAK_FIRST_LAUNCH_CAPTURE:-0}"
 endpoint="ws://$host:$port/api/ui-protocol/ws"
 
 usage() {
@@ -49,86 +49,86 @@ usage() {
 Usage: scripts/run-onboarding-tmux-soak.sh <preflight-live|start|restart-server|drive-onboard|drive-solo|drive-permissions|drive-provider-missing|drive-approval-denial|drive-multiline-composer|drive-runtime-menus|drive-task-subagent-tree|drive-task-subagent-reconnect|drive-task-subagent-old-server-fallback|drive-autonomy-live|drive-autonomy-reconnect|drive-dropped-completion-backpressure|drive-interrupt-reconnect|drive-validator-cycle|drive-long-output|drive-narrow-terminal|drive-diff-artifact|drive-tool-denial|drive-tool-success|capture|send-turn|verify|verify-onboard|verify-solo|verify-solo-closure|verify-solo-transport-closure|verify-first-launch|verify-provider-missing|verify-permissions|verify-approval-denial|verify-multiline-composer|verify-runtime-menus|verify-task-subagent-tree|verify-task-subagent-reconnect|verify-task-subagent-old-server-fallback|verify-task-subagent-closure|verify-backpressure|verify-interrupt-reconnect|verify-validator-cycle|verify-long-output|verify-narrow-terminal|verify-diff-artifact|verify-tool-denial|verify-tool-success|verify-autonomy-live|verify-autonomy-reconnect|verify-autonomy-closure|verify-transport-parity|verify-ux-run|api-parity|self-test|solo-self-test|stop|help>
 
 Environment:
-  OCTOS_REPO                     Path to sibling ra checkout.
-  OCTOS_BIN                      ra backend binary.
-  OCTOSCODE_BIN                  octoscode binary.
-  OCTOSCODE_SOAK_TRANSPORT       ws or stdio, default ws.
-  OCTOSCODE_SOAK_RUN_ID          Stable run id for repeated capture/verify.
-  OCTOSCODE_SOAK_RUNTIME_ROOT    Runtime workspace/data/log root used by tmux children, default /tmp/octoscode-onboarding-$run_id.
-  OCTOSCODE_SOAK_PORT            Backend port, default 50179.
-  OCTOSCODE_SOAK_PROFILE         Profile id, default coding.
-  OCTOSCODE_SOAK_OPEN_SESSION    1, 0, or auto. auto skips session/open until a profile JSON exists.
-  OCTOSCODE_SOAK_SERVE_ARGS      Extra ra serve args.
-  OCTOSCODE_SOAK_EXPECT_FAMILY   Optional family_id expected in profile JSON.
-  OCTOSCODE_SOAK_EXPECT_MODEL    Optional model_id expected in redacted profile JSON.
-  OCTOSCODE_SOAK_EXPECT_ROUTE    Optional route.route_id expected in profile JSON.
-  OCTOSCODE_SOAK_EXPECT_BASE_URL Optional route.base_url expected in profile JSON.
-  OCTOSCODE_SOAK_API_KEY         Optional secret string checked for capture leaks.
-  OCTOSCODE_SOAK_PROVIDER_ENV_VARS Space/comma-separated provider key env vars
+  ra_REPO                     Path to sibling ra checkout.
+  ra_BIN                      ra backend binary.
+  RA_TUI_BIN                  ra-tui binary.
+  RA_TUI_SOAK_TRANSPORT       ws or stdio, default ws.
+  RA_TUI_SOAK_RUN_ID          Stable run id for repeated capture/verify.
+  RA_TUI_SOAK_RUNTIME_ROOT    Runtime workspace/data/log root used by tmux children, default /tmp/ra-tui-onboarding-$run_id.
+  RA_TUI_SOAK_PORT            Backend port, default 50179.
+  RA_TUI_SOAK_PROFILE         Profile id, default coding.
+  RA_TUI_SOAK_OPEN_SESSION    1, 0, or auto. auto skips session/open until a profile JSON exists.
+  RA_TUI_SOAK_SERVE_ARGS      Extra ra serve args.
+  RA_TUI_SOAK_EXPECT_FAMILY   Optional family_id expected in profile JSON.
+  RA_TUI_SOAK_EXPECT_MODEL    Optional model_id expected in redacted profile JSON.
+  RA_TUI_SOAK_EXPECT_ROUTE    Optional route.route_id expected in profile JSON.
+  RA_TUI_SOAK_EXPECT_BASE_URL Optional route.base_url expected in profile JSON.
+  RA_TUI_SOAK_API_KEY         Optional secret string checked for capture leaks.
+  RA_TUI_SOAK_PROVIDER_ENV_VARS Space/comma-separated provider key env vars
                                  accepted by preflight-live.
-  OCTOSCODE_SOAK_REQUIRE_LIVE_PROVIDER Set to 0 for provider-free dry-run preflight.
-  OCTOSCODE_SOAK_INIT_PROFILE_LLM Set to 1 to pre-seed profile JSON before backend bootstraps.
-  OCTOSCODE_SOAK_TENANT_NEGATIVE Set to 1 to also run tenant/cloud dangerous-mode negative probe.
-  OCTOSCODE_SOAK_EXPECT_TENANT_NEGATIVE Set to 1 during verify-solo to require
+  RA_TUI_SOAK_REQUIRE_LIVE_PROVIDER Set to 0 for provider-free dry-run preflight.
+  RA_TUI_SOAK_INIT_PROFILE_LLM Set to 1 to pre-seed profile JSON before backend bootstraps.
+  RA_TUI_SOAK_TENANT_NEGATIVE Set to 1 to also run tenant/cloud dangerous-mode negative probe.
+  RA_TUI_SOAK_EXPECT_TENANT_NEGATIVE Set to 1 during verify-solo to require
                                  a passed tenant/cloud dangerous-mode rejection row.
-  OCTOSCODE_SOAK_SOLO_PROBE_DATA_DIR Optional separate data dir for stdio solo probe.
-  OCTOSCODE_SOAK_FAKE_OPENAI     Set to 1 to start scripts/fake-openai-server.py in tmux.
-  OCTOSCODE_SOAK_FAKE_OPENAI_PORT Local fake OpenAI-compatible port, default 50180.
-  OCTOSCODE_SOAK_FAKE_OPENAI_DELAY_SECS Optional fake API response delay for progress captures.
-  OCTOSCODE_SOAK_MULTILINE_PROMPT Optional multiline composer text used by
+  RA_TUI_SOAK_SOLO_PROBE_DATA_DIR Optional separate data dir for stdio solo probe.
+  RA_TUI_SOAK_FAKE_OPENAI     Set to 1 to start scripts/fake-openai-server.py in tmux.
+  RA_TUI_SOAK_FAKE_OPENAI_PORT Local fake OpenAI-compatible port, default 50180.
+  RA_TUI_SOAK_FAKE_OPENAI_DELAY_SECS Optional fake API response delay for progress captures.
+  RA_TUI_SOAK_MULTILINE_PROMPT Optional multiline composer text used by
                                  drive-multiline-composer.
-  OCTOSCODE_SOAK_INTERRUPT_PROMPT Optional long-running prompt used by
+  RA_TUI_SOAK_INTERRUPT_PROMPT Optional long-running prompt used by
                                  drive-interrupt-reconnect.
-  OCTOSCODE_SOAK_VALIDATOR_PROMPT Optional prompt used by
+  RA_TUI_SOAK_VALIDATOR_PROMPT Optional prompt used by
                                  drive-validator-cycle.
-  OCTOSCODE_SOAK_LONG_OUTPUT_PROMPT Optional prompt used by
+  RA_TUI_SOAK_LONG_OUTPUT_PROMPT Optional prompt used by
                                  drive-long-output.
-  OCTOSCODE_SOAK_NARROW_COLS    Narrow terminal columns, default 80.
-  OCTOSCODE_SOAK_NARROW_ROWS    Narrow terminal rows, default 24.
-  OCTOSCODE_SOAK_DIFF_ARTIFACT_PROMPT Optional prompt used by
+  RA_TUI_SOAK_NARROW_COLS    Narrow terminal columns, default 80.
+  RA_TUI_SOAK_NARROW_ROWS    Narrow terminal rows, default 24.
+  RA_TUI_SOAK_DIFF_ARTIFACT_PROMPT Optional prompt used by
                                  drive-diff-artifact.
-  OCTOSCODE_SOAK_TOOL_DENIAL_PROMPT Optional prompt used by
+  RA_TUI_SOAK_TOOL_DENIAL_PROMPT Optional prompt used by
                                  drive-tool-denial.
-  OCTOSCODE_SOAK_TOOL_SUCCESS_PROMPT Optional prompt used by
+  RA_TUI_SOAK_TOOL_SUCCESS_PROMPT Optional prompt used by
                                  drive-tool-success.
-  OCTOSCODE_SOAK_AUTONOMY_GOAL Optional /goal objective used by
+  RA_TUI_SOAK_AUTONOMY_GOAL Optional /goal objective used by
                                  drive-autonomy-live.
-  OCTOSCODE_SOAK_AUTONOMY_LOOP_ID Optional loop id used by
+  RA_TUI_SOAK_AUTONOMY_LOOP_ID Optional loop id used by
                                  drive-autonomy-live for fire-now/pause/resume.
-  OCTOSCODE_SOAK_AUTONOMY_AGENT_ID Optional agent id used by
+  RA_TUI_SOAK_AUTONOMY_AGENT_ID Optional agent id used by
                                  drive-autonomy-live for status/output/artifacts.
-  OCTOSCODE_M15_UX_OUTPUT_DIR    Optional live M15 evidence directory copied
+  RA_TUI_M15_UX_OUTPUT_DIR    Optional live M15 evidence directory copied
                                  into the retained artifact bundle.
-  OCTOSCODE_SOAK_WS_ARTIFACT_DIR WebSocket artifact dir for transport parity
+  RA_TUI_SOAK_WS_ARTIFACT_DIR WebSocket artifact dir for transport parity
                                  and verify-solo-transport-closure.
-  OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR Stdio artifact dir for transport parity
+  RA_TUI_SOAK_STDIO_ARTIFACT_DIR Stdio artifact dir for transport parity
                                  and verify-solo-transport-closure.
-  OCTOSCODE_SOAK_TRANSPORT_PARITY_MODE sequence, set, or autonomy-required;
+  RA_TUI_SOAK_TRANSPORT_PARITY_MODE sequence, set, or autonomy-required;
                                  default sequence. autonomy-required normalizes
                                  UI-Protocol §14 superseded/projection methods
                                  and asserts every required autonomy category is
                                  present in both transports (used by
                                  verify-autonomy-closure); sequence/set keep
                                  exact comparison for deterministic fixtures.
-  OCTOSCODE_SOAK_TASK_RECONNECT_ARTIFACT_DIR Optional reconnect artifact dir
+  RA_TUI_SOAK_TASK_RECONNECT_ARTIFACT_DIR Optional reconnect artifact dir
                                  used by verify-task-subagent-closure.
-  OCTOSCODE_SOAK_TASK_OLD_SERVER_ARTIFACT_DIR Optional old-server fallback
+  RA_TUI_SOAK_TASK_OLD_SERVER_ARTIFACT_DIR Optional old-server fallback
                                  artifact dir used by verify-task-subagent-closure.
-  OCTOSCODE_SOAK_AUTONOMY_RECONNECT_ARTIFACT_DIR Optional reconnect artifact
+  RA_TUI_SOAK_AUTONOMY_RECONNECT_ARTIFACT_DIR Optional reconnect artifact
                                  dir used by verify-autonomy-closure.
-  OCTOSCODE_SOAK_FIRST_LAUNCH_CAPTURE Set to 1 to launch without a preselected
+  RA_TUI_SOAK_FIRST_LAUNCH_CAPTURE Set to 1 to launch without a preselected
                                  profile/session and save tui-capture-first-launch.txt.
-  OCTOSCODE_SOAK_REQUIRE_PROFILE Set to 0 to allow verify without profile JSON.
-  OCTOSCODE_SOAK_SOLO_STRICT     Set to 1 to fail when M12-A/C capability blockers remain.
+  RA_TUI_SOAK_REQUIRE_PROFILE Set to 0 to allow verify without profile JSON.
+  RA_TUI_SOAK_SOLO_STRICT     Set to 1 to fail when M12-A/C capability blockers remain.
                                  Also requires MCP/tool fixture mutations to pass
                                  when the backend advertises those methods.
-  OCTOSCODE_SOAK_REQUIRED_SOLO_CASES Space/comma-separated case names that
+  RA_TUI_SOAK_REQUIRED_SOLO_CASES Space/comma-separated case names that
                                  must be status=ok in verify-solo.
-  OCTOSCODE_SOAK_MULTILINE_ARTIFACT_DIR Optional multiline artifact dir used
+  RA_TUI_SOAK_MULTILINE_ARTIFACT_DIR Optional multiline artifact dir used
                                  by verify-solo-closure.
 
 Interactive flow after start:
-  1. Attach: tmux attach -t "$OCTOSCODE_SOAK_TUI_SESSION"
+  1. Attach: tmux attach -t "$RA_TUI_SOAK_TUI_SESSION"
   2. For M12 local solo no-OTP evidence use:
        scripts/run-onboarding-tmux-soak.sh drive-solo
   3. For legacy provider onboarding, run /onboard. For automated smoke use:
@@ -147,7 +147,7 @@ die() {
 
 case "$transport" in
   ws|stdio) ;;
-  *) die "OCTOSCODE_SOAK_TRANSPORT must be ws or stdio, got: $transport" ;;
+  *) die "RA_TUI_SOAK_TRANSPORT must be ws or stdio, got: $transport" ;;
 esac
 
 require_bin() {
@@ -158,10 +158,10 @@ require_bin() {
   fi
 }
 
-require_octos_serve() {
-  require_bin OCTOS_BIN "$octos_bin"
-  if ! "$octos_bin" serve --help >/dev/null 2>&1; then
-    die "OCTOS_BIN does not expose 'serve'; build ra-cli with the api feature or set OCTOS_BIN to an API-enabled binary"
+require_ra_serve() {
+  require_bin ra_BIN "$ra_bin"
+  if ! "$ra_bin" serve --help >/dev/null 2>&1; then
+    die "ra_BIN does not expose 'serve'; build ra-cli with the api feature or set ra_BIN to an API-enabled binary"
   fi
 }
 
@@ -187,8 +187,8 @@ git_commit_for_dir() {
 }
 
 provider_credential_source() {
-  if [ -n "${OCTOSCODE_SOAK_API_KEY:-}" ]; then
-    printf 'OCTOSCODE_SOAK_API_KEY\n'
+  if [ -n "${RA_TUI_SOAK_API_KEY:-}" ]; then
+    printf 'RA_TUI_SOAK_API_KEY\n'
     return 0
   fi
 
@@ -214,22 +214,22 @@ write_live_preflight_json() {
   local failure="$2"
   local provider_source="$3"
   local tmux_check="$4"
-  local octos_check="$5"
+  local ra_check="$5"
   local tui_check="$6"
   local tmux_version="$7"
   local tmux_version_status="$8"
   local ra_version="$9"
-  local octos_version_status="${10}"
-  local octoscode_version="${11}"
-  local octoscode_version_status="${12}"
-  local octos_repo_commit="${13}"
-  local octoscode_repo_commit="${14}"
+  local ra_version_status="${10}"
+  local ra_tui_version="${11}"
+  local ra_tui_version_status="${12}"
+  local ra_repo_commit="${13}"
+  local ra_tui_repo_commit="${14}"
   local host_name="${15}"
   local os_release="${16}"
   mkdir -p "$artifact_dir"
   {
     printf '{\n'
-    write_json_string_field schema "octoscode.live-preflight.v1"
+    write_json_string_field schema "ra-tui.live-preflight.v1"
     write_json_string_field run_id "$run_id"
     write_json_string_field status "$status"
     write_json_string_field transport "$transport"
@@ -245,16 +245,16 @@ write_live_preflight_json() {
     write_json_string_field tmux "$tmux_check"
     write_json_string_field tmux_version "$tmux_version"
     write_json_string_field tmux_version_status "$tmux_version_status"
-    write_json_string_field octos_serve "$octos_check"
-    write_json_string_field octos_bin "$octos_bin"
+    write_json_string_field ra_serve "$ra_check"
+    write_json_string_field ra_bin "$ra_bin"
     write_json_string_field ra_version "$ra_version"
-    write_json_string_field octos_version_status "$octos_version_status"
-    write_json_string_field octos_repo_commit "$octos_repo_commit"
-    write_json_string_field octoscode "$tui_check"
-    write_json_string_field octoscode_bin "$octoscode_bin"
-    write_json_string_field octoscode_version "$octoscode_version"
-    write_json_string_field octoscode_version_status "$octoscode_version_status"
-    write_json_string_field octoscode_repo_commit "$octoscode_repo_commit"
+    write_json_string_field ra_version_status "$ra_version_status"
+    write_json_string_field ra_repo_commit "$ra_repo_commit"
+    write_json_string_field ra-tui "$tui_check"
+    write_json_string_field ra_tui_bin "$ra_tui_bin"
+    write_json_string_field ra_tui_version "$ra_tui_version"
+    write_json_string_field ra_tui_version_status "$ra_tui_version_status"
+    write_json_string_field ra_tui_repo_commit "$ra_tui_repo_commit"
     write_json_string_field provider_credential "$provider_source"
     write_json_string_field provider_env_vars_checked "$provider_env_vars"
     write_json_string_field require_live_provider "$require_live_provider"
@@ -268,24 +268,24 @@ preflight_live() {
   local status="passed"
   local failure=""
   local tmux_check="passed"
-  local octos_check="passed"
+  local ra_check="passed"
   local tui_check="passed"
   local tmux_version=""
   local tmux_version_status=""
   local ra_version=""
-  local octos_version_status=""
-  local octoscode_version=""
-  local octoscode_version_status=""
-  local octos_repo_commit=""
-  local octoscode_repo_commit=""
+  local ra_version_status=""
+  local ra_tui_version=""
+  local ra_tui_version_status=""
+  local ra_repo_commit=""
+  local ra_tui_repo_commit=""
   local host_name=""
   local os_release=""
   local provider_source=""
 
   host_name="$(hostname 2>/dev/null || true)"
   os_release="$(uname -a 2>/dev/null || true)"
-  octos_repo_commit="$(git_commit_for_dir "$octos_repo")"
-  octoscode_repo_commit="$(git_commit_for_dir "$repo_root")"
+  ra_repo_commit="$(git_commit_for_dir "$ra_repo")"
+  ra_tui_repo_commit="$(git_commit_for_dir "$repo_root")"
 
   if ! command -v tmux >/dev/null 2>&1; then
     tmux_check="missing"
@@ -299,33 +299,33 @@ preflight_live() {
     tmux_version_status="unsupported"
   fi
 
-  if [ -z "$octos_bin" ] || [ ! -x "$octos_bin" ]; then
-    octos_check="not executable"
-    octos_version_status="not executable"
+  if [ -z "$ra_bin" ] || [ ! -x "$ra_bin" ]; then
+    ra_check="not executable"
+    ra_version_status="not executable"
     status="failed"
-    [ -n "$failure" ] || failure="OCTOS_BIN is not executable: ${octos_bin:-<unset>}"
-  elif ! "$octos_bin" serve --help >/dev/null 2>&1; then
-    octos_check="missing serve"
-    octos_version_status="missing serve"
+    [ -n "$failure" ] || failure="ra_BIN is not executable: ${ra_bin:-<unset>}"
+  elif ! "$ra_bin" serve --help >/dev/null 2>&1; then
+    ra_check="missing serve"
+    ra_version_status="missing serve"
     status="failed"
-    [ -n "$failure" ] || failure="OCTOS_BIN does not expose 'serve'; build ra-cli with the api feature or set OCTOS_BIN to an API-enabled binary"
-  elif ra_version="$("$octos_bin" --version 2>/dev/null)"; then
-    octos_version_status="passed"
+    [ -n "$failure" ] || failure="ra_BIN does not expose 'serve'; build ra-cli with the api feature or set ra_BIN to an API-enabled binary"
+  elif ra_version="$("$ra_bin" --version 2>/dev/null)"; then
+    ra_version_status="passed"
   else
     ra_version="unsupported"
-    octos_version_status="unsupported"
+    ra_version_status="unsupported"
   fi
 
-  if [ -z "$octoscode_bin" ] || [ ! -x "$octoscode_bin" ]; then
+  if [ -z "$ra_tui_bin" ] || [ ! -x "$ra_tui_bin" ]; then
     tui_check="not executable"
-    octoscode_version_status="not executable"
+    ra_tui_version_status="not executable"
     status="failed"
-    [ -n "$failure" ] || failure="OCTOSCODE_BIN is not executable: ${octoscode_bin:-<unset>}"
-  elif octoscode_version="$("$octoscode_bin" --version 2>/dev/null)"; then
-    octoscode_version_status="passed"
+    [ -n "$failure" ] || failure="RA_TUI_BIN is not executable: ${ra_tui_bin:-<unset>}"
+  elif ra_tui_version="$("$ra_tui_bin" --version 2>/dev/null)"; then
+    ra_tui_version_status="passed"
   else
-    octoscode_version="unsupported"
-    octoscode_version_status="unsupported"
+    ra_tui_version="unsupported"
+    ra_tui_version_status="unsupported"
   fi
 
   if [ "$require_live_provider" != "0" ]; then
@@ -333,13 +333,13 @@ preflight_live() {
     if [ -z "$provider_source" ]; then
       provider_source="missing"
       status="failed"
-      [ -n "$failure" ] || failure="no provider credential found. Set OCTOSCODE_SOAK_API_KEY, one of OCTOSCODE_SOAK_PROVIDER_ENV_VARS, or pre-seed $data_dir/profiles/$profile_id.json with profile env_vars. Set OCTOSCODE_SOAK_REQUIRE_LIVE_PROVIDER=0 only for provider-free dry runs."
+      [ -n "$failure" ] || failure="no provider credential found. Set RA_TUI_SOAK_API_KEY, one of RA_TUI_SOAK_PROVIDER_ENV_VARS, or pre-seed $data_dir/profiles/$profile_id.json with profile env_vars. Set RA_TUI_SOAK_REQUIRE_LIVE_PROVIDER=0 only for provider-free dry runs."
     fi
   else
     provider_source="not required"
   fi
 
-  write_live_preflight_json "$status" "$failure" "$provider_source" "$tmux_check" "$octos_check" "$tui_check" "$tmux_version" "$tmux_version_status" "$ra_version" "$octos_version_status" "$octoscode_version" "$octoscode_version_status" "$octos_repo_commit" "$octoscode_repo_commit" "$host_name" "$os_release"
+  write_live_preflight_json "$status" "$failure" "$provider_source" "$tmux_check" "$ra_check" "$tui_check" "$tmux_version" "$tmux_version_status" "$ra_version" "$ra_version_status" "$ra_tui_version" "$ra_tui_version_status" "$ra_repo_commit" "$ra_tui_repo_commit" "$host_name" "$os_release"
 
   if [ "$status" != "passed" ]; then
     die "Live closure preflight failed: $failure (artifact: $artifact_dir/live-preflight.json)"
@@ -351,14 +351,14 @@ preflight_live() {
   printf 'os=%s\n' "$os_release"
   printf 'tmux_version=%s\n' "$tmux_version"
   printf 'tmux_version_status=%s\n' "$tmux_version_status"
-  printf 'octos_bin=%s\n' "$octos_bin"
+  printf 'ra_bin=%s\n' "$ra_bin"
   printf 'ra_version=%s\n' "$ra_version"
-  printf 'octos_version_status=%s\n' "$octos_version_status"
-  printf 'octos_repo_commit=%s\n' "$octos_repo_commit"
-  printf 'octoscode_bin=%s\n' "$octoscode_bin"
-  printf 'octoscode_version=%s\n' "$octoscode_version"
-  printf 'octoscode_version_status=%s\n' "$octoscode_version_status"
-  printf 'octoscode_repo_commit=%s\n' "$octoscode_repo_commit"
+  printf 'ra_version_status=%s\n' "$ra_version_status"
+  printf 'ra_repo_commit=%s\n' "$ra_repo_commit"
+  printf 'ra_tui_bin=%s\n' "$ra_tui_bin"
+  printf 'ra_tui_version=%s\n' "$ra_tui_version"
+  printf 'ra_tui_version_status=%s\n' "$ra_tui_version_status"
+  printf 'ra_tui_repo_commit=%s\n' "$ra_tui_repo_commit"
   printf 'provider_credential=%s\n' "$provider_source"
   printf 'provider_env_vars_checked=%s\n' "$provider_env_vars"
   printf 'artifact=%s\n' "$artifact_dir/live-preflight.json"
@@ -433,9 +433,9 @@ wait_for_tui_text() {
 
 submit_composer_prompt() {
   local prompt="$1"
-  local buffer="octoscode-soak-prompt-$run_id"
+  local buffer="ra-tui-soak-prompt-$run_id"
   local tmp
-  tmp="$(mktemp "${TMPDIR:-/tmp}/octoscode-prompt.XXXXXX")"
+  tmp="$(mktemp "${TMPDIR:-/tmp}/ra-tui-prompt.XXXXXX")"
   printf '%s' "$prompt" > "$tmp"
   tmux send-keys -t "$tui_session" Escape
   sleep 0.2
@@ -443,7 +443,7 @@ submit_composer_prompt() {
   rm -f "$tmp"
   tmux paste-buffer -p -t "$tui_session" -b "$buffer"
   tmux delete-buffer -b "$buffer" >/dev/null 2>&1 || true
-  sleep "${OCTOSCODE_SOAK_PROMPT_SETTLE_SECS:-0.35}"
+  sleep "${RA_TUI_SOAK_PROMPT_SETTLE_SECS:-0.35}"
   tmux send-keys -t "$tui_session" Enter
 }
 
@@ -574,7 +574,7 @@ assert_profile_value() {
 secret_leak_check_dir() {
   local dir="$1"
   local label="$2"
-  local secret="${OCTOSCODE_SOAK_API_KEY:-}"
+  local secret="${RA_TUI_SOAK_API_KEY:-}"
   local file
   if [ -z "$secret" ]; then
     return 0
@@ -594,26 +594,26 @@ secret_leak_check() {
 }
 
 runtime_env_prefix() {
-  local api_key_env="${OCTOSCODE_SOAK_EXPECT_API_KEY_ENV:-AUTODL_API_KEY}"
-  local api_key="${OCTOSCODE_SOAK_API_KEY:-}"
+  local api_key_env="${RA_TUI_SOAK_EXPECT_API_KEY_ENV:-AUTODL_API_KEY}"
+  local api_key="${RA_TUI_SOAK_API_KEY:-}"
   local prefix=""
   if [ -n "$api_key" ]; then
     prefix="$prefix $(shell_quote "$api_key_env=$api_key")"
   fi
-  if [ -n "${OCTOS_M9_PROTOCOL_FIXTURES:-}" ]; then
-    prefix="$prefix $(shell_quote "OCTOS_M9_PROTOCOL_FIXTURES=$OCTOS_M9_PROTOCOL_FIXTURES")"
+  if [ -n "${ra_M9_PROTOCOL_FIXTURES:-}" ]; then
+    prefix="$prefix $(shell_quote "ra_M9_PROTOCOL_FIXTURES=$ra_M9_PROTOCOL_FIXTURES")"
   fi
-  if [ -n "${OCTOS_M15_LIVE_SUBAGENT_FIXTURE:-}" ]; then
-    prefix="$prefix $(shell_quote "OCTOS_M15_LIVE_SUBAGENT_FIXTURE=$OCTOS_M15_LIVE_SUBAGENT_FIXTURE")"
+  if [ -n "${ra_M15_LIVE_SUBAGENT_FIXTURE:-}" ]; then
+    prefix="$prefix $(shell_quote "ra_M15_LIVE_SUBAGENT_FIXTURE=$ra_M15_LIVE_SUBAGENT_FIXTURE")"
   fi
-  if [ -n "${OCTOSCODE_M15_UX_OUTPUT_DIR:-}" ]; then
-    prefix="$prefix $(shell_quote "OCTOSCODE_M15_UX_OUTPUT_DIR=$OCTOSCODE_M15_UX_OUTPUT_DIR")"
+  if [ -n "${RA_TUI_M15_UX_OUTPUT_DIR:-}" ]; then
+    prefix="$prefix $(shell_quote "RA_TUI_M15_UX_OUTPUT_DIR=$RA_TUI_M15_UX_OUTPUT_DIR")"
   fi
-  if [ -n "${OCTOSCODE_M15_UX_WORKDIR:-}" ]; then
-    prefix="$prefix $(shell_quote "OCTOSCODE_M15_UX_WORKDIR=$OCTOSCODE_M15_UX_WORKDIR")"
+  if [ -n "${RA_TUI_M15_UX_WORKDIR:-}" ]; then
+    prefix="$prefix $(shell_quote "RA_TUI_M15_UX_WORKDIR=$RA_TUI_M15_UX_WORKDIR")"
   fi
-  if [ -n "${OCTOS_M15_LIVE_SUBAGENT_DELAY_SCALE:-}" ]; then
-    prefix="$prefix $(shell_quote "OCTOS_M15_LIVE_SUBAGENT_DELAY_SCALE=$OCTOS_M15_LIVE_SUBAGENT_DELAY_SCALE")"
+  if [ -n "${ra_M15_LIVE_SUBAGENT_DELAY_SCALE:-}" ]; then
+    prefix="$prefix $(shell_quote "ra_M15_LIVE_SUBAGENT_DELAY_SCALE=$ra_M15_LIVE_SUBAGENT_DELAY_SCALE")"
   fi
   if [ -n "$prefix" ]; then
     printf 'env%s ' "$prefix"
@@ -639,8 +639,8 @@ write_summary() {
     printf 'first_launch_capture=%s\n' "$first_launch_capture"
     printf 'workspace=%s\n' "$workspace"
     printf 'data_dir=%s\n' "$data_dir"
-    printf 'octos_repo_commit=%s\n' "$(git_commit_for_dir "$octos_repo")"
-    printf 'octoscode_repo_commit=%s\n' "$(git_commit_for_dir "$repo_root")"
+    printf 'ra_repo_commit=%s\n' "$(git_commit_for_dir "$ra_repo")"
+    printf 'ra_tui_repo_commit=%s\n' "$(git_commit_for_dir "$repo_root")"
     printf 'host=%s\n' "$host"
     printf 'port=%s\n' "$port"
   } > "$artifact_dir/summary.env"
@@ -648,22 +648,22 @@ write_summary() {
 
 init_profile_if_missing() {
   local profile_path="$1"
-  if [ "${OCTOSCODE_SOAK_INIT_PROFILE:-1}" = "0" ] || [ -f "$profile_path" ]; then
+  if [ "${RA_TUI_SOAK_INIT_PROFILE:-1}" = "0" ] || [ -f "$profile_path" ]; then
     return 0
   fi
   mkdir -p "$(dirname "$profile_path")"
   local now
   now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  local init_llm="${OCTOSCODE_SOAK_INIT_PROFILE_LLM:-0}"
-  local local_name="${OCTOSCODE_SOAK_LOCAL_NAME:-$profile_id}"
-  local local_username="${OCTOSCODE_SOAK_LOCAL_USERNAME:-$profile_id}"
-  local local_email="${OCTOSCODE_SOAK_LOCAL_EMAIL:-$profile_id@example.invalid}"
-  local family="${OCTOSCODE_SOAK_EXPECT_FAMILY:-moonshot}"
-  local model="${OCTOSCODE_SOAK_EXPECT_MODEL:-kimi-k2.5}"
-  local route="${OCTOSCODE_SOAK_EXPECT_ROUTE:-autodl}"
-  local base_url="${OCTOSCODE_SOAK_EXPECT_BASE_URL:-https://www.autodl.art/api/v1}"
-  local api_key_env="${OCTOSCODE_SOAK_EXPECT_API_KEY_ENV:-AUTODL_API_KEY}"
-  local api_key="${OCTOSCODE_SOAK_API_KEY:-}"
+  local init_llm="${RA_TUI_SOAK_INIT_PROFILE_LLM:-0}"
+  local local_name="${RA_TUI_SOAK_LOCAL_NAME:-$profile_id}"
+  local local_username="${RA_TUI_SOAK_LOCAL_USERNAME:-$profile_id}"
+  local local_email="${RA_TUI_SOAK_LOCAL_EMAIL:-$profile_id@example.invalid}"
+  local family="${RA_TUI_SOAK_EXPECT_FAMILY:-moonshot}"
+  local model="${RA_TUI_SOAK_EXPECT_MODEL:-kimi-k2.5}"
+  local route="${RA_TUI_SOAK_EXPECT_ROUTE:-autodl}"
+  local base_url="${RA_TUI_SOAK_EXPECT_BASE_URL:-https://www.autodl.art/api/v1}"
+  local api_key_env="${RA_TUI_SOAK_EXPECT_API_KEY_ENV:-AUTODL_API_KEY}"
+  local api_key="${RA_TUI_SOAK_API_KEY:-}"
   {
     printf '{\n'
     write_json_string_field id "$profile_id"
@@ -745,7 +745,7 @@ write_api_parity_checklist() {
   mkdir -p "$artifact_dir"
   {
     printf '{\n'
-    write_json_string_field schema "octoscode-onboarding-api-parity-checklist-v1"
+    write_json_string_field schema "ra-tui-onboarding-api-parity-checklist-v1"
     write_json_string_field purpose "Record equivalence expectations between dashboard profile patch and AppUI profile/llm/upsert."
     printf '  "cases": [\n'
     printf '    {"name":"moonshot-autodl","family_id":"moonshot","model_id":"kimi-k2.5","route_id":"autodl","base_url":"https://www.autodl.art/api/v1","expectation":"AppUI upsert and dashboard patch persist identical redacted config.llm primary selection and env_vars key presence."},\n'
@@ -787,14 +787,14 @@ require_summary_source_commits_for_dir() {
   local summary_file="$dir/summary.env"
   [ -f "$summary_file" ] || die "$label artifact dir missing summary.env: $summary_file"
 
-  local octos_commit
-  local octoscode_commit
-  octos_commit="$(summary_env_value_for_dir "$dir" octos_repo_commit || true)"
-  octoscode_commit="$(summary_env_value_for_dir "$dir" octoscode_repo_commit || true)"
-  is_git_sha "$octos_commit" \
-    || die "$label summary.env missing valid octos_repo_commit: $summary_file"
-  is_git_sha "$octoscode_commit" \
-    || die "$label summary.env missing valid octoscode_repo_commit: $summary_file"
+  local ra_commit
+  local ra_tui_commit
+  ra_commit="$(summary_env_value_for_dir "$dir" ra_repo_commit || true)"
+  ra_tui_commit="$(summary_env_value_for_dir "$dir" ra_tui_repo_commit || true)"
+  is_git_sha "$ra_commit" \
+    || die "$label summary.env missing valid ra_repo_commit: $summary_file"
+  is_git_sha "$ra_tui_commit" \
+    || die "$label summary.env missing valid ra_tui_repo_commit: $summary_file"
 }
 
 require_matching_summary_source_commits_for_dir() {
@@ -804,19 +804,19 @@ require_matching_summary_source_commits_for_dir() {
   require_summary_source_commits_for_dir "$expected_dir" "$label expected"
   require_summary_source_commits_for_dir "$actual_dir" "$label"
 
-  local expected_octos_commit
-  local actual_octos_commit
+  local expected_ra_commit
+  local actual_ra_commit
   local expected_tui_commit
   local actual_tui_commit
-  expected_octos_commit="$(summary_env_value_for_dir "$expected_dir" octos_repo_commit)"
-  actual_octos_commit="$(summary_env_value_for_dir "$actual_dir" octos_repo_commit)"
-  expected_tui_commit="$(summary_env_value_for_dir "$expected_dir" octoscode_repo_commit)"
-  actual_tui_commit="$(summary_env_value_for_dir "$actual_dir" octoscode_repo_commit)"
+  expected_ra_commit="$(summary_env_value_for_dir "$expected_dir" ra_repo_commit)"
+  actual_ra_commit="$(summary_env_value_for_dir "$actual_dir" ra_repo_commit)"
+  expected_tui_commit="$(summary_env_value_for_dir "$expected_dir" ra_tui_repo_commit)"
+  actual_tui_commit="$(summary_env_value_for_dir "$actual_dir" ra_tui_repo_commit)"
 
-  [ "$actual_octos_commit" = "$expected_octos_commit" ] \
-    || die "$label octos_repo_commit mismatch: $actual_octos_commit != $expected_octos_commit"
+  [ "$actual_ra_commit" = "$expected_ra_commit" ] \
+    || die "$label ra_repo_commit mismatch: $actual_ra_commit != $expected_ra_commit"
   [ "$actual_tui_commit" = "$expected_tui_commit" ] \
-    || die "$label octoscode_repo_commit mismatch: $actual_tui_commit != $expected_tui_commit"
+    || die "$label ra_tui_repo_commit mismatch: $actual_tui_commit != $expected_tui_commit"
 }
 
 require_matching_summary_tui_commit_for_dir() {
@@ -828,11 +828,11 @@ require_matching_summary_tui_commit_for_dir() {
 
   local expected_tui_commit
   local actual_tui_commit
-  expected_tui_commit="$(summary_env_value_for_dir "$expected_dir" octoscode_repo_commit)"
-  actual_tui_commit="$(summary_env_value_for_dir "$actual_dir" octoscode_repo_commit)"
+  expected_tui_commit="$(summary_env_value_for_dir "$expected_dir" ra_tui_repo_commit)"
+  actual_tui_commit="$(summary_env_value_for_dir "$actual_dir" ra_tui_repo_commit)"
 
   [ "$actual_tui_commit" = "$expected_tui_commit" ] \
-    || die "$label octoscode_repo_commit mismatch: $actual_tui_commit != $expected_tui_commit"
+    || die "$label ra_tui_repo_commit mismatch: $actual_tui_commit != $expected_tui_commit"
 }
 
 require_live_preflight_for_dir() {
@@ -841,7 +841,7 @@ require_live_preflight_for_dir() {
   local preflight_file="$dir/live-preflight.json"
   [ -f "$preflight_file" ] || die "$label missing live-preflight.json: $preflight_file"
 
-  grep -F '"schema": "octoscode.live-preflight.v1"' "$preflight_file" >/dev/null 2>&1 \
+  grep -F '"schema": "ra-tui.live-preflight.v1"' "$preflight_file" >/dev/null 2>&1 \
     || die "$label live-preflight.json schema mismatch: $preflight_file"
   grep -F '"status": "passed"' "$preflight_file" >/dev/null 2>&1 \
     || die "$label live preflight did not pass: $preflight_file"
@@ -849,10 +849,10 @@ require_live_preflight_for_dir() {
     "$preflight_file" >/dev/null 2>&1; then
     die "$label live preflight is not provider-backed: $preflight_file"
   fi
-  grep -F '"octos_repo_commit": "' "$preflight_file" >/dev/null 2>&1 \
-    || die "$label live preflight missing octos_repo_commit: $preflight_file"
-  grep -F '"octoscode_repo_commit": "' "$preflight_file" >/dev/null 2>&1 \
-    || die "$label live preflight missing octoscode_repo_commit: $preflight_file"
+  grep -F '"ra_repo_commit": "' "$preflight_file" >/dev/null 2>&1 \
+    || die "$label live preflight missing ra_repo_commit: $preflight_file"
+  grep -F '"ra_tui_repo_commit": "' "$preflight_file" >/dev/null 2>&1 \
+    || die "$label live preflight missing ra_tui_repo_commit: $preflight_file"
 }
 
 write_ux_validation() {
@@ -861,23 +861,23 @@ write_ux_validation() {
   local summary="$3"
   local validation_run_id="$run_id"
   local validation_transport="$transport"
-  local validation_octos_repo_commit=""
-  local validation_octoscode_repo_commit=""
+  local validation_ra_repo_commit=""
+  local validation_ra_tui_repo_commit=""
   validation_run_id="$(summary_env_value run_id || printf '%s' "$run_id")"
   validation_transport="$(summary_env_value transport || printf '%s' "$transport")"
-  validation_octos_repo_commit="$(summary_env_value octos_repo_commit || true)"
-  validation_octoscode_repo_commit="$(summary_env_value octoscode_repo_commit || true)"
+  validation_ra_repo_commit="$(summary_env_value ra_repo_commit || true)"
+  validation_ra_tui_repo_commit="$(summary_env_value ra_tui_repo_commit || true)"
   mkdir -p "$artifact_dir"
   {
     printf '{\n'
-    write_json_string_field schema "octoscode-onboarding-ux-validation-v1"
+    write_json_string_field schema "ra-tui-onboarding-ux-validation-v1"
     write_json_string_field run_id "$validation_run_id"
     write_json_string_field scenario "$scenario"
     write_json_string_field status "$status"
     write_json_string_field transport "$validation_transport"
     write_json_string_field artifact_dir "$artifact_dir"
-    write_json_string_field octos_repo_commit "$validation_octos_repo_commit"
-    write_json_string_field octoscode_repo_commit "$validation_octoscode_repo_commit"
+    write_json_string_field ra_repo_commit "$validation_ra_repo_commit"
+    write_json_string_field ra_tui_repo_commit "$validation_ra_tui_repo_commit"
     write_json_string_field summary "$summary"
     write_json_string_field generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" ""
     printf '}\n'
@@ -1108,8 +1108,8 @@ json_scalar_value() {
 
 start() {
   command -v tmux >/dev/null 2>&1 || die "tmux is required for start"
-  require_bin OCTOS_BIN "$octos_bin"
-  require_bin OCTOSCODE_BIN "$octoscode_bin"
+  require_bin ra_BIN "$ra_bin"
+  require_bin RA_TUI_BIN "$ra_tui_bin"
   mkdir -p "$workspace" "$data_dir" "$logs_dir"
   write_summary
   write_api_parity_checklist
@@ -1117,7 +1117,7 @@ start() {
   local profile_path="$data_dir/profiles/$profile_id.json"
   if [ "$first_launch_capture" = "1" ]; then
     if [ -f "$profile_path" ]; then
-      die "OCTOSCODE_SOAK_FIRST_LAUNCH_CAPTURE=1 requires no existing profile JSON: $profile_path"
+      die "RA_TUI_SOAK_FIRST_LAUNCH_CAPTURE=1 requires no existing profile JSON: $profile_path"
     fi
   else
     init_profile_if_missing "$profile_path"
@@ -1140,7 +1140,7 @@ start() {
     local fake_cmd
     fake_cmd="cd $(shell_quote "$repo_root") && python3 $(shell_quote "$script_dir/fake-openai-server.py") --host $(shell_quote "$fake_openai_host") --port $(shell_quote "$fake_openai_port") --content OK --delay-secs $(shell_quote "$fake_openai_delay_secs") 2>&1 | tee $(shell_quote "$logs_dir/fake-openai.log")"
     tmux new-session -d -s "$fake_openai_session" "$fake_cmd"
-    sleep "${OCTOSCODE_SOAK_FAKE_OPENAI_WAIT_SECS:-1}"
+    sleep "${RA_TUI_SOAK_FAKE_OPENAI_WAIT_SECS:-1}"
   fi
 
   local env_prefix
@@ -1148,29 +1148,29 @@ start() {
 
   if [ "$transport" = "ws" ]; then
     local server_cmd
-    server_cmd="cd $(shell_quote "$workspace") && ${env_prefix}$(shell_quote "$octos_bin") serve --host $(shell_quote "$host") --port $(shell_quote "$port") --data-dir $(shell_quote "$data_dir") --auth-token $(shell_quote "$auth_token")"
+    server_cmd="cd $(shell_quote "$workspace") && ${env_prefix}$(shell_quote "$ra_bin") serve --host $(shell_quote "$host") --port $(shell_quote "$port") --data-dir $(shell_quote "$data_dir") --auth-token $(shell_quote "$auth_token")"
     if [ -n "$serve_args" ]; then
       server_cmd="$server_cmd $serve_args"
     fi
     server_cmd="$server_cmd 2>&1 | tee $(shell_quote "$logs_dir/server.log")"
     tmux new-session -d -s "$server_session" "$server_cmd"
-    wait_for_server_ready "${OCTOSCODE_SOAK_SERVER_WAIT_SECS:-20}"
+    wait_for_server_ready "${RA_TUI_SOAK_SERVER_WAIT_SECS:-20}"
   else
     : > "$logs_dir/server.log"
     tmux new-session -d -s "$server_session" "tail -n +1 -F $(shell_quote "$logs_dir/server.log")"
-    sleep "${OCTOSCODE_SOAK_SERVER_WAIT_SECS:-1}"
+    sleep "${RA_TUI_SOAK_SERVER_WAIT_SECS:-1}"
   fi
 
   local tui_cmd
   tui_cmd="cd $(shell_quote "$workspace") && "
   tui_cmd="${tui_cmd}${env_prefix}"
-  tui_cmd="${tui_cmd}$(shell_quote "$octoscode_bin") --mode protocol"
+  tui_cmd="${tui_cmd}$(shell_quote "$ra_tui_bin") --mode protocol"
   if [ "$transport" = "ws" ]; then
     tui_cmd="$tui_cmd --endpoint $(shell_quote "$endpoint") --auth-token $(shell_quote "$auth_token")"
   else
     local stdio_cmd
     local stdio_pid_file="$logs_dir/stdio-backend.pid"
-    stdio_cmd="cd $(shell_quote "$workspace") && printf '%s\n' \$\$ > $(shell_quote "$stdio_pid_file") && exec ${env_prefix}$(shell_quote "$octos_bin") serve --stdio --data-dir $(shell_quote "$data_dir")"
+    stdio_cmd="cd $(shell_quote "$workspace") && printf '%s\n' \$\$ > $(shell_quote "$stdio_pid_file") && exec ${env_prefix}$(shell_quote "$ra_bin") serve --stdio --data-dir $(shell_quote "$data_dir")"
     if [ -n "$serve_args" ]; then
       stdio_cmd="$stdio_cmd $serve_args"
     fi
@@ -1184,15 +1184,15 @@ start() {
     tui_cmd="$tui_cmd --profile-id $(shell_quote "$profile_id")"
   fi
   tui_cmd="$tui_cmd --cwd $(shell_quote "$workspace") --theme $(shell_quote "$theme")"
-  tui_cmd="$tui_cmd 2>&1; exit_code=\$?; echo octoscode exited with status \$exit_code; sleep ${OCTOSCODE_SOAK_EXIT_HOLD_SECS:-30}"
+  tui_cmd="$tui_cmd 2>&1; exit_code=\$?; echo ra-tui exited with status \$exit_code; sleep ${RA_TUI_SOAK_EXIT_HOLD_SECS:-30}"
   tmux new-session -d -s "$tui_session" "$tui_cmd"
 
   if [ "$first_launch_capture" = "1" ]; then
-    wait_for_tui_text "Welcome to ra" "${OCTOSCODE_SOAK_FIRST_LAUNCH_WAIT_SECS:-20}" || \
+    wait_for_tui_text "Welcome to ra" "${RA_TUI_SOAK_FIRST_LAUNCH_WAIT_SECS:-20}" || \
       die "Timed out waiting for first-launch onboarding splash"
     capture_pane "$tui_session" "$artifact_dir/tui-capture-first-launch.txt"
   else
-    sleep "${OCTOSCODE_SOAK_TUI_WAIT_SECS:-2}"
+    sleep "${RA_TUI_SOAK_TUI_WAIT_SECS:-2}"
   fi
   capture
 
@@ -1214,7 +1214,7 @@ EOF
 
 restart_server() {
   command -v tmux >/dev/null 2>&1 || die "tmux is required for restart-server"
-  require_bin OCTOS_BIN "$octos_bin"
+  require_bin ra_BIN "$ra_bin"
   if [ "$transport" != "ws" ]; then
     die "restart-server is only supported for WebSocket transport"
   fi
@@ -1227,7 +1227,7 @@ restart_server() {
 
   mkdir -p "$workspace" "$data_dir" "$logs_dir" "$artifact_dir"
   tmux kill-session -t "$server_session" 2>/dev/null || true
-  local shutdown_deadline=$((SECONDS + ${OCTOSCODE_SOAK_SERVER_SHUTDOWN_WAIT_SECS:-10}))
+  local shutdown_deadline=$((SECONDS + ${RA_TUI_SOAK_SERVER_SHUTDOWN_WAIT_SECS:-10}))
   while tmux has-session -t "$server_session" 2>/dev/null && [ "$SECONDS" -le "$shutdown_deadline" ]; do
     sleep 0.2
   done
@@ -1237,19 +1237,19 @@ restart_server() {
   if [ -f "$logs_dir/server.log" ]; then
     cp "$logs_dir/server.log" "$artifact_dir/server-before-restart.log"
   fi
-  sleep "${OCTOSCODE_SOAK_SERVER_RESTART_DOWN_SECS:-1}"
+  sleep "${RA_TUI_SOAK_SERVER_RESTART_DOWN_SECS:-1}"
   : > "$logs_dir/server.log"
 
   local env_prefix
   env_prefix="$(runtime_env_prefix)"
   local server_cmd
-  server_cmd="cd $(shell_quote "$workspace") && ${env_prefix}$(shell_quote "$octos_bin") serve --host $(shell_quote "$host") --port $(shell_quote "$port") --data-dir $(shell_quote "$data_dir") --auth-token $(shell_quote "$auth_token")"
+  server_cmd="cd $(shell_quote "$workspace") && ${env_prefix}$(shell_quote "$ra_bin") serve --host $(shell_quote "$host") --port $(shell_quote "$port") --data-dir $(shell_quote "$data_dir") --auth-token $(shell_quote "$auth_token")"
   if [ -n "$serve_args" ]; then
     server_cmd="$server_cmd $serve_args"
   fi
   server_cmd="$server_cmd 2>&1 | tee $(shell_quote "$logs_dir/server.log")"
   tmux new-session -d -s "$server_session" "$server_cmd"
-  wait_for_server_ready "${OCTOSCODE_SOAK_SERVER_WAIT_SECS:-20}"
+  wait_for_server_ready "${RA_TUI_SOAK_SERVER_WAIT_SECS:-20}"
   capture_pane "$server_session" "$artifact_dir/server-pane-after-restart.txt"
   capture
   echo "Restarted backend tmux server for $tui_session"
@@ -1272,12 +1272,12 @@ stdio_backend_pids() {
 
   command -v ps >/dev/null 2>&1 || die "ps is required to locate stdio backend processes"
   ps -ax -o pid= -o command= | awk \
-    -v bin="$octos_bin" \
+    -v bin="$ra_bin" \
     -v data="$data_dir" '
       index($0, bin) &&
       index($0, "serve --stdio") &&
       index($0, data) &&
-      index($0, "octoscode") == 0 &&
+      index($0, "ra-tui") == 0 &&
       index($0, "--stdio-command") == 0 &&
       index($0, "run-onboarding-tmux-soak.sh") == 0 {
         pid = $1
@@ -1290,7 +1290,7 @@ stdio_backend_pids() {
 
 restart_stdio_child() {
   command -v tmux >/dev/null 2>&1 || die "tmux is required for stdio restart"
-  require_bin OCTOS_BIN "$octos_bin"
+  require_bin ra_BIN "$ra_bin"
   if [ "$transport" != "stdio" ]; then
     die "restart_stdio_child is only supported for stdio transport"
   fi
@@ -1302,7 +1302,7 @@ restart_stdio_child() {
   local pids
   pids="$(stdio_backend_pids | sort -u)"
   if [ -z "$pids" ]; then
-    die "No scoped stdio backend process matched OCTOS_BIN=$octos_bin and data_dir=$data_dir"
+    die "No scoped stdio backend process matched ra_BIN=$ra_bin and data_dir=$data_dir"
   fi
 
   if [ -f "$logs_dir/server.log" ]; then
@@ -1319,7 +1319,7 @@ restart_stdio_child() {
   # relaunch is exactly the reconnect behavior under test, so a NEW pid
   # appearing is expected and must NOT be treated as "did not exit". Only
   # the pids we signalled need to be gone.
-  local shutdown_deadline=$((SECONDS + ${OCTOSCODE_SOAK_STDIO_SHUTDOWN_WAIT_SECS:-10}))
+  local shutdown_deadline=$((SECONDS + ${RA_TUI_SOAK_STDIO_SHUTDOWN_WAIT_SECS:-10}))
   local still_alive
   while [ "$SECONDS" -le "$shutdown_deadline" ]; do
     still_alive=""
@@ -1343,7 +1343,7 @@ restart_stdio_child() {
 
   {
     printf 'Terminated scoped stdio backend process(es): %s\n' "$pids"
-    printf 'OCTOS_BIN=%s\n' "$octos_bin"
+    printf 'ra_BIN=%s\n' "$ra_bin"
     printf 'data_dir=%s\n' "$data_dir"
   } > "$artifact_dir/server-pane-after-restart.txt"
   capture
@@ -1369,13 +1369,13 @@ capture() {
 }
 
 send_turn() {
-  local prompt="${OCTOSCODE_SOAK_PROMPT:-Reply with exactly OK.}"
+  local prompt="${RA_TUI_SOAK_PROMPT:-Reply with exactly OK.}"
   command -v tmux >/dev/null 2>&1 || die "tmux is required for send-turn"
   if ! tmux has-session -t "$tui_session" 2>/dev/null; then
     die "TUI tmux session is not running: $tui_session"
   fi
   submit_composer_prompt "$prompt"
-  sleep "${OCTOSCODE_SOAK_TURN_WAIT_SECS:-20}"
+  sleep "${RA_TUI_SOAK_TURN_WAIT_SECS:-20}"
   capture
 }
 
@@ -1388,7 +1388,7 @@ send_tui_line() {
   tmux send-keys -t "$tui_session" Escape
   sleep 0.1
   tmux send-keys -t "$tui_session" Enter
-  sleep "${OCTOSCODE_SOAK_COMMAND_WAIT_SECS:-1}"
+  sleep "${RA_TUI_SOAK_COMMAND_WAIT_SECS:-1}"
 }
 
 drive_onboard() {
@@ -1397,18 +1397,18 @@ drive_onboard() {
     die "TUI tmux session is not running: $tui_session"
   fi
 
-  local family="${OCTOSCODE_SOAK_EXPECT_FAMILY:-moonshot}"
-  local model="${OCTOSCODE_SOAK_EXPECT_MODEL:-kimi-k2.5}"
-  local route="${OCTOSCODE_SOAK_EXPECT_ROUTE:-autodl}"
-  local base_url="${OCTOSCODE_SOAK_EXPECT_BASE_URL:-https://www.autodl.art/api/v1}"
-  local api_key_env="${OCTOSCODE_SOAK_EXPECT_API_KEY_ENV:-AUTODL_API_KEY}"
-  local api_key="${OCTOSCODE_SOAK_API_KEY:-octoscode-soak-placeholder-key}"
+  local family="${RA_TUI_SOAK_EXPECT_FAMILY:-moonshot}"
+  local model="${RA_TUI_SOAK_EXPECT_MODEL:-kimi-k2.5}"
+  local route="${RA_TUI_SOAK_EXPECT_ROUTE:-autodl}"
+  local base_url="${RA_TUI_SOAK_EXPECT_BASE_URL:-https://www.autodl.art/api/v1}"
+  local api_key_env="${RA_TUI_SOAK_EXPECT_API_KEY_ENV:-AUTODL_API_KEY}"
+  local api_key="${RA_TUI_SOAK_API_KEY:-ra-tui-soak-placeholder-key}"
 
   # M22-A polished onboarding (post-#67 / commit f142a86) auto-opens the
   # onboarding picker on first launch when profile/local/create is advertised.
   # The picker overlay redraws over the status line, so tmux capture-pane
   # can't reliably catch the legacy "AppUI capabilities refreshed: N methods"
-  # banner. See octoscode#27 mini5 sweep finding.
+  # banner. See ra-tui#27 mini5 sweep finding.
   #
   # Wait for ANY of three signals (`|`-separated alternation per the
   # extended wait_for_tui_text):
@@ -1427,27 +1427,27 @@ drive_onboard() {
   #                                   the polished picker overlay, so the
   #                                   status banner remains visible.
   #
-  # Operators driving a custom flow can override via OCTOSCODE_SOAK_READY_TEXT
+  # Operators driving a custom flow can override via RA_TUI_SOAK_READY_TEXT
   # — values are also treated as `|`-separated alternations.
-  local ready_text="${OCTOSCODE_SOAK_READY_TEXT:-Welcome to ra|Set Up LLM Provider|AppUI capabilities refreshed}"
-  wait_for_tui_text "$ready_text" "${OCTOSCODE_SOAK_CAPABILITIES_WAIT_SECS:-20}" || \
+  local ready_text="${RA_TUI_SOAK_READY_TEXT:-Welcome to ra|Set Up LLM Provider|AppUI capabilities refreshed}"
+  wait_for_tui_text "$ready_text" "${RA_TUI_SOAK_CAPABILITIES_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI ready signal ('$ready_text') before driving onboarding commands"
   send_tui_line "/login status"
   send_tui_line "/login me"
   send_tui_line "/provider catalog"
-  sleep "${OCTOSCODE_SOAK_CATALOG_WAIT_SECS:-2}"
+  sleep "${RA_TUI_SOAK_CATALOG_WAIT_SECS:-2}"
   send_tui_line "/provider select $family $model $route $base_url $api_key_env"
   send_tui_line "/provider key $api_key"
   send_tui_line "/provider save"
-  sleep "${OCTOSCODE_SOAK_SAVE_WAIT_SECS:-2}"
+  sleep "${RA_TUI_SOAK_SAVE_WAIT_SECS:-2}"
   send_tui_line "/provider list"
-  if [ "${OCTOSCODE_SOAK_DRIVE_FINISH:-1}" = "1" ]; then
+  if [ "${RA_TUI_SOAK_DRIVE_FINISH:-1}" = "1" ]; then
     send_tui_line "/onboard profile $profile_id"
     send_tui_line "/onboard finish"
   fi
   send_tui_line "/provider"
   send_tui_line "/model"
-  sleep "${OCTOSCODE_SOAK_FINISH_WAIT_SECS:-2}"
+  sleep "${RA_TUI_SOAK_FINISH_WAIT_SECS:-2}"
   capture
   echo "Drove /onboard flow in $tui_session"
 }
@@ -1459,23 +1459,23 @@ verify_onboard() {
 
   if [ -f "$profile_path" ]; then
     redact_profile "$profile_path" "$redacted_profile"
-  elif [ "${OCTOSCODE_SOAK_REQUIRE_PROFILE:-1}" != "0" ]; then
+  elif [ "${RA_TUI_SOAK_REQUIRE_PROFILE:-1}" != "0" ]; then
     die "Profile JSON missing: $profile_path"
   else
     printf '{}\n' > "$redacted_profile"
   fi
 
-  if [ -n "${OCTOSCODE_SOAK_EXPECT_FAMILY:-}" ]; then
-    assert_profile_value "$redacted_profile" family_id "$OCTOSCODE_SOAK_EXPECT_FAMILY"
+  if [ -n "${RA_TUI_SOAK_EXPECT_FAMILY:-}" ]; then
+    assert_profile_value "$redacted_profile" family_id "$RA_TUI_SOAK_EXPECT_FAMILY"
   fi
-  if [ -n "${OCTOSCODE_SOAK_EXPECT_MODEL:-}" ]; then
-    assert_profile_value "$redacted_profile" model_id "$OCTOSCODE_SOAK_EXPECT_MODEL"
+  if [ -n "${RA_TUI_SOAK_EXPECT_MODEL:-}" ]; then
+    assert_profile_value "$redacted_profile" model_id "$RA_TUI_SOAK_EXPECT_MODEL"
   fi
-  if [ -n "${OCTOSCODE_SOAK_EXPECT_ROUTE:-}" ]; then
-    assert_profile_value "$redacted_profile" route_id "$OCTOSCODE_SOAK_EXPECT_ROUTE"
+  if [ -n "${RA_TUI_SOAK_EXPECT_ROUTE:-}" ]; then
+    assert_profile_value "$redacted_profile" route_id "$RA_TUI_SOAK_EXPECT_ROUTE"
   fi
-  if [ -n "${OCTOSCODE_SOAK_EXPECT_BASE_URL:-}" ]; then
-    assert_profile_value "$redacted_profile" base_url "$OCTOSCODE_SOAK_EXPECT_BASE_URL"
+  if [ -n "${RA_TUI_SOAK_EXPECT_BASE_URL:-}" ]; then
+    assert_profile_value "$redacted_profile" base_url "$RA_TUI_SOAK_EXPECT_BASE_URL"
   fi
 
   write_runtime_policy_stamp "$redacted_profile"
@@ -1506,10 +1506,10 @@ verify_onboard() {
     write_json_string_field profile_id "$profile_id"
     write_json_string_field session_id "$session_id"
     write_json_string_field artifact_dir "$artifact_dir"
-    write_json_string_field expected_family "${OCTOSCODE_SOAK_EXPECT_FAMILY:-}"
-    write_json_string_field expected_model "${OCTOSCODE_SOAK_EXPECT_MODEL:-}"
-    write_json_string_field expected_route "${OCTOSCODE_SOAK_EXPECT_ROUTE:-}"
-    write_json_string_field expected_base_url "${OCTOSCODE_SOAK_EXPECT_BASE_URL:-}"
+    write_json_string_field expected_family "${RA_TUI_SOAK_EXPECT_FAMILY:-}"
+    write_json_string_field expected_model "${RA_TUI_SOAK_EXPECT_MODEL:-}"
+    write_json_string_field expected_route "${RA_TUI_SOAK_EXPECT_ROUTE:-}"
+    write_json_string_field expected_base_url "${RA_TUI_SOAK_EXPECT_BASE_URL:-}"
     write_json_string_field api_parity_checklist "api-parity-checklist.json"
     write_json_string_field verified_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" ""
     printf '}\n'
@@ -1533,8 +1533,8 @@ api_parity() {
 solo_probe_args() {
   local probe_transport="$1"
   local stdio_command="${2:-}"
-  local local_name="${OCTOSCODE_SOAK_LOCAL_NAME:-$profile_id}"
-  local probe="$octos_repo/scripts/m12-solo-appui-probe.mjs"
+  local local_name="${RA_TUI_SOAK_LOCAL_NAME:-$profile_id}"
+  local probe="$ra_repo/scripts/m12-solo-appui-probe.mjs"
   [ -f "$probe" ] || die "M12 solo AppUI probe missing: $probe"
   local args=(
     "$probe"
@@ -1545,8 +1545,8 @@ solo_probe_args() {
     --profile-id "$profile_id"
     --session-id "$session_id"
     --local-name "$local_name"
-    --local-username "${OCTOSCODE_SOAK_LOCAL_USERNAME:-$profile_id}"
-    --local-email "${OCTOSCODE_SOAK_LOCAL_EMAIL:-$profile_id@example.invalid}"
+    --local-username "${RA_TUI_SOAK_LOCAL_USERNAME:-$profile_id}"
+    --local-email "${RA_TUI_SOAK_LOCAL_EMAIL:-$profile_id@example.invalid}"
     --server-log "$solo_probe_server_log"
   )
   if [ "$probe_transport" = "ws" ]; then
@@ -1555,10 +1555,10 @@ solo_probe_args() {
   if [ "$probe_transport" = "stdio" ]; then
     args+=(--stdio-command "$stdio_command")
   fi
-  if [ "${OCTOSCODE_SOAK_SOLO_STRICT:-0}" = "1" ]; then
+  if [ "${RA_TUI_SOAK_SOLO_STRICT:-0}" = "1" ]; then
     args+=(--strict)
   fi
-  if [ "${OCTOSCODE_SOAK_TENANT_NEGATIVE:-0}" != "1" ]; then
+  if [ "${RA_TUI_SOAK_TENANT_NEGATIVE:-0}" != "1" ]; then
     args+=(--no-tenant-negative)
   fi
   printf '%s\0' "${args[@]}"
@@ -1566,12 +1566,12 @@ solo_probe_args() {
 
 drive_solo() {
   command -v node >/dev/null 2>&1 || die "node is required for drive-solo"
-  require_octos_serve
+  require_ra_serve
   mkdir -p "$workspace" "$data_dir" "$solo_probe_data_dir" "$logs_dir" "$artifact_dir"
   write_summary
-  local local_name="${OCTOSCODE_SOAK_LOCAL_NAME:-$profile_id}"
-  OCTOSCODE_SOAK_INIT_PROFILE_LLM="${OCTOSCODE_SOAK_INIT_PROFILE_LLM:-1}" \
-    OCTOSCODE_SOAK_LOCAL_NAME="$local_name" \
+  local local_name="${RA_TUI_SOAK_LOCAL_NAME:-$profile_id}"
+  RA_TUI_SOAK_INIT_PROFILE_LLM="${RA_TUI_SOAK_INIT_PROFILE_LLM:-1}" \
+    RA_TUI_SOAK_LOCAL_NAME="$local_name" \
     init_profile_if_missing "$solo_probe_data_dir/profiles/$profile_id.json"
   capture
 
@@ -1581,13 +1581,13 @@ drive_solo() {
   env_prefix="$(runtime_env_prefix)"
   if [ "$probe_transport" = "ws" ]; then
     if have_tmux && ! tmux has-session -t "$server_session" 2>/dev/null; then
-      die "WS solo probe expects the server tmux session to be running; run start first or use OCTOSCODE_SOAK_TRANSPORT=stdio"
+      die "WS solo probe expects the server tmux session to be running; run start first or use RA_TUI_SOAK_TRANSPORT=stdio"
     fi
   else
     # TODO(M12-A/C): once `ra serve` grows explicit solo/dangerous flags,
-    # append them via OCTOSCODE_SOAK_SERVE_ARGS instead of relying only on
+    # append them via RA_TUI_SOAK_SERVE_ARGS instead of relying only on
     # AppUI capability negotiation.
-    stdio_command="${env_prefix}$(shell_quote "$octos_bin") serve --stdio --data-dir $(shell_quote "$solo_probe_data_dir") --cwd $(shell_quote "$workspace")"
+    stdio_command="${env_prefix}$(shell_quote "$ra_bin") serve --stdio --data-dir $(shell_quote "$solo_probe_data_dir") --cwd $(shell_quote "$workspace")"
     if [ -n "$serve_args" ]; then
       stdio_command="$stdio_command $serve_args"
     fi
@@ -1611,10 +1611,10 @@ drive_permissions() {
     die "TUI tmux session is not running: $tui_session"
   fi
 
-  wait_for_tui_text "Ask ra to change code" "${OCTOSCODE_SOAK_TUI_READY_WAIT_SECS:-20}" || \
+  wait_for_tui_text "Ask ra to change code" "${RA_TUI_SOAK_TUI_READY_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI composer before opening permissions"
   send_tui_line "/permissions"
-  wait_for_tui_text "Update Model Permissions" "${OCTOSCODE_SOAK_PERMISSIONS_WAIT_SECS:-20}" || \
+  wait_for_tui_text "Update Model Permissions" "${RA_TUI_SOAK_PERMISSIONS_WAIT_SECS:-20}" || \
     die "Timed out waiting for /permissions menu"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-permissions-open.txt"
 
@@ -1626,7 +1626,7 @@ drive_permissions() {
   sleep 0.1
   tmux send-keys -t "$tui_session" Enter
   wait_for_tui_text "Permissions updated: Workspace Write" \
-    "${OCTOSCODE_SOAK_PERMISSIONS_APPLY_WAIT_SECS:-5}" || \
+    "${RA_TUI_SOAK_PERMISSIONS_APPLY_WAIT_SECS:-5}" || \
     die "Timed out waiting for workspace-write permission update"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-permissions-applied.txt"
   capture
@@ -1639,7 +1639,7 @@ drive_provider_missing() {
     die "TUI tmux session is not running: $tui_session"
   fi
 
-  wait_for_tui_text "Set Up LLM Provider" "${OCTOSCODE_SOAK_PROVIDER_WAIT_SECS:-20}" || \
+  wait_for_tui_text "Set Up LLM Provider" "${RA_TUI_SOAK_PROVIDER_WAIT_SECS:-20}" || \
     die "Timed out waiting for missing-provider setup menu"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-provider-missing.txt"
   capture
@@ -1652,16 +1652,16 @@ drive_approval_denial() {
     die "TUI tmux session is not running: $tui_session"
   fi
 
-  local prompt="${OCTOSCODE_SOAK_APPROVAL_PROMPT:-M9 approval fixture: request approval for printf m19-approval-denial}"
-  wait_for_tui_text "Ask ra to change code" "${OCTOSCODE_SOAK_TUI_READY_WAIT_SECS:-20}" || \
+  local prompt="${RA_TUI_SOAK_APPROVAL_PROMPT:-M9 approval fixture: request approval for printf m19-approval-denial}"
+  wait_for_tui_text "Ask ra to change code" "${RA_TUI_SOAK_TUI_READY_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI composer before driving approval denial"
   send_tui_line "$prompt"
-  wait_for_tui_text "Approval Requested" "${OCTOSCODE_SOAK_APPROVAL_WAIT_SECS:-40}" || \
+  wait_for_tui_text "Approval Requested" "${RA_TUI_SOAK_APPROVAL_WAIT_SECS:-40}" || \
     die "Timed out waiting for approval request in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-approval-request.txt"
 
   tmux send-keys -t "$tui_session" n
-  wait_for_tui_text "Approval denied" "${OCTOSCODE_SOAK_APPROVAL_DENIAL_WAIT_SECS:-40}" || \
+  wait_for_tui_text "Approval denied" "${RA_TUI_SOAK_APPROVAL_DENIAL_WAIT_SECS:-40}" || \
     die "Timed out waiting for approval denial acknowledgement in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-approval-denied.txt"
   capture
@@ -1674,11 +1674,11 @@ drive_multiline_composer() {
     die "TUI tmux session is not running: $tui_session"
   fi
 
-  local prompt="${OCTOSCODE_SOAK_MULTILINE_PROMPT:-}"
+  local prompt="${RA_TUI_SOAK_MULTILINE_PROMPT:-}"
   if [ -z "$prompt" ]; then
     prompt=$'first instruction\nsecond instruction\nthird instruction'
   fi
-  wait_for_tui_text "Ask ra to change code" "${OCTOSCODE_SOAK_TUI_READY_WAIT_SECS:-20}" || \
+  wait_for_tui_text "Ask ra to change code" "${RA_TUI_SOAK_TUI_READY_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI composer before multiline capture"
   tmux send-keys -t "$tui_session" Escape
   sleep 0.1
@@ -1695,7 +1695,7 @@ drive_multiline_composer() {
   done <<EOF
 $prompt
 EOF
-  sleep "${OCTOSCODE_SOAK_MULTILINE_SETTLE_SECS:-0.5}"
+  sleep "${RA_TUI_SOAK_MULTILINE_SETTLE_SECS:-0.5}"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-multiline-composer.txt"
   capture
   echo "Drove multiline composer capture in $tui_session"
@@ -1708,20 +1708,20 @@ drive_runtime_menus() {
   fi
 
   wait_for_tui_text "Ask ra to change code|state|AppUI capabilities refreshed" \
-    "${OCTOSCODE_SOAK_TUI_READY_WAIT_SECS:-20}" || \
+    "${RA_TUI_SOAK_TUI_READY_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI ready signal before runtime menu capture"
   send_tui_line "/status"
   tmux send-keys -t "$tui_session" Down Down Down Enter
-  sleep "${OCTOSCODE_SOAK_COMMAND_WAIT_SECS:-1}"
+  sleep "${RA_TUI_SOAK_COMMAND_WAIT_SECS:-1}"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-runtime-status.txt"
   send_tui_line "/model"
   tmux send-keys -t "$tui_session" Enter
-  sleep "${OCTOSCODE_SOAK_COMMAND_WAIT_SECS:-1}"
+  sleep "${RA_TUI_SOAK_COMMAND_WAIT_SECS:-1}"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-runtime-model.txt"
   send_tui_line "/mcp config"
   send_tui_line "/mcp status"
   send_tui_line "/mcp"
-  sleep "${OCTOSCODE_SOAK_COMMAND_WAIT_SECS:-1}"
+  sleep "${RA_TUI_SOAK_COMMAND_WAIT_SECS:-1}"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-runtime-mcp.txt"
   capture
   echo "Drove runtime menu captures in $tui_session"
@@ -1733,32 +1733,32 @@ drive_task_subagent_tree() {
     die "TUI tmux session is not running: $tui_session"
   fi
 
-  local prompt="${OCTOSCODE_SOAK_TASK_SUBAGENT_PROMPT:-Run M15 code review with live subagent orchestration through ra serve --stdio. Use supervised subagents and produce the final marker.}"
-  wait_for_tui_text "Ask ra to change code" "${OCTOSCODE_SOAK_TUI_READY_WAIT_SECS:-20}" || \
+  local prompt="${RA_TUI_SOAK_TASK_SUBAGENT_PROMPT:-Run M15 code review with live subagent orchestration through ra serve --stdio. Use supervised subagents and produce the final marker.}"
+  wait_for_tui_text "Ask ra to change code" "${RA_TUI_SOAK_TUI_READY_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI composer before driving task/subagent tree"
   submit_composer_prompt "$prompt"
-  wait_for_tui_text "Agent task" "${OCTOSCODE_SOAK_TASK_SUBAGENT_RUNNING_WAIT_SECS:-10}" || \
+  wait_for_tui_text "Agent task" "${RA_TUI_SOAK_TASK_SUBAGENT_RUNNING_WAIT_SECS:-10}" || \
     die "Timed out waiting for visible agent task tree"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-task-subagent-tree-running.txt"
 
-  wait_for_tui_text "M15CODEREVIEWFINALLINE" "${OCTOSCODE_SOAK_TASK_SUBAGENT_DONE_WAIT_SECS:-80}" || \
+  wait_for_tui_text "M15CODEREVIEWFINALLINE" "${RA_TUI_SOAK_TASK_SUBAGENT_DONE_WAIT_SECS:-80}" || \
     die "Timed out waiting for M15 final marker in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-task-subagent-tree-final.txt"
   capture_scrolled_transcript_until_text \
     "Review Summary" \
     "$artifact_dir/tui-capture-task-subagent-tree-summary.txt" \
-    "${OCTOSCODE_SOAK_TASK_SUBAGENT_SUMMARY_PAGEUP_COUNT:-6}" || \
+    "${RA_TUI_SOAK_TASK_SUBAGENT_SUMMARY_PAGEUP_COUNT:-6}" || \
     die "Timed out waiting for visible code-review summary heading after scrolling task/subagent output"
   local page_down=1
-  while [ "$page_down" -le "${OCTOSCODE_SOAK_TASK_SUBAGENT_SUMMARY_PAGEUP_COUNT:-6}" ]; do
+  while [ "$page_down" -le "${RA_TUI_SOAK_TASK_SUBAGENT_SUMMARY_PAGEUP_COUNT:-6}" ]; do
     tmux send-keys -t "$tui_session" PageDown
     sleep 0.05
     page_down=$((page_down + 1))
   done
-  if [ -n "${OCTOSCODE_M15_UX_OUTPUT_DIR:-}" ] && [ -d "$OCTOSCODE_M15_UX_OUTPUT_DIR" ]; then
+  if [ -n "${RA_TUI_M15_UX_OUTPUT_DIR:-}" ] && [ -d "$RA_TUI_M15_UX_OUTPUT_DIR" ]; then
     local m15_source_abs
     local m15_dest_abs
-    m15_source_abs="$(cd "$OCTOSCODE_M15_UX_OUTPUT_DIR" && pwd -P)"
+    m15_source_abs="$(cd "$RA_TUI_M15_UX_OUTPUT_DIR" && pwd -P)"
     mkdir -p "$artifact_dir/m15-evidence"
     m15_dest_abs="$(cd "$artifact_dir/m15-evidence" && pwd -P)"
     case "$m15_dest_abs/" in
@@ -1779,7 +1779,7 @@ drive_task_subagent_reconnect() {
     restart_stdio_child
   fi
   wait_for_tui_text "Ask ra to change code|UI protocol reconnected|stdio child exited|relaunch|state" \
-    "${OCTOSCODE_SOAK_RECONNECT_WAIT_SECS:-20}" || \
+    "${RA_TUI_SOAK_RECONNECT_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI to settle after backend restart"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-task-subagent-tree-reconnect.txt"
   capture
@@ -1793,7 +1793,7 @@ drive_task_subagent_old_server_fallback() {
   fi
 
   wait_for_tui_text "Ask ra to change code|state|AppUI capabilities refreshed" \
-    "${OCTOSCODE_SOAK_TUI_READY_WAIT_SECS:-20}" || \
+    "${RA_TUI_SOAK_TUI_READY_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI ready signal before old-server fallback capture"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-task-subagent-old-server-fallback.txt"
   capture
@@ -1806,83 +1806,83 @@ drive_autonomy_live() {
     die "TUI tmux session is not running: $tui_session"
   fi
 
-  local goal="${OCTOSCODE_SOAK_AUTONOMY_GOAL:-Keep the production autonomy soak moving until the final joined answer is visible.}"
-  local loop_fixed="${OCTOSCODE_SOAK_AUTONOMY_LOOP_FIXED_PROMPT:-check child-agent progress and report backend truth}"
-  local loop_self="${OCTOSCODE_SOAK_AUTONOMY_LOOP_SELF_PROMPT:-continue the autonomy soak when the backend decides it is idle}"
-  local loop_maintenance="${OCTOSCODE_SOAK_AUTONOMY_LOOP_MAINTENANCE_PROMPT:-prune stale autonomy artifacts after the soak}"
-  local review_prompt="${OCTOSCODE_SOAK_AUTONOMY_REVIEW_PROMPT:-Run a production autonomy review with supervised child agents. Produce model-generated per-child progress summaries, a model-generated final joined answer, goal continuation updates, and loop fire evidence.}"
-  local loop_id="${OCTOSCODE_SOAK_AUTONOMY_LOOP_ID:-}"
-  local agent_id="${OCTOSCODE_SOAK_AUTONOMY_AGENT_ID:-}"
+  local goal="${RA_TUI_SOAK_AUTONOMY_GOAL:-Keep the production autonomy soak moving until the final joined answer is visible.}"
+  local loop_fixed="${RA_TUI_SOAK_AUTONOMY_LOOP_FIXED_PROMPT:-check child-agent progress and report backend truth}"
+  local loop_self="${RA_TUI_SOAK_AUTONOMY_LOOP_SELF_PROMPT:-continue the autonomy soak when the backend decides it is idle}"
+  local loop_maintenance="${RA_TUI_SOAK_AUTONOMY_LOOP_MAINTENANCE_PROMPT:-prune stale autonomy artifacts after the soak}"
+  local review_prompt="${RA_TUI_SOAK_AUTONOMY_REVIEW_PROMPT:-Run a production autonomy review with supervised child agents. Produce model-generated per-child progress summaries, a model-generated final joined answer, goal continuation updates, and loop fire evidence.}"
+  local loop_id="${RA_TUI_SOAK_AUTONOMY_LOOP_ID:-}"
+  local agent_id="${RA_TUI_SOAK_AUTONOMY_AGENT_ID:-}"
 
-  wait_for_tui_text "Ask ra to change code" "${OCTOSCODE_SOAK_TUI_READY_WAIT_SECS:-20}" || \
+  wait_for_tui_text "Ask ra to change code" "${RA_TUI_SOAK_TUI_READY_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI composer before driving M15 autonomy"
 
   send_tui_line "/goal $goal"
-  wait_for_tui_text "Goal|goal|session/goal" "${OCTOSCODE_SOAK_AUTONOMY_GOAL_WAIT_SECS:-20}" || \
+  wait_for_tui_text "Goal|goal|session/goal" "${RA_TUI_SOAK_AUTONOMY_GOAL_WAIT_SECS:-20}" || \
     die "Timed out waiting for goal runtime evidence in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-autonomy-goal.txt"
 
   send_tui_line "/loop 5m $loop_fixed"
-  wait_for_tui_text "Loop|loop|loop/create" "${OCTOSCODE_SOAK_AUTONOMY_LOOP_WAIT_SECS:-20}" || \
+  wait_for_tui_text "Loop|loop|loop/create" "${RA_TUI_SOAK_AUTONOMY_LOOP_WAIT_SECS:-20}" || \
     die "Timed out waiting for fixed loop evidence in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-autonomy-loop-fixed.txt"
 
   send_tui_line "/loop $loop_self"
-  wait_for_tui_text "Loop|loop|loop/create" "${OCTOSCODE_SOAK_AUTONOMY_LOOP_WAIT_SECS:-20}" || \
+  wait_for_tui_text "Loop|loop|loop/create" "${RA_TUI_SOAK_AUTONOMY_LOOP_WAIT_SECS:-20}" || \
     die "Timed out waiting for self-paced loop evidence in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-autonomy-loop-self-paced.txt"
 
   send_tui_line "/loop maintenance $loop_maintenance"
-  wait_for_tui_text "Loop|loop|loop/create" "${OCTOSCODE_SOAK_AUTONOMY_LOOP_WAIT_SECS:-20}" || \
+  wait_for_tui_text "Loop|loop|loop/create" "${RA_TUI_SOAK_AUTONOMY_LOOP_WAIT_SECS:-20}" || \
     die "Timed out waiting for maintenance loop evidence in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-autonomy-loop-maintenance.txt"
 
   send_tui_line "/loop list"
-  wait_for_tui_text "Loop|loop|loop/list" "${OCTOSCODE_SOAK_AUTONOMY_LOOP_WAIT_SECS:-20}" || \
+  wait_for_tui_text "Loop|loop|loop/list" "${RA_TUI_SOAK_AUTONOMY_LOOP_WAIT_SECS:-20}" || \
     die "Timed out waiting for loop list evidence in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-autonomy-loop-list.txt"
 
   if [ -n "$loop_id" ]; then
     send_tui_line "/loop fire-now $loop_id"
-    wait_for_tui_text "Loop|loop|fire|fired|completed" "${OCTOSCODE_SOAK_AUTONOMY_FIRE_WAIT_SECS:-40}" || \
+    wait_for_tui_text "Loop|loop|fire|fired|completed" "${RA_TUI_SOAK_AUTONOMY_FIRE_WAIT_SECS:-40}" || \
       die "Timed out waiting for loop fire-now evidence in TUI"
     capture_pane "$tui_session" "$artifact_dir/tui-capture-autonomy-loop-fire-now.txt"
 
     send_tui_line "/loop pause $loop_id"
-    wait_for_tui_text "Loop|loop|pause|paused" "${OCTOSCODE_SOAK_AUTONOMY_LOOP_WAIT_SECS:-20}" || \
+    wait_for_tui_text "Loop|loop|pause|paused" "${RA_TUI_SOAK_AUTONOMY_LOOP_WAIT_SECS:-20}" || \
       die "Timed out waiting for loop pause evidence in TUI"
     capture_pane "$tui_session" "$artifact_dir/tui-capture-autonomy-loop-paused.txt"
 
     send_tui_line "/loop resume $loop_id"
-    wait_for_tui_text "Loop|loop|resume|resumed" "${OCTOSCODE_SOAK_AUTONOMY_LOOP_WAIT_SECS:-20}" || \
+    wait_for_tui_text "Loop|loop|resume|resumed" "${RA_TUI_SOAK_AUTONOMY_LOOP_WAIT_SECS:-20}" || \
       die "Timed out waiting for loop resume evidence in TUI"
     capture_pane "$tui_session" "$artifact_dir/tui-capture-autonomy-loop-resumed.txt"
   fi
 
   submit_composer_prompt "$review_prompt"
   wait_for_tui_text "Agent|agent|Goal|goal|Loop|loop|summary|final|completed|joined answer" \
-    "${OCTOSCODE_SOAK_AUTONOMY_REVIEW_WAIT_SECS:-120}" || \
+    "${RA_TUI_SOAK_AUTONOMY_REVIEW_WAIT_SECS:-120}" || \
     die "Timed out waiting for production autonomy review evidence in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-autonomy-review.txt"
 
   send_tui_line "/agents list"
-  wait_for_tui_text "Agent|agent|agent/list" "${OCTOSCODE_SOAK_AUTONOMY_AGENT_WAIT_SECS:-20}" || \
+  wait_for_tui_text "Agent|agent|agent/list" "${RA_TUI_SOAK_AUTONOMY_AGENT_WAIT_SECS:-20}" || \
     die "Timed out waiting for agent list evidence in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-autonomy-agents.txt"
 
   if [ -n "$agent_id" ]; then
     send_tui_line "/agents status $agent_id"
-    wait_for_tui_text "Agent|agent|status" "${OCTOSCODE_SOAK_AUTONOMY_AGENT_WAIT_SECS:-20}" || \
+    wait_for_tui_text "Agent|agent|status" "${RA_TUI_SOAK_AUTONOMY_AGENT_WAIT_SECS:-20}" || \
       die "Timed out waiting for agent status evidence in TUI"
     capture_pane "$tui_session" "$artifact_dir/tui-capture-autonomy-agent-status.txt"
 
     send_tui_line "/agents output $agent_id"
-    wait_for_tui_text "Agent|agent|output|summary|final" "${OCTOSCODE_SOAK_AUTONOMY_AGENT_WAIT_SECS:-20}" || \
+    wait_for_tui_text "Agent|agent|output|summary|final" "${RA_TUI_SOAK_AUTONOMY_AGENT_WAIT_SECS:-20}" || \
       die "Timed out waiting for agent output evidence in TUI"
     capture_pane "$tui_session" "$artifact_dir/tui-capture-autonomy-agent-output.txt"
 
     send_tui_line "/agents artifacts $agent_id"
-    wait_for_tui_text "Agent|agent|Artifacts|artifacts" "${OCTOSCODE_SOAK_AUTONOMY_AGENT_WAIT_SECS:-20}" || \
+    wait_for_tui_text "Agent|agent|Artifacts|artifacts" "${RA_TUI_SOAK_AUTONOMY_AGENT_WAIT_SECS:-20}" || \
       die "Timed out waiting for agent artifact evidence in TUI"
     capture_pane "$tui_session" "$artifact_dir/tui-capture-autonomy-agent-artifacts.txt"
   fi
@@ -1911,10 +1911,10 @@ drive_autonomy_live() {
   done
   [ -s "$aggregate_capture" ] || die "M15 autonomy aggregate capture was not written"
 
-  if [ -n "${OCTOSCODE_M15_UX_OUTPUT_DIR:-}" ] && [ -d "$OCTOSCODE_M15_UX_OUTPUT_DIR" ]; then
+  if [ -n "${RA_TUI_M15_UX_OUTPUT_DIR:-}" ] && [ -d "$RA_TUI_M15_UX_OUTPUT_DIR" ]; then
     local m15_source_abs
     local m15_dest_abs
-    m15_source_abs="$(cd "$OCTOSCODE_M15_UX_OUTPUT_DIR" && pwd -P)"
+    m15_source_abs="$(cd "$RA_TUI_M15_UX_OUTPUT_DIR" && pwd -P)"
     mkdir -p "$artifact_dir/m15-evidence"
     m15_dest_abs="$(cd "$artifact_dir/m15-evidence" && pwd -P)"
     case "$m15_dest_abs/" in
@@ -1941,21 +1941,21 @@ drive_autonomy_reconnect() {
     restart_stdio_child
   fi
   wait_for_tui_text "UI protocol reconnected|stdio child exited|relaunch|Ask ra to change code|state" \
-    "${OCTOSCODE_SOAK_RECONNECT_WAIT_SECS:-20}" || \
+    "${RA_TUI_SOAK_RECONNECT_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI to settle after autonomy backend restart"
 
   send_tui_line "/agents list"
-  wait_for_tui_text "Agent|agent|agent/list" "${OCTOSCODE_SOAK_AUTONOMY_AGENT_WAIT_SECS:-20}" || \
+  wait_for_tui_text "Agent|agent|agent/list" "${RA_TUI_SOAK_AUTONOMY_AGENT_WAIT_SECS:-20}" || \
     die "Timed out waiting for reconnect agent hydration evidence in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-autonomy-reconnect-agents.txt"
 
   send_tui_line "/goal"
-  wait_for_tui_text "Goal|goal|session/goal" "${OCTOSCODE_SOAK_AUTONOMY_GOAL_WAIT_SECS:-20}" || \
+  wait_for_tui_text "Goal|goal|session/goal" "${RA_TUI_SOAK_AUTONOMY_GOAL_WAIT_SECS:-20}" || \
     die "Timed out waiting for reconnect goal hydration evidence in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-autonomy-reconnect-goal.txt"
 
   send_tui_line "/loop list"
-  wait_for_tui_text "Loop|loop|loop/list" "${OCTOSCODE_SOAK_AUTONOMY_LOOP_WAIT_SECS:-20}" || \
+  wait_for_tui_text "Loop|loop|loop/list" "${RA_TUI_SOAK_AUTONOMY_LOOP_WAIT_SECS:-20}" || \
     die "Timed out waiting for reconnect loop hydration evidence in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-autonomy-reconnect-loops.txt"
 
@@ -1973,10 +1973,10 @@ drive_autonomy_reconnect() {
   done
   [ -s "$aggregate_capture" ] || die "M15 autonomy reconnect aggregate capture was not written"
 
-  if [ -n "${OCTOSCODE_M15_UX_OUTPUT_DIR:-}" ] && [ -d "$OCTOSCODE_M15_UX_OUTPUT_DIR" ]; then
+  if [ -n "${RA_TUI_M15_UX_OUTPUT_DIR:-}" ] && [ -d "$RA_TUI_M15_UX_OUTPUT_DIR" ]; then
     local m15_source_abs
     local m15_dest_abs
-    m15_source_abs="$(cd "$OCTOSCODE_M15_UX_OUTPUT_DIR" && pwd -P)"
+    m15_source_abs="$(cd "$RA_TUI_M15_UX_OUTPUT_DIR" && pwd -P)"
     mkdir -p "$artifact_dir/m15-evidence"
     m15_dest_abs="$(cd "$artifact_dir/m15-evidence" && pwd -P)"
     case "$m15_dest_abs/" in
@@ -1997,14 +1997,14 @@ drive_dropped_completion_backpressure() {
     die "TUI tmux session is not running: $tui_session"
   fi
 
-  local prompt="${OCTOSCODE_SOAK_BACKPRESSURE_PROMPT:-M9 replay-lossy fixture for M18 reconnect-style replay.}"
-  wait_for_tui_text "Ask ra to change code" "${OCTOSCODE_SOAK_TUI_READY_WAIT_SECS:-20}" || \
+  local prompt="${RA_TUI_SOAK_BACKPRESSURE_PROMPT:-M9 replay-lossy fixture for M18 reconnect-style replay.}"
+  wait_for_tui_text "Ask ra to change code" "${RA_TUI_SOAK_TUI_READY_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI composer before driving replay-lossy backpressure"
   submit_composer_prompt "$prompt"
-  wait_for_tui_text "Replay lossy" "${OCTOSCODE_SOAK_BACKPRESSURE_WAIT_SECS:-30}" || \
+  wait_for_tui_text "Replay lossy" "${RA_TUI_SOAK_BACKPRESSURE_WAIT_SECS:-30}" || \
     die "Timed out waiting for replay-lossy status in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-replay-lossy.txt"
-  wait_for_tui_text "Done|state .*Idle|interactive idle" "${OCTOSCODE_SOAK_BACKPRESSURE_DONE_WAIT_SECS:-20}" || \
+  wait_for_tui_text "Done|state .*Idle|interactive idle" "${RA_TUI_SOAK_BACKPRESSURE_DONE_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI to settle after replay-lossy fixture"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-backpressure-final.txt"
   capture
@@ -2017,29 +2017,29 @@ drive_interrupt_reconnect() {
     die "TUI tmux session is not running: $tui_session"
   fi
 
-  local prompt="${OCTOSCODE_SOAK_INTERRUPT_PROMPT:-M12 interrupt/reconnect fixture: start a long response, then interrupt and resume.}"
-  wait_for_tui_text "Ask ra to change code" "${OCTOSCODE_SOAK_TUI_READY_WAIT_SECS:-20}" || \
+  local prompt="${RA_TUI_SOAK_INTERRUPT_PROMPT:-M12 interrupt/reconnect fixture: start a long response, then interrupt and resume.}"
+  wait_for_tui_text "Ask ra to change code" "${RA_TUI_SOAK_TUI_READY_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI composer before driving interrupt/reconnect"
   submit_composer_prompt "$prompt"
-  wait_for_tui_text "Working|Thinking|Agent task|Running" "${OCTOSCODE_SOAK_INTERRUPT_RUNNING_WAIT_SECS:-20}" || \
+  wait_for_tui_text "Working|Thinking|Agent task|Running" "${RA_TUI_SOAK_INTERRUPT_RUNNING_WAIT_SECS:-20}" || \
     die "Timed out waiting for active turn before interrupt"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-interrupt-running.txt"
 
   tmux send-keys -t "$tui_session" C-c
   wait_for_tui_text "interrupt|cancel|Ask ra to change code|Done" \
-    "${OCTOSCODE_SOAK_INTERRUPT_DONE_WAIT_SECS:-30}" || \
+    "${RA_TUI_SOAK_INTERRUPT_DONE_WAIT_SECS:-30}" || \
     die "Timed out waiting for interrupt acknowledgement in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-interrupt.txt"
 
   if [ "$transport" = "ws" ]; then
     restart_server
     wait_for_tui_text "UI protocol reconnected|Ask ra to change code|state" \
-      "${OCTOSCODE_SOAK_RECONNECT_WAIT_SECS:-20}" || \
+      "${RA_TUI_SOAK_RECONNECT_WAIT_SECS:-20}" || \
       die "Timed out waiting for TUI to settle after interrupt reconnect"
   else
     send_tui_line "/status"
     wait_for_tui_text "Status|Ask ra to change code|state" \
-      "${OCTOSCODE_SOAK_STATUS_WAIT_SECS:-10}" || \
+      "${RA_TUI_SOAK_STATUS_WAIT_SECS:-10}" || \
       die "Timed out waiting for post-interrupt status capture"
   fi
   capture_pane "$tui_session" "$artifact_dir/tui-capture-interrupt-reconnect.txt"
@@ -2053,12 +2053,12 @@ drive_validator_cycle() {
     die "TUI tmux session is not running: $tui_session"
   fi
 
-  local prompt="${OCTOSCODE_SOAK_VALIDATOR_PROMPT:-M12 validator fixture: make a tiny change, show one failing validator, fix it, then show the passing validator rerun.}"
-  wait_for_tui_text "Ask ra to change code" "${OCTOSCODE_SOAK_TUI_READY_WAIT_SECS:-20}" || \
+  local prompt="${RA_TUI_SOAK_VALIDATOR_PROMPT:-M12 validator fixture: make a tiny change, show one failing validator, fix it, then show the passing validator rerun.}"
+  wait_for_tui_text "Ask ra to change code" "${RA_TUI_SOAK_TUI_READY_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI composer before driving validator cycle"
   submit_composer_prompt "$prompt"
   wait_for_tui_text "validator|Validator|failed|passed" \
-    "${OCTOSCODE_SOAK_VALIDATOR_WAIT_SECS:-80}" || \
+    "${RA_TUI_SOAK_VALIDATOR_WAIT_SECS:-80}" || \
     die "Timed out waiting for validator evidence in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-validator-cycle.txt"
   capture
@@ -2071,12 +2071,12 @@ drive_long_output() {
     die "TUI tmux session is not running: $tui_session"
   fi
 
-  local prompt="${OCTOSCODE_SOAK_LONG_OUTPUT_PROMPT:-M12 long-output fixture: run a shell command that prints 40 unique output-line-NN rows so the TUI folds the tool output preview.}"
-  wait_for_tui_text "Ask ra to change code" "${OCTOSCODE_SOAK_TUI_READY_WAIT_SECS:-20}" || \
+  local prompt="${RA_TUI_SOAK_LONG_OUTPUT_PROMPT:-M12 long-output fixture: run a shell command that prints 40 unique output-line-NN rows so the TUI folds the tool output preview.}"
+  wait_for_tui_text "Ask ra to change code" "${RA_TUI_SOAK_TUI_READY_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI composer before driving long-output capture"
   submit_composer_prompt "$prompt"
   wait_for_tui_text "more line(s) hidden|Ctrl+O expand|Ctrl+O collapse|output-line-" \
-    "${OCTOSCODE_SOAK_LONG_OUTPUT_WAIT_SECS:-80}" || \
+    "${RA_TUI_SOAK_LONG_OUTPUT_WAIT_SECS:-80}" || \
     die "Timed out waiting for long-output folding evidence in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-long-output.txt"
   capture
@@ -2089,21 +2089,21 @@ drive_narrow_terminal() {
     die "TUI tmux session is not running: $tui_session"
   fi
 
-  local cols="${OCTOSCODE_SOAK_NARROW_COLS:-80}"
-  local rows="${OCTOSCODE_SOAK_NARROW_ROWS:-24}"
-  case "$cols" in ''|*[!0-9]*) die "OCTOSCODE_SOAK_NARROW_COLS must be numeric: ${cols:-<empty>}" ;; esac
-  case "$rows" in ''|*[!0-9]*) die "OCTOSCODE_SOAK_NARROW_ROWS must be numeric: ${rows:-<empty>}" ;; esac
+  local cols="${RA_TUI_SOAK_NARROW_COLS:-80}"
+  local rows="${RA_TUI_SOAK_NARROW_ROWS:-24}"
+  case "$cols" in ''|*[!0-9]*) die "RA_TUI_SOAK_NARROW_COLS must be numeric: ${cols:-<empty>}" ;; esac
+  case "$rows" in ''|*[!0-9]*) die "RA_TUI_SOAK_NARROW_ROWS must be numeric: ${rows:-<empty>}" ;; esac
   [ "$cols" -le 80 ] || die "Narrow terminal cols must be <= 80, got $cols"
   [ "$rows" -le 24 ] || die "Narrow terminal rows must be <= 24, got $rows"
 
   tmux resize-window -t "$tui_session" -x "$cols" -y "$rows"
   wait_for_tui_text "Ask ra to change code|state|AppUI capabilities refreshed" \
-    "${OCTOSCODE_SOAK_NARROW_WAIT_SECS:-20}" || \
+    "${RA_TUI_SOAK_NARROW_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI ready signal after narrow resize"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-narrow-terminal.txt"
   {
     printf '{\n'
-    write_json_string_field schema "octoscode.narrow-terminal.v1"
+    write_json_string_field schema "ra-tui.narrow-terminal.v1"
     printf '  "cols": %s,\n' "$cols"
     printf '  "rows": %s\n' "$rows"
     printf '}\n'
@@ -2118,12 +2118,12 @@ drive_diff_artifact() {
     die "TUI tmux session is not running: $tui_session"
   fi
 
-  local prompt="${OCTOSCODE_SOAK_DIFF_ARTIFACT_PROMPT:-M12 diff/artifact fixture: make a tiny patch, show the diff preview, and publish an artifact summary.}"
-  wait_for_tui_text "Ask ra to change code" "${OCTOSCODE_SOAK_TUI_READY_WAIT_SECS:-20}" || \
+  local prompt="${RA_TUI_SOAK_DIFF_ARTIFACT_PROMPT:-M12 diff/artifact fixture: make a tiny patch, show the diff preview, and publish an artifact summary.}"
+  wait_for_tui_text "Ask ra to change code" "${RA_TUI_SOAK_TUI_READY_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI composer before driving diff/artifact capture"
   submit_composer_prompt "$prompt"
   wait_for_tui_text "Diff Preview|diff preview|artifact ready|Artifacts|artifact" \
-    "${OCTOSCODE_SOAK_DIFF_ARTIFACT_WAIT_SECS:-80}" || \
+    "${RA_TUI_SOAK_DIFF_ARTIFACT_WAIT_SECS:-80}" || \
     die "Timed out waiting for diff/artifact evidence in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-diff-artifact.txt"
   capture
@@ -2136,12 +2136,12 @@ drive_tool_denial() {
     die "TUI tmux session is not running: $tui_session"
   fi
 
-  local prompt="${OCTOSCODE_SOAK_TOOL_DENIAL_PROMPT:-M12 denied-tool fixture: attempt a policy-blocked shell command and show the tool/denied event in the TUI.}"
-  wait_for_tui_text "Ask ra to change code" "${OCTOSCODE_SOAK_TUI_READY_WAIT_SECS:-20}" || \
+  local prompt="${RA_TUI_SOAK_TOOL_DENIAL_PROMPT:-M12 denied-tool fixture: attempt a policy-blocked shell command and show the tool/denied event in the TUI.}"
+  wait_for_tui_text "Ask ra to change code" "${RA_TUI_SOAK_TUI_READY_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI composer before driving tool denial"
   submit_composer_prompt "$prompt"
   wait_for_tui_text "tool denied|Tool denied|tool_denied|denied by policy|policy denied" \
-    "${OCTOSCODE_SOAK_TOOL_DENIAL_WAIT_SECS:-80}" || \
+    "${RA_TUI_SOAK_TOOL_DENIAL_WAIT_SECS:-80}" || \
     die "Timed out waiting for denied-tool evidence in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-tool-denial.txt"
   capture
@@ -2154,12 +2154,12 @@ drive_tool_success() {
     die "TUI tmux session is not running: $tui_session"
   fi
 
-  local prompt="${OCTOSCODE_SOAK_TOOL_SUCCESS_PROMPT:-M12 normal-tool fixture: run a safe shell command and show a successful tool card in the TUI.}"
-  wait_for_tui_text "Ask ra to change code" "${OCTOSCODE_SOAK_TUI_READY_WAIT_SECS:-20}" || \
+  local prompt="${RA_TUI_SOAK_TOOL_SUCCESS_PROMPT:-M12 normal-tool fixture: run a safe shell command and show a successful tool card in the TUI.}"
+  wait_for_tui_text "Ask ra to change code" "${RA_TUI_SOAK_TUI_READY_WAIT_SECS:-20}" || \
     die "Timed out waiting for TUI composer before driving successful tool call"
   submit_composer_prompt "$prompt"
   wait_for_tui_text "Tool|tool|shell|complete|succeeded|Done" \
-    "${OCTOSCODE_SOAK_TOOL_SUCCESS_WAIT_SECS:-80}" || \
+    "${RA_TUI_SOAK_TOOL_SUCCESS_WAIT_SECS:-80}" || \
     die "Timed out waiting for successful tool-call evidence in TUI"
   capture_pane "$tui_session" "$artifact_dir/tui-capture-tool-success.txt"
   capture
@@ -2202,7 +2202,7 @@ verify_solo() {
   if grep -E 'redacted-by-probe|Bearer redacted-by-probe' "${leak_check_files[@]}" >/dev/null 2>&1; then
     die "M12 MCP/tool artifacts contain unredacted fixture secrets"
   fi
-  if [ "${OCTOSCODE_SOAK_SOLO_STRICT:-0}" = "1" ] && [ -f "$artifact_dir/mcp-config-after.redacted.json" ]; then
+  if [ "${RA_TUI_SOAK_SOLO_STRICT:-0}" = "1" ] && [ -f "$artifact_dir/mcp-config-after.redacted.json" ]; then
     if grep -q '"id": "fixture-stdio"' "$artifact_dir/mcp-config-after.redacted.json"; then
       die "M12 MCP strict verification expected deleted fixture-stdio to be absent"
     fi
@@ -2210,17 +2210,17 @@ verify_solo() {
       die "M12 MCP strict verification expected websocket parity fixture to remain"
     fi
   fi
-  if [ "${OCTOSCODE_SOAK_SOLO_STRICT:-0}" = "1" ]; then
+  if [ "${RA_TUI_SOAK_SOLO_STRICT:-0}" = "1" ]; then
     if ! grep -q '"status": "passed"' "$artifact_dir/soak-summary.json"; then
       die "M12 solo strict verification requires passed soak-summary.json"
     fi
   fi
-  local required_solo_cases="${OCTOSCODE_SOAK_REQUIRED_SOLO_CASES:-}"
-  if [ "${OCTOSCODE_SOAK_SOLO_STRICT:-0}" = "1" ] && [ -z "$required_solo_cases" ]; then
+  local required_solo_cases="${RA_TUI_SOAK_REQUIRED_SOLO_CASES:-}"
+  if [ "${RA_TUI_SOAK_SOLO_STRICT:-0}" = "1" ] && [ -z "$required_solo_cases" ]; then
     required_solo_cases="workspace-cwd-open approval-never-sandbox-active danger-full-access-approval-never"
   fi
   verify_solo_required_cases "$required_solo_cases"
-  if [ "${OCTOSCODE_SOAK_EXPECT_TENANT_NEGATIVE:-${OCTOSCODE_SOAK_TENANT_NEGATIVE:-0}}" = "1" ]; then
+  if [ "${RA_TUI_SOAK_EXPECT_TENANT_NEGATIVE:-${RA_TUI_SOAK_TENANT_NEGATIVE:-0}}" = "1" ]; then
     verify_solo_tenant_negative_case
   fi
   write_solo_summary_matrix
@@ -2232,13 +2232,13 @@ verify_solo() {
 
 verify_solo_strict_bundle() {
   local expect_tenant_negative="${1:-0}"
-  local original_strict="${OCTOSCODE_SOAK_SOLO_STRICT:-}"
-  local original_tenant_negative="${OCTOSCODE_SOAK_EXPECT_TENANT_NEGATIVE:-}"
-  OCTOSCODE_SOAK_SOLO_STRICT=1
-  OCTOSCODE_SOAK_EXPECT_TENANT_NEGATIVE="$expect_tenant_negative"
+  local original_strict="${RA_TUI_SOAK_SOLO_STRICT:-}"
+  local original_tenant_negative="${RA_TUI_SOAK_EXPECT_TENANT_NEGATIVE:-}"
+  RA_TUI_SOAK_SOLO_STRICT=1
+  RA_TUI_SOAK_EXPECT_TENANT_NEGATIVE="$expect_tenant_negative"
   verify_solo
-  OCTOSCODE_SOAK_SOLO_STRICT="$original_strict"
-  OCTOSCODE_SOAK_EXPECT_TENANT_NEGATIVE="$original_tenant_negative"
+  RA_TUI_SOAK_SOLO_STRICT="$original_strict"
+  RA_TUI_SOAK_EXPECT_TENANT_NEGATIVE="$original_tenant_negative"
 }
 
 verify_solo_closure() {
@@ -2246,7 +2246,7 @@ verify_solo_closure() {
   require_live_preflight_for_dir "$artifact_dir" "M12 solo closure"
   verify_solo_strict_bundle 1
 
-  local multiline_dir="${OCTOSCODE_SOAK_MULTILINE_ARTIFACT_DIR:-$artifact_dir}"
+  local multiline_dir="${RA_TUI_SOAK_MULTILINE_ARTIFACT_DIR:-$artifact_dir}"
   local original_artifact_dir="$artifact_dir"
   artifact_dir="$multiline_dir"
   require_matching_summary_source_commits_for_dir "$original_artifact_dir" "$artifact_dir" "M12 multiline closure"
@@ -2259,10 +2259,10 @@ verify_solo_closure() {
 
 verify_solo_transport_closure() {
   local original_artifact_dir="$artifact_dir"
-  local stdio_dir="${OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR:-}"
-  local ws_dir="${OCTOSCODE_SOAK_WS_ARTIFACT_DIR:-}"
-  [ -n "$stdio_dir" ] || die "OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR is required for verify-solo-transport-closure"
-  [ -n "$ws_dir" ] || die "OCTOSCODE_SOAK_WS_ARTIFACT_DIR is required for verify-solo-transport-closure"
+  local stdio_dir="${RA_TUI_SOAK_STDIO_ARTIFACT_DIR:-}"
+  local ws_dir="${RA_TUI_SOAK_WS_ARTIFACT_DIR:-}"
+  [ -n "$stdio_dir" ] || die "RA_TUI_SOAK_STDIO_ARTIFACT_DIR is required for verify-solo-transport-closure"
+  [ -n "$ws_dir" ] || die "RA_TUI_SOAK_WS_ARTIFACT_DIR is required for verify-solo-transport-closure"
   [ -d "$stdio_dir" ] || die "stdio artifact dir missing: $stdio_dir"
   [ -d "$ws_dir" ] || die "WebSocket artifact dir missing: $ws_dir"
 
@@ -2882,19 +2882,19 @@ verify_task_subagent_closure() {
   require_live_preflight_for_dir "$artifact_dir" "M13 task/subagent closure"
   verify_task_subagent_tree
 
-  local reconnect_dir="${OCTOSCODE_SOAK_TASK_RECONNECT_ARTIFACT_DIR:-$original_artifact_dir}"
+  local reconnect_dir="${RA_TUI_SOAK_TASK_RECONNECT_ARTIFACT_DIR:-$original_artifact_dir}"
   artifact_dir="$reconnect_dir"
   require_matching_summary_source_commits_for_dir "$original_artifact_dir" "$artifact_dir" "M13 task/subagent reconnect closure"
   verify_task_subagent_reconnect
 
-  local old_server_dir="${OCTOSCODE_SOAK_TASK_OLD_SERVER_ARTIFACT_DIR:-$original_artifact_dir}"
+  local old_server_dir="${RA_TUI_SOAK_TASK_OLD_SERVER_ARTIFACT_DIR:-$original_artifact_dir}"
   artifact_dir="$old_server_dir"
   require_matching_summary_tui_commit_for_dir "$original_artifact_dir" "$artifact_dir" "M13 task/subagent old-server closure"
   verify_task_subagent_old_server_fallback
 
   artifact_dir="$original_artifact_dir"
-  require_matching_summary_source_commits_for_dir "$original_artifact_dir" "${OCTOSCODE_SOAK_WS_ARTIFACT_DIR:-}" "M13 WebSocket parity closure"
-  require_matching_summary_source_commits_for_dir "$original_artifact_dir" "${OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR:-}" "M13 stdio parity closure"
+  require_matching_summary_source_commits_for_dir "$original_artifact_dir" "${RA_TUI_SOAK_WS_ARTIFACT_DIR:-}" "M13 WebSocket parity closure"
+  require_matching_summary_source_commits_for_dir "$original_artifact_dir" "${RA_TUI_SOAK_STDIO_ARTIFACT_DIR:-}" "M13 stdio parity closure"
   verify_transport_parity
 
   write_ux_validation "task-subagent-closure" "passed" "M13 task/subagent closure bundle verified"
@@ -3101,14 +3101,14 @@ verify_autonomy_closure() {
   require_live_preflight_for_dir "$artifact_dir" "M15 autonomy closure"
   verify_autonomy_live
 
-  local reconnect_dir="${OCTOSCODE_SOAK_AUTONOMY_RECONNECT_ARTIFACT_DIR:-$original_artifact_dir}"
+  local reconnect_dir="${RA_TUI_SOAK_AUTONOMY_RECONNECT_ARTIFACT_DIR:-$original_artifact_dir}"
   artifact_dir="$reconnect_dir"
   require_matching_summary_source_commits_for_dir "$original_artifact_dir" "$artifact_dir" "M15 autonomy reconnect closure"
   verify_autonomy_reconnect
 
   artifact_dir="$original_artifact_dir"
-  require_matching_summary_source_commits_for_dir "$original_artifact_dir" "${OCTOSCODE_SOAK_WS_ARTIFACT_DIR:-}" "M15 WebSocket parity closure"
-  require_matching_summary_source_commits_for_dir "$original_artifact_dir" "${OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR:-}" "M15 stdio parity closure"
+  require_matching_summary_source_commits_for_dir "$original_artifact_dir" "${RA_TUI_SOAK_WS_ARTIFACT_DIR:-}" "M15 WebSocket parity closure"
+  require_matching_summary_source_commits_for_dir "$original_artifact_dir" "${RA_TUI_SOAK_STDIO_ARTIFACT_DIR:-}" "M15 stdio parity closure"
   # Two REAL deepseek runs cannot emit byte-identical AppUI sequences, so the
   # closure gate asserts autonomy-contract parity (every required category
   # present in both transports after §14 normalization) rather than exact
@@ -3124,10 +3124,10 @@ verify_autonomy_closure() {
 }
 
 verify_transport_parity() {
-  local ws_dir="${OCTOSCODE_SOAK_WS_ARTIFACT_DIR:-}"
-  local stdio_dir="${OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR:-}"
-  [ -n "$ws_dir" ] || die "OCTOSCODE_SOAK_WS_ARTIFACT_DIR is required for verify-transport-parity"
-  [ -n "$stdio_dir" ] || die "OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR is required for verify-transport-parity"
+  local ws_dir="${RA_TUI_SOAK_WS_ARTIFACT_DIR:-}"
+  local stdio_dir="${RA_TUI_SOAK_STDIO_ARTIFACT_DIR:-}"
+  [ -n "$ws_dir" ] || die "RA_TUI_SOAK_WS_ARTIFACT_DIR is required for verify-transport-parity"
+  [ -n "$stdio_dir" ] || die "RA_TUI_SOAK_STDIO_ARTIFACT_DIR is required for verify-transport-parity"
   [ -d "$ws_dir" ] || die "WebSocket artifact dir missing: $ws_dir"
   [ -d "$stdio_dir" ] || die "stdio artifact dir missing: $stdio_dir"
 
@@ -3141,7 +3141,7 @@ verify_transport_parity() {
   secret_leak_check_dir "$stdio_dir" "stdio transport parity"
 
   local tmp_dir
-  tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/octoscode-transport-parity.XXXXXX")"
+  tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/ra-tui-transport-parity.XXXXXX")"
   trap 'rm -rf "$tmp_dir"; trap - RETURN' RETURN
 
   # autonomy-required normalizes §14 superseded/projection methods before
@@ -3168,7 +3168,7 @@ verify_transport_parity() {
       echo "Verified autonomy-required transport parity between $ws_dir and $stdio_dir"
       return 0
       ;;
-    *) die "OCTOSCODE_SOAK_TRANSPORT_PARITY_MODE must be sequence, set, or autonomy-required, got: $transport_parity_mode" ;;
+    *) die "RA_TUI_SOAK_TRANSPORT_PARITY_MODE must be sequence, set, or autonomy-required, got: $transport_parity_mode" ;;
   esac
 
   if ! diff -u "$tmp_dir/ws.methods" "$tmp_dir/stdio.methods" > "$tmp_dir/diff"; then
@@ -3283,11 +3283,11 @@ verify_ux_run() {
   grep --fixed-strings -- '"schema": "ra.ux.validation.v1"' "$validation_json" >/dev/null 2>&1 \
     || die "UX run validation schema mismatch"
 
-  if [ -n "${OCTOSCODE_SOAK_EXPECT_SCENARIO:-}" ] && [ "$scenario_id" != "$OCTOSCODE_SOAK_EXPECT_SCENARIO" ]; then
-    die "Expected UX scenario $OCTOSCODE_SOAK_EXPECT_SCENARIO, got $scenario_id"
+  if [ -n "${RA_TUI_SOAK_EXPECT_SCENARIO:-}" ] && [ "$scenario_id" != "$RA_TUI_SOAK_EXPECT_SCENARIO" ]; then
+    die "Expected UX scenario $RA_TUI_SOAK_EXPECT_SCENARIO, got $scenario_id"
   fi
-  if [ -n "${OCTOSCODE_SOAK_EXPECT_TRANSPORT:-}" ] && [ "$scenario_transport" != "$OCTOSCODE_SOAK_EXPECT_TRANSPORT" ]; then
-    die "Expected UX transport $OCTOSCODE_SOAK_EXPECT_TRANSPORT, got $scenario_transport"
+  if [ -n "${RA_TUI_SOAK_EXPECT_TRANSPORT:-}" ] && [ "$scenario_transport" != "$RA_TUI_SOAK_EXPECT_TRANSPORT" ]; then
+    die "Expected UX transport $RA_TUI_SOAK_EXPECT_TRANSPORT, got $scenario_transport"
   fi
 
   case "$cols" in
@@ -3322,7 +3322,7 @@ verify_ux_run() {
 }
 
 self_test_solo() {
-  local probe="$octos_repo/scripts/m12-solo-appui-soak.sh"
+  local probe="$ra_repo/scripts/m12-solo-appui-soak.sh"
   [ -x "$probe" ] || die "M12 solo soak wrapper missing or not executable: $probe"
   "$probe" self-test
 }
@@ -3335,8 +3335,8 @@ write_self_test_summary_env() {
   cat > "$dir/summary.env" <<SUMMARY
 run_id=$summary_run_id
 transport=$summary_transport
-octos_repo_commit=1111111111111111111111111111111111111111
-octoscode_repo_commit=2222222222222222222222222222222222222222
+ra_repo_commit=1111111111111111111111111111111111111111
+ra_tui_repo_commit=2222222222222222222222222222222222222222
 SUMMARY
 }
 
@@ -3346,42 +3346,42 @@ write_self_test_live_preflight_json() {
   mkdir -p "$dir"
   cat > "$dir/live-preflight.json" <<JSON
 {
-  "schema": "octoscode.live-preflight.v1",
+  "schema": "ra-tui.live-preflight.v1",
   "run_id": "$preflight_run_id",
   "status": "passed",
   "transport": "ws",
-  "provider_credential": "OCTOSCODE_SOAK_API_KEY",
-  "octos_repo_commit": "1111111111111111111111111111111111111111",
-  "octoscode_repo_commit": "2222222222222222222222222222222222222222"
+  "provider_credential": "RA_TUI_SOAK_API_KEY",
+  "ra_repo_commit": "1111111111111111111111111111111111111111",
+  "ra_tui_repo_commit": "2222222222222222222222222222222222222222"
 }
 JSON
 }
 
 self_test() {
   # Hermetic: child invocations below assume the default sequence parity mode
-  # unless a test explicitly sets OCTOSCODE_SOAK_TRANSPORT_PARITY_MODE. Clearing
+  # unless a test explicitly sets RA_TUI_SOAK_TRANSPORT_PARITY_MODE. Clearing
   # any inherited value keeps the strict-parity assertions deterministic even
   # when the harness is run with the env var preset (e.g. autonomy-required).
-  unset OCTOSCODE_SOAK_TRANSPORT_PARITY_MODE
+  unset RA_TUI_SOAK_TRANSPORT_PARITY_MODE
   local tmp_root
-  tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/octoscode-soak-self-test.XXXXXX")"
-  local self_test_server_session="octoscode-soak-selftest-server-$$"
-  local self_test_tui_session="octoscode-soak-selftest-tui-$$"
+  tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/ra-tui-soak-self-test.XXXXXX")"
+  local self_test_server_session="ra-tui-soak-selftest-server-$$"
+  local self_test_tui_session="ra-tui-soak-selftest-tui-$$"
   command -v tmux >/dev/null 2>&1 || die "tmux is required for self-test"
   local child_env=(
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/artifacts"
-    "OCTOSCODE_SOAK_DATA_DIR=$tmp_root/data"
-    "OCTOSCODE_SOAK_WORKSPACE=$tmp_root/workspace"
-    "OCTOSCODE_SOAK_RUN_ID=selftest"
-    "OCTOSCODE_SOAK_SERVER_SESSION=$self_test_server_session"
-    "OCTOSCODE_SOAK_TUI_SESSION=$self_test_tui_session"
-    "OCTOSCODE_SOAK_PROFILE=coding"
-    "OCTOSCODE_SOAK_REQUIRE_PROFILE=1"
-    "OCTOSCODE_SOAK_EXPECT_FAMILY=moonshot"
-    "OCTOSCODE_SOAK_EXPECT_MODEL=kimi-k2.5"
-    "OCTOSCODE_SOAK_EXPECT_ROUTE=autodl"
-    "OCTOSCODE_SOAK_EXPECT_BASE_URL=https://www.autodl.art/api/v1"
-    "OCTOSCODE_SOAK_API_KEY=selftest-secret"
+    "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/artifacts"
+    "RA_TUI_SOAK_DATA_DIR=$tmp_root/data"
+    "RA_TUI_SOAK_WORKSPACE=$tmp_root/workspace"
+    "RA_TUI_SOAK_RUN_ID=selftest"
+    "RA_TUI_SOAK_SERVER_SESSION=$self_test_server_session"
+    "RA_TUI_SOAK_TUI_SESSION=$self_test_tui_session"
+    "RA_TUI_SOAK_PROFILE=coding"
+    "RA_TUI_SOAK_REQUIRE_PROFILE=1"
+    "RA_TUI_SOAK_EXPECT_FAMILY=moonshot"
+    "RA_TUI_SOAK_EXPECT_MODEL=kimi-k2.5"
+    "RA_TUI_SOAK_EXPECT_ROUTE=autodl"
+    "RA_TUI_SOAK_EXPECT_BASE_URL=https://www.autodl.art/api/v1"
+    "RA_TUI_SOAK_API_KEY=selftest-secret"
   )
   cleanup_self_test() {
     if [ -n "${self_test_server_session:-}" ]; then
@@ -3399,10 +3399,10 @@ self_test() {
   tmux kill-session -t "$self_test_server_session" >/dev/null 2>&1 || true
   tmux kill-session -t "$self_test_tui_session" >/dev/null 2>&1 || true
   tmux new-session -d -s "$self_test_server_session" "printf 'Synthetic self-test server pane\n'; sleep 600"
-  tmux new-session -d -s "$self_test_tui_session" "printf 'Ask ra to change code\nOCTOS self-test\n'; sleep 600"
-  local fake_octos_bin="$tmp_root/fake-ra-preflight"
-  local fake_tui_bin="$tmp_root/fake-octoscode-preflight"
-  cat > "$fake_octos_bin" <<'SH'
+  tmux new-session -d -s "$self_test_tui_session" "printf 'Ask ra to change code\nRA self-test\n'; sleep 600"
+  local fake_ra_bin="$tmp_root/fake-ra-preflight"
+  local fake_tui_bin="$tmp_root/fake-ra-tui-preflight"
+  cat > "$fake_ra_bin" <<'SH'
 #!/usr/bin/env bash
 if [ "${1:-}" = "serve" ] && [ "${2:-}" = "--help" ]; then
   printf 'serve help\n'
@@ -3417,19 +3417,19 @@ SH
   cat > "$fake_tui_bin" <<'SH'
 #!/usr/bin/env bash
 if [ "${1:-}" = "--version" ]; then
-  printf 'octoscode 0.0.0-self-test\n'
+  printf 'ra-tui 0.0.0-self-test\n'
   exit 0
 fi
 exit 0
 SH
-  chmod +x "$fake_octos_bin" "$fake_tui_bin"
+  chmod +x "$fake_ra_bin" "$fake_tui_bin"
   env \
-    "OCTOS_BIN=$fake_octos_bin" \
-    "OCTOSCODE_BIN=$fake_tui_bin" \
-    "OCTOSCODE_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
-    "OCTOSCODE_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
-    "OCTOSCODE_SOAK_RUN_ID=preflight-provider-ok" \
-    "OCTOSCODE_SOAK_API_KEY=selftest-secret" \
+    "ra_BIN=$fake_ra_bin" \
+    "RA_TUI_BIN=$fake_tui_bin" \
+    "RA_TUI_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
+    "RA_TUI_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
+    "RA_TUI_SOAK_RUN_ID=preflight-provider-ok" \
+    "RA_TUI_SOAK_API_KEY=selftest-secret" \
     "$0" preflight-live >/dev/null
   [ -f "$tmp_root/preflight-artifacts/preflight-provider-ok/live-preflight.json" ] \
     || die "self-test expected provider-backed preflight artifact"
@@ -3445,16 +3445,16 @@ SH
     || die "self-test expected session id in preflight artifact"
   grep -F '"ra_version": "ra 0.0.0-self-test"' "$tmp_root/preflight-artifacts/preflight-provider-ok/live-preflight.json" >/dev/null \
     || die "self-test expected ra version in preflight artifact"
-  grep -F '"octos_version_status": "passed"' "$tmp_root/preflight-artifacts/preflight-provider-ok/live-preflight.json" >/dev/null \
+  grep -F '"ra_version_status": "passed"' "$tmp_root/preflight-artifacts/preflight-provider-ok/live-preflight.json" >/dev/null \
     || die "self-test expected ra version status in preflight artifact"
-  grep -F '"octoscode_version": "octoscode 0.0.0-self-test"' "$tmp_root/preflight-artifacts/preflight-provider-ok/live-preflight.json" >/dev/null \
-    || die "self-test expected octoscode version in preflight artifact"
-  grep -F '"octoscode_version_status": "passed"' "$tmp_root/preflight-artifacts/preflight-provider-ok/live-preflight.json" >/dev/null \
-    || die "self-test expected octoscode version status in preflight artifact"
-  grep -F '"octos_repo_commit": "' "$tmp_root/preflight-artifacts/preflight-provider-ok/live-preflight.json" >/dev/null \
+  grep -F '"ra_tui_version": "ra-tui 0.0.0-self-test"' "$tmp_root/preflight-artifacts/preflight-provider-ok/live-preflight.json" >/dev/null \
+    || die "self-test expected ra-tui version in preflight artifact"
+  grep -F '"ra_tui_version_status": "passed"' "$tmp_root/preflight-artifacts/preflight-provider-ok/live-preflight.json" >/dev/null \
+    || die "self-test expected ra-tui version status in preflight artifact"
+  grep -F '"ra_repo_commit": "' "$tmp_root/preflight-artifacts/preflight-provider-ok/live-preflight.json" >/dev/null \
     || die "self-test expected ra repo commit field in preflight artifact"
-  grep -F '"octoscode_repo_commit": "' "$tmp_root/preflight-artifacts/preflight-provider-ok/live-preflight.json" >/dev/null \
-    || die "self-test expected octoscode repo commit field in preflight artifact"
+  grep -F '"ra_tui_repo_commit": "' "$tmp_root/preflight-artifacts/preflight-provider-ok/live-preflight.json" >/dev/null \
+    || die "self-test expected ra-tui repo commit field in preflight artifact"
   grep -F '"provider_env_vars_checked": "OPENAI_API_KEY ANTHROPIC_API_KEY DEEPSEEK_API_KEY OPENROUTER_API_KEY MOONSHOT_API_KEY KIMI_API_KEY AUTODL_API_KEY"' "$tmp_root/preflight-artifacts/preflight-provider-ok/live-preflight.json" >/dev/null \
     || die "self-test expected provider env names in preflight artifact"
   grep -F '"tmux_version": "tmux ' "$tmp_root/preflight-artifacts/preflight-provider-ok/live-preflight.json" >/dev/null \
@@ -3473,23 +3473,23 @@ SH
   chmod +x "$fake_bin_dir/tmux"
   env \
     "PATH=$fake_bin_dir:$PATH" \
-    "OCTOS_BIN=$fake_octos_bin" \
-    "OCTOSCODE_BIN=$fake_tui_bin" \
-    "OCTOSCODE_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
-    "OCTOSCODE_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
-    "OCTOSCODE_SOAK_RUN_ID=preflight-tmux-version-unsupported" \
-    "OCTOSCODE_SOAK_REQUIRE_LIVE_PROVIDER=0" \
+    "ra_BIN=$fake_ra_bin" \
+    "RA_TUI_BIN=$fake_tui_bin" \
+    "RA_TUI_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
+    "RA_TUI_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
+    "RA_TUI_SOAK_RUN_ID=preflight-tmux-version-unsupported" \
+    "RA_TUI_SOAK_REQUIRE_LIVE_PROVIDER=0" \
     "$0" preflight-live >/dev/null
   grep -F '"tmux_version": "unsupported"' "$tmp_root/preflight-artifacts/preflight-tmux-version-unsupported/live-preflight.json" >/dev/null \
     || die "self-test expected unsupported tmux version in preflight artifact"
   grep -F '"tmux_version_status": "unsupported"' "$tmp_root/preflight-artifacts/preflight-tmux-version-unsupported/live-preflight.json" >/dev/null \
     || die "self-test expected unsupported tmux version status in preflight artifact"
   if env \
-    "OCTOS_BIN=$fake_octos_bin" \
-    "OCTOSCODE_BIN=$fake_tui_bin" \
-    "OCTOSCODE_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
-    "OCTOSCODE_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
-    "OCTOSCODE_SOAK_RUN_ID=preflight-provider-missing" \
+    "ra_BIN=$fake_ra_bin" \
+    "RA_TUI_BIN=$fake_tui_bin" \
+    "RA_TUI_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
+    "RA_TUI_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
+    "RA_TUI_SOAK_RUN_ID=preflight-provider-missing" \
     "$0" preflight-live >/dev/null 2>&1; then
     die "self-test expected live preflight to fail without provider credentials"
   fi
@@ -3498,19 +3498,19 @@ SH
   grep -F '"provider_credential": "missing"' "$tmp_root/preflight-artifacts/preflight-provider-missing/live-preflight.json" >/dev/null \
     || die "self-test expected missing-provider preflight artifact"
   env \
-    "OCTOS_BIN=$fake_octos_bin" \
-    "OCTOSCODE_BIN=$fake_tui_bin" \
-    "OCTOSCODE_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
-    "OCTOSCODE_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
-    "OCTOSCODE_SOAK_RUN_ID=preflight-provider-free" \
-    "OCTOSCODE_SOAK_REQUIRE_LIVE_PROVIDER=0" \
+    "ra_BIN=$fake_ra_bin" \
+    "RA_TUI_BIN=$fake_tui_bin" \
+    "RA_TUI_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
+    "RA_TUI_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
+    "RA_TUI_SOAK_RUN_ID=preflight-provider-free" \
+    "RA_TUI_SOAK_REQUIRE_LIVE_PROVIDER=0" \
     "$0" preflight-live >/dev/null
   [ -f "$tmp_root/preflight-artifacts/preflight-provider-free/live-preflight.json" ] \
     || die "self-test expected provider-free preflight artifact"
   grep -F '"provider_credential": "not required"' "$tmp_root/preflight-artifacts/preflight-provider-free/live-preflight.json" >/dev/null \
     || die "self-test expected provider-free preflight artifact"
-  local fake_octos_no_version="$tmp_root/fake-ra-no-version"
-  cat > "$fake_octos_no_version" <<'SH'
+  local fake_ra_no_version="$tmp_root/fake-ra-no-version"
+  cat > "$fake_ra_no_version" <<'SH'
 #!/usr/bin/env bash
 if [ "${1:-}" = "serve" ] && [ "${2:-}" = "--help" ]; then
   printf 'serve help\n'
@@ -3521,20 +3521,20 @@ if [ "${1:-}" = "--version" ]; then
 fi
 exit 0
 SH
-  chmod +x "$fake_octos_no_version"
+  chmod +x "$fake_ra_no_version"
   env \
-    "OCTOS_BIN=$fake_octos_no_version" \
-    "OCTOSCODE_BIN=$fake_tui_bin" \
-    "OCTOSCODE_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
-    "OCTOSCODE_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
-    "OCTOSCODE_SOAK_RUN_ID=preflight-ra-version-unsupported" \
-    "OCTOSCODE_SOAK_REQUIRE_LIVE_PROVIDER=0" \
+    "ra_BIN=$fake_ra_no_version" \
+    "RA_TUI_BIN=$fake_tui_bin" \
+    "RA_TUI_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
+    "RA_TUI_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
+    "RA_TUI_SOAK_RUN_ID=preflight-ra-version-unsupported" \
+    "RA_TUI_SOAK_REQUIRE_LIVE_PROVIDER=0" \
     "$0" preflight-live >/dev/null
   grep -F '"ra_version": "unsupported"' "$tmp_root/preflight-artifacts/preflight-ra-version-unsupported/live-preflight.json" >/dev/null \
     || die "self-test expected unsupported ra version in preflight artifact"
-  grep -F '"octos_version_status": "unsupported"' "$tmp_root/preflight-artifacts/preflight-ra-version-unsupported/live-preflight.json" >/dev/null \
+  grep -F '"ra_version_status": "unsupported"' "$tmp_root/preflight-artifacts/preflight-ra-version-unsupported/live-preflight.json" >/dev/null \
     || die "self-test expected unsupported ra version status in preflight artifact"
-  local fake_tui_no_version="$tmp_root/fake-octoscode-no-version"
+  local fake_tui_no_version="$tmp_root/fake-ra-tui-no-version"
   cat > "$fake_tui_no_version" <<'SH'
 #!/usr/bin/env bash
 if [ "${1:-}" = "--version" ]; then
@@ -3544,17 +3544,17 @@ exit 0
 SH
   chmod +x "$fake_tui_no_version"
   env \
-    "OCTOS_BIN=$fake_octos_bin" \
-    "OCTOSCODE_BIN=$fake_tui_no_version" \
-    "OCTOSCODE_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
-    "OCTOSCODE_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
-    "OCTOSCODE_SOAK_RUN_ID=preflight-tui-version-unsupported" \
-    "OCTOSCODE_SOAK_REQUIRE_LIVE_PROVIDER=0" \
+    "ra_BIN=$fake_ra_bin" \
+    "RA_TUI_BIN=$fake_tui_no_version" \
+    "RA_TUI_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
+    "RA_TUI_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
+    "RA_TUI_SOAK_RUN_ID=preflight-tui-version-unsupported" \
+    "RA_TUI_SOAK_REQUIRE_LIVE_PROVIDER=0" \
     "$0" preflight-live >/dev/null
-  grep -F '"octoscode_version": "unsupported"' "$tmp_root/preflight-artifacts/preflight-tui-version-unsupported/live-preflight.json" >/dev/null \
-    || die "self-test expected unsupported octoscode version in preflight artifact"
-  grep -F '"octoscode_version_status": "unsupported"' "$tmp_root/preflight-artifacts/preflight-tui-version-unsupported/live-preflight.json" >/dev/null \
-    || die "self-test expected unsupported octoscode version status in preflight artifact"
+  grep -F '"ra_tui_version": "unsupported"' "$tmp_root/preflight-artifacts/preflight-tui-version-unsupported/live-preflight.json" >/dev/null \
+    || die "self-test expected unsupported ra-tui version in preflight artifact"
+  grep -F '"ra_tui_version_status": "unsupported"' "$tmp_root/preflight-artifacts/preflight-tui-version-unsupported/live-preflight.json" >/dev/null \
+    || die "self-test expected unsupported ra-tui version status in preflight artifact"
   cat > "$tmp_root/data/profiles/coding.json" <<'JSON'
 {
   "id": "coding",
@@ -3581,10 +3581,10 @@ JSON
   env "${child_env[@]}" "$0" verify-onboard >/dev/null
 
   [ -f "$tmp_root/artifacts/summary.env" ] || die "self-test missing summary.env"
-  grep -F 'octos_repo_commit=' "$tmp_root/artifacts/summary.env" >/dev/null \
-    || die "self-test missing octos_repo_commit in summary.env"
-  grep -F 'octoscode_repo_commit=' "$tmp_root/artifacts/summary.env" >/dev/null \
-    || die "self-test missing octoscode_repo_commit in summary.env"
+  grep -F 'ra_repo_commit=' "$tmp_root/artifacts/summary.env" >/dev/null \
+    || die "self-test missing ra_repo_commit in summary.env"
+  grep -F 'ra_tui_repo_commit=' "$tmp_root/artifacts/summary.env" >/dev/null \
+    || die "self-test missing ra_tui_repo_commit in summary.env"
   [ -f "$tmp_root/artifacts/server.log" ] || die "self-test missing server.log"
   [ -f "$tmp_root/artifacts/server-pane.txt" ] || die "self-test missing server-pane.txt"
   [ -f "$tmp_root/artifacts/tui-capture.txt" ] || die "self-test missing tui-capture.txt"
@@ -3594,10 +3594,10 @@ JSON
   [ -f "$tmp_root/artifacts/soak-summary.json" ] || die "self-test missing soak-summary.json"
   [ -f "$tmp_root/artifacts/api-parity-checklist.json" ] || die "self-test missing api-parity-checklist.json"
   [ -f "$tmp_root/artifacts/ux-validation.json" ] || die "self-test missing ux-validation.json"
-  grep -F '"octos_repo_commit": "' "$tmp_root/artifacts/ux-validation.json" >/dev/null \
-    || die "self-test missing octos_repo_commit in ux-validation.json"
-  grep -F '"octoscode_repo_commit": "' "$tmp_root/artifacts/ux-validation.json" >/dev/null \
-    || die "self-test missing octoscode_repo_commit in ux-validation.json"
+  grep -F '"ra_repo_commit": "' "$tmp_root/artifacts/ux-validation.json" >/dev/null \
+    || die "self-test missing ra_repo_commit in ux-validation.json"
+  grep -F '"ra_tui_repo_commit": "' "$tmp_root/artifacts/ux-validation.json" >/dev/null \
+    || die "self-test missing ra_tui_repo_commit in ux-validation.json"
   printf 'first_launch_capture=1\n' >> "$tmp_root/artifacts/summary.env"
   cat > "$tmp_root/artifacts/tui-capture-first-launch.txt" <<'CAPTURE'
 Welcome to ra
@@ -3612,7 +3612,7 @@ CAPTURE
   mkdir -p "$tmp_root/bad-first-launch"
   printf 'first_launch_capture=1\n' > "$tmp_root/bad-first-launch/summary.env"
   printf 'Set Up LLM Provider\n' > "$tmp_root/bad-first-launch/tui-capture-first-launch.txt"
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-first-launch" "$0" verify-first-launch >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-first-launch" "$0" verify-first-launch >/dev/null 2>&1; then
     die "self-test expected bad first-launch capture verification to fail"
   fi
 
@@ -3626,7 +3626,7 @@ CAPTURE
 
   mkdir -p "$tmp_root/bad-provider-missing"
   printf 'Welcome to ra\n' > "$tmp_root/bad-provider-missing/tui-capture-provider-missing.txt"
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-provider-missing" "$0" verify-provider-missing >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-provider-missing" "$0" verify-provider-missing >/dev/null 2>&1; then
     die "self-test expected bad provider-missing capture verification to fail"
   fi
 
@@ -3646,20 +3646,20 @@ CAPTURE
   mkdir -p "$tmp_root/bad-permissions"
   printf 'Update Model Permissions\n' > "$tmp_root/bad-permissions/tui-capture-permissions-open.txt"
   printf 'Set Up LLM Provider\n' > "$tmp_root/bad-permissions/tui-capture-permissions-applied.txt"
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-permissions" "$0" verify-permissions >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-permissions" "$0" verify-permissions >/dev/null 2>&1; then
     die "self-test expected bad permissions capture verification to fail"
   fi
 
   mkdir -p "$tmp_root/empty-capture"
   : > "$tmp_root/empty-capture/tui-capture-first-launch.txt"
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/empty-capture" "$0" verify-first-launch >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/empty-capture" "$0" verify-first-launch >/dev/null 2>&1; then
     die "self-test expected empty first-launch capture verification to fail"
   fi
 
   mkdir -p "$tmp_root/error-capture"
   printf 'Update Model Permissions\nunsupported method: profile/set\n' > "$tmp_root/error-capture/tui-capture-permissions-open.txt"
   printf 'Permissions updated: Workspace Write\nAsk ra to change code...\n' > "$tmp_root/error-capture/tui-capture-permissions-applied.txt"
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/error-capture" "$0" verify-permissions >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/error-capture" "$0" verify-permissions >/dev/null 2>&1; then
     die "self-test expected unsupported-method capture verification to fail"
   fi
 
@@ -3695,9 +3695,9 @@ JSONL
 }
 JSON
   env \
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/solo-core" \
-    "OCTOSCODE_SOAK_SOLO_STRICT=1" \
-    "OCTOSCODE_SOAK_API_KEY=selftest-secret" \
+    "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/solo-core" \
+    "RA_TUI_SOAK_SOLO_STRICT=1" \
+    "RA_TUI_SOAK_API_KEY=selftest-secret" \
     "$0" verify-solo >/dev/null
   cmp -s "$tmp_root/solo-core/tui-capture.before" "$tmp_root/solo-core/tui-capture.txt" \
     || die "self-test expected verify-solo to preserve retained tui-capture.txt"
@@ -3719,8 +3719,8 @@ JSON
 }
 JSON
   if env \
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-solo-required-case" \
-    "OCTOSCODE_SOAK_SOLO_STRICT=1" \
+    "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-solo-required-case" \
+    "RA_TUI_SOAK_SOLO_STRICT=1" \
     "$0" verify-solo >/dev/null 2>&1; then
     die "self-test expected required solo case verification to fail"
   fi
@@ -3738,8 +3738,8 @@ JSON
 }
 JSON
   env \
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/solo-tenant-negative" \
-    "OCTOSCODE_SOAK_EXPECT_TENANT_NEGATIVE=1" \
+    "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/solo-tenant-negative" \
+    "RA_TUI_SOAK_EXPECT_TENANT_NEGATIVE=1" \
     "$0" verify-solo >/dev/null
 
   cp -R "$tmp_root/solo-core" "$tmp_root/bad-solo-tenant-negative"
@@ -3755,8 +3755,8 @@ JSON
 }
 JSON
   if env \
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-solo-tenant-negative" \
-    "OCTOSCODE_SOAK_EXPECT_TENANT_NEGATIVE=1" \
+    "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-solo-tenant-negative" \
+    "RA_TUI_SOAK_EXPECT_TENANT_NEGATIVE=1" \
     "$0" verify-solo >/dev/null 2>&1; then
     die "self-test expected tenant-negative solo verification to fail"
   fi
@@ -3774,7 +3774,7 @@ decision  deny  decided by coding
 Ask ra to change code...
 state Done
 CAPTURE
-  env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/approval-denial" "$0" verify-approval-denial >/dev/null
+  env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/approval-denial" "$0" verify-approval-denial >/dev/null
 
   mkdir -p "$tmp_root/multiline-composer"
   write_self_test_summary_env "$tmp_root/multiline-composer" multiline-composer-selftest stdio
@@ -3785,7 +3785,7 @@ Composer  Enter send | Tab inspector
   third instruction
 state Done
 CAPTURE
-  env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/multiline-composer" "$0" verify-multiline-composer >/dev/null
+  env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/multiline-composer" "$0" verify-multiline-composer >/dev/null
 
   cp -R "$tmp_root/solo-core" "$tmp_root/solo-closure"
   write_self_test_live_preflight_json "$tmp_root/solo-closure" solo-closure-selftest
@@ -3803,29 +3803,29 @@ CAPTURE
 }
 JSON
   env \
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/solo-closure" \
-    "OCTOSCODE_SOAK_MULTILINE_ARTIFACT_DIR=$tmp_root/multiline-composer" \
+    "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/solo-closure" \
+    "RA_TUI_SOAK_MULTILINE_ARTIFACT_DIR=$tmp_root/multiline-composer" \
     "$0" verify-solo-closure >/dev/null
   grep --fixed-strings -- '"scenario": "solo-closure"' "$tmp_root/solo-closure/ux-validation.json" >/dev/null 2>&1 \
     || die "self-test missing solo-closure ux validation"
   cp -R "$tmp_root/solo-closure" "$tmp_root/bad-solo-closure-provider-free"
-  sed 's/"provider_credential": "OCTOSCODE_SOAK_API_KEY"/"provider_credential": "not required"/' \
+  sed 's/"provider_credential": "RA_TUI_SOAK_API_KEY"/"provider_credential": "not required"/' \
     "$tmp_root/solo-closure/live-preflight.json" \
     > "$tmp_root/bad-solo-closure-provider-free/live-preflight.json"
   if env \
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-solo-closure-provider-free" \
-    "OCTOSCODE_SOAK_MULTILINE_ARTIFACT_DIR=$tmp_root/multiline-composer" \
+    "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-solo-closure-provider-free" \
+    "RA_TUI_SOAK_MULTILINE_ARTIFACT_DIR=$tmp_root/multiline-composer" \
     "$0" verify-solo-closure >/dev/null 2>&1; then
     die "self-test expected solo closure verification to fail on provider-free live preflight"
   fi
   cp -R "$tmp_root/solo-closure" "$tmp_root/bad-solo-closure-source-commit"
-  grep -v '^octoscode_repo_commit=' "$tmp_root/bad-solo-closure-source-commit/summary.env" \
+  grep -v '^ra_tui_repo_commit=' "$tmp_root/bad-solo-closure-source-commit/summary.env" \
     > "$tmp_root/bad-solo-closure-source-commit/summary.env.tmp"
   mv "$tmp_root/bad-solo-closure-source-commit/summary.env.tmp" \
     "$tmp_root/bad-solo-closure-source-commit/summary.env"
   if env \
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-solo-closure-source-commit" \
-    "OCTOSCODE_SOAK_MULTILINE_ARTIFACT_DIR=$tmp_root/multiline-composer" \
+    "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-solo-closure-source-commit" \
+    "RA_TUI_SOAK_MULTILINE_ARTIFACT_DIR=$tmp_root/multiline-composer" \
     "$0" verify-solo-closure >/dev/null 2>&1; then
     die "self-test expected solo closure verification to fail without source commit metadata"
   fi
@@ -3845,36 +3845,36 @@ JSONL
 {"direction":"client_to_server","frame":{"method":"session/status/read"}}
 JSONL
   env \
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/solo-closure" \
-    "OCTOSCODE_SOAK_MULTILINE_ARTIFACT_DIR=$tmp_root/multiline-composer" \
-    "OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/solo-transport-stdio" \
-    "OCTOSCODE_SOAK_WS_ARTIFACT_DIR=$tmp_root/solo-transport-ws" \
+    "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/solo-closure" \
+    "RA_TUI_SOAK_MULTILINE_ARTIFACT_DIR=$tmp_root/multiline-composer" \
+    "RA_TUI_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/solo-transport-stdio" \
+    "RA_TUI_SOAK_WS_ARTIFACT_DIR=$tmp_root/solo-transport-ws" \
     "$0" verify-solo-transport-closure >/dev/null
   grep --fixed-strings -- '"scenario": "solo-transport-closure"' "$tmp_root/solo-closure/ux-validation.json" >/dev/null 2>&1 \
     || die "self-test missing solo-transport-closure ux validation"
   cp -R "$tmp_root/solo-transport-stdio" "$tmp_root/bad-solo-transport-stdio-mismatch"
-  sed 's/^octos_repo_commit=.*/octos_repo_commit=3333333333333333333333333333333333333333/' \
+  sed 's/^ra_repo_commit=.*/ra_repo_commit=3333333333333333333333333333333333333333/' \
     "$tmp_root/solo-transport-stdio/summary.env" \
     > "$tmp_root/bad-solo-transport-stdio-mismatch/summary.env"
   if env \
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/solo-closure" \
-    "OCTOSCODE_SOAK_MULTILINE_ARTIFACT_DIR=$tmp_root/multiline-composer" \
-    "OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/bad-solo-transport-stdio-mismatch" \
-    "OCTOSCODE_SOAK_WS_ARTIFACT_DIR=$tmp_root/solo-transport-ws" \
+    "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/solo-closure" \
+    "RA_TUI_SOAK_MULTILINE_ARTIFACT_DIR=$tmp_root/multiline-composer" \
+    "RA_TUI_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/bad-solo-transport-stdio-mismatch" \
+    "RA_TUI_SOAK_WS_ARTIFACT_DIR=$tmp_root/solo-transport-ws" \
     "$0" verify-solo-transport-closure >/dev/null 2>&1; then
     die "self-test expected solo transport closure verification to fail on source commit mismatch"
   fi
 
   if env \
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/solo-closure" \
-    "OCTOSCODE_SOAK_MULTILINE_ARTIFACT_DIR=$tmp_root/multiline-composer" \
-    "OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/solo-transport-stdio" \
+    "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/solo-closure" \
+    "RA_TUI_SOAK_MULTILINE_ARTIFACT_DIR=$tmp_root/multiline-composer" \
+    "RA_TUI_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/solo-transport-stdio" \
     "$0" verify-solo-transport-closure >/dev/null 2>&1; then
     die "self-test expected solo transport closure verification to fail without WebSocket artifacts"
   fi
 
   if env \
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/solo-closure" \
+    "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/solo-closure" \
     "$0" verify-solo-closure >/dev/null 2>&1; then
     die "self-test expected solo closure verification to fail without multiline artifact"
   fi
@@ -3885,7 +3885,7 @@ Composer  Enter send | Tab inspector
 > first instruction
   third instruction
 CAPTURE
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-multiline-composer" "$0" verify-multiline-composer >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-multiline-composer" "$0" verify-multiline-composer >/dev/null 2>&1; then
     die "self-test expected incomplete multiline composer verification to fail"
   fi
 
@@ -3909,7 +3909,7 @@ CAPTURE
 {"direction":"client_to_server","frame":{"method":"profile/llm/list"}}
 {"direction":"client_to_server","frame":{"method":"mcp/status/list"}}
 JSONL
-  env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/runtime-menus" "$0" verify-runtime-menus >/dev/null
+  env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/runtime-menus" "$0" verify-runtime-menus >/dev/null
 
   mkdir -p "$tmp_root/bad-runtime-menus"
   cp "$tmp_root/runtime-menus/tui-capture-runtime-status.txt" "$tmp_root/bad-runtime-menus/"
@@ -3919,7 +3919,7 @@ JSONL
 {"direction":"client_to_server","frame":{"method":"session/status/read"}}
 {"direction":"client_to_server","frame":{"method":"profile/llm/list"}}
 JSONL
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-runtime-menus" "$0" verify-runtime-menus >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-runtime-menus" "$0" verify-runtime-menus >/dev/null 2>&1; then
     die "self-test expected runtime menu MCP transcript verification to fail"
   fi
 
@@ -3939,7 +3939,7 @@ CAPTURE
 {"direction":"server_to_client","frame":{"method":"protocol/replay_lossy"}}
 JSONL
   printf 'Listening\n' > "$tmp_root/backpressure/server.log"
-  env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/backpressure" "$0" verify-backpressure >/dev/null
+  env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/backpressure" "$0" verify-backpressure >/dev/null
 
   mkdir -p "$tmp_root/bad-backpressure"
   cp "$tmp_root/backpressure/tui-capture-replay-lossy.txt" "$tmp_root/bad-backpressure/"
@@ -3951,7 +3951,7 @@ state Working
 CAPTURE
   cp "$tmp_root/backpressure/appui-transcript.jsonl" "$tmp_root/bad-backpressure/"
   printf 'writer channel full for lifecycle frame turn/completed\n' > "$tmp_root/bad-backpressure/server.log"
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-backpressure" "$0" verify-backpressure >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-backpressure" "$0" verify-backpressure >/dev/null 2>&1; then
     die "self-test expected dropped turn/completed backpressure verification to fail"
   fi
 
@@ -3974,7 +3974,7 @@ CAPTURE
 {"direction":"client_to_server","frame":{"method":"turn/interrupt"}}
 {"direction":"client_to_server","frame":{"method":"session/status/read"}}
 JSONL
-  env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/interrupt-reconnect" "$0" verify-interrupt-reconnect >/dev/null
+  env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/interrupt-reconnect" "$0" verify-interrupt-reconnect >/dev/null
 
   mkdir -p "$tmp_root/bad-interrupt-reconnect"
   cp "$tmp_root/interrupt-reconnect/tui-capture-interrupt-running.txt" "$tmp_root/bad-interrupt-reconnect/"
@@ -3984,7 +3984,7 @@ JSONL
 {"direction":"client_to_server","frame":{"method":"turn/start"}}
 {"direction":"client_to_server","frame":{"method":"session/status/read"}}
 JSONL
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-interrupt-reconnect" "$0" verify-interrupt-reconnect >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-interrupt-reconnect" "$0" verify-interrupt-reconnect >/dev/null 2>&1; then
     die "self-test expected interrupt/reconnect verification to fail without turn/interrupt"
   fi
 
@@ -4003,7 +4003,7 @@ JSONL
 {"direction":"client_to_server","frame":{"method":"turn/start"}}
 {"direction":"server_to_client","frame":{"method":"task/updated"}}
 JSONL
-  env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/validator-cycle" "$0" verify-validator-cycle >/dev/null
+  env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/validator-cycle" "$0" verify-validator-cycle >/dev/null
 
   mkdir -p "$tmp_root/bad-validator-cycle"
   cp "$tmp_root/validator-cycle/tui-capture-validator-cycle.txt" "$tmp_root/bad-validator-cycle/"
@@ -4011,7 +4011,7 @@ JSONL
   cat > "$tmp_root/bad-validator-cycle/validator-results.jsonl" <<'JSONL'
 {"name":"cargo fmt --check","status":"passed","attempt":1,"exit_code":0}
 JSONL
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-validator-cycle" "$0" verify-validator-cycle >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-validator-cycle" "$0" verify-validator-cycle >/dev/null 2>&1; then
     die "self-test expected validator-cycle verification to fail without failed result"
   fi
 
@@ -4028,7 +4028,7 @@ CAPTURE
 {"direction":"client_to_server","frame":{"method":"turn/start"}}
 {"direction":"server_to_client","frame":{"method":"task/output/delta"}}
 JSONL
-  env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/long-output" "$0" verify-long-output >/dev/null
+  env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/long-output" "$0" verify-long-output >/dev/null
 
   mkdir -p "$tmp_root/bad-long-output"
   cat > "$tmp_root/bad-long-output/tui-capture-long-output.txt" <<'CAPTURE'
@@ -4039,7 +4039,7 @@ Ask ra to change code...
 state Done
 CAPTURE
   cp "$tmp_root/long-output/appui-transcript.jsonl" "$tmp_root/bad-long-output/"
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-long-output" "$0" verify-long-output >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-long-output" "$0" verify-long-output >/dev/null 2>&1; then
     die "self-test expected long-output verification to fail without folded-output marker"
   fi
 
@@ -4050,16 +4050,16 @@ Ask ra to change code...
 state Done
 CAPTURE
   cat > "$tmp_root/narrow-terminal/terminal-size.json" <<'JSON'
-{"schema":"octoscode.narrow-terminal.v1","cols":80,"rows":24}
+{"schema":"ra-tui.narrow-terminal.v1","cols":80,"rows":24}
 JSON
-  env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/narrow-terminal" "$0" verify-narrow-terminal >/dev/null
+  env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/narrow-terminal" "$0" verify-narrow-terminal >/dev/null
 
   mkdir -p "$tmp_root/bad-narrow-terminal"
   cp "$tmp_root/narrow-terminal/tui-capture-narrow-terminal.txt" "$tmp_root/bad-narrow-terminal/"
   cat > "$tmp_root/bad-narrow-terminal/terminal-size.json" <<'JSON'
-{"schema":"octoscode.narrow-terminal.v1","cols":120,"rows":40}
+{"schema":"ra-tui.narrow-terminal.v1","cols":120,"rows":40}
 JSON
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-narrow-terminal" "$0" verify-narrow-terminal >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-narrow-terminal" "$0" verify-narrow-terminal >/dev/null 2>&1; then
     die "self-test expected narrow-terminal verification to fail for wide geometry"
   fi
 
@@ -4079,7 +4079,7 @@ JSON
 {"event":"diff.preview.ready","message":"modify src/app.rs | diff preview ready"}
 {"event":"artifact.ready","message":"artifact ready: summary.env"}
 JSONL
-  env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/diff-artifact" "$0" verify-diff-artifact >/dev/null
+  env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/diff-artifact" "$0" verify-diff-artifact >/dev/null
 
   mkdir -p "$tmp_root/bad-diff-artifact"
   cp "$tmp_root/diff-artifact/tui-capture-diff-artifact.txt" "$tmp_root/bad-diff-artifact/"
@@ -4087,7 +4087,7 @@ JSONL
   cat > "$tmp_root/bad-diff-artifact/artifact-index.json" <<'JSON'
 {"items":[]}
 JSON
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-diff-artifact" "$0" verify-diff-artifact >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-diff-artifact" "$0" verify-diff-artifact >/dev/null 2>&1; then
     die "self-test expected diff/artifact verification to fail without artifact index"
   fi
 
@@ -4101,14 +4101,14 @@ CAPTURE
   cat > "$tmp_root/tool-denial/appui-transcript.jsonl" <<'JSONL'
 {"direction":"server_to_client","frame":{"method":"tool/denied","params":{"code":"tool_denied"}}}
 JSONL
-  env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/tool-denial" "$0" verify-tool-denial >/dev/null
+  env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/tool-denial" "$0" verify-tool-denial >/dev/null
 
   mkdir -p "$tmp_root/bad-tool-denial"
   cp "$tmp_root/tool-denial/tui-capture-tool-denial.txt" "$tmp_root/bad-tool-denial/"
   cat > "$tmp_root/bad-tool-denial/appui-transcript.jsonl" <<'JSONL'
 {"direction":"server_to_client","frame":{"method":"approval/requested"}}
 JSONL
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-tool-denial" "$0" verify-tool-denial >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-tool-denial" "$0" verify-tool-denial >/dev/null 2>&1; then
     die "self-test expected tool-denial verification to fail without tool/denied evidence"
   fi
 
@@ -4123,14 +4123,14 @@ CAPTURE
 {"direction":"client_to_server","frame":{"method":"turn/start"}}
 {"event":"activity.tool.complete","tool":"shell","status":"success"}
 JSONL
-  env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/tool-success" "$0" verify-tool-success >/dev/null
+  env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/tool-success" "$0" verify-tool-success >/dev/null
 
   mkdir -p "$tmp_root/bad-tool-success"
   cp "$tmp_root/tool-success/tui-capture-tool-success.txt" "$tmp_root/bad-tool-success/"
   cat > "$tmp_root/bad-tool-success/appui-transcript.jsonl" <<'JSONL'
 {"direction":"server_to_client","frame":{"method":"tool/denied","params":{"code":"tool_denied"}}}
 JSONL
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-tool-success" "$0" verify-tool-success >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-tool-success" "$0" verify-tool-success >/dev/null 2>&1; then
     die "self-test expected tool-success verification to fail with denied-tool evidence"
   fi
 
@@ -4141,7 +4141,7 @@ Approval Requested inline
 approval denied
 state ! Blocked
 CAPTURE
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-approval-denial" "$0" verify-approval-denial >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-approval-denial" "$0" verify-approval-denial >/dev/null 2>&1; then
     die "self-test expected blocked approval denial verification to fail"
   fi
 
@@ -4179,7 +4179,7 @@ JSONL
   cat > "$tmp_root/task-subagent/m15-evidence/artifact-index.json" <<'JSON'
 {"artifacts":[{"id":"reviewer-api-notes"}]}
 JSON
-  env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/task-subagent" "$0" verify-task-subagent-tree >/dev/null
+  env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/task-subagent" "$0" verify-task-subagent-tree >/dev/null
 
   mkdir -p "$tmp_root/bad-task-subagent/m15-evidence"
   cp "$tmp_root/task-subagent/tui-capture-task-subagent-tree-running.txt" "$tmp_root/bad-task-subagent/"
@@ -4192,7 +4192,7 @@ JSON
 {"direction":"client_to_server","frame":{"method":"task/spawn"}}
 {"direction":"server_to_client","frame":{"method":"task/updated"}}
 JSONL
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-task-subagent" "$0" verify-task-subagent-tree >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-task-subagent" "$0" verify-task-subagent-tree >/dev/null 2>&1; then
     die "self-test expected task-subagent client task-control verification to fail"
   fi
 
@@ -4210,7 +4210,7 @@ CAPTURE
 {"direction":"client_to_server","frame":{"method":"session/open"}}
 {"direction":"client_to_server","frame":{"method":"agent/list"}}
 JSONL
-  env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/task-subagent-reconnect" "$0" verify-task-subagent-reconnect >/dev/null
+  env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/task-subagent-reconnect" "$0" verify-task-subagent-reconnect >/dev/null
 
   local fake_task_stdio_bin="$tmp_root/fake-ra-task-stdio"
   local fake_task_stdio_data="$tmp_root/task-stdio-drive-data"
@@ -4235,11 +4235,11 @@ SH
   tmux new-session -d -s "$self_test_tui_session" "printf 'UI protocol reconnected\nAsk ra to change code...\nstate Done\n'; sleep 600"
   env \
     "${child_env[@]}" \
-    "OCTOS_BIN=$fake_task_stdio_bin" \
-    "OCTOSCODE_SOAK_TRANSPORT=stdio" \
-    "OCTOSCODE_SOAK_DATA_DIR=$fake_task_stdio_data" \
-    "OCTOSCODE_SOAK_LOGS_DIR=$fake_task_stdio_logs" \
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$fake_task_stdio_artifacts" \
+    "ra_BIN=$fake_task_stdio_bin" \
+    "RA_TUI_SOAK_TRANSPORT=stdio" \
+    "RA_TUI_SOAK_DATA_DIR=$fake_task_stdio_data" \
+    "RA_TUI_SOAK_LOGS_DIR=$fake_task_stdio_logs" \
+    "RA_TUI_SOAK_ARTIFACT_DIR=$fake_task_stdio_artifacts" \
     "$0" drive-task-subagent-reconnect >/dev/null
   wait "$fake_task_stdio_pid" 2>/dev/null || true
   if kill -0 "$fake_task_stdio_pid" 2>/dev/null; then
@@ -4256,7 +4256,7 @@ SH
   cat > "$tmp_root/bad-task-subagent-reconnect/m15-evidence/appui-transcript.jsonl" <<'JSONL'
 {"direction":"client_to_server","frame":{"method":"turn/start"}}
 JSONL
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-task-subagent-reconnect" "$0" verify-task-subagent-reconnect >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-task-subagent-reconnect" "$0" verify-task-subagent-reconnect >/dev/null 2>&1; then
     die "self-test expected task-subagent reconnect verification to fail"
   fi
 
@@ -4272,7 +4272,7 @@ CAPTURE
 {"direction":"client_to_server","frame":{"method":"session/open"}}
 {"direction":"client_to_server","frame":{"method":"turn/start"}}
 JSONL
-  env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/task-subagent-old-server" "$0" verify-task-subagent-old-server-fallback >/dev/null
+  env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/task-subagent-old-server" "$0" verify-task-subagent-old-server-fallback >/dev/null
 
   mkdir -p "$tmp_root/bad-task-subagent-old-server"
   cat > "$tmp_root/bad-task-subagent-old-server/tui-capture-task-subagent-old-server-fallback.txt" <<'CAPTURE'
@@ -4285,7 +4285,7 @@ CAPTURE
 {"direction":"client_to_server","frame":{"method":"config/capabilities/list"}}
 {"direction":"client_to_server","frame":{"method":"task/artifact/list"}}
 JSONL
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-task-subagent-old-server" "$0" verify-task-subagent-old-server-fallback >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-task-subagent-old-server" "$0" verify-task-subagent-old-server-fallback >/dev/null 2>&1; then
     die "self-test expected task-subagent old-server fallback verification to fail"
   fi
 
@@ -4303,20 +4303,20 @@ JSONL
 {"direction":"tx","frame":{"method":"agent/list"}}
 JSONL
   env \
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/task-subagent" \
-    "OCTOSCODE_SOAK_TASK_RECONNECT_ARTIFACT_DIR=$tmp_root/task-subagent-reconnect" \
-    "OCTOSCODE_SOAK_TASK_OLD_SERVER_ARTIFACT_DIR=$tmp_root/task-subagent-old-server" \
-    "OCTOSCODE_SOAK_WS_ARTIFACT_DIR=$tmp_root/task-subagent-parity-ws" \
-    "OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/task-subagent-parity-stdio" \
+    "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/task-subagent" \
+    "RA_TUI_SOAK_TASK_RECONNECT_ARTIFACT_DIR=$tmp_root/task-subagent-reconnect" \
+    "RA_TUI_SOAK_TASK_OLD_SERVER_ARTIFACT_DIR=$tmp_root/task-subagent-old-server" \
+    "RA_TUI_SOAK_WS_ARTIFACT_DIR=$tmp_root/task-subagent-parity-ws" \
+    "RA_TUI_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/task-subagent-parity-stdio" \
     "$0" verify-task-subagent-closure >/dev/null
   grep --fixed-strings -- '"scenario": "task-subagent-closure"' "$tmp_root/task-subagent/ux-validation.json" >/dev/null 2>&1 \
     || die "self-test missing task-subagent-closure ux validation"
 
   if env \
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/task-subagent" \
-    "OCTOSCODE_SOAK_TASK_RECONNECT_ARTIFACT_DIR=$tmp_root/task-subagent-reconnect" \
-    "OCTOSCODE_SOAK_WS_ARTIFACT_DIR=$tmp_root/task-subagent-parity-ws" \
-    "OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/task-subagent-parity-stdio" \
+    "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/task-subagent" \
+    "RA_TUI_SOAK_TASK_RECONNECT_ARTIFACT_DIR=$tmp_root/task-subagent-reconnect" \
+    "RA_TUI_SOAK_WS_ARTIFACT_DIR=$tmp_root/task-subagent-parity-ws" \
+    "RA_TUI_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/task-subagent-parity-stdio" \
     "$0" verify-task-subagent-closure >/dev/null 2>&1; then
     die "self-test expected task-subagent closure verification to fail without old-server artifacts"
   fi
@@ -4363,7 +4363,7 @@ JSONL
   cat > "$tmp_root/autonomy-live/m15-evidence/artifact-index.json" <<'JSON'
 {"artifacts":[{"id":"joined-answer"}]}
 JSON
-  env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/autonomy-live" "$0" verify-autonomy-live >/dev/null
+  env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/autonomy-live" "$0" verify-autonomy-live >/dev/null
 
   mkdir -p "$tmp_root/bad-autonomy-live/m15-evidence"
   cp "$tmp_root/autonomy-live/tui-capture-autonomy-live.txt" "$tmp_root/bad-autonomy-live/"
@@ -4383,7 +4383,7 @@ JSON
 {"direction":"server_to_client","frame":{"method":"session/goal/updated"}}
 {"direction":"server_to_client","frame":{"method":"loop/fired"}}
 JSONL
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-autonomy-live" "$0" verify-autonomy-live >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-autonomy-live" "$0" verify-autonomy-live >/dev/null 2>&1; then
     die "self-test expected autonomy live client notification verification to fail"
   fi
 
@@ -4392,7 +4392,7 @@ JSONL
   cp "$tmp_root/autonomy-live/m15-evidence/"*.json "$tmp_root/fixture-autonomy-live/m15-evidence/"
   cp "$tmp_root/autonomy-live/m15-evidence/"*.jsonl "$tmp_root/fixture-autonomy-live/m15-evidence/"
   printf 'M15CODEREVIEWFINALLINE\n' >> "$tmp_root/fixture-autonomy-live/tui-capture-autonomy-live.txt"
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/fixture-autonomy-live" "$0" verify-autonomy-live >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/fixture-autonomy-live" "$0" verify-autonomy-live >/dev/null 2>&1; then
     die "self-test expected autonomy live fixture-marker verification to fail"
   fi
 
@@ -4423,7 +4423,7 @@ JSONL
   cat > "$tmp_root/autonomy-reconnect/m15-evidence/loop-ledger.jsonl" <<'JSONL'
 {"event":"loop_fired","loop_id":"loop-1","status":"completed"}
 JSONL
-  env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/autonomy-reconnect" "$0" verify-autonomy-reconnect >/dev/null
+  env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/autonomy-reconnect" "$0" verify-autonomy-reconnect >/dev/null
 
   local fake_stdio_bin="$tmp_root/fake-ra-stdio"
   local fake_stdio_data="$tmp_root/stdio-drive-data"
@@ -4448,11 +4448,11 @@ SH
   tmux new-session -d -s "$self_test_tui_session" "printf 'UI protocol reconnected\nAgent reviewer-api hydrated\nGoal active continuation hydrated\nLoop fire_now schedule hydrated\nAsk ra to change code...\nstate Done\n'; sleep 600"
   env \
     "${child_env[@]}" \
-    "OCTOS_BIN=$fake_stdio_bin" \
-    "OCTOSCODE_SOAK_TRANSPORT=stdio" \
-    "OCTOSCODE_SOAK_DATA_DIR=$fake_stdio_data" \
-    "OCTOSCODE_SOAK_LOGS_DIR=$fake_stdio_logs" \
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$fake_stdio_artifacts" \
+    "ra_BIN=$fake_stdio_bin" \
+    "RA_TUI_SOAK_TRANSPORT=stdio" \
+    "RA_TUI_SOAK_DATA_DIR=$fake_stdio_data" \
+    "RA_TUI_SOAK_LOGS_DIR=$fake_stdio_logs" \
+    "RA_TUI_SOAK_ARTIFACT_DIR=$fake_stdio_artifacts" \
     "$0" drive-autonomy-reconnect >/dev/null
   wait "$fake_stdio_pid" 2>/dev/null || true
   if kill -0 "$fake_stdio_pid" 2>/dev/null; then
@@ -4475,7 +4475,7 @@ SH
 {"direction":"client_to_server","frame":{"method":"session/goal/get"}}
 {"direction":"client_to_server","frame":{"method":"loop/fired"}}
 JSONL
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-autonomy-reconnect" "$0" verify-autonomy-reconnect >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-autonomy-reconnect" "$0" verify-autonomy-reconnect >/dev/null 2>&1; then
     die "self-test expected autonomy reconnect verification to fail"
   fi
 
@@ -4505,9 +4505,9 @@ JSONL
 {"direction":"tx","frame":{"method":"loop/list"}}
 JSONL
   env \
-    "OCTOSCODE_SOAK_TRANSPORT_PARITY_MODE=sequence" \
-    "OCTOSCODE_SOAK_WS_ARTIFACT_DIR=$tmp_root/parity-ws" \
-    "OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/parity-stdio" \
+    "RA_TUI_SOAK_TRANSPORT_PARITY_MODE=sequence" \
+    "RA_TUI_SOAK_WS_ARTIFACT_DIR=$tmp_root/parity-ws" \
+    "RA_TUI_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/parity-stdio" \
     "$0" verify-transport-parity >/dev/null
 
   # autonomy-required parity passes on an envelope-different but semantically
@@ -4544,17 +4544,17 @@ JSONL
 {"direction":"rx","frame":{"method":"turn/completed"}}
 JSONL
   env \
-    "OCTOSCODE_SOAK_TRANSPORT_PARITY_MODE=autonomy-required" \
-    "OCTOSCODE_SOAK_WS_ARTIFACT_DIR=$tmp_root/parity-autonomy-ws" \
-    "OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/parity-autonomy-stdio" \
+    "RA_TUI_SOAK_TRANSPORT_PARITY_MODE=autonomy-required" \
+    "RA_TUI_SOAK_WS_ARTIFACT_DIR=$tmp_root/parity-autonomy-ws" \
+    "RA_TUI_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/parity-autonomy-stdio" \
     "$0" verify-transport-parity >/dev/null \
     || die "self-test expected autonomy-required parity to pass on envelope-different equal pair"
   # The same pair must FAIL the strict sequence gate (proves the new mode is not
   # a relaxed default; only autonomy-required tolerates the §14/optional diff).
   if env \
-    "OCTOSCODE_SOAK_TRANSPORT_PARITY_MODE=sequence" \
-    "OCTOSCODE_SOAK_WS_ARTIFACT_DIR=$tmp_root/parity-autonomy-ws" \
-    "OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/parity-autonomy-stdio" \
+    "RA_TUI_SOAK_TRANSPORT_PARITY_MODE=sequence" \
+    "RA_TUI_SOAK_WS_ARTIFACT_DIR=$tmp_root/parity-autonomy-ws" \
+    "RA_TUI_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/parity-autonomy-stdio" \
     "$0" verify-transport-parity >/dev/null 2>&1; then
     die "self-test expected strict sequence parity to fail on envelope-different pair"
   fi
@@ -4567,26 +4567,26 @@ JSONL
   grep -v 'task/updated' "$tmp_root/parity-autonomy-stdio/m15-evidence/appui-transcript.jsonl" \
     > "$tmp_root/parity-autonomy-missing/m15-evidence/appui-transcript.jsonl"
   if env \
-    "OCTOSCODE_SOAK_TRANSPORT_PARITY_MODE=autonomy-required" \
-    "OCTOSCODE_SOAK_WS_ARTIFACT_DIR=$tmp_root/parity-autonomy-ws" \
-    "OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/parity-autonomy-missing" \
+    "RA_TUI_SOAK_TRANSPORT_PARITY_MODE=autonomy-required" \
+    "RA_TUI_SOAK_WS_ARTIFACT_DIR=$tmp_root/parity-autonomy-ws" \
+    "RA_TUI_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/parity-autonomy-missing" \
     "$0" verify-transport-parity >/dev/null 2>&1; then
     die "self-test expected autonomy-required parity to fail when a required category is missing"
   fi
 
   env \
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/autonomy-live" \
-    "OCTOSCODE_SOAK_AUTONOMY_RECONNECT_ARTIFACT_DIR=$tmp_root/autonomy-reconnect" \
-    "OCTOSCODE_SOAK_WS_ARTIFACT_DIR=$tmp_root/parity-ws" \
-    "OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/parity-stdio" \
+    "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/autonomy-live" \
+    "RA_TUI_SOAK_AUTONOMY_RECONNECT_ARTIFACT_DIR=$tmp_root/autonomy-reconnect" \
+    "RA_TUI_SOAK_WS_ARTIFACT_DIR=$tmp_root/parity-ws" \
+    "RA_TUI_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/parity-stdio" \
     "$0" verify-autonomy-closure >/dev/null
   grep --fixed-strings -- '"scenario": "autonomy-closure"' "$tmp_root/autonomy-live/ux-validation.json" >/dev/null 2>&1 \
     || die "self-test missing autonomy-closure ux validation"
 
   if env \
-    "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/autonomy-live" \
-    "OCTOSCODE_SOAK_WS_ARTIFACT_DIR=$tmp_root/parity-ws" \
-    "OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/parity-stdio" \
+    "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/autonomy-live" \
+    "RA_TUI_SOAK_WS_ARTIFACT_DIR=$tmp_root/parity-ws" \
+    "RA_TUI_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/parity-stdio" \
     "$0" verify-autonomy-closure >/dev/null 2>&1; then
     die "self-test expected autonomy closure verification to fail without reconnect artifacts"
   fi
@@ -4597,9 +4597,9 @@ JSONL
   printf '{"direction":"tx","frame":{"method":"session/goal/get"}}\n' \
     >> "$tmp_root/bad-parity-stdio/m15-evidence/appui-transcript.jsonl"
   if env \
-    "OCTOSCODE_SOAK_TRANSPORT_PARITY_MODE=sequence" \
-    "OCTOSCODE_SOAK_WS_ARTIFACT_DIR=$tmp_root/parity-ws" \
-    "OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/bad-parity-stdio" \
+    "RA_TUI_SOAK_TRANSPORT_PARITY_MODE=sequence" \
+    "RA_TUI_SOAK_WS_ARTIFACT_DIR=$tmp_root/parity-ws" \
+    "RA_TUI_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/bad-parity-stdio" \
     "$0" verify-transport-parity >/dev/null 2>&1; then
     die "self-test expected transport parity verification to fail"
   fi
@@ -4608,9 +4608,9 @@ JSONL
   cp "$tmp_root/parity-ws/m15-evidence/appui-transcript.jsonl" "$tmp_root/bad-parity-wrong-kind/m15-evidence/"
   printf 'transport=stdio\n' > "$tmp_root/bad-parity-wrong-kind/summary.env"
   if env \
-    "OCTOSCODE_SOAK_TRANSPORT_PARITY_MODE=sequence" \
-    "OCTOSCODE_SOAK_WS_ARTIFACT_DIR=$tmp_root/bad-parity-wrong-kind" \
-    "OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/parity-stdio" \
+    "RA_TUI_SOAK_TRANSPORT_PARITY_MODE=sequence" \
+    "RA_TUI_SOAK_WS_ARTIFACT_DIR=$tmp_root/bad-parity-wrong-kind" \
+    "RA_TUI_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/parity-stdio" \
     "$0" verify-transport-parity >/dev/null 2>&1; then
     die "self-test expected transport parity verification to fail on wrong transport kind"
   fi
@@ -4620,10 +4620,10 @@ JSONL
   cp "$tmp_root/parity-ws/summary.env" "$tmp_root/bad-parity-secret/summary.env"
   printf 'retained secret: selftest-secret\n' > "$tmp_root/bad-parity-secret/leak.txt"
   if env \
-    "OCTOSCODE_SOAK_TRANSPORT_PARITY_MODE=sequence" \
-    "OCTOSCODE_SOAK_API_KEY=selftest-secret" \
-    "OCTOSCODE_SOAK_WS_ARTIFACT_DIR=$tmp_root/bad-parity-secret" \
-    "OCTOSCODE_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/parity-stdio" \
+    "RA_TUI_SOAK_TRANSPORT_PARITY_MODE=sequence" \
+    "RA_TUI_SOAK_API_KEY=selftest-secret" \
+    "RA_TUI_SOAK_WS_ARTIFACT_DIR=$tmp_root/bad-parity-secret" \
+    "RA_TUI_SOAK_STDIO_ARTIFACT_DIR=$tmp_root/parity-stdio" \
     "$0" verify-transport-parity >/dev/null 2>&1; then
     die "self-test expected transport parity verification to fail on secret leak"
   fi
@@ -4653,9 +4653,9 @@ CAPTURE
 JSONL
   printf '{}\n' > "$tmp_root/ux-run/runtime-policy-stamp.json"
   printf 'Listening\n' > "$tmp_root/ux-run/server.log"
-  env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/ux-run" \
-    "OCTOSCODE_SOAK_EXPECT_SCENARIO=narrow-layout" \
-    "OCTOSCODE_SOAK_EXPECT_TRANSPORT=stdio" \
+  env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/ux-run" \
+    "RA_TUI_SOAK_EXPECT_SCENARIO=narrow-layout" \
+    "RA_TUI_SOAK_EXPECT_TRANSPORT=stdio" \
     "$0" verify-ux-run >/dev/null
 
   mkdir -p "$tmp_root/bad-ux-run"
@@ -4669,7 +4669,7 @@ JSONL
   cat > "$tmp_root/bad-ux-run/validation.json" <<'JSON'
 {"schema": "ra.ux.validation.v1","status":"failed","checks":[]}
 JSON
-  if env "OCTOSCODE_SOAK_ARTIFACT_DIR=$tmp_root/bad-ux-run" "$0" verify-ux-run >/dev/null 2>&1; then
+  if env "RA_TUI_SOAK_ARTIFACT_DIR=$tmp_root/bad-ux-run" "$0" verify-ux-run >/dev/null 2>&1; then
     die "self-test expected failed UX run verification to fail"
   fi
 

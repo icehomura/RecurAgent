@@ -47,7 +47,7 @@
 ## 2. 唤醒与纠偏(下行)
 
 ```bash
-herdr agent list                      # 发现内环窗格(octoscode | <pane> | 状态)
+herdr agent list                      # 发现内环窗格(ra-tui | <pane> | 状态)
 herdr agent prompt <pane> '<一句话>'   # 空闲时唤醒:指向黑板新条目编号
 ```
 master 正在跑 turn 时,用 steer 插话(不打断动作,下一拍被消费):
@@ -63,7 +63,7 @@ ra steer --session '<会话键>' --text '[external-reviewer] ...'
 ```bash
 herdr pane read <pane>                                   # 现场屏幕
 tail -f ~/.ra/instances/<实例>/profiles/<档>/data/events.jsonl
-#   实例哈希 = octoscode 对项目 cwd 的 DefaultHasher;不想自算就
+#   实例哈希 = ra-tui 对项目 cwd 的 DefaultHasher;不想自算就
 #   ls -t ~/.ra/instances/ 按 mtime 对号。ws://127.0.0.1:50090 的
 #   sidecar 是外环自建临时观测件(非发行物);终态为 serve 内
 #   /api/events/stream 端点(完整已测实现存档于 archive/olp-evt-ws
@@ -73,7 +73,7 @@ ra goal status --goal <id> / ra peer list           # 结构面(项目目录下)
 
 ## 3.5 主审权锁(outer-duty,olp/v2 R7)
 
-上岗即以 `octoscode outer-duty hold --project <项目> --signature <署名>
+上岗即以 `ra-tui outer-duty hold --project <项目> --signature <署名>
 --duties <职责> -- <agent 启动命令>` 包裹启动:锁即 authority,**守护式
 死亡耦合**——wrapper 是唯一锁 fd 持有者,agent 经 PR_SET_PDEATHSIG
 (SIGKILL) 与 wrapper 同死(wrapper 亡⇒agent 必亡⇒锁 VACANT);
@@ -114,14 +114,14 @@ NFS 不适用。本切片 fencing 为文档层纪律;硬 gate(写入面校验 le
 
 | 内环形态 | 优势 | 适用 |
 |---|---|---|
-| octoscode + 便宜模型(标准形态) | 成本低;goal/peer/ledger/steer/事件流全套机械 | 慢轨战役、机械大批量 |
+| ra-tui + 便宜模型(标准形态) | 成本低;goal/peer/ledger/steer/事件流全套机械 | 慢轨战役、机械大批量 |
 | Claude Code 免审批窗格 | 质量高、不交赝品、单兵战力强 | 快轨 bug、难切片 |
 | codex 窗格(全局 auto 配置后) | 同上,且与主审厂牌隔离(利于互审) | 同上 |
 
 **开设命令**:
 ```bash
-# 标准形态(octoscode)
-herdr pane run <pane> 'cd <repo> && octoscode --stdio-command "octos serve --stdio --solo --danger-full-access"'
+# 标准形态(ra-tui)
+herdr pane run <pane> 'cd <repo> && ra-tui --stdio-command "ra serve --stdio --solo --danger-full-access"'
 # Claude Code 快轨内环(免审批启动属信任决策,建议 operator 亲手执行)
 herdr pane run <pane> 'cd <repo> && claude --dangerously-skip-permissions'
 # codex 快轨内环(先在 ~/.codex/config.toml 设 approval_policy="never" + sandbox_mode)
@@ -130,13 +130,13 @@ herdr pane run <pane> 'cd <repo> && codex'
 开设后:发内环上岗词——"读 <repo>/.ra/loop.md 与黑板 Active 区,
 以内环身份执行:只 commit 不 push,完成落 v1 定式 ACK"。
 
-**诚实的差距清单**(裸 Claude/codex 窗格 vs octoscode):无事件流
+**诚实的差距清单**(裸 Claude/codex 窗格 vs ra-tui):无事件流
 (三层观测退化为黑板+屏幕)、无 goal/peer/R2/ledger 机械、预算不入
 本体系账本、纪律靠提示词非 harness 硬约束。**快轨单兵单不受影响**;
 需要机械的活仍走标准形态。
 
 **折中优选**:若想"高端脑子 + 完整机械",不必换 harness——用
-sub_providers 多模型车道(配置法见 configuration.md),给 octoscode
+sub_providers 多模型车道(配置法见 configuration.md),给 ra-tui
 配强档车道(如 zai/glm、anthropic/claude),难切片按车道路由,机械
 一样不少。选型优先序:强档车道 > 裸窗格 > 换 harness。
 
@@ -175,7 +175,7 @@ R2 记档(声称与复验不符的诚实记录)行示例:
 - 索引:`scripts/olp-evo-index.sh <repo>` 生成 `INDEX.md`;PROTOCOL 散文被
   记录取代时只加一行 `> 已记录:FLAW-NNN`,不删原文。
 - kind 候选登记在 `knowledge/context/evolution/README.md`(`iteration_cap`、
-  `patch_failed`),发射点属 ra 侧另立契约。
+  `patch_failed`),发射点属 RecurAgent 侧另立契约。
 
 **派单与节奏**
 - 快慢双轨:修订级 bug 走快轨(直驱、可抢占、单一外环复验、免重仪式);
@@ -197,7 +197,7 @@ R2 记档(声称与复验不符的诚实记录)行示例:
 **运维安全**
 - 禁批量 kill serve:逐个核对"父进程==存活 TUI"后单杀;孤儿只占内存,
   宁留勿滥杀。
-- CLI 寻址:ra goal/steer 等按实例操作时用 `OCTOS_HOME=<实例根>`;
+- CLI 寻址:RecurAgent goal/steer 等按实例操作时用 `ra_HOME=<实例根>`;
   会话主模型切换的落点是 profile JSON 的 `config.llm.primary`
   (fallbacks 数组即备胎位)。
 - provider 断供(quota/auth 拒付)是系统性风险:备胎车道预配 +

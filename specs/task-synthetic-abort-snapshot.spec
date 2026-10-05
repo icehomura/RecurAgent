@@ -21,7 +21,7 @@ unprovable compaction authority in those legacy snapshots.
 
 ## Boundaries
 
-Changes are limited to `crates/octos-cli/src/api/context_manager.rs`, its inline
+Changes are limited to `crates/ra-cli/src/api/context_manager.rs`, its inline
 tests, and this specification. No caller API, source-sequence assignment,
 ghost-discard policy, provider behavior, or unrelated ledger format changes.
 

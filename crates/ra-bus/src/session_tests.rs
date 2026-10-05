@@ -3074,7 +3074,7 @@ fn should_preserve_messages_when_worktree_missing() {
 }
 
 // ----------------------------------------------------------------------
-// Item 3 of OCTOS_M8_FIX_FIRST_CHECKLIST_2026-04-24:
+// Item 3 of ra_M8_FIX_FIRST_CHECKLIST_2026-04-24:
 // worktree-missing must be a hard resume refusal. The session actor
 // calls `clear_messages_for_unsafe_resume()` on Err so the in-memory
 // transcript cannot be silently consumed by the first LLM call.
@@ -3399,7 +3399,7 @@ async fn should_round_trip_thread_id() {
 
 #[tokio::test]
 async fn should_synthesize_thread_id_for_legacy_record_without_field() {
-    // Pre-existing JSONL written by a prior ra build that didn't know
+    // Pre-existing JSONL written by a prior RecurAgent build that didn't know
     // about thread_id. On load the synthesizer must thread the messages
     // using the `client_message_id` hints already present (or
     // synth_{seq} when even those are missing) so `Session::threads()`

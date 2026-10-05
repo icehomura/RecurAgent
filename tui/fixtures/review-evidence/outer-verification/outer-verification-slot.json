@@ -1,7 +1,7 @@
 {
-  "worktree": "/Users/zhangalex/.local/tmp/octoloop-evolution-20260909/verify-octoscode",
+  "worktree": "/Users/zhangalex/.local/tmp/octoloop-evolution-20260909/verify-ra-tui",
   "base": "0a174d95ddec2b123adb3498432e29eb13affb81",
-  "source": "/Users/zhangalex/Work/Projects/FW/octoscode/.octos/reviews/pr-627-630-20260909/evidence/store-repros.rs",
+  "source": "/Users/zhangalex/Work/Projects/FW/ra-tui/.ra/reviews/pr-627-630-20260909/evidence/store-repros.rs",
   "probe": "/Users/zhangalex/.local/tmp/octoloop-evolution-20260909/residual-629-repro.rs",
   "probe_sha256": "172d25638df5af31b8e8915663148e5ef1abe12c837c63f86c4c1f6f4fba8a86",
   "original_store_sha256": "65697a81acbfe2ad35d184a0bf89deb211eea3a0cf9644935889d40743fba4e9",

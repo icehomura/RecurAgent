@@ -74,9 +74,9 @@ async fn build_fixture() -> Fixture {
 
 async fn build_fixture_with_ttl(ttl: std::time::Duration) -> Fixture {
     let tempdir = TempDir::new().expect("tempdir");
-    let octos_home = tempdir.path().to_path_buf();
+    let ra_home = tempdir.path().to_path_buf();
 
-    let profile_store = Arc::new(ProfileStore::open_unified(&octos_home).expect("profile store"));
+    let profile_store = Arc::new(ProfileStore::open_unified(&ra_home).expect("profile store"));
 
     let profile_a = UserProfile {
         id: "tenant-a".into(),
@@ -105,7 +105,7 @@ async fn build_fixture_with_ttl(ttl: std::time::Duration) -> Fixture {
 
     let data_dir_a = profile_store.resolve_data_dir(&profile_a);
 
-    let user_store = Arc::new(UserStore::open(&octos_home).expect("user store"));
+    let user_store = Arc::new(UserStore::open(&ra_home).expect("user store"));
     let user_a = User {
         id: profile_a.id.clone(),
         email: "alice@example.test".into(),
@@ -130,7 +130,7 @@ async fn build_fixture_with_ttl(ttl: std::time::Duration) -> Fixture {
             host: "smtp.invalid".into(),
             port: 465,
             username: "no-reply@invalid".into(),
-            password_env: "OCTOS_TEST_NO_SMTP".into(),
+            password_env: "ra_TEST_NO_SMTP".into(),
             from_address: "no-reply@invalid".into(),
         }),
         session_expiry_hours: 1,

@@ -18,7 +18,7 @@ name = "ra_uniffi"
 # uniffi-bindgen CLI: generates the foreign-language bindings from the built
 # library metadata (no UDL — everything is proc-macro). Invoke as, e.g.:
 #   cargo run -p ra-uniffi --bin uniffi-bindgen -- generate \
-#       --library target/debug/liboctos_uniffi.dylib \
+#       --library target/debug/libra_uniffi.dylib \
 #       --language python --out-dir crates/ra-uniffi/bindings/python
 [[bin]]
 name = "uniffi-bindgen"
@@ -37,7 +37,7 @@ uniffi = { version = "0.29", features = ["cli"] }
 # Only to parse the JSON the `memory_*` methods return in the offline tests.
 serde_json = { workspace = true }
 # Dual-read the ignored end-to-end test's env knobs (`RA_*` first, legacy
-# `OCTOS_*` honoured).
+# `RA_*` honoured).
 ra-core = { workspace = true }
 
 [features]

@@ -7,7 +7,7 @@ estimate: 0.25d
 
 ## 意图
 
-OctosCode 重启本地 OUP stdio 子进程时，必须先完成带原 workspace cwd 的
+RaCode 重启本地 OUP stdio 子进程时，必须先完成带原 workspace cwd 的
 `session/open`，再放行自动续跑或用户请求。OUP 会并发处理 JSON-RPC 请求，因此仅靠
 写入顺序不能保证 scope affinity 先建立。
 

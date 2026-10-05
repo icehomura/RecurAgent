@@ -1,6 +1,6 @@
 # Nix
 
-ra provides a first-class Nix flake for reproducible builds, development shells, and system-wide integration on NixOS and macOS (via nix-darwin).
+RecurAgent provides a first-class Nix flake for reproducible builds, development shells, and system-wide integration on NixOS and macOS (via nix-darwin).
 
 ## Supported Systems
 
@@ -32,9 +32,9 @@ ra provides a first-class Nix flake for reproducible builds, development shells,
 ### Running Without Installing
 
 ```bash
-nix run github:your-org/ra#octos -- --version
-nix run github:your-org/ra#octos -- status
-nix run github:your-org/ra#octos-full -- chat --message "Hello"
+nix run github:icehomura/ra#ra -- --version
+nix run github:icehomura/ra#ra -- status
+nix run github:icehomura/ra#ra-full -- chat --message "Hello"
 ```
 
 ### Building Packages
@@ -60,7 +60,7 @@ nix build .#ra --override-input features '["api" "telegram"]'
 
 # Or in your own flake:
 let
-  myOctos = ra.packages.${system}.ra.override {
+  myRa = ra.packages.${system}.ra.override {
     features = [ "api" "telegram" "discord" ];
     enableAppSkills = true;
   };
@@ -76,7 +76,7 @@ in
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    octos.url = "github:your-org/ra";
+    ra.url = "github:icehomura/ra";
   };
 }
 ```
@@ -154,8 +154,8 @@ This creates a launchd daemon (`org.ra.serve`) managed by the system.
 
 | Option                               | Type         | Default            | Description                                               |
 | ------------------------------------ | ------------ | ------------------ | --------------------------------------------------------- |
-| `programs.ra.enable`              | bool         | `false`            | Enable the ra module                                   |
-| `programs.ra.package`             | package      | `ra`            | Base ra package to use                                 |
+| `programs.ra.enable`              | bool         | `false`            | Enable the RecurAgent module                                   |
+| `programs.ra.package`             | package      | `ra`            | Base RecurAgent package to use                                 |
 | `programs.ra.finalPackage`        | package      | (computed)         | Read-only; the resolved package after overrides           |
 | `programs.ra.channels`            | list of enum | `null`             | Channels to enable. `null` preserves the package default  |
 | `programs.ra.enableAllChannels`   | bool         | `false`            | Enable all supported channels                             |
@@ -224,7 +224,7 @@ nix build .#checks.x86_64-linux.nixos-module-vm --print-build-logs
 
 Runs a full NixOS VM that:
 
-- Installs ra with Telegram + Discord channels and app-skills
+- Installs RecurAgent with Telegram + Discord channels and app-skills
 - Starts the `ra-serve` systemd service
 - Verifies the service responds on the configured port
 - Checks that all app-skill binaries are on PATH

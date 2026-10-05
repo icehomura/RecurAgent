@@ -1,4 +1,4 @@
-# ra Runtime Phase 3 Contract
+# RecurAgent Runtime Phase 3 Contract
 
 This document is the execution contract for Phase 3.
 
@@ -15,7 +15,7 @@ small number of user-visible improvements on top of the Phase 2 foundation.
 Phase 3 should produce three concrete outcomes:
 
 1. long-running background tasks are durably supervised and trustworthy
-2. reload/recovery in `octos-web` is reliable for long-running background work
+2. reload/recovery in `ra-web` is reliable for long-running background work
 3. freeform agent chat, especially coding/debugging work, is more bounded and
    less flaky
 
@@ -75,7 +75,7 @@ Primary issues:
 
 - `#413`
 - `#415`
-- web persistent-state work already underway in `octos-web`
+- web persistent-state work already underway in `ra-web`
 
 Must prove:
 
@@ -152,7 +152,7 @@ This Phase 3 branch lands the concrete slices that moved canary behavior:
   repair
 - `#416` operator summary now reports per-source scrape provenance instead of
   only merged counters
-- `octos-web` reload persistence now restores long-running task watchers and
+- `ra-web` reload persistence now restores long-running task watchers and
   cleans up stale resume bubbles after replay
 
 ## Validation Matrix
@@ -168,7 +168,7 @@ The release gate for this branch was:
   - contract-backed artifact selection
   - shell retry recovery
   - operator summary aggregation/provenance
-- `octos-web` typecheck + eslint on the persistence/reload slice: green
+- `ra-web` typecheck + eslint on the persistence/reload slice: green
 
 Public release truth remained:
 

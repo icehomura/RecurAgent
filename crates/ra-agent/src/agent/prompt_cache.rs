@@ -427,7 +427,9 @@ mod tests {
             true,
         );
 
-        assert_eq!(context.affinity_key.len(), 64);
+        // `ra-` + 58 hash chars = 61; the pre-rename `ra-` prefix filled 64.
+        assert_eq!(context.affinity_key.len(), 61);
+        assert!(context.affinity_key.starts_with("ra-"));
         assert!(!context.affinity_key.contains("private-user-session"));
         assert_eq!(context.semantic_boundaries.len(), 2);
         assert!(

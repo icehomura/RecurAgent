@@ -283,7 +283,7 @@ impl SessionRuntime {
     }
 
     /// Tell the agent which slash commands the client on connection `owner`
-    /// declared on `session/open` (octoscode#664); an empty list clears them.
+    /// declared on `session/open` (ra-tui#664); an empty list clears them.
     /// Per-turn agents inherit it via the snapshot. Returns the names that
     /// were accepted, for the `session/open` result to echo.
     pub fn apply_client_commands(&self, owner: u64, commands: &[String]) -> Vec<String> {
@@ -766,7 +766,7 @@ impl SessionRuntime {
 
         // The prompt's slash commands (`/router`, `/queue`, …) are handled by
         // bus channels only; serve sessions get the client's own commands
-        // instead, via `apply_client_commands` (octoscode#664).
+        // instead, via `apply_client_commands` (ra-tui#664).
         let base_prompt = strip_slash_commands(&profile.prompt_parts.pre_memory);
         let mut agent = Agent::new_shared(
             AgentId::new("api"),
@@ -966,7 +966,7 @@ pub(crate) fn configured_agent_defaults(profile: &ProfileRuntime) -> AgentConfig
         // #1774: opt-in post-edit formatting (rustfmt/prettier/black/gofmt).
         format_after_edit: profile.format_after_edit,
         // #2172: thread the profile's gateway LLM knobs onto serve /
-        // octoscode sessions, exactly as `ra chat` does. Without this a
+        // ra-tui sessions, exactly as `ra chat` does. Without this a
         // profile-driven session silently ran with the built-in defaults
         // (greedy temperature=0.0, no sampler, 16384 max output) — dropping
         // the local-model repetition-collapse mitigations. Each is `None`
@@ -1001,7 +1001,7 @@ pub(crate) fn configured_agent_defaults(profile: &ProfileRuntime) -> AgentConfig
             // default overrides a same-named `top_p` key in the gateway
             // sampler passthrough map; every OTHER passthrough key
             // (`repeat_penalty`, …) is untouched. The passthrough stays
-            // the escape hatch for params ra does not model.
+            // the escape hatch for params RecurAgent does not model.
             if let Some(top_p) = profile.config.model_top_p {
                 sampling
                     .get_or_insert_with(serde_json::Map::new)
@@ -1094,17 +1094,17 @@ pub(crate) fn project_sessions_root(canonical_cwd: &Path, profile_id: &str) -> P
 // the writer stays unconditional next to the store layout it records.
 #[cfg_attr(not(feature = "api"), allow(dead_code))]
 pub(crate) fn write_active_profile_marker(canonical_cwd: &Path, profile_id: &str) {
-    let octos_dir = canonical_cwd.join(".ra");
-    if let Err(error) = std::fs::create_dir_all(&octos_dir) {
+    let ra_dir = canonical_cwd.join(".ra");
+    if let Err(error) = std::fs::create_dir_all(&ra_dir) {
         tracing::warn!(
-            dir = %octos_dir.display(),
+            dir = %ra_dir.display(),
             error = %error,
             "failed to create .ra dir for active-profile marker",
         );
         return;
     }
-    let path = octos_dir.join("active-profile");
-    let tmp = octos_dir.join("active-profile.tmp");
+    let path = ra_dir.join("active-profile");
+    let tmp = ra_dir.join("active-profile.tmp");
     if let Err(error) = std::fs::write(&tmp, profile_id.as_bytes()) {
         tracing::warn!(
             path = %tmp.display(),
@@ -1755,7 +1755,7 @@ tools = ["read_file"]
 
     #[tokio::test]
     async fn session_agent_threads_profile_gateway_llm_knobs() {
-        // #2172: a serve / octoscode session must honor the profile's gateway
+        // #2172: a serve / ra-tui session must honor the profile's gateway
         // LLM knobs (temperature, sampler, max output) rather than silently
         // falling back to the greedy 0.0 / 16384 / no-sampler defaults.
         let dir = tempfile::tempdir().unwrap();

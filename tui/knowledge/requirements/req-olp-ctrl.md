@@ -4,7 +4,7 @@ id: REQ-OLP-CTRL
 title: "控制面:带确认的 steer、审查者通道、升级通知"
 status: accepted
 liveness: auto
-tags: [olp, steer, escalation, ra]
+tags: [olp, steer, escalation, RecurAgent]
 ---
 
 ## Problem
@@ -29,14 +29,14 @@ continuation。
 沿用 notes 的 64KiB 读取上限。
 
 [REQ-OLP-CTRL-NOTIFY] goal-scoped escalation 记录时,若 profile 配置了
-通知通道(复用 ra cron notify mode),runtime MUST 向 operator 发送
+通知通道(复用 RecurAgent cron notify mode),runtime MUST 向 operator 发送
 外部通知。
 
 ## Scenarios
 
 Scenario: steer 唤醒 idle master 并留下回执
   Given master 无 active goal 且处于 idle
-  When 外部进程执行 ra steer --session <master> --text "读黑板第 7 条"
+  When 外部进程执行 RecurAgent steer --session <master> --text "读黑板第 7 条"
   Then master 的下一 turn prompt 含该指令,且 events.jsonl 出现 steer_consumed
 
 Scenario: steer 不越权

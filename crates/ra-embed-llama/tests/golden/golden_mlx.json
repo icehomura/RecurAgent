@@ -1,8 +1,8 @@
 {
-"source": "octos-embed-mlx (MLX affine 8-bit), verified vs Python oracle",
+"source": "ra-embed-mlx (MLX affine 8-bit), verified vs Python oracle",
 "model": "embeddinggemma-300m",
 "dim": 768,
-"docs": ["octos",
+"docs": ["ra",
   "BM25 is a lexical ranking function.",
   "BM25 is a keyword ranking function.",
   "Grep needs no index at all, so it stays fresh as files change.",

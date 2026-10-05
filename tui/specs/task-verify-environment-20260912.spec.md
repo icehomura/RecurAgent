@@ -56,7 +56,7 @@ docs/superpowers/plans/2026-09-12-verify-environment.md
 
 Scenario: 脚本存在且可执行
   Test:
-    Package: octoscode
+    Package: ra-tui
     Filter: verify_script_exists_and_is_executable
   Given 仓库已检出
   When 检查 scripts/verify.sh
@@ -64,7 +64,7 @@ Scenario: 脚本存在且可执行
 
 Scenario: GNU 工具解析或明确失败
   Test:
-    Package: octoscode
+    Package: ra-tui
     Filter: gnu_tools_resolved_or_clear_failure
   Given 通过 verify.sh 运行 GNU 形态 stat -c '%s'
   When 在 Linux 或已解析 GNU 能力的 Darwin
@@ -72,7 +72,7 @@ Scenario: GNU 工具解析或明确失败
 
 Scenario: 已具 GNU 能力的 PATH 直接可用
   Test:
-    Package: octoscode
+    Package: ra-tui
     Filter: already_gnu_path_is_used_without_brew_requirement
   Given 宿主已有可委托的 GNU 工具，PATH 前置 stat/realpath 委托 shim（Darwin 缺 GNU 时 fixture 会响亮失败）
   When verify.sh -- stat -c '%s'
@@ -80,7 +80,7 @@ Scenario: 已具 GNU 能力的 PATH 直接可用
 
 Scenario: 混合 PATH（GNU stat + BSD realpath）不满足能力门
   Test:
-    Package: octoscode
+    Package: ra-tui
     Filter: mixed_path_with_bsd_realpath_still_resolves_gnu
   Given 宿主已有可回落的 GNU 工具，PATH 前置 GNU 形态 stat shim 与拒绝式 realpath stub（无其他 GNU 源在前）
   When verify.sh -- realpath -m /etc/../etc/hosts
@@ -88,7 +88,7 @@ Scenario: 混合 PATH（GNU stat + BSD realpath）不满足能力门
 
 Scenario: 嵌套 Python 不写字节码
   Test:
-    Package: octoscode
+    Package: ra-tui
     Filter: nested_python_inherits_no_bytecode
   Given verify.sh → python3（父）→ subprocess python3（子）导入临时模块
   When 子进程运行
@@ -96,7 +96,7 @@ Scenario: 嵌套 Python 不写字节码
 
 Scenario: 自定义命令退出码原样传播
   Test:
-    Package: octoscode
+    Package: ra-tui
     Filter: custom_failure_exit_code_propagates
   Given verify.sh -- sh -c 'exit 7'
   When 命令结束
@@ -104,7 +104,7 @@ Scenario: 自定义命令退出码原样传播
 
 Scenario: 未知参数与空 -- 打印 usage 非零退出
   Test:
-    Package: octoscode
+    Package: ra-tui
     Filter: unknown_argument_and_empty_dash_print_usage
   Given verify.sh --bad 或裸 --
   When 参数解析
@@ -112,7 +112,7 @@ Scenario: 未知参数与空 -- 打印 usage 非零退出
 
 Scenario: 确定性缺失 GNU 负例在脚本内响亮失败
   Test:
-    Package: octoscode
+    Package: ra-tui
     Filter: controlled_missing_gnu_fails_loudly_inside_script
   Given shim 全控 PATH：uname 恒报 Darwin、stat/realpath 均拒绝 GNU、brew shim 的 --prefix coreutils 指向存在但同样拒绝的伪 gnubin
   When 运行 GNU 形态 stat

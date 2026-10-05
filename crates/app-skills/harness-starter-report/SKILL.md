@@ -2,7 +2,7 @@
 name: harness-starter-report
 description: Harnessed report-generator starter. Writes a markdown artifact under reports/ and relies on the workspace contract to deliver it.
 version: 1.0.0
-author: ra
+author: RecurAgent
 always: false
 ---
 

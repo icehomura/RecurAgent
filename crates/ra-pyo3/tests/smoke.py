@@ -2,7 +2,7 @@
 """Hermetic smoke test for the native `ra` pyo3 extension.
 
 No network: it only imports the module, builds a Config/Brief, and asserts that
-constructing a Runtime with a bogus provider raises OctosError. Provider
+constructing a Runtime with a bogus provider raises RaError. Provider
 construction fails offline, so nothing here touches an API.
 
 This is intentionally NOT part of `cargo test` (that runs the Rust suite). Run
@@ -23,7 +23,7 @@ def main() -> int:
     import ra
 
     # Exception type is exported.
-    assert hasattr(ra, "OctosError"), "ra.OctosError missing"
+    assert hasattr(ra, "RaError"), "ra.RaError missing"
 
     # Config/Brief take kwargs, including api_type.
     cfg = ra.Config(
@@ -50,13 +50,13 @@ def main() -> int:
     assert brief.max_iterations is None
     print("Brief OK:", repr(brief))
 
-    # Bogus provider must raise OctosError (offline, before any network).
+    # Bogus provider must raise RaError (offline, before any network).
     try:
         ra.Runtime(ra.Config(provider="totally-not-a-real-provider", model="x"))
-    except ra.OctosError as e:
-        print("Runtime(bad provider) correctly raised OctosError:", e)
+    except ra.RaError as e:
+        print("Runtime(bad provider) correctly raised RaError:", e)
     else:
-        print("FAIL: expected OctosError for a bogus provider", file=sys.stderr)
+        print("FAIL: expected RaError for a bogus provider", file=sys.stderr)
         return 1
 
     print("SMOKE OK")

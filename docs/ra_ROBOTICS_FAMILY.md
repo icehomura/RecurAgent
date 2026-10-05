@@ -1,10 +1,10 @@
-# ra Robotics Family — Program Plan
+# RecurAgent Robotics Family — Program Plan
 
 See also:
 
-- [OCTOS_ROBOTICS_ARCHITECTURE.md](./OCTOS_ROBOTICS_ARCHITECTURE.md)
-- [OCTOS_ROBOTICS_CONTRACTS.md](./OCTOS_ROBOTICS_CONTRACTS.md)
-- [OCTOS_HARNESS_MASTER_PLAN.md](./OCTOS_HARNESS_MASTER_PLAN.md)
+- [ra_ROBOTICS_ARCHITECTURE.md](./ra_ROBOTICS_ARCHITECTURE.md)
+- [ra_ROBOTICS_CONTRACTS.md](./ra_ROBOTICS_CONTRACTS.md)
+- [ra_HARNESS_MASTER_PLAN.md](./ra_HARNESS_MASTER_PLAN.md)
 
 ## Purpose
 
@@ -14,7 +14,7 @@ and give a program manager or architect a single source of truth to drive an
 agent swarm against.
 
 It follows the same shape as
-[OCTOS_HARNESS_MASTER_PLAN.md](./OCTOS_HARNESS_MASTER_PLAN.md): phases, release
+[ra_HARNESS_MASTER_PLAN.md](./ra_HARNESS_MASTER_PLAN.md): phases, release
 contracts, roles, allowed files, decision rules, stop conditions, definition
 of done.
 
@@ -38,7 +38,7 @@ string match, and so out-of-family drift is rejected at review time.
 
 The robotics family does not start until
 `release/2026-04-17-harness-gate-local` lands with its three blocking fixes
-from `OCTOS_RUNTIME_PHASE3_REVIEW.md` applied. The mission contract in
+from `ra_RUNTIME_PHASE3_REVIEW.md` applied. The mission contract in
 Phase RB is an extension of the workspace contract landed by that branch.
 
 ## Phase Ordering
@@ -46,7 +46,7 @@ Phase RB is an extension of the workspace contract landed by that branch.
 The phases are in strict landing order. A phase does not start until the
 prior phase is green on canary.
 
-### Phase ra — Foundations
+### Phase RecurAgent — Foundations
 
 Goal: make the two-cadence runtime real, land the safety trust domain, and
 land the typed bridge so higher phases have something to build on.
@@ -84,7 +84,7 @@ Issues:
 
 Out of this phase:
 
-- multi-robot cell — not ready until all of ra and RB
+- multi-robot cell — not ready until all of RecurAgent and RB
 - HITL beyond current channel primitives
 
 Release gate:
@@ -124,9 +124,9 @@ Phase RD is explicitly deferred until RC canary soak passes.
 ## Release Contracts
 
 Each phase produces one or more release contracts named
-`OCTOS_ROBOTICS_RELEASE_<yyyy-mm-dd>.md`. The contract is modeled after the
+`ra_ROBOTICS_RELEASE_<yyyy-mm-dd>.md`. The contract is modeled after the
 `## Release Contract — 2026-04-17` section of
-`OCTOS_HARNESS_MASTER_PLAN.md`.
+`ra_HARNESS_MASTER_PLAN.md`.
 
 A release contract must carry:
 
@@ -197,7 +197,7 @@ name. Workers may rotate. Roles may not.
 A slice is driven by a four-step loop.
 
 1. **Author the release contract.** The architect writes
-   `OCTOS_ROBOTICS_RELEASE_<date>.md` by copying the template from the
+   `ra_ROBOTICS_RELEASE_<date>.md` by copying the template from the
    harness master plan and filling in the slice fields. The PM reviews
    scope and sequencing before the slice opens.
 2. **Dispatch by contract, not by chat.** The PM hands workers the
@@ -237,7 +237,7 @@ slice. Any failure kills the merge.
 1. No file outside the release-contract allowlist was touched.
 2. All acceptance tests in the per-issue contract are green.
 3. All required invariants in
-   [OCTOS_ROBOTICS_ARCHITECTURE.md](./OCTOS_ROBOTICS_ARCHITECTURE.md)
+   [ra_ROBOTICS_ARCHITECTURE.md](./ra_ROBOTICS_ARCHITECTURE.md)
    still hold after the slice.
 4. No new `unsafe` block was added.
 5. No new execution path bypasses the sandbox, `ToolPolicy`,
@@ -292,8 +292,8 @@ issues are merged.
 This family doc is the canonical program record.
 
 Per-issue contracts live in
-[OCTOS_ROBOTICS_CONTRACTS.md](./OCTOS_ROBOTICS_CONTRACTS.md). Release
+[ra_ROBOTICS_CONTRACTS.md](./ra_ROBOTICS_CONTRACTS.md). Release
 contracts are per-date files named
 `docs/ra_ROBOTICS_RELEASE_<yyyy-mm-dd>.md`. Architecture targets and
 required invariants live in
-[OCTOS_ROBOTICS_ARCHITECTURE.md](./OCTOS_ROBOTICS_ARCHITECTURE.md).
+[ra_ROBOTICS_ARCHITECTURE.md](./ra_ROBOTICS_ARCHITECTURE.md).

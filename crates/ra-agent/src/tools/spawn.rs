@@ -1152,7 +1152,7 @@ pub struct SpawnTool {
     /// Optional host-owned root for spawned-worker deliverables. When absent,
     /// retain the legacy `<working_dir>/.ra/spawn-deliverables` location.
     deliverable_root: Option<PathBuf>,
-    /// Whether ra itself may create workspace-local state such as a git
+    /// Whether RecurAgent itself may create workspace-local state such as a git
     /// worktree. Agent file access is enforced elsewhere; this covers the
     /// host-side control plane so a read-only session cannot create
     /// `.ra/work` before a tool sandbox applies.
@@ -1260,7 +1260,7 @@ impl SpawnTool {
     /// [`MAX_SPAWN_DEPTH`] via the child worker's incremented
     /// `ToolContext::spawn_depth`). Without this the child registry carries
     /// only the delegate-less builtin `spawn_agent`, and any nested spawn
-    /// fails with "No native ra spawn tool is bound behind spawn_agent in
+    /// fails with "No native RecurAgent spawn tool is bound behind spawn_agent in
     /// this ToolRegistry." — orphaning the child task with empty outputs.
     ///
     /// Every wired field (routers, factories, supervisor, sandbox, plugin
@@ -1376,7 +1376,7 @@ impl SpawnTool {
     }
 
     /// Direct host-created deliverables outside the agent workspace. This is
-    /// used by read-only chat sessions so ra bookkeeping cannot create a
+    /// used by read-only chat sessions so RecurAgent bookkeeping cannot create a
     /// `.ra` directory in the reviewed repository.
     pub fn with_deliverable_root(mut self, root: PathBuf) -> Self {
         self.deliverable_root = Some(root);
@@ -1700,10 +1700,10 @@ impl SpawnTool {
             // #1021 / M17-C — populate backend_kind/agent_id/risk so the
             // evidence ledger can identify this unmanaged dispatch
             // without parsing free-form text. Direct MCP dispatch never
-            // forks the ra prompt context manager, so we tag it
+            // forks the RecurAgent prompt context manager, so we tag it
             // `risk: medium` (external transport, no managed context).
             DispatchContextContract::external_unmanaged(
-                "direct_mcp_dispatch_has_no_octos_context_manager_payload",
+                "direct_mcp_dispatch_has_no_ra_context_manager_payload",
             )
             .with_parent_session_key(Some(session_id.to_string()))
             .with_child_session_key(Some(task_id.to_string()))
@@ -2606,8 +2606,8 @@ const DELIVERABLE_AUTOMATERIALIZE_MIN_BYTES: usize = 400;
 /// glob so [`resolve_deliverable_terminal_files`] then surfaces it.
 ///
 /// - single-`*` glob (`*-review.md`, `*.md`, `report-*.txt`) → replace `*`
-///   with a slug of the label's first word (`octos-web review` → `octos-web`
-///   → `octos-web-review.md`);
+///   with a slug of the label's first word (`ra-web review` → `ra-web`
+///   → `ra-web-review.md`);
 /// - literal filename (no `*`) → use it verbatim;
 /// - anything else → `<slug>-review.md` (matches the common `*-review.md` /
 ///   `*.md` review globs).
@@ -2915,7 +2915,7 @@ impl Tool for SpawnTool {
     }
 
     fn concurrency_class(&self) -> super::ConcurrencyClass {
-        // Item 6 of OCTOS_M8_FIX_FIRST_CHECKLIST_2026-04-24:
+        // Item 6 of ra_M8_FIX_FIRST_CHECKLIST_2026-04-24:
         // spawn() registers a background task with the supervisor,
         // mutates the spawn_only_invoked atomic, and may share the
         // backing memory store with peers in the same batch. Treat it
@@ -3373,10 +3373,10 @@ impl Tool for SpawnTool {
                         // identify this unmanaged dispatch in the
                         // evidence ledger. Same medium-risk tagging as
                         // the direct dispatch path: external MCP
-                        // transport that never forks the ra prompt
+                        // transport that never forks the RecurAgent prompt
                         // context manager.
                         DispatchContextContract::external_unmanaged(
-                            "mcp_agent_backend_does_not_consume_octos_prompt_context_manager",
+                            "mcp_agent_backend_does_not_consume_ra_prompt_context_manager",
                         )
                         .with_parent_session_key(self.session_key.clone())
                         .with_child_session_key(Some(task_id_for_event.clone()))
@@ -3526,7 +3526,7 @@ impl Tool for SpawnTool {
             // invariant: any required validator failure demotes the
             // response to a typed failure before it leaves the tool.
             //
-            // ra #997 (round-4 fix): run both the session-scope and
+            // RecurAgent #997 (round-4 fix): run both the session-scope and
             // project-scope validator blocks BEFORE
             // `resolve_contract_terminal_files`. With
             // `terminal_output.required_artifact_kind = "presentation"`
@@ -3590,7 +3590,7 @@ impl Tool for SpawnTool {
                 }
             }
 
-            // ra #997 (round-3 fix): the session-scope validator block above
+            // RecurAgent #997 (round-3 fix): the session-scope validator block above
             // runs against `self.working_dir` (the session root) and writes the
             // session ledger only. The project-scope contract gate
             // (`inspect_workspace_contract`) reads
@@ -3856,7 +3856,7 @@ impl Tool for SpawnTool {
             // tool named "spawn" triggers the `ToolRegistry` swap that binds
             // `spawn_agent` + `delegate` behind it, so a subagent can nest a
             // further spawn instead of hitting the delegate-less builtin
-            // ("No native ra spawn tool is bound…"). `MAX_SPAWN_DEPTH`
+            // ("No native RecurAgent spawn tool is bound…"). `MAX_SPAWN_DEPTH`
             // (via the child worker's incremented `ctx.spawn_depth`) bounds
             // the recursion, and the subagent policy still denies DIRECT
             // `spawn` (deny is exact-match, so `spawn_agent` stays allowed).
@@ -4080,14 +4080,14 @@ impl Tool for SpawnTool {
                         }
                     }
 
-                    // ra #997 (round-2 fix): in addition to the session-scope
+                    // RecurAgent #997 (round-2 fix): in addition to the session-scope
                     // validator run above, ALSO run each project-scope policy
                     // at its OWN project root. The session run writes its
                     // outcome to `<session>/.ra/validator_outcomes.jsonl`,
                     // but `inspect_workspace_contract` reads from
                     // `<session>/<kind>/<slug>/.ra/validator_outcomes.jsonl`
                     // — so without this run a real valid deck whose project
-                    // policy declares a hard-required validator (ra #997:
+                    // policy declares a hard-required validator (RecurAgent #997:
                     // `slides.mofa_slides.pptx_magic_bytes`) would surface as
                     // `ready = false`. Scope the iteration to the workflow's
                     // expected kind when available so a slides spawn does not
@@ -4725,13 +4725,13 @@ impl Tool for SpawnTool {
                     }
                 }
 
-                // ra #997 (round-2 fix): also run each project-scope
+                // RecurAgent #997 (round-2 fix): also run each project-scope
                 // policy AT its OWN project root. The session-scope run above
                 // writes to `<session>/.ra/validator_outcomes.jsonl`, but
                 // `inspect_workspace_contract` reads from
                 // `<session>/<kind>/<slug>/.ra/validator_outcomes.jsonl`.
                 // Without this run a real valid deck whose project policy
-                // declares a hard-required validator (ra #997:
+                // declares a hard-required validator (RecurAgent #997:
                 // `slides.mofa_slides.pptx_magic_bytes`) would surface as
                 // `ready = false` because the persisted outcome is missing
                 // from the path `inspect_workspace_contract` reads.

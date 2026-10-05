@@ -110,11 +110,11 @@ Four engineers / agent workers run in parallel. Each track owns a clean slice wi
 - `crates/ra-pipeline/src/executor.rs` — node execution + recovery loop
 - `crates/ra-pipeline/src/lib.rs` — exports
 - New: `crates/ra-pipeline/src/recovery.rs` — M8.9 recovery wrapper for nodes
-- `octos-web/src/store/message-store.ts` — node tree types
-- `octos-web/src/store/message-store-reducers/tool-progress-reducer.ts` — node-tree projection
-- `octos-web/src/components/chat-thread.tsx` — `<NodeCard>` component
-- New: `octos-web/src/components/node-card.tsx`
-- New: `octos-web/src/components/cost-breakdown.tsx`
+- `ra-web/src/store/message-store.ts` — node tree types
+- `ra-web/src/store/message-store-reducers/tool-progress-reducer.ts` — node-tree projection
+- `ra-web/src/components/chat-thread.tsx` — `<NodeCard>` component
+- New: `ra-web/src/components/node-card.tsx`
+- New: `ra-web/src/components/cost-breakdown.tsx`
 
 **Deliverables**:
 - A1 — Pipeline workers wire `with_file_state_cache`, `with_subagent_output_router`, `with_subagent_summary_generator` from session-actor's shared instances (plumbed via `TOOL_CTX`)
@@ -143,8 +143,8 @@ Four engineers / agent workers run in parallel. Each track owns a clean slice wi
 - `crates/ra-cli/src/workflows/research_podcast.rs` — same
 - `crates/ra-cli/src/api/handlers.rs` — new endpoints
 - `crates/ra-cli/src/api/router.rs` — route registration
-- `octos-web/src/components/node-card.tsx` (collaborate with W1) — cancel + restart buttons
-- `octos-web/src/api/types.ts` — new POST request types
+- `ra-web/src/components/node-card.tsx` (collaborate with W1) — cancel + restart buttons
+- `ra-web/src/api/types.ts` — new POST request types
 
 **Deliverables**:
 - B1 — Spawn child agent wires `with_file_state_cache(parent.file_state_cache.clone())`, `with_subagent_output_router(parent.router.clone())`, `with_subagent_summary_generator(...)` — all inherited from parent session
@@ -295,7 +295,7 @@ All track PRs must pass:
 - `cargo build --workspace`
 - `cargo clippy --workspace --all-targets -- -D warnings`
 - `cargo test --workspace` (sharded per #590)
-- `pnpm typecheck` + `pnpm build` (octos-web)
+- `pnpm typecheck` + `pnpm build` (ra-web)
 - Track's own integration tests pass against staging mini2
 
 ## 7. Rollout plan
@@ -327,7 +327,7 @@ The migration force-push of `c8787472` is preserved in `release/coding-yellow` a
 
 - Re-architecting plugin invocation to be in-process (still binary protocol)
 - Replacing TaskSupervisor with an external scheduler (Kubernetes-style)
-- Changing octos-web from React to anything else
+- Changing ra-web from React to anything else
 - Migrating session storage from JSONL to a database
 - Adding new features beyond the M8 contract (M9 family is separate scope)
 

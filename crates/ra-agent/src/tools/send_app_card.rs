@@ -405,7 +405,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn should_put_org_octos_app_in_metadata_when_weather_payload_valid() {
+    async fn should_put_org_ra_app_in_metadata_when_weather_payload_valid() {
         let (tool, mut rx) = make_tool();
         let result = tool
             .execute(&json!({

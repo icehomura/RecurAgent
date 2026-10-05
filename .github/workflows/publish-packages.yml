@@ -4,7 +4,7 @@ name: Publish Packages
 # publishes a Homebrew formula + an npm wrapper.
 #
 # The Homebrew formula now lives IN THIS REPO at Formula/ra.rb (this repo is
-# its own Homebrew tap — `brew tap your-org/ra https://github.com/your-org/ra`).
+# its own Homebrew tap — `brew tap icehomura/ra https://github.com/icehomura/ra`).
 # On a stable release the homebrew job re-renders Formula/ra.rb from the
 # built bundles and opens a PR to update it (main is branch-protected, so it
 # cannot push directly). Prereleases do not update the stable formula.
@@ -12,7 +12,7 @@ name: Publish Packages
 # Gated behind the repo variable PUBLISH_PACKAGES so it no-ops until the
 # maintainer opts in (avoids failing on missing tokens). To go live, set:
 #   - repo variable PUBLISH_PACKAGES = true
-#   - secret NPM_TOKEN           (npm automation token for @your-org)
+#   - secret NPM_TOKEN           (npm automation token for @icehomura)
 #   - secret HOMEBREW_TAP_TOKEN  (bot/PAT token that can open formula PRs)
 # The Homebrew token is optional at the workflow boundary so manual diagnostics
 # still start, but it is required while the org forbids GITHUB_TOKEN-created PRs.
@@ -29,7 +29,7 @@ on:
         description: 'Bot/PAT token that can push branches and open formula PRs'
         required: false
       NPM_TOKEN:
-        description: 'npm automation token for @your-org'
+        description: 'npm automation token for @icehomura'
         required: false
   release:
     types: [published]
@@ -170,7 +170,7 @@ jobs:
           set -euo pipefail
           version="${TAG#v}"
           npm version "$version" --no-git-tag-version --allow-same-version
-          echo "Publishing @your-org/ra@${version}"
+          echo "Publishing @icehomura/ra@${version}"
 
       - name: Publish to npm
         working-directory: packaging/npm
@@ -184,14 +184,14 @@ jobs:
           fi
           version="${TAG#v}"
           # Prerelease versions (1.1.0-alpha.1, -rc.2, …) MUST NOT publish under
-          # the `latest` dist-tag, or `npm i -g @your-org/ra` would install a
+          # the `latest` dist-tag, or `npm i -g @icehomura/ra` would install a
           # prerelease. Derive the dist-tag from the prerelease label; stable →
           # latest.
           case "$version" in
             *-*) dist_tag="${version#*-}"; dist_tag="${dist_tag%%.*}" ;;
             *)   dist_tag="latest" ;;
           esac
-          echo "npm publish @your-org/ra@${version} --tag ${dist_tag}"
+          echo "npm publish @icehomura/ra@${version} --tag ${dist_tag}"
           npm publish --access public --tag "$dist_tag"
 
       - name: Verify npm publication
@@ -200,13 +200,13 @@ jobs:
           set -euo pipefail
           version="${TAG#v}"
           for attempt in $(seq 1 18); do
-            published=$(npm view "@your-org/ra@${version}" version 2>/dev/null || true)
+            published=$(npm view "@icehomura/ra@${version}" version 2>/dev/null || true)
             if [ "$published" = "$version" ]; then
-              echo "Verified @your-org/ra@${version} on npm."
+              echo "Verified @icehomura/ra@${version} on npm."
               exit 0
             fi
             echo "attempt $attempt/18: waiting for npm registry visibility"
             sleep 10
           done
-          echo "::error::@your-org/ra@${version} is not visible on npm"
+          echo "::error::@icehomura/ra@${version} is not visible on npm"
           exit 1

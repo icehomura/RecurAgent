@@ -5,7 +5,7 @@
 ## The Problem
 
 Robot hardware runs on Dora-RS dataflow graphs — camera nodes, motion planners,
-gripper controllers. The LLM agent runs on ra with MCP tools. These are two
+gripper controllers. The LLM agent runs on RecurAgent with MCP tools. These are two
 separate worlds with no connection. Without a bridge:
 
 - **Developers write glue code for every robot tool.** Each Dora node needs a

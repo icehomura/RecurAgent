@@ -502,8 +502,8 @@ fn should_refuse_external_calls_on_host_owned_peer_sessions() {
         external_gate,
     };
     use serde_json::json;
-    let peer = "_main:api:octosense#peer-rinx";
-    let ctx = "_main:api:octosense#peerctx-rinx.app-a";
+    let peer = "_main:api:recuragent#peer-rinx";
+    let ctx = "_main:api:recuragent#peerctx-rinx.app-a";
     let opened: std::collections::HashSet<String> = [peer.to_owned(), ctx.to_owned()].into();
     let kind = |r: Result<(), ra_core::ui_protocol::RpcError>| {
         r.unwrap_err().data.unwrap()["kind"].clone()
@@ -544,11 +544,11 @@ fn should_refuse_external_calls_on_host_owned_peer_sessions() {
         )),
         json!(EXTERNAL_SESSION_NOT_OPENED)
     );
-    let mine: std::collections::HashSet<String> = ["_main:api:octosense#system".to_owned()].into();
+    let mine: std::collections::HashSet<String> = ["_main:api:recuragent#system".to_owned()].into();
     assert!(
         external_gate(
             "approval/respond",
-            &json!({"session_id": "_main:api:octosense#system"}),
+            &json!({"session_id": "_main:api:recuragent#system"}),
             &mine
         )
         .is_ok()
@@ -556,7 +556,7 @@ fn should_refuse_external_calls_on_host_owned_peer_sessions() {
     assert!(
         external_gate(
             "turn/start",
-            &json!({"session_id": "_main:api:octosense#system"}),
+            &json!({"session_id": "_main:api:recuragent#system"}),
             &mine
         )
         .is_ok()
@@ -573,7 +573,7 @@ fn should_give_external_turns_no_code_admin_or_peer_tools() {
         "spawn",
         "peer_respond",
         "peer_send_input",
-        "admin_update_octos",
+        "admin_update_ra",
         "manage_skills",
         "browser",
         "git",
@@ -635,7 +635,7 @@ fn should_confine_external_calls_to_the_main_profile_at_any_depth() {
     assert_eq!(
         kind(external_gate(
             "turn/start",
-            &json!({"session_id": "_main:api:web", "context": {"target": {"session_id": "_main:api:octosense#peer-rinx"}}}),
+            &json!({"session_id": "_main:api:web", "context": {"target": {"session_id": "_main:api:recuragent#peer-rinx"}}}),
             &none
         )),
         json!(HOST_OWNED_PEER_SESSION_DENIED)
@@ -643,7 +643,7 @@ fn should_confine_external_calls_to_the_main_profile_at_any_depth() {
     assert_eq!(
         kind(external_gate(
             "turn/start",
-            &json!({"sessions": ["_main:api:octosense#peerctx-rinx.a"]}),
+            &json!({"sessions": ["_main:api:recuragent#peerctx-rinx.a"]}),
             &none
         )),
         json!(HOST_OWNED_PEER_SESSION_DENIED)
@@ -675,9 +675,9 @@ fn should_catch_peer_topics_sandbox_overrides_and_local_media() {
     };
     // A separate topic is refused outright (handlers fold it into the key).
     for params in [
-        json!({"session_id": "_main:api:octosense", "topic": "peer-rinx"}),
-        json!({"session_id": "_main:api:octosense", "topic": "system"}),
-        json!({"session_id": "_main:api:octosense", "TOPIC": " PeerCtx-rinx.a"}),
+        json!({"session_id": "_main:api:recuragent", "topic": "peer-rinx"}),
+        json!({"session_id": "_main:api:recuragent", "topic": "system"}),
+        json!({"session_id": "_main:api:recuragent", "TOPIC": " PeerCtx-rinx.a"}),
     ] {
         assert_eq!(
             kind(external_gate("session/open", &params, &none)),
@@ -687,9 +687,9 @@ fn should_catch_peer_topics_sandbox_overrides_and_local_media() {
     }
     // A peer session under any casing or nesting of the key.
     for params in [
-        json!({"sessionId": "_main:api:octosense#PEER-rinx"}),
-        json!({"session_id": {"key": "_main:api:octosense#peer-rinx"}}),
-        json!({"session": ["_main:api:octosense#peerctx-rinx.a"]}),
+        json!({"sessionId": "_main:api:recuragent#PEER-rinx"}),
+        json!({"session_id": {"key": "_main:api:recuragent#peer-rinx"}}),
+        json!({"session": ["_main:api:recuragent#peerctx-rinx.a"]}),
     ] {
         assert_eq!(
             kind(external_gate("session/hydrate", &params, &none)),
@@ -788,11 +788,11 @@ async fn should_gate_external_clients_over_the_real_socket() {
     use serde_json::json;
     let server = serve(true).await;
     let kind = |reply: &serde_json::Value| reply["error"]["data"]["kind"].clone();
-    let peer = "_main:api:octosense#peer-rinx";
+    let peer = "_main:api:recuragent#peer-rinx";
     for (method, params, expected) in [
         (
             "peer/context/open",
-            json!({"session_id": "_main:api:octosense#system", "peer": "rinx", "context_id": "a"}),
+            json!({"session_id": "_main:api:recuragent#system", "peer": "rinx", "context_id": "a"}),
             super::EXTERNAL_METHOD_DENIED,
         ),
         (

@@ -172,8 +172,8 @@ Each event is a single line, JSON-encoded, terminated with `\n`. Schema:
 {
   "schema": "ra.harness.event.v1",
   "kind": "progress",
-  "session_id": "<from $OCTOS_HARNESS_SESSION_ID>",
-  "task_id":    "<from $OCTOS_HARNESS_TASK_ID>",
+  "session_id": "<from $ra_HARNESS_SESSION_ID>",
+  "task_id":    "<from $ra_HARNESS_TASK_ID>",
   "workflow":   "deep_research",        // optional, plugin-defined
   "phase":      "fetching_sources",     // free-form stable label
   "message":    "Fetched 3/12 sources", // optional human-readable
@@ -233,11 +233,11 @@ documents how to verify SIGTERM handling.
 
 Environment variables the plugin can rely on (set by the host):
 
-- `$OCTOS_TASK_ID` — supervisor task id (also `$OCTOS_HARNESS_TASK_ID`).
-- `$OCTOS_SESSION_ID` — owning session id.
-- `$OCTOS_EVENT_SINK` — file path the plugin can write structured events
+- `$ra_TASK_ID` — supervisor task id (also `$ra_HARNESS_TASK_ID`).
+- `$ra_SESSION_ID` — owning session id.
+- `$ra_EVENT_SINK` — file path the plugin can write structured events
   to (used as an alternative to stderr for high-volume cases).
-- `$OCTOS_WORK_DIR` — sandboxed working directory.
+- `$ra_WORK_DIR` — sandboxed working directory.
 
 The shared `BLOCKED_ENV_VARS` list (e.g. `LD_PRELOAD`, `DYLD_*`,
 `NODE_OPTIONS`) is **stripped** before invocation; plugins cannot rely on
@@ -342,11 +342,11 @@ owner token). Cancel returns 409 if the task is already terminal.
 
 ### 5.3 Harness event sink
 
-When a plugin sets `$OCTOS_EVENT_SINK=/path/to/sink.jsonl`, the host
+When a plugin sets `$ra_EVENT_SINK=/path/to/sink.jsonl`, the host
 appends one JSON event per line. The session actor and supervisor read
 this sink and fold structured events into `BackgroundTask.runtime_detail`.
 
-The plugin can write events directly to `$OCTOS_EVENT_SINK` instead of (or
+The plugin can write events directly to `$ra_EVENT_SINK` instead of (or
 in addition to) stderr. The sink path is per-task — concurrent plugins
 get separate sinks. Same schema as §3.3.
 
@@ -429,8 +429,8 @@ M8 compliance` with a checkbox list pointing at each subsection of §2.
 - **Emitting `tool_progress` frames without a `tool_call_id`.** The chat
   bubble loses its anchor and the frame surfaces under the wrong turn after
   compaction. Always pass the originating `tool_call_id`.
-- **Spawning a plugin without setting `$OCTOS_TASK_ID` /
-  `$OCTOS_SESSION_ID`.** The plugin cannot emit valid v2 events without
+- **Spawning a plugin without setting `$ra_TASK_ID` /
+  `$ra_SESSION_ID`.** The plugin cannot emit valid v2 events without
   these. The host always sets them; if you bypass the host, set them
   yourself.
 - **Sleep-loop polling `BackgroundTask` instead of using the on_change

@@ -4,7 +4,7 @@ Status: draft spec for `M9.1`.
 
 Sprint: `coding-green`
 
-This is the first protocol document for the M9 control-plane layer. It is intentionally narrower than the eventual end-state. The goal is to define one client/runtime boundary that both `octoscode` and future server work can target without baking unresolved M8 runtime defects into the contract.
+This is the first protocol document for the M9 control-plane layer. It is intentionally narrower than the eventual end-state. The goal is to define one client/runtime boundary that both `ra-tui` and future server work can target without baking unresolved M8 runtime defects into the contract.
 
 Code sketch:
 
@@ -12,13 +12,13 @@ Code sketch:
 
 Related planning:
 
-- [OCTOS_M9_ISSUE_STACK_2026-04-24.md](../docs/ra_M9_ISSUE_STACK_2026-04-24.md)
-- [OCTOSCODE_ARCHITECTURE_2026-04-24.md](../docs/OCTOSCODE_ARCHITECTURE_2026-04-24.md)
-- [OCTOS_M8_FIX_FIRST_CHECKLIST_2026-04-24.md](../docs/ra_M8_FIX_FIRST_CHECKLIST_2026-04-24.md)
+- [ra_M9_ISSUE_STACK_2026-04-24.md](../docs/ra_M9_ISSUE_STACK_2026-04-24.md)
+- [RA_TUI_ARCHITECTURE_2026-04-24.md](../docs/RA_TUI_ARCHITECTURE_2026-04-24.md)
+- [ra_M8_FIX_FIRST_CHECKLIST_2026-04-24.md](../docs/ra_M8_FIX_FIRST_CHECKLIST_2026-04-24.md)
 
 ## 1. Goals
 
-`UI Protocol v1` should give ra clients a first-class interactive boundary for:
+`UI Protocol v1` should give RecurAgent clients a first-class interactive boundary for:
 
 - opening or resuming a session
 - starting and interrupting turns
@@ -101,7 +101,7 @@ Session-ingress transport rules:
   speaks the same UI Protocol v1 JSON-RPC frames as `/api/ui-protocol/ws`,
   but authenticates with a short-lived, session-scoped work secret instead
   of the dashboard credential. The full walkthrough lives in
-  [OCTOS_WORK_SECRET_SESSION_INGRESS.md](../docs/ra_WORK_SECRET_SESSION_INGRESS.md).
+  [ra_WORK_SECRET_SESSION_INGRESS.md](../docs/ra_WORK_SECRET_SESSION_INGRESS.md).
 - Credentials: clients send `Authorization: Bearer {session_ingress_token}`.
   WebSocket clients that cannot set headers may fall back to
   `?token={session_ingress_token}`; the server logs that deprecated form
@@ -175,7 +175,7 @@ Formal change request required:
 Process:
 
 1. Create a change request from
-   [OCTOS_UI_PROTOCOL_CHANGE_REQUEST_TEMPLATE.md](../docs/ra_UI_PROTOCOL_CHANGE_REQUEST_TEMPLATE.md).
+   [ra_UI_PROTOCOL_CHANGE_REQUEST_TEMPLATE.md](../docs/ra_UI_PROTOCOL_CHANGE_REQUEST_TEMPLATE.md).
 2. Mark it `proposed` and link the related M issue.
 3. Review compatibility, capability negotiation, tests, and rollout plan.
 4. Mark it `accepted` before code changes land.
@@ -312,7 +312,7 @@ Current M9 sandbox-parity decision:
   legacy REST-bridge `session/status.get`, AppUI `session/status/read`,
   `turn/state/get`, and context lifecycle notifications) is governed by the
   M16 context-manager workstream
-  [OCTOS_CONTEXT_MANAGER_GAP_CONTRACT](../docs/ra_CONTEXT_MANAGER_GAP_CONTRACT.md).
+  [ra_CONTEXT_MANAGER_GAP_CONTRACT](../docs/ra_CONTEXT_MANAGER_GAP_CONTRACT.md).
   It lets AppUI clients inspect the server-owned prompt context generation,
   transcript hash, checkpoint, compaction, and recovery state without
   reconstructing it from chat rows.
@@ -367,7 +367,7 @@ Current M9 sandbox-parity decision:
 These ids need to be stable and client-visible:
 
 - `session_id`
-  Uses ra session identity. For now this can map to existing `SessionKey`.
+  Uses RecurAgent session identity. For now this can map to existing `SessionKey`.
   Profile-qualified local TUI/coding sessions use
   `{profile_id}:local:{client_id}#{topic}`; `local` is a recognized channel
   name for profile extraction, so stdio clients can recover profile scope from
@@ -1158,7 +1158,7 @@ Behavior:
 - server emits `task/updated` and `task/output/delta` for the review swarm
 - server resolves native specialists from server configuration, not from a
   hard-coded AppUI client contract. Resolution order is:
-  `OCTOS_REVIEW_NATIVE_SPECIALISTS_JSON`, profile
+  `ra_REVIEW_NATIVE_SPECIALISTS_JSON`, profile
   `review.native_specialists`, built-in default template. Optional CLI/MCP
   specialists are added when their backend configuration is available, so
   `agent_count` is dynamic.
@@ -1448,7 +1448,7 @@ Clients must use that method list to enable or disable slash commands.
   ```json
   {
     "transport": "stdio",
-    "client": { "name": "octoscode" },
+    "client": { "name": "ra-tui" },
     "supported_features": [
       "approval.typed.v1",
       "session.workspace_cwd.v1",
@@ -1464,7 +1464,7 @@ Clients must use that method list to enable or disable slash commands.
     "type": "server_hello",
     "transport": "stdio",
     "client_transport": "stdio",
-    "client": { "name": "octoscode" },
+    "client": { "name": "ra-tui" },
     "capabilities": {
       "version": {
         "protocol": "ra-ui/v1alpha1",
@@ -2944,12 +2944,12 @@ Before productionizing protocol features that depend on runtime truth, the follo
 - profile/manifest authority
 - concurrency classification for mutating/task-spawning tools
 
-See [OCTOS_M8_FIX_FIRST_CHECKLIST_2026-04-24.md](../docs/ra_M8_FIX_FIRST_CHECKLIST_2026-04-24.md).
+See [ra_M8_FIX_FIRST_CHECKLIST_2026-04-24.md](../docs/ra_M8_FIX_FIRST_CHECKLIST_2026-04-24.md).
 
 ## 13. Immediate Next Steps
 
 1. Keep the shared Rust types in `ra-core` aligned with this doc.
-2. Build the mock `octoscode` scaffold against these draft types.
+2. Build the mock `ra-tui` scaffold against these draft types.
 3. When M8 fixes land, start server-side `M9.1` transport wiring against the same shapes.
 
 ## 14. M9-γ Envelope
@@ -3064,7 +3064,7 @@ Field contract:
 
 Rust source: [`Envelope`](../crates/ra-core/src/ui_protocol.rs)
 in `ra-core::ui_protocol`. TS source: `Envelope` in
-[`crates/octos-web/src/runtime/ui-protocol-types.ts`](../crates/octos-web/src/runtime/ui-protocol-types.ts).
+[`crates/ra-web/src/runtime/ui-protocol-types.ts`](../crates/ra-web/src/runtime/ui-protocol-types.ts).
 
 ### 14.2 Payload (sealed tagged union)
 
@@ -3296,7 +3296,7 @@ elimination that motivated M9-γ. The drop is silent at the projection
 layer (the metric is the operational signal); clients do NOT
 rehydrate, restart, or treat the situation as a desync. The same
 behaviour is implemented by the M9-γ-2 projection
-([`octos-web` PR #93](https://github.com/your-org/ra-web/pull/93)).
+([`ra-web` PR #93](https://github.com/icehomura/ra-web/pull/93)).
 
 A server that needs to emit a follow-up assistant or tool event
 belonging to a logically separate turn MUST mint a new `thread_id` for
@@ -3376,7 +3376,7 @@ time from initial provider attempt to failover decision.
 
 ### 15.3 `queue/state` (notification — client-emitted today)
 
-Pending-queue snapshot. The queue is client-side (`octos-web`
+Pending-queue snapshot. The queue is client-side (`ra-web`
 `runtime/ui-protocol-send.ts`); the server never emits this variant.
 The wire shape is defined here so a future server-side queue (or a TUI
 client) can publish into the same DOM event channel:

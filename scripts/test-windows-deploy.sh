@@ -27,9 +27,9 @@ require_grep 'ra-bundle-x86_64-pc-windows-msvc\.zip' "$SCRIPT" "deploy.ps1 must 
 require_grep 'ssh' "$SCRIPT" "deploy.ps1 must use OpenSSH for remote execution"
 require_grep 'scp' "$SCRIPT" "deploy.ps1 must use SCP for local bundle uploads"
 require_grep 'EncodedCommand' "$SCRIPT" "deploy.ps1 must send encoded PowerShell to the remote host"
-require_grep '\$nssmExe install' "$SCRIPT" "deploy.ps1 must register OctosServe through NSSM"
+require_grep '\$nssmExe install' "$SCRIPT" "deploy.ps1 must register RaServe through NSSM"
 require_grep 'SERVICE_AUTO_START' "$SCRIPT" "deploy.ps1 must configure auto-start service behavior"
-require_grep 'OCTOS_HOME=' "$SCRIPT" "deploy.ps1 must set the remote ra data path"
+require_grep 'ra_HOME=' "$SCRIPT" "deploy.ps1 must set the remote ra data path"
 require_grep 'C:\\ra' "$SCRIPT" "deploy.ps1 must document the default Windows install root"
 
 if grep -q -- '--auth-token' "$SCRIPT"; then
@@ -44,7 +44,7 @@ if command -v pwsh >/dev/null 2>&1; then
         -IdentityFile "$ROOT_DIR/.ssh/test-key" \
         -Version v0.0.0-test \
         -RemoteRoot 'C:\ra-ci' \
-        -ServiceName OctosServeTest \
+        -ServiceName RaServeTest \
         -ServePort 50080 \
         -AuthToken test-token \
         -DryRun 2>&1)"
@@ -55,15 +55,15 @@ if command -v pwsh >/dev/null 2>&1; then
         || fail "dry run should show service registration"
     grep -q 'C:\\ra-ci' <<<"$out" \
         || fail "dry run should include the requested remote root"
-    grep -q 'OctosServeTest' <<<"$out" \
+    grep -q 'RaServeTest' <<<"$out" \
         || fail "dry run should include the requested service name"
     if grep -q -- '--auth-token' <<<"$out"; then
         fail "dry run must not pass the bearer token via service argv (#2380)"
     fi
     grep -q 'AppEnvironmentExtra' <<<"$out" \
         || fail "dry run should deliver the token via AppEnvironmentExtra"
-    grep -q 'OCTOS_AUTH_TOKEN=' <<<"$out" \
-        || fail "dry run should deliver the token via OCTOS_AUTH_TOKEN"
+    grep -q 'ra_AUTH_TOKEN=' <<<"$out" \
+        || fail "dry run should deliver the token via ra_AUTH_TOKEN"
     grep -q 'test-token' <<<"$out" \
         || fail "dry run should include the requested auth token"
     grep -q 'ssh -p 2222' <<<"$out" \
@@ -72,7 +72,7 @@ if command -v pwsh >/dev/null 2>&1; then
     uninstall_out="$(pwsh -NoProfile -ExecutionPolicy Bypass -File "$SCRIPT" \
         -HostName win.example.invalid \
         -RemoteRoot 'C:\ra-ci' \
-        -ServiceName OctosServeTest \
+        -ServiceName RaServeTest \
         -Uninstall \
         -Purge \
         -DryRun 2>&1)"

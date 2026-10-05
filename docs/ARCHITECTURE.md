@@ -1,11 +1,11 @@
-# Architecture Document: ra
+# Architecture Document: RecurAgent
 
 ## Overview
 
-ra is a 25-member Rust workspace (Edition 2024, rust-version 1.85.0) providing both a coding agent CLI and a multi-channel messaging gateway. Pure Rust TLS via rustls (no OpenSSL). Error handling via `eyre`/`color-eyre`.
+RecurAgent is a 25-member Rust workspace (Edition 2024, rust-version 1.85.0) providing both a coding agent CLI and a multi-channel messaging gateway. Pure Rust TLS via rustls (no OpenSSL). Error handling via `eyre`/`color-eyre`.
 
 For the background-task delivery model used by web chat, see [SESSION_EVENT_ARCHITECTURE.md](SESSION_EVENT_ARCHITECTURE.md).
-For the next hardening/generalization round after the runtime refactor, see [OCTOS_RUNTIME_PHASE2.md](OCTOS_RUNTIME_PHASE2.md).
+For the next hardening/generalization round after the runtime refactor, see [ra_RUNTIME_PHASE2.md](ra_RUNTIME_PHASE2.md).
 
 **Workspace members**:
 - **10 ra-* crates**: ra-core, ra-memory, ra-llm, ra-agent, ra-bus, ra-cli, ra-pipeline, ra-plugin, **ra-sandbox** (Windows AppContainer helper binary), **ra-swarm** (PM/swarm dispatcher, ledger, topology)
@@ -618,7 +618,7 @@ The other workspace `app-skills/*` crates (`harness-starter-{audio,coding,generi
 
 ### Bootstrap (`bootstrap.rs`)
 
-`bootstrap.rs` writes the contents of each `BUNDLED_APP_SKILLS` entry into `<octos_home>/bundled-app-skills/<dir>/` (constant: `BUNDLED_APP_SKILLS_DIR = "bundled-app-skills"`) at gateway startup, then drops the matching binary alongside it. Platform skills live under `<octos_home>/platform-skills/`, while operator or sideloaded custom skills are installed per profile under `~/.ra/profiles/<id>/data/skills/`. Legacy HOME-rooted globals such as `~/.ra/skills/` are migration-only; current profile gateways no longer scan them as a normal install location.
+`bootstrap.rs` writes the contents of each `BUNDLED_APP_SKILLS` entry into `<ra_home>/bundled-app-skills/<dir>/` (constant: `BUNDLED_APP_SKILLS_DIR = "bundled-app-skills"`) at gateway startup, then drops the matching binary alongside it. Platform skills live under `<ra_home>/platform-skills/`, while operator or sideloaded custom skills are installed per profile under `~/.ra/profiles/<id>/data/skills/`. Legacy HOME-rooted globals such as `~/.ra/skills/` are migration-only; current profile gateways no longer scan them as a normal install location.
 
 ### Sub-Agent Output Router (M8.7)
 
@@ -879,16 +879,16 @@ Plugins extend the agent with external tools via standalone executables. Each pl
 #### Directory Layout
 
 ```
-<octos_home>/plugins/                 # deployment-scoped plugins
-<octos_home>/skills/                  # deployment-scoped skills
-<octos_home>/bundled-app-skills/      # bundled app skills
+<ra_home>/plugins/                 # deployment-scoped plugins
+<ra_home>/skills/                  # deployment-scoped skills
+<ra_home>/bundled-app-skills/      # bundled app skills
 ~/.ra/profiles/<profile>/data/skills/
   └── my-plugin/
       ├── manifest.json  # plugin metadata + tool definitions
       └── my-plugin      # executable (or "main" as fallback)
 ```
 
-**Discovery order**: `Config::plugin_dirs_from_project()` scans deployment-scoped `<octos_home>/plugins`, `<octos_home>/skills`, `<octos_home>/bundled-app-skills`, and `OCTOS_SKILLS_PATH`; managed profile gateways then layer platform skills and the active profile's `data/skills/` directory on top. Legacy HOME-rooted globals (`~/.ra/plugins`, `~/.ra/skills`) are no longer scanned except for a one-shot migration warning.
+**Discovery order**: `Config::plugin_dirs_from_project()` scans deployment-scoped `<ra_home>/plugins`, `<ra_home>/skills`, `<ra_home>/bundled-app-skills`, and `ra_SKILLS_PATH`; managed profile gateways then layer platform skills and the active profile's `data/skills/` directory on top. Legacy HOME-rooted globals (`~/.ra/plugins`, `~/.ra/skills`) are no longer scanned except for a one-shot migration warning.
 
 #### PluginManifest
 
@@ -1184,7 +1184,7 @@ JSONL persistence at `.ra/sessions/{key}.jsonl`.
 
 - **In-memory cache**: LRU with disk sync on write
 - **Filenames**: Percent-encoded SessionKey, truncated to 183 chars with `_{hash:016X}` suffix on truncation to prevent collisions
-- **Rolling segments**: Files roll into `<name>.segments/NNNNNN.jsonl` at `OCTOS_SESSION_SEGMENT_BYTES` (8MB); loads read the newest segments up to `OCTOS_SESSION_LOAD_BUDGET_BYTES` (32MB, 0 = all)
+- **Rolling segments**: Files roll into `<name>.segments/NNNNNN.jsonl` at `ra_SESSION_SEGMENT_BYTES` (8MB); loads read the newest segments up to `ra_SESSION_LOAD_BUDGET_BYTES` (32MB, 0 = all)
 - **Crash safety**: Atomic write-then-rename
 - **Forking**: `fork()` creates child session with `parent_key` tracking, copies last N messages
 
@@ -1273,7 +1273,7 @@ Polls every 5 seconds. SHA-256 hash comparison of file contents.
 
 **Web UI**: Embedded SPA via `rust-embed` served as the fallback handler. Session sidebar, chat interface, UI Protocol WebSocket streaming, and dashboard/admin surfaces share the same `ra serve` process.
 
-**Prometheus Metrics**: `ra_tool_calls_total` (counter, labels: tool, success), `octos_tool_call_duration_seconds` (histogram, label: tool), `ra_llm_tokens_total` (counter, label: direction). Powered by `metrics` + `metrics-exporter-prometheus` crates.
+**Prometheus Metrics**: `ra_tool_calls_total` (counter, labels: tool, success), `ra_tool_call_duration_seconds` (histogram, label: tool), `ra_llm_tokens_total` (counter, label: direction). Powered by `metrics` + `metrics-exporter-prometheus` crates.
 
 ### Session Compaction (Gateway)
 
@@ -1610,7 +1610,7 @@ crates/
 - Tool output sanitization: strips base64 data URIs and long hex strings (`sanitize.rs`)
 - UTF-8 safe truncation via `truncate_utf8()` across all tool outputs and email bodies
 - Session file collision prevention via percent-encoded filenames with hash suffix on truncation
-- Session files roll into 8MB segments and loads stop at `OCTOS_SESSION_LOAD_BUDGET_BYTES` (32MB), preventing OOM on oversized histories
+- Session files roll into 8MB segments and loads stop at `ra_SESSION_LOAD_BUDGET_BYTES` (32MB), preventing OOM on oversized histories
 - Atomic write-then-rename for session persistence (crash safety)
 - API server binds to 127.0.0.1 by default (not 0.0.0.0)
 - Channel access control via `allowed_senders` lists
@@ -1624,9 +1624,9 @@ crates/
 
 ### Why Rust
 
-ra uses Rust with the tokio async runtime, which provides significant advantages over Python (OpenClaw, etc.) and Node.js (NanoCloud, etc.) agent frameworks for concurrent session handling:
+RecurAgent uses Rust with the tokio async runtime, which provides significant advantages over Python (OpenClaw, etc.) and Node.js (NanoCloud, etc.) agent frameworks for concurrent session handling:
 
-**True parallelism** — Tokio tasks run across all CPU cores simultaneously. Python has the GIL, so even with asyncio, CPU-bound work (JSON parsing, context compaction, token counting) is single-core. Node.js is single-threaded entirely. In ra, 10 concurrent sessions doing context compaction actually execute in parallel across cores.
+**True parallelism** — Tokio tasks run across all CPU cores simultaneously. Python has the GIL, so even with asyncio, CPU-bound work (JSON parsing, context compaction, token counting) is single-core. Node.js is single-threaded entirely. In RecurAgent, 10 concurrent sessions doing context compaction actually execute in parallel across cores.
 
 **Memory efficiency** — No garbage collector, no runtime overhead per object. Agent sessions are compact structs on the heap. A Python agent session carries interpreter overhead, GC metadata on every object, and dict-based attribute lookup. This matters with hundreds of sessions and large conversation histories in memory.
 

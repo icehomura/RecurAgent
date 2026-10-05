@@ -15,9 +15,9 @@
   host-owned peer delivered to its host
 - Builds on: UPCR-2026-034 (host-owned app peers, host token, request
   contexts)
-- Origin: OctoSense ADR 0002 "Event-driven app agents", sections 4 ("Apps
+- Origin: RecurAgent ADR 0002 "Event-driven app agents", sections 4 ("Apps
   expose their own tools") and 12 ("What an autonomous app agent may do");
-  OctoSense issue #61 (News M2)
+  RecurAgent issue #61 (News M2)
 
 ## Problem
 
@@ -61,11 +61,11 @@ approval flow. An empty set takes nothing away. A host that sets
 A host that uses only UPCR-2026-034 today (`peer/prepare`,
 `peer/context/open`, `turn/start`) keeps its peers' tools, but their turns
 get no app memory or app context, and the system agent's `peer_send_input`
-to them fails, until it registers and handles `peer/input`. OctoSense's
+to them fails, until it registers and handles `peer/input`. RecurAgent's
 `crates/app-peers` broker currently calls only `peer/prepare`,
 `peer/context/open` and `turn/start`; it will register (the app's pinned
-`tools.json`, or an empty set) in OctoSense's M3 pin-bump PR. Other hosts,
-such as octoscode-web, must do the same: register on the connection that
+`tools.json`, or an empty set) in RecurAgent's M3 pin-bump PR. Other hosts,
+such as ra-tui-web, must do the same: register on the connection that
 drives the turns, after every `peer/prepare` and every reconnect.
 
 ### `peer/tools/register`
@@ -84,7 +84,7 @@ drives the turns, after every `peer/prepare` and every reconnect.
 session `session_id` itself: a session that is not an app peer, typically
 the system agent's conversation, so the system agent can call the app tools
 the host granted it. The host's own connection needs no credential
-(OctoSense#146): the private `serve --stdio` pipe, or a host-token
+(RecurAgent#146): the private `serve --stdio` pipe, or a host-token
 connection of `serve --host-managed`, registers a host session's set before
 any app peer exists. Any other connection presents the host token of an app
 peer that `session_id` prepared (only the host that prepared that session's
@@ -165,7 +165,7 @@ Typed `data.kind`: `peer_host_token_mismatch`, `peer_originator_mismatch`,
 
 Addendum, 2026-09-30. The host SESSION set's `generic_tools` lives only as
 long as the registering connection, and a set that narrows every client's
-turns is not what a host registers for its app tools (OctoSense ADR 0004,
+turns is not what a host registers for its app tools (RecurAgent ADR 0004,
 section 12, step 4). Two more raw methods let the host fix the EXACT kernel
 tool list of one of its own sessions durably, for example the system agent's
 conversation. Discovery: both are in `config/capabilities/list`
@@ -393,7 +393,7 @@ the serve continuation queue).
 ```
 
 The host refuses a `peer/input` it cannot act on, so the system agent learns
-why the peer did not act instead of the refusal being only logged. OctoSense's
+why the peer did not act instead of the refusal being only logged. RecurAgent's
 reasons: the account is signed out or suspended (`signed_out`), the person has
 not granted the app consent (`no_consent`), the peer is busy past the host's
 queue limit (`busy`). `other` needs a `message` (one line, 1–256 bytes, no
@@ -614,7 +614,7 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
     path refuses it.
   - The person-absent approvals of `confirm: app` and `confirm: host` tools
     are raised on the peer's own session (`peer-<slug>`); the host surfaces
-    them in the app's conversation (for native modules, OctoSense's
+    them in the app's conversation (for native modules, RecurAgent's
     `crates/app-peers` broker does).
 - **One execution per occurrence.** Every non-`read` call is claimed before
   any approval or host call under
@@ -711,7 +711,7 @@ The app bundle's `tools.json` (checked and pinned by App Hub at admission) is
 the ONE declaration of an app's tools, for native modules and script apps
 alike; its entries are the `tools` of `peer/tools/register` as they are.
 Whoever owns the host-owned app peer registers them: for a native module
-that is OctoSense's `crates/app-peers` broker, which creates the peer with
+that is RecurAgent's `crates/app-peers` broker, which creates the peer with
 `peer/prepare`, holds its host token, registers the pinned `tools.json`
 when it opens (or resumes) the peer and after every App Hub update, and
 executes each `peer/tool/call` with the calling session's identity. A module

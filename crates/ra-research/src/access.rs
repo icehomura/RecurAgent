@@ -65,7 +65,7 @@ pub enum ReadFailure {
     RenderTimeout,
     /// The page loaded but had no extractable main text.
     NoMainText,
-    /// Refused by ra: SSRF protection (private or internal address) or
+    /// Refused by RecurAgent: SSRF protection (private or internal address) or
     /// the caller's scope.
     Blocked,
     /// The publisher answered with this HTTP status (or an error page that

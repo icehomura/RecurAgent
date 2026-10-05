@@ -11,9 +11,9 @@ use crate::{ChatConfig, ToolSpec};
 
 pub const VERSION: u32 = 1;
 pub const CAPABILITY_KEY: &str = "ra.hostManaged";
-pub const MODEL_METHOD: &str = "_octos/host/model";
-pub const TOOLS_LIST_METHOD: &str = "_octos/host/tools/list";
-pub const TOOLS_CALL_METHOD: &str = "_octos/host/tools/call";
+pub const MODEL_METHOD: &str = "_ra/host/model";
+pub const TOOLS_LIST_METHOD: &str = "_ra/host/tools/list";
+pub const TOOLS_CALL_METHOD: &str = "_ra/host/tools/call";
 pub const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_MESSAGES: usize = 4096;
 pub const MAX_TOOLS: usize = 256;
@@ -61,7 +61,7 @@ impl HostConfig {
 
 /// Returned in `initialize.agentCapabilities._meta[CAPABILITY_KEY]` only
 /// after OS confinement succeeds. This reports startup state, not attestation
-/// of an arbitrary executable: the host must launch a trusted ra binary.
+/// of an arbitrary executable: the host must launch a trusted RecurAgent binary.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HostCapabilities {

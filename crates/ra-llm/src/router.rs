@@ -5,7 +5,7 @@
 //! the prefix `"anthropic"` selects the sub-provider, and the remainder
 //! `"claude-haiku"` identifies the model within that provider.
 //!
-//! Inspired by aitk's `RouterClient` pattern, adapted for ra's
+//! Inspired by aitk's `RouterClient` pattern, adapted for RecurAgent's
 //! `Send + Sync` `LlmProvider` trait.
 
 use std::collections::HashMap;

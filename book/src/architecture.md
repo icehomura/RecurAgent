@@ -1,15 +1,15 @@
-# Architecture Document: ra
+# Architecture Document: RecurAgent
 
 ## Overview
 
-ra is a 27-member Rust workspace (Edition 2024, rust-version 1.85.0) providing both a coding agent CLI and a multi-channel messaging gateway. Pure Rust TLS via rustls (no OpenSSL). Error handling via `eyre`/`color-eyre`.
+RecurAgent is a 27-member Rust workspace (Edition 2024, rust-version 1.85.0) providing both a coding agent CLI and a multi-channel messaging gateway. Pure Rust TLS via rustls (no OpenSSL). Error handling via `eyre`/`color-eyre`.
 
 **Workspace members** (from `Cargo.toml`):
 - **Layered core** (7): `ra-core` (shared types) → `ra-memory` + `ra-llm` → `ra-agent` (agent loop, tools, sandbox, MCP, compaction) → `ra-cli` (commands, config, serve/API), plus `ra-bus` (14 channels, sessions, coalescing, cron) and `ra-diagnostics` (powers `ra doctor`).
 - **Agent-adjacent** (5): `ra-pipeline` (DOT-graph workflows), `ra-plugin` (plugin/skill SDK), `ra-swarm` (multi-agent contract authoring), `ra-sandbox`, `ra-dora-mcp`.
 - **Bundled skill crates** (15): each app skill under `crates/app-skills/` is its own crate — `news`, `deep-search`, `deep-crawl`, `send-email`, `account-manager`, `time`, `weather`, `smart-home`, `wechat-bridge`, `skill-evolve`, and the `harness-starter-{generic,report,audio,coding}` templates — plus `platform-skills/voice` (ASR/TTS).
 
-(The web SPA and terminal client live in the separate `octos-web` and `octoscode` repositories and talk to `octos serve` over the UI Protocol.)
+(The web SPA and terminal client live in the separate `ra-web` and `ra-tui` repositories and talk to `ra serve` over the UI Protocol.)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -816,16 +816,16 @@ Plugins extend the agent with external tools via standalone executables. Each pl
 #### Directory Layout
 
 ```
-<octos_home>/plugins/                 # deployment-scoped plugins
-<octos_home>/skills/                  # deployment-scoped skills
-<octos_home>/bundled-app-skills/      # bundled app skills
+<ra_home>/plugins/                 # deployment-scoped plugins
+<ra_home>/skills/                  # deployment-scoped skills
+<ra_home>/bundled-app-skills/      # bundled app skills
 ~/.ra/profiles/<profile>/data/skills/
   └── my-plugin/
       ├── manifest.json  # plugin metadata + tool definitions
       └── my-plugin      # executable (or "main" as fallback)
 ```
 
-**Discovery order**: `Config::plugin_dirs_from_project()` scans deployment-scoped `<octos_home>/plugins`, `<octos_home>/skills`, `<octos_home>/bundled-app-skills`, and `OCTOS_SKILLS_PATH`; managed profile gateways then layer platform skills and the active profile's `data/skills/` directory on top. Legacy HOME-rooted globals (`~/.ra/plugins`, `~/.ra/skills`) are no longer scanned except for a one-shot migration warning.
+**Discovery order**: `Config::plugin_dirs_from_project()` scans deployment-scoped `<ra_home>/plugins`, `<ra_home>/skills`, `<ra_home>/bundled-app-skills`, and `RA_SKILLS_PATH`; managed profile gateways then layer platform skills and the active profile's `data/skills/` directory on top. Legacy HOME-rooted globals (`~/.ra/plugins`, `~/.ra/skills`) are no longer scanned except for a one-shot migration warning.
 
 #### PluginManifest
 
@@ -1098,7 +1098,7 @@ JSONL persistence at `.ra/sessions/{key}.jsonl`.
 
 - **In-memory cache**: LRU with disk sync on write
 - **Filenames**: Percent-encoded SessionKey, truncated to 183 chars with `_{hash:016X}` suffix on truncation to prevent collisions
-- **Rolling segments**: Files roll into `<name>.segments/NNNNNN.jsonl` at `OCTOS_SESSION_SEGMENT_BYTES` (8 MiB); loads read the newest segments up to `OCTOS_SESSION_LOAD_BUDGET_BYTES` (32 MiB, 0 = all)
+- **Rolling segments**: Files roll into `<name>.segments/NNNNNN.jsonl` at `RA_SESSION_SEGMENT_BYTES` (8 MiB); loads read the newest segments up to `RA_SESSION_LOAD_BUDGET_BYTES` (32 MiB, 0 = all)
 - **Crash safety**: Atomic write-then-rename
 - **Forking**: `fork()` creates child session with `parent_key` tracking, copies last N messages
 
@@ -1197,7 +1197,7 @@ Many methods are gated by a **negotiated capability flag** (~22 `*.v1` tokens su
 
 **Web UI**: Embedded SPA via `rust-embed` served as the fallback handler. Session sidebar, chat interface, UI Protocol WebSocket streaming, and dashboard/admin surfaces share the same `ra serve` process.
 
-**Prometheus Metrics**: `ra_tool_calls_total` (counter, labels: tool, success), `octos_tool_call_duration_seconds` (histogram, label: tool), `ra_llm_tokens_total` (counter, label: direction). Powered by `metrics` + `metrics-exporter-prometheus` crates.
+**Prometheus Metrics**: `ra_tool_calls_total` (counter, labels: tool, success), `ra_tool_call_duration_seconds` (histogram, label: tool), `ra_llm_tokens_total` (counter, label: direction). Powered by `metrics` + `metrics-exporter-prometheus` crates.
 
 ### Session Compaction (Gateway)
 
@@ -1378,7 +1378,7 @@ crates/
 - Tool output sanitization (`sanitize.rs`): strips base64 data URIs, long hex strings (64+ chars), and **credential redaction** with 7 regex patterns covering OpenAI (`sk-...`), Anthropic (`sk-ant-...`), AWS (`AKIA...`), GitHub (`ghp_/gho_/ghs_/ghr_/github_pat_...`), GitLab (`glpat-...`), Bearer tokens, and generic `password`/`api_key` assignments
 - UTF-8 safe truncation via `truncate_utf8()` across all tool outputs and email bodies
 - Session file collision prevention via percent-encoded filenames with hash suffix on truncation
-- Session files roll into 8 MiB segments and loads stop at `OCTOS_SESSION_LOAD_BUDGET_BYTES` (32 MiB), preventing OOM on oversized histories
+- Session files roll into 8 MiB segments and loads stop at `RA_SESSION_LOAD_BUDGET_BYTES` (32 MiB), preventing OOM on oversized histories
 - Atomic write-then-rename for session persistence (crash safety)
 - API server binds to 127.0.0.1 by default (not 0.0.0.0)
 - Channel access control via `allowed_senders` lists
@@ -1392,9 +1392,9 @@ crates/
 
 ### Why Rust
 
-ra uses Rust with the tokio async runtime, which provides significant advantages over Python (OpenClaw, etc.) and Node.js (NanoCloud, etc.) agent frameworks for concurrent session handling:
+RecurAgent uses Rust with the tokio async runtime, which provides significant advantages over Python (OpenClaw, etc.) and Node.js (NanoCloud, etc.) agent frameworks for concurrent session handling:
 
-**True parallelism** — Tokio tasks run across all CPU cores simultaneously. Python has the GIL, so even with asyncio, CPU-bound work (JSON parsing, context compaction, token counting) is single-core. Node.js is single-threaded entirely. In ra, 10 concurrent sessions doing context compaction actually execute in parallel across cores.
+**True parallelism** — Tokio tasks run across all CPU cores simultaneously. Python has the GIL, so even with asyncio, CPU-bound work (JSON parsing, context compaction, token counting) is single-core. Node.js is single-threaded entirely. In RecurAgent, 10 concurrent sessions doing context compaction actually execute in parallel across cores.
 
 **Memory efficiency** — No garbage collector, no runtime overhead per object. Agent sessions are compact structs on the heap. A Python agent session carries interpreter overhead, GC metadata on every object, and dict-based attribute lookup. This matters with hundreds of sessions and large conversation histories in memory.
 
@@ -1447,7 +1447,7 @@ LLM response: [web_search, read_file, send_email]
 
 ### Sub-Agents & Peers
 
-ra supports two multi-agent shapes with opposite ownership models.
+RecurAgent supports two multi-agent shapes with opposite ownership models.
 
 **Sub-agents** (`spawn` tool) are children of the current turn:
 

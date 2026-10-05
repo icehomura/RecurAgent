@@ -218,13 +218,23 @@ impl GeminiProvider {
     /// Attach the auth header for the active mode (resolving a fresh Vertex
     /// token when needed).
     async fn apply_auth(&self, req: reqwest::RequestBuilder) -> Result<reqwest::RequestBuilder> {
-        Ok(match &self.auth {
+        let mut req = match &self.auth {
             GeminiAuth::ApiKey(key) => req.header("x-goog-api-key", key.expose_secret()),
             GeminiAuth::Vertex { token, .. } => {
                 let t = token.token().await?;
                 req.header("Authorization", format!("Bearer {t}"))
             }
-        })
+        };
+        // OpenCode (Zen and Go tiers) requires a per-conversation session
+        // header before it will route the request.
+        for (name, value) in crate::attribution::opencode_headers(
+            self.provider_name(),
+            &self.base_url,
+            crate::attribution::current_session_id().as_deref(),
+        ) {
+            req = req.header(name, value);
+        }
+        Ok(req)
     }
 
     fn build_request(
@@ -917,7 +927,7 @@ fn sanitize_schema_for_gemini(value: &mut serde_json::Value) {
 }
 
 /// Project a host JSON Schema onto the subset documented for Gemini function
-/// declarations. ra retains the original [`ToolSpec`], while only this
+/// declarations. RecurAgent retains the original [`ToolSpec`], while only this
 /// cloned projection is sent to Gemini. Removing provider-unsupported
 /// constraints here therefore changes model-side guidance without mutating the
 /// canonical tool contract used by the host and the tool implementation.
@@ -960,7 +970,7 @@ fn project_gemini_tool_schema(value: &mut serde_json::Value, depth: usize) {
 
     // Vertex's FunctionDeclaration Schema documents this finite OpenAPI
     // subset. AI Studio uses the same generateContent declaration shape. Do
-    // not forward every keyword accepted by ra's Draft-07 validator: an
+    // not forward every keyword accepted by RecurAgent's Draft-07 validator: an
     // unknown field invalidates the entire request and every otherwise-valid
     // tool declaration in it.
     schema.retain(|key, _| {
@@ -993,7 +1003,7 @@ fn sanitize_schema_recursive(value: &mut serde_json::Value, depth: usize) {
         // Gemini's tool API rejects unknown field names with HTTP 400
         // ("Unknown name <field>"), even for the conventional `x-*` JSON
         // Schema vendor-extension namespace. Strip them before the schema
-        // reaches the wire so host-only metadata (e.g. ra's
+        // reaches the wire so host-only metadata (e.g. RecurAgent's
         // `x-ra-host-config-keys` on the deep-search manifest) doesn't
         // crash plan_and_search workers when routing lands on Gemini.
         obj.retain(|k, _| !k.starts_with("x-"));

@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Compatibility fixture skill for the Octos harness compat gate.
+# Compatibility fixture skill for the Ra harness compat gate.
 #
 # Protocol:
 #   argv[1] = tool name (currently only "summarize_text")

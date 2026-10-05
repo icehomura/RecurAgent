@@ -166,7 +166,7 @@ jobs:
             -Port 2222 `
             -Version v0.0.0-test `
             -RemoteRoot 'C:\ra-ci' `
-            -ServiceName OctosServeTest `
+            -ServiceName RecurAgentServeTest `
             -ServePort 50080 `
             -AuthToken test-token `
             -DryRun 2>&1
@@ -181,14 +181,14 @@ jobs:
           if ($deployText -notmatch 'icacls \$tokenTmp /inheritance:r') {
             throw 'deploy dry run did not restrict the serve-token file ACLs (#2496)'
           }
-          if ($deployText -notmatch 'set /p OCTOS_AUTH_TOKEN=<') {
+          if ($deployText -notmatch 'set /p ra_AUTH_TOKEN=<') {
             throw 'deploy dry run did not read the token from the serve-token file in the launcher (#2496)'
           }
           $envLines = $deployText -split "`r?`n" | Where-Object { $_ -match 'AppEnvironmentExtra' }
           if (-not $envLines) {
             throw 'deploy dry run lost the non-secret service environment'
           }
-          if ($envLines -match 'OCTOS_AUTH_TOKEN=') {
+          if ($envLines -match 'ra_AUTH_TOKEN=') {
             throw 'deploy dry run still delivers the token via AppEnvironmentExtra (#2496)'
           }
           if ($deployText -match 'auth_token = \$authToken') {
@@ -204,7 +204,7 @@ jobs:
           $uninstall = & .\scripts\deploy.ps1 `
             -HostName win.example.invalid `
             -RemoteRoot 'C:\ra-ci' `
-            -ServiceName OctosServeTest `
+            -ServiceName RecurAgentServeTest `
             -Uninstall `
             -Purge `
             -DryRun 2>&1
@@ -413,7 +413,7 @@ jobs:
         run: cargo test -p ra-sandbox
 
       # RFC-2 (issue #1291): validate every bundled `crates/app-skills/*/manifest.json`
-      # against the strict ra JSON schema validator. A failure here means a
+      # against the strict RecurAgent JSON schema validator. A failure here means a
       # bundled skill ships a manifest shape that strict LLM-provider validators
       # (Moonshot Kimi K2.6 etc.) will reject at request time — see the
       # 2026-05-25 mofa-slides v0.5.0 incident write-up.
@@ -952,7 +952,7 @@ jobs:
     #
     # BLOCKING. This job carried `continue-on-error: ${{ github.event_name ==
     # 'pull_request' }}` while it was red on `main` for pre-existing reasons
-    # (`session_scope` → #1838, `run_phase_injects_octos_skill_dir_env` → #1860,
+    # (`session_scope` → #1838, `run_phase_injects_ra_skill_dir_env` → #1860,
     # then `git_worktree`'s `GIT_BIN` + `ra-plugin`'s drift guard → #1884).
     # Those are all fixed and the job is green on `main`, which is the condition
     # that note set for removing the flag.
@@ -1377,7 +1377,7 @@ jobs:
       - name: Build dashboard bundle (embedded at compile time)
         run: ./scripts/build-dashboard.sh
 
-      - name: Build ra with all features
+      - name: Build RecurAgent with all features
         run: cargo build --release -p ra-cli --features "ra-cli/api,ra-cli/telegram"
 
       - name: Install Homebrew ffmpeg (macOS)
@@ -1399,9 +1399,9 @@ jobs:
         run: |
           echo '{"allow_admin_shell": true}' > /tmp/ra-ci-serve.json
 
-      - name: Start ra serve
+      - name: Start RecurAgent serve
         run: |
-          OCTOS_AUTH_TOKEN=ci-test-token ./target/release/ra serve --port 3000 \
+          ra_AUTH_TOKEN=ci-test-token ./target/release/ra serve --port 3000 \
             --config /tmp/ra-ci-serve.json &
           # Wait for server to be ready.
           #
@@ -1420,7 +1420,7 @@ jobs:
             sleep 1
           done
           if [ -z "$ready" ]; then
-            echo "::error::ra serve never answered /health on port 3000 after 30s."
+            echo "::error::RecurAgent serve never answered /health on port 3000 after 30s."
             exit 1
           fi
 
@@ -1474,7 +1474,7 @@ jobs:
       # regression without making model phrasing a merge gate.
       - name: Run e2e tool regression tests
         working-directory: e2e
-        run: OCTOS_TEST_URL=http://localhost:3000 OCTOS_AUTH_TOKEN=ci-test-token npx playwright test --reporter=line tests/tool-use-regression.spec.ts
+        run: ra_TEST_URL=http://localhost:3000 ra_AUTH_TOKEN=ci-test-token npx playwright test --reporter=line tests/tool-use-regression.spec.ts
 
       # #2073 — the model-INDEPENDENT half of the m9 protocol suite, gating.
       #
@@ -1493,9 +1493,9 @@ jobs:
       # nightly.yml.
       - name: Run m9 protocol conformance (model-independent)
         working-directory: e2e
-        run: OCTOS_TEST_URL=http://localhost:3000 OCTOS_AUTH_TOKEN=ci-test-token npx playwright test --reporter=line tests/m9-protocol-session-open.spec.ts tests/m9-protocol-diff-preview.spec.ts
+        run: ra_TEST_URL=http://localhost:3000 ra_AUTH_TOKEN=ci-test-token npx playwright test --reporter=line tests/m9-protocol-session-open.spec.ts tests/m9-protocol-diff-preview.spec.ts
 
-      - name: Stop ra serve
+      - name: Stop RecurAgent serve
         if: always()
         run: pkill -f "ra serve" || true
 

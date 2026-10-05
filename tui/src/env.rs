@@ -1,20 +1,20 @@
 //! ra/legacy environment + user-path compatibility (`ra-fork.md` follow-up #2).
 //!
-//! Every environment read prefers the new ra spelling and falls back to the
+//! Every environment read prefers the new RecurAgent spelling and falls back to the
 //! pre-rename one:
 //!
 //! | New | Legacy | Scope |
 //! |---|---|---|
-//! | `RA_TUI_*` | `OCTOSCODE_*` | behaviour owned by this client |
-//! | `RA_*` | `OCTOS_*` | names shared with the kernel (token, home, prefix) |
+//! | `RA_TUI_*` | `RA_TUI_*` | behaviour owned by this client |
+//! | `RA_*` | `RA_*` | names shared with the kernel (token, home, prefix) |
 //!
-//! Paths follow the same rule: `~/.ra` is preferred when it exists, a legacy
-//! `~/.ra` that already holds state is used when only it exists, and a fresh
-//! install targets `~/.ra`. Legacy state is never migrated or deleted.
+//! Paths use the new RecurAgent spelling only: `~/.ra`, `~/.config/ra-tui`. There is no
+//! backward-compat for state directories — legacy locations are neither read
+//! nor migrated. The env-var fallback above is the only compatibility kept.
 //!
 //! Env reads are routed through [`env_compat`] / [`env_os_compat`]; the pure
-//! cores ([`pick_compat`], [`pick_home_entry`]) are split out so the fallback
-//! order is unit-testable without mutating process env (`std::env::set_var` is
+//! cores ([`pick_compat`], [`home_entry`]) are split out so the fallback order
+//! is unit-testable without mutating process env (`std::env::set_var` is
 //! `unsafe` under edition 2024 + `unsafe_code = deny`).
 
 use std::path::{Path, PathBuf};
@@ -52,24 +52,15 @@ pub fn home_dir() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-/// Pick the ra-side entry under `home`: `home/<new_rel>` when it exists, else
-/// `home/<legacy_rel>` when *only* that exists (keep using the legacy state we
-/// found), else `home/<new_rel>` (fresh installs create the ra path).
-pub fn pick_home_entry(home: &Path, new_rel: &str, legacy_rel: &str) -> PathBuf {
-    let new = home.join(new_rel);
-    if new.exists() {
-        return new;
-    }
-    let legacy = home.join(legacy_rel);
-    if legacy.exists() {
-        return legacy;
-    }
-    new
+/// The ra-side entry under `home`: `home/<rel>`. Fresh installs create it; no
+/// legacy location is consulted (state dirs have no backward-compat).
+pub fn home_entry(home: &Path, rel: &str) -> PathBuf {
+    home.join(rel)
 }
 
-/// [`pick_home_entry`] rooted at [`home_dir`]; `None` when no home resolves.
-pub fn ra_or_legacy_home_entry(new_rel: &str, legacy_rel: &str) -> Option<PathBuf> {
-    home_dir().map(|home| pick_home_entry(&home, new_rel, legacy_rel))
+/// [`home_entry`] rooted at [`home_dir`]; `None` when no home resolves.
+pub fn ra_home_entry(rel: &str) -> Option<PathBuf> {
+    home_dir().map(|home| home_entry(&home, rel))
 }
 
 #[cfg(test)]
@@ -90,44 +81,23 @@ mod tests {
     }
 
     #[test]
-    fn home_entry_prefers_new_then_legacy_then_defaults_new() {
+    fn home_entry_is_the_new_path() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let home = tmp.path();
 
-        // Neither exists → fresh installs target the ra entry.
-        assert_eq!(
-            pick_home_entry(home, ".ra", ".octos"),
-            home.join(".ra"),
-            "neither present must default to the new entry"
-        );
+        assert_eq!(home_entry(home, ".ra"), home.join(".ra"));
 
-        // Only legacy exists → keep using the legacy state.
-        std::fs::create_dir(home.join(".octos")).expect("create legacy");
-        assert_eq!(
-            pick_home_entry(home, ".ra", ".octos"),
-            home.join(".octos"),
-            "legacy state must still be honoured when it is all there is"
-        );
-
-        // Both exist → new wins.
-        std::fs::create_dir(home.join(".ra")).expect("create new");
-        assert_eq!(
-            pick_home_entry(home, ".ra", ".octos"),
-            home.join(".ra"),
-            "the ra entry must win once it exists"
-        );
+        // The new path is returned whether or not it exists yet, and a stray
+        // legacy dir is never consulted (state dirs have no backward-compat).
+        std::fs::create_dir(home.join(".ra")).expect("create stray legacy dir");
+        assert_eq!(home_entry(home, ".ra"), home.join(".ra"));
     }
 
     #[test]
-    fn ra_or_legacy_home_entry_uses_env_home() {
-        // The live-process wrapper: no assertion about the host's HOME values,
-        // only that a resolved entry is the ra or legacy spelling.
-        if let Some(entry) = ra_or_legacy_home_entry(".ra", ".octos") {
-            let name = entry.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            assert!(
-                name == ".ra" || name == ".octos",
-                "unexpected entry {entry:?}"
-            );
+    fn ra_home_entry_uses_env_home() {
+        // The live-process wrapper: only the new spelling is ever returned.
+        if let Some(entry) = ra_home_entry(".ra") {
+            assert_eq!(entry.file_name().and_then(|n| n.to_str()), Some(".ra"));
         }
     }
 }

@@ -1,6 +1,6 @@
-# ra User Guide
+# RecurAgent User Guide
 
-A comprehensive guide for deploying, configuring, and using the ra AI agent platform.
+A comprehensive guide for deploying, configuring, and using the RecurAgent AI agent platform.
 
 ---
 
@@ -38,17 +38,17 @@ A comprehensive guide for deploying, configuring, and using the ra AI agent plat
 
 ## 1. Overview
 
-ra is a Rust-native AI agent platform that runs in three modes:
+RecurAgent is a Rust-native AI agent platform that runs in three modes:
 
 - **`ra serve`** — Control plane with admin dashboard + ~140 REST endpoints. Manages multiple **profiles** (bot instances), each running as an isolated gateway child process with its own config, memory, sessions, and messaging channels. On first launch with no admin profile, the embedded dashboard runs the **setup wizard**.
 - **`ra gateway`** — A single gateway instance serving messaging channels (Telegram, Discord, DingTalk, Slack, WhatsApp, Matrix, Feishu, Email, WeChat, WeCom, WeCom Bot, QQ Bot, Twilio).
 - **`ra chat`** — Interactive CLI chat for development and testing.
 
-Chat and `ra acp` use the same OUP session runtime as OctosCode, via an
+Chat and `ra acp` use the same OUP session runtime as ra-tui, via an
 in-process connection. Both require the default `api` feature; no extra server
 process or network listener is required. They share OUP history, compaction,
 permissions and cancellation. ACP supports `session/load` replay and typed tool
-permissions; structured OUP user questions remain a terminal/OctosCode feature.
+permissions; structured OUP user questions remain a terminal/ra-tui feature.
 
 ### Architecture
 
@@ -94,9 +94,9 @@ If you're running behind a reverse proxy (e.g., Caddy or Nginx), configure it to
 
 Deployment behavior depends on `config.mode`:
 
-- `local` — Standalone machine. `/` redirects to `/app/` (the octos-web app); when the web bundle isn't embedded it falls back to `/admin/`.
+- `local` — Standalone machine. `/` redirects to `/app/` (the ra-web app); when the web bundle isn't embedded it falls back to `/admin/`.
 - `tenant` — Default end-user machine setup. Direct installs land on `/app/` the same way; managed registration setup can also configure the machine's public tunnel. `/admin/` remains the admin dashboard.
-- `cloud` — Advanced relay-host setup. `/` serves the landing page, `/app/` serves the octos-web app, and `/admin/` remains the admin dashboard.
+- `cloud` — Advanced relay-host setup. `/` serves the landing page, `/app/` serves the ra-web app, and `/admin/` remains the admin dashboard.
 
 `~/.ra/config.json` is the file that `ra serve` reads at startup. Tenant and local installs create it through the normal installers; host installs can now bootstrap it with `scripts/cloud-host-deploy.sh`, which writes `mode: "cloud"` plus the relay settings used by the landing page and frps plugin.
 
@@ -118,7 +118,7 @@ That script:
 
 For unattended setup, pass `--config <env-file> --non-interactive`.
 
-**Per-tenant frps authentication.** Tenants no longer share a single FRPS auth token. Each tenant gets its own `tunnel_token` (a UUID, generated at registration time) that the frpc client sends in `metadatas.token`; `frps` forwards Login and NewProxy operations to an ra plugin endpoint that validates the token against the tenant store and caches the `run_id → tenant_id` mapping for subsequent proxy requests. Both `frps` and `frpc` are configured with `auth.token = ""` — the built-in token check is a no-op and all tenant identity rides in the metadata field.
+**Per-tenant frps authentication.** Tenants no longer share a single FRPS auth token. Each tenant gets its own `tunnel_token` (a UUID, generated at registration time) that the frpc client sends in `metadatas.token`; `frps` forwards Login and NewProxy operations to an RecurAgent plugin endpoint that validates the token against the tenant store and caches the `run_id → tenant_id` mapping for subsequent proxy requests. Both `frps` and `frpc` are configured with `auth.token = ""` — the built-in token check is a no-op and all tenant identity rides in the metadata field.
 
 ### 2.1.2 Tenant Bootstrap
 
@@ -127,7 +127,7 @@ End users register themselves via the cloud host's public signup page (e.g., `ht
 A typical emitted command (macOS/Linux):
 
 ```bash
-curl -fsSL https://github.com/your-org/ra/releases/latest/download/install.sh | bash -s -- \
+curl -fsSL https://github.com/icehomura/ra/releases/latest/download/install.sh | bash -s -- \
     --tunnel \
     --tenant-name alice \
     --frps-token <per-tenant-uuid> \
@@ -228,7 +228,7 @@ Once logged in, the dashboard provides:
 
 When `ra serve` boots for the first time without an admin profile, the embedded dashboard launches a **setup wizard** that walks the operator through:
 
-1. **Deployment mode** — choose between local-only, self-hosted cloud + tenant, or ra Cloud signup. Guidance text differs per mode.
+1. **Deployment mode** — choose between local-only, self-hosted cloud + tenant, or RecurAgent Cloud signup. Guidance text differs per mode.
 2. **SMTP configuration** — needed for OTP email login (skippable for local-only deployments).
 3. **LLM provider** — pick a provider, enter the API key, and run a live test before saving.
 4. **Admin profile** — name, channels, and optional Family Plan setup.
@@ -255,7 +255,7 @@ Source: `crates/ra-cli/src/api/admin_setup.rs`, `dashboard/src/pages/wizard/`.
   sudo launchctl unload /Library/LaunchDaemons/io.ra.serve.plist
   ```
 
-- **`server/shutdown` (WebSocket, local solo only)** — a UI Protocol client connected over the authenticated WebSocket at `/api/ui-protocol/ws` can stop the server the same way Ctrl+C does: connections drain, gateways stop, the process exits. The call is idempotent, and the stop fires ~250 ms after the request is handled; under outbound backpressure the client may miss the acknowledgement, but the stop still happens. It is accepted only on a local deployment (`config.mode = "local"`) with solo login opted in (`ra serve --solo` / `OCTOS_SOLO_LOGIN=1`) and only by an HTTP serve (`ra serve` without `--stdio`); fleet/hosted servers and `--stdio` serve answer `invalid_request` (-32600) with `data.kind: "server_shutdown_unavailable"` and keep running, and session-scoped connections can never call it. One call stops the process for every connected client — their running turns are cancelled. On a solo serve this follows the local-solo trust model: any local process that can reach the WebSocket can stop the server. A host-managed serve (`ra serve --host-managed`, see `docs/HOST_MANAGED_SERVE.md`) never offers it: its host stops it by closing stdin.
+- **`server/shutdown` (WebSocket, local solo only)** — a UI Protocol client connected over the authenticated WebSocket at `/api/ui-protocol/ws` can stop the server the same way Ctrl+C does: connections drain, gateways stop, the process exits. The call is idempotent, and the stop fires ~250 ms after the request is handled; under outbound backpressure the client may miss the acknowledgement, but the stop still happens. It is accepted only on a local deployment (`config.mode = "local"`) with solo login opted in (`ra serve --solo` / `RA_SOLO_LOGIN=1`) and only by an HTTP serve (`ra serve` without `--stdio`); fleet/hosted servers and `--stdio` serve answer `invalid_request` (-32600) with `data.kind: "server_shutdown_unavailable"` and keep running, and session-scoped connections can never call it. One call stops the process for every connected client — their running turns are cancelled. On a solo serve this follows the local-solo trust model: any local process that can reach the WebSocket can stop the server. A host-managed serve (`ra serve --host-managed`, see `docs/HOST_MANAGED_SERVE.md`) never offers it: its host stops it by closing stdin.
 
 ### 2.6 Giving an External Agent Session Access (Work Secrets)
 
@@ -286,7 +286,7 @@ Full walkthrough (including a minimal Python client): `docs/ra_WORK_SECRET_SESSI
 
 ## 3. Setting Up LLM Providers
 
-ra supports 17 LLM provider families out of the box. Cloud providers require an API key set as an environment variable; local servers (see [3.6](#36-local-models-llamacpp-ollama-vllm-lm-studio)) need none.
+RecurAgent supports 17 LLM provider families out of the box. Cloud providers require an API key set as an environment variable; local servers (see [3.6](#36-local-models-llamacpp-ollama-vllm-lm-studio)) need none.
 
 ### 3.1 Supported Providers
 
@@ -413,7 +413,7 @@ ra chat --model gpt-4o  # auto-detects provider from model name
 
 #### Method 3: Auto-Detection
 
-When `provider` is omitted, ra detects the provider from the model name:
+When `provider` is omitted, RecurAgent detects the provider from the model name:
 
 | Model Pattern | Detected Provider |
 |--------------|-------------------|
@@ -497,7 +497,7 @@ Credentials are stored in `~/.ra/auth.json` (file mode 0600). The auth store is 
 
 ### 3.6 Local Models (llama.cpp, Ollama, vLLM, LM Studio)
 
-Every popular local model server speaks the same OpenAI-compatible API, so ra unifies them under **one provider family: `local`**. You don't need to care which engine serves the model — pick `local`, point `base_url` at the server, done. The engine names also work as aliases (`"provider": "llamacpp"`, `"lmstudio"`, … all resolve to `local`).
+Every popular local model server speaks the same OpenAI-compatible API, so RecurAgent unifies them under **one provider family: `local`**. You don't need to care which engine serves the model — pick `local`, point `base_url` at the server, done. The engine names also work as aliases (`"provider": "llamacpp"`, `"lmstudio"`, … all resolve to `local`).
 
 The zero-config default targets llama.cpp's `llama-server` on its standard port:
 
@@ -856,7 +856,7 @@ This stops the gateway process (if running) and cascades to all sub-accounts.
 curl http://localhost:50080/api/admin/profiles/my-bot/logs
 
 # Main daemon SSE log stream with initial replay and optional filters
-curl -H "Authorization: Bearer $OCTOS_ADMIN_TOKEN" \
+curl -H "Authorization: Bearer $RA_ADMIN_TOKEN" \
   'http://localhost:50080/api/admin/serve/logs?tail_n=200&grep=.*error.*'
 
 # Provider metrics
@@ -1242,7 +1242,7 @@ Check for new issues in the GitHub repo and summarize any urgent ones.
 
 ## 12. Bundled App Skills
 
-Bundled app skills ship as compiled binaries alongside the `ra` binary. On gateway startup they are written into `<octos_home>/bundled-app-skills/<name>/`, while operator or user customizations are installed into the active profile's `~/.ra/profiles/<profile>/data/skills/` directory so a re-deploy never overwrites them. The full list lives in `BUNDLED_APP_SKILLS` (`crates/ra-agent/src/bundled_app_skills.rs`):
+Bundled app skills ship as compiled binaries alongside the `ra` binary. On gateway startup they are written into `<ra_home>/bundled-app-skills/<name>/`, while operator or user customizations are installed into the active profile's `~/.ra/profiles/<profile>/data/skills/` directory so a re-deploy never overwrites them. The full list lives in `BUNDLED_APP_SKILLS` (`crates/ra-agent/src/bundled_app_skills.rs`):
 
 > **Bundled (auto-installed):** news, deep-search, deep-crawl, send-email, account-manager, time (binary `clock`), weather, smart-home, skill-evolve. Plus the platform-skill `voice`.
 
@@ -1634,7 +1634,7 @@ WebSocket bridge for WeChat personal accounts. Connects to the WeChat client via
 **Requires:** A bridge configured for the profile first (Settings → Smart Home)
 **Context-triggered:** Activated when conversation mentions "smart home", "device", "light", "thermostat", "智能家居", "开灯", "关灯", "空调", "窗帘"
 
-Lists and controls smart-home devices (lights, thermostats, curtains, speakers, etc.) through the bridge configured for the active profile (e.g. Home Assistant). Reads the bridge URL and token directly from the profile — does not proxy through the running gateway. Camera video streaming stays a human-facing, WebSocket-only feature in octos-web and is not exposed to the agent.
+Lists and controls smart-home devices (lights, thermostats, curtains, speakers, etc.) through the bridge configured for the active profile (e.g. Home Assistant). Reads the bridge URL and token directly from the profile — does not proxy through the running gateway. Camera video streaming stays a human-facing, WebSocket-only feature in ra-web and is not exposed to the agent.
 
 #### smart_home_list_devices Parameters
 
@@ -1753,9 +1753,9 @@ ASR_API_URL=http://127.0.0.1:8091 ra serve --port 50080
 The service must accept `POST /v1/audio/transcriptions` with JSON fields
 `file` (base64 audio), optional `language`, and `response_format`. It must
 return JSON containing a string `text` field. A successful empty `text` is
-treated as a no-speech rejection. ra probes `GET /health` for readiness;
+treated as a no-speech rejection. RecurAgent probes `GET /health` for readiness;
 services without that route may return `404` or `405`. If `ASR_API_URL` is
-unset or blank, ra uses the existing OMiniX ASR route.
+unset or blank, RecurAgent uses the existing OMiniX ASR route.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -1777,7 +1777,7 @@ Converts text to speech using preset voices.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `text` | string | *(required)* | Text to synthesize |
-| `output_path` | string | `/tmp/octos_tts_<ts>.wav` | Output file path |
+| `output_path` | string | `/tmp/ra_tts_<ts>.wav` | Output file path |
 | `language` | string | `"chinese"` | `"chinese"`, `"english"`, `"japanese"`, `"korean"` |
 | `speaker` | string | `"vivian"` | Voice preset |
 
@@ -2016,8 +2016,8 @@ The tool binary receives JSON input on stdin and outputs JSON on stdout:
 Profile gateways load skills from these directories, in priority order:
 
 1. `~/.ra/profiles/<profile>/data/skills/` (profile-scoped custom skills)
-2. `<octos_home>/bundled-app-skills/` (bundled: news, deep-search, etc.)
-3. `<octos_home>/platform-skills/` (admin-loaded platform skills, such as ASR/TTS)
+2. `<ra_home>/bundled-app-skills/` (bundled: news, deep-search, etc.)
+3. `<ra_home>/platform-skills/` (admin-loaded platform skills, such as ASR/TTS)
 
 Standalone project runs can also load `<project>/.ra/plugins/` and
 `<project>/.ra/skills/`. The old HOME-rooted global directories
@@ -2280,10 +2280,10 @@ Bot: [uses translate tool with text="Hello world", target_lang="JA"]
 | Variable | Description |
 |----------|-------------|
 | **Long-running turns** | |
-| `OCTOS_CONVERGENCE_LLM_CALLS` | Tools-disabled reflection interval by LLM calls (default `20`) |
-| `OCTOS_CONVERGENCE_ACTIVE_TOKENS` | Reflection interval by uncached input + output tokens (default `100000`) |
-| `OCTOS_CONVERGENCE_SECS` | Reflection interval by elapsed seconds (default `300`) |
-| `OCTOS_FILE_CHURN_THRESHOLD` | Successful edits to one file before an early reflection; the second threshold also requests model/provider escalation (default `5`) |
+| `RA_CONVERGENCE_LLM_CALLS` | Tools-disabled reflection interval by LLM calls (default `20`) |
+| `RA_CONVERGENCE_ACTIVE_TOKENS` | Reflection interval by uncached input + output tokens (default `100000`) |
+| `RA_CONVERGENCE_SECS` | Reflection interval by elapsed seconds (default `300`) |
+| `RA_FILE_CHURN_THRESHOLD` | Successful edits to one file before an early reflection; the second threshold also requests model/provider escalation (default `5`) |
 | **LLM Providers** | |
 | `ANTHROPIC_API_KEY` | Anthropic (Claude) API key |
 | `OPENAI_API_KEY` | OpenAI API key |
@@ -2327,12 +2327,12 @@ Bot: [uses translate tool with text="Hello world", target_lang="JA"]
 | `ASR_API_URL` | Dedicated batch-ASR service base URL; overrides OMiniX for transcription |
 | `OMINIX_API_URL` | OminiX ASR/TTS API URL |
 | **Session storage** | |
-| `OCTOS_SESSION_SEGMENT_BYTES` | Active session file size at which it seals into a segment (default 8 MiB) |
-| `OCTOS_SESSION_LOAD_BUDGET_BYTES` | Session history bytes a plain load reads, newest first (default 32 MiB; `0` = unlimited) |
+| `RA_SESSION_SEGMENT_BYTES` | Active session file size at which it seals into a segment (default 8 MiB) |
+| `RA_SESSION_LOAD_BUDGET_BYTES` | Session history bytes a plain load reads, newest first (default 32 MiB; `0` = unlimited) |
 | **System** | |
 | `RUST_LOG` | Log level (error/warn/info/debug/trace) |
-| `OCTOS_LOG_JSON` | Enable JSON-formatted logs (set to any value) |
-| `OCTOS_HOME` | Override the global data/config directory (default: `~/.ra`) |
+| `RA_LOG_JSON` | Enable JSON-formatted logs (set to any value) |
+| `RA_HOME` | Override the global data/config directory (default: `~/.ra`) |
 | `TUNNEL_DOMAIN` | Tunnel base domain for tenant/cloud deployments |
 | `FRPS_SERVER` | frps relay host for tenant/cloud deployments |
 
@@ -2398,7 +2398,7 @@ Bot: [uses translate tool with text="Hello world", target_lang="JA"]
 
 ## 16. Matrix Appservice (Palpo)
 
-ra can run as a [Matrix Application Service](https://spec.matrix.org/latest/application-service-api/) (appservice) behind a Matrix homeserver. This section describes how to deploy ra alongside [Palpo](https://github.com/palpo-im/palpo) using Docker Compose so that users can talk to the bot from any Matrix client.
+RecurAgent can run as a [Matrix Application Service](https://spec.matrix.org/latest/application-service-api/) (appservice) behind a Matrix homeserver. This section describes how to deploy RecurAgent alongside [Palpo](https://github.com/palpo-im/palpo) using Docker Compose so that users can talk to the bot from any Matrix client.
 
 ### 16.1 How It Works
 
@@ -2415,12 +2415,12 @@ Matrix Client (Element, etc.)
   Palpo ──► Matrix Client
 ```
 
-Palpo loads a **registration YAML** at startup that tells it which user namespaces belong to ra and where to forward events. ra listens on a dedicated port (default `8009`) for those events and replies through Palpo's client-server API.
+Palpo loads a **registration YAML** at startup that tells it which user namespaces belong to RecurAgent and where to forward events. RecurAgent listens on a dedicated port (default `8009`) for those events and replies through Palpo's client-server API.
 
 ### 16.2 Directory Layout
 
 ```
-palpo_with_octos/
+palpo_with_ra/
 ├── compose.yml                        # Docker Compose file
 ├── palpo.toml                         # Palpo homeserver config
 ├── appservices/
@@ -2440,7 +2440,7 @@ palpo_with_octos/
 
 #### 1. Generate Tokens
 
-The appservice registration and the ra profile must share two tokens. Generate them once:
+The appservice registration and the RecurAgent profile must share two tokens. Generate them once:
 
 ```bash
 # Generate as_token and hs_token (any random hex string works)
@@ -2465,15 +2465,15 @@ url: "http://ra:8009"
 as_token: "<your-as-token>"
 hs_token: "<your-hs-token>"
 
-sender_localpart: octosbot
+sender_localpart: rabot
 rate_limited: false
 
 namespaces:
   users:
     - exclusive: true
-      regex: "@octosbot_.*:your\\.server\\.name"
+      regex: "@rabot_.*:your\\.server\\.name"
     - exclusive: true
-      regex: "@octosbot:your\\.server\\.name"
+      regex: "@rabot:your\\.server\\.name"
   aliases: []
   rooms: []
 ```
@@ -2483,9 +2483,9 @@ Key fields:
 | Field | Description |
 |-------|-------------|
 | `url` | Where Palpo sends events. Use the Docker service name (e.g. `http://ra:8009`), not `localhost`. |
-| `as_token` | Token that ra uses when calling Palpo's API. |
+| `as_token` | Token that RecurAgent uses when calling Palpo's API. |
 | `hs_token` | Token that Palpo uses when pushing events to ra. |
-| `sender_localpart` | The bot's Matrix local username (becomes `@octosbot:your.server.name`). |
+| `sender_localpart` | The bot's Matrix local username (becomes `@rabot:your.server.name`). |
 | `namespaces.users` | Regex patterns for user IDs the appservice manages. Include both the bot itself and any bridged-user prefix. |
 
 #### 3. Configure Palpo
@@ -2511,7 +2511,7 @@ server = "your.server.name"
 client = "https://your.server.name"
 ```
 
-#### 4. Create the ra Profile
+#### 4. Create the RecurAgent Profile
 
 Create `config/botfather.json` with a Matrix channel that uses the same tokens:
 
@@ -2531,8 +2531,8 @@ Create `config/botfather.json` with a Matrix channel that uses the same tokens:
         "as_token": "<your-as-token>",
         "hs_token": "<your-hs-token>",
         "server_name": "your.server.name",
-        "sender_localpart": "octosbot",
-        "user_prefix": "octosbot_",
+        "sender_localpart": "rabot",
+        "user_prefix": "rabot_",
         "port": 8009,
         "mention_only": true,
         "allowed_senders": ["@alice:your.server.name"]
@@ -2556,7 +2556,7 @@ Matrix channel fields:
 | `server_name` | The Matrix domain (must match `palpo.toml`). |
 | `sender_localpart` | Bot username (must match the registration). |
 | `user_prefix` | Prefix for bridged user IDs managed by this appservice. |
-| `port` | Port ra listens on for appservice events from Palpo. |
+| `port` | Port RecurAgent listens on for appservice events from Palpo. |
 | `allowed_senders` | Matrix user IDs that may talk to the bot. Empty array = allow all. |
 | `mention_only` | Optional, default `true`. Outside a true 1:1 DM, a bot only replies when explicitly addressed (an `m.mentions` entry, an MXID pill/mention, or a client-supplied target). A true 1:1 DM — a single human plus a single managed bot in the room, counted from the appservice's own room map — always replies. Rooms with multiple managed bots require a mention even when only one human is present, so bots don't all answer every message. Set to `false` to make the bot reply to every message in every room (messages carrying `org.ra.explicit_room` are still gated). |
 
@@ -2632,7 +2632,7 @@ networks:
 docker compose up -d
 ```
 
-Palpo reads `appservices/ra-registration.yaml` on startup. When a Matrix user sends a message in a room where the bot is invited, Palpo pushes the event to `http://ra:8009`, ra processes it through the agent loop, and replies via Palpo's client-server API.
+Palpo reads `appservices/ra-registration.yaml` on startup. When a Matrix user sends a message in a room where the bot is invited, Palpo pushes the event to `http://ra:8009`, RecurAgent processes it through the agent loop, and replies via Palpo's client-server API.
 
 ### 16.4 Token Matching Checklist
 
@@ -2642,18 +2642,18 @@ The most common misconfiguration is a token mismatch. All three of these must ag
 |-------|--------------------------|-------------------|
 | `as_token` | `as_token: "abc..."` | `"as_token": "abc..."` |
 | `hs_token` | `hs_token: "def..."` | `"hs_token": "def..."` |
-| `sender_localpart` | `sender_localpart: octosbot` | `"sender_localpart": "octosbot"` |
-| server name | `regex: "@octosbot:your\\.server\\.name"` | `"server_name": "your.server.name"` |
+| `sender_localpart` | `sender_localpart: rabot` | `"sender_localpart": "rabot"` |
+| server name | `regex: "@rabot:your\\.server\\.name"` | `"server_name": "your.server.name"` |
 
 ### 16.5 Troubleshooting
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Bot does not respond | Token mismatch between registration and profile | Verify the [token checklist](#164-token-matching-checklist) |
-| `Connection refused` in Palpo logs | ra not running or wrong `url` in registration | Ensure ra is up; use Docker service name (`http://ra:8009`), not `localhost` |
+| `Connection refused` in Palpo logs | RecurAgent not running or wrong `url` in registration | Ensure RecurAgent is up; use Docker service name (`http://ra:8009`), not `localhost` |
 | `User ID not in namespace` | `sender_localpart` doesn't match registration `namespaces.users` regex | Update the regex to include the bot's full user ID |
 | Messages from unauthorized users ignored | `allowed_senders` filtering | Add the user's Matrix ID to the array, or set it to `[]` to allow everyone |
 
 ---
 
-*This guide reflects the post-M8.10 state (April 2026). For the latest updates, see the repository at [github.com/your-org/ra](https://github.com/your-org/ra).*
+*This guide reflects the post-M8.10 state (April 2026). For the latest updates, see the repository at [github.com/icehomura/ra](https://github.com/icehomura/ra).*

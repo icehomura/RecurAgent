@@ -679,7 +679,7 @@ impl Store {
     /// prompt FIFO onto the session's queue (each staged prompt drains as
     /// its OWN turn at turn-end, preserving order), unless steering is
     /// opted in (`steer_mid_turn`) AND the server supports `turn/steer`
-    /// (octos#1807) — then the prompt is injected into the live turn —
+    /// (RecurAgent#1807) — then the prompt is injected into the live turn —
     /// starting a SECOND `turn/start` concurrently with the live turn
     /// corrupts run-state bookkeeping and races the server — while an idle
     /// session starts the turn. Slash/bang inputs never reach here: the
@@ -719,7 +719,7 @@ impl Store {
         command
     }
 
-    /// octos#1807: steer a mid-turn prompt into the ACTIVE turn instead of
+    /// RecurAgent#1807: steer a mid-turn prompt into the ACTIVE turn instead of
     /// staging it. Returns the `turn/steer` command, or `None` to fall back
     /// to EXACTLY today's staging path (every gate below is silent — no
     /// status noise — so an old server stays byte-identical):
@@ -1102,7 +1102,7 @@ impl Store {
                     cwd = Some(value.to_owned());
                     cursor = cursor[value_end..].trim_start();
                 }
-                // octos#1801 v2: `--n <K>` stages a fleet of K peers from this
+                // RecurAgent#1801 v2: `--n <K>` stages a fleet of K peers from this
                 // ONE brief. 2..=8 client-side — `--n 1` is just `/peer` (and
                 // `--n 0`/oversized are nonsense), so anything else rejects
                 // with the usage line rather than shipping it to the server.
@@ -1228,7 +1228,7 @@ impl Store {
             .unwrap_or(fallback)
     }
 
-    /// `turn/steer` result (octos#1807). `steered:true` — the text joined
+    /// `turn/steer` result (RecurAgent#1807). `steered:true` — the text joined
     /// the ACTIVE turn: status only; run-state and the pre-token marker are
     /// deliberately untouched (the turn was already live and keeps
     /// streaming), and the drain-time persisted `UserMessage` envelope echo
@@ -1341,7 +1341,7 @@ impl Store {
             return None;
         }
         let result = event.result;
-        // octos#1801 v2 fleet: >1 staged peers → mint EVERY session key, stash
+        // RecurAgent#1801 v2 fleet: >1 staged peers → mint EVERY session key, stash
         // a per-member kickoff (the ONE shared brief suffixed with the member
         // lens), open the FIRST session via this apply's return value and ride
         // the remaining opens on the generic bounded follow-up queue
@@ -1436,7 +1436,7 @@ impl Store {
         ))
     }
 
-    /// Durable `peer/staged` notification (octos#1801 v3): a server-side
+    /// Durable `peer/staged` notification (RecurAgent#1801 v3): a server-side
     /// agent staged a peer via its `peer_spawn` tool — auto-open it in the
     /// background by riding the exact `/peer` flow: stash a go-less
     /// [`crate::model::PeerKickoff`] under the minted peer key and emit
@@ -1506,7 +1506,7 @@ impl Store {
     /// enough to cover a delayed/replayed open, far below any real slug-reuse gap.
     const RECENTLY_CLOSED_PEER_TTL: std::time::Duration = std::time::Duration::from_secs(30);
 
-    /// Durable `peer/closed` notification (octos#1801 v3): a peer session the
+    /// Durable `peer/closed` notification (RecurAgent#1801 v3): a peer session the
     /// server tore down must vanish from the peer dock (Ctrl+L) and the session
     /// switcher (Ctrl+S). Mirror of [`Self::apply_peer_staged_event`]'s
     /// tui-local decode path — the vendored ra-core rev predates the
@@ -1729,7 +1729,7 @@ impl Store {
         }))
     }
 
-    /// octos#1801 v2: byte cap for the composed `/gather` synthesis prompt.
+    /// RecurAgent#1801 v2: byte cap for the composed `/gather` synthesis prompt.
     /// The server caps each result at 48 KiB, but 8 fleet peers of those would
     /// compose to ~384 KiB — far past a sane single-turn injection.
     const GATHER_PROMPT_MAX_BYTES: usize = 64 * 1024;
@@ -1792,7 +1792,7 @@ impl Store {
         build(Some(per_result))
     }
 
-    /// `/gather [all | <slug> …]` (octos#1801 v2): read the peer blackboard
+    /// `/gather [all | <slug> …]` (RecurAgent#1801 v2): read the peer blackboard
     /// and synthesize the briefs + results into the CURRENT session as a
     /// prompt turn. Bare `/gather` (or `all`) gathers every staged peer;
     /// naming slugs filters server-side. The RPC is a READ — allowed in
@@ -1829,7 +1829,7 @@ impl Store {
         )))
     }
 
-    /// `peer/gather` result (octos#1801 v2): compose the blackboard rows into
+    /// `peer/gather` result (RecurAgent#1801 v2): compose the blackboard rows into
     /// the synthesis prompt and submit it into the CURRENT session through the
     /// staging-aware chokepoint — a live turn STAGES it (like any typed input
     /// mid-turn) instead of racing a second `turn/start`. No staged peers at
@@ -4261,7 +4261,7 @@ impl Store {
                 let new_family = value.trim().to_owned();
                 // A staged key belongs to the family it was pasted for —
                 // switching families must not let it ride along to a
-                // different endpoint (security pass, octoscode#562).
+                // different endpoint (security pass, ra-tui#562).
                 if !self
                     .state
                     .onboarding
@@ -5131,7 +5131,7 @@ impl Store {
     /// and the catalog was never fetched (command-driven flows skip the menu
     /// auto-fetch), the selection might be keyless — fetch the catalog and say
     /// so instead of mis-reporting "API key is empty" (adversarial pass,
-    /// octoscode#562). `Blocked(Some(cmd))` = dispatch `cmd` (the fetch).
+    /// ra-tui#562). `Blocked(Some(cmd))` = dispatch `cmd` (the fetch).
     fn onboarding_require_api_key(&mut self, empty_status: &str) -> OnboardingKeyGate {
         if self.onboarding_api_key_satisfied() {
             return OnboardingKeyGate::Satisfied;
@@ -5362,14 +5362,8 @@ impl Store {
             return;
         }
         let writable = !metadata.permissions().readonly();
-        // Prefer the ra workspace marker; a legacy `.ra-workspace.toml` is
-        // still recognised when only it exists (never migrated).
-        let has_workspace_toml = crate::env::pick_home_entry(
-            &path,
-            ".ra-workspace.toml",
-            ".ra-workspace.toml",
-        )
-        .is_file();
+        // The RecurAgent workspace marker (`.ra-workspace.toml`).
+        let has_workspace_toml = crate::env::home_entry(&path, ".ra-workspace.toml").is_file();
         self.state.onboarding.workspace_validation =
             crate::model::OnboardingWorkspaceValidation::Valid {
                 canonical: canonical.clone(),
@@ -5512,7 +5506,7 @@ impl Store {
                 // key_satisfied, not has_api_key: a rehydrated keyless
                 // primary (local/ollama/vllm) publishes has_api_key=false and
                 // must still unblock session open after a TUI restart
-                // (red-team pass, octoscode#562).
+                // (red-team pass, ra-tui#562).
                 .is_some_and(|provider| provider.key_satisfied())
     }
 
@@ -7700,7 +7694,7 @@ impl Store {
             .into_owned();
             return None;
         }
-        // octos#1380: only send task/cancel when the server actually advertises
+        // RecurAgent#1380: only send task/cancel when the server actually advertises
         // task control. Capabilities arrive via the authoritative
         // config/capabilities/list response (negotiated through the
         // X-Ra-Ui-Features header); until that lands, or against a server
@@ -7965,7 +7959,7 @@ impl Store {
                     self.state.status = t!("status.btw_failed").into_owned();
                     return None;
                 }
-                // octos#1807: a dead `turn/steer` falls back to STAGING its
+                // RecurAgent#1807: a dead `turn/steer` falls back to STAGING its
                 // prompt so the typed text is never lost. Same
                 // attribution discipline as `/btw` above — match ONLY the
                 // shapes the transport actually produces for this method
@@ -8627,10 +8621,10 @@ impl Store {
             ClientEvent::PeerPrepared(event) => self.apply_peer_prepared_event(event),
             ClientEvent::TurnSteered(event) => self.apply_turn_steered_event(event),
             ClientEvent::PeerStaged(event) => self.apply_peer_staged_event(event),
-            // octos#2019: file the background event under the session that OWNS
+            // RecurAgent#2019: file the background event under the session that OWNS
             // its emitter. No fallback to the focused session — an unroutable
             // row is dropped by `push_background_activity` rather than
-            // misattributed (octos-tui#461 / #466 / #483).
+            // misattributed (ra-tui#461 / #466 / #483).
             ClientEvent::BackgroundActivity(event) => {
                 self.state.push_background_activity(event);
                 None
@@ -9258,7 +9252,7 @@ impl Store {
                 // keyless flags would then steer what gets SENT (a keyless
                 // save). Dropping it costs one lazy refetch — the menu
                 // auto-fetch and the empty-key gate both re-request it
-                // (adversarial pass, octoscode#562).
+                // (adversarial pass, ra-tui#562).
                 let profile_llm_state = self.state.profile_llm_state.clone();
                 // One-shot re-flush request: a snapshot replay draining
                 // between an aside dismissal and the next draw must not eat
@@ -9359,7 +9353,7 @@ impl Store {
                 // a generic focused row. Carry them over like the kickoffs;
                 // TTL-pruned on next access.
                 let recently_closed_peers = self.state.recently_closed_peers.clone();
-                // octos#1807 local-only in-flight `turn/steer` stash: between
+                // RecurAgent#1807 local-only in-flight `turn/steer` stash: between
                 // dispatch and result the steered text lives ONLY here (the
                 // error fallback re-stages from it), so a replay landing in
                 // that window must carry it over or the text is lost.
@@ -9577,7 +9571,7 @@ impl Store {
                     self.state.status = t!("status.btw_failed").into_owned();
                     return None;
                 }
-                // octos#1807: a dead `turn/steer` falls back to STAGING its
+                // RecurAgent#1807: a dead `turn/steer` falls back to STAGING its
                 // prompt so the typed text is never lost. Same
                 // attribution discipline as `/btw` above — match ONLY the
                 // shapes the transport actually produces for this method
@@ -10009,7 +10003,7 @@ impl Store {
     /// `workspace_candidate` (the launch `--cwd`, or the process working
     /// directory for a transport-local launch) over the plain-path
     /// `workspace.root`: a stdio launch's root is the spawn command
-    /// ("stdio:ra serve …"), which carries no cwd, so relying on it alone
+    /// ("stdio:RecurAgent serve …"), which carries no cwd, so relying on it alone
     /// dead-ends the flow into the onboarding wizard even though the real cwd
     /// was captured at startup by `seed_onboarding_workspace_cwd`. Every launch
     /// consumer (resolve probe, Activate/CrossProfile prompt, Resume open) must
@@ -13693,7 +13687,7 @@ impl Store {
             PayloadV2::UserMessage { text, files } => {
                 let _ = self.resolve_v2_turn_id(&session_id, &wire_turn_id, false);
                 // Thread-id replay dedup + optimistic-row promotion
-                // (octos#1807: the `turn/steer` drain-time echo must
+                // (RecurAgent#1807: the `turn/steer` drain-time echo must
                 // reconcile with the client's own optimistic row — the
                 // normal submit path's echo reconciles identically).
                 self.state.apply_user_row_echo(
@@ -18331,7 +18325,7 @@ mod tests {
         );
     }
 
-    // ── /peer --n fleets + /gather (octos#1801 v2) ──────────────────────────
+    // ── /peer --n fleets + /gather (RecurAgent#1801 v2) ──────────────────────────
 
     fn gather_capable_store() -> Store {
         let mut store = store_with_empty_session();
@@ -18416,7 +18410,7 @@ mod tests {
         }
     }
 
-    /// octos#1801 v2: a 3-peer fleet result mints 3 session keys, stashes 3
+    /// RecurAgent#1801 v2: a 3-peer fleet result mints 3 session keys, stashes 3
     /// kickoffs whose briefs carry the per-member lens suffix, opens the
     /// FIRST session via the apply's return value, and rides the other two
     /// opens on the generic follow-up queue (`pending_autonomy_hydration`) in
@@ -18539,7 +18533,7 @@ mod tests {
         );
     }
 
-    // ── peer/staged — LLM-initiated peers (octos#1801 v3) ───────────────────
+    // ── peer/staged — LLM-initiated peers (RecurAgent#1801 v3) ───────────────────
 
     /// The durable `peer/staged` notification params a server-side agent's
     /// `peer_spawn` produces (the transport decodes the wire frame into this
@@ -18675,7 +18669,7 @@ mod tests {
         );
     }
 
-    // ── peer/closed — teardown removal (octos#1801 v3) ──────────────────────
+    // ── peer/closed — teardown removal (RecurAgent#1801 v3) ──────────────────────
 
     /// A store with a master session (index 0, non-peer topic) plus one peer
     /// row per slug, each registered in the durable identity set AND the dock
@@ -19255,7 +19249,7 @@ mod tests {
         );
     }
 
-    // --- turn/steer client (octos#1807): mid-turn input steers into the
+    // --- turn/steer client (RecurAgent#1807): mid-turn input steers into the
     // --- running turn when the server advertises the method; otherwise (and
     // --- on any steer death) it stages exactly like before.
 
@@ -20340,7 +20334,7 @@ mod tests {
 
     /// task-consume-turn-steer-dropped (review round 3): the connection-close
     /// terminal outlet. The socket died with a steer still buffered; on
-    /// reconnect the client replays the ledger, which (ra 1fb44005) reads
+    /// reconnect the client replays the ledger, which (RecurAgent 1fb44005) reads
     /// steer_dropped → turn/error(connection_closed). Exactly one recovery.
     #[test]
     fn replayed_connection_closed_terminal_after_dropped_recovers_exactly_once() {
@@ -25075,10 +25069,10 @@ now analyzing the bus module"
         );
     }
 
-    /// A keyless family (empty key-env in the fetched catalog — the ra
+    /// A keyless family (empty key-env in the fetched catalog — the RecurAgent
     /// `local`/`ollama`/`vllm` server families) tests and saves WITHOUT an
     /// API key. The empty-key gate used to dead-end this flow entirely
-    /// (octos#2096 review round).
+    /// (RecurAgent#2096 review round).
     #[test]
     fn onboarding_keyless_family_tests_and_saves_without_api_key() {
         let mut store = protocol_store_with_methods(&[
@@ -26926,7 +26920,7 @@ now analyzing the bus module"
     }
 
     /// Regression: a real stdio launch sets `workspace.root` to the transport
-    /// label ("stdio:ra serve --stdio --solo"), which carries no cwd. The
+    /// label ("stdio:RecurAgent serve --stdio --solo"), which carries no cwd. The
     /// launch cwd must come from the seeded `workspace_candidate` (the process
     /// cwd / `--cwd`), so a bare launch in a fresh folder still requests
     /// `launch/resolve` instead of dead-ending into the onboarding wizard. The
@@ -27618,7 +27612,7 @@ now analyzing the bus module"
     #[test]
     fn selecting_family_pre_profile_seeds_suggestion_and_returns_to_profile_step() {
         // Nameable flow, no profile yet: picking a family from the profile step
-        // seeds the name suggestion (glm, not the empty→ra default) and
+        // seeds the name suggestion (glm, not the empty→RecurAgent default) and
         // returns to the profile step — NOT into model/route setup.
         // Drive the REAL wizard stack ([onboard, onboard-family]) — the
         // profile-step reroute is wizard-owned, keyed on the wizard root
@@ -31022,7 +31016,7 @@ now analyzing the bus module"
         fn new(tag: &str) -> Self {
             let mut dir = std::env::temp_dir();
             dir.push(format!(
-                "octoscode-store-picker-{tag}-{}-{}",
+                "ra-tui-store-picker-{tag}-{}-{}",
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -31273,13 +31267,13 @@ now analyzing the bus module"
         ]);
 
         store.state.composer =
-            "/skills install octos-org/skills/deep-search --branch dev --force".into();
+            "/skills install icehomura/skills/deep-search --branch dev --force".into();
         let command = store.compose_command().expect("install command");
         let AppUiCommand::ProfileSkillsInstall(params) = command else {
             panic!("expected profile skills install command");
         };
         assert_eq!(params.profile_id.as_deref(), Some("coding"));
-        assert_eq!(params.repo, "octos-org/skills/deep-search");
+        assert_eq!(params.repo, "icehomura/skills/deep-search");
         assert_eq!(params.branch.as_deref(), Some("dev"));
         assert!(params.force);
 
@@ -33558,7 +33552,7 @@ now analyzing the bus module"
     }
 
     /// #532 (defect 3): a master turn that ends while its peer fleet is still
-    /// running is NOT a void turn — it ended BY DESIGN and ra's
+    /// running is NOT a void turn — it ended BY DESIGN and RecurAgent's
     /// `evaluate_peer_fleet_synthesis` wake re-enters once the last peer lands.
     /// The old card ("the TUI did not receive a final assistant answer / 0
     /// action(s) recorded") read as a crash at exactly that moment.
@@ -36555,7 +36549,7 @@ now analyzing the bus module"
         assert!(store.state.status.starts_with("Requested cancel"));
     }
 
-    /// octos#1380: if the server has not advertised task control (e.g. before
+    /// RecurAgent#1380: if the server has not advertised task control (e.g. before
     /// config/capabilities/list lands, or a non-negotiating server), `x` must
     /// not send a doomed task/cancel — it reports the affordance is
     /// unavailable instead (codex P1).
@@ -36574,7 +36568,7 @@ now analyzing the bus module"
         assert!(store.state.status.contains("not available"));
     }
 
-    /// octos#1380: with no capabilities negotiated yet (capabilities == None),
+    /// RecurAgent#1380: with no capabilities negotiated yet (capabilities == None),
     /// cancel is conservatively disabled rather than sending a doomed RPC.
     #[test]
     fn cancel_task_command_disabled_when_capabilities_unknown() {
@@ -47936,7 +47930,7 @@ now analyzing the bus module"
         );
     }
 
-    /// Real-wire reproduction of the duplicate-render report (octos#1916).
+    /// Real-wire reproduction of the duplicate-render report (RecurAgent#1916).
     ///
     /// The ids here are NOT invented — they are the ones an older live
     /// `dev:local:tui#coding` server actually emitted. That server derived a
@@ -49459,7 +49453,7 @@ now analyzing the bus module"
         );
     }
 
-    /// PR384 fix P2-c: a rejected lane upsert (e.g. the octos#1775
+    /// PR384 fix P2-c: a rejected lane upsert (e.g. the RecurAgent#1775
     /// api_key-without-env rule) must un-wedge `provider_pending` immediately
     /// via error attribution — not freeze the wizard until the 30s sweep and
     /// then report a misleading timeout.

@@ -1,4 +1,4 @@
-   Compiling octoscode v0.3.0-rc.10 (/Users/zhangalex/.local/tmp/octoloop-evolution-20260909/octoscode-behavior-review)
+   Compiling ra-tui v0.3.0-rc.10 (/Users/zhangalex/.local/tmp/octoloop-evolution-20260909/ra-tui-behavior-review)
 warning: unused variable: `so2`
    --> tests/olp_review_evidence.rs:590:15
     |
@@ -7,9 +7,9 @@ warning: unused variable: `so2`
     |
     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
 
-warning: `octoscode` (test "olp_review_evidence") generated 1 warning (run `cargo fix --test "olp_review_evidence" -p octoscode` to apply 1 suggestion)
+warning: `ra-tui` (test "olp_review_evidence") generated 1 warning (run `cargo fix --test "olp_review_evidence" -p ra-tui` to apply 1 suggestion)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 9.94s
-     Running tests/olp_review_evidence.rs (/Users/zhangalex/Work/Projects/FW/octoscode/target/debug/deps/olp_review_evidence-090e7289e7aa9ff5)
+     Running tests/olp_review_evidence.rs (/Users/zhangalex/Work/Projects/FW/ra-tui/target/debug/deps/olp_review_evidence-090e7289e7aa9ff5)
 
 running 22 tests
 test olp_review_challenge_rejects_fabricated_cargo_log ... ok

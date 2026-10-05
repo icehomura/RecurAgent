@@ -196,7 +196,7 @@ Scenario: 事件的 topic 路由与其他 turn 事件一致
 
 ## Out of Scope
 
-- 客户端（octoscode）消费 `turn/steer_dropped`（task-consume-turn-steer-dropped）。
+- 客户端（ra-tui）消费 `turn/steer_dropped`（task-consume-turn-steer-dropped）。
 - 跨客户端进程重启的 durable 恢复（需要 steer 回执 id 与持久化状态；本任务明确为 same-process reconnect only）。
 - interrupt/steer 的 INFO 级关联日志（F7）、`ra serve` fd 累积（F8）。
 - 把残留输入合并进 `turn/error`/`turn/completed` 载荷。

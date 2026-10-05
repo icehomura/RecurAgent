@@ -82,31 +82,31 @@ pub enum ClientEvent {
     /// wrote the durable brief; the store mints the peer session key, stashes
     /// the kickoff, and follows up with `session/open`.
     PeerPrepared(PeerPreparedClientEvent),
-    /// octos#1807: `turn/steer` result. `steered:true` — the typed text
+    /// RecurAgent#1807: `turn/steer` result. `steered:true` — the typed text
     /// joined the ACTIVE turn (status only; run-state/pre-token untouched,
     /// the turn was already live). `steered:false` — no active turn existed
     /// server-side and a NEW real turn started with the input; the store arms
     /// the client like a normal submit (pre-token marker + run-state
     /// in-progress) for the returned turn id.
     TurnSteered(TurnSteeredClientEvent),
-    /// octos#1801 v3: durable `peer/staged` notification — a server-side
+    /// RecurAgent#1801 v3: durable `peer/staged` notification — a server-side
     /// agent staged a peer (its `peer_spawn` tool); the store auto-opens it
     /// in the background via the same stash → `session/opened` kickoff flow
     /// as `/peer`. Durable ⇒ replayed on reconnect, so the store handler is
     /// idempotent (a peer whose session already exists is a no-op).
     PeerStaged(crate::model::PeerStagedParams),
-    /// octos#1801 v3: durable `peer/closed` notification — a peer session the
+    /// RecurAgent#1801 v3: durable `peer/closed` notification — a peer session the
     /// server tore down; the store removes it from the peer dock (Ctrl+L) and
     /// the session switcher (Ctrl+S). Durable ⇒ replayed on reconnect, so the
     /// store handler is idempotent (an already-removed peer is a no-op).
     PeerClosed(crate::model::PeerClosedParams),
-    /// octos#2019: durable `background/activity` notification — one background
+    /// RecurAgent#2019: durable `background/activity` notification — one background
     /// event that woke the model (a monitor event line, a claimed fleet outbox
     /// event), surfaced to the HUMAN. The store files it under the session that
     /// OWNS the emitter. Durable ⇒ replayed on reconnect, so a client that
     /// disconnected mid-loop sees the whole run rather than losing its middle.
     BackgroundActivity(crate::model::BackgroundActivityParams),
-    /// octos#1801 v2: `peer/gather` result — the peer blackboard rows
+    /// RecurAgent#1801 v2: `peer/gather` result — the peer blackboard rows
     /// (brief + latest result per staged peer). The store composes the
     /// `/gather` synthesis prompt from these and submits it into the CURRENT
     /// session (staging-aware).
@@ -125,7 +125,7 @@ pub enum ClientEvent {
     /// RPCs so the store can update its per-session autonomy mirror.
     Autonomy(AutonomyClientEvent),
     /// `!`-bang local-shell completion. Carries the exit result of a
-    /// client-local shell command (run where octoscode runs, NOT the agent's
+    /// client-local shell command (run where ra-tui runs, NOT the agent's
     /// sandboxed server `shell` tool). The event loop emits this after it
     /// restores the TUI from the child-terminal handoff; the store folds it
     /// back into the matching "running" activity chip via its `local_id`.
@@ -302,14 +302,14 @@ pub struct PeerPreparedClientEvent {
     pub result: crate::model::PeerPrepareResult,
 }
 
-/// octos#1807 `turn/steer` result for the mid-turn steer flow.
+/// RecurAgent#1807 `turn/steer` result for the mid-turn steer flow.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TurnSteeredClientEvent {
     pub message: String,
     pub result: crate::model::TurnSteerResult,
 }
 
-/// octos#1801 v2 `peer/gather` result for the `/gather` fan-in flow.
+/// RecurAgent#1801 v2 `peer/gather` result for the `/gather` fan-in flow.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PeerGatheredClientEvent {
     pub message: String,

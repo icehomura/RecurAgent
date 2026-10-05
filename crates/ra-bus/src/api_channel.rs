@@ -1,7 +1,7 @@
 //! API channel — HTTP endpoint for web clients.
 //!
 //! Provides a `POST /chat` endpoint that accepts messages and returns SSE responses.
-//! Used by octos-web to route through the gateway for adaptive routing, queue modes,
+//! Used by ra-web to route through the gateway for adaptive routing, queue modes,
 //! multi-provider failover, etc.
 
 use std::collections::HashMap;
@@ -2626,8 +2626,8 @@ async fn handle_admin_shell(
             ra_core::brand::env_compat_str("AUTH_TOKEN").filter(|t| !t.is_empty())
         })
         .or_else(|| {
-            // Try RA_DATA_DIR (legacy OCTOS_DATA_DIR), then the state home
-            // (~/.ra, or ~/.ra when that is where the install lives).
+            // Try RA_DATA_DIR (legacy ra_DATA_DIR), then the state home
+            // (~/.ra).
             let candidates = [
                 ra_core::brand::env_compat_str("DATA_DIR"),
                 ra_core::brand::state_home().map(|dir| dir.display().to_string()),

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install.sh — Install ra on a fresh machine from this source tree.
 # Default path: builds the release binaries locally with cargo and installs
-# them. Set OCTOS_DOWNLOAD_URL (or drop a ra-bundle-<triple>.tar.gz next to
+# them. Set ra_DOWNLOAD_URL (or drop a ra-bundle-<triple>.tar.gz next to
 # this script) to install an already-built bundle instead.
 #
 # Usage:
@@ -36,8 +36,8 @@ set -euo pipefail
 
 # ── Defaults ──────────────────────────────────────────────────────────
 VERSION=""
-PREFIX="${OCTOS_PREFIX:-$HOME/.ra/bin}"
-DATA_DIR="${OCTOS_HOME:-$HOME/.ra}"
+PREFIX="${ra_PREFIX:-$HOME/.ra/bin}"
+DATA_DIR="${ra_HOME:-$HOME/.ra}"
 FRPC_VERSION="0.65.0"
 
 # The script's own path — used to locate the source tree (and ra-doctor.sh)
@@ -99,7 +99,7 @@ while [ $# -gt 0 ]; do
             cat << 'HELPEOF'
 install.sh — Install ra on a fresh machine from this source tree.
 Default path: builds the release binaries locally with cargo and installs
-them. Set OCTOS_DOWNLOAD_URL (or drop a ra-bundle-<triple>.tar.gz next to
+them. Set ra_DOWNLOAD_URL (or drop a ra-bundle-<triple>.tar.gz next to
 this script) to install an already-built bundle instead.
 
 Usage:
@@ -116,13 +116,13 @@ Options:
   --doctor                 Diagnose installation and service health
 
 Environment:
-  OCTOS_DOWNLOAD_URL       Install a pre-built bundle from this directory or
+  ra_DOWNLOAD_URL       Install a pre-built bundle from this directory or
                            file:// URL (ra-bundle-<triple>.tar.gz [+ .sha256])
                            instead of building from source
-  OCTOS_SOURCE_DIR         Source tree to build from (default: the checkout
+  ra_SOURCE_DIR         Source tree to build from (default: the checkout
                            this script lives in, then $PWD)
-  OCTOS_PREFIX             Install prefix (same as --prefix)
-  OCTOS_HOME               Data directory (default: ~/.ra)
+  ra_PREFIX             Install prefix (same as --prefix)
+  ra_HOME               Data directory (default: ~/.ra)
   RA_BUILD_FEATURES        cargo features for `ra` in a source build
                            (default: api,telegram,discord,dingtalk,whatsapp,
                            feishu,twilio,wecom,wecom-bot,audio_mp3)
@@ -176,9 +176,9 @@ DATA_DIR="$(normalize_path "$DATA_DIR")"
 # ── Config home resolver (bash mirror of resolve_config_context in Rust) ──
 # Keep this EXACTLY consistent with crates/ra-cli/src/config_context.rs.
 #
-#   config_home = $OCTOS_CONFIG_DIR                       (if set, non-empty)
+#   config_home = $ra_CONFIG_DIR                       (if set, non-empty)
 #               | $DATA_DIR                               (if explicit: an
-#                                                          OCTOS_HOME override
+#                                                          ra_HOME override
 #                                                          != $HOME/.ra)
 #               | XDG default                             (otherwise)
 #
@@ -201,7 +201,7 @@ xdg_config_home() {
     fi
 }
 
-# Resolve symlinks/. /.. best-effort so the OCTOS_HOME-vs-default comparison
+# Resolve symlinks/. /.. best-effort so the ra_HOME-vs-default comparison
 # matches Rust's canonicalize() (which resolves symlinks when the path exists).
 # Prefer python3's os.path.realpath (consistent across macOS/Linux, handles
 # non-existent paths), then GNU `realpath -m`, then BSD `realpath`, finally the
@@ -209,7 +209,7 @@ xdg_config_home() {
 canonicalize_path() {
     local p="$1"
     if command -v python3 >/dev/null 2>&1; then
-        OCTOS_CANON_IN="$p" python3 -c 'import os; print(os.path.realpath(os.environ["OCTOS_CANON_IN"]))' 2>/dev/null && return 0
+        ra_CANON_IN="$p" python3 -c 'import os; print(os.path.realpath(os.environ["ra_CANON_IN"]))' 2>/dev/null && return 0
     fi
     if command -v realpath >/dev/null 2>&1; then
         # GNU realpath supports -m (no existence requirement); BSD does not.
@@ -224,11 +224,11 @@ canonicalize_path() {
 }
 
 compute_config_home() {
-    if [ -n "${OCTOS_CONFIG_DIR:-}" ]; then
-        normalize_path "$OCTOS_CONFIG_DIR"
+    if [ -n "${ra_CONFIG_DIR:-}" ]; then
+        normalize_path "$ra_CONFIG_DIR"
         return 0
     fi
-    # Explicit when DATA_DIR (from OCTOS_HOME) is a non-default override.
+    # Explicit when DATA_DIR (from ra_HOME) is a non-default override.
     # Compare CANONICALIZED paths so symlinked / trailing-slash variants of
     # ~/.ra still resolve to the default (mirrors normalize_for_compare).
     if [ "$(canonicalize_path "$DATA_DIR")" != "$(canonicalize_path "$HOME/.ra")" ]; then
@@ -351,7 +351,7 @@ write_serve_env_file() {
     # the chmod below stays as belt-and-braces.
     (
         umask 077
-        printf 'OCTOS_AUTH_TOKEN="%s"\n' "$token" > "$target"
+        printf 'ra_AUTH_TOKEN="%s"\n' "$token" > "$target"
         if [ -n "$FRPS_TOKEN" ]; then
             printf 'FRPS_TOKEN="%s"\n' "$frps" >> "$target"
         fi
@@ -663,8 +663,8 @@ UNIT_EOF
 }
 
 # Write and load the ra serve system service (plist on Darwin, systemd on Linux).
-# Uses globals: OCTOS_BIN, AUTH_TOKEN, DATA_DIR, PREFIX, HOME
-write_octos_service() {
+# Uses globals: ra_BIN, AUTH_TOKEN, DATA_DIR, PREFIX, HOME
+write_ra_service() {
     # Persist the SMTP password in `$DATA_DIR/smtp_secret.json` (0600) before
     # loading the service so the fresh process can read it. The password is
     # intentionally not written into the plist / systemd unit env block.
@@ -698,14 +698,14 @@ write_octos_service() {
     <string>io.ra.serve</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$OCTOS_BIN</string>
+        <string>$ra_BIN</string>
         <string>serve</string>
         <string>--port</string>
         <string>$PORT</string>
         <string>--host</string>
         <string>0.0.0.0</string>
     </array>
-    <!-- #2371: the token travels via OCTOS_AUTH_TOKEN below, never argv —
+    <!-- #2371: the token travels via ra_AUTH_TOKEN below, never argv —
          ProgramArguments are readable by any local process via ps. #2388:
          the plist holds secrets, so it is installed 0600 root:wheel —
          launchd reads it as root, no other local user can. -->
@@ -733,14 +733,14 @@ write_octos_service() {
         <string>$PREFIX:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
         <key>HOME</key>
         <string>$HOME</string>
-        <key>OCTOS_DATA_DIR</key>
+        <key>ra_DATA_DIR</key>
         <string>$DATA_DIR</string>
-        <key>OCTOS_HOME</key>
+        <key>ra_HOME</key>
         <string>$DATA_DIR</string>
-    <key>OCTOS_AUTH_TOKEN</key>
+    <key>ra_AUTH_TOKEN</key>
     <string>$AUTH_TOKEN</string>
 $(launchd_env_var_xml "XDG_CONFIG_HOME" "${XDG_CONFIG_HOME:-}")
-$(launchd_env_var_xml "OCTOS_CONFIG_DIR" "${OCTOS_CONFIG_DIR:+$CONFIG_HOME}")
+$(launchd_env_var_xml "ra_CONFIG_DIR" "${ra_CONFIG_DIR:+$CONFIG_HOME}")
 $(launchd_env_var_xml "FRPS_TOKEN" "${FRPS_TOKEN:-}")
 $(launchd_env_var_xml "SMTP_HOST" "${SMTP_HOST:-}")
 $(launchd_env_var_xml "SMTP_PORT" "${SMTP_PORT:-}")
@@ -782,16 +782,16 @@ User=$(whoami)
 # local user via systemctl cat / ps. #2388: it does not travel inline here
 # either — the unit file is world-readable; secrets load from the 0600
 # DATA_DIR/serve.env via EnvironmentFile.
-ExecStart=$OCTOS_BIN serve --port $PORT --host 0.0.0.0
+ExecStart=$ra_BIN serve --port $PORT --host 0.0.0.0
 Restart=on-failure
 RestartSec=5
 EnvironmentFile=$DATA_DIR/serve.env
 Environment=HOME=$HOME
-Environment=OCTOS_DATA_DIR=$DATA_DIR
-Environment=OCTOS_HOME=$DATA_DIR
+Environment=ra_DATA_DIR=$DATA_DIR
+Environment=ra_HOME=$DATA_DIR
 Environment=PATH=$PREFIX:/usr/local/bin:/usr/bin:/bin
 $(systemd_env_var_line "XDG_CONFIG_HOME" "${XDG_CONFIG_HOME:-}")
-$(systemd_env_var_line "OCTOS_CONFIG_DIR" "${OCTOS_CONFIG_DIR:+$CONFIG_HOME}")
+$(systemd_env_var_line "ra_CONFIG_DIR" "${ra_CONFIG_DIR:+$CONFIG_HOME}")
 $(systemd_env_var_line "SMTP_HOST" "${SMTP_HOST:-}")
 $(systemd_env_var_line "SMTP_PORT" "${SMTP_PORT:-}")
 $(systemd_env_var_line "SMTP_USERNAME" "${SMTP_USERNAME:-}")
@@ -813,7 +813,7 @@ EOF
 
         *)
             warn "ra serve service setup not supported on $OS"
-            hint "Run manually: OCTOS_AUTH_TOKEN=$AUTH_TOKEN $OCTOS_BIN serve --port $PORT --host 0.0.0.0"
+            hint "Run manually: ra_AUTH_TOKEN=$AUTH_TOKEN $ra_BIN serve --port $PORT --host 0.0.0.0"
             ;;
     esac
 }
@@ -946,26 +946,26 @@ if [ "$RUN_DOCTOR" = true ]; then
     # ── Binary ───────────────────────────────────────────────────────
     section "ra binary"
 
-    OCTOS_BIN="$PREFIX/ra"
-    if [ -f "$OCTOS_BIN" ]; then
-        ok "found: $OCTOS_BIN"
-        if "$OCTOS_BIN" --version &>/dev/null; then
-            ok "version: $("$OCTOS_BIN" --version 2>&1 | head -1)"
+    ra_BIN="$PREFIX/ra"
+    if [ -f "$ra_BIN" ]; then
+        ok "found: $ra_BIN"
+        if "$ra_BIN" --version &>/dev/null; then
+            ok "version: $("$ra_BIN" --version 2>&1 | head -1)"
         else
             err "binary exists but failed to run"
             if [ "$OS" = "Darwin" ]; then
-                hint "Try: xattr -d com.apple.quarantine $OCTOS_BIN && codesign -s - $OCTOS_BIN"
+                hint "Try: xattr -d com.apple.quarantine $ra_BIN && codesign -s - $ra_BIN"
             else
-                hint "Try: chmod +x $OCTOS_BIN"
-                hint "Check dependencies: ldd $OCTOS_BIN"
+                hint "Try: chmod +x $ra_BIN"
+                hint "Check dependencies: ldd $ra_BIN"
             fi
             hint "Or re-run install.sh"
         fi
     else
         if command -v ra &>/dev/null; then
             FOUND="$(command -v ra)"
-            warn "not found at $OCTOS_BIN, but found at $FOUND"
-            hint "Set OCTOS_PREFIX or add $PREFIX to PATH"
+            warn "not found at $ra_BIN, but found at $FOUND"
+            hint "Set ra_PREFIX or add $PREFIX to PATH"
         else
             err "ra binary not found"
             hint "Run install.sh to install"
@@ -991,7 +991,7 @@ if [ "$RUN_DOCTOR" = true ]; then
     _DOCTOR_LEGACY_CONFIG="$HOME/.ra/config.json"
     if [ -f "$CONFIG_HOME/config.json" ]; then
         ok "config.json: $CONFIG_HOME/config.json"
-    elif [ "$CONFIG_HOME" = "$(xdg_config_home)" ] && [ -z "${OCTOS_CONFIG_DIR:-}" ] \
+    elif [ "$CONFIG_HOME" = "$(xdg_config_home)" ] && [ -z "${ra_CONFIG_DIR:-}" ] \
          && [ -f "$_DOCTOR_LEGACY_CONFIG" ]; then
         ok "config.json (legacy): $_DOCTOR_LEGACY_CONFIG"
         hint "Run 'ra init' to migrate it to $CONFIG_HOME"
@@ -1003,11 +1003,11 @@ if [ "$RUN_DOCTOR" = true ]; then
     # ── ra serve process ──────────────────────────────────────────
     section "ra serve"
 
-    OCTOS_PID=$(pgrep -f "ra serve" 2>/dev/null | head -1 || true)
-    if [ -n "$OCTOS_PID" ]; then
-        OCTOS_CMD=$(ps -p "$OCTOS_PID" -o args= 2>/dev/null || true)
-        ok "running (PID: $OCTOS_PID)"
-        echo "    CMD: $OCTOS_CMD"
+    ra_PID=$(pgrep -f "ra serve" 2>/dev/null | head -1 || true)
+    if [ -n "$ra_PID" ]; then
+        ra_CMD=$(ps -p "$ra_PID" -o args= 2>/dev/null || true)
+        ok "running (PID: $ra_PID)"
+        echo "    CMD: $ra_CMD"
     else
         err "ra serve is not running"
         hint "Start: $(svc_hint start serve)"
@@ -1064,9 +1064,9 @@ if [ "$RUN_DOCTOR" = true ]; then
             fi
         fi
     elif [ "$PORT_CHECK_AVAILABLE" = true ]; then
-        if [ -n "$OCTOS_PID" ]; then
+        if [ -n "$ra_PID" ]; then
             err "ra serve is running but nothing is listening on $PORT"
-            hint "Check if it's bound to a different port: ps -p $OCTOS_PID -o args="
+            hint "Check if it's bound to a different port: ps -p $ra_PID -o args="
         else
             warn "nothing listening on port $PORT"
         fi
@@ -1607,11 +1607,11 @@ is_ra_source_root() {
 }
 
 # Print the source tree to build from, or return 1 when none can be found.
-# Order: $OCTOS_SOURCE_DIR, the tree this script lives in, $PWD, the enclosing
+# Order: $ra_SOURCE_DIR, the tree this script lives in, $PWD, the enclosing
 # git work tree.
 resolve_source_root() {
     local candidate
-    for candidate in "${OCTOS_SOURCE_DIR:-}" "$(dirname "$SCRIPT_SELF")/.." "$PWD"; do
+    for candidate in "${ra_SOURCE_DIR:-}" "$(dirname "$SCRIPT_SELF")/.." "$PWD"; do
         [ -n "$candidate" ] || continue
         if is_ra_source_root "$candidate"; then
             (cd "$candidate" && pwd)
@@ -1639,7 +1639,7 @@ build_from_source() {
     if ! command -v cargo >/dev/null 2>&1; then
         err "cargo not found — building from source needs the Rust toolchain."
         hint "Install Rust:        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
-        hint "Or install a bundle: OCTOS_DOWNLOAD_URL=<dir|file://path> $SCRIPT_SELF"
+        hint "Or install a bundle: ra_DOWNLOAD_URL=<dir|file://path> $SCRIPT_SELF"
         return 1
     fi
 
@@ -1685,7 +1685,7 @@ build_from_source() {
 section "Resolving install source"
 
 TARBALL="ra-bundle-${TRIPLE}.tar.gz"
-DOWNLOAD_BASE="${OCTOS_DOWNLOAD_URL:-}"
+DOWNLOAD_BASE="${ra_DOWNLOAD_URL:-}"
 
 # Auto-detect: a bundle tarball next to the script or in the current directory
 # (scripts/build-local-bundle.sh writes it there).
@@ -1704,7 +1704,7 @@ if [ -n "$DOWNLOAD_BASE" ]; then
     # downloading a 404.
     case "$TRIPLE" in
         aarch64-apple-darwin|x86_64-unknown-linux-gnu|aarch64-unknown-linux-gnu) ;;
-        *) err "No bundle is published for $TRIPLE. Re-run without OCTOS_DOWNLOAD_URL to build from source." ;;
+        *) err "No bundle is published for $TRIPLE. Re-run without ra_DOWNLOAD_URL to build from source." ;;
     esac
     DOWNLOAD_URL="${DOWNLOAD_BASE}/${TARBALL}"
     ok "bundle: $DOWNLOAD_URL"
@@ -1714,7 +1714,7 @@ else
     if ! SOURCE_ROOT="$(resolve_source_root)"; then
         err "Could not find the ra source tree to build from."
         hint "Run this script from the checkout (scripts/install.sh), set"
-        hint "OCTOS_SOURCE_DIR, or point OCTOS_DOWNLOAD_URL at a bundle."
+        hint "ra_SOURCE_DIR, or point ra_DOWNLOAD_URL at a bundle."
         exit 1
     fi
     ok "source tree: $SOURCE_ROOT"
@@ -1808,7 +1808,7 @@ section "Initializing ra"
 
 # Temporarily add PREFIX to PATH for subsequent commands
 export PATH="$PREFIX:$PATH"
-export OCTOS_HOME="$DATA_DIR"
+export ra_HOME="$DATA_DIR"
 
 if [ ! -d "$DATA_DIR" ]; then
     # ra init always writes to $cwd/.ra/, which won't match a custom
@@ -1831,7 +1831,7 @@ fi
 # Runtime STATE (profiles/sessions/skills/...) lives under $DATA_DIR. The
 # starter config.json is written to $CONFIG_HOME — the bash mirror of the Rust
 # resolver (XDG for a default install; the state dir for an explicit
-# OCTOS_HOME; OCTOS_CONFIG_DIR when set).
+# ra_HOME; ra_CONFIG_DIR when set).
 mkdir -p "$DATA_DIR"/{profiles,memory,sessions,skills,logs,research,history}
 
 # Legacy config for the default case: never shadow an existing legacy config.
@@ -1846,7 +1846,7 @@ _CONFIG_FILE="$CONFIG_HOME/config.json"
 _WRITE_CONFIG=true
 if [ -f "$_CONFIG_FILE" ]; then
     _WRITE_CONFIG=false
-elif [ "$CONFIG_HOME" = "$(xdg_config_home)" ] && [ -z "${OCTOS_CONFIG_DIR:-}" ] \
+elif [ "$CONFIG_HOME" = "$(xdg_config_home)" ] && [ -z "${ra_CONFIG_DIR:-}" ] \
      && [ -f "$_LEGACY_CONFIG" ]; then
     # Default install with an existing legacy config — do not shadow it.
     _WRITE_CONFIG=false
@@ -1916,8 +1916,8 @@ fi
 # ── Set up ra serve as system service ──────────────────────────────
 section "Setting up ra serve"
 
-OCTOS_BIN="$PREFIX/ra"
-write_octos_service
+ra_BIN="$PREFIX/ra"
+write_ra_service
 
 # ── Verify ra serve ────────────────────────────────────────────────
 section "Verifying ra serve"
@@ -2133,8 +2133,8 @@ if [ -n "$CADDY_DOMAIN" ]; then
     # boundary that prevents arbitrary DNS pointed at this server
     # from burning ACME rate limits. See codex P1 follow-up to
     # #380 / #1070, and #1124 for the apex+single-label tightening.
-    @octos_tls expression \`{query.domain}.matches("^([^.]+\\\\.)?${CADDY_DOMAIN_RE}\$")\`
-    respond @octos_tls 200
+    @ra_tls expression \`{query.domain}.matches("^([^.]+\\\\.)?${CADDY_DOMAIN_RE}\$")\`
+    respond @ra_tls 200
     respond /check 403
 }
 

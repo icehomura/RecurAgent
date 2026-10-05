@@ -28,7 +28,7 @@ const TAB_ORDER: { key: TabKey; label: string; hint: string }[] = [
  *
  * Invariants honoured (per the acceptance contract):
  *   - UI never re-implements orchestration — it forwards to the backend
- *     which forwards to `octos_swarm::Swarm::dispatch`.
+ *     which forwards to `ra_swarm::Swarm::dispatch`.
  *   - Live view subscribes to the existing `/api/events`-style stream;
  *     no new channel is opened.
  *   - Review submits as a typed `SwarmReviewDecision` event — never raw
@@ -49,7 +49,7 @@ export default function SwarmPage() {
           <p className="mt-1 max-w-2xl text-sm text-gray-500">
             Author contracts, dispatch swarms, watch live progress, and gate
             decisions through a typed review event. Consumes the M7.5 primitive
-            via the octos-cli REST surface.
+            via the ra-cli REST surface.
           </p>
         </div>
         {lastDispatch && (

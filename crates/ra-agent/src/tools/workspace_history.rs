@@ -49,6 +49,26 @@ fn run_git(dir: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
+/// Whether a model-supplied revision is safe to hand to git as a revision
+/// argument.
+///
+/// Revisions are interpolated straight into git's argv by `workspace_show`
+/// and `workspace_diff`, so a value that looks like an option (for example
+/// `--output=<path>`) makes git act on the option instead of reading history:
+/// `git diff --output=<file> <range>` writes the diff to `<file>` and exits
+/// zero. Refuse anything option-like, plus revision-range (`..`) and path
+/// (`/`, `\`) syntax and embedded whitespace/control characters, before it
+/// ever reaches the command line.
+fn revision_is_safe(revision: &str) -> bool {
+    !revision.is_empty()
+        && !revision.starts_with('-')
+        && !revision.contains("..")
+        && !revision.contains(['/', '\\'])
+        && !revision
+            .chars()
+            .any(|c| c.is_control() || c.is_whitespace())
+}
+
 /// Resolve a workspace project path from a relative slides/sites path.
 /// Returns the project root if it has a .git directory.
 fn resolve_workspace_git_root(base_dir: &Path, project_path: &str) -> Result<PathBuf> {
@@ -245,8 +265,9 @@ impl Tool for WorkspaceShowTool {
         let input: WorkspaceShowInput =
             serde_json::from_value(args.clone()).wrap_err("invalid workspace_show input")?;
 
-        // Reject commit hashes with path traversal
-        if input.commit.contains("..") || input.commit.contains('/') {
+        // Reject option-like revisions (git would parse e.g. `--output=<path>`
+        // as an option) and hashes carrying path or range syntax.
+        if !revision_is_safe(&input.commit) {
             return Ok(ToolResult {
                 output: "invalid commit hash".to_string(),
                 success: false,
@@ -372,9 +393,10 @@ impl Tool for WorkspaceDiffTool {
         let input: WorkspaceDiffInput =
             serde_json::from_value(args.clone()).wrap_err("invalid workspace_diff input")?;
 
-        // Reject traversal in commit refs
+        // Reject option-like revisions (git would parse e.g. `--output=<path>`
+        // as an option) and refs carrying path or range syntax.
         for ref_str in [&input.from_commit, &input.to_commit] {
-            if ref_str.contains('/') && !ref_str.starts_with("HEAD") {
+            if !revision_is_safe(ref_str) {
                 return Ok(ToolResult {
                     output: "invalid commit ref".to_string(),
                     success: false,

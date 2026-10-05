@@ -41,7 +41,7 @@ pub enum AdminAction {
         /// frps control port.
         #[arg(long, default_value = "7000")]
         port: u16,
-        /// Local ra serve port on the tenant machine. Matches the
+        /// Local RecurAgent serve port on the tenant machine. Matches the
         /// `ra serve` default (see serve.rs / issue #417).
         #[arg(long, default_value = "50080")]
         local_port: u16,
@@ -108,7 +108,7 @@ pub enum AdminAction {
     },
     /// Show a condensed operator view of runtime observability counters.
     OperatorSummary {
-        /// Base URL of the running ra API.
+        /// Base URL of the running RecurAgent API.
         #[arg(long)]
         base_url: Option<String>,
         /// Admin or user bearer token for the API.

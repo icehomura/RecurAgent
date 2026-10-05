@@ -11,7 +11,7 @@
 //! with DNS pinning on every hop, and a real browser only to render JS-heavy
 //! pages (private destinations blocked inside it, result re-validated).
 //! robots.txt is an operator setting (`RA_RESPECT_ROBOTS=1`; legacy
-//! `OCTOS_RESPECT_ROBOTS` is still honoured), off by default.
+//! `ra_RESPECT_ROBOTS` is still honoured), off by default.
 
 use std::collections::HashMap;
 use std::path::PathBuf;

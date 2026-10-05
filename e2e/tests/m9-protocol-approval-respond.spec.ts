@@ -1,7 +1,7 @@
 /**
  * M9 wire-level e2e: `approval/respond` (error paths).
  *
- * Issue: https://github.com/your-org/ra/issues/647
+ * Issue: https://github.com/icehomura/ra/issues/647
  * Spec  : api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md §7 / §8
  *
  * Happy-path approval lifecycle requires a tool-call that triggers a

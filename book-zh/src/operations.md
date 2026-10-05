@@ -29,9 +29,9 @@ sudo systemctl restart ra-serve
 
 ## 会话存储容量
 
-会话以滚动 JSONL 分段存储，而不是单个无限增长的文件。当活跃文件达到 `OCTOS_SESSION_SEGMENT_BYTES`（默认 8 MiB）时，它会被封存为旁边的 `<name>.segments/NNNNNN.jsonl`，并新建一个活跃文件。普通加载会读取活跃文件，再按新到旧纳入尽可能多的封存分段，直到 `OCTOS_SESSION_LOAD_BUDGET_BYTES`（默认 32 MiB；`0` = 不限）——超出预算的历史仍留在磁盘上，可通过全量加载和 `/undo` 访问。
+会话以滚动 JSONL 分段存储，而不是单个无限增长的文件。当活跃文件达到 `RA_SESSION_SEGMENT_BYTES`（默认 8 MiB）时，它会被封存为旁边的 `<name>.segments/NNNNNN.jsonl`，并新建一个活跃文件。普通加载会读取活跃文件，再按新到旧纳入尽可能多的封存分段，直到 `RA_SESSION_LOAD_BUDGET_BYTES`（默认 32 MiB；`0` = 不限）——超出预算的历史仍留在磁盘上，可通过全量加载和 `/undo` 访问。
 
-**内存规划**：该预算限制单个驻留会话占用的文件字节；解析后的行开销约为文件大小的 1.5–3 倍，因此缓存 N 个长会话的进程最多需要约 `N × 32 MiB × 3`。内存受限的主机应调低预算（如 `OCTOS_SESSION_LOAD_BUDGET_BYTES=16777216`）或调小会话缓存（`gateway.max_sessions`）。
+**内存规划**：该预算限制单个驻留会话占用的文件字节；解析后的行开销约为文件大小的 1.5–3 倍，因此缓存 N 个长会话的进程最多需要约 `N × 32 MiB × 3`。内存受限的主机应调低预算（如 `RA_SESSION_LOAD_BUDGET_BYTES=16777216`）或调小会话缓存（`gateway.max_sessions`）。
 
 **混布版本重叠**（例如共享数据目录上的 Kubernetes 滚动升级）：旧二进制看不到 `.segments/`，其 `*.jsonl` 扫描只会看到活跃文件，看起来像一个很短的会话。本版本写入的会话携带 schema 版本 2，旧版本构建会整体拒读——但仍绝不能让旧二进制**改写**（重命名、摘要）任何已滚动的会话：改写会用旧构建能读到的内容整个替换活跃文件。对更老的（schema 1）会话，旧版重写擦掉 `sealed_segments` 会让封存分段对加载不可见；在这个未点名的状态存续期间，改写会被拒绝、seal 也会拒绝替换未点名的分段——文件保留在磁盘上，但该会话在状态修复前不再滚动。
 
@@ -41,7 +41,7 @@ sudo systemctl restart ra-serve
 
 ## 钥匙串集成
 
-ra 支持将 API 密钥存储在操作系统的密钥存储中，而不是以明文形式存放在配置文件的 JSON 中：macOS 使用钥匙串（Apple Silicon 上提供硬件级加密和操作系统级别的访问控制），Linux 使用 `~/.ra/secrets` 下的 0600 文件，Windows 暂无密钥存储——请改用环境变量或明文 `env_vars`。下图展示的是 macOS 后端。
+RecurAgent 支持将 API 密钥存储在操作系统的密钥存储中，而不是以明文形式存放在配置文件的 JSON 中：macOS 使用钥匙串（Apple Silicon 上提供硬件级加密和操作系统级别的访问控制），Linux 使用 `~/.ra/secrets` 下的 0600 文件，Windows 暂无密钥存储——请改用环境变量或明文 `env_vars`。下图展示的是 macOS 后端。
 
 ### 架构
 
@@ -141,7 +141,7 @@ security set-keychain-settings ~/Library/Keychains/login.keychain-db
 | "User interaction is not allowed" | 钥匙串已锁定（SSH 会话） | `ra auth unlock --password <pw>` |
 | 钥匙串查找超时（3 秒） | 钥匙串已锁定（LaunchDaemon） | 启用自动登录，重启 |
 | "keychain marker found but no secret" | 密钥未存储或使用了错误的钥匙串 | 解锁后重新执行 `ra auth set-key` |
-| 网关启动时卡住 | 钥匙串查找阻塞 | 更新到最新的 ra 二进制文件 |
+| 网关启动时卡住 | 钥匙串查找阻塞 | 更新到最新的 RecurAgent 二进制文件 |
 
 ### 安全性对比
 
@@ -225,7 +225,7 @@ ra auth issue-work-secret \
 
 ### macOS (launchd)
 
-部署脚本将 ra 安装为**系统 LaunchDaemon**，位于 `/Library/LaunchDaemons/io.ra.serve.plist`（因此登出后仍存活，并在 GUI 登录前启动）。使用 `sudo` 管理：
+部署脚本将 RecurAgent 安装为**系统 LaunchDaemon**，位于 `/Library/LaunchDaemons/io.ra.serve.plist`（因此登出后仍存活，并在 GUI 登录前启动）。使用 `sudo` 管理：
 
 ```bash
 # 加载服务
@@ -274,4 +274,4 @@ sudo journalctl -u ra-serve -f
 
 UI Protocol 客户端可以通过已认证的 WebSocket（`/api/ui-protocol/ws`）调用 `server/shutdown` 方法停止服务器。它的效果与 Ctrl+C 完全一致：连接排空、网关停止、进程退出。该调用是幂等的，停止动作在请求被处理后约 250 ms 触发，确认通常仍能赶在排空前送达客户端（出站背压下客户端可能错过确认，但停止照常发生）。
 
-该方法只在**本地部署**（`config.mode = "local"`）且开启 solo 登录（`ra serve --solo` / `OCTOS_SOLO_LOGIN=1`）时被接受，且仅限 HTTP serve（不带 `--stdio` 的 `ra serve`）。一次调用会停止整个进程，所有已连接客户端一起下线，其运行中的轮次一并取消。fleet/托管服务器与 `--stdio` serve 会以 `invalid_request`（-32600）携带 `data.kind: "server_shutdown_unavailable"` 拒绝该调用，什么都不停；session 级（session-ingress）连接则完全无法调用，只会收到不带 kind 的裸 `invalid_request`。注意本地 solo 的信任模型：solo serve 上，任何能打开 WebSocket 的本地进程——或白名单来源页面——都能停止服务器。
+该方法只在**本地部署**（`config.mode = "local"`）且开启 solo 登录（`ra serve --solo` / `RA_SOLO_LOGIN=1`）时被接受，且仅限 HTTP serve（不带 `--stdio` 的 `ra serve`）。一次调用会停止整个进程，所有已连接客户端一起下线，其运行中的轮次一并取消。fleet/托管服务器与 `--stdio` serve 会以 `invalid_request`（-32600）携带 `data.kind: "server_shutdown_unavailable"` 拒绝该调用，什么都不停；session 级（session-ingress）连接则完全无法调用，只会收到不带 kind 的裸 `invalid_request`。注意本地 solo 的信任模型：solo serve 上，任何能打开 WebSocket 的本地进程——或白名单来源页面——都能停止服务器。

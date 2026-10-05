@@ -1,5 +1,5 @@
 //! In-process OUP transport for local frontends. The other endpoint is the
-//! actual stdio dispatcher used by OctosCode, not a parallel agent runner.
+//! actual stdio dispatcher used by RaCode, not a parallel agent runner.
 
 use std::collections::HashMap;
 use std::sync::Arc;

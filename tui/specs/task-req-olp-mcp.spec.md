@@ -14,7 +14,7 @@ OLP 今天有四条信道(黑板批注、ACK 定式、PR review、goal 派发),�
 `scripts/olp-init.sh` 同发行哲学),内环经 `ra mcp` 客户端机制挂载后
 可在 turn 内 `ask_outer` 提问并等待外环作答。
 
-server 是**外环侧基建**:octos 引擎零改动,octoscode 仓库只新增
+server 是**外环侧基建**:RecurAgent 引擎零改动,ra-tui 仓库只新增
 server 脚本、本规格、以及 S2 的内环工具配置 diff。operator 已拍板设计
 定论(见下),不重开讨论。
 
@@ -43,11 +43,11 @@ server 脚本、本规格、以及 S2 的内环工具配置 diff。operator 已�
 
 ### Allowed Changes
 - specs/task-req-olp-mcp.spec.md(本文件)
-- octoscode olp-mcp-serve 子命令(#31 Rust 化:src/olp_mcp.rs + src/cmd/olp_mcp.rs,纯 stdlib 无新依赖;Python 原型归档 scripts/reference/)
+- ra-tui olp-mcp-serve 子命令(#31 Rust 化:src/olp_mcp.rs + src/cmd/olp_mcp.rs,纯 stdlib 无新依赖;Python 原型归档 scripts/reference/)
 - S2 的内环 MCP 工具配置(配置 diff 先落板给外环过目,确认后再生效)
 
 ### Forbidden
-- 不得改动 ra 引擎(ra 仓库)任何代码——挂载完全走 `ra mcp`
+- 不得改动 RecurAgent 引擎(RecurAgent 仓库)任何代码——挂载完全走 `ra mcp`
   既有客户端机制。
 - 不得在 server 内引入第三方依赖(pip 包、vendored 库);纯 Python 3
   标准库。
@@ -70,14 +70,14 @@ S0:本规格过 `agent-spec guard --spec-dir specs --code .`(lint 无
 ERROR;新 spec 尚无代码可验,verify 全 skipped 可接受)。
 
 S1(#31 Rust 化后):`cargo test --test olp_mcp_contract` 全绿(真子进程
-  `octoscode olp-mcp-serve` stdio 驱动;Python 原型归档于
+  `ra-tui olp-mcp-serve` stdio 驱动;Python 原型归档于
   scripts/reference/olp-mcp-server.py),逐条对应下列断言:
 
 Scenario: initialize 握手
   测试: self_test_initialize_handshake
   Given server 以 stdio 模式启动
   When 客户端发送 initialize 请求
-  Then 返回合法 capabilities(tools 非空)且协议版本与 ra mcp 握手一致
+  Then 返回合法 capabilities(tools 非空)且协议版本与 RecurAgent mcp 握手一致
 
 Scenario: tools/list 仅二件
   测试: self_test_tools_list_exactly_two
