@@ -358,7 +358,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        # Cargo treats the vendored crates under `vendor/` as implicit workspace
+        # members (they are path dependencies), so a plain `cargo fmt --all`
+        # would reformat third-party sources that stay byte-faithful to their
+        # upstream revision. Format the workspace's own crates only.
+        run: |
+          cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[]
+                     | select(.manifest_path | contains("/vendor/") | not)
+                     | .name' \
+            | xargs -I{} cargo fmt -p {} -- --check
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
