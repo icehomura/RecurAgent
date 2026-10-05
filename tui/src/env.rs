@@ -96,23 +96,23 @@ mod tests {
 
         // Neither exists → fresh installs target the ra entry.
         assert_eq!(
-            pick_home_entry(home, ".ra", ".ra"),
+            pick_home_entry(home, ".ra", ".octos"),
             home.join(".ra"),
             "neither present must default to the new entry"
         );
 
         // Only legacy exists → keep using the legacy state.
-        std::fs::create_dir(home.join(".ra")).expect("create legacy");
+        std::fs::create_dir(home.join(".octos")).expect("create legacy");
         assert_eq!(
-            pick_home_entry(home, ".ra", ".ra"),
-            home.join(".ra"),
+            pick_home_entry(home, ".ra", ".octos"),
+            home.join(".octos"),
             "legacy state must still be honoured when it is all there is"
         );
 
         // Both exist → new wins.
         std::fs::create_dir(home.join(".ra")).expect("create new");
         assert_eq!(
-            pick_home_entry(home, ".ra", ".ra"),
+            pick_home_entry(home, ".ra", ".octos"),
             home.join(".ra"),
             "the ra entry must win once it exists"
         );
@@ -122,9 +122,12 @@ mod tests {
     fn ra_or_legacy_home_entry_uses_env_home() {
         // The live-process wrapper: no assertion about the host's HOME values,
         // only that a resolved entry is the ra or legacy spelling.
-        if let Some(entry) = ra_or_legacy_home_entry(".ra", ".ra") {
+        if let Some(entry) = ra_or_legacy_home_entry(".ra", ".octos") {
             let name = entry.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            assert!(name == ".ra" || name == ".ra", "unexpected entry {entry:?}");
+            assert!(
+                name == ".ra" || name == ".octos",
+                "unexpected entry {entry:?}"
+            );
         }
     }
 }

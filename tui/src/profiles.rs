@@ -28,7 +28,7 @@ pub fn discover_local_profile_ids(stdio_command: Option<&str>) -> Vec<String> {
 #[derive(Debug, PartialEq, Eq)]
 enum DataDirResolution {
     /// No `--data-dir` / `RA_HOME=` override — the default `~/.ra` (or a
-    /// pre-existing legacy `~/.ra`) applies.
+    /// pre-existing legacy `~/.octos`) applies.
     None,
     /// An override we resolved to a concrete path.
     Resolved(PathBuf),
@@ -339,7 +339,7 @@ fn cwd_hash(cwd: &Path) -> String {
 /// `~/.ra` that holds state, else `~/.ra` (fresh installs). `None` when no
 /// home dir resolves.
 fn default_data_home() -> Option<PathBuf> {
-    crate::env::ra_or_legacy_home_entry(".ra", ".ra")
+    crate::env::ra_or_legacy_home_entry(".ra", ".octos")
 }
 
 #[cfg(test)]
@@ -432,7 +432,7 @@ mod tests {
             DataDirResolution::Unresolvable
         );
         assert_eq!(
-            data_dir_from_command("OCTOS_HOME=\"$PWD/.ra\" ra serve"),
+            data_dir_from_command("OCTOS_HOME=\"$PWD/.octos\" ra serve"),
             DataDirResolution::Unresolvable
         );
         assert_eq!(
@@ -478,8 +478,8 @@ mod tests {
             .and_then(|p| p.file_name())
             .and_then(|n| n.to_str());
         assert!(
-            matches!(base, Some(".ra") | Some(".ra")),
-            "data home must be the ra entry or a kept legacy .ra, got {:?}",
+            matches!(base, Some(".ra") | Some(".octos")),
+            "data home must be the ra entry or a kept legacy .octos, got {:?}",
             base
         );
     }
@@ -518,14 +518,14 @@ mod tests {
         // "no profiles" (→ onboarding) instead of falling back to the default
         // dir and offering foreign profiles.
         assert!(solo_profiles_dir(Some("RA_HOME=$PWD/.ra ra serve --stdio")).is_none());
-        assert!(solo_profiles_dir(Some("OCTOS_HOME=$PWD/.ra ra serve --stdio")).is_none());
+        assert!(solo_profiles_dir(Some("OCTOS_HOME=$PWD/.octos ra serve --stdio")).is_none());
         // No command at all (remote launch) also yields no local profiles dir.
         assert!(solo_profiles_dir(None).is_none());
     }
 
     #[test]
     fn solo_profiles_dir_defaults_only_when_no_override() {
-        // No override → default `~/.ra/profiles` (or legacy `~/.ra/profiles`
+        // No override → default `~/.ra/profiles` (or legacy `~/.octos/profiles`
         // when only that home exists). Only assert structure when a home dir is
         // resolvable in the test env.
         let dir = solo_profiles_dir(Some("ra serve --stdio --solo"));
@@ -536,7 +536,7 @@ mod tests {
                 .and_then(|p| p.file_name())
                 .and_then(|n| n.to_str());
             assert!(
-                matches!(home, Some(".ra") | Some(".ra")),
+                matches!(home, Some(".ra") | Some(".octos")),
                 "profiles dir must be under the ra (or kept legacy) home, got {}",
                 dir.display()
             );

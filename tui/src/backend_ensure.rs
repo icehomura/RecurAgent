@@ -723,21 +723,31 @@ mod tests {
     }
 
     #[test]
-    fn windows_token_rewrite_handles_a_legacy_octos_backend() {
-        let legacy = PathBuf::from("C:/Users/u/.ra/bin/ra.exe");
-        // Command says `ra`, resolved file is `ra.exe` → rewrite the token
-        // only (never embed a path in a `cmd /C` command).
+    fn windows_command_rewrites_only_a_different_program_stem() {
+        // Same stem (`ra` vs `ra.exe`) → the bare command is left untouched;
+        // the child's prepended PATH resolves it via PATHEXT.
         assert_eq!(
-            windows_command_for("ra serve --stdio --solo", &legacy).as_deref(),
-            Some("ra serve --stdio --solo")
-        );
-        // Same-name sibling/install dir → the command is left untouched.
-        assert_eq!(
-            windows_command_for("ra serve --stdio", Path::new("C:/t/ra.exe")),
+            windows_command_for(
+                "ra serve --stdio --solo",
+                Path::new("C:/Users/u/.ra/bin/ra.exe")
+            ),
             None
         );
-        // A user-managed `ra` command is never rewritten.
-        assert_eq!(windows_command_for("ra serve --stdio", &legacy), None);
+        // A resolved binary whose stem differs from the command token → rewrite
+        // only the token (never embed a path in a `cmd /C` command).
+        assert_eq!(
+            windows_command_for(
+                "ra serve --stdio --solo",
+                Path::new("C:/Users/u/.ra/bin/ra-legacy.exe")
+            )
+            .as_deref(),
+            Some("ra-legacy serve --stdio --solo")
+        );
+        // A user-managed (non-canonical) command is never rewritten.
+        assert_eq!(
+            windows_command_for("octos serve --stdio", Path::new("C:/Users/u/.ra/bin/ra.exe")),
+            None
+        );
     }
 
     #[test]
@@ -751,17 +761,15 @@ mod tests {
     }
 
     #[test]
-    fn legacy_only_backend_is_launchable_on_both_platform_paths() {
-        let legacy = PathBuf::from("/home/u/.ra/bin/ra");
+    fn resolved_backend_is_launchable_on_both_platform_paths() {
+        let backend = PathBuf::from("/home/u/.ra/bin/ra");
         let command = "ra serve --stdio --solo";
-        let resolved = Resolved::AtPath(legacy.clone());
+        let resolved = Resolved::AtPath(backend.clone());
 
-        // Windows: never embed a path — the program token becomes the resolved
-        // binary's bare stem, and its dir is prepended to the child PATH.
-        assert_eq!(
-            windows_command_for(command, &legacy).as_deref(),
-            Some("ra serve --stdio --solo")
-        );
+        // Windows: never embed a path. The resolved stem matches the command
+        // token, so the command stays bare and its dir is prepended to the
+        // child PATH (which resolves `ra` → `ra.exe`).
+        assert_eq!(windows_command_for(command, &backend), None);
         assert_eq!(
             child_path_prepend(&resolved),
             Some(PathBuf::from("/home/u/.ra/bin"))
@@ -769,7 +777,7 @@ mod tests {
 
         // Unix: the command is rewritten to the explicit path.
         assert_eq!(
-            rewrite_program(command, &legacy).as_deref(),
+            rewrite_program(command, &backend).as_deref(),
             Some("/home/u/.ra/bin/ra serve --stdio --solo")
         );
     }
@@ -822,7 +830,7 @@ mod tests {
             "my-custom-backend --stdio",          // not ra
             "env A=1 my-backend serve",           // not ra
             "ra.exe serve --stdio",               // not canonical; bare `ra` is
-            "ra serve --stdio",                // legacy upstream — user-managed
+            "octos serve --stdio",             // legacy name — user-managed
             "env PATH=/custom/bin:$PATH ra serve", // PATH override — can't probe same ra
             "PATH=/opt/ra/bin ra serve",          // leading PATH override
         ] {
@@ -888,7 +896,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_octos_version_extracts_semver() {
+    fn parse_backend_version_extracts_semver() {
         assert_eq!(
             parse_octos_version("ra 1.1.0 (79c19f6d4 2026-07-11)").as_deref(),
             Some("1.1.0")
@@ -901,8 +909,8 @@ mod tests {
         assert_eq!(parse_octos_version("ra 1.2.3.4"), None); // 4-part isn't X.Y.Z
         // `ra --version` prints a prerelease; the leading X.Y.Z must still read.
         assert_eq!(
-            parse_octos_version("ra 0.1.0 (dde7655 2026-10-03)").as_deref(),
-            Some("2.0.3")
+            parse_octos_version("ra 0.1.0-rc.13 (dde7655 2026-10-03)").as_deref(),
+            Some("0.1.0")
         );
     }
 

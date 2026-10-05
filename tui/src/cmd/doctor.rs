@@ -565,7 +565,7 @@ fn install_location_label(path: &Path) -> &'static str {
         "brew"
     } else if p.contains("/.ra/bin/") {
         "ra install dir"
-    } else if p.contains("/.ra/bin/") {
+    } else if p.contains("/.octos/bin/") {
         "legacy ra install"
     } else if p.contains("/.local/bin/") {
         "shell installer"
@@ -1835,7 +1835,7 @@ mod tests {
             "ra install dir"
         );
         assert_eq!(
-            install_location_label(Path::new("/home/u/.ra/bin/ra")),
+            install_location_label(Path::new("/home/u/.octos/bin/ra")),
             "legacy ra install"
         );
         assert_eq!(install_location_label(Path::new("/usr/bin/ra")), "system");
