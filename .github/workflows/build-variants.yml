@@ -1,0 +1,226 @@
+name: Build Variants
+
+# Reusable builder for the three ra variants across the four release targets.
+# The only callers are the two release flows:
+#   * release.yml      — `v*` tag push / manual dispatch → OFFICIAL release
+#   * build-latest.yml — push to main with no tag        → rolling "latest"
+#
+# Asset naming contract (resolved BY NAME in scripts/install.sh,
+# scripts/install.ps1, packaging/npm/install.js and crates/ra-diagnostics —
+# never rename):
+#   ra          → ra-bundle-<triple>.tar.gz|.zip          (+ .sha256)
+#   ra-headless → ra-headless-bundle-<triple>.tar.gz|.zip (+ .sha256)
+#   ra-full     → ra-full-bundle-<triple>.tar.gz|.zip     (+ .sha256)
+#
+# Variant recipes (mirroring the Justfile's `just release`):
+#   ra-headless : kernel only — no TUI, no web UI, no local llama.cpp
+#                 (`--no-default-features --features api`)
+#   ra          : kernel + local llama.cpp embeddings, no web UI
+#                 (crate default features), bundled per scripts/bundle-release.sh
+#   ra-full     : `ra` with the web UI embed built first + the ra-tui client
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to build (tag, branch or SHA). Empty builds the caller's ref."
+        required: false
+        type: string
+        default: ""
+      platform:
+        description: "Target platform to build (all = every target)."
+        required: false
+        type: string
+        default: all
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  RUST_VERSION: "1.97.1"
+  CARGO_TERM_COLOR: always
+  # Skill binaries shipped next to the kernels. scripts/bundle-release.sh is
+  # the SSOT for the full `ra` bundle's shipping set.
+  SKILL_CRATES: "-p news_fetch -p deep-search -p deep-crawl -p send-email -p account-manager -p voice -p clock -p weather -p smart-home"
+
+jobs:
+  plan:
+    name: Plan variant matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      enabled: ${{ steps.matrix.outputs.enabled }}
+    steps:
+      - name: Compute variant × target matrix
+        id: matrix
+        env:
+          PLATFORM: ${{ inputs.platform }}
+        run: |
+          set -euo pipefail
+          # One entry per release target. `runner` is the GitHub-hosted image,
+          # `archive` the bundle format installers expect for that triple.
+          targets='[
+            {"target":"x86_64-unknown-linux-gnu","runner":"ubuntu-24.04","platform":"linux-x86","archive":"tar.gz"},
+            {"target":"aarch64-unknown-linux-gnu","runner":"ubuntu-24.04-arm","platform":"linux-arm","archive":"tar.gz"},
+            {"target":"aarch64-apple-darwin","runner":"macos-14","platform":"macos-arm","archive":"tar.gz"},
+            {"target":"x86_64-pc-windows-msvc","runner":"windows-latest","platform":"windows","archive":"zip"}
+          ]'
+          variants='["ra","ra-headless","ra-full"]'
+          case "${PLATFORM:-all}" in
+            all) ;;
+            macos-arm|linux-x86|linux-arm|windows)
+              targets=$(jq -c --arg p "$PLATFORM" \
+                '[.[] | select(.platform == $p)]' <<<"$targets") ;;
+            docker)
+              # The Docker image build is not implemented (see the disabled job
+              # in release.yml), so this dispatch option selects no targets.
+              echo "::warning::platform 'docker' has no build targets — nothing to build"
+              targets='[]' ;;
+            *)
+              echo "::error::unknown platform '$PLATFORM' (want all, macos-arm, linux-x86, linux-arm, windows or docker)"
+              exit 1 ;;
+          esac
+          if [ "$(jq -n --argjson t "$targets" '$t | length')" = 0 ]; then
+            # An empty matrix.include is invalid, so emit one inert entry; the
+            # build job is skipped because `enabled` is false.
+            matrix='{"include":[{"variant":"none","target":"none","runner":"ubuntu-latest","platform":"none","archive":"tar.gz"}]}'
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            matrix=$(jq -cn --argjson variants "$variants" --argjson targets "$targets" \
+              '{include: [$targets[] as $t | $variants[] as $v | ($t + {variant: $v})]}')
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "planned $(jq -r '.include | length' <<<"$matrix") build job(s) for platform '${PLATFORM:-all}':"
+          jq -r '.include[] | "  \(.variant) × \(.target) on \(.runner)"' <<<"$matrix"
+
+  build:
+    name: ${{ matrix.variant }} (${{ matrix.target }})
+    needs: plan
+    if: ${{ needs.plan.outputs.enabled == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      # e.g. ra-full-bundle-aarch64-apple-darwin.tar.gz
+      BUNDLE: ${{ matrix.variant }}-bundle-${{ matrix.target }}.${{ matrix.archive }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ matrix.variant }}-${{ matrix.target }}
+
+      - name: Set build metadata
+        run: |
+          echo "ra_GIT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "ra_BUILD_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
+          # Keep build-machine paths (home dir, cargo registry, checkout) out
+          # of the shipped binaries' panic messages and file!() strings.
+          home_dir="$HOME"; cargo_dir="${CARGO_HOME:-$HOME/.cargo}"; ws_dir="$GITHUB_WORKSPACE"
+          if command -v cygpath >/dev/null 2>&1; then
+            home_dir=$(cygpath -w "$home_dir"); cargo_dir=$(cygpath -w "$cargo_dir"); ws_dir=$(cygpath -w "$ws_dir")
+          fi
+          echo "RUSTFLAGS=${RUSTFLAGS:+$RUSTFLAGS }--remap-path-prefix=${home_dir}=~ --remap-path-prefix=${cargo_dir}=/cargo --remap-path-prefix=${ws_dir}=." >> "$GITHUB_ENV"
+
+      - name: Build dashboard (ra-full only)
+        # rust-embed bakes crates/ra-cli/static/admin/ in at compile time, so
+        # the SPA must be built BEFORE cargo. Needs node/npm (preinstalled on
+        # the hosted runners). The script aborts on any failure, so a broken
+        # dashboard can never be published as an apparently good binary.
+        if: matrix.variant == 'ra-full'
+        run: ./scripts/build-dashboard.sh
+
+      - name: Build ${{ matrix.variant }} binaries
+        run: |
+          set -euo pipefail
+          case '${{ matrix.variant }}' in
+            ra-headless)
+              cargo build --release -p ra-cli --bin ra --no-default-features --features api
+              ;;
+            ra)
+              cargo build --release -p ra-cli --bin ra
+              cargo build --release -p ra-sandbox
+              cargo build --release ${SKILL_CRATES}
+              ;;
+            ra-full)
+              cargo build --release -p ra-cli --bin ra
+              cargo build --release --manifest-path tui/Cargo.toml --bin ra-tui
+              ;;
+            *)
+              echo "::error::unknown variant '${{ matrix.variant }}'"
+              exit 1
+              ;;
+          esac
+
+      - name: Bundle ra (scripts/bundle-release.sh)
+        # Single source of truth for the shipping set: ra, ra-sandbox, the
+        # skill binaries and model_catalog.json — the set installers unpack.
+        if: matrix.variant == 'ra'
+        run: ./scripts/bundle-release.sh "$BUNDLE"
+
+      - name: Bundle ${{ matrix.variant }}
+        if: matrix.variant != 'ra'
+        run: |
+          set -euo pipefail
+          out="$(pwd)/$BUNDLE"
+          ext=""
+          if [ '${{ matrix.target }}' = 'x86_64-pc-windows-msvc' ]; then
+            ext=".exe"
+          fi
+          rm -rf dist-variant
+          mkdir dist-variant
+          # The variant's own kernel build is the only `ra` in this bundle.
+          cp "target/release/ra${ext}" dist-variant/
+          if [ '${{ matrix.variant }}' = 'ra-full' ]; then
+            # ra-full = ra with the dashboard embedded + the terminal client.
+            # tui/ is its own cargo workspace, so its artifacts land under
+            # tui/target unless CARGO_TARGET_DIR redirects them.
+            if [ -f "tui/target/release/ra-tui${ext}" ]; then
+              tui_bin="tui/target/release/ra-tui${ext}"
+            else
+              tui_bin="target/release/ra-tui${ext}"
+            fi
+            cp "$tui_bin" dist-variant/
+          fi
+          # Canonical model catalog (model-provisioning SSOT) ships next to
+          # the binary, same as in scripts/bundle-release.sh.
+          cp model_catalog.json dist-variant/
+          case "$BUNDLE" in
+            *.tar.gz) (cd dist-variant && tar czf "$out" ./*) ;;
+            *.zip)    (cd dist-variant && 7z a "$out" ./*) ;;
+            *) echo "error: unknown archive format: $BUNDLE" >&2; exit 1 ;;
+          esac
+          # Checksum sidecar in `sha256sum -c` format. macOS runners ship
+          # shasum instead; the output is identical.
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$BUNDLE" > "$BUNDLE.sha256"
+          else
+            shasum -a 256 "$BUNDLE" > "$BUNDLE.sha256"
+          fi
+          echo "bundled $BUNDLE:"
+          case "$BUNDLE" in
+            *.tar.gz) tar tzf "$BUNDLE" ;;
+            *.zip) 7z l "$BUNDLE" ;;
+          esac
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.variant }}-${{ matrix.target }}
+          # Fail loudly when the bundle or its sidecar is missing instead of
+          # letting the publish job ship a partial asset set.
+          if-no-files-found: error
+          path: |
+            ${{ env.BUNDLE }}
+            ${{ env.BUNDLE }}.sha256

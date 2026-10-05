@@ -1,4 +1,13 @@
 name: Release
+
+# OFFICIAL release flow — fires ONLY for a pushed `v*` tag (or a manual
+# dispatch that supplies a tag). `tags: ['v*']` matches tag refs only, so
+# pushing an untagged commit to main NEVER starts this workflow; that push
+# runs build-latest.yml instead. The two flows are mutually exclusive per push.
+#
+# Builds all three variants (ra, ra-headless, ra-full) × all four targets via
+# the reusable build-variants.yml, then publishes the full asset set and
+# verifies it after the fact.
 on:
   push:
     tags: ['v*']
@@ -25,11 +34,6 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  RUST_VERSION: "1.97.1"
-  # embed-llama: the bundled in-process embedder (llama.cpp, needs cmake on
-  # the runner). The macOS job adds Metal below.
-  FEATURES: "api,telegram,discord,whatsapp,feishu,twilio,wecom,wecom-bot,audio_mp3,embed-llama"
-  SKILL_CRATES: "-p news_fetch -p deep-search -p deep-crawl -p send-email -p account-manager -p voice -p clock -p weather -p smart-home"
 
 jobs:
   check-version:
@@ -52,240 +56,151 @@ jobs:
             exit 1
           fi
 
-  build-macos-arm:
+  build:
+    name: Build release variants
     needs: check-version
-    if: github.event_name == 'push' || inputs.platform == 'all' || inputs.platform == 'macos-arm'
-    runs-on: macos-14
-    env:
-      # Apple Silicon: offload the bundled embedder to Metal.
-      FEATURES: "api,telegram,discord,whatsapp,feishu,twilio,wecom,wecom-bot,audio_mp3,embed-llama-metal"
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          # On workflow_dispatch for a specific tag, check out THAT tag —
-          # otherwise we build main's HEAD but publish under the tag.
-          ref: ${{ inputs.tag || github.ref }}
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-      - uses: Swatinem/rust-cache@v2
+    # The variant × target matrix (ra, ra-headless, ra-full × the four release
+    # triples), per-target `runs-on` images and the bundle recipes all live in
+    # the reusable workflow. On a tag push every target is built; a manual
+    # dispatch can restrict the build to one platform.
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-variants.yml
+    with:
+      # On workflow_dispatch for a specific tag, build THAT tag — otherwise we
+      # build main's HEAD but publish under the tag.
+      ref: ${{ inputs.tag || github.ref }}
+      platform: ${{ inputs.platform || 'all' }}
 
-      - name: Set build metadata
-        run: |
-          echo "ra_GIT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-          echo "ra_BUILD_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
-          # Keep build-machine paths (home dir, cargo registry, checkout) out
-          # of the shipped binaries' panic messages and file!() strings.
-          home_dir="$HOME"; cargo_dir="${CARGO_HOME:-$HOME/.cargo}"; ws_dir="$GITHUB_WORKSPACE"
-          if command -v cygpath >/dev/null 2>&1; then
-            home_dir=$(cygpath -w "$home_dir"); cargo_dir=$(cygpath -w "$cargo_dir"); ws_dir=$(cygpath -w "$ws_dir")
-          fi
-          echo "RUSTFLAGS=${RUSTFLAGS:+$RUSTFLAGS }--remap-path-prefix=${home_dir}=~ --remap-path-prefix=${cargo_dir}=/cargo --remap-path-prefix=${ws_dir}=." >> "$GITHUB_ENV"
-
-      - name: Build dashboard
-        run: |
-          # One command per line so `set -e` aborts on ANY failure — a chained
-          # `&&` can let an early failure slip and publish a binary missing the
-          # embedded /admin SPA.
-          cd dashboard
-          npm ci
-          npm run build
-          cd ..
-          bash scripts/build-swarm-app.sh
-
-      - name: Build
-        run: |
-          cargo build --release -p ra-cli --features ${{ env.FEATURES }}
-          cargo build --release -p ra-sandbox
-          cargo build --release ${{ env.SKILL_CRATES }}
-
-      - name: Bundle
-        shell: bash
-        run: ./scripts/bundle-release.sh ra-bundle-aarch64-apple-darwin.tar.gz
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: macos-arm
-          # Fail loudly when the bundle or its sidecar is missing instead of
-          # letting verify-release fail 3 jobs later with a cryptic gap.
-          if-no-files-found: error
-          path: |
-            ra-bundle-aarch64-apple-darwin.tar.gz
-            ra-bundle-aarch64-apple-darwin.tar.gz.sha256
-
-  build-linux-x86:
-    needs: check-version
-    if: github.event_name == 'push' || inputs.platform == 'all' || inputs.platform == 'linux-x86'
+  publish:
+    if: ${{ !failure() && !cancelled() && needs.build.result == 'success' && (github.event_name == 'push' || inputs.tag != '') }}
+    needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v6
         with:
-          # On workflow_dispatch for a specific tag, check out THAT tag —
-          # otherwise we build main's HEAD but publish under the tag.
-          ref: ${{ inputs.tag || github.ref }}
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-      - uses: Swatinem/rust-cache@v2
+          fetch-depth: 0
 
-      - name: Set build metadata
+      - name: Install git-cliff
+        run: cargo install git-cliff --locked
+
+      - name: Generate release notes
+        run: git-cliff --latest --strip header -o RELEASE_NOTES.md
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Collect release assets
         run: |
-          echo "ra_GIT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-          echo "ra_BUILD_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
-          # Keep build-machine paths (home dir, cargo registry, checkout) out
-          # of the shipped binaries' panic messages and file!() strings.
-          home_dir="$HOME"; cargo_dir="${CARGO_HOME:-$HOME/.cargo}"; ws_dir="$GITHUB_WORKSPACE"
-          if command -v cygpath >/dev/null 2>&1; then
-            home_dir=$(cygpath -w "$home_dir"); cargo_dir=$(cygpath -w "$cargo_dir"); ws_dir=$(cygpath -w "$ws_dir")
+          mkdir -p release-assets
+          # Every variant × target bundle plus its .sha256 sidecar. A
+          # platform-restricted dispatch only produced that platform's
+          # artifacts, so only those get published.
+          find artifacts -type f -name '*-bundle-*' -exec cp {} release-assets/ \;
+          # Always include install scripts
+          cp scripts/install.sh scripts/install.ps1 scripts/deploy.ps1 scripts/ra-doctor.sh release-assets/
+          echo "Assets to upload:"
+          ls -la release-assets/
+
+      - name: Detect pre-release
+        id: prerelease
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          if echo "$TAG" | grep -qE '[-](rc|alpha|beta|dev|preview|test|macos|linux|win)'; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "RUSTFLAGS=${RUSTFLAGS:+$RUSTFLAGS }--remap-path-prefix=${home_dir}=~ --remap-path-prefix=${cargo_dir}=/cargo --remap-path-prefix=${ws_dir}=." >> "$GITHUB_ENV"
 
-      - name: Build dashboard
-        run: |
-          # One command per line so `set -e` aborts on ANY failure — a chained
-          # `&&` can let an early failure slip and publish a binary missing the
-          # embedded /admin SPA.
-          cd dashboard
-          npm ci
-          npm run build
-          cd ..
-          bash scripts/build-swarm-app.sh
-
-      - name: Build
-        run: |
-          cargo build --release -p ra-cli --features ${{ env.FEATURES }}
-          cargo build --release -p ra-sandbox
-          cargo build --release ${{ env.SKILL_CRATES }}
-
-      - name: Bundle
-        shell: bash
-        run: ./scripts/bundle-release.sh ra-bundle-x86_64-unknown-linux-gnu.tar.gz
-
-      - uses: actions/upload-artifact@v7
+      - uses: softprops/action-gh-release@v2
         with:
-          name: linux-x86
-          if-no-files-found: error
-          path: |
-            ra-bundle-x86_64-unknown-linux-gnu.tar.gz
-            ra-bundle-x86_64-unknown-linux-gnu.tar.gz.sha256
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
+          files: release-assets/*
+          body_path: RELEASE_NOTES.md
 
-  build-linux-arm:
-    needs: check-version
-    if: github.event_name == 'push' || inputs.platform == 'all' || inputs.platform == 'linux-arm'
-    runs-on: ubuntu-24.04-arm
+  verify-release:
+    name: Verify GitHub release assets
+    needs: publish
+    if: ${{ !failure() && !cancelled() && needs.publish.result == 'success' && (github.event_name == 'push' || inputs.tag != '') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
-        with:
-          # On workflow_dispatch for a specific tag, check out THAT tag —
-          # otherwise we build main's HEAD but publish under the tag.
-          ref: ${{ inputs.tag || github.ref }}
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: arm64-release
-
-      - name: Set build metadata
+      - name: Verify complete release and readable archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          PLATFORM: ${{ inputs.platform || 'all' }}
         run: |
-          echo "ra_GIT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-          echo "ra_BUILD_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
-          # Keep build-machine paths (home dir, cargo registry, checkout) out
-          # of the shipped binaries' panic messages and file!() strings.
-          home_dir="$HOME"; cargo_dir="${CARGO_HOME:-$HOME/.cargo}"; ws_dir="$GITHUB_WORKSPACE"
-          if command -v cygpath >/dev/null 2>&1; then
-            home_dir=$(cygpath -w "$home_dir"); cargo_dir=$(cygpath -w "$cargo_dir"); ws_dir=$(cygpath -w "$ws_dir")
-          fi
-          echo "RUSTFLAGS=${RUSTFLAGS:+$RUSTFLAGS }--remap-path-prefix=${home_dir}=~ --remap-path-prefix=${cargo_dir}=/cargo --remap-path-prefix=${ws_dir}=." >> "$GITHUB_ENV"
+          set -euo pipefail
+          # The bundles the run was supposed to publish: all three variants
+          # for every target the dispatch selected.
+          case "$PLATFORM" in
+            all)       triples="aarch64-apple-darwin aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu x86_64-pc-windows-msvc" ;;
+            macos-arm) triples="aarch64-apple-darwin" ;;
+            linux-x86) triples="x86_64-unknown-linux-gnu" ;;
+            linux-arm) triples="aarch64-unknown-linux-gnu" ;;
+            windows)   triples="x86_64-pc-windows-msvc" ;;
+            *)         echo "::error::unknown platform '$PLATFORM'"; exit 1 ;;
+          esac
+          expected=()
+          for triple in $triples; do
+            ext=tar.gz
+            case "$triple" in *windows-msvc) ext=zip ;; esac
+            for variant in ra ra-headless ra-full; do
+              expected+=("${variant}-bundle-${triple}.${ext}" "${variant}-bundle-${triple}.${ext}.sha256")
+            done
+          done
+          expected+=(install.sh install.ps1 deploy.ps1 ra-doctor.sh)
 
-      - name: Build dashboard
-        run: |
-          # One command per line so `set -e` aborts on ANY failure — a chained
-          # `&&` can let an early failure slip and publish a binary missing the
-          # embedded /admin SPA.
-          cd dashboard
-          npm ci
-          npm run build
-          cd ..
-          bash scripts/build-swarm-app.sh
+          actual=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          for asset in "${expected[@]}"; do
+            echo "$actual" | grep -Fx "$asset" >/dev/null \
+              || { echo "::error::release $TAG is missing $asset"; exit 1; }
+          done
 
-      - name: Build
-        run: |
-          cargo build --release -p ra-cli --features ${{ env.FEATURES }}
-          cargo build --release -p ra-sandbox
-          cargo build --release ${{ env.SKILL_CRATES }}
+          mkdir verify
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'ra-bundle-*' \
+            --pattern 'ra-headless-bundle-*' \
+            --pattern 'ra-full-bundle-*' \
+            --dir verify
+          # Every published sidecar must match the published bytes — this is
+          # the exact verification ra-tui's auto-install performs (#1929).
+          # Darwin sidecars are produced by shasum, the rest by sha256sum, so
+          # checking every downloaded sidecar covers both producer paths.
+          (cd verify && sha256sum -c ./*.sha256)
 
-      - name: Bundle
-        shell: bash
-        run: ./scripts/bundle-release.sh ra-bundle-aarch64-unknown-linux-gnu.tar.gz
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: linux-arm
-          if-no-files-found: error
-          path: |
-            ra-bundle-aarch64-unknown-linux-gnu.tar.gz
-            ra-bundle-aarch64-unknown-linux-gnu.tar.gz.sha256
-
-  build-windows:
-    needs: check-version
-    if: github.event_name == 'push' || inputs.platform == 'all' || inputs.platform == 'windows'
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          # On workflow_dispatch for a specific tag, check out THAT tag —
-          # otherwise we build main's HEAD but publish under the tag.
-          ref: ${{ inputs.tag || github.ref }}
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: windows-release
-
-      - name: Set build metadata
-        shell: bash
-        run: |
-          echo "ra_GIT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-          echo "ra_BUILD_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
-          # Keep build-machine paths (home dir, cargo registry, checkout) out
-          # of the shipped binaries' panic messages and file!() strings.
-          home_dir="$HOME"; cargo_dir="${CARGO_HOME:-$HOME/.cargo}"; ws_dir="$GITHUB_WORKSPACE"
-          if command -v cygpath >/dev/null 2>&1; then
-            home_dir=$(cygpath -w "$home_dir"); cargo_dir=$(cygpath -w "$cargo_dir"); ws_dir=$(cygpath -w "$ws_dir")
-          fi
-          echo "RUSTFLAGS=${RUSTFLAGS:+$RUSTFLAGS }--remap-path-prefix=${home_dir}=~ --remap-path-prefix=${cargo_dir}=/cargo --remap-path-prefix=${ws_dir}=." >> "$GITHUB_ENV"
-
-      - name: Build dashboard
-        shell: bash
-        run: |
-          # One command per line so `set -e` aborts on ANY failure — a chained
-          # `&&` can let an early failure slip and publish a binary missing the
-          # embedded /admin SPA.
-          cd dashboard
-          npm ci
-          npm run build
-          cd ..
-          bash scripts/build-swarm-app.sh
-
-      - name: Build
-        run: |
-          cargo build --release -p ra-cli --features ${{ env.FEATURES }}
-          cargo build --release -p ra-sandbox
-          cargo build --release ${{ env.SKILL_CRATES }}
-
-      - name: Bundle
-        shell: bash
-        run: ./scripts/bundle-release.sh ra-bundle-x86_64-pc-windows-msvc.zip
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: windows
-          if-no-files-found: error
-          path: |
-            ra-bundle-x86_64-pc-windows-msvc.zip
-            ra-bundle-x86_64-pc-windows-msvc.zip.sha256
+          # Readable archives, and the variant split really holds: ra-full
+          # carries the dashboard-embedded ra plus ra-tui, ra-headless is the
+          # kernel-only build.
+          for archive in verify/*.tar.gz; do
+            [ -e "$archive" ] || continue
+            tar -tzf "$archive" >/dev/null
+          done
+          # Bundles are created with `tar czf … ./*` / `7z a … ./*`, so tar
+          # entries carry a `./` prefix — accept either form. `tr -d '\r'`
+          # keeps the match working on runners whose tar prints CRLF.
+          case " $triples " in
+            *" x86_64-unknown-linux-gnu "*)
+              tar -tzf verify/ra-full-bundle-x86_64-unknown-linux-gnu.tar.gz | tr -d '\r' | grep -qE '(^|/)ra-tui$' \
+                || { echo "::error::ra-full bundle is missing ra-tui"; exit 1; }
+              tar -tzf verify/ra-headless-bundle-x86_64-unknown-linux-gnu.tar.gz | tr -d '\r' | grep -qE '(^|/)ra$' \
+                || { echo "::error::ra-headless bundle is missing the ra kernel"; exit 1; }
+              ;;
+          esac
+          case " $triples " in
+            *" x86_64-pc-windows-msvc "*)
+              unzip -l verify/ra-full-bundle-x86_64-pc-windows-msvc.zip | tr -d '\r' | grep -qE 'ra-tui\.exe$' \
+                || { echo "::error::ra-full bundle is missing ra-tui.exe"; exit 1; }
+              ;;
+          esac
 
   # TODO: uncomment after Dockerfile is fixed
   # build-docker:
@@ -321,104 +236,10 @@ jobs:
   #         cache-from: type=gha
   #         cache-to: type=gha,mode=max
 
-  publish:
-    if: ${{ !failure() && !cancelled() && (github.event_name == 'push' || inputs.tag != '') }}
-    needs: [build-macos-arm, build-linux-x86, build-linux-arm, build-windows]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Install git-cliff
-        run: cargo install git-cliff --locked
-
-      - name: Generate release notes
-        run: git-cliff --latest --strip header -o RELEASE_NOTES.md
-
-      - uses: actions/download-artifact@v8
-        with:
-          path: artifacts
-
-      - name: Collect release assets
-        run: |
-          mkdir -p release-assets
-          # Copy whichever platform bundles were built
-          find artifacts -name 'ra-bundle-*' -exec cp {} release-assets/ \;
-          # Always include install scripts
-          cp scripts/install.sh scripts/install.ps1 scripts/deploy.ps1 scripts/ra-doctor.sh release-assets/
-          echo "Assets to upload:"
-          ls -la release-assets/
-
-      - name: Detect pre-release
-        id: prerelease
-        env:
-          TAG: ${{ inputs.tag || github.ref_name }}
-        run: |
-          if echo "$TAG" | grep -qE '[-](rc|alpha|beta|dev|preview|test|macos|linux|win)'; then
-            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ inputs.tag || github.ref_name }}
-          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
-          files: release-assets/*
-          body_path: RELEASE_NOTES.md
-
-  verify-release:
-    name: Verify GitHub release assets
-    needs: publish
-    if: ${{ !failure() && !cancelled() && (github.event_name == 'push' || inputs.tag != '') }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    steps:
-      - name: Verify complete release and readable archives
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag || github.ref_name }}
-        run: |
-          set -euo pipefail
-          actual=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
-          expected='ra-bundle-aarch64-apple-darwin.tar.gz
-          ra-bundle-aarch64-apple-darwin.tar.gz.sha256
-          ra-bundle-aarch64-unknown-linux-gnu.tar.gz
-          ra-bundle-aarch64-unknown-linux-gnu.tar.gz.sha256
-          ra-bundle-x86_64-unknown-linux-gnu.tar.gz
-          ra-bundle-x86_64-unknown-linux-gnu.tar.gz.sha256
-          ra-bundle-x86_64-pc-windows-msvc.zip
-          ra-bundle-x86_64-pc-windows-msvc.zip.sha256
-          install.sh
-          install.ps1
-          deploy.ps1
-          ra-doctor.sh'
-          while IFS= read -r asset; do
-            asset=$(echo "$asset" | xargs)
-            [ -z "$asset" ] && continue
-            echo "$actual" | grep -Fx "$asset" >/dev/null \
-              || { echo "::error::release $TAG is missing $asset"; exit 1; }
-          done <<< "$expected"
-
-          mkdir verify
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'ra-bundle-*' --dir verify
-          # Every published sidecar must match the published bytes — this is
-          # the exact verification ra-tui's auto-install performs (#1929).
-          # Darwin sidecars are produced by shasum, the rest by sha256sum, so
-          # checking all four covers both producer paths.
-          (cd verify && sha256sum -c ./*.sha256)
-          tar -tzf verify/ra-bundle-x86_64-unknown-linux-gnu.tar.gz >/dev/null
-
   package-publishers:
     name: Publish npm and Homebrew packages
     needs: verify-release
-    if: ${{ !failure() && !cancelled() && (github.event_name == 'push' || inputs.tag != '') }}
+    if: ${{ !failure() && !cancelled() && needs.verify-release.result == 'success' && (github.event_name == 'push' || inputs.tag != '') }}
     uses: ./.github/workflows/publish-packages.yml
     with:
       tag: ${{ inputs.tag || github.ref_name }}
