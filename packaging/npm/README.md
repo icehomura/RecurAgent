@@ -1,10 +1,10 @@
-# @octos-org/octos
+# @your-org/ra
 
-One-line installer for the [Octos](https://github.com/octos-org/octos) server — a
+One-line installer for the [Octos](https://github.com/your-org/ra) server — a
 Rust-native, API-first Agentic OS.
 
 ```bash
-npm install -g @octos-org/octos
+npm install -g @your-org/ra
 ra serve
 ```
 
@@ -33,8 +33,8 @@ macOS Intel is not supported (no prebuilt build is published).
 
 ```bash
 # Homebrew
-brew install octos-org/octos/octos
+brew install your-org/ra/octos
 
 # Shell installer (sets up ra serve as a service)
-curl -fsSL https://github.com/octos-org/octos/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/your-org/ra/releases/latest/download/install.sh | bash
 ```

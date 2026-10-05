@@ -32,9 +32,9 @@ ra 提供一流的 Nix Flake 支持，用于可重现构建、开发环境和系
 ### 不安装直接运行
 
 ```bash
-nix run github:octos-org/octos#octos -- --version
-nix run github:octos-org/octos#octos -- status
-nix run github:octos-org/octos#octos-full -- chat --message "Hello"
+nix run github:your-org/ra#octos -- --version
+nix run github:your-org/ra#octos -- status
+nix run github:your-org/ra#octos-full -- chat --message "Hello"
 ```
 
 ### 构建软件包
@@ -76,7 +76,7 @@ in
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    octos.url = "github:octos-org/octos";
+    octos.url = "github:your-org/ra";
   };
 }
 ```

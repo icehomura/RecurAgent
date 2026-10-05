@@ -22,8 +22,8 @@ allow-dirty = ["ci"]
 installers = ["shell", "powershell", "npm"]
 # Target platforms to build apps for (Rust target-triple syntax)
 targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
-# Publish the npm package under the @octos-org scope -> `npm i -g @octos-org/octoscode`
-npm-scope = "@octos-org"
+# Publish the npm package under the @your-org scope -> `npm i -g @your-org/ra-tui`
+npm-scope = "@your-org"
 # Ship the self-updater + install receipt so `octoscode update` can self-update
 # in-place (and defer to brew/npm when installed that way).
 install-updater = true
@@ -34,9 +34,9 @@ install-updater = true
 # elevate to the contents:write needed to commit Formula/octoscode.rb to main.
 publish-jobs = ["npm"]
 # Prereleases (rc/beta tags) publish to SEPARATE channels that never touch
-# stable, so `npm i -g @octos-org/octoscode` and `brew install …/octoscode`
+# stable, so `npm i -g @your-org/ra-tui` and `brew install …/octoscode`
 # always resolve to the latest STABLE build:
-#   - npm:  published under the `next` dist-tag -> `@octos-org/octoscode@next`.
+#   - npm:  published under the `next` dist-tag -> `@your-org/ra-tui@next`.
 #           The `publish-npm` job in .github/workflows/release.yml computes
 #           `--tag next` vs `--tag latest` from the plan's
 #           `announcement_is_prerelease`; a prerelease never takes `latest`.

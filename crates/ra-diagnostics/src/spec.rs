@@ -48,16 +48,16 @@ pub struct ProductSpec {
     /// The caller's own version — passed IN (its `env!("CARGO_PKG_VERSION")`).
     /// NEVER this crate's `CARGO_PKG_VERSION`.
     pub current_version: String,
-    /// `owner/repo` on GitHub, e.g. `octos-org/octos`.
+    /// `owner/repo` on GitHub, e.g. `your-org/ra`.
     pub github_repo: String,
     /// Env var holding an optional GitHub token to dodge the unauthenticated
     /// rate limit, e.g. `OCTOS_GITHUB_TOKEN`. Optional auth — the GitHub client
     /// (Stage 2, `github` feature) reads it only when this is `Some` and the var
     /// is set & non-blank; a public repo never requires it.
     pub github_token_env: Option<String>,
-    /// Homebrew formula (tap-qualified), e.g. `octos-org/octos/octos`.
+    /// Homebrew formula (tap-qualified), e.g. `your-org/ra/octos`.
     pub brew_formula: Option<String>,
-    /// npm package name, e.g. `@octos-org/octos`.
+    /// npm package name, e.g. `@your-org/ra`.
     pub npm_package: Option<String>,
     /// `cargo install` crate name (registry), e.g. `ra-cli`.
     pub cargo_install: Option<String>,
@@ -147,17 +147,17 @@ mod tests {
 
     #[test]
     fn builder_sets_optional_fields() {
-        let spec = ProductSpec::new("octos", "octos", "1.2.3", "octos-org/octos", "octos-bundle")
-            .with_brew_formula("octos-org/octos/octos")
-            .with_npm_package("@octos-org/octos")
+        let spec = ProductSpec::new("octos", "octos", "1.2.3", "your-org/ra", "octos-bundle")
+            .with_brew_formula("your-org/ra/octos")
+            .with_npm_package("@your-org/ra")
             .with_cargo_install("ra-cli")
             .with_cargo_dist_app("ra");
         assert_eq!(spec.current_version, "1.2.3");
-        assert_eq!(spec.brew_formula.as_deref(), Some("octos-org/octos/octos"));
-        assert_eq!(spec.npm_package.as_deref(), Some("@octos-org/octos"));
+        assert_eq!(spec.brew_formula.as_deref(), Some("your-org/ra/octos"));
+        assert_eq!(spec.npm_package.as_deref(), Some("@your-org/ra"));
         assert_eq!(spec.cargo_install.as_deref(), Some("ra-cli"));
         assert_eq!(spec.cargo_dist_app.as_deref(), Some("ra"));
-        assert_eq!(spec.github_url(), "https://github.com/octos-org/octos");
+        assert_eq!(spec.github_url(), "https://github.com/your-org/ra");
         assert_eq!(
             spec.asset_selector.asset_name("x86_64-unknown-linux-gnu"),
             "ra-bundle-x86_64-unknown-linux-gnu"
@@ -167,7 +167,7 @@ mod tests {
     #[cfg(not(windows))]
     #[test]
     fn binary_file_name_is_bare_on_unix() {
-        let spec = ProductSpec::new("octos", "octos", "0.1.0", "octos-org/octos", "octos-bundle");
+        let spec = ProductSpec::new("octos", "octos", "0.1.0", "your-org/ra", "octos-bundle");
         assert_eq!(spec.binary_file_name(), "ra");
     }
 }

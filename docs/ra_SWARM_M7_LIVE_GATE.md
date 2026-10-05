@@ -1,7 +1,7 @@
 # ra Swarm M7 Live Gate
 
 Date: 2026-05-25
-Issue: [`#511`](https://github.com/octos-org/octos/issues/511)
+Issue: [`#511`](https://github.com/your-org/ra/issues/511)
 Milestone: `M7.8` (Swarm Dispatch Live Gate)
 
 This runbook defines the repo-side live release gate for the M7 swarm

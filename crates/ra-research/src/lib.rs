@@ -57,7 +57,7 @@ pub const AGENT_TOKEN: &str = "ra-research";
 /// their own behalf (provider APIs, robots.txt, page reads). It names the
 /// software and where to learn about it, instead of posing as a desktop
 /// browser.
-pub const USER_AGENT: &str = "ra-research/1.0 (+https://github.com/octos-org/octos)";
+pub const USER_AGENT: &str = "ra-research/1.0 (+https://github.com/your-org/ra)";
 
 /// The environment lookup the research tools use in production: `RA_<NAME>`
 /// wins over the legacy `OCTOS_<NAME>`, and both spellings are honoured
@@ -365,7 +365,7 @@ mod tests {
     #[test]
     fn should_identify_itself_in_user_agent() {
         assert!(USER_AGENT.starts_with(AGENT_TOKEN));
-        assert!(USER_AGENT.contains("https://github.com/octos-org/octos"));
+        assert!(USER_AGENT.contains("https://github.com/your-org/ra"));
         assert!(!USER_AGENT.contains("Mozilla") && !USER_AGENT.contains("Chrome/"));
     }
 }

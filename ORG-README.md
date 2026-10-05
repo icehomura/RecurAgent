@@ -10,9 +10,9 @@ Connect your LLM API keys and messaging channels. ra handles conversation routin
 
 | Repo | Description |
 |------|-------------|
-| **[octos](https://github.com/octos-org/octos)** | Core platform — Rust binary, 17 LLM providers, 14 channels, DOT pipeline engine, multi-tenant gateway, web dashboard |
-| **[octos-hub](https://github.com/octos-org/octos-hub)** | Community skill registry — install and share agent skills |
-| **[octos-web](https://github.com/octos-org/octos-web)** | Admin dashboard — React SPA for profile management, metrics, and fleet control |
+| **[octos](https://github.com/your-org/ra)** | Core platform — Rust binary, 17 LLM providers, 14 channels, DOT pipeline engine, multi-tenant gateway, web dashboard |
+| **[octos-hub](https://github.com/your-org/ra-hub)** | Community skill registry — install and share agent skills |
+| **[octos-web](https://github.com/your-org/ra-web)** | Admin dashboard — React SPA for profile management, metrics, and fleet control |
 
 ## Key Capabilities
 
@@ -37,9 +37,9 @@ ra chat
 
 ## Links
 
-- [User Guide (English)](https://github.com/octos-org/octos/blob/main/docs/user-guide.md)
-- [用户指南 (中文)](https://github.com/octos-org/octos/blob/main/docs/user-guide-zh.md)
-- [中文 README](https://github.com/octos-org/octos/blob/main/README-zh.md)
+- [User Guide (English)](https://github.com/your-org/ra/blob/main/docs/user-guide.md)
+- [用户指南 (中文)](https://github.com/your-org/ra/blob/main/docs/user-guide-zh.md)
+- [中文 README](https://github.com/your-org/ra/blob/main/README-zh.md)
 
 ---
 

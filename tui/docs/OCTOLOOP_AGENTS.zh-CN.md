@@ -3,7 +3,7 @@
 > protocol: olp/v2 — 读本文件的 agent 即在 OLP v2 下作业(R6 版本协商)。
 >
 > **OctoLoop** 是产品名;**OLP**(Outer-Loop Protocol)是协议名。
-> English: [OCTOLOOP_AGENTS.md](https://github.com/octos-org/octoscode/blob/main/docs/OCTOLOOP_AGENTS.md)
+> English: [OCTOLOOP_AGENTS.md](https://github.com/your-org/ra-tui/blob/main/docs/OCTOLOOP_AGENTS.md)
 
 **本卡自包含**:读完即可上岗,不必再开别的文档。深入文档列在末尾。卡内
 一切路径与标识**全部发现式取得**,绝不硬编码——窗格号、实例哈希、会话键
@@ -262,9 +262,9 @@ octoscode --stdio-command 'octos serve --stdio --solo --danger-full-access'
 
 ## 7. 深入阅读
 
-- [`OUTER_LOOP_PROTOCOL.md`](https://github.com/octos-org/octoscode/blob/main/docs/OUTER_LOOP_PROTOCOL.md) — 协议全文:R1–R7、
+- [`OUTER_LOOP_PROTOCOL.md`](https://github.com/your-org/ra-tui/blob/main/docs/OUTER_LOOP_PROTOCOL.md) — 协议全文:R1–R7、
   `result.md` schema、多外环规则、预算治理、实战沉淀
-- [`OLP_OUTER_BOOT.md`](https://github.com/octos-org/octoscode/blob/main/docs/OLP_OUTER_BOOT.md) — 外环操作面与战术手册
-- [`OLP_QUICKSTART.md`](https://github.com/octos-org/octoscode/blob/main/docs/OLP_QUICKSTART.md) — 新项目从零到跑通
-- [`OCTOLOOP_GUIDE.md`](https://github.com/octos-org/octoscode/blob/main/docs/OCTOLOOP_GUIDE.md) — 完整指南、机制篇、平台矩阵
-- [`OCTOLOOP_FEATURES.md`](https://github.com/octos-org/octoscode/blob/main/docs/OCTOLOOP_FEATURES.md) — 一页能力全景
+- [`OLP_OUTER_BOOT.md`](https://github.com/your-org/ra-tui/blob/main/docs/OLP_OUTER_BOOT.md) — 外环操作面与战术手册
+- [`OLP_QUICKSTART.md`](https://github.com/your-org/ra-tui/blob/main/docs/OLP_QUICKSTART.md) — 新项目从零到跑通
+- [`OCTOLOOP_GUIDE.md`](https://github.com/your-org/ra-tui/blob/main/docs/OCTOLOOP_GUIDE.md) — 完整指南、机制篇、平台矩阵
+- [`OCTOLOOP_FEATURES.md`](https://github.com/your-org/ra-tui/blob/main/docs/OCTOLOOP_FEATURES.md) — 一页能力全景

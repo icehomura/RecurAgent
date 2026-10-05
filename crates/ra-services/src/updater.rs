@@ -1,6 +1,6 @@
 //! Self-update module: download, verify, backup, replace, rollback.
 //!
-//! Fetches release tarballs from GitHub Releases for `octos-org/octos`,
+//! Fetches release tarballs from GitHub Releases for `your-org/ra`,
 //! verifies each download against the release's `.sha256` sidecar and the
 //! API-reported asset size — corruption protection only: the sidecar ships
 //! from the same release, so a compromised release channel is out of scope
@@ -14,7 +14,7 @@ use eyre::{Context, Result};
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 
-const GITHUB_REPO: &str = "octos-org/octos";
+const GITHUB_REPO: &str = "your-org/ra";
 const ASSET_NAME: &str = "ra-bundle-aarch64-apple-darwin.tar.gz";
 
 /// The top-level files a release bundle is allowed to install, mirroring
@@ -570,7 +570,7 @@ mod tests {
             "assets": [
                 {
                     "name": ASSET_NAME,
-                    "browser_download_url": "https://github.com/octos-org/octos/releases/download/v0.3.1/octos-bundle-aarch64-apple-darwin.tar.gz",
+                    "browser_download_url": "https://github.com/your-org/ra/releases/download/v0.3.1/ra-bundle-aarch64-apple-darwin.tar.gz",
                     "size": 12345678
                 }
             ]

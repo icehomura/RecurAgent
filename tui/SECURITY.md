@@ -25,7 +25,7 @@ backport. Pre-release builds and unreleased commits are evaluated case by case.
 1. On the repository's **Security** page, use **Report a vulnerability** if that
    private reporting option is available.
 2. If it is unavailable, open a
-   [security contact request](https://github.com/octos-org/octoscode/issues/new?template=security_contact.yml).
+   [security contact request](https://github.com/your-org/ra-tui/issues/new?template=security_contact.yml).
    Include only contact information and a one-line, non-sensitive category.
    **Do not include exploit steps, logs, secrets, affected paths, or technical
    details.** A maintainer will establish a private channel before details are
@@ -42,7 +42,7 @@ Include the following only in the private report:
 
 If a report affects the ra server rather than this terminal client, say so;
 the maintainers will coordinate with the
-[octos repository](https://github.com/octos-org/octos).
+[octos repository](https://github.com/your-org/ra).
 
 ## What to expect
 

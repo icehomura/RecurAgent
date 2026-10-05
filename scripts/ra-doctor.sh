@@ -4,7 +4,7 @@
 #
 # Usage:
 #   ra-doctor.sh
-#   curl -fsSL https://github.com/octos-org/octos/releases/latest/download/octos-doctor.sh | bash
+#   curl -fsSL https://github.com/your-org/ra/releases/latest/download/octos-doctor.sh | bash
 #
 # Options:
 #   --prefix DIR     Install prefix to check (default: ~/.ra/bin)

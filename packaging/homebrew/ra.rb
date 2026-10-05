@@ -1,12 +1,12 @@
 class ra < Formula
   desc "Rust-native, API-first Agentic OS server (ra serve + bundled skills)"
-  homepage "https://github.com/octos-org/octos"
+  homepage "https://github.com/your-org/ra"
   version "__VERSION__"
   license "Apache-2.0"
 
   on_macos do
     on_arm do
-      url "https://github.com/octos-org/octos/releases/download/__TAG__/octos-bundle-aarch64-apple-darwin.tar.gz"
+      url "https://github.com/your-org/ra/releases/download/__TAG__/octos-bundle-aarch64-apple-darwin.tar.gz"
       sha256 "__SHA_DARWIN_ARM__"
     end
     on_intel do
@@ -16,11 +16,11 @@ class ra < Formula
 
   on_linux do
     on_intel do
-      url "https://github.com/octos-org/octos/releases/download/__TAG__/octos-bundle-x86_64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/your-org/ra/releases/download/__TAG__/octos-bundle-x86_64-unknown-linux-gnu.tar.gz"
       sha256 "__SHA_LINUX_X64__"
     end
     on_arm do
-      url "https://github.com/octos-org/octos/releases/download/__TAG__/octos-bundle-aarch64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/your-org/ra/releases/download/__TAG__/octos-bundle-aarch64-unknown-linux-gnu.tar.gz"
       sha256 "__SHA_LINUX_ARM__"
     end
   end

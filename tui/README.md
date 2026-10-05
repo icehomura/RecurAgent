@@ -13,7 +13,7 @@
 <em>Welcome to Octoscode — Your Coding Buddy</em>
 </div>
 
-`octoscode` is the terminal app for [Octos](https://github.com/octos-org/octos)
+`octoscode` is the terminal app for [Octos](https://github.com/your-org/ra)
 — an AI coding assistant in your terminal, in the spirit of Claude Code and
 Codex. The Octos server runs the agent, the models, and the tools; `octoscode`
 is the fast, keyboard-driven way to talk to it: chat, diffs, tool approvals,
@@ -25,10 +25,10 @@ Install **just the TUI** — it auto-provisions the ra **server** (the brain)
 on first launch, so there's nothing else to set up:
 
 ```bash
-npm install -g @octos-org/octoscode
+npm install -g @your-org/ra-tui
 # or Homebrew (this repo is its own tap):
-#   brew tap octos-org/octoscode https://github.com/octos-org/octoscode
-#   brew install octos-org/octoscode/octoscode
+#   brew tap your-org/ra-tui https://github.com/your-org/ra-tui
+#   brew install your-org/ra-tui/octoscode
 # (or the shell / PowerShell installer — see Install below)
 ```
 
@@ -52,7 +52,7 @@ provider, paste its API key, and open your first coding chat. The
 > **Want it in a browser too?** The solo launch above talks to its server over
 > stdio, which serves exactly one client. Run the server on a port instead and
 > the terminal and
-> [octoscode-web](https://github.com/octos-org/octoscode-web) can both attach —
+> [octoscode-web](https://github.com/your-org/ra-tui-web) can both attach —
 > to the same sessions, at the same time. See
 > [Two ways to run](#two-ways-to-run).
 
@@ -60,7 +60,7 @@ provider, paste its API key, and open your first coding chat. The
 
 | Symptom | Fix |
 |---|---|
-| First launch can't fetch the server | Auto-install needs network. Offline / behind a proxy? Install octos yourself (`npm i -g @octos-org/octos`, or the [server guide](https://github.com/octos-org/octos#start-here)) — the TUI then finds it. Set `OCTOSCODE_NO_AUTO_INSTALL=1` to disable auto-install. |
+| First launch can't fetch the server | Auto-install needs network. Offline / behind a proxy? Install octos yourself (`npm i -g @your-org/ra`, or the [server guide](https://github.com/your-org/ra#start-here)) — the TUI then finds it. Set `OCTOSCODE_NO_AUTO_INSTALL=1` to disable auto-install. |
 | Replies are instant and feel canned | You launched with `--mode mock`. Run plain `octoscode` for the real backend. |
 | "Test provider" fails during onboarding | Re-check the API key and the provider choice; you can redo it anytime with `/onboard` or `/setup`. |
 
@@ -86,7 +86,7 @@ Every method installs a single self-contained `octoscode` binary. Then run
 
 ### ⬇️ Prebuilt binary — no Rust toolchain needed (recommended)
 
-Same model as Claude Code and Codex: each [GitHub Release](https://github.com/octos-org/octoscode/releases)
+Same model as Claude Code and Codex: each [GitHub Release](https://github.com/your-org/ra-tui/releases)
 ships prebuilt binaries for macOS (Apple Silicon), Linux (x86-64 +
 arm64), and Windows (x86-64). Pick one — each block has its own **copy button**
 (top-right corner, on hover) that copies just that command:
@@ -94,27 +94,27 @@ arm64), and Windows (x86-64). Pick one — each block has its own **copy button*
 **📦 npm**
 
 ```bash
-npm install -g @octos-org/octoscode
+npm install -g @your-org/ra-tui
 ```
 
 **🍺 Homebrew** — this repo is its own tap
 
 ```bash
-brew tap octos-org/octoscode https://github.com/octos-org/octoscode
-brew install octos-org/octoscode/octoscode
+brew tap your-org/ra-tui https://github.com/your-org/ra-tui
+brew install your-org/ra-tui/octoscode
 ```
 
 **🐚 Shell installer** — macOS / Linux
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/octos-org/octoscode/releases/latest/download/octoscode-installer.sh | sh
+  https://github.com/your-org/ra-tui/releases/latest/download/octoscode-installer.sh | sh
 ```
 
 **🪟 PowerShell installer** — Windows
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/octos-org/octoscode/releases/latest/download/octoscode-installer.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/your-org/ra-tui/releases/latest/download/octoscode-installer.ps1 | iex"
 ```
 
 Once installed, `octoscode update` checks for a newer release — and for
@@ -128,7 +128,7 @@ and connection prerequisites.
 **From git** — no crates.io publish required
 
 ```bash
-cargo install --git https://github.com/octos-org/octoscode octoscode
+cargo install --git https://github.com/your-org/ra-tui octoscode
 ```
 
 **From crates.io** — once published
@@ -164,7 +164,7 @@ pulled automatically as a git dependency, so a plain clone builds with **no
 sibling checkout** required (needs Rust 1.85+):
 
 ```bash
-git clone https://github.com/octos-org/octoscode.git
+git clone https://github.com/your-org/ra-tui.git
 cd octoscode
 cargo build --release
 # produces ./target/release/octoscode — substitute it for `octoscode` below
@@ -257,7 +257,7 @@ Access is offered only on solo/local backends**, never on a shared `ra serve`.
 
 For **headless / scripted** code review and for running **many review or edit
 agents in parallel**, use the `ra chat` CLI in the main
-[octos](https://github.com/octos-org/octos) repo (`--sandbox`, `--yolo`,
+[octos](https://github.com/your-org/ra) repo (`--sandbox`, `--yolo`,
 `--profile`, `--no-session-persistence`) — see its README's *Headless agent mode
 & code review* section.
 
@@ -294,7 +294,7 @@ re-run freely, and expensive tokens only on review and adjudication.
 
 ```bash
 cd your-project/
-curl -fsSL https://raw.githubusercontent.com/octos-org/octoscode/main/scripts/olp-init.sh | bash
+curl -fsSL https://raw.githubusercontent.com/your-org/ra-tui/main/scripts/olp-init.sh | bash
 ```
 
 It is idempotent and never overwrites an existing file. It lays down:
@@ -377,7 +377,7 @@ two talk, and that decides whether anything else can join.
 | Start it with | `octoscode` | `octos serve --host … --port …`, then `octoscode --endpoint …` |
 | Who runs the server | the TUI spawns and auto-provisions it | you do, and it outlives the client |
 | How many clients | exactly one | as many as you point at it |
-| Browser client | no | yes — [octoscode-web](https://github.com/octos-org/octoscode-web) |
+| Browser client | no | yes — [octoscode-web](https://github.com/your-org/ra-tui-web) |
 | Setup | none | a port and a shared token |
 
 Solo is the default because it is the shortest path to a working session.
@@ -457,7 +457,7 @@ out and a fresh server answers "This server cannot onboard from the Web".
 **2. Start the browser client** — terminal 2:
 
 ```bash
-git clone https://github.com/octos-org/octoscode-web.git
+git clone https://github.com/your-org/ra-tui-web.git
 cd octoscode-web
 pnpm install --frozen-lockfile
 OCTOSCODE_DEV_PROXY_TARGET=http://127.0.0.1:50080 \

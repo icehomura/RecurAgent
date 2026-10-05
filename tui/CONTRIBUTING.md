@@ -41,7 +41,7 @@ Then fork the repository, clone it, and verify your fork:
 ```bash
 git clone https://github.com/YOUR-USER/octoscode.git
 cd octoscode
-git remote add upstream https://github.com/octos-org/octoscode.git
+git remote add upstream https://github.com/your-org/ra-tui.git
 scripts/verify.sh -- cargo test --all-targets
 ```
 

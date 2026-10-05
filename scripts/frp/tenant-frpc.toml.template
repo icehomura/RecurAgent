@@ -7,7 +7,7 @@
 #   {{SUBDOMAIN}}      — Tenant subdomain (e.g. "alice")
 #   {{LOCAL_PORT}}     — Local octos serve port (default: 8080)
 #   {{SSH_REMOTE_PORT}} — Allocated SSH tunnel port (e.g. 6001)
-#   {{TUNNEL_DOMAIN}}  — Base domain (e.g. "octos-cloud.org")
+#   {{TUNNEL_DOMAIN}}  — Base domain (e.g. "your-cloud.example")
 
 serverAddr = "{{FRPS_SERVER}}"
 serverPort = {{FRPS_PORT}}
@@ -24,7 +24,7 @@ log.to = "/var/log/frpc.log"
 log.level = "info"
 log.maxDays = 7
 
-# ── HTTP tunnel: subdomain.octos-cloud.org → localhost:8080 ──────────
+# ── HTTP tunnel: subdomain.your-cloud.example → localhost:8080 ──────────
 [[proxies]]
 name = "{{SUBDOMAIN}}-web"
 type = "http"

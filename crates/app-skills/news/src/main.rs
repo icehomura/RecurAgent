@@ -284,7 +284,7 @@ fn build_client() -> Client {
         .timeout(Duration::from_secs(30))
         .redirect(reqwest::redirect::Policy::limited(5))
         // Identifiable, never a disguised desktop browser (ADR 0002).
-        .user_agent("octos-news/1.0 (+https://github.com/octos-org/octos)")
+        .user_agent("octos-news/1.0 (+https://github.com/your-org/ra)")
         .build()
         .expect("failed to build HTTP client")
 }

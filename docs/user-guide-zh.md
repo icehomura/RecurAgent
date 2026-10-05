@@ -2532,4 +2532,4 @@ Palpo 在启动时读取 `appservices/ra-registration.yaml`。当 Matrix 用户�
 
 ---
 
-*本指南反映 M8.10 之后的状态（2026 年 4 月）。最新更新请参阅仓库 [github.com/octos-org/octos](https://github.com/octos-org/octos)。*
+*本指南反映 M8.10 之后的状态（2026 年 4 月）。最新更新请参阅仓库 [github.com/your-org/ra](https://github.com/your-org/ra)。*

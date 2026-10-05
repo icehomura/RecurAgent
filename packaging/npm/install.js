@@ -21,7 +21,7 @@ const { spawnSync } = require("child_process");
 const { URL } = require("url");
 
 const VENDOR_DIR = path.join(__dirname, "vendor");
-const REPO = "octos-org/octos";
+const REPO = "your-org/ra";
 
 // Every binary the release bundle is expected to contain. `ra` is the
 // server; the rest are the bundled skills discovered as siblings at runtime.
@@ -39,7 +39,7 @@ const EXPECTED_BINS = [
 ];
 
 function fail(msg) {
-  console.error("\n[@octos-org/octos] install failed: " + msg + "\n");
+  console.error("\n[@your-org/ra] install failed: " + msg + "\n");
   process.exit(1);
 }
 
@@ -237,14 +237,14 @@ function finalizeAndVerify() {
 function main() {
   if (process.env.OCTOS_SKIP_DOWNLOAD === "1") {
     console.log(
-      "[@octos-org/octos] OCTOS_SKIP_DOWNLOAD=1 set; skipping bundle download."
+      "[@your-org/ra] OCTOS_SKIP_DOWNLOAD=1 set; skipping bundle download."
     );
     return;
   }
 
   const target = resolveTarget();
   const url = bundleUrl(target);
-  console.log("[@octos-org/octos] downloading " + url);
+  console.log("[@your-org/ra] downloading " + url);
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ra-npm-"));
   const archiveFile = path.join(tmpDir, "bundle." + target.ext);
@@ -261,7 +261,7 @@ function main() {
       // non-fatal cleanup failure
     }
     console.log(
-      "[@octos-org/octos] installed octos + " +
+      "[@your-org/ra] installed octos + " +
         (EXPECTED_BINS.length - 1) +
         " bundled skills into vendor/"
     );

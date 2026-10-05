@@ -107,7 +107,7 @@ test.describe('Live mofa skills install/remove via dashboard', () => {
     console.log(`preinstalled_removed=${wasPreinstalled}`);
 
     const sourceInput = page.getByPlaceholder(
-      /octos-org\/system-skills, https:\/\/host\/org\/repo\.git, or \.\/skills\/my-skill/i,
+      /your-org\/system-skills, https:\/\/host\/org\/repo\.git, or \.\/skills\/my-skill/i,
     );
     await sourceInput.fill(INSTALL_SOURCE);
 

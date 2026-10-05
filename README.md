@@ -27,7 +27,7 @@ owns agent execution and runtime state. The same OUP contract lets a human-facin
 client and an automated controller operate that runtime.
 
 [Build with ra](#build-with-ra) · [Control through OUP](#control-through-oup) ·
-[Documentation](https://octos-org.github.io/octos/) · [中文](README-zh.md)
+[Documentation](https://your-org.github.io/octos/) · [中文](README-zh.md)
 
 <a id="start-here"></a>
 <a id="quick-start"></a>
@@ -38,8 +38,8 @@ Start with an application built on the kernel:
 
 | Application | Where to start |
 | --- | --- |
-| **[Octoscode](https://github.com/octos-org/octoscode)** | Install the terminal client. It provisions a compatible local Octos runtime on first launch. |
-| **[Octoscode Web](https://github.com/octos-org/octoscode-web)** | Set up the browser client using its [getting-started guide](https://github.com/octos-org/octoscode-web/blob/main/docs/getting-started.md), and connect it to an Octos runtime. |
+| **[Octoscode](https://github.com/your-org/ra-tui)** | Install the terminal client. It provisions a compatible local Octos runtime on first launch. |
+| **[Octoscode Web](https://github.com/your-org/ra-tui-web)** | Set up the browser client using its [getting-started guide](https://github.com/your-org/ra-tui-web/blob/main/docs/getting-started.md), and connect it to an Octos runtime. |
 
 This repository is for developers embedding, extending, or integrating the
 harness kernel. Application installation and everyday coding workflows belong
@@ -393,7 +393,7 @@ Follow one Calendar request through admission, Tokio tasks, a host tool and its 
 - [Harness developer interface](docs/ra_HARNESS_DEVELOPER_INTERFACE.md)
 - [Artifact and workflow integration guide](docs/ra_HARNESS_DEVELOPER_GUIDE.md)
 - [Harness compatibility and versioning](docs/ra_HARNESS_ABI_VERSIONING.md)
-- [Documentation site](https://octos-org.github.io/octos/)
+- [Documentation site](https://your-org.github.io/octos/)
 
 ## Contributing
 

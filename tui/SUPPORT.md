@@ -5,16 +5,16 @@ best-effort basis; no response time or service-level agreement is guaranteed.
 
 ## Where to ask
 
-- Use the [bug report form](https://github.com/octos-org/octoscode/issues/new?template=bug_report.yml)
+- Use the [bug report form](https://github.com/your-org/ra-tui/issues/new?template=bug_report.yml)
   for reproducible defects in octoscode.
-- Use the [feature request form](https://github.com/octos-org/octoscode/issues/new?template=feature_request.yml)
+- Use the [feature request form](https://github.com/your-org/ra-tui/issues/new?template=feature_request.yml)
   for proposed improvements.
 - Check the [README troubleshooting guide](README.md#troubleshooting) before
   opening an issue.
 - Report vulnerabilities privately according to [SECURITY.md](SECURITY.md).
 
 The ra server/runtime is maintained separately. Server-only defects belong
-in the [octos repository](https://github.com/octos-org/octos/issues).
+in the [octos repository](https://github.com/your-org/ra/issues).
 
 ## Helpful diagnostic information
 

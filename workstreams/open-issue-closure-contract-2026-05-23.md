@@ -2,7 +2,7 @@
 
 Status: active closure contract
 Date: 2026-05-23
-Repository: octos-org/octos
+Repository: your-org/ra
 Input snapshot: 70 open GitHub issues from `gh issue list --state open`
 
 ## Goal

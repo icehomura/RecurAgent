@@ -342,16 +342,16 @@ mod tests {
     }
 
     fn octos_spec() -> ProductSpec {
-        ProductSpec::new("octos", "octos", "1.0.0", "octos-org/octos", "octos-bundle")
-            .with_brew_formula("octos-org/octos/octos")
-            .with_npm_package("@octos-org/octos")
+        ProductSpec::new("octos", "octos", "1.0.0", "your-org/ra", "octos-bundle")
+            .with_brew_formula("your-org/ra/octos")
+            .with_npm_package("@your-org/ra")
             .with_cargo_install("ra-cli")
             .with_cargo_dist_app("ra")
     }
 
     #[test]
     fn should_classify_npm_global_when_under_npm_root() {
-        let mut i = input("/usr/local/lib/node_modules/@octos-org/octos/bin/octos");
+        let mut i = input("/usr/local/lib/node_modules/@your-org/ra/bin/octos");
         i.npm_global_roots = vec![PathBuf::from("/usr/local/lib/node_modules")];
         assert_eq!(classify_path(&i), InstallMethod::Npm);
     }
@@ -436,11 +436,11 @@ mod tests {
         );
         assert_eq!(
             InstallMethod::Homebrew.upgrade_hint(&spec).unwrap(),
-            "brew update && brew upgrade octos-org/octos/octos"
+            "brew update && brew upgrade your-org/ra/octos"
         );
         assert_eq!(
             InstallMethod::Npm.upgrade_hint(&spec).unwrap(),
-            "npm update -g @octos-org/octos"
+            "npm update -g @your-org/ra"
         );
         assert_eq!(
             InstallMethod::CargoRegistry.upgrade_hint(&spec).unwrap(),
@@ -448,7 +448,7 @@ mod tests {
         );
         assert_eq!(
             InstallMethod::CargoGit.upgrade_hint(&spec).unwrap(),
-            "cargo install --git https://github.com/octos-org/octos ra-cli --force"
+            "cargo install --git https://github.com/your-org/ra ra-cli --force"
         );
         assert!(
             InstallMethod::Unknown
@@ -462,7 +462,7 @@ mod tests {
     fn upgrade_hint_falls_back_to_installer_when_pkg_field_absent() {
         // A spec lacking brew/npm/cargo fields must still produce a usable hint
         // (the one-line installer), not panic or return None.
-        let bare = ProductSpec::new("octos", "octos", "1.0.0", "octos-org/octos", "octos-bundle");
+        let bare = ProductSpec::new("octos", "octos", "1.0.0", "your-org/ra", "octos-bundle");
         assert!(
             InstallMethod::Homebrew
                 .upgrade_hint(&bare)

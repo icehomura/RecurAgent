@@ -50,7 +50,7 @@ edition = "2024"
 rust-version = "1.85.0"
 authors = ["ra team"]
 license = "Apache-2.0"
-repository = "https://github.com/octos-org/octos"
+repository = "https://github.com/your-org/ra"
 [workspace.lints.rust]
 unsafe_code = "deny"
 [workspace.dependencies]

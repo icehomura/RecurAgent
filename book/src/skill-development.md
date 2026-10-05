@@ -18,7 +18,7 @@ This guide covers the full lifecycle of an ra skill — from development to publ
 |---------|-------------------|------------------|
 | **App** | iOS/Android app | Skill (binary + manifest + docs) |
 | **SDK** | Xcode / Android Studio | Rust + `manifest.json` + `SKILL.md` |
-| **App Store** | Apple App Store | [octos-hub](https://github.com/octos-org/octos-hub) registry |
+| **App Store** | Apple App Store | [octos-hub](https://github.com/your-org/ra-hub) registry |
 | **Distribution** | App Store binary delivery | Pre-built binaries in GitHub Releases |
 | **Install** | Tap "Get" | `ra skills install user/repo` |
 | **Sideload** | Ad-hoc / TestFlight | `ra skills --profile <profile> install ./my-skill` |
@@ -501,7 +501,7 @@ my-skills/                   ← repo root
 
 ### Submit to the Registry
 
-The [octos-hub](https://github.com/octos-org/octos-hub) registry is the central catalog for discoverable skills. Submit a PR to add your entry to `registry.json`:
+The [octos-hub](https://github.com/your-org/ra-hub) registry is the central catalog for discoverable skills. Submit a PR to add your entry to `registry.json`:
 
 ```json
 {
@@ -993,7 +993,7 @@ crates/app-skills/send-email/
 ### Publishing
 
 - [ ] Repo pushed to GitHub with `manifest.json` and `SKILL.md` at expected paths
-- [ ] Registry PR submitted to [octos-hub](https://github.com/octos-org/octos-hub)
+- [ ] Registry PR submitted to [octos-hub](https://github.com/your-org/ra-hub)
 - [ ] (Optional) Pre-built binaries for `darwin-aarch64`, `linux-x86_64`
 - [ ] (Optional) SHA-256 hashes in `manifest.json` `binaries` section
 - [ ] (Optional) GitHub Actions workflow for automated binary builds on release tags

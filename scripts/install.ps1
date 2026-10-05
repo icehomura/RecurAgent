@@ -2,7 +2,7 @@
 # Self-contained: no repo clone, Rust, or Node.js needed.
 #
 # Usage:
-#   irm https://github.com/octos-org/octos/releases/latest/download/install.ps1 | iex
+#   irm https://github.com/your-org/ra/releases/latest/download/install.ps1 | iex
 #
 #   # Or download and run with options:
 #   .\install.ps1 -Version v0.5.0
@@ -73,7 +73,7 @@ if ($Help) {
 install.ps1 - Install ra from pre-built binaries on Windows.
 
 USAGE
-  Piped:     irm https://github.com/octos-org/octos/releases/latest/download/install.ps1 | iex
+  Piped:     irm https://github.com/your-org/ra/releases/latest/download/install.ps1 | iex
   Download:  .\install.ps1 [options]
   Tunnel:    .\install.ps1 -Tunnel -TenantName alice -FrpsToken <token>
 
@@ -112,7 +112,7 @@ ENVIRONMENT VARIABLES
 }
 
 # -- Defaults ----------------------------------------------------------
-$GithubRepo = "octos-org/octos"
+$GithubRepo = "your-org/ra"
 
 if (-not $Version)   { $Version = if ($env:OCTOS_VERSION) { $env:OCTOS_VERSION } else { "latest" } }
 if (-not $Prefix)    { $Prefix  = if ($env:OCTOS_PREFIX)  { $env:OCTOS_PREFIX }  else { Join-Path $HOME ".ra\bin" } }
@@ -164,7 +164,7 @@ function Err($msg) {
         Write-Host "    ERROR: $msg" -ForegroundColor Red
         Write-Host ""
         Write-Host "    Run diagnostics:"
-        Write-Host "      irm https://github.com/octos-org/octos/releases/latest/download/install.ps1 -OutFile install.ps1; .\install.ps1 -Doctor"
+        Write-Host "      irm https://github.com/your-org/ra/releases/latest/download/install.ps1 -OutFile install.ps1; .\install.ps1 -Doctor"
         exit 1
     }
 }
@@ -536,7 +536,7 @@ if ($Doctor) {
             Ok "version: $ver"
         } catch {
             Err "binary exists but failed to run"
-            Hint "Try reinstalling: irm https://github.com/octos-org/octos/releases/latest/download/install.ps1 | iex"
+            Hint "Try reinstalling: irm https://github.com/your-org/ra/releases/latest/download/install.ps1 | iex"
         }
     } else {
         if (Test-Command "ra") {

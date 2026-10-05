@@ -29,7 +29,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$GithubRepo = "octos-org/octos"
+$GithubRepo = "your-org/ra"
 $BundleName = "ra-bundle-x86_64-pc-windows-msvc.zip"
 $NssmVersion = "2.24"
 

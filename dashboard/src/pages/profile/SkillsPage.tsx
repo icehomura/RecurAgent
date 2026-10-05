@@ -265,7 +265,7 @@ export default function SkillsPage() {
                       type="text"
                       value={repo}
                       onChange={(e) => setRepo(e.target.value)}
-                      placeholder="e.g. octos-org/system-skills, https://host/org/repo.git, or ./skills/my-skill"
+                      placeholder="e.g. your-org/system-skills, https://host/org/repo.git, or ./skills/my-skill"
                       className="w-full px-3 py-2 bg-black/30 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent"
                       onKeyDown={(e) => e.key === 'Enter' && handleInstall()}
                     />

@@ -3,7 +3,7 @@
 ## Scope
 
 The shared OUP runtime, incomplete-result handling and C/UniFFI contracts
-already landed in [PR #2265](https://github.com/octos-org/octos/pull/2265).
+already landed in [PR #2265](https://github.com/your-org/ra/pull/2265).
 This follow-up is based on `f1fc20c1e` and preserves subsequent upstream work.
 It ports the remaining fixes and repeatable validation from local commit
 `3cf3ebda1`; that older checkout's test results are not evidence for this tree.

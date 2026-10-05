@@ -5,27 +5,27 @@
 # '-', e.g. v0.2.2-rc.15) into Formula/octoscode-dev.rb, filling the same
 # 0.3.0-rc.11/v0.3.0-rc.11/__SHA_*__ placeholders from that prerelease's assets. The
 # stable Formula/octoscode.rb is NEVER touched by a prerelease tag, so
-# `brew install octos-org/octoscode/octoscode` stays on the latest STABLE while
-# `brew install octos-org/octoscode/octoscode-dev` tracks the latest prerelease.
+# `brew install your-org/ra-tui/octoscode` stays on the latest STABLE while
+# `brew install your-org/ra-tui/octoscode-dev` tracks the latest prerelease.
 #
 # MUTUALLY EXCLUSIVE with the stable formula: both install a binary named
 # `octoscode`, so only one may be linked at a time (see `conflicts_with` below).
 # This is the standard `foo` vs `foo-dev` pattern — install one or the other.
 class OctoscodeDev < Formula
   desc "Terminal UI client for the ra UI Protocol (prerelease channel)"
-  homepage "https://github.com/octos-org/octoscode"
+  homepage "https://github.com/your-org/ra-tui"
   version "0.1.0"
   if OS.mac? && Hardware::CPU.arm?
-    url "https://github.com/octos-org/octoscode/releases/download/v0.3.0-rc.11/octoscode-aarch64-apple-darwin.tar.xz"
+    url "https://github.com/your-org/ra-tui/releases/download/v0.3.0-rc.11/octoscode-aarch64-apple-darwin.tar.xz"
     sha256 "0f91572b5b349fef0fda5f1e9f36ccfa1d7f102d6e165c35e3debb046bf3f735"
   end
   if OS.linux?
     if Hardware::CPU.arm?
-      url "https://github.com/octos-org/octoscode/releases/download/v0.3.0-rc.11/octoscode-aarch64-unknown-linux-gnu.tar.xz"
+      url "https://github.com/your-org/ra-tui/releases/download/v0.3.0-rc.11/octoscode-aarch64-unknown-linux-gnu.tar.xz"
       sha256 "1cce50b57dbd75b8d546df51c6589706ef190e47a6567a6d21b11dfdc5b9a3a1"
     end
     if Hardware::CPU.intel?
-      url "https://github.com/octos-org/octoscode/releases/download/v0.3.0-rc.11/octoscode-x86_64-unknown-linux-gnu.tar.xz"
+      url "https://github.com/your-org/ra-tui/releases/download/v0.3.0-rc.11/octoscode-x86_64-unknown-linux-gnu.tar.xz"
       sha256 "e56a23a674938a3f010f938fc1c6a563ed057c7c06c7426028cf8d76fdcf02b2"
     end
   end
@@ -37,19 +37,19 @@ class OctoscodeDev < Formula
   conflicts_with "octoscode", because: "both install the octoscode binary (prerelease vs stable channel)"
 
   # octoscode is a CLIENT; a local launch spawns `octos serve --stdio` as its
-  # backend. We deliberately do NOT `depends_on "octos-org/octos/octos"`: Homebrew
+  # backend. We deliberately do NOT `depends_on "your-org/ra/octos"`: Homebrew
   # does not auto-tap third-party dependency taps, so that would abort the
   # install with "tap must be installed explicitly". Instead the tui
   # auto-installs the ra server on first run if it's missing (see caveats).
   def caveats
     <<~EOS
       octoscode-dev is the PRERELEASE (rc/beta) channel; the stable formula is
-      `octos-org/octoscode/octoscode`. Only one may be linked at a time.
+      `your-org/ra-tui/octoscode`. Only one may be linked at a time.
 
       octoscode talks to the `octos` server backend. If octos isn't installed,
       octoscode installs the latest release automatically on first run
       (set OCTOSCODE_NO_AUTO_INSTALL=1 to disable). To install it up front:
-        brew install octos-org/octos/octos
+        brew install your-org/ra/octos
     EOS
   end
 

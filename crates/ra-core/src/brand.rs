@@ -1,11 +1,11 @@
 //! Product identity: name, environment-variable compatibility and state/config locations.
 //!
-//! The kernel was renamed from `ra` to ra. Everything a *user* can see or set must move
+//! The kernel was renamed from `octos` to `ra`. Everything a *user* can see or set must move
 //! without breaking an existing install, so every read here is new-name-first with a legacy
 //! fallback:
 //!
 //! * env vars — `RA_<NAME>` wins, `OCTOS_<NAME>` is still honoured ([`env_compat`]);
-//! * state dir — `~/.ra`, but an existing `~/.ra` keeps being used ([`state_home`]);
+//! * state dir — `~/.ra`, but an existing `~/.octos` keeps being used ([`state_home`]);
 //! * config dir — `<config>/ra`, with the same "prefer the new one only if it exists" rule
 //!   ([`config_home`]).
 //!
@@ -24,11 +24,11 @@ pub const ENV_PREFIX: &str = "RA_";
 /// Prefix of the variables the product used before the rename.
 pub const LEGACY_ENV_PREFIX: &str = "OCTOS_";
 /// Directory name the product used before the rename.
-pub const LEGACY_SLUG: &str = "ra";
+pub const LEGACY_SLUG: &str = "octos";
 /// State-home directory inside the user's home: `~/.ra`.
 pub const STATE_DIR: &str = ".ra";
-/// Legacy state-home directory: `~/.ra`.
-pub const LEGACY_STATE_DIR: &str = ".ra";
+/// Legacy state-home directory: `~/.octos`.
+pub const LEGACY_STATE_DIR: &str = ".octos";
 
 /// Read `RA_<name>` and fall back to `OCTOS_<name>`.
 ///
@@ -84,7 +84,7 @@ pub fn choose(
     new_default
 }
 
-/// The runtime state home: `RA_HOME` → `OCTOS_HOME` → existing `~/.ra` → existing `~/.ra`.
+/// The runtime state home: `RA_HOME` → `OCTOS_HOME` → existing `~/.ra` → existing `~/.octos`.
 pub fn state_home() -> Option<PathBuf> {
     let home = dirs::home_dir()?;
     let new_dir = home.join(STATE_DIR);
@@ -100,7 +100,7 @@ pub fn state_home() -> Option<PathBuf> {
 }
 
 /// The config home: `RA_CONFIG_DIR` → `OCTOS_CONFIG_DIR` → existing `<config>/ra` → existing
-/// `<config>/ra`, where `<config>` is `%APPDATA%` on Windows and
+/// `<config>/octos`, where `<config>` is `%APPDATA%` on Windows and
 /// `${XDG_CONFIG_HOME:-~/.config}` elsewhere.
 pub fn config_home() -> Option<PathBuf> {
     let base = platform_config_base()?;
@@ -170,7 +170,7 @@ mod tests {
     #[test]
     fn choose_prefers_overrides_then_existing_state_then_the_new_default() {
         let new_default = p(".ra");
-        let legacy_default = p(".ra");
+        let legacy_default = p(".octos");
         // explicit overrides win over everything on disk
         assert_eq!(
             choose(Some(p("custom")), None, new_default.clone(), legacy_default.clone(), true, true),
@@ -209,9 +209,9 @@ mod tests {
         assert_eq!(APP_NAME, "ra");
         assert_eq!(ENV_PREFIX, "RA_");
         assert_eq!(LEGACY_ENV_PREFIX, "OCTOS_");
-        assert_eq!(LEGACY_SLUG, "ra");
+        assert_eq!(LEGACY_SLUG, "octos");
         // the state dir is a dot-directory in $HOME, the config dir is plain
         assert_eq!(STATE_DIR, ".ra");
-        assert_eq!(LEGACY_STATE_DIR, ".ra");
+        assert_eq!(LEGACY_STATE_DIR, ".octos");
     }
 }

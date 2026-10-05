@@ -86,7 +86,7 @@ in
         description = ''
           Whether to install optional runtime dependencies (chromium, nodejs, ffmpeg, libreoffice, poppler-utils).
 
-          See <https://github.com/octos-org/octos/blob/main/book/src/installation.md#optional-dependencies>
+          See <https://github.com/your-org/ra/blob/main/book/src/installation.md#optional-dependencies>
         '';
       };
 
@@ -100,7 +100,7 @@ in
         description = ''
           Communication channels to enable. If null, preserves the package's default features.
 
-          See <https://github.com/octos-org/octos/blob/main/book/src/channels.md>
+          See <https://github.com/your-org/ra/blob/main/book/src/channels.md>
         '';
       };
 

@@ -144,7 +144,7 @@ async function installSkillFresh(page: Page) {
   console.log(`mofa-flow: preinstalled_removed=${wasPreinstalled}`);
 
   const sourceInput = page.getByPlaceholder(
-    /octos-org\/system-skills, https:\/\/host\/org\/repo\.git, or \.\/skills\/my-skill/i,
+    /your-org\/system-skills, https:\/\/host\/org\/repo\.git, or \.\/skills\/my-skill/i,
   );
   await sourceInput.fill(INSTALL_SOURCE);
 

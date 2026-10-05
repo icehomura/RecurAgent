@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, type DeploymentMode } from '../../api'
 
 const INSTALL_URL =
-  'https://github.com/octos-org/octos/releases/latest/download/install.sh'
+  'https://github.com/your-org/ra/releases/latest/download/install.sh'
 
 type Guidance = {
   tone: 'ok' | 'info' | 'warn'
@@ -130,7 +130,7 @@ const MODES: { id: DeploymentMode; label: string; description: string }[] = [
     id: 'cloud',
     label: 'Cloud',
     description:
-      'This node IS the VPS relay — terminates tunnels from tenants and issues subdomains. Right for the operator-hosted octos-cloud.org host.',
+      'This node IS the VPS relay — terminates tunnels from tenants and issues subdomains. Right for the operator-hosted your-cloud.example host.',
   },
 ]
 

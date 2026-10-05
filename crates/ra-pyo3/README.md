@@ -1,6 +1,6 @@
 # ra (Python)
 
-Native Python bindings for embedding [octos](https://github.com/octos-org/octos)
+Native Python bindings for embedding [octos](https://github.com/your-org/ra)
 — a Rust-native agentic OS — in a Python process. Built with
 [pyo3](https://pyo3.rs/) over the shared **native core** in `ra-ffi`.
 

@@ -45,7 +45,7 @@ tags: [olp, evolution, harness, observability]
 
 [REQ-OLP-EVO-DRYRUN] `--dry-run` MUST 把将要落的卡打印到 stdout,MUST NOT 创建或修改状态目录、锁、进化黑板中的任何文件字节。
 
-[REQ-OLP-EVO-RECORDS] 缺陷记录、修复记忆、算子表 MUST 位于本仓库 `knowledge/context/evolution/`,每份 `FLAW-*.md` 的 frontmatter MUST 含 `kind: context`、唯一 `id`、`repo`(`octos-org/octos` 或 `ZhangHanDong/octoscode` 形式的 owner/name)、`layers`、`status`(open、consolidated、filed、accepted、specified、patched、verified、closed、rejected、reopened 之一)、`severity`(S1、S2、S3 之一)、非负整数 `recurrence`、非空 `fingerprint`。
+[REQ-OLP-EVO-RECORDS] 缺陷记录、修复记忆、算子表 MUST 位于本仓库 `knowledge/context/evolution/`,每份 `FLAW-*.md` 的 frontmatter MUST 含 `kind: context`、唯一 `id`、`repo`(`your-org/ra` 或 `ZhangHanDong/octoscode` 形式的 owner/name)、`layers`、`status`(open、consolidated、filed、accepted、specified、patched、verified、closed、rejected、reopened 之一)、`severity`(S1、S2、S3 之一)、非负整数 `recurrence`、非空 `fingerprint`。
 
 [REQ-OLP-EVO-ISSUE] `status` 为 `filed` 或其后任一状态的缺陷记录 MUST 在 frontmatter 含以 `https://github.com/` 开头的 `issue` 链接。
 

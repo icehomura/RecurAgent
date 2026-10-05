@@ -186,7 +186,7 @@ mod tests {
     use crate::report::CheckStatus;
 
     fn spec() -> ProductSpec {
-        ProductSpec::new("octos", "octos", "1.0.0", "octos-org/octos", "octos-bundle")
+        ProductSpec::new("octos", "octos", "1.0.0", "your-org/ra", "octos-bundle")
     }
 
     #[test]
@@ -234,7 +234,7 @@ mod tests {
         // checks must PASS, not warn, and on-PATH must not suggest a fix.
         let located = LocatedBinaries::default();
         let exe = PathBuf::from(
-            "C:/Users/u/AppData/Roaming/npm/node_modules/@octos-org/octos/node_modules/.bin_real/octos.exe",
+            "C:/Users/u/AppData/Roaming/npm/node_modules/@your-org/ra/node_modules/.bin_real/octos.exe",
         );
         let on_path = on_path_check(&located, Some(exe.as_path()), &InstallMethod::Npm, &spec());
         assert_eq!(on_path.status, CheckStatus::Pass);

@@ -32,9 +32,9 @@ ra provides a first-class Nix flake for reproducible builds, development shells,
 ### Running Without Installing
 
 ```bash
-nix run github:octos-org/octos#octos -- --version
-nix run github:octos-org/octos#octos -- status
-nix run github:octos-org/octos#octos-full -- chat --message "Hello"
+nix run github:your-org/ra#octos -- --version
+nix run github:your-org/ra#octos -- status
+nix run github:your-org/ra#octos-full -- chat --message "Hello"
 ```
 
 ### Building Packages
@@ -76,7 +76,7 @@ in
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    octos.url = "github:octos-org/octos";
+    octos.url = "github:your-org/ra";
   };
 }
 ```

@@ -1,7 +1,7 @@
 # ra Harness M4.1A Live Release Gate
 
 Date: 2026-04-21
-Issue: [`#474`](https://github.com/octos-org/octos/issues/474)
+Issue: [`#474`](https://github.com/your-org/ra/issues/474)
 Milestone: `M4.1A` (Structured Progress Contract)
 
 This document is the release gate for every M4.1A pull request. No M4.1A PR

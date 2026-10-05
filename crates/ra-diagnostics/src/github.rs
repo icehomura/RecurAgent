@@ -195,8 +195,8 @@ mod tests {
     use super::*;
 
     fn octos_spec() -> ProductSpec {
-        ProductSpec::new("octos", "octos", "1.0.0", "octos-org/octos", "octos-bundle")
-            .with_brew_formula("octos-org/octos/octos")
+        ProductSpec::new("octos", "octos", "1.0.0", "your-org/ra", "octos-bundle")
+            .with_brew_formula("your-org/ra/octos")
             .with_cargo_dist_app("ra")
     }
 
@@ -210,15 +210,15 @@ mod tests {
             "assets": [
                 {
                     "name": "ra-bundle-aarch64-apple-darwin.tar.gz",
-                    "browser_download_url": "https://github.com/octos-org/octos/releases/download/v9.9.9/octos-bundle-aarch64-apple-darwin.tar.gz"
+                    "browser_download_url": "https://github.com/your-org/ra/releases/download/v9.9.9/octos-bundle-aarch64-apple-darwin.tar.gz"
                 },
                 {
                     "name": "ra-bundle-x86_64-unknown-linux-gnu.tar.gz",
-                    "browser_download_url": "https://github.com/octos-org/octos/releases/download/v9.9.9/octos-bundle-x86_64-unknown-linux-gnu.tar.gz"
+                    "browser_download_url": "https://github.com/your-org/ra/releases/download/v9.9.9/octos-bundle-x86_64-unknown-linux-gnu.tar.gz"
                 },
                 {
                     "name": "ra-bundle-x86_64-pc-windows-msvc.zip",
-                    "browser_download_url": "https://github.com/octos-org/octos/releases/download/v9.9.9/octos-bundle-x86_64-pc-windows-msvc.zip"
+                    "browser_download_url": "https://github.com/your-org/ra/releases/download/v9.9.9/octos-bundle-x86_64-pc-windows-msvc.zip"
                 }
             ]
         })

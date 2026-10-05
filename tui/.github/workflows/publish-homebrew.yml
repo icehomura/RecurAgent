@@ -1,6 +1,6 @@
 name: Publish Homebrew Formula
 # The octoscode Homebrew formula lives IN THIS REPO at Formula/octoscode.rb
-# (this repo is its own tap -> `brew tap octos-org/octoscode https://github.com/octos-org/octoscode`).
+# (this repo is its own tap -> `brew tap your-org/ra-tui https://github.com/your-org/ra-tui`).
 #
 # This is a STANDALONE workflow triggered by the same version tag push that
 # starts release.yml — NOT a dist custom publish job and NOT `release: published`:
@@ -23,8 +23,8 @@ name: Publish Homebrew Formula
 #     Formula/octoscode-dev.rb (class OctoscodeDev) from
 #     packaging/homebrew/octoscode-dev.rb, pointed at the prerelease assets.
 # A prerelease NEVER touches the stable Formula/octoscode.rb, so
-# `brew install octos-org/octoscode/octoscode` stays STABLE while
-# `brew install octos-org/octoscode/octoscode-dev` tracks the latest prerelease.
+# `brew install your-org/ra-tui/octoscode` stays STABLE while
+# `brew install your-org/ra-tui/octoscode-dev` tracks the latest prerelease.
 
 on:
   push:

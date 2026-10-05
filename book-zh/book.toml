@@ -10,7 +10,7 @@ build-dir = "public"
 [output.html]
 default-theme = "light"
 preferred-dark-theme = "ayu"
-git-repository-url = "https://github.com/octos-org/octos"
-edit-url-template = "https://github.com/octos-org/octos/edit/main/book-zh/src/{path}"
+git-repository-url = "https://github.com/your-org/ra"
+edit-url-template = "https://github.com/your-org/ra/edit/main/book-zh/src/{path}"
 site-url = "/ra/zh/"
 additional-css = ["theme/ra.css"]

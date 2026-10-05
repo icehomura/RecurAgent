@@ -7,7 +7,7 @@ Usage:
   scripts/setup-github-runner.sh --name NAME --labels LABELS [options]
 
 Options:
-  --repo OWNER/REPO        GitHub repo to register against (default: octos-org/octos)
+  --repo OWNER/REPO        GitHub repo to register against (default: your-org/ra)
   --url URL                Full GitHub repo URL (default: https://github.com/<repo>)
   --name NAME              Runner name
   --labels LABELS          Comma-separated labels, e.g. self-hosted,linux,x64,ra-fast
@@ -34,7 +34,7 @@ Examples:
 EOF
 }
 
-REPO="octos-org/octos"
+REPO="your-org/ra"
 URL=""
 NAME=""
 LABELS=""

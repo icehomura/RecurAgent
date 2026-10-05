@@ -18,7 +18,7 @@ const binary = path.join(__dirname, "..", "vendor", "ra" + exeSuffix);
 
 if (!fs.existsSync(binary)) {
   console.error(
-    "[@octos-org/octos] native binary not found at " +
+    "[@your-org/ra] native binary not found at " +
       binary +
       ".\nThe postinstall download did not run (was the package installed with " +
       "--ignore-scripts?).\nReinstall without --ignore-scripts, or run " +
@@ -32,7 +32,7 @@ if (!fs.existsSync(binary)) {
 const result = spawnSync(binary, process.argv.slice(2), { stdio: "inherit" });
 
 if (result.error) {
-  console.error("[@octos-org/octos] failed to launch octos: " + result.error.message);
+  console.error("[@your-org/ra] failed to launch octos: " + result.error.message);
   process.exit(1);
 }
 

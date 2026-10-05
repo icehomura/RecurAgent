@@ -173,7 +173,7 @@ test.describe('Harness M4.4: third-party skill compatibility gate', () => {
 
     // ── Phase 1: install from the documented source (local path or repo) ──
     const sourceInput = page.getByPlaceholder(
-      /octos-org\/system-skills, https:\/\/host\/org\/repo\.git, or \.\/skills\/my-skill/i,
+      /your-org\/system-skills, https:\/\/host\/org\/repo\.git, or \.\/skills\/my-skill/i,
     );
     await sourceInput.fill(SKILL_SOURCE);
 

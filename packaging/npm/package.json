@@ -1,12 +1,12 @@
 {
-  "name": "@octos-org/octos",
+  "name": "@your-org/ra",
   "version": "0.0.0-managed",
   "description": "Rust-native, API-first Agentic OS server (ra serve + bundled skills). Installs the prebuilt release bundle.",
-  "homepage": "https://github.com/octos-org/octos",
+  "homepage": "https://github.com/your-org/ra",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/octos-org/octos.git"
+    "url": "git+https://github.com/your-org/ra.git"
   },
   "bin": {
     "ra": "bin/ra.js"

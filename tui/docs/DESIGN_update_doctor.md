@@ -1,7 +1,7 @@
 # Design: `octoscode update` and `octoscode doctor`
 
 **Status:** design / RFC.
-**Target repos:** `octos-org/octoscode` (primary), `octos-org/octos` (shared bits + future `octos doctor`/`octos update`).
+**Target repos:** `your-org/ra-tui` (primary), `your-org/ra` (shared bits + future `octos doctor`/`octos update`).
 **Date:** 2026-06-05.
 
 ---
@@ -64,17 +64,17 @@ Detection order (first match wins):
 1. **cargo-dist installer** → `load_receipt()` succeeds (authoritative; receipt pins `install_prefix`).
 2. else classify by `current_exe()` location + corroborating signal:
    - Homebrew prefix (`/opt/homebrew/`, `/usr/local/Cellar/`, `$(brew --prefix)`) or `brew list octoscode` → **Homebrew**.
-   - npm global root (`npm root -g`/`npm prefix -g`, or `node_modules/@octos-org/octoscode` ancestor) → **npm**.
+   - npm global root (`npm root -g`/`npm prefix -g`, or `node_modules/@your-org/ra-tui` ancestor) → **npm**.
    - `~/.cargo/bin` + `~/.cargo/.crates2.json` mentions octoscode → **cargo**; sub-classify `--git` vs registry by the recorded `source`.
    - else → **Unknown / distro**.
 
 | Detected method | `update` does | `--check` does |
 |---|---|---|
 | cargo-dist installer (receipt) | self-update in place via axoupdater (verify + atomic swap; respects `--version`/`--tag`/`--prerelease`/`--force`) | `query_new_version()`; print + exit 10 if newer |
-| Homebrew | print `brew update && brew upgrade octos-org/octoscode/octoscode`; exit 3 | best-effort `brew outdated --json`; else print command, exit 0 |
-| npm (`-g`) | print `npm update -g @octos-org/octoscode`; exit 3 | `npm outdated -g @octos-org/octoscode` |
+| Homebrew | print `brew update && brew upgrade your-org/ra-tui/octoscode`; exit 3 | best-effort `brew outdated --json`; else print command, exit 0 |
+| npm (`-g`) | print `npm update -g @your-org/ra-tui`; exit 3 | `npm outdated -g @your-org/ra-tui` |
 | cargo install (registry) | print `cargo install octoscode --force` (+ suggest `cargo install-update`); exit 3 | compare to crates.io / latest tag |
-| cargo install --git | print `cargo install --git https://github.com/octos-org/octoscode octoscode --force`; exit 3 | compare `CARGO_PKG_VERSION` to repo latest tag |
+| cargo install --git | print `cargo install --git https://github.com/your-org/ra-tui octoscode --force`; exit 3 | compare `CARGO_PKG_VERSION` to repo latest tag |
 | Unknown / distro | print manual instructions + suggest the curl\|sh installer to convert to a self-updating install; exit 3 | GitHub-latest compare only |
 
 ### A.4 UX, exit codes, security

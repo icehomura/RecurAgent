@@ -29,7 +29,7 @@ pkgs.buildEnv {
 
   meta = with lib; {
     description = "ra - Agentic OS";
-    homepage = "https://github.com/octos-org/octos";
+    homepage = "https://github.com/your-org/ra";
     license = licenses.asl20;
     maintainers = [ ];
     platforms = platforms.linux ++ platforms.darwin;

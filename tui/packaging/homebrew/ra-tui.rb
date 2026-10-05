@@ -1,25 +1,25 @@
 class Octoscode < Formula
   desc "Terminal UI client for the ra UI Protocol"
-  homepage "https://github.com/octos-org/octoscode"
+  homepage "https://github.com/your-org/ra-tui"
   version "__VERSION__"
   if OS.mac? && Hardware::CPU.arm?
-    url "https://github.com/octos-org/octoscode/releases/download/__TAG__/octoscode-aarch64-apple-darwin.tar.xz"
+    url "https://github.com/your-org/ra-tui/releases/download/__TAG__/octoscode-aarch64-apple-darwin.tar.xz"
     sha256 "__SHA_DARWIN_ARM__"
   end
   if OS.linux?
     if Hardware::CPU.arm?
-      url "https://github.com/octos-org/octoscode/releases/download/__TAG__/octoscode-aarch64-unknown-linux-gnu.tar.xz"
+      url "https://github.com/your-org/ra-tui/releases/download/__TAG__/octoscode-aarch64-unknown-linux-gnu.tar.xz"
       sha256 "__SHA_LINUX_ARM__"
     end
     if Hardware::CPU.intel?
-      url "https://github.com/octos-org/octoscode/releases/download/__TAG__/octoscode-x86_64-unknown-linux-gnu.tar.xz"
+      url "https://github.com/your-org/ra-tui/releases/download/__TAG__/octoscode-x86_64-unknown-linux-gnu.tar.xz"
       sha256 "__SHA_LINUX_X64__"
     end
   end
   license "Apache-2.0"
 
   # octoscode is a CLIENT; a local launch spawns `octos serve --stdio` as its
-  # backend. We deliberately do NOT `depends_on "octos-org/octos/octos"`: Homebrew
+  # backend. We deliberately do NOT `depends_on "your-org/ra/octos"`: Homebrew
   # does not auto-tap third-party dependency taps, so that would abort the
   # install with "tap must be installed explicitly". Instead the tui
   # auto-installs the ra server on first run if it's missing (see caveats).
@@ -28,7 +28,7 @@ class Octoscode < Formula
       octoscode talks to the `octos` server backend. If octos isn't installed,
       octoscode installs the latest release automatically on first run
       (set OCTOSCODE_NO_AUTO_INSTALL=1 to disable). To install it up front:
-        brew install octos-org/octos/octos
+        brew install your-org/ra/octos
     EOS
   end
 

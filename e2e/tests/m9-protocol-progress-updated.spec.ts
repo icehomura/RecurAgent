@@ -1,7 +1,7 @@
 /**
  * M9 wire-level e2e: `progress/updated` notification stream.
  *
- * Issue: https://github.com/octos-org/octos/issues/647
+ * Issue: https://github.com/your-org/ra/issues/647
  * Spec  : api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md §8
  *
  * `progress/updated` carries typed lifecycle metadata (thinking, response,
