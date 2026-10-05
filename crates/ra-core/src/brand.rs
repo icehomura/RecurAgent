@@ -1,12 +1,13 @@
 //! Product identity: name, environment-variable compatibility and state/config locations.
 //!
-//! The kernel was renamed from `ra` to `ra`. Two rules apply here:
+//! The product is RecurAgent; the code-level slug is `ra`. Two rules apply here:
 //!
-//! * **environment variables are aliased** — `RA_<NAME>` wins and `RA_<NAME>` is still
-//!   honoured ([`env_compat`]), so an operator's existing exports keep working;
+//! * **environment variables are aliased** — the canonical `RA_<NAME>` wins and the
+//!   lowercase `ra_<NAME>` form older scripts and CI still export is honoured
+//!   ([`env_compat`]);
 //! * **state and configuration are not** — [`state_home`] and [`config_home`] resolve to the
 //!   `ra` locations only. No legacy directory is read, migrated or cleared, and no legacy
-//!   credentials, payloads or databases are interpreted: an install that used the old name
+//!   credentials, payloads or databases are interpreted: an install that used an old name
 //!   starts fresh with the new one.
 
 use std::ffi::OsString;
@@ -18,13 +19,13 @@ pub const APP_SLUG: &str = "ra";
 pub const APP_NAME: &str = "ra";
 /// Prefix of every environment variable the product introduces.
 pub const ENV_PREFIX: &str = "RA_";
-/// Prefix of the variables the product used before the rename.
-pub const LEGACY_ENV_PREFIX: &str = "RA_";
-/// Directory name the product used before the rename.
+/// Lowercase prefix older scripts and CI still export (`ra_<NAME>`).
+pub const LEGACY_ENV_PREFIX: &str = "ra_";
+/// Legacy product slug (no longer consulted for paths).
 pub const LEGACY_SLUG: &str = "ra";
 /// State-home directory inside the user's home: `~/.ra`.
 pub const STATE_DIR: &str = ".ra";
-/// Legacy state-home directory: `~/.ra`.
+/// Legacy state-home directory (no longer consulted).
 pub const LEGACY_STATE_DIR: &str = ".ra";
 
 /// Read `RA_<name>` and fall back to `RA_<name>`.
@@ -133,7 +134,7 @@ mod tests {
         assert_eq!(APP_SLUG, "ra");
         assert_eq!(APP_NAME, "ra");
         assert_eq!(ENV_PREFIX, "RA_");
-        assert_eq!(LEGACY_ENV_PREFIX, "RA_");
+        assert_eq!(LEGACY_ENV_PREFIX, "ra_");
         assert_eq!(LEGACY_SLUG, "ra");   // legacy spelling, no longer consulted for paths
         // the state dir is a dot-directory in $HOME, the config dir is plain
         assert_eq!(STATE_DIR, ".ra");
