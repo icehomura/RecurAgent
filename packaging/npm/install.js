@@ -7,8 +7,8 @@
 // `ra` executable, so they must all land in the same dir (vendor/).
 //
 // Escapes:
-//   ra_SKIP_DOWNLOAD=1   skip the download entirely (CI / offline installs)
-//   ra_BUNDLE_URL=<url>  override the download URL (file:// supported for tests)
+//   RA_SKIP_DOWNLOAD=1   skip the download entirely (CI / offline installs)
+//   RA_BUNDLE_URL=<url>  override the download URL (file:// supported for tests)
 
 "use strict";
 
@@ -91,8 +91,8 @@ function resolveTag() {
 }
 
 function bundleUrl(target) {
-  if (process.env.ra_BUNDLE_URL) {
-    return process.env.ra_BUNDLE_URL;
+  if (process.env.RA_BUNDLE_URL) {
+    return process.env.RA_BUNDLE_URL;
   }
   const tag = resolveTag();
   return (
@@ -135,8 +135,8 @@ function download(urlStr, destFile, redirects, cb) {
   // Direct request only. Corporate HTTP/HTTPS proxies are NOT supported here
   // (Node core has no CONNECT helper, and absolute-form GET to an HTTP proxy
   // fails for https targets). Behind a proxy: pre-download the bundle and point
-  // the installer at it with ra_BUNDLE_URL=file:///path, or set
-  // ra_SKIP_DOWNLOAD=1 and place the binaries under vendor/ yourself.
+  // the installer at it with RA_BUNDLE_URL=file:///path, or set
+  // RA_SKIP_DOWNLOAD=1 and place the binaries under vendor/ yourself.
   const transport = url.protocol === "https:" ? https : http;
   const requestOptions = {
     protocol: url.protocol,
@@ -235,9 +235,9 @@ function finalizeAndVerify() {
 }
 
 function main() {
-  if (process.env.ra_SKIP_DOWNLOAD === "1") {
+  if (process.env.RA_SKIP_DOWNLOAD === "1") {
     console.log(
-      "[@icehomura/ra] ra_SKIP_DOWNLOAD=1 set; skipping bundle download."
+      "[@icehomura/ra] RA_SKIP_DOWNLOAD=1 set; skipping bundle download."
     );
     return;
   }

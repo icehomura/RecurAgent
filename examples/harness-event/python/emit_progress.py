@@ -71,7 +71,7 @@ def _send_unix_socket(path: str, line: str) -> None:
 
 
 def emit_event(event: dict[str, Any], sink: str | None = None) -> bool:
-    target = sink if sink is not None else os.environ.get("ra_EVENT_SINK", "")
+    target = sink if sink is not None else os.environ.get("RA_EVENT_SINK", "")
     if not target:
         return False
 
@@ -121,7 +121,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--phase", required=True)
     parser.add_argument("--message", required=True)
     parser.add_argument("--progress", type=float)
-    parser.add_argument("--sink", default=os.environ.get("ra_EVENT_SINK", ""))
+    parser.add_argument("--sink", default=os.environ.get("RA_EVENT_SINK", ""))
     return parser.parse_args()
 
 

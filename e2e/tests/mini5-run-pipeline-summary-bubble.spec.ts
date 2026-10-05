@@ -15,9 +15,9 @@
  *
  * Run:
  *   cd ~/home/ra/e2e
- *   ra_TEST_URL=https://dspfac.ocean.ominix.io \
- *   ra_AUTH_TOKEN=ra-admin-2026 \
- *   ra_PROFILE=dspfac \
+ *   RA_TEST_URL=https://dspfac.ocean.ominix.io \
+ *   RA_AUTH_TOKEN=ra-admin-2026 \
+ *   RA_PROFILE=dspfac \
  *     npx playwright test tests/mini5-run-pipeline-summary-bubble.spec.ts \
  *     --reporter=list --workers=1
  */

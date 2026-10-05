@@ -8,17 +8,17 @@
  * - typed workflow metadata exposed through the normalized task API
  *
  * Run against a live deployment:
- *   ra_TEST_URL=https://dspfac.crew.ominix.io \
- *   ra_AUTH_TOKEN=ra-admin-2026 \
- *   ra_PROFILE=dspfac \
+ *   RA_TEST_URL=https://dspfac.crew.ominix.io \
+ *   RA_AUTH_TOKEN=ra-admin-2026 \
+ *   RA_PROFILE=dspfac \
  *   npx playwright test tests/refactor-capabilities.spec.ts
  */
 import { expect, test } from '@playwright/test';
 import { chatWS, type ChatWsEvent } from '../lib/m9-ws-client';
 
-const BASE = process.env.ra_TEST_URL || 'https://dspfac.crew.ominix.io';
-const TOKEN = process.env.ra_AUTH_TOKEN || 'ra-admin-2026';
-const PROFILE = process.env.ra_PROFILE || 'dspfac';
+const BASE = process.env.RA_TEST_URL || 'https://dspfac.crew.ominix.io';
+const TOKEN = process.env.RA_AUTH_TOKEN || 'ra-admin-2026';
+const PROFILE = process.env.RA_PROFILE || 'dspfac';
 
 test.setTimeout(240_000);
 

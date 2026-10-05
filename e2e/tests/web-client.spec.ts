@@ -10,9 +10,9 @@
  * chain still surfaces.
  *
  * Run against a live ra-serve instance:
- *   ra_TEST_URL=http://localhost:3000 npx playwright test web-client
+ *   RA_TEST_URL=http://localhost:3000 npx playwright test web-client
  *
- * NOTE: on the deterministic fixture protocol server (`ra_M9_PROTOCOL_FIXTURES=1`,
+ * NOTE: on the deterministic fixture protocol server (`RA_M9_PROTOCOL_FIXTURES=1`,
  * the nightly protocol lane's config) the CJK / literal-token specs route to
  * dedicated fixtures that echo the declared content (#2483), so their content
  * assertions run there. The history-check half of `session persists across
@@ -31,9 +31,9 @@ import {
 test.setTimeout(240_000);
 
 const AUTH_TOKEN =
-  process.env.ra_AUTH_TOKEN ||
-  process.env.ra_LIVE_TOKEN ||
-  process.env.ra_TEST_TOKEN ||
+  process.env.RA_AUTH_TOKEN ||
+  process.env.RA_LIVE_TOKEN ||
+  process.env.RA_TEST_TOKEN ||
   '';
 
 function headers() {
@@ -203,7 +203,7 @@ test('session persists across requests', async ({ request, baseURL }) => {
   // wires no gateway/profile runtime for the `session/messages_page` REST
   // backing — so it is gated on a live serve. The chat-turn half still runs
   // everywhere.
-  const fixtureLane = process.env.ra_M9_PROTOCOL_FIXTURES === '1';
+  const fixtureLane = process.env.RA_M9_PROTOCOL_FIXTURES === '1';
 
   const sid = `test-persist-${Date.now()}`;
 

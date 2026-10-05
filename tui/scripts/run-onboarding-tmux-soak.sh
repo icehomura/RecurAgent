@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
-ra_repo="${ra_REPO:-$(cd "$repo_root/../ra" 2>/dev/null && pwd || true)}"
+ra_repo="${RA_REPO:-$(cd "$repo_root/../ra" 2>/dev/null && pwd || true)}"
 
 run_id="${RA_TUI_SOAK_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 artifact_root="${RA_TUI_SOAK_ARTIFACT_ROOT:-$repo_root/e2e/test-results-tui-onboarding}"
@@ -13,7 +13,7 @@ workspace="${RA_TUI_SOAK_WORKSPACE:-$runtime_root/workspace}"
 data_dir="${RA_TUI_SOAK_DATA_DIR:-$runtime_root/data}"
 logs_dir="${RA_TUI_SOAK_LOGS_DIR:-$runtime_root/logs}"
 
-ra_bin="${ra_BIN:-${ra_repo:+$ra_repo/target/debug/ra}}"
+ra_bin="${RA_BIN:-${ra_repo:+$ra_repo/target/debug/ra}}"
 ra_tui_bin="${RA_TUI_BIN:-$repo_root/target/debug/ra-tui}"
 transport="${RA_TUI_SOAK_TRANSPORT:-ws}"
 if [ "$transport" = "stdio" ]; then
@@ -161,7 +161,7 @@ require_bin() {
 require_ra_serve() {
   require_bin ra_BIN "$ra_bin"
   if ! "$ra_bin" serve --help >/dev/null 2>&1; then
-    die "ra_BIN does not expose 'serve'; build ra-cli with the api feature or set ra_BIN to an API-enabled binary"
+    die 'RA_BIN does not expose 'serve'; build ra-cli with the api feature or set ra_BIN to an API-enabled binary"
   fi
 }
 
@@ -303,12 +303,12 @@ preflight_live() {
     ra_check="not executable"
     ra_version_status="not executable"
     status="failed"
-    [ -n "$failure" ] || failure="ra_BIN is not executable: ${ra_bin:-<unset>}"
+    [ -n "$failure" ] || failure="RA_BIN is not executable: ${ra_bin:-<unset>}"
   elif ! "$ra_bin" serve --help >/dev/null 2>&1; then
     ra_check="missing serve"
     ra_version_status="missing serve"
     status="failed"
-    [ -n "$failure" ] || failure="ra_BIN does not expose 'serve'; build ra-cli with the api feature or set ra_BIN to an API-enabled binary"
+    [ -n "$failure" ] || failure='RA_BIN does not expose 'serve'; build ra-cli with the api feature or set ra_BIN to an API-enabled binary"
   elif ra_version="$("$ra_bin" --version 2>/dev/null)"; then
     ra_version_status="passed"
   else
@@ -600,11 +600,11 @@ runtime_env_prefix() {
   if [ -n "$api_key" ]; then
     prefix="$prefix $(shell_quote "$api_key_env=$api_key")"
   fi
-  if [ -n "${ra_M9_PROTOCOL_FIXTURES:-}" ]; then
-    prefix="$prefix $(shell_quote "ra_M9_PROTOCOL_FIXTURES=$ra_M9_PROTOCOL_FIXTURES")"
+  if [ -n "${RA_M9_PROTOCOL_FIXTURES:-}" ]; then
+    prefix="$prefix $(shell_quote "RA_M9_PROTOCOL_FIXTURES=$RA_M9_PROTOCOL_FIXTURES")"
   fi
-  if [ -n "${ra_M15_LIVE_SUBAGENT_FIXTURE:-}" ]; then
-    prefix="$prefix $(shell_quote "ra_M15_LIVE_SUBAGENT_FIXTURE=$ra_M15_LIVE_SUBAGENT_FIXTURE")"
+  if [ -n "${RA_M15_LIVE_SUBAGENT_FIXTURE:-}" ]; then
+    prefix="$prefix $(shell_quote "RA_M15_LIVE_SUBAGENT_FIXTURE=$RA_M15_LIVE_SUBAGENT_FIXTURE")"
   fi
   if [ -n "${RA_TUI_M15_UX_OUTPUT_DIR:-}" ]; then
     prefix="$prefix $(shell_quote "RA_TUI_M15_UX_OUTPUT_DIR=$RA_TUI_M15_UX_OUTPUT_DIR")"
@@ -612,8 +612,8 @@ runtime_env_prefix() {
   if [ -n "${RA_TUI_M15_UX_WORKDIR:-}" ]; then
     prefix="$prefix $(shell_quote "RA_TUI_M15_UX_WORKDIR=$RA_TUI_M15_UX_WORKDIR")"
   fi
-  if [ -n "${ra_M15_LIVE_SUBAGENT_DELAY_SCALE:-}" ]; then
-    prefix="$prefix $(shell_quote "ra_M15_LIVE_SUBAGENT_DELAY_SCALE=$ra_M15_LIVE_SUBAGENT_DELAY_SCALE")"
+  if [ -n "${RA_M15_LIVE_SUBAGENT_DELAY_SCALE:-}" ]; then
+    prefix="$prefix $(shell_quote "RA_M15_LIVE_SUBAGENT_DELAY_SCALE=$RA_M15_LIVE_SUBAGENT_DELAY_SCALE")"
   fi
   if [ -n "$prefix" ]; then
     printf 'env%s ' "$prefix"
@@ -1302,7 +1302,7 @@ restart_stdio_child() {
   local pids
   pids="$(stdio_backend_pids | sort -u)"
   if [ -z "$pids" ]; then
-    die "No scoped stdio backend process matched ra_BIN=$ra_bin and data_dir=$data_dir"
+    die "No scoped stdio backend process matched RA_BIN=$ra_bin and data_dir=$data_dir"
   fi
 
   if [ -f "$logs_dir/server.log" ]; then
@@ -1343,7 +1343,7 @@ restart_stdio_child() {
 
   {
     printf 'Terminated scoped stdio backend process(es): %s\n' "$pids"
-    printf 'ra_BIN=%s\n' "$ra_bin"
+    printf 'RA_BIN=%s\n' "$ra_bin"
     printf 'data_dir=%s\n' "$data_dir"
   } > "$artifact_dir/server-pane-after-restart.txt"
   capture
@@ -3424,7 +3424,7 @@ exit 0
 SH
   chmod +x "$fake_ra_bin" "$fake_tui_bin"
   env \
-    "ra_BIN=$fake_ra_bin" \
+    "RA_BIN=$fake_ra_bin" \
     "RA_TUI_BIN=$fake_tui_bin" \
     "RA_TUI_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
     "RA_TUI_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
@@ -3473,7 +3473,7 @@ SH
   chmod +x "$fake_bin_dir/tmux"
   env \
     "PATH=$fake_bin_dir:$PATH" \
-    "ra_BIN=$fake_ra_bin" \
+    "RA_BIN=$fake_ra_bin" \
     "RA_TUI_BIN=$fake_tui_bin" \
     "RA_TUI_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
     "RA_TUI_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
@@ -3485,7 +3485,7 @@ SH
   grep -F '"tmux_version_status": "unsupported"' "$tmp_root/preflight-artifacts/preflight-tmux-version-unsupported/live-preflight.json" >/dev/null \
     || die "self-test expected unsupported tmux version status in preflight artifact"
   if env \
-    "ra_BIN=$fake_ra_bin" \
+    "RA_BIN=$fake_ra_bin" \
     "RA_TUI_BIN=$fake_tui_bin" \
     "RA_TUI_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
     "RA_TUI_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
@@ -3498,7 +3498,7 @@ SH
   grep -F '"provider_credential": "missing"' "$tmp_root/preflight-artifacts/preflight-provider-missing/live-preflight.json" >/dev/null \
     || die "self-test expected missing-provider preflight artifact"
   env \
-    "ra_BIN=$fake_ra_bin" \
+    "RA_BIN=$fake_ra_bin" \
     "RA_TUI_BIN=$fake_tui_bin" \
     "RA_TUI_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
     "RA_TUI_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
@@ -3523,7 +3523,7 @@ exit 0
 SH
   chmod +x "$fake_ra_no_version"
   env \
-    "ra_BIN=$fake_ra_no_version" \
+    "RA_BIN=$fake_ra_no_version" \
     "RA_TUI_BIN=$fake_tui_bin" \
     "RA_TUI_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
     "RA_TUI_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
@@ -3544,7 +3544,7 @@ exit 0
 SH
   chmod +x "$fake_tui_no_version"
   env \
-    "ra_BIN=$fake_ra_bin" \
+    "RA_BIN=$fake_ra_bin" \
     "RA_TUI_BIN=$fake_tui_no_version" \
     "RA_TUI_SOAK_DATA_DIR=$tmp_root/preflight-empty-data" \
     "RA_TUI_SOAK_ARTIFACT_ROOT=$tmp_root/preflight-artifacts" \
@@ -4235,7 +4235,7 @@ SH
   tmux new-session -d -s "$self_test_tui_session" "printf 'UI protocol reconnected\nAsk ra to change code...\nstate Done\n'; sleep 600"
   env \
     "${child_env[@]}" \
-    "ra_BIN=$fake_task_stdio_bin" \
+    "RA_BIN=$fake_task_stdio_bin" \
     "RA_TUI_SOAK_TRANSPORT=stdio" \
     "RA_TUI_SOAK_DATA_DIR=$fake_task_stdio_data" \
     "RA_TUI_SOAK_LOGS_DIR=$fake_task_stdio_logs" \
@@ -4448,7 +4448,7 @@ SH
   tmux new-session -d -s "$self_test_tui_session" "printf 'UI protocol reconnected\nAgent reviewer-api hydrated\nGoal active continuation hydrated\nLoop fire_now schedule hydrated\nAsk ra to change code...\nstate Done\n'; sleep 600"
   env \
     "${child_env[@]}" \
-    "ra_BIN=$fake_stdio_bin" \
+    "RA_BIN=$fake_stdio_bin" \
     "RA_TUI_SOAK_TRANSPORT=stdio" \
     "RA_TUI_SOAK_DATA_DIR=$fake_stdio_data" \
     "RA_TUI_SOAK_LOGS_DIR=$fake_stdio_logs" \

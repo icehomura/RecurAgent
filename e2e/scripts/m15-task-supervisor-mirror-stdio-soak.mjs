@@ -10,15 +10,15 @@ import readline from 'node:readline';
 const repoRoot = path.resolve(import.meta.dirname, '..', '..');
 const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z');
 const runRoot = path.resolve(
-  process.env.ra_M15_TASK_SUPERVISOR_MIRROR_DIR
+  process.env.RA_M15_TASK_SUPERVISOR_MIRROR_DIR
     || path.join(repoRoot, 'e2e', 'test-results-m15-task-supervisor-mirror-stdio', stamp),
 );
 const dataDir = path.join(runRoot, 'data');
 const workspace = path.join(runRoot, 'workspace');
-const raBin = process.env.ra_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
-const sessionId = process.env.ra_M15_TASK_SUPERVISOR_SESSION || `api:m15-task-mirror-${stamp}`;
-const profileId = process.env.ra_M15_TASK_SUPERVISOR_PROFILE || '_main';
-const timeoutMs = Number(process.env.ra_M15_TASK_SUPERVISOR_TIMEOUT_MS || 45_000);
+const raBin = process.env.RA_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
+const sessionId = process.env.RA_M15_TASK_SUPERVISOR_SESSION || `api:m15-task-mirror-${stamp}`;
+const profileId = process.env.RA_M15_TASK_SUPERVISOR_PROFILE || '_main';
+const timeoutMs = Number(process.env.RA_M15_TASK_SUPERVISOR_TIMEOUT_MS || 45_000);
 
 fs.mkdirSync(workspace, { recursive: true });
 
@@ -45,7 +45,7 @@ const child = spawn(raBin, ['serve', '--stdio', '--data-dir', dataDir, '--cwd', 
   cwd: repoRoot,
   env: {
     ...process.env,
-    ra_M9_PROTOCOL_FIXTURES: '1',
+    RA_M9_PROTOCOL_FIXTURES: '1',
     RUST_BACKTRACE: process.env.RUST_BACKTRACE || '1',
   },
   stdio: ['pipe', 'pipe', 'pipe'],

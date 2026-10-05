@@ -23,7 +23,7 @@ set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────
 TUNNEL_DOMAIN="${TUNNEL_DOMAIN:-ra-cloud.org}"
-ra_SERVE_PORT="${ra_SERVE_PORT:-8080}"
+RA_SERVE_PORT="${RA_SERVE_PORT:-8080}"
 FRPS_VHOST_HTTP_PORT="${FRPS_VHOST_HTTP_PORT:-8081}"
 ENABLE_HTTPS=false
 DNS_PROVIDER=""
@@ -561,7 +561,7 @@ fi
 sed_in_place /etc/caddy/Caddyfile \
     -e "s|__DOMAIN__|${TUNNEL_DOMAIN}|g" \
     -e "s|__ESCAPED_DOMAIN__|${ESCAPED_DOMAIN}|g" \
-    -e "s|__SERVE_PORT__|${ra_SERVE_PORT}|g" \
+    -e "s|__SERVE_PORT__|${RA_SERVE_PORT}|g" \
     -e "s|__FRPS_VHOST_PORT__|${FRPS_VHOST_HTTP_PORT}|g" \
     -e "s|__DNS_PROVIDER__|${DNS_PROVIDER}|g" \
     -e "s|__DNS_CONFIG_BLOCK__|${DNS_CONFIG_BLOCK}|g"
@@ -666,12 +666,12 @@ VPS_IP=$(curl -s ifconfig.me 2>/dev/null || echo "<VPS_IP>")
 echo ""
 echo "==> Caddy is running"
 if [ "$ENABLE_HTTPS" = true ]; then
-    echo "    HTTPS: ${TUNNEL_DOMAIN} → localhost:${ra_SERVE_PORT} (ra serve)"
+    echo "    HTTPS: ${TUNNEL_DOMAIN} → localhost:${RA_SERVE_PORT} (ra serve)"
     echo "    HTTPS: *.${TUNNEL_DOMAIN} → localhost:${FRPS_VHOST_HTTP_PORT} (frps vhost)"
     echo "    DNS challenge: ${DNS_PROVIDER}"
     echo "    Certs: auto-provisioned via Let's Encrypt"
 else
-    echo "    HTTP: ${TUNNEL_DOMAIN} → localhost:${ra_SERVE_PORT} (ra serve)"
+    echo "    HTTP: ${TUNNEL_DOMAIN} → localhost:${RA_SERVE_PORT} (ra serve)"
     echo "    HTTP: *.${TUNNEL_DOMAIN} → localhost:${FRPS_VHOST_HTTP_PORT} (frps vhost)"
 fi
 echo ""

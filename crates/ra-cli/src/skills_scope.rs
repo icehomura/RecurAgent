@@ -223,7 +223,7 @@ pub(crate) fn push_runtime_plugin_env(
         data_dir.to_string_lossy().to_string(),
     ));
     plugin_env.push((
-        "ra_DATA_DIR".to_string(),
+        "RA_DATA_DIR".to_string(),
         data_dir.to_string_lossy().to_string(),
     ));
     plugin_env.push((
@@ -231,19 +231,19 @@ pub(crate) fn push_runtime_plugin_env(
         ra_home.to_string_lossy().to_string(),
     ));
     plugin_env.push((
-        "ra_HOME".to_string(),
+        "RA_HOME".to_string(),
         ra_home.to_string_lossy().to_string(),
     ));
     if let Some(profile_id) = profile_id {
         plugin_env.push(("RA_PROFILE_ID".to_string(), profile_id.to_string()));
-        plugin_env.push(("ra_PROFILE_ID".to_string(), profile_id.to_string()));
+        plugin_env.push(("RA_PROFILE_ID".to_string(), profile_id.to_string()));
     }
     let voice_dir = data_dir
         .join("voice_profiles")
         .to_string_lossy()
         .to_string();
     plugin_env.push(("RA_VOICE_DIR".to_string(), voice_dir.clone()));
-    plugin_env.push(("ra_VOICE_DIR".to_string(), voice_dir));
+    plugin_env.push(("RA_VOICE_DIR".to_string(), voice_dir));
     if let Some(ominix_url) = ominix_url {
         plugin_env.push(("OMINIX_API_URL".to_string(), ominix_url.to_string()));
     }
@@ -490,7 +490,7 @@ mod tests {
             Some("/tmp/profile-data")
         );
         assert_eq!(
-            map.get("ra_DATA_DIR").map(String::as_str),
+            map.get("RA_DATA_DIR").map(String::as_str),
             Some("/tmp/profile-data")
         );
         assert_eq!(
@@ -498,7 +498,7 @@ mod tests {
             Some("/home/user/.ra")
         );
         assert_eq!(
-            map.get("ra_HOME").map(String::as_str),
+            map.get("RA_HOME").map(String::as_str),
             Some("/home/user/.ra")
         );
         assert_eq!(
@@ -506,7 +506,7 @@ mod tests {
             Some("dspfac")
         );
         assert_eq!(
-            map.get("ra_PROFILE_ID").map(String::as_str),
+            map.get("RA_PROFILE_ID").map(String::as_str),
             Some("dspfac")
         );
         // Derive the expectation the way the product does (`Path::join`), so
@@ -516,7 +516,7 @@ mod tests {
             .to_string_lossy()
             .to_string();
         assert_eq!(map.get("RA_VOICE_DIR"), Some(&expected_voice));
-        assert_eq!(map.get("ra_VOICE_DIR"), Some(&expected_voice));
+        assert_eq!(map.get("RA_VOICE_DIR"), Some(&expected_voice));
         assert_eq!(
             map.get("OMINIX_API_URL").map(String::as_str),
             Some("http://127.0.0.1:8765")
@@ -535,14 +535,14 @@ mod tests {
         );
         let keys: std::collections::HashSet<_> = env.into_iter().map(|(k, _)| k).collect();
         assert!(!keys.contains("RA_PROFILE_ID"));
-        assert!(!keys.contains("ra_PROFILE_ID"));
+        assert!(!keys.contains("RA_PROFILE_ID"));
         assert!(!keys.contains("OMINIX_API_URL"));
         assert!(keys.contains("RA_DATA_DIR"));
-        assert!(keys.contains("ra_DATA_DIR"));
+        assert!(keys.contains("RA_DATA_DIR"));
         assert!(keys.contains("RA_HOME"));
-        assert!(keys.contains("ra_HOME"));
+        assert!(keys.contains("RA_HOME"));
         assert!(keys.contains("RA_VOICE_DIR"));
-        assert!(keys.contains("ra_VOICE_DIR"));
+        assert!(keys.contains("RA_VOICE_DIR"));
     }
 
     #[test]
@@ -589,13 +589,13 @@ mod tests {
             std::fs::write(dir.join("api_url"), url).unwrap();
         }
 
-        let keys = ["OMINIX_API_URL", "ra_OMINIX_HOME", "HOME"];
+        let keys = ["OMINIX_API_URL", "RA_OMINIX_HOME", "HOME"];
         let saved: Vec<(&str, Option<std::ffi::OsString>)> =
             keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
         // SAFETY: serialized by TEST_ENV_LOCK; restored below.
         unsafe {
             std::env::remove_var("OMINIX_API_URL");
-            std::env::set_var("ra_OMINIX_HOME", custom.path());
+            std::env::set_var("RA_OMINIX_HOME", custom.path());
             std::env::set_var("HOME", default_home.path());
         }
         let discovered = discover_ominix_url();
@@ -622,13 +622,13 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("api_url"), "http://127.0.0.1:8081").unwrap();
 
-        let keys = ["OMINIX_API_URL", "ra_OMINIX_HOME", "HOME"];
+        let keys = ["OMINIX_API_URL", "RA_OMINIX_HOME", "HOME"];
         let saved: Vec<(&str, Option<std::ffi::OsString>)> =
             keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
         // SAFETY: serialized by TEST_ENV_LOCK; restored below.
         unsafe {
             std::env::remove_var("OMINIX_API_URL");
-            std::env::remove_var("ra_OMINIX_HOME");
+            std::env::remove_var("RA_OMINIX_HOME");
             std::env::set_var("HOME", default_home.path());
         }
         let discovered = discover_ominix_url();

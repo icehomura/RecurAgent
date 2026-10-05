@@ -187,7 +187,7 @@ fn mixed_v1_and_v2_lines_are_parsed_independently() {
 // Section 3 — Sink integration: events fold into supervisor state
 // =========================================================================
 //
-// When a plugin writes a v2 event to `$ra_EVENT_SINK`, the host's
+// When a plugin writes a v2 event to `$RA_EVENT_SINK`, the host's
 // `HarnessEventSink` reader picks it up and applies the appropriate
 // transition to the supervised `BackgroundTask`.
 
@@ -201,7 +201,7 @@ async fn v2_progress_event_via_sink_updates_runtime_detail() {
         HarnessEventSink::new(supervisor.clone(), task_id.clone(), "api:session-x").expect("sink");
 
     // Append a v2 progress event to the sink (simulating what the W4
-    // plugin will do via $ra_EVENT_SINK).
+    // plugin will do via $RA_EVENT_SINK).
     let event_line = format!(
         r#"{{"schema":"ra.harness.event.v1","kind":"progress","session_id":"api:session-x","task_id":"{task_id}","workflow":"mofa_slides","phase":"rendering","message":"Rendering deck 3/8","progress":0.375}}"#,
     );

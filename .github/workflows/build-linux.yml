@@ -27,8 +27,8 @@ jobs:
 
       - name: Set build metadata
         run: |
-          echo "ra_GIT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-          echo "ra_BUILD_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
+          echo "RA_GIT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "RA_BUILD_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
           # Keep build-machine paths (home dir, cargo registry, checkout) out
           # of the shipped binaries' panic messages and file!() strings.
           home_dir="$HOME"; cargo_dir="${CARGO_HOME:-$HOME/.cargo}"; ws_dir="$GITHUB_WORKSPACE"

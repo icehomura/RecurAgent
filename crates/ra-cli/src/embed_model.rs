@@ -10,7 +10,7 @@
 //! by every profile under that data dir.
 //!
 //! The download is opt-out (`embedding.auto_download = false` or
-//! `RA_NO_MODEL_DOWNLOAD=1`, legacy `ra_NO_MODEL_DOWNLOAD=1`); without the
+//! `RA_NO_MODEL_DOWNLOAD=1`, legacy `RA_NO_MODEL_DOWNLOAD=1`); without the
 //! file the runtime stays keyword-only, which every memory path supports.
 
 use std::io::Write;

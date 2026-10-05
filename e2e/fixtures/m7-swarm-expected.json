@@ -9,7 +9,7 @@
   "required_matrix_rooms": 1,
   "required_matrix_puppets": 3,
   "required_validator_aggregates": 1,
-  "live_gate_env": "ra_M7_SWARM_LIVE=1",
+  "live_gate_env": "RA_M7_SWARM_LIVE=1",
   "disallowed_hosts": [
     "dspfac.ocean.ominix.io"
   ],

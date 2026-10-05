@@ -1,6 +1,6 @@
 // Capture-and-replay infrastructure for live e2e soak runs (PR I).
 //
-// Goal: when a live spec fails (or any time `ra_CAPTURE_FIXTURE=1` is set)
+// Goal: when a live spec fails (or any time `RA_CAPTURE_FIXTURE=1` is set)
 // auto-save the streamed event log + final DOM state + assertion failure to
 // `e2e/fixtures/captured/<test-name>-<timestamp>.json`. Captured fixtures
 // can then be promoted to Layer 1 (`crates/ra-web/src/state/__tests__/
@@ -150,7 +150,7 @@ export interface CaptureHandle {
 /** Returns true iff the env opts in to capture. */
 export function captureEnabled(force = false): boolean {
   if (force) return true;
-  const v = process.env.ra_CAPTURE_FIXTURE;
+  const v = process.env.RA_CAPTURE_FIXTURE;
   return v === '1' || v === 'true' || v === 'yes';
 }
 
@@ -177,21 +177,21 @@ export function captureEnabled(force = false): boolean {
  *    contract. To enable that path the helper itself runs in capture mode
  *    (so the in-page buffer exists); we just check the failure status at
  *    flush time. To suppress capture entirely (e.g. headless smoke runs
- *    that explicitly don't want disk writes) set `ra_CAPTURE_DISABLE=1`.
+ *    that explicitly don't want disk writes) set `RA_CAPTURE_DISABLE=1`.
  */
 export async function attachCapture(
   page: Page,
   testInfo: TestInfo,
   opts: CaptureOptions = {},
 ): Promise<CaptureHandle> {
-  const disabled = process.env.ra_CAPTURE_DISABLE === '1';
+  const disabled = process.env.RA_CAPTURE_DISABLE === '1';
   if (disabled) {
     return noopHandle();
   }
 
   // We always install the init script when capture isn't explicitly
   // disabled — that way we can still flush a fixture when the test fails,
-  // even if the operator forgot `ra_CAPTURE_FIXTURE=1`. The page-side
+  // even if the operator forgot `RA_CAPTURE_FIXTURE=1`. The page-side
   // overhead of an idle TransformStream tee is negligible because we
   // ALSO gate by `Content-Type: text/event-stream` (or chunked transfer)
   // before starting to decode — see the matchUrl + content-type filter
@@ -209,7 +209,7 @@ export async function attachCapture(
   // soak run. Configurable via env. Beyond this we drop frames silently
   // (with a single warning marker) so that one bad soak run doesn't
   // produce a 500MB JSON file.
-  const maxFrames = Number(process.env.ra_CAPTURE_MAX_FRAMES || 10_000);
+  const maxFrames = Number(process.env.RA_CAPTURE_MAX_FRAMES || 10_000);
 
   await page.addInitScript(
     ({ paths, maxFrames }) => {
@@ -539,7 +539,7 @@ export async function attachCapture(
             (finalizeOpts.reason ? ` (${finalizeOpts.reason})` : ''),
         captured_at: new Date().toISOString(),
         spec: path.basename(testInfo.file || 'unknown.spec.ts'),
-        base_url: process.env.ra_TEST_URL || 'http://localhost:3000',
+        base_url: process.env.RA_TEST_URL || 'http://localhost:3000',
         session_id: drained.sessionId,
         events: drained.events.map(normalizeFrame),
         raw_events: drained.events,
@@ -641,7 +641,7 @@ function writeSnapshotToDisk(
       `${onFailure ? 'failed' : 'captured'} live run: ${testInfo.title} (${reason})`,
     captured_at: new Date().toISOString(),
     spec: path.basename(testInfo.file || 'unknown.spec.ts'),
-    base_url: process.env.ra_TEST_URL || 'http://localhost:3000',
+    base_url: process.env.RA_TEST_URL || 'http://localhost:3000',
     session_id: drained.sessionId,
     events: drained.events.map(normalizeFrame),
     raw_events: drained.events,

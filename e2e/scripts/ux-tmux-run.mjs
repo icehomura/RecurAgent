@@ -265,11 +265,11 @@ function stablePortForRunId(runId) {
 function taskSubagentFixtureEnv(scenario, workdir) {
   if (scenario.runner !== 'task-subagent-tree') return {};
   return {
-    ra_M15_LIVE_SUBAGENT_FIXTURE: '1',
+    RA_M15_LIVE_SUBAGENT_FIXTURE: '1',
     RA_TUI_M15_UX_OUTPUT_DIR: path.join(workdir, '.ra-m15-evidence'),
     RA_TUI_M15_UX_WORKDIR: workdir,
     ra_M15_LIVE_SUBAGENT_DELAY_SCALE:
-      process.env.ra_M15_LIVE_SUBAGENT_DELAY_SCALE || '0.25',
+      process.env.RA_M15_LIVE_SUBAGENT_DELAY_SCALE || '0.25',
   };
 }
 
@@ -279,9 +279,9 @@ function scenarioRequiresSoloServe(scenario) {
 
 function backendFixtureEnv(scenario, workdir) {
   return {
-    ra_M9_PROTOCOL_FIXTURES: '1',
+    RA_M9_PROTOCOL_FIXTURES: '1',
     DEEPSEEK_API_KEY: 'dummy-key-for-ux-tmux',
-    ...(scenarioRequiresSoloServe(scenario) ? { ra_SOLO_LOGIN: '1' } : {}),
+    ...(scenarioRequiresSoloServe(scenario) ? { RA_SOLO_LOGIN: '1' } : {}),
     ...taskSubagentFixtureEnv(scenario, workdir),
   };
 }
@@ -352,45 +352,45 @@ function resolveContext({ scenarioId, selfTest }) {
 
   const stamp = compactTimestamp();
   const runId =
-    process.env.ra_UX_TMUX_RUN_ID || `${selfTest ? 'ux-tmux-self-test' : 'ux-tmux'}-${stamp}`;
+    process.env.RA_UX_TMUX_RUN_ID || `${selfTest ? 'ux-tmux-self-test' : 'ux-tmux'}-${stamp}`;
   const runKey = `${runId}-${scenario.id}`;
   const outRoot = path.resolve(
-    process.env.ra_UX_TMUX_OUT_ROOT || path.join(repoRoot, 'e2e', 'test-results-ux'),
+    process.env.RA_UX_TMUX_OUT_ROOT || path.join(repoRoot, 'e2e', 'test-results-ux'),
   );
   const scenarioDir = path.resolve(
-    process.env.ra_UX_TMUX_OUT_DIR || path.join(outRoot, runId, scenario.id),
+    process.env.RA_UX_TMUX_OUT_DIR || path.join(outRoot, runId, scenario.id),
   );
   const runtimeRoot = path.resolve(
-    process.env.ra_UX_TMUX_RUNTIME_ROOT || path.join(os.tmpdir(), `ra-ux-tmux-${runKey}`),
+    process.env.RA_UX_TMUX_RUNTIME_ROOT || path.join(os.tmpdir(), `ra-ux-tmux-${runKey}`),
   );
-  const dataDir = path.resolve(process.env.ra_UX_TMUX_DATA_DIR || path.join(runtimeRoot, 'data'));
+  const dataDir = path.resolve(process.env.RA_UX_TMUX_DATA_DIR || path.join(runtimeRoot, 'data'));
   const workdir = path.resolve(
-    process.env.ra_UX_TMUX_WORKDIR || path.join(runtimeRoot, 'workspace'),
+    process.env.RA_UX_TMUX_WORKDIR || path.join(runtimeRoot, 'workspace'),
   );
   const replayFile = path.resolve(
-    process.env.ra_UX_TMUX_REPLAY || path.join(scenarioDir, 'input-replay.log'),
+    process.env.RA_UX_TMUX_REPLAY || path.join(scenarioDir, 'input-replay.log'),
   );
   const tuiRepo = path.resolve(process.env.RA_TUI_REPO || path.join(repoRoot, '..', 'ra-tui'));
   const lowerRunner = path.resolve(
-    process.env.ra_UX_TMUX_TUI_RUNNER
-      || process.env.ra_M19_UX_TUI_RUNNER
+    process.env.RA_UX_TMUX_TUI_RUNNER
+      || process.env.RA_M19_UX_TUI_RUNNER
       || path.join(tuiRepo, 'scripts', 'run-onboarding-tmux-soak.sh'),
   );
-  const raBin = path.resolve(process.env.ra_BIN || path.join(repoRoot, 'target', 'debug', 'ra'));
+  const raBin = path.resolve(process.env.RA_BIN || path.join(repoRoot, 'target', 'debug', 'ra'));
   const tuiBin = path.resolve(process.env.RA_TUI_BIN || path.join(tuiRepo, 'target', 'debug', 'ra-tui'));
-  const cols = positiveIntegerEnv('ra_UX_TMUX_COLS', scenario.id === 'narrow-layout' ? 80 : 120);
-  const rows = positiveIntegerEnv('ra_UX_TMUX_ROWS', scenario.id === 'narrow-layout' ? 24 : 40);
-  const port = positiveIntegerEnv('ra_UX_TMUX_PORT', stablePortForRunId(runKey));
-  const profileId = process.env.ra_UX_TMUX_PROFILE || 'coding';
+  const cols = positiveIntegerEnv('RA_UX_TMUX_COLS', scenario.id === 'narrow-layout' ? 80 : 120);
+  const rows = positiveIntegerEnv('RA_UX_TMUX_ROWS', scenario.id === 'narrow-layout' ? 24 : 40);
+  const port = positiveIntegerEnv('RA_UX_TMUX_PORT', stablePortForRunId(runKey));
+  const profileId = process.env.RA_UX_TMUX_PROFILE || 'coding';
   const sessionId =
-    process.env.ra_UX_TMUX_SESSION_ID || `${profileId}:local:ux:${scenario.id}:${runId}`;
+    process.env.RA_UX_TMUX_SESSION_ID || `${profileId}:local:ux:${scenario.id}:${runId}`;
   const sessionName =
-    process.env.ra_UX_TMUX_SESSION || `ra-ux-${safeSlug(runId)}-${safeSlug(scenario.id)}`;
+    process.env.RA_UX_TMUX_SESSION || `ra-ux-${safeSlug(runId)}-${safeSlug(scenario.id)}`;
   const fixtureEnv = taskSubagentFixtureEnv(scenario, workdir);
   const backendEnv = backendFixtureEnv(scenario, workdir);
   const backendServeArgs = scenarioRequiresSoloServe(scenario) ? ['--solo'] : [];
   const backendCommand =
-    process.env.ra_UX_TMUX_BACKEND_COMMAND
+    process.env.RA_UX_TMUX_BACKEND_COMMAND
     || [
       'env',
       ...shellEnvAssignments(backendEnv),
@@ -404,9 +404,9 @@ function resolveContext({ scenarioId, selfTest }) {
       shellQuote(workdir),
     ].join(' ');
   const websocketEndpoint = `ws://127.0.0.1:${port}/api/ui-protocol/ws`;
-  const authToken = process.env.ra_UX_TMUX_AUTH_TOKEN || 'ra-tui-onboarding-soak-token';
+  const authToken = process.env.RA_UX_TMUX_AUTH_TOKEN || 'ra-tui-onboarding-soak-token';
   const launchCommand =
-    process.env.ra_UX_TMUX_LAUNCH_COMMAND
+    process.env.RA_UX_TMUX_LAUNCH_COMMAND
     || (scenario.transport === 'websocket'
       ? `${shellQuote(tuiBin)} --mode protocol --endpoint ${shellQuote(websocketEndpoint)} --auth-token ${shellQuote(authToken)}`
       : `${shellQuote(tuiBin)} --mode protocol --stdio-command ${shellQuote(backendCommand)}`);
@@ -480,9 +480,9 @@ function writeRuntimePolicyStamp(ctx, generatedAt, { force = false } = {}) {
     stamp: {
       profile_id: ctx.profileId,
       session_id: ctx.sessionId,
-      approval_policy: process.env.ra_APPROVAL_POLICY || null,
-      sandbox_mode: process.env.ra_SANDBOX || 'inherits harness environment',
-      network_access: process.env.ra_NETWORK || 'inherits harness environment',
+      approval_policy: process.env.RA_APPROVAL_POLICY || null,
+      sandbox_mode: process.env.RA_SANDBOX || 'inherits harness environment',
+      network_access: process.env.RA_NETWORK || 'inherits harness environment',
     },
     terminal: {
       cols: ctx.cols,
@@ -804,13 +804,13 @@ function runRestartReconnectProbe(ctx, phase, env) {
     cwd: repoRoot,
     env: {
       ...env,
-      ra_M19_RESTART_PHASE: phase,
-      ra_M19_RESTART_ARTIFACT_DIR: ctx.scenarioDir,
-      ra_M19_RESTART_WS_ENDPOINT: ctx.websocketEndpoint,
-      ra_M19_RESTART_AUTH_TOKEN: ctx.authToken,
-      ra_M19_RESTART_PROFILE_ID: ctx.profileId,
-      ra_M19_RESTART_SESSION_ID: ctx.sessionId,
-      ra_M19_RESTART_WORKSPACE: ctx.workdir,
+      RA_M19_RESTART_PHASE: phase,
+      RA_M19_RESTART_ARTIFACT_DIR: ctx.scenarioDir,
+      RA_M19_RESTART_WS_ENDPOINT: ctx.websocketEndpoint,
+      RA_M19_RESTART_AUTH_TOKEN: ctx.authToken,
+      RA_M19_RESTART_PROFILE_ID: ctx.profileId,
+      RA_M19_RESTART_SESSION_ID: ctx.sessionId,
+      RA_M19_RESTART_WORKSPACE: ctx.workdir,
     },
     stdio: 'inherit',
   });
@@ -825,12 +825,12 @@ function runBackpressureReplayProbe(ctx, env) {
     cwd: repoRoot,
     env: {
       ...env,
-      ra_M19_BACKPRESSURE_ARTIFACT_DIR: ctx.scenarioDir,
-      ra_M19_BACKPRESSURE_WS_ENDPOINT: ctx.websocketEndpoint,
-      ra_M19_BACKPRESSURE_AUTH_TOKEN: ctx.authToken,
-      ra_M19_BACKPRESSURE_PROFILE_ID: ctx.profileId,
-      ra_M19_BACKPRESSURE_SESSION_ID: ctx.sessionId,
-      ra_M19_BACKPRESSURE_WORKSPACE: ctx.workdir,
+      RA_M19_BACKPRESSURE_ARTIFACT_DIR: ctx.scenarioDir,
+      RA_M19_BACKPRESSURE_WS_ENDPOINT: ctx.websocketEndpoint,
+      RA_M19_BACKPRESSURE_AUTH_TOKEN: ctx.authToken,
+      RA_M19_BACKPRESSURE_PROFILE_ID: ctx.profileId,
+      RA_M19_BACKPRESSURE_SESSION_ID: ctx.sessionId,
+      RA_M19_BACKPRESSURE_WORKSPACE: ctx.workdir,
       ra_M19_BACKPRESSURE_PROMPT:
         'M9 replay-lossy fixture for post-drop protocol probe after TUI recovery.',
     },
@@ -946,8 +946,8 @@ function runLowerRunner(ctx, options = {}) {
   const shouldInitProfileLlm = ctx.scenario.runner === 'provider-missing' ? '0' : '1';
   const env = {
     ...process.env,
-    ra_REPO: repoRoot,
-    ra_BIN: ctx.raBin,
+    RA_REPO: repoRoot,
+    RA_BIN: ctx.raBin,
     RA_TUI_BIN: ctx.tuiBin,
     RA_TUI_SOAK_RUN_ID: ctx.runId,
     RA_TUI_SOAK_ARTIFACT_DIR: ctx.scenarioDir,
@@ -976,7 +976,7 @@ function runLowerRunner(ctx, options = {}) {
       || (ctx.scenario.transport === 'websocket' ? '4' : '1'),
     RA_TUI_SOAK_TUI_WAIT_SECS: process.env.RA_TUI_SOAK_TUI_WAIT_SECS || '2',
     RA_TUI_SOAK_EXIT_HOLD_SECS: process.env.RA_TUI_SOAK_EXIT_HOLD_SECS || '30',
-    ra_M9_PROTOCOL_FIXTURES: '1',
+    RA_M9_PROTOCOL_FIXTURES: '1',
     ...ctx.fixtureEnv,
   };
 
@@ -1019,7 +1019,7 @@ function runLowerRunner(ctx, options = {}) {
   if (capture.error && status === 0) throw capture.error;
   if (capture.status !== 0 && status === 0) status = capture.status || 1;
 
-  if (!options.keepSession && process.env.ra_UX_TMUX_KEEP_SESSION !== '1') {
+  if (!options.keepSession && process.env.RA_UX_TMUX_KEEP_SESSION !== '1') {
     action('stop', false);
   }
 

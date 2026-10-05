@@ -1,8 +1,8 @@
 import { test, type Page } from "@playwright/test";
 
-const BASE_URL = process.env.ra_TEST_URL || "https://dspfac.ocean.ominix.io";
-const TOKEN = process.env.ra_USER_TOKEN!;
-const PROFILE = process.env.ra_PROFILE || "dspfac";
+const BASE_URL = process.env.RA_TEST_URL || "https://dspfac.ocean.ominix.io";
+const TOKEN = process.env.RA_USER_TOKEN!;
+const PROFILE = process.env.RA_PROFILE || "dspfac";
 
 if (!TOKEN) {
   throw new Error("Set ra_USER_TOKEN");

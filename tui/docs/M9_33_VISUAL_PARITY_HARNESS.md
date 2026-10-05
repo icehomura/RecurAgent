@@ -37,7 +37,7 @@ Each parity run must keep:
 
 ## Live Watch Contract
 
-When `ra_TMUX_KEEP=1` or `RA_TUI_UX_KEEP_SESSIONS=1` is set, the runner
+When `RA_TMUX_KEEP=1` or `RA_TUI_UX_KEEP_SESSIONS=1` is set, the runner
 must print attach commands for both sessions and leave them alive:
 
 ```bash

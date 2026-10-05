@@ -62,7 +62,7 @@ pub const BROWSER_PROFILE_ENV: &str = "RA_BROWSER_PROFILE";
 
 /// The spelling the previous build used for [`BROWSER_PROFILE_ENV`]; still
 /// honoured as a fallback.
-pub const LEGACY_BROWSER_PROFILE_ENV: &str = "ra_BROWSER_PROFILE";
+pub const LEGACY_BROWSER_PROFILE_ENV: &str = "RA_BROWSER_PROFILE";
 
 /// Chrome/Chromium executable override (same variable the `browser` tool
 /// honours).

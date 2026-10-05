@@ -104,9 +104,9 @@ mod serve_sigterm {
         // lock). Remove it so the child uses ONLY our private --instance-data-dir.
         .env_remove("RA_INSTANCE_DATA_DIR")
         .env_remove("RA_HOME")
-        .env_remove("ra_HOME")
+        .env_remove("RA_HOME")
         .env_remove("RA_DATA_DIR")
-        .env_remove("ra_DATA_DIR");
+        .env_remove("RA_DATA_DIR");
         #[cfg(unix)]
         unsafe {
             use std::os::unix::process::CommandExt;

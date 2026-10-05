@@ -401,7 +401,7 @@ async fn should_apply_blocked_env_vars_to_stdio_subprocess() {
     extra.insert("DYLD_INSERT_LIBRARIES".into(), "evil.dylib".into());
     extra.insert("NODE_OPTIONS".into(), "--require=bad".into());
     extra.insert("BASH_ENV".into(), "/tmp/bad.sh".into());
-    extra.insert("ra_TEST_MARKER".into(), "kept".into());
+    extra.insert("RA_TEST_MARKER".into(), "kept".into());
 
     let config = McpAgentBackendConfig::Local {
         cmd: script.display().to_string(),

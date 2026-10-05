@@ -2,18 +2,18 @@
  * Live browser validation for profile skill install/remove via dashboard UI.
  *
  * Run:
- *   ra_TEST_URL=https://dspfac.crew.ominix.io \
- *   ra_AUTH_TOKEN=ra-admin-2026 \
- *   ra_PROFILE=dspfac \
+ *   RA_TEST_URL=https://dspfac.crew.ominix.io \
+ *   RA_AUTH_TOKEN=ra-admin-2026 \
+ *   RA_PROFILE=dspfac \
  *   npx playwright test tests/live-mofa-skills.spec.ts
  */
 import { expect, test, type Page } from '@playwright/test';
 
 import { ensureAdminTokenRotated } from './live-browser-helpers';
 
-const PROFILE_ID = process.env.ra_PROFILE || 'dspfac';
-const INSTALL_SOURCE = process.env.ra_MOFA_INSTALL_SOURCE || 'mofa-org/mofa-skills/mofa-cli';
-const SKILL_NAME = process.env.ra_MOFA_SKILL_NAME || 'mofa-cli';
+const PROFILE_ID = process.env.RA_PROFILE || 'dspfac';
+const INSTALL_SOURCE = process.env.RA_MOFA_INSTALL_SOURCE || 'mofa-org/mofa-skills/mofa-cli';
+const SKILL_NAME = process.env.RA_MOFA_SKILL_NAME || 'mofa-cli';
 
 function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

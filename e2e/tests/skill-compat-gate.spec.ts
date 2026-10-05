@@ -11,11 +11,11 @@
  * The supervisor dispatches the canary run. This spec only authors the flow.
  *
  * Run:
- *   ra_TEST_URL=https://dspfac.crew.ominix.io \
- *   ra_AUTH_TOKEN=ra-admin-2026 \
- *   ra_PROFILE=dspfac \
- *   ra_COMPAT_SKILL_SOURCE=./e2e/fixtures/compat-test-skill \
- *   ra_COMPAT_SKILL_NAME=compat-test-skill \
+ *   RA_TEST_URL=https://dspfac.crew.ominix.io \
+ *   RA_AUTH_TOKEN=ra-admin-2026 \
+ *   RA_PROFILE=dspfac \
+ *   RA_COMPAT_SKILL_SOURCE=./e2e/fixtures/compat-test-skill \
+ *   RA_COMPAT_SKILL_NAME=compat-test-skill \
  *   npx playwright test tests/skill-compat-gate.spec.ts
  *
  * The canary host must have the fixture directory reachable at the
@@ -24,11 +24,11 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 
-const AUTH_TOKEN = process.env.ra_AUTH_TOKEN || 'ra-admin-2026';
-const PROFILE_ID = process.env.ra_PROFILE || 'dspfac';
-const SKILL_NAME = process.env.ra_COMPAT_SKILL_NAME || 'compat-test-skill';
+const AUTH_TOKEN = process.env.RA_AUTH_TOKEN || 'ra-admin-2026';
+const PROFILE_ID = process.env.RA_PROFILE || 'dspfac';
+const SKILL_NAME = process.env.RA_COMPAT_SKILL_NAME || 'compat-test-skill';
 const SKILL_SOURCE =
-  process.env.ra_COMPAT_SKILL_SOURCE || './e2e/fixtures/compat-test-skill';
+  process.env.RA_COMPAT_SKILL_SOURCE || './e2e/fixtures/compat-test-skill';
 
 function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

@@ -21,7 +21,7 @@
 
 import { test, expect, type Page } from '@playwright/test';
 
-const ADMIN_TOKEN = process.env.ra_ADMIN_TOKEN || 'coding-loop-dashboard-test';
+const ADMIN_TOKEN = process.env.RA_ADMIN_TOKEN || 'coding-loop-dashboard-test';
 const FIXTURE_NOW = '2026-04-19T12:10:00Z';
 
 type LifecycleState = 'queued' | 'running' | 'verifying' | 'ready' | 'failed';

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # M7.8 release gate: live swarm dispatch validation on a canary.
 #
-# This gate is intentionally canary-only. It sets ra_M7_SWARM_LIVE=1 before
+# This gate is intentionally canary-only. It sets RA_M7_SWARM_LIVE=1 before
 # invoking Playwright, which keeps the spec skipped during default e2e runs.
 
 set -euo pipefail
@@ -10,10 +10,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 FIXTURE_PATH="${ROOT}/e2e/fixtures/m7-swarm-expected.json"
 
-BASE_URL="${ra_TEST_URL:-}"
-AUTH_TOKEN="${ra_AUTH_TOKEN:-}"
-PROFILE_ID="${ra_PROFILE:-dspfac}"
-TEST_EMAIL="${ra_TEST_EMAIL:-dspfac@gmail.com}"
+BASE_URL="${RA_TEST_URL:-}"
+AUTH_TOKEN="${RA_AUTH_TOKEN:-}"
+PROFILE_ID="${RA_PROFILE:-dspfac}"
+TEST_EMAIL="${RA_TEST_EMAIL:-dspfac@gmail.com}"
 OUTPUT_DIR=""
 HEADED=false
 LIST_ONLY=false
@@ -82,7 +82,7 @@ command -v node >/dev/null 2>&1 || { fail "node is required"; exit 2; }
 command -v npm >/dev/null 2>&1 || { fail "npm is required"; exit 2; }
 
 if [[ -z "$OUTPUT_DIR" ]]; then
-  OUTPUT_DIR="${ra_M7_SWARM_OUTPUT_DIR:-${ROOT}/e2e/test-results-m7-swarm-live/$(date -u +%Y%m%dT%H%M%SZ)}"
+  OUTPUT_DIR="${RA_M7_SWARM_OUTPUT_DIR:-${ROOT}/e2e/test-results-m7-swarm-live/$(date -u +%Y%m%dT%H%M%SZ)}"
 fi
 mkdir -p "$OUTPUT_DIR"
 
@@ -135,12 +135,12 @@ if [[ ! -d "${ROOT}/e2e/node_modules/@playwright/test" ]]; then
   (cd "$ROOT/e2e" && npm ci)
 fi
 
-export ra_TEST_URL="$BASE_URL"
-export ra_AUTH_TOKEN="$AUTH_TOKEN"
-export ra_PROFILE="$PROFILE_ID"
-export ra_TEST_EMAIL="$TEST_EMAIL"
-export ra_M7_SWARM_OUTPUT_DIR="$OUTPUT_DIR"
-export ra_M7_SWARM_DIAGNOSTICS="$DIAGNOSTIC_JSON"
+export RA_TEST_URL="$BASE_URL"
+export RA_AUTH_TOKEN="$AUTH_TOKEN"
+export RA_PROFILE="$PROFILE_ID"
+export RA_TEST_EMAIL="$TEST_EMAIL"
+export RA_M7_SWARM_OUTPUT_DIR="$OUTPUT_DIR"
+export RA_M7_SWARM_DIAGNOSTICS="$DIAGNOSTIC_JSON"
 export PLAYWRIGHT_OUTPUT_DIR="${OUTPUT_DIR}/playwright"
 
 if [[ "$LIST_ONLY" == true ]]; then
@@ -150,7 +150,7 @@ if [[ "$LIST_ONLY" == true ]]; then
   exit 0
 fi
 
-export ra_M7_SWARM_LIVE=1
+export RA_M7_SWARM_LIVE=1
 
 PLAYWRIGHT_CMD=(npx playwright test --workers=1 tests/swarm-dispatch-gate.spec.ts --reporter=line)
 if [[ "$HEADED" == true ]]; then

@@ -10,19 +10,19 @@ import readline from 'node:readline';
 const repoRoot = path.resolve(import.meta.dirname, '..', '..');
 const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z');
 const runRoot = path.resolve(
-  process.env.ra_M15_NATIVE_STDIO_SOAK_DIR
+  process.env.RA_M15_NATIVE_STDIO_SOAK_DIR
     || path.join(repoRoot, 'e2e', 'test-results-m15-native-review-start-stdio', stamp),
 );
 const dataDir = path.join(runRoot, 'data');
 const workspace = path.join(runRoot, 'workspace');
-const raBin = process.env.ra_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
-const profileId = process.env.ra_M15_NATIVE_PROFILE || 'm15-native';
+const raBin = process.env.RA_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
+const profileId = process.env.RA_M15_NATIVE_PROFILE || 'm15-native';
 const sessionId =
-  process.env.ra_M15_NATIVE_SESSION || `${profileId}:local:m15-native-review-${stamp}`;
-const timeoutMs = Number(process.env.ra_M15_NATIVE_TIMEOUT_MS || 180_000);
-const providerFamily = process.env.ra_M15_NATIVE_PROVIDER || 'deepseek';
-const modelId = process.env.ra_M15_NATIVE_MODEL || 'deepseek-chat';
-const providerKey = process.env.ra_M15_NATIVE_API_KEY || process.env.DEEPSEEK_API_KEY || '';
+  process.env.RA_M15_NATIVE_SESSION || `${profileId}:local:m15-native-review-${stamp}`;
+const timeoutMs = Number(process.env.RA_M15_NATIVE_TIMEOUT_MS || 180_000);
+const providerFamily = process.env.RA_M15_NATIVE_PROVIDER || 'deepseek';
+const modelId = process.env.RA_M15_NATIVE_MODEL || 'deepseek-chat';
+const providerKey = process.env.RA_M15_NATIVE_API_KEY || process.env.DEEPSEEK_API_KEY || '';
 
 const observedTranscript = path.join(runRoot, 'client-observed-appui-transcript.jsonl');
 const serverStderr = path.join(runRoot, 'server-stderr.log');
@@ -113,13 +113,13 @@ fs.writeFileSync(
     '#!/usr/bin/env node',
     "import fs from 'node:fs';",
     "import path from 'node:path';",
-    "const artifactPath = process.env.ra_REVIEW_ARTIFACT_PATH;",
+    "const artifactPath = process.env.RA_REVIEW_ARTIFACT_PATH;",
     "if (!artifactPath) {",
     "  console.error('missing ra_REVIEW_ARTIFACT_PATH');",
     '  process.exit(2);',
     '}',
-    "const target = process.env.ra_REVIEW_TARGET || 'unknown-target';",
-    "const objective = process.env.ra_REVIEW_OBJECTIVE || 'unknown-objective';",
+    "const target = process.env.RA_REVIEW_TARGET || 'unknown-target';",
+    "const objective = process.env.RA_REVIEW_OBJECTIVE || 'unknown-objective';",
     "const text = [`# Grace Hopper CLI Review`, '', `Medium: CLI specialist fixture reviewed ${target}.`, '', `Objective excerpt: ${objective.slice(0, 240)}`].join('\\n');",
     'fs.mkdirSync(path.dirname(artifactPath), { recursive: true });',
     'fs.writeFileSync(artifactPath, `${text}\\n`, "utf8");',
@@ -184,8 +184,8 @@ const child = spawn(raBin, [
   env: {
     ...process.env,
     RUST_BACKTRACE: process.env.RUST_BACKTRACE || '1',
-    ra_REVIEW_CLI_SPECIALIST_ARGV_JSON: JSON.stringify([cliFixture]),
-    ra_REVIEW_MCP_TIMEOUT_SECS: process.env.ra_REVIEW_MCP_TIMEOUT_SECS || '30',
+    RA_REVIEW_CLI_SPECIALIST_ARGV_JSON: JSON.stringify([cliFixture]),
+    RA_REVIEW_MCP_TIMEOUT_SECS: process.env.RA_REVIEW_MCP_TIMEOUT_SECS || '30',
   },
   stdio: ['pipe', 'pipe', 'pipe'],
 });

@@ -6,13 +6,13 @@ import {
   type UiNotification,
 } from '../lib/m9-ws-client';
 
-const BASE = process.env.ra_TEST_URL || 'http://127.0.0.1:50123';
+const BASE = process.env.RA_TEST_URL || 'http://127.0.0.1:50123';
 const TOKEN =
-  process.env.ra_AUTH_TOKEN ||
-  process.env.ra_LIVE_TOKEN ||
-  process.env.ra_TEST_TOKEN ||
+  process.env.RA_AUTH_TOKEN ||
+  process.env.RA_LIVE_TOKEN ||
+  process.env.RA_TEST_TOKEN ||
   '';
-const PROFILE = process.env.ra_PROFILE || 'admin';
+const PROFILE = process.env.RA_PROFILE || 'admin';
 
 // The default profile above is a LOCAL-HARNESS default, not something CI has.
 // `e2e-live-nightly` sets no ra_PROFILE and its serve configures no
@@ -22,7 +22,7 @@ const PROFILE = process.env.ra_PROFILE || 'admin';
 // the missing prerequisite reads as skipped rather than as a failing
 // pipeline. See #2073.
 test.skip(
-  !process.env.ra_PROFILE,
+  !process.env.RA_PROFILE,
   'set ra_PROFILE to a profile the target server actually has ' +
     "(the 'admin' default is a local-harness convention, not a CI fixture)",
 );
@@ -52,7 +52,7 @@ function waitForMatchingNotification(
 }
 
 test('text-only IR run_pipeline reaches the user as a background completion', async () => {
-  expect(TOKEN, 'ra_AUTH_TOKEN must be set for live e2e').not.toEqual('');
+  expect(TOKEN, 'RA_AUTH_TOKEN must be set for live e2e').not.toEqual('');
 
   const client = new M9WsClient({
     url: BASE,

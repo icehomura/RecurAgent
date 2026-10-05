@@ -4,26 +4,26 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 
-run_id="${ra_M16_UX_RUN_ID:-m16-ux-soak-$(date -u +%Y%m%dT%H%M%SZ)}"
+run_id="${RA_M16_UX_RUN_ID:-m16-ux-soak-$(date -u +%Y%m%dT%H%M%SZ)}"
 tui_repo="${RA_TUI_REPO:-$(dirname "$repo_root")/ra-tui}"
-tui_runner="${ra_M16_TUI_RUNNER:-$tui_repo/scripts/run-m15-live-tmux-ux-soak.sh}"
-out_root="${ra_M16_UX_OUT_ROOT:-$repo_root/e2e/test-results-m16-tmux-ux}"
-out_dir="${ra_M16_UX_OUT_DIR:-$out_root/$run_id}"
-runtime_root="${ra_M16_UX_RUNTIME_ROOT:-/tmp/ra-m16-ux-$run_id}"
-data_dir="${ra_M16_UX_DATA_DIR:-$runtime_root/data}"
-workdir="${ra_M16_UX_WORKDIR:-$runtime_root/workspace}"
-replay_file="${ra_M16_UX_REPLAY:-$out_dir/m16-code-review-replay.txt}"
-ra_bin="${ra_BIN:-$repo_root/target/debug/ra}"
+tui_runner="${RA_M16_TUI_RUNNER:-$tui_repo/scripts/run-m15-live-tmux-ux-soak.sh}"
+out_root="${RA_M16_UX_OUT_ROOT:-$repo_root/e2e/test-results-m16-tmux-ux}"
+out_dir="${RA_M16_UX_OUT_DIR:-$out_root/$run_id}"
+runtime_root="${RA_M16_UX_RUNTIME_ROOT:-/tmp/ra-m16-ux-$run_id}"
+data_dir="${RA_M16_UX_DATA_DIR:-$runtime_root/data}"
+workdir="${RA_M16_UX_WORKDIR:-$runtime_root/workspace}"
+replay_file="${RA_M16_UX_REPLAY:-$out_dir/m16-code-review-replay.txt}"
+ra_bin="${RA_BIN:-$repo_root/target/debug/ra}"
 tui_bin="${RA_TUI_BIN:-$tui_repo/target/debug/ra-tui}"
-session_name="${ra_M16_UX_TMUX_SESSION:-ra-m16-ux-$run_id}"
-profile_id="${ra_M16_UX_PROFILE:-coding}"
-session_id="${ra_M16_UX_SESSION_ID:-$profile_id:local:m16-ux:$run_id}"
-delay_scale="${ra_M16_UX_SUBAGENT_DELAY_SCALE:-8}"
+session_name="${RA_M16_UX_TMUX_SESSION:-ra-m16-ux-$run_id}"
+profile_id="${RA_M16_UX_PROFILE:-coding}"
+session_id="${RA_M16_UX_SESSION_ID:-$profile_id:local:m16-ux:$run_id}"
+delay_scale="${RA_M16_UX_SUBAGENT_DELAY_SCALE:-8}"
 final_marker="M16_CODE_REVIEW_FINAL_LINE"
 fixture_dir="$out_dir/fixtures"
 cli_fixture="$fixture_dir/review-cli-specialist.mjs"
 mcp_fixture="$fixture_dir/review-mcp-specialist.mjs"
-provider_key_source="${ra_M16_NATIVE_PROVIDER_KEY_SOURCE:-$repo_root/e2e/test-results-m15-native-review-start-stdio/20260516T191424Z/data/profiles/m15-native.json}"
+provider_key_source="${RA_M16_NATIVE_PROVIDER_KEY_SOURCE:-$repo_root/e2e/test-results-m15-native-review-start-stdio/20260516T191424Z/data/profiles/m15-native.json}"
 live_provider_config_path="$data_dir/profiles/$profile_id.json"
 secret_cleanup_report="$out_dir/m16-secret-cleanup.json"
 cleanup_secrets_done=0
@@ -59,10 +59,10 @@ shell_quote() {
 }
 
 ensure_binaries() {
-  if [[ "${ra_M16_BUILD:-1}" == "1" ]]; then
+  if [[ "${RA_M16_BUILD:-1}" == "1" ]]; then
     (cd "$repo_root" && cargo build -p ra-cli --bin ra --features api)
   fi
-  if [[ "${ra_M16_BUILD_TUI:-0}" == "1" || ! -x "$tui_bin" ]]; then
+  if [[ "${RA_M16_BUILD_TUI:-0}" == "1" || ! -x "$tui_bin" ]]; then
     (cd "$tui_repo" && cargo build --bin ra-tui)
   fi
   [[ -x "$ra_bin" ]] || die "ra binary is not executable: $ra_bin"
@@ -208,12 +208,12 @@ write_review_fixtures() {
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
-const artifactPath = process.env.ra_REVIEW_ARTIFACT_PATH;
+const artifactPath = process.env.RA_REVIEW_ARTIFACT_PATH;
 if (!artifactPath) {
   console.error('missing ra_REVIEW_ARTIFACT_PATH');
   process.exit(2);
 }
-const target = process.env.ra_REVIEW_TARGET || 'unknown-target';
+const target = process.env.RA_REVIEW_TARGET || 'unknown-target';
 const text = [`# Grace Hopper CLI Review`, '', `Medium: CLI specialist fixture reviewed ${target}.`].join('\n');
 fs.mkdirSync(path.dirname(artifactPath), { recursive: true });
 fs.writeFileSync(artifactPath, `${text}\n`, 'utf8');
@@ -438,7 +438,7 @@ stop_tui_session() {
     return 0
   fi
   cleanup_stop_done=1
-  if [[ "${tmux_session_started:-0}" == "1" && "${ra_M16_UX_KEEP_SESSION:-0}" != "1" && -x "$tui_runner" ]]; then
+  if [[ "${tmux_session_started:-0}" == "1" && "${RA_M16_UX_KEEP_SESSION:-0}" != "1" && -x "$tui_runner" ]]; then
     "$tui_runner" stop || true
   fi
 }
@@ -464,7 +464,7 @@ run_soak() {
   trap 'cleanup_on_exit $?' EXIT
   trap 'cleanup_on_signal 130' INT
   trap 'cleanup_on_signal 143' TERM
-  if [[ "${ra_M16_UX_INJECT_FAIL_AFTER_PROFILE_WRITE:-0}" != "1" ]]; then
+  if [[ "${RA_M16_UX_INJECT_FAIL_AFTER_PROFILE_WRITE:-0}" != "1" ]]; then
     command -v tmux >/dev/null 2>&1 || die "tmux is required"
     [[ -x "$tui_runner" ]] || die "ra-tui tmux runner not found or not executable: $tui_runner"
     ensure_binaries
@@ -473,20 +473,20 @@ run_soak() {
   write_review_fixtures
   write_replay
 
-  local provider_key="${ra_M16_NATIVE_API_KEY:-${ra_M15_NATIVE_API_KEY:-${DEEPSEEK_API_KEY:-}}}"
+  local provider_key="${RA_M16_NATIVE_API_KEY:-${RA_M15_NATIVE_API_KEY:-${DEEPSEEK_API_KEY:-}}}"
   if [[ -z "$provider_key" || "$provider_key" == "<redacted>" ]]; then
     provider_key="$(deepseek_key_from_source)"
   fi
   [[ -n "$provider_key" && "$provider_key" != "<redacted>" ]] || die "missing provider key; set ra_M16_NATIVE_API_KEY, ra_M15_NATIVE_API_KEY, DEEPSEEK_API_KEY, or ra_M16_NATIVE_PROVIDER_KEY_SOURCE"
   write_profile_config
   export DEEPSEEK_API_KEY="$provider_key"
-  if [[ "${ra_M16_UX_INJECT_FAIL_AFTER_PROFILE_WRITE:-0}" == "1" ]]; then
+  if [[ "${RA_M16_UX_INJECT_FAIL_AFTER_PROFILE_WRITE:-0}" == "1" ]]; then
     echo "Injected failure after provider config write" >&2
     return 97
   fi
 
   local backend_command
-  backend_command="env ra_REVIEW_CLI_SPECIALIST_ARGV_JSON=$(shell_quote "[\"$cli_fixture\"]") ra_REVIEW_MCP_TIMEOUT_SECS=30 $(shell_quote "$ra_bin") serve --stdio --data-dir $(shell_quote "$data_dir") --cwd $(shell_quote "$workdir") --swarm-backend stdio --swarm-backend-cmd $(shell_quote "$mcp_fixture")"
+  backend_command="env RA_REVIEW_CLI_SPECIALIST_ARGV_JSON=$(shell_quote "[\"$cli_fixture\"]") RA_REVIEW_MCP_TIMEOUT_SECS=30 $(shell_quote "$ra_bin") serve --stdio --data-dir $(shell_quote "$data_dir") --cwd $(shell_quote "$workdir") --swarm-backend stdio --swarm-backend-cmd $(shell_quote "$mcp_fixture")"
 
   export RA_TUI_M15_UX_RUN_ID="$run_id"
   export RA_TUI_M15_UX_OUT_DIR="$out_dir"
@@ -502,8 +502,8 @@ run_soak() {
   export RA_TUI_M15_UX_SESSION_ID="$session_id"
   export RA_TUI_M15_UX_PROFILE="$profile_id"
   export RA_TUI_M15_UX_REPLACE_SESSION=1
-  export RA_TUI_M15_UX_COLS="${ra_M16_UX_COLS:-120}"
-  export RA_TUI_M15_UX_ROWS="${ra_M16_UX_ROWS:-40}"
+  export RA_TUI_M15_UX_COLS="${RA_M16_UX_COLS:-120}"
+  export RA_TUI_M15_UX_ROWS="${RA_M16_UX_ROWS:-40}"
 
   "$tui_runner" start
   tmux_session_started=1
@@ -535,13 +535,13 @@ google: AIzaSyA-1234567890abcdefghijklmnopqrstuv
 TXT
   local output_file="$tmp_root/injected-failure.out"
   set +e
-  ra_M16_UX_OUT_DIR="$tmp_root/out" \
-    ra_M16_UX_RUNTIME_ROOT="$tmp_root/runtime" \
-    ra_M16_UX_DATA_DIR="$tmp_root/runtime/data" \
-    ra_M16_UX_WORKDIR="$tmp_root/runtime/workspace" \
-    ra_M16_UX_INJECT_FAIL_AFTER_PROFILE_WRITE=1 \
-    ra_M16_NATIVE_API_KEY="sk-testm16cleanup000000000000" \
-    ra_M16_BUILD=0 \
+  RA_M16_UX_OUT_DIR="$tmp_root/out" \
+    RA_M16_UX_RUNTIME_ROOT="$tmp_root/runtime" \
+    RA_M16_UX_DATA_DIR="$tmp_root/runtime/data" \
+    RA_M16_UX_WORKDIR="$tmp_root/runtime/workspace" \
+    RA_M16_UX_INJECT_FAIL_AFTER_PROFILE_WRITE=1 \
+    RA_M16_NATIVE_API_KEY="sk-testm16cleanup000000000000" \
+    RA_M16_BUILD=0 \
     "$0" run >"$output_file" 2>&1
   local status=$?
   set -e

@@ -553,10 +553,10 @@ fn should_read_keys_settings_and_contact_from_the_environment() {
         ("GITHUB_TOKEN", ""),
         ("RA_METASEARCH_MASTODON_INSTANCE", "fosstodon.org"),
         // The legacy `RA_` spellings are still honoured…
-        ("ra_RESEARCH_CONTACT", "ops@example.org"),
+        ("RA_RESEARCH_CONTACT", "ops@example.org"),
         // …and the new spelling wins over the legacy one.
         ("RA_RESEARCH_CONTACT", "new@example.org"),
-        ("ra_METASEARCH_STACKEXCHANGE_SITE", "serverfault"),
+        ("RA_METASEARCH_STACKEXCHANGE_SITE", "serverfault"),
     ]);
     let lookup = |k: &str| env.get(k).map(|v| v.to_string());
     let extra = BTreeMap::from([("stackexchange".to_string(), "sekey".to_string())]);

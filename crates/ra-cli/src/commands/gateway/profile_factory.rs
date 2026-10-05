@@ -48,9 +48,9 @@ const FIRST_PARTY_SKILL_ENV_VARS: &[&str] = &[
     // search-results scrape opt-in (default off).
     "SEARXNG_URL",
     "RA_RESPECT_ROBOTS",
-    "ra_RESPECT_ROBOTS",
+    "RA_RESPECT_ROBOTS",
     "RA_ALLOW_SERP_SCRAPE",
-    "ra_ALLOW_SERP_SCRAPE",
+    "RA_ALLOW_SERP_SCRAPE",
 ];
 
 /// Google / Vertex credential material: the raw service-account JSON, the
@@ -156,14 +156,14 @@ pub(crate) fn apply_resolved_profile_llm_env(
 ) {
     let values = [
         (
-            "ra_PROFILE_LLM_PROVIDER",
+            "RA_PROFILE_LLM_PROVIDER",
             crate::runtime::profile::configured_provider_name(config),
         ),
-        ("ra_PROFILE_LLM_MODEL", config.model.clone()),
-        ("ra_PROFILE_LLM_BASE_URL", config.base_url.clone()),
-        ("ra_PROFILE_LLM_API_TYPE", config.api_type.clone()),
+        ("RA_PROFILE_LLM_MODEL", config.model.clone()),
+        ("RA_PROFILE_LLM_BASE_URL", config.base_url.clone()),
+        ("RA_PROFILE_LLM_API_TYPE", config.api_type.clone()),
         (
-            "ra_PROFILE_LLM_CONFIG_REVISION",
+            "RA_PROFILE_LLM_CONFIG_REVISION",
             Some(config_revision.to_string()),
         ),
     ];
@@ -236,11 +236,11 @@ pub(crate) fn profile_plugin_env(profile: &crate::profiles::UserProfile) -> Vec<
             .or_else(|| primary.model_id.as_deref().and_then(detect_provider))
         {
             push_env_once(&mut env, "RA_PROFILE_LLM_PROVIDER", provider.to_string());
-            push_env_once(&mut env, "ra_PROFILE_LLM_PROVIDER", provider.to_string());
+            push_env_once(&mut env, "RA_PROFILE_LLM_PROVIDER", provider.to_string());
         }
         if let Some(model) = primary.model_id.as_deref() {
             push_env_once(&mut env, "RA_PROFILE_LLM_MODEL", model.to_string());
-            push_env_once(&mut env, "ra_PROFILE_LLM_MODEL", model.to_string());
+            push_env_once(&mut env, "RA_PROFILE_LLM_MODEL", model.to_string());
         }
     }
 
@@ -306,7 +306,7 @@ fn push_runtime_plugin_env(
         data_dir.to_string_lossy().to_string(),
     ));
     plugin_env.push((
-        "ra_DATA_DIR".to_string(),
+        "RA_DATA_DIR".to_string(),
         data_dir.to_string_lossy().to_string(),
     ));
     plugin_env.push((
@@ -314,11 +314,11 @@ fn push_runtime_plugin_env(
         ra_home.to_string_lossy().to_string(),
     ));
     plugin_env.push((
-        "ra_HOME".to_string(),
+        "RA_HOME".to_string(),
         ra_home.to_string_lossy().to_string(),
     ));
     plugin_env.push(("RA_PROFILE_ID".to_string(), profile_id.to_string()));
-    plugin_env.push(("ra_PROFILE_ID".to_string(), profile_id.to_string()));
+    plugin_env.push(("RA_PROFILE_ID".to_string(), profile_id.to_string()));
     plugin_env.push((
         "RA_VOICE_DIR".to_string(),
         data_dir
@@ -327,7 +327,7 @@ fn push_runtime_plugin_env(
             .to_string(),
     ));
     plugin_env.push((
-        "ra_VOICE_DIR".to_string(),
+        "RA_VOICE_DIR".to_string(),
         data_dir
             .join("voice_profiles")
             .to_string_lossy()
@@ -1251,23 +1251,23 @@ mod tests {
             ..Default::default()
         };
         let mut env = vec![
-            ("ra_PROFILE_LLM_MODEL".into(), "stale".into()),
-            ("ra_PROFILE_LLM_MODEL".into(), "duplicate".into()),
+            ("RA_PROFILE_LLM_MODEL".into(), "stale".into()),
+            ("RA_PROFILE_LLM_MODEL".into(), "duplicate".into()),
             ("UNRELATED".into(), "retained".into()),
         ];
         apply_resolved_profile_llm_env(&mut env, &config, "revision-1");
         let map: HashMap<_, _> = env.iter().cloned().collect();
         assert_eq!(env.len(), map.len());
-        assert_eq!(map["ra_PROFILE_LLM_PROVIDER"], "google");
         assert_eq!(map["RA_PROFILE_LLM_PROVIDER"], "google");
-        assert_eq!(map["ra_PROFILE_LLM_MODEL"], "resolved-model");
+        assert_eq!(map["RA_PROFILE_LLM_PROVIDER"], "google");
+        assert_eq!(map["RA_PROFILE_LLM_MODEL"], "resolved-model");
         assert_eq!(map["RA_PROFILE_LLM_MODEL"], "resolved-model");
         assert_eq!(
-            map["ra_PROFILE_LLM_BASE_URL"],
+            map["RA_PROFILE_LLM_BASE_URL"],
             "https://example.invalid/v1beta"
         );
-        assert_eq!(map["ra_PROFILE_LLM_API_TYPE"], "gemini");
-        assert_eq!(map["ra_PROFILE_LLM_CONFIG_REVISION"], "revision-1");
+        assert_eq!(map["RA_PROFILE_LLM_API_TYPE"], "gemini");
+        assert_eq!(map["RA_PROFILE_LLM_CONFIG_REVISION"], "revision-1");
         assert_eq!(map["UNRELATED"], "retained");
         config.provider = None;
         config.model = Some("gemini-3.6-flash".into());
@@ -1275,13 +1275,13 @@ mod tests {
         config.api_type = None;
         apply_resolved_profile_llm_env(&mut env, &config, "revision-2");
         let map: HashMap<_, _> = env.into_iter().collect();
-        assert_eq!(map["ra_PROFILE_LLM_PROVIDER"], "gemini");
         assert_eq!(map["RA_PROFILE_LLM_PROVIDER"], "gemini");
-        assert!(!map.contains_key("ra_PROFILE_LLM_BASE_URL"));
+        assert_eq!(map["RA_PROFILE_LLM_PROVIDER"], "gemini");
         assert!(!map.contains_key("RA_PROFILE_LLM_BASE_URL"));
-        assert!(!map.contains_key("ra_PROFILE_LLM_API_TYPE"));
+        assert!(!map.contains_key("RA_PROFILE_LLM_BASE_URL"));
         assert!(!map.contains_key("RA_PROFILE_LLM_API_TYPE"));
-        assert_eq!(map["ra_PROFILE_LLM_CONFIG_REVISION"], "revision-2");
+        assert!(!map.contains_key("RA_PROFILE_LLM_API_TYPE"));
+        assert_eq!(map["RA_PROFILE_LLM_CONFIG_REVISION"], "revision-2");
     }
 
     #[test]
@@ -1368,7 +1368,7 @@ mod tests {
         let env = profile_plugin_env(&profile);
 
         assert!(env.contains(&(
-            "ra_PROFILE_LLM_PROVIDER".to_string(),
+            "RA_PROFILE_LLM_PROVIDER".to_string(),
             "google".to_string()
         )));
         assert!(env.contains(&(
@@ -1376,7 +1376,7 @@ mod tests {
             "google".to_string()
         )));
         assert!(env.contains(&(
-            "ra_PROFILE_LLM_MODEL".to_string(),
+            "RA_PROFILE_LLM_MODEL".to_string(),
             "gemini-3.6-flash".to_string()
         )));
         assert!(env.contains(&(

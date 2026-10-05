@@ -130,7 +130,7 @@ async fn build_fixture_with_ttl(ttl: std::time::Duration) -> Fixture {
             host: "smtp.invalid".into(),
             port: 465,
             username: "no-reply@invalid".into(),
-            password_env: "ra_TEST_NO_SMTP".into(),
+            password_env: "RA_TEST_NO_SMTP".into(),
             from_address: "no-reply@invalid".into(),
         }),
         session_expiry_hours: 1,

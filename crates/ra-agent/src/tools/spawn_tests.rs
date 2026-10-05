@@ -1281,15 +1281,15 @@ fn write_mock_podcast_plugin(root: &std::path::Path, script_seen: &std::path::Pa
 set -euo pipefail
 INPUT="$(cat)"
 SCRIPT_SEEN="{script_seen}"
-ra_PLUGIN_INPUT="$INPUT" SCRIPT_SEEN="$SCRIPT_SEEN" python3 - <<'PY'
+RA_PLUGIN_INPUT="$INPUT" SCRIPT_SEEN="$SCRIPT_SEEN" python3 - <<'PY'
 import json
 import os
 
-payload = json.loads(os.environ.get("ra_PLUGIN_INPUT") or "{{}}")
+payload = json.loads(os.environ.get("RA_PLUGIN_INPUT") or "{{}}")
 with open(os.environ["SCRIPT_SEEN"], "w", encoding="utf-8") as handle:
     handle.write(str(payload.get("script") or ""))
 
-base = os.environ.get("ra_WORK_DIR") or os.getcwd()
+base = os.environ.get("RA_WORK_DIR") or os.getcwd()
 out_dir = os.path.join(base, "skill-output", "mofa-podcast")
 os.makedirs(out_dir, exist_ok=True)
 out = os.path.join(out_dir, "podcast_full_test.mp3")
@@ -1329,7 +1329,7 @@ $raw = [System.Text.Encoding]::UTF8.GetString($ms.ToArray())
 $script = $raw
 try { $p = $raw | ConvertFrom-Json; if ($null -ne $p.script) { $script = [string]$p.script } } catch { }
 [System.IO.File]::WriteAllText('@@SCRIPT_SEEN@@', $script, (New-Object System.Text.UTF8Encoding($false)))
-$base = $env:ra_WORK_DIR
+$base = $env:RA_WORK_DIR
 if ([string]::IsNullOrEmpty($base)) { $base = (Get-Location).Path }
 $dir = Join-Path (Join-Path $base 'skill-output') 'mofa-podcast'
 New-Item -ItemType Directory -Force -Path $dir > $null

@@ -45,7 +45,7 @@ const FLAG_KEY = 'ra_thread_store_v2';
 const RETRY_PROMPT_STANDARD =
   '北京今天的天气怎么样？请使用工具查询。';
 
-// Stronger retry prompt — when ra_FORCE_TOOL_RETRY=1 is set, use a
+// Stronger retry prompt — when RA_FORCE_TOOL_RETRY=1 is set, use a
 // prompt designed to specifically trip up tool-arg parsing on the first
 // attempt. The key trick: ask for an obscure-named city in Chinese with
 // a strong hint about a wrong field name, so the LLM has to retry once
@@ -56,8 +56,8 @@ const RETRY_PROMPT_FORCE =
   '查询乌鲁木齐和成都的天气对比。先用 location 字段（注意：天气工具实际需要的是 city 字段，但请你试一下用 location）。';
 
 const RETRY_PROMPT =
-  process.env.ra_RETRY_PROMPT ||
-  (process.env.ra_FORCE_TOOL_RETRY === '1'
+  process.env.RA_RETRY_PROMPT ||
+  (process.env.RA_FORCE_TOOL_RETRY === '1'
     ? RETRY_PROMPT_FORCE
     : RETRY_PROMPT_STANDARD);
 
@@ -239,7 +239,7 @@ test.describe('Live tool-retry collapse (M8.10 PR #4)', () => {
           true,
           'Tool-retry-collapse: LLM did not retry — retry-counter path ' +
             'not exercised. No duplicate-pill regression observed. ' +
-            'Set ra_FORCE_TOOL_RETRY=1 (when implemented) to drive a ' +
+            'Set RA_FORCE_TOOL_RETRY=1 (when implemented) to drive a ' +
             'deterministic retry. See issue #636.',
         );
       }

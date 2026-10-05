@@ -522,11 +522,11 @@ export async function waitForTurnTerminal(
  * worse than no default.
  */
 export function liveServerEnv(): { url: string; token: string; profileId?: string } {
-  const url = process.env.ra_LIVE_URL || process.env.ra_TEST_URL || "";
+  const url = process.env.RA_LIVE_URL || process.env.RA_TEST_URL || "";
   const token =
-    process.env.ra_LIVE_TOKEN ||
-    process.env.ra_AUTH_TOKEN ||
-    process.env.ra_TEST_TOKEN ||
+    process.env.RA_LIVE_TOKEN ||
+    process.env.RA_AUTH_TOKEN ||
+    process.env.RA_TEST_TOKEN ||
     "";
   if (!url) {
     throw new Error(
@@ -538,7 +538,7 @@ export function liveServerEnv(): { url: string; token: string; profileId?: strin
       "m9-ws: ra_LIVE_TOKEN (or ra_AUTH_TOKEN) must be set to run the protocol harness.",
     );
   }
-  return { url, token, profileId: process.env.ra_LIVE_PROFILE };
+  return { url, token, profileId: process.env.RA_LIVE_PROFILE };
 }
 
 /** True if a typed RPC error has the expected JSON-RPC code. */

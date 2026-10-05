@@ -49,7 +49,7 @@ any M4.1A PR to main:
 ```bash
 ./scripts/validate-m4-1a-live.sh \
     --base-url https://dspfac.crew.ominix.io \
-    --auth-token "$ra_ADMIN_TOKEN" \
+    --auth-token "$RA_ADMIN_TOKEN" \
     --profile dspfac \
     --output-dir /tmp/m4-1a-live-$(date -u +%Y%m%d-%H%M%S)
 ```
@@ -144,13 +144,13 @@ cargo build --workspace
 # 3) Point the gate at a canary (mini1 example):
 ./scripts/validate-m4-1a-live.sh \
     --base-url https://dspfac.crew.ominix.io \
-    --auth-token "$ra_ADMIN_TOKEN" \
+    --auth-token "$RA_ADMIN_TOKEN" \
     --output-dir /tmp/m4-1a-live-mini1
 
 # 4) Repeat for mini3:
 ./scripts/validate-m4-1a-live.sh \
     --base-url https://dspfac-mini3.crew.ominix.io \
-    --auth-token "$ra_ADMIN_TOKEN" \
+    --auth-token "$RA_ADMIN_TOKEN" \
     --output-dir /tmp/m4-1a-live-mini3
 ```
 

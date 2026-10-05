@@ -34,7 +34,7 @@
  *
  * Run:
  *   cd ~/home/ra/e2e
- *   ra_AUTH_TOKEN=ra-admin-2026 ra_PROFILE=dspfac \
+ *   RA_AUTH_TOKEN=ra-admin-2026 RA_PROFILE=dspfac \
  *     npx playwright test tests/round12-fleet-slides-validation.spec.ts \
  *     --reporter=json --workers=4
  *
@@ -70,9 +70,9 @@ interface HostTrial {
 // the project SSH config (~/.ssh/config) and ControlMaster.
 // SSH targets per fleet host come from the environment so no host
 // addresses live in the repo, e.g.
-//   ra_FLEET_SSH_MAP='dspfac.crew.ominix.io=cloud@<host>,dspfac.bot.ominix.io=cloud@<host>'
+//   RA_FLEET_SSH_MAP='dspfac.crew.ominix.io=cloud@<host>,dspfac.bot.ominix.io=cloud@<host>'
 const SSH_MAP: Record<string, string> = Object.fromEntries(
-  (process.env.ra_FLEET_SSH_MAP || '')
+  (process.env.RA_FLEET_SSH_MAP || '')
     .split(',')
     .map((pair): [string, string] => {
       const [k = '', v = ''] = pair.trim().split('=');
@@ -134,7 +134,7 @@ const SLIDE_BUDGET_MS = 20 * 60 * 1000; // 20-min generate-phase wait
 const SLIDES_DEADLINE_MS = 20 * 60 * 1000; // post-confirm DOM/WS wait
 const TEST_TIMEOUT_MS = 75 * 60 * 1000; // hard cap for the whole test
 
-const PROFILE = process.env.ra_PROFILE || 'dspfac';
+const PROFILE = process.env.RA_PROFILE || 'dspfac';
 
 interface WsCapture {
   framesTotal: number;

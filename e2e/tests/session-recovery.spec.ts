@@ -7,10 +7,10 @@
  * - returning to an earlier session after reload restores the correct history
  *
  * Run against a live deployment:
- *   ra_TEST_URL=https://dspfac.crew.ominix.io \
- *   ra_AUTH_TOKEN=ra-admin-2026 \
- *   ra_PROFILE=dspfac \
- *   ra_TEST_EMAIL=dspfac@gmail.com \
+ *   RA_TEST_URL=https://dspfac.crew.ominix.io \
+ *   RA_AUTH_TOKEN=ra-admin-2026 \
+ *   RA_PROFILE=dspfac \
+ *   RA_TEST_EMAIL=dspfac@gmail.com \
  *   npx playwright test tests/session-recovery.spec.ts
  */
 import { expect, test, type Browser, type Page } from '@playwright/test';

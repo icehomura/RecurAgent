@@ -416,12 +416,12 @@ mod tests {
         static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let prev_new = std::env::var_os("RA_APPROVALS_AUDIT_ENABLED");
-        let prev_legacy = std::env::var_os("ra_APPROVALS_AUDIT_ENABLED");
+        let prev_legacy = std::env::var_os("RA_APPROVALS_AUDIT_ENABLED");
 
         // RA_ wins over the legacy name.
         unsafe {
             std::env::set_var("RA_APPROVALS_AUDIT_ENABLED", "0");
-            std::env::set_var("ra_APPROVALS_AUDIT_ENABLED", "1");
+            std::env::set_var("RA_APPROVALS_AUDIT_ENABLED", "1");
         }
         assert!(!ApprovalsAuditConfig::from_env().enabled);
 
@@ -434,8 +434,8 @@ mod tests {
             None => unsafe { std::env::remove_var("RA_APPROVALS_AUDIT_ENABLED") },
         }
         match prev_legacy {
-            Some(v) => unsafe { std::env::set_var("ra_APPROVALS_AUDIT_ENABLED", v) },
-            None => unsafe { std::env::remove_var("ra_APPROVALS_AUDIT_ENABLED") },
+            Some(v) => unsafe { std::env::set_var("RA_APPROVALS_AUDIT_ENABLED", v) },
+            None => unsafe { std::env::remove_var("RA_APPROVALS_AUDIT_ENABLED") },
         }
     }
 }

@@ -32,27 +32,27 @@ import readline from 'node:readline';
 const repoRoot = path.resolve(import.meta.dirname, '..', '..');
 const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z');
 const runRoot = path.resolve(
-  process.env.ra_M15_LOOP_SOAK_DIR
+  process.env.RA_M15_LOOP_SOAK_DIR
     || path.join(repoRoot, 'e2e', 'test-results-m15-loop-runtime-stdio', stamp),
 );
 const dataDir = path.join(runRoot, 'data');
 const workspace = path.join(runRoot, 'workspace');
-const raBin = process.env.ra_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
-const profileId = process.env.ra_M15_LOOP_PROFILE || 'm15-loop';
+const raBin = process.env.RA_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
+const profileId = process.env.RA_M15_LOOP_PROFILE || 'm15-loop';
 const sessionId =
-  process.env.ra_M15_LOOP_SESSION || `${profileId}:local:m15-loop-runtime-${stamp}`;
+  process.env.RA_M15_LOOP_SESSION || `${profileId}:local:m15-loop-runtime-${stamp}`;
 // LOOP_MIN_INTERVAL_SECONDS = 60 — 3 scheduled fires take ≥180s; allow
 // generous slack for model latency. Self-paced variant adds ~120s.
-const timeoutMs = Number(process.env.ra_M15_LOOP_TIMEOUT_MS || 600_000);
-const loopIntervalSeconds = Number(process.env.ra_M15_LOOP_INTERVAL_SECONDS || 60);
-const targetScheduledFires = Number(process.env.ra_M15_LOOP_SCHEDULED_FIRES || 3);
-const selfPacedEnabled = (process.env.ra_M15_LOOP_SELF_PACED || 'true').toLowerCase() !== 'false';
-const providerFamily = process.env.ra_M15_LOOP_PROVIDER || 'deepseek';
-const modelId = process.env.ra_M15_LOOP_MODEL || 'deepseek-chat';
+const timeoutMs = Number(process.env.RA_M15_LOOP_TIMEOUT_MS || 600_000);
+const loopIntervalSeconds = Number(process.env.RA_M15_LOOP_INTERVAL_SECONDS || 60);
+const targetScheduledFires = Number(process.env.RA_M15_LOOP_SCHEDULED_FIRES || 3);
+const selfPacedEnabled = (process.env.RA_M15_LOOP_SELF_PACED || 'true').toLowerCase() !== 'false';
+const providerFamily = process.env.RA_M15_LOOP_PROVIDER || 'deepseek';
+const modelId = process.env.RA_M15_LOOP_MODEL || 'deepseek-chat';
 const providerKey =
-  process.env.ra_M15_LOOP_API_KEY
-  || process.env.ra_M15_NATIVE_API_KEY
-  || process.env.ra_M16_NATIVE_API_KEY
+  process.env.RA_M15_LOOP_API_KEY
+  || process.env.RA_M15_NATIVE_API_KEY
+  || process.env.RA_M16_NATIVE_API_KEY
   || process.env.DEEPSEEK_API_KEY
   || '';
 

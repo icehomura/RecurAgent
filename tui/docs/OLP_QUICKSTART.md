@@ -76,7 +76,7 @@ agent **不可见**,任何构建命令都是 "command not found"。要让内环�
 cargo/npm 等工具链,必须:
 
 - 权限菜单选第 **5 档 Full Access**(免沙箱),或
-- serve 启动时带 `--danger-full-access`(等价 `ra_DANGER_FULL_ACCESS=1`),
+- serve 启动时带 `--danger-full-access`(等价 `RA_DANGER_FULL_ACCESS=1`),
   标准命令:
 
 ```bash

@@ -7632,7 +7632,7 @@ async fn user_prompt_submit_hook_injects_stdout_as_turn_context() {
     assert!(
         prompts[0]
             .iter()
-            .any(|content| content.contains("ra_CTX_MARKER_42")),
+            .any(|content| content.contains("RA_CTX_MARKER_42")),
         "injected context must reach the model input; got {:?}",
         prompts[0]
     );
@@ -7641,7 +7641,7 @@ async fn user_prompt_submit_hook_injects_stdout_as_turn_context() {
         result
             .messages
             .iter()
-            .all(|m| !m.content.contains("ra_CTX_MARKER_42")),
+            .all(|m| !m.content.contains("RA_CTX_MARKER_42")),
         "injected context must not be persisted as a message"
     );
 }

@@ -29,7 +29,7 @@ function hasExplicitTestSelection(argv: string[]): boolean {
 }
 
 const includeLiveE2e =
-  process.env.ra_PLAYWRIGHT_LIVE === '1' ||
+  process.env.RA_PLAYWRIGHT_LIVE === '1' ||
   hasExplicitTestSelection(process.argv);
 
 /**
@@ -44,7 +44,7 @@ const includeLiveE2e =
  *
  * Default discovery excludes live/fleet/mini suites so a normal e2e run cannot
  * accidentally hit production hosts. Pass an explicit test path/glob, or set
- * ra_PLAYWRIGHT_LIVE=1, for intentional live validation.
+ * RA_PLAYWRIGHT_LIVE=1, for intentional live validation.
  */
 export default defineConfig({
   testDir: './tests',
@@ -58,6 +58,6 @@ export default defineConfig({
   timeout: 60_000,
   retries: 0,
   use: {
-    baseURL: process.env.ra_TEST_URL || 'http://localhost:3000',
+    baseURL: process.env.RA_TEST_URL || 'http://localhost:3000',
   },
 });

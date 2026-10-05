@@ -57,16 +57,16 @@ mod serve_host_managed {
         .stderr(Stdio::null())
         .env("NO_COLOR", "1")
         .env_remove("RA_AUTH_TOKEN")
-        .env_remove("ra_AUTH_TOKEN")
+        .env_remove("RA_AUTH_TOKEN")
         .env_remove("RA_HOST_EXTERNAL_TOKEN")
-        .env_remove("ra_HOST_EXTERNAL_TOKEN")
+        .env_remove("RA_HOST_EXTERNAL_TOKEN")
         .env_remove("RA_INSTANCE_DATA_DIR")
         .env_remove("RA_HOME")
-        .env_remove("ra_HOME")
+        .env_remove("RA_HOME")
         .env_remove("RA_DATA_DIR")
-        .env_remove("ra_DATA_DIR")
+        .env_remove("RA_DATA_DIR")
         .env_remove("RA_SOLO_LOGIN")
-        .env_remove("ra_SOLO_LOGIN");
+        .env_remove("RA_SOLO_LOGIN");
         cmd
     }
 
@@ -251,7 +251,7 @@ mod serve_host_managed {
             )
             .env_remove("RA_INSTANCE_DATA_DIR")
             .env_remove("RA_HOME")
-            .env_remove("ra_HOME")
+            .env_remove("RA_HOME")
             .stdin(std::process::Stdio::null())
             .output()
             .unwrap();

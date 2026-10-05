@@ -9,7 +9,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_ID="${RA_TUI_UX_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 RUN_STARTED_AT_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 RUN_START_EPOCH="$(date +%s)"
-export ra_TMUX_RUN_ID="${ra_TMUX_RUN_ID:-$RUN_ID}"
+export RA_TMUX_RUN_ID="${RA_TMUX_RUN_ID:-$RUN_ID}"
 
 # shellcheck source=tmux-cli-driver.sh
 source "$ROOT_DIR/scripts/tmux-cli-driver.sh"
@@ -213,8 +213,8 @@ cleanup_all() {
 }
 
 resolve_ra_bin() {
-  if [ -n "${ra_BIN:-}" ]; then
-    printf '%s\n' "$ra_BIN"
+  if [ -n "${RA_BIN:-}" ]; then
+    printf '%s\n' "$RA_BIN"
     return 0
   fi
   if [ ! -x "$ROOT_DIR/target/debug/ra" ]; then
@@ -397,7 +397,7 @@ start_frame_sampler() {
     while tmux has-session -t "$session" 2>/dev/null; do
       seq=$((seq + 1))
       frame_id="$(printf '%05d' "$seq")"
-      tmux capture-pane -t "$session" -p -e -J -S "-$ra_TMUX_ROWS" \
+      tmux capture-pane -t "$session" -p -e -J -S "-$RA_TMUX_ROWS" \
         | tmux_redact >"$frame_dir/frame-$frame_id.raw.log" 2>/dev/null || true
       tmux_strip_ansi <"$frame_dir/frame-$frame_id.raw.log" \
         >"$frame_dir/frame-$frame_id.clean.log" 2>/dev/null || true
@@ -869,7 +869,7 @@ write_secret_runner() {
 #!/usr/bin/env bash
 set -euo pipefail
 IFS= read -r ra_LIVE_API_KEY < "$fifo"
-export "$api_key_env=\$ra_LIVE_API_KEY"
+export "$api_key_env=\$RA_LIVE_API_KEY"
 rm -f "$fifo"
 exec bash -lc $(printf '%q' "$command")
 EOF
@@ -1342,7 +1342,7 @@ write_codex_runner() {
 #!/usr/bin/env bash
 set -euo pipefail
 IFS= read -r ra_LIVE_API_KEY < "$fifo"
-export "$API_KEY_ENV=\$ra_LIVE_API_KEY"
+export "$API_KEY_ENV=\$RA_LIVE_API_KEY"
 rm -f "$fifo"
 cd "$dir"
 export CODEX_HOME="$OUT_DIR/codex-home"
@@ -1355,7 +1355,7 @@ if [ -f "\$HOME/.x-cmd.root/X" ]; then
   set -u
 fi
 if [ "$PROVIDER" = "openai" ]; then
-  printf '%s\n' "\$ra_LIVE_API_KEY" | "$codex_bin" login --with-api-key >/dev/null 2>&1 || true
+  printf '%s\n' "\$RA_LIVE_API_KEY" | "$codex_bin" login --with-api-key >/dev/null 2>&1 || true
 fi
 if [ "$PROVIDER" = "deepseek" ]; then
 exec "$codex_bin" \\

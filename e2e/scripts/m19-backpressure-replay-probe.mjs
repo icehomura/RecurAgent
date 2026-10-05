@@ -5,13 +5,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import WebSocket from 'ws';
 
-const artifactDir = path.resolve(process.env.ra_M19_BACKPRESSURE_ARTIFACT_DIR || process.cwd());
-const endpoint = process.env.ra_M19_BACKPRESSURE_WS_ENDPOINT;
-const authToken = process.env.ra_M19_BACKPRESSURE_AUTH_TOKEN;
-const profileId = process.env.ra_M19_BACKPRESSURE_PROFILE_ID || 'coding';
-const sessionId = process.env.ra_M19_BACKPRESSURE_SESSION_ID;
-const workspace = process.env.ra_M19_BACKPRESSURE_WORKSPACE || process.cwd();
-const prompt = process.env.ra_M19_BACKPRESSURE_PROMPT
+const artifactDir = path.resolve(process.env.RA_M19_BACKPRESSURE_ARTIFACT_DIR || process.cwd());
+const endpoint = process.env.RA_M19_BACKPRESSURE_WS_ENDPOINT;
+const authToken = process.env.RA_M19_BACKPRESSURE_AUTH_TOKEN;
+const profileId = process.env.RA_M19_BACKPRESSURE_PROFILE_ID || 'coding';
+const sessionId = process.env.RA_M19_BACKPRESSURE_SESSION_ID;
+const workspace = process.env.RA_M19_BACKPRESSURE_WORKSPACE || process.cwd();
+const prompt = process.env.RA_M19_BACKPRESSURE_PROMPT
   || 'M9 replay-lossy fixture for M18 reconnect-style replay.';
 
 function positiveIntegerEnv(name, fallback) {
@@ -21,7 +21,7 @@ function positiveIntegerEnv(name, fallback) {
   return Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
-const timeoutMs = positiveIntegerEnv('ra_M19_BACKPRESSURE_TIMEOUT_MS', 15_000);
+const timeoutMs = positiveIntegerEnv('RA_M19_BACKPRESSURE_TIMEOUT_MS', 15_000);
 const appuiTranscript = path.join(artifactDir, 'appui-transcript.jsonl');
 const websocketTranscript = path.join(artifactDir, 'websocket-transcript.jsonl');
 const notificationLog = path.join(artifactDir, 'notification-log.jsonl');
@@ -278,9 +278,9 @@ async function ensureProfile(client) {
 }
 
 async function main() {
-  assert(endpoint, 'ra_M19_BACKPRESSURE_WS_ENDPOINT is required');
-  assert(authToken, 'ra_M19_BACKPRESSURE_AUTH_TOKEN is required');
-  assert(sessionId, 'ra_M19_BACKPRESSURE_SESSION_ID is required');
+  assert(endpoint, 'RA_M19_BACKPRESSURE_WS_ENDPOINT is required');
+  assert(authToken, 'RA_M19_BACKPRESSURE_AUTH_TOKEN is required');
+  assert(sessionId, 'RA_M19_BACKPRESSURE_SESSION_ID is required');
   fs.rmSync(appuiTranscript, { force: true });
   fs.rmSync(websocketTranscript, { force: true });
   fs.rmSync(notificationLog, { force: true });

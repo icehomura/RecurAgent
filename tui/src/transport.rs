@@ -323,7 +323,7 @@ fn auth_token_from_cli(cli: &Cli) -> Option<String> {
         .clone()
         .and_then(clean_auth_token)
         .or_else(|| {
-            crate::env::env_compat("RA_AUTH_TOKEN", "ra_AUTH_TOKEN")
+            crate::env::env_compat("RA_AUTH_TOKEN", "RA_AUTH_TOKEN")
                 .and_then(clean_auth_token)
         })
 }

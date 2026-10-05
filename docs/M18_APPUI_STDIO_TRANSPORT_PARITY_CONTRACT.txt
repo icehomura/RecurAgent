@@ -208,7 +208,7 @@ GitHub issue update status:
 Issue RecurAgent#1044 adds a second mode to the existing headless M18 AppUI transport parity soak:
 
 - Default/headless mode remains unchanged and continues to verify matching typed -32140 session/messages_page failures when the sessions REST backing store is unavailable.
-- Backing-store mode runs with `ra_M18_APPUI_PARITY_MODE=backing-store` or `node e2e/scripts/m18-appui-transport-parity-soak.mjs --backing-store`.
+- Backing-store mode runs with `RA_M18_APPUI_PARITY_MODE=backing-store` or `node e2e/scripts/m18-appui-transport-parity-soak.mjs --backing-store`.
 - The backing-store mode seeds deterministic local session JSONL history into both the WebSocket and stdio data dirs before opening the same session id over each transport.
 - The mode verifies populated `session/messages_page` first, middle, tail, beyond-end, and clamped-limit pages, plus typed invalid-params edge errors for malformed pagination requests.
 - Artifacts include `appui-ws-transcript.jsonl`, `appui-stdio-transcript.jsonl`, `normalized-diff.json`, `runtime-policy-stamp.json`, `backing-store-seed.json`, and `server.log` under the run directory.

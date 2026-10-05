@@ -184,7 +184,7 @@ Deliverables:
 Exact usage:
 
 ```bash
-export ra_EVENT_SINK="file:///tmp/ra-events.jsonl"
+export RA_EVENT_SINK="file:///tmp/ra-events.jsonl"
 python3 examples/harness-event/python/emit_progress.py \
   --session-id sess-123 \
   --task-id task-456 \

@@ -8,7 +8,7 @@
  * rendered DOM. Each test mints its own session id and tears down its own
  * socket so it is independently runnable:
  *
- *   ra_LIVE_TOKEN=… npx playwright test tests/m9-protocol-session-open.spec.ts
+ *   RA_LIVE_TOKEN=… npx playwright test tests/m9-protocol-session-open.spec.ts
  *
  * The fault-injection variants of the cursor checks are duplicated by
  * `m9-protocol-fault-injection.spec.ts` so each spec file remains a useful

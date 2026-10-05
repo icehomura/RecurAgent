@@ -37,7 +37,7 @@ main() {
     PY_OUT="$WORK_DIR/python.jsonl"
     JS_OUT="$WORK_DIR/node.jsonl"
 
-    ra_EVENT_SINK="file://$PY_OUT" python3 "$PY_HELPER" \
+    RA_EVENT_SINK="file://$PY_OUT" python3 "$PY_HELPER" \
         --session-id sess-123 \
         --task-id task-456 \
         --workflow deep_research \
@@ -49,7 +49,7 @@ main() {
     [ ! -s "$WORK_DIR/python.stderr" ] || fail "python emitter should not write diagnostics on success"
     assert_file_matches_fixture "$PY_OUT"
 
-    ra_EVENT_SINK="file://$JS_OUT" node "$JS_HELPER" \
+    RA_EVENT_SINK="file://$JS_OUT" node "$JS_HELPER" \
         --session-id sess-123 \
         --task-id task-456 \
         --workflow deep_research \
@@ -61,7 +61,7 @@ main() {
     [ ! -s "$WORK_DIR/node.stderr" ] || fail "node emitter should not write diagnostics on success"
     assert_file_matches_fixture "$JS_OUT"
 
-    ra_EVENT_SINK= python3 "$PY_HELPER" \
+    RA_EVENT_SINK= python3 "$PY_HELPER" \
         --session-id sess-123 \
         --task-id task-456 \
         --workflow deep_research \
@@ -72,7 +72,7 @@ main() {
     [ ! -s "$WORK_DIR/python-noop.stdout" ] || fail "python emitter should stay silent when ra_EVENT_SINK is missing"
     [ ! -s "$WORK_DIR/python-noop.stderr" ] || fail "python emitter should not emit diagnostics when ra_EVENT_SINK is missing"
 
-    ra_EVENT_SINK= node "$JS_HELPER" \
+    RA_EVENT_SINK= node "$JS_HELPER" \
         --session-id sess-123 \
         --task-id task-456 \
         --workflow deep_research \

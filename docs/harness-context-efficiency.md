@@ -11,7 +11,7 @@ A published observation: the same model at the same reasoning effort, run on Cla
 | Component | pi (default) | RecurAgent (`ra chat`, default coding profile) |
 |---|---|---|
 | System prompt | ~30-line template ≈ **604 tok** (`system-prompt.ts`) | `prompts/worker.txt` + `TOOL_USE_DISCIPLINE` ≈ **615 tok** (`agent/mod.rs:52`, `agent/execution.rs:297-309`) |
-| Tool schemas | **4 tools ≈ 678 tok** — read 164, bash 129, edit 288, write 98; grep/find/ls exist but are opt-in | **48 tools ≈ 9,325 tok** — 39 native (27,279 B) + 9 bundled-skill tools (10,024 B) auto-installed each chat (`chat.rs:734`). Whales: `run_pipeline` 4,055 B (6,421 B with `ra_PIPELINE_IR=1`), `spawn` 3,292 B |
+| Tool schemas | **4 tools ≈ 678 tok** — read 164, bash 129, edit 288, write 98; grep/find/ls exist but are opt-in | **48 tools ≈ 9,325 tok** — 39 native (27,279 B) + 9 bundled-skill tools (10,024 B) auto-installed each chat (`chat.rs:734`). Whales: `run_pipeline` 4,055 B (6,421 B with `RA_PIPELINE_IR=1`), `spawn` 3,292 B |
 | Memory / project context | AGENTS.md **uncapped** verbatim (their footgun); skills metadata-only | memory block **capped 2,500 tok** (`memory_store.rs:19`) + ~470 tok fixed guidance riders (`memory_segment.rs`); `.ra/AGENTS.md` etc. **uncapped**; skills metadata-only ✓ |
 | Per-turn injected extras | none | episodic recall ≤6 episodes (embedder-gated) |
 | **Fixed total** | **≈1.3 K tok** | **≈10.4–13.5 K tok** |

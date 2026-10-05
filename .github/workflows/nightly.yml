@@ -131,9 +131,9 @@ jobs:
         run: |
           set -euo pipefail
           echo '{"allow_admin_shell": true}' > /tmp/ra-nightly-serve.json
-          ra_M9_PROTOCOL_FIXTURES=1 \
+          RA_M9_PROTOCOL_FIXTURES=1 \
           OPENAI_API_KEY=fixture-key-not-a-secret \
-          ra_AUTH_TOKEN=ci-test-token \
+          RA_AUTH_TOKEN=ci-test-token \
             ./target/release/ra serve --port 3000 \
               --config /tmp/ra-nightly-serve.json \
               --provider openai --model gpt-4o --no-retry \
@@ -150,14 +150,14 @@ jobs:
       - name: Run deterministic protocol suite
         working-directory: e2e
         env:
-          ra_TEST_URL: http://localhost:3000
-          ra_AUTH_TOKEN: ci-test-token
-          ra_PROFILE: _main
+          RA_TEST_URL: http://localhost:3000
+          RA_AUTH_TOKEN: ci-test-token
+          RA_PROFILE: _main
           # Tells the specs they are on the fixture lane (#2483): the
           # web-client persistence spec gates its history-check half there
           # because fixture turns do not persist session history and the
           # aux session/messages_page backing is not wired on this serve.
-          ra_M9_PROTOCOL_FIXTURES: "1"
+          RA_M9_PROTOCOL_FIXTURES: "1"
         run: >-
           npx playwright test --reporter=line
           tests/m9-protocol-*.spec.ts
@@ -230,7 +230,7 @@ jobs:
         run: |
           set -euo pipefail
           echo '{"allow_admin_shell": true}' > /tmp/ra-nightly-tool-regression.json
-          ra_AUTH_TOKEN=ci-test-token ./target/release/ra serve --port 3000 \
+          RA_AUTH_TOKEN=ci-test-token ./target/release/ra serve --port 3000 \
             --config /tmp/ra-nightly-tool-regression.json > server.log 2>&1 &
           echo $! > server.pid
           for attempt in $(seq 1 45); do
@@ -264,8 +264,8 @@ jobs:
       - name: Run tool-use regression spec
         working-directory: e2e
         env:
-          ra_TEST_URL: http://localhost:3000
-          ra_AUTH_TOKEN: ci-test-token
+          RA_TEST_URL: http://localhost:3000
+          RA_AUTH_TOKEN: ci-test-token
         run: npx playwright test --reporter=line tests/tool-use-regression.spec.ts
       - name: Stop server
         if: always()

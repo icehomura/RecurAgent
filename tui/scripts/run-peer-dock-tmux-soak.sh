@@ -12,7 +12,7 @@
 # workspace + data dir under /tmp, tears down on exit.
 set -euo pipefail
 
-ra_BIN="${ra_BIN:-$HOME/home/ra-one/ra/target/debug/ra}"
+RA_BIN="${RA_BIN:-$HOME/home/ra-one/ra/target/debug/ra}"
 RA_TUI_BIN="${RA_TUI_BIN:-$(cd "$(dirname "$0")/.." && pwd)/target/debug/ra-tui}"
 
 RUN_ID="${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
@@ -90,18 +90,18 @@ teardown() {
 trap teardown EXIT
 
 echo "=== binaries ==="
-[ -x "$ra_BIN" ] || die "ra binary missing: $ra_BIN"
+[ -x "$RA_BIN" ] || die "ra binary missing: $RA_BIN"
 [ -x "$RA_TUI_BIN" ] || die "ra-tui binary missing: $RA_TUI_BIN"
-"$ra_BIN" --version | head -1
+"$RA_BIN" --version | head -1
 "$RA_TUI_BIN" --version | head -1
 
 echo "=== launching ra serve (ws on $PORT) ==="
-# ra_HOME=~/.crew resolves the 'dev' profile (LLM creds). A SEPARATE
+# RA_HOME=~/.crew resolves the 'dev' profile (LLM creds). A SEPARATE
 # --instance-data-dir keeps the serve lock off the running production
 # server (PID held against ~/.crew/instances/...).
 tmux new-session -d -s "$SERVER_SESSION" \
-  "cd '$WORKSPACE' && ra_HOME='$HOME/.crew' KIMI_API_KEY='$KIMI_API_KEY' \
-    '$ra_BIN' serve --host '$HOST' --port '$PORT' \
+  "cd '$WORKSPACE' && RA_HOME='$HOME/.crew' KIMI_API_KEY='$KIMI_API_KEY' \
+    '$RA_BIN' serve --host '$HOST' --port '$PORT' \
     --instance-data-dir '$DATA_DIR/runtime' \
     --auth-token '$AUTH_TOKEN' \
     2>&1 | tee '$LOGS_DIR/server.log'"

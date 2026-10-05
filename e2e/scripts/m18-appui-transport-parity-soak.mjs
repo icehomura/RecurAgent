@@ -13,9 +13,9 @@ import WebSocket from 'ws';
 const repoRoot = path.resolve(import.meta.dirname, '..', '..');
 const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z');
 const cliArgs = process.argv.slice(2);
-const codexP0Soak = process.env.ra_M18_CODEX_P0_SOAK === '1';
+const codexP0Soak = process.env.RA_M18_CODEX_P0_SOAK === '1';
 const modeArgIndex = cliArgs.findIndex((arg) => arg === '--mode');
-const scenarioMode = process.env.ra_M18_APPUI_PARITY_MODE
+const scenarioMode = process.env.RA_M18_APPUI_PARITY_MODE
   || (cliArgs.includes('--backing-store') ? 'backing-store' : null)
   || (modeArgIndex >= 0 ? cliArgs[modeArgIndex + 1] : null)
   || 'headless';
@@ -23,7 +23,7 @@ if (!['headless', 'backing-store'].includes(scenarioMode)) {
   throw new Error(`Unsupported M18 AppUI parity mode: ${scenarioMode}`);
 }
 const runRoot = path.resolve(
-  process.env.ra_M18_APPUI_PARITY_DIR
+  process.env.RA_M18_APPUI_PARITY_DIR
     || path.join(
       repoRoot,
       'e2e',
@@ -47,11 +47,11 @@ const taskLedgerPath = path.join(runRoot, 'task-ledger.jsonl');
 const tuiCapturePath = path.join(runRoot, 'tui-capture.txt');
 const routeInventoryPath = path.join(repoRoot, 'e2e', 'fixtures', 'appui-conformance', 'm18-route-inventory.json');
 const allowlistPath = path.join(repoRoot, 'e2e', 'fixtures', 'appui-conformance', 'm18-conformance-allowlist.json');
-const raBin = process.env.ra_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
-const authToken = process.env.ra_M18_APPUI_AUTH_TOKEN || `m18-${crypto.randomBytes(8).toString('hex')}`;
-const profileId = process.env.ra_M18_APPUI_PROFILE || 'm18-parity';
-const sessionId = process.env.ra_M18_APPUI_SESSION || `${profileId}:local:appui-parity-${stamp}`;
-const timeoutMs = Number(process.env.ra_M18_APPUI_TIMEOUT_MS || 45_000);
+const raBin = process.env.RA_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
+const authToken = process.env.RA_M18_APPUI_AUTH_TOKEN || `m18-${crypto.randomBytes(8).toString('hex')}`;
+const profileId = process.env.RA_M18_APPUI_PROFILE || 'm18-parity';
+const sessionId = process.env.RA_M18_APPUI_SESSION || `${profileId}:local:appui-parity-${stamp}`;
+const timeoutMs = Number(process.env.RA_M18_APPUI_TIMEOUT_MS || 45_000);
 const wsUiFeatures = [
   'approval.typed.v1',
   'pane.snapshots.v1',
@@ -609,7 +609,7 @@ class StdioClient extends AppUiClient {
       cwd: repoRoot,
       env: {
         ...process.env,
-        ra_M9_PROTOCOL_FIXTURES: '1',
+        RA_M9_PROTOCOL_FIXTURES: '1',
         RA_TUI_M15_UX_OUTPUT_DIR: runRoot,
         RA_TUI_M15_UX_WORKDIR: workspace,
         RUST_BACKTRACE: process.env.RUST_BACKTRACE || '1',
@@ -739,7 +739,7 @@ async function startWsServer(port) {
     cwd: repoRoot,
     env: {
       ...process.env,
-      ra_M9_PROTOCOL_FIXTURES: '1',
+      RA_M9_PROTOCOL_FIXTURES: '1',
       RA_TUI_M15_UX_OUTPUT_DIR: runRoot,
       RA_TUI_M15_UX_WORKDIR: workspace,
       RUST_BACKTRACE: process.env.RUST_BACKTRACE || '1',

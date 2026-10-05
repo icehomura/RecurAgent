@@ -2828,7 +2828,7 @@ impl Tool for PluginTool {
                 );
             }
             cmd.current_dir(dir);
-            cmd.env("ra_WORK_DIR", dir);
+            cmd.env("RA_WORK_DIR", dir);
         }
 
         // A plugin's output CWD is commonly `<session workspace>/skill-output`,
@@ -2840,12 +2840,12 @@ impl Tool for PluginTool {
             .tool_def
             .env
             .iter()
-            .any(|name| name == "ra_SESSION_WORKSPACE")
+            .any(|name| name == "RA_SESSION_WORKSPACE")
         {
             if let Some(session_workspace) = self.workspace_root_for_host_injection(
                 ctx.as_ref().and_then(|ctx| ctx.session_scope.as_deref()),
             ) {
-                cmd.env("ra_SESSION_WORKSPACE", session_workspace);
+                cmd.env("RA_SESSION_WORKSPACE", session_workspace);
             }
         }
 

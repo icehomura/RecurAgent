@@ -197,7 +197,7 @@ R2 记档(声称与复验不符的诚实记录)行示例:
 **运维安全**
 - 禁批量 kill serve:逐个核对"父进程==存活 TUI"后单杀;孤儿只占内存,
   宁留勿滥杀。
-- CLI 寻址:RecurAgent goal/steer 等按实例操作时用 `ra_HOME=<实例根>`;
+- CLI 寻址:RecurAgent goal/steer 等按实例操作时用 `RA_HOME=<实例根>`;
   会话主模型切换的落点是 profile JSON 的 `config.llm.primary`
   (fallbacks 数组即备胎位)。
 - provider 断供(quota/auth 拒付)是系统性风险:备胎车道预配 +

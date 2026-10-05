@@ -54,7 +54,7 @@ Example:
 ```bash
 ra admin operator-summary \
   --base-url https://dspfac.crew.ominix.io \
-  --auth-token "$ra_AUTH_TOKEN"
+  --auth-token "$RA_AUTH_TOKEN"
 ```
 
 For automation:

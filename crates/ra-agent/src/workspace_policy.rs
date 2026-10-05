@@ -983,7 +983,7 @@ impl WorkspacePolicy {
         //
         // The FileExists path uses `${args.name}` interpolation against
         // the spawn task's input args; mofa-fm writes the WAV to
-        // `${ra_VOICE_DIR:-${ra_DATA_DIR}/voice_profiles}/<name>.wav`,
+        // `${RA_VOICE_DIR:-${RA_DATA_DIR}/voice_profiles}/<name>.wav`,
         // which under the default session workspace resolves relative to
         // the workspace root via `voice_profiles/<name>.wav`. Operators
         // who pin a non-default `ra_VOICE_DIR` can override the path

@@ -95,7 +95,7 @@ An `embed-llama` build (the default) embeds with EmbeddingGemma-300M
 kept at `<data_dir>/models/embeddinggemma-300M-Q8_0.gguf`. When
 `embedding_model_path` is unset, `Runtime(...)` loads it if it is there;
 otherwise it downloads it first — **blocking the constructor** — unless
-`embedding_auto_download=False` or `ra_NO_MODEL_DOWNLOAD=1` is set, in
+`embedding_auto_download=False` or `RA_NO_MODEL_DOWNLOAD=1` is set, in
 which case the runtime is keyword-only (`embed` raises `NoEmbedder`; memory
 search still works, BM25-only). The full resolution rules are in the
 [`ra-ffi` README](../ra-ffi/README.md#the-default-embedding-model).

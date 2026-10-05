@@ -107,7 +107,7 @@
 ## 接入清单(一个新的 outer agent 需要知道的全部)
 
 0. 启动命令注意:单人本地盒子要给 serve 带 **`--solo`**
-   (`ra serve --stdio --solo`,或 `ra_SOLO_LOGIN=1`)。宽松
+   (`ra serve --stdio --solo`,或 `RA_SOLO_LOGIN=1`)。宽松
    permission profile(yolo/approvals-never/network-allow)是安全基石门,
    仅在显式 solo opt-in 下可设——漏掉它的症状是
    "requested permission profile is not allowed outside local solo mode"。
@@ -118,7 +118,7 @@
    **不可见**,任何构建命令都是 "command not found",历史上 peer 反复声明
    "本机无工具链" 的真相即此。要跑构建必须第 5 档 **Full Access**(免沙箱),
    或 serve 带 **`--danger-full-access`**(默认所有未显式选择的 session 为
-   Full Access;solo 门控;`ra_DANGER_FULL_ACCESS=1` 等价)。注意:
+   Full Access;solo 门控;`RA_DANGER_FULL_ACCESS=1` 等价)。注意:
    给 agent 授免沙箱权限属 operator 亲手动作——外环自己的 harness 也会
    拦截代按,不要尝试绕过。标准启动命令:
    `ra-tui --stdio-command 'ra serve --stdio --solo --danger-full-access'`。

@@ -330,7 +330,7 @@ function resolveSpecialHostTool(tool) {
   switch (tool) {
     case 'ra-bin':
       return firstExecutable([
-        process.env.ra_BIN,
+        process.env.RA_BIN,
         path.join(repoRoot, 'target', 'debug', executableName('ra')),
       ]);
     case 'ra-tui-bin':
@@ -341,7 +341,7 @@ function resolveSpecialHostTool(tool) {
     case 'ra-tui-onboarding-runner':
       return firstExecutable([
         process.env.RA_TUI_ONBOARDING_RUNNER,
-        process.env.ra_M19_UX_TUI_RUNNER,
+        process.env.RA_M19_UX_TUI_RUNNER,
         path.join(siblingra-tuiRepo, 'scripts', 'run-onboarding-tmux-soak.sh'),
       ]);
     case 'ra-tui-m15-runner':
@@ -514,7 +514,7 @@ try {
     process.exit(0);
   }
   const manifestPath = path.resolve(
-    args.manifest || process.env.ra_UX_SCENARIO_MANIFEST || defaultManifestPath,
+    args.manifest || process.env.RA_UX_SCENARIO_MANIFEST || defaultManifestPath,
   );
   const manifest = loadScenarioManifest(manifestPath);
   const listing = buildListing(manifest, manifestPath);

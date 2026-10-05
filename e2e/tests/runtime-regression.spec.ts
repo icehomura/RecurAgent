@@ -31,9 +31,9 @@ import {
   type ChatWsEvent,
 } from '../lib/m9-ws-client';
 
-const BASE = process.env.ra_TEST_URL || 'https://dspfac.crew.ominix.io';
-const TOKEN = process.env.ra_AUTH_TOKEN || 'e2e-test-2026';
-const PROFILE = process.env.ra_PROFILE || 'dspfac';
+const BASE = process.env.RA_TEST_URL || 'https://dspfac.crew.ominix.io';
+const TOKEN = process.env.RA_AUTH_TOKEN || 'e2e-test-2026';
+const PROFILE = process.env.RA_PROFILE || 'dspfac';
 
 test.setTimeout(120_000);
 

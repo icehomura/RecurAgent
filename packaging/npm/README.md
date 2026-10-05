@@ -25,8 +25,8 @@ macOS Intel is not supported (no prebuilt build is published).
 
 ## Environment overrides
 
-- `ra_SKIP_DOWNLOAD=1` — skip the postinstall download (offline / CI).
-- `ra_BUNDLE_URL=<url>` — install from a specific bundle URL (`file://` works).
+- `RA_SKIP_DOWNLOAD=1` — skip the postinstall download (offline / CI).
+- `RA_BUNDLE_URL=<url>` — install from a specific bundle URL (`file://` works).
 - `HTTPS_PROXY` — honored when downloading.
 
 ## Alternatives

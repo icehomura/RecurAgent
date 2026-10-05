@@ -12,19 +12,19 @@ import WebSocket from 'ws';
 const repoRoot = path.resolve(import.meta.dirname, '..', '..');
 const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z');
 const runRoot = path.resolve(
-  process.env.ra_M15_TASK_SUPERVISOR_MIRROR_WS_DIR
-    || process.env.ra_M15_TASK_SUPERVISOR_MIRROR_DIR
+  process.env.RA_M15_TASK_SUPERVISOR_MIRROR_WS_DIR
+    || process.env.RA_M15_TASK_SUPERVISOR_MIRROR_DIR
     || path.join(repoRoot, 'e2e', 'test-results-m15-task-supervisor-mirror-ws', stamp),
 );
 const dataDir = path.join(runRoot, 'data');
 const workspace = path.join(runRoot, 'workspace');
-const raBin = process.env.ra_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
-const authToken = process.env.ra_M15_TASK_SUPERVISOR_AUTH_TOKEN
+const raBin = process.env.RA_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
+const authToken = process.env.RA_M15_TASK_SUPERVISOR_AUTH_TOKEN
   || `m15-task-mirror-${crypto.randomBytes(8).toString('hex')}`;
-const sessionId = process.env.ra_M15_TASK_SUPERVISOR_SESSION
+const sessionId = process.env.RA_M15_TASK_SUPERVISOR_SESSION
   || `api:m15-task-mirror-ws-${stamp}`;
-const profileId = process.env.ra_M15_TASK_SUPERVISOR_PROFILE || 'm15-task-mirror-ws';
-const timeoutMs = Number(process.env.ra_M15_TASK_SUPERVISOR_TIMEOUT_MS || 45_000);
+const profileId = process.env.RA_M15_TASK_SUPERVISOR_PROFILE || 'm15-task-mirror-ws';
+const timeoutMs = Number(process.env.RA_M15_TASK_SUPERVISOR_TIMEOUT_MS || 45_000);
 
 const transcriptPath = path.join(runRoot, 'client-observed-appui-ws-transcript.jsonl');
 const serverLog = path.join(runRoot, 'server.log');
@@ -334,7 +334,7 @@ async function startWsServer(port) {
     cwd: repoRoot,
     env: {
       ...process.env,
-      ra_M9_PROTOCOL_FIXTURES: '1',
+      RA_M9_PROTOCOL_FIXTURES: '1',
       RUST_BACKTRACE: process.env.RUST_BACKTRACE || '1',
     },
     stdio: ['ignore', 'pipe', 'pipe'],

@@ -103,8 +103,8 @@ try {
     # already exercised by the #2388 section above; these arms pin the
     # deploy wrapper's read-and-refuse behavior.
     [System.IO.File]::WriteAllText($tokenPath, "check-token-123", [System.Text.UTF8Encoding]::new($false))
-    $env:ra_HOME = $dir
-    $env:ra_DATA_DIR = $dir
+    $env:RA_HOME = $dir
+    $env:RA_DATA_DIR = $dir
     $raExe = $fakeBin
     $servePort = 8080
     $deployContent = $ExecutionContext.InvokeCommand.ExpandString($deployTemplate)

@@ -302,7 +302,7 @@ write_serve_env_file() {
     token="${token//\"/\\\"}"
     # printf (not a heredoc) so the escaping reaches the remote file
     # byte-for-byte, exactly like install.sh's writer.
-    printf 'ra_AUTH_TOKEN="%s"\n' "$token" |
+    printf 'RA_AUTH_TOKEN="%s"\n' "$token" |
         ssh_cmd "umask 077 && cat > '${RDATA}/serve.env' && chmod 600 '${RDATA}/serve.env'"
 }
 
@@ -409,7 +409,7 @@ Type=simple
 User=$(echo "$SSH_TARGET" | cut -d@ -f1)
 Environment=HOME=${REMOTE_HOME}
 Environment=PATH=${RBIN}:${REMOTE_HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin
-Environment=ra_DATA_DIR=${RDATA}
+Environment=RA_DATA_DIR=${RDATA}
 EnvironmentFile=${RDATA}/serve.env
 ExecStart=${RBIN}/ra serve --port ${SERVE_PORT} --host 0.0.0.0
 Restart=always

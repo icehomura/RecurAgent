@@ -4,20 +4,20 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 
-run_id="${ra_M15_TASK_MIRROR_TMUX_RUN_ID:-m15-task-mirror-tmux-$(date -u +%Y%m%dT%H%M%SZ)}"
+run_id="${RA_M15_TASK_MIRROR_TMUX_RUN_ID:-m15-task-mirror-tmux-$(date -u +%Y%m%dT%H%M%SZ)}"
 tui_repo="${RA_TUI_REPO:-$(dirname "$repo_root")/ra-tui}"
-tui_runner="${ra_M15_TASK_MIRROR_TUI_RUNNER:-$tui_repo/scripts/run-m15-live-tmux-ux-soak.sh}"
-out_root="${ra_M15_TASK_MIRROR_TMUX_OUT_ROOT:-$repo_root/e2e/test-results-m15-task-supervisor-mirror-tmux}"
-out_dir="${ra_M15_TASK_MIRROR_TMUX_OUT_DIR:-$out_root/$run_id}"
-runtime_root="${ra_M15_TASK_MIRROR_TMUX_RUNTIME_ROOT:-/tmp/ra-m15-task-mirror-$run_id}"
-data_dir="${ra_M15_TASK_MIRROR_TMUX_DATA_DIR:-$runtime_root/data}"
-workdir="${ra_M15_TASK_MIRROR_TMUX_WORKDIR:-$runtime_root/workspace}"
-replay_file="${ra_M15_TASK_MIRROR_TMUX_REPLAY:-$out_dir/m15-task-supervisor-mirror-replay.txt}"
-ra_bin="${ra_BIN:-$repo_root/target/debug/ra}"
+tui_runner="${RA_M15_TASK_MIRROR_TUI_RUNNER:-$tui_repo/scripts/run-m15-live-tmux-ux-soak.sh}"
+out_root="${RA_M15_TASK_MIRROR_TMUX_OUT_ROOT:-$repo_root/e2e/test-results-m15-task-supervisor-mirror-tmux}"
+out_dir="${RA_M15_TASK_MIRROR_TMUX_OUT_DIR:-$out_root/$run_id}"
+runtime_root="${RA_M15_TASK_MIRROR_TMUX_RUNTIME_ROOT:-/tmp/ra-m15-task-mirror-$run_id}"
+data_dir="${RA_M15_TASK_MIRROR_TMUX_DATA_DIR:-$runtime_root/data}"
+workdir="${RA_M15_TASK_MIRROR_TMUX_WORKDIR:-$runtime_root/workspace}"
+replay_file="${RA_M15_TASK_MIRROR_TMUX_REPLAY:-$out_dir/m15-task-supervisor-mirror-replay.txt}"
+ra_bin="${RA_BIN:-$repo_root/target/debug/ra}"
 tui_bin="${RA_TUI_BIN:-$tui_repo/target/debug/ra-tui}"
-session_name="${ra_M15_TASK_MIRROR_TMUX_SESSION:-ra-m15-task-mirror-$run_id}"
-profile_id="${ra_M15_TASK_MIRROR_PROFILE:-coding}"
-session_id="${ra_M15_TASK_MIRROR_SESSION_ID:-$profile_id:local:m15-task-mirror:$run_id}"
+session_name="${RA_M15_TASK_MIRROR_TMUX_SESSION:-ra-m15-task-mirror-$run_id}"
+profile_id="${RA_M15_TASK_MIRROR_PROFILE:-coding}"
+session_id="${RA_M15_TASK_MIRROR_SESSION_ID:-$profile_id:local:m15-task-mirror:$run_id}"
 
 usage() {
   cat <<'USAGE'
@@ -47,10 +47,10 @@ shell_quote() {
 }
 
 ensure_binaries() {
-  if [[ "${ra_M15_TASK_MIRROR_BUILD:-1}" == "1" ]]; then
+  if [[ "${RA_M15_TASK_MIRROR_BUILD:-1}" == "1" ]]; then
     (cd "$repo_root" && cargo build -p ra-cli --bin ra --features api)
   fi
-  if [[ "${ra_M15_TASK_MIRROR_BUILD_TUI:-0}" == "1" || ! -x "$tui_bin" ]]; then
+  if [[ "${RA_M15_TASK_MIRROR_BUILD_TUI:-0}" == "1" || ! -x "$tui_bin" ]]; then
     (cd "$tui_repo" && cargo build --bin ra-tui)
   fi
   [[ -x "$ra_bin" ]] || die "ra binary is not executable: $ra_bin"
@@ -251,7 +251,7 @@ run_soak() {
   write_replay
 
   local backend_command
-  backend_command="env ra_M9_PROTOCOL_FIXTURES=1 DEEPSEEK_API_KEY=dummy-key-for-m15-task-supervisor-fixture $(shell_quote "$ra_bin") serve --stdio --data-dir $(shell_quote "$data_dir") --cwd $(shell_quote "$workdir")"
+  backend_command="env RA_M9_PROTOCOL_FIXTURES=1 DEEPSEEK_API_KEY=dummy-key-for-m15-task-supervisor-fixture $(shell_quote "$ra_bin") serve --stdio --data-dir $(shell_quote "$data_dir") --cwd $(shell_quote "$workdir")"
 
   export RA_TUI_M15_UX_RUN_ID="$run_id"
   export RA_TUI_M15_UX_OUT_DIR="$out_dir"
@@ -267,8 +267,8 @@ run_soak() {
   export RA_TUI_M15_UX_SESSION_ID="$session_id"
   export RA_TUI_M15_UX_PROFILE="$profile_id"
   export RA_TUI_M15_UX_REPLACE_SESSION=1
-  export RA_TUI_M15_UX_COLS="${ra_M15_TASK_MIRROR_TMUX_COLS:-120}"
-  export RA_TUI_M15_UX_ROWS="${ra_M15_TASK_MIRROR_TMUX_ROWS:-40}"
+  export RA_TUI_M15_UX_COLS="${RA_M15_TASK_MIRROR_TMUX_COLS:-120}"
+  export RA_TUI_M15_UX_ROWS="${RA_M15_TASK_MIRROR_TMUX_ROWS:-40}"
 
   "$tui_runner" start
   local status=0
@@ -276,7 +276,7 @@ run_soak() {
   "$tui_runner" capture || true
   scrub_fixture_key
   python3 "$script_dir/validate-m15-task-supervisor-mirror-tmux.py" --out-dir "$out_dir" || status=$?
-  if [[ "${ra_M15_TASK_MIRROR_TMUX_KEEP_SESSION:-0}" != "1" ]]; then
+  if [[ "${RA_M15_TASK_MIRROR_TMUX_KEEP_SESSION:-0}" != "1" ]]; then
     "$tui_runner" stop || true
   fi
   trap - EXIT

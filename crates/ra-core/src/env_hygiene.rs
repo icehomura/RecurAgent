@@ -195,7 +195,7 @@ mod tests {
         // `_KEY`), so it is caught ONLY once registered — the gap the registry
         // closes. Use a unique fixture so it can't collide with another test in
         // this (process-global) registry.
-        let fixture = "ra_ENVHYGIENE_FIXTURE_SA_JSON";
+        let fixture = "RA_ENVHYGIENE_FIXTURE_SA_JSON";
         assert!(
             !is_secret_env_name(fixture),
             "fixture must be a name the heuristic does NOT flag"

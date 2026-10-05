@@ -181,14 +181,14 @@ jobs:
           if ($deployText -notmatch 'icacls \$tokenTmp /inheritance:r') {
             throw 'deploy dry run did not restrict the serve-token file ACLs (#2496)'
           }
-          if ($deployText -notmatch 'set /p ra_AUTH_TOKEN=<') {
+          if ($deployText -notmatch 'set /p RA_AUTH_TOKEN=<') {
             throw 'deploy dry run did not read the token from the serve-token file in the launcher (#2496)'
           }
           $envLines = $deployText -split "`r?`n" | Where-Object { $_ -match 'AppEnvironmentExtra' }
           if (-not $envLines) {
             throw 'deploy dry run lost the non-secret service environment'
           }
-          if ($envLines -match 'ra_AUTH_TOKEN=') {
+          if ($envLines -match 'RA_AUTH_TOKEN=') {
             throw 'deploy dry run still delivers the token via AppEnvironmentExtra (#2496)'
           }
           if ($deployText -match 'auth_token = \$authToken') {
@@ -1401,7 +1401,7 @@ jobs:
 
       - name: Start RecurAgent serve
         run: |
-          ra_AUTH_TOKEN=ci-test-token ./target/release/ra serve --port 3000 \
+          RA_AUTH_TOKEN=ci-test-token ./target/release/ra serve --port 3000 \
             --config /tmp/ra-ci-serve.json &
           # Wait for server to be ready.
           #
@@ -1474,7 +1474,7 @@ jobs:
       # regression without making model phrasing a merge gate.
       - name: Run e2e tool regression tests
         working-directory: e2e
-        run: ra_TEST_URL=http://localhost:3000 ra_AUTH_TOKEN=ci-test-token npx playwright test --reporter=line tests/tool-use-regression.spec.ts
+        run: RA_TEST_URL=http://localhost:3000 RA_AUTH_TOKEN=ci-test-token npx playwright test --reporter=line tests/tool-use-regression.spec.ts
 
       # #2073 — the model-INDEPENDENT half of the m9 protocol suite, gating.
       #
@@ -1493,7 +1493,7 @@ jobs:
       # nightly.yml.
       - name: Run m9 protocol conformance (model-independent)
         working-directory: e2e
-        run: ra_TEST_URL=http://localhost:3000 ra_AUTH_TOKEN=ci-test-token npx playwright test --reporter=line tests/m9-protocol-session-open.spec.ts tests/m9-protocol-diff-preview.spec.ts
+        run: RA_TEST_URL=http://localhost:3000 RA_AUTH_TOKEN=ci-test-token npx playwright test --reporter=line tests/m9-protocol-session-open.spec.ts tests/m9-protocol-diff-preview.spec.ts
 
       - name: Stop RecurAgent serve
         if: always()

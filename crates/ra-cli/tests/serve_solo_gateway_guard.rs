@@ -99,13 +99,13 @@ mod serve_solo_gateway_guard {
             .env("RA_AUTH_TOKEN", "solo-guard-e2e-token")
             .env_remove("RA_INSTANCE_DATA_DIR")
             .env_remove("RA_HOME")
-            .env_remove("ra_HOME")
+            .env_remove("RA_HOME")
             .env_remove("RA_DATA_DIR")
-            .env_remove("ra_DATA_DIR")
+            .env_remove("RA_DATA_DIR")
             // The solo condition also rides this env var; scrub it so a
             // developer shell exporting it cannot flip the non-solo scenario.
             .env_remove("RA_SOLO_LOGIN")
-            .env_remove("ra_SOLO_LOGIN");
+            .env_remove("RA_SOLO_LOGIN");
         #[cfg(unix)]
         unsafe {
             use std::os::unix::process::CommandExt;

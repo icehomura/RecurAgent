@@ -2440,7 +2440,7 @@ mod tests {
     #[allow(unsafe_code)]
     async fn profile_runtime_bootstrap_includes_skill_prompt_fragments() {
         // Uniquely-named env var to avoid contention with other tests.
-        const KEY_NAME: &str = "ra_M11_891_TEST_API_KEY";
+        const KEY_NAME: &str = "RA_M11_891_TEST_API_KEY";
         // SAFETY: this env var name is unique to this test; nothing
         // else in the test suite reads or writes it. We also unset it
         // on the way out via the guard below.
@@ -2559,7 +2559,7 @@ mod tests {
     #[tokio::test]
     #[allow(unsafe_code)]
     async fn bootstrap_succeeds_when_redb_already_owned_by_sibling_process() {
-        const KEY_NAME: &str = "ra_GH899_TEST_API_KEY";
+        const KEY_NAME: &str = "RA_GH899_TEST_API_KEY";
         // SAFETY: env var name is unique to this test.
         unsafe {
             std::env::set_var(KEY_NAME, "test-key-sk-fake");
@@ -2650,7 +2650,7 @@ mod tests {
     #[tokio::test]
     #[allow(unsafe_code)]
     async fn second_serve_role_bootstrap_fails_loudly_when_redb_already_owned() {
-        const KEY_NAME: &str = "ra_GH899_SERVE_STRICT_TEST_API_KEY";
+        const KEY_NAME: &str = "RA_GH899_SERVE_STRICT_TEST_API_KEY";
         // SAFETY: env var name is unique to this test.
         unsafe {
             std::env::set_var(KEY_NAME, "test-key-sk-fake");
@@ -2801,12 +2801,12 @@ mod tests {
     /// not get dropped when bootstrap returns.
     #[tokio::test]
     async fn profile_runtime_bootstrap_registers_cron_tool() {
-        let _key = ScopedEnvKey::set("ra_M11F_REG2_KEY");
+        let _key = ScopedEnvKey::set("RA_M11F_REG2_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let data_dir = tmp.path().join("profile-data");
         std::fs::create_dir_all(&data_dir).unwrap();
 
-        let profile = fixture_profile("reg2", "ra_M11F_REG2_KEY");
+        let profile = fixture_profile("reg2", "RA_M11F_REG2_KEY");
         let rt = ProfileRuntime::bootstrap(&profile, &data_dir, None, BootstrapRole::Serve)
             .await
             .expect("bootstrap should succeed");
@@ -2835,7 +2835,7 @@ mod tests {
     /// the dir was *scanned*.
     #[tokio::test]
     async fn profile_runtime_bootstrap_includes_global_plugin_dirs() {
-        let _key = ScopedEnvKey::set("ra_M11F_REG5_KEY");
+        let _key = ScopedEnvKey::set("RA_M11F_REG5_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let ra_home = tmp.path().join("ra-home");
         let data_dir = ra_home.join("profiles").join("reg5").join("data");
@@ -2846,7 +2846,7 @@ mod tests {
         let global_plugins = ra_home.join("plugins");
         std::fs::create_dir_all(&global_plugins).unwrap();
 
-        let profile = fixture_profile("reg5", "ra_M11F_REG5_KEY");
+        let profile = fixture_profile("reg5", "RA_M11F_REG5_KEY");
         let rt =
             ProfileRuntime::bootstrap(&profile, &data_dir, Some(&ra_home), BootstrapRole::Serve)
                 .await
@@ -2867,7 +2867,7 @@ mod tests {
     async fn subaccount_skill_loading_preserves_shell() {
         use std::os::unix::fs::PermissionsExt;
 
-        let _key = ScopedEnvKey::set("ra_ISSUE_87_SUBACCOUNT_KEY");
+        let _key = ScopedEnvKey::set("RA_ISSUE_87_SUBACCOUNT_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let ra_home = tmp.path().join("ra-home");
         let data_dir = ra_home.join("profiles").join("mofa-child").join("data");
@@ -2897,7 +2897,7 @@ mod tests {
         .unwrap();
         std::fs::set_permissions(&exec_path, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-        let mut profile = fixture_profile("mofa-child", "ra_ISSUE_87_SUBACCOUNT_KEY");
+        let mut profile = fixture_profile("mofa-child", "RA_ISSUE_87_SUBACCOUNT_KEY");
         profile.parent_id = Some("mofa-parent".to_string());
         profile.public_subdomain = Some("mofa-child-public".to_string());
 
@@ -2963,7 +2963,7 @@ mod tests {
     async fn profile_runtime_bootstrap_honours_host_require_signed() {
         use std::os::unix::fs::PermissionsExt;
 
-        let _key = ScopedEnvKey::set("ra_HOST_SIGN_KEY");
+        let _key = ScopedEnvKey::set("RA_HOST_SIGN_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let ra_home = tmp.path().join("ra-home");
         let data_dir = ra_home.join("profiles").join("sigtest").join("data");
@@ -2986,7 +2986,7 @@ mod tests {
         std::fs::write(&exec_path, b"#!/bin/sh\necho unsigned").unwrap();
         std::fs::set_permissions(&exec_path, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-        let profile = fixture_profile("sigtest", "ra_HOST_SIGN_KEY");
+        let profile = fixture_profile("sigtest", "RA_HOST_SIGN_KEY");
         let host_plugins = crate::config::PluginsConfig {
             require_signed: true,
         };
@@ -3017,11 +3017,11 @@ mod tests {
     async fn should_rebuild_plugin_layer_without_reopening_long_lived_stores() {
         use std::os::unix::fs::PermissionsExt;
 
-        let _key = ScopedEnvKey::set("ra_PLUGIN_RELOAD_KEY");
+        let _key = ScopedEnvKey::set("RA_PLUGIN_RELOAD_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let ra_home = tmp.path().join("ra-home");
         let data_dir = ra_home.join("profiles").join("reload").join("data");
-        let profile = fixture_profile("reload", "ra_PLUGIN_RELOAD_KEY");
+        let profile = fixture_profile("reload", "RA_PLUGIN_RELOAD_KEY");
         let original =
             ProfileRuntime::bootstrap(&profile, &data_dir, Some(&ra_home), BootstrapRole::Serve)
                 .await
@@ -3080,7 +3080,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_keep_startup_best_effort_but_reject_rebuild_after_discovery_rejection() {
-        let _key = ScopedEnvKey::set("ra_PLUGIN_RELOAD_DISCOVERY_KEY");
+        let _key = ScopedEnvKey::set("RA_PLUGIN_RELOAD_DISCOVERY_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let data_dir = tmp.path().join("profile-data");
         let plugin_dir = data_dir.join("skills").join("invalid-discovery-plugin");
@@ -3098,7 +3098,7 @@ mod tests {
             }"#,
         )
         .unwrap();
-        let profile = fixture_profile("reload-discovery", "ra_PLUGIN_RELOAD_DISCOVERY_KEY");
+        let profile = fixture_profile("reload-discovery", "RA_PLUGIN_RELOAD_DISCOVERY_KEY");
 
         let original = ProfileRuntime::bootstrap(&profile, &data_dir, None, BootstrapRole::Serve)
             .await
@@ -3119,10 +3119,10 @@ mod tests {
 
     #[tokio::test]
     async fn should_keep_shared_cron_alive_until_replacement_runtime_drops() {
-        let _key = ScopedEnvKey::set("ra_PLUGIN_RELOAD_CRON_KEY");
+        let _key = ScopedEnvKey::set("RA_PLUGIN_RELOAD_CRON_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let data_dir = tmp.path().join("profile-data");
-        let profile = fixture_profile("reload-cron", "ra_PLUGIN_RELOAD_CRON_KEY");
+        let profile = fixture_profile("reload-cron", "RA_PLUGIN_RELOAD_CRON_KEY");
         let original = ProfileRuntime::bootstrap(&profile, &data_dir, None, BootstrapRole::Serve)
             .await
             .unwrap();
@@ -3147,10 +3147,10 @@ mod tests {
 
     #[tokio::test]
     async fn should_fail_rebuild_on_fatal_http_skill_discovery_error() {
-        let _key = ScopedEnvKey::set("ra_PLUGIN_RELOAD_HTTP_KEY");
+        let _key = ScopedEnvKey::set("RA_PLUGIN_RELOAD_HTTP_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let data_dir = tmp.path().join("profile-data");
-        let profile = fixture_profile("reload-http", "ra_PLUGIN_RELOAD_HTTP_KEY");
+        let profile = fixture_profile("reload-http", "RA_PLUGIN_RELOAD_HTTP_KEY");
         let original = ProfileRuntime::bootstrap(&profile, &data_dir, None, BootstrapRole::Serve)
             .await
             .unwrap();
@@ -3185,14 +3185,14 @@ mod tests {
     async fn should_reject_unsigned_plugins_when_rebuilding_under_host_strict_signing() {
         use std::os::unix::fs::PermissionsExt;
 
-        let _key = ScopedEnvKey::set("ra_PLUGIN_RELOAD_SIGN_KEY");
+        let _key = ScopedEnvKey::set("RA_PLUGIN_RELOAD_SIGN_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let ra_home = tmp.path().join("ra-home");
         let data_dir = ra_home
             .join("profiles")
             .join("reload-signed")
             .join("data");
-        let profile = fixture_profile("reload-signed", "ra_PLUGIN_RELOAD_SIGN_KEY");
+        let profile = fixture_profile("reload-signed", "RA_PLUGIN_RELOAD_SIGN_KEY");
         let strict = crate::config::PluginsConfig {
             require_signed: true,
         };
@@ -3253,12 +3253,12 @@ mod tests {
     /// task, so we settle for the durable observable (`running` flag).
     #[tokio::test]
     async fn profile_runtime_drop_signals_cron_shutdown() {
-        let _key = ScopedEnvKey::set("ra_M11F_REG2_DROP_KEY");
+        let _key = ScopedEnvKey::set("RA_M11F_REG2_DROP_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let data_dir = tmp.path().join("profile-data");
         std::fs::create_dir_all(&data_dir).unwrap();
 
-        let profile = fixture_profile("reg2-drop", "ra_M11F_REG2_DROP_KEY");
+        let profile = fixture_profile("reg2-drop", "RA_M11F_REG2_DROP_KEY");
         let rt = ProfileRuntime::bootstrap(&profile, &data_dir, None, BootstrapRole::Serve)
             .await
             .expect("bootstrap should succeed");
@@ -3294,12 +3294,12 @@ mod tests {
     /// `session.rs::session_runtime_agent_inherits_profile_hooks`.
     #[tokio::test]
     async fn profile_runtime_bootstrap_initializes_hook_executor_field() {
-        let _key = ScopedEnvKey::set("ra_M11F_REG3_KEY");
+        let _key = ScopedEnvKey::set("RA_M11F_REG3_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let data_dir = tmp.path().join("profile-data");
         std::fs::create_dir_all(&data_dir).unwrap();
 
-        let profile = fixture_profile("reg3", "ra_M11F_REG3_KEY");
+        let profile = fixture_profile("reg3", "RA_M11F_REG3_KEY");
         let rt = ProfileRuntime::bootstrap(&profile, &data_dir, None, BootstrapRole::Serve)
             .await
             .expect("bootstrap should succeed");
@@ -3341,12 +3341,12 @@ mod tests {
     ///      `crates/ra-agent/src/tools/spawn.rs::ensure_subagent_tools_available`).
     #[tokio::test]
     async fn profile_runtime_bootstrap_populates_pipeline_factory_for_spawn_children() {
-        let _key = ScopedEnvKey::set("ra_NEW07_PIPELINE_FACTORY_KEY");
+        let _key = ScopedEnvKey::set("RA_NEW07_PIPELINE_FACTORY_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let data_dir = tmp.path().join("profile-data");
         std::fs::create_dir_all(&data_dir).unwrap();
 
-        let profile = fixture_profile("new07", "ra_NEW07_PIPELINE_FACTORY_KEY");
+        let profile = fixture_profile("new07", "RA_NEW07_PIPELINE_FACTORY_KEY");
         let rt = ProfileRuntime::bootstrap(&profile, &data_dir, None, BootstrapRole::Serve)
             .await
             .expect("bootstrap should succeed");
@@ -3492,10 +3492,10 @@ mod tests {
     fn should_resolve_goal_verifier_lane_key_from_its_api_key_env() {
         let mut env_vars = HashMap::new();
         env_vars.insert(
-            "ra_TEST_1935_LANE_KEY".to_string(),
+            "RA_TEST_1935_LANE_KEY".to_string(),
             "lane-secret".to_string(),
         );
-        let config = openai_goal_verifier_config("ra_TEST_1935_LANE_KEY", env_vars);
+        let config = openai_goal_verifier_config("RA_TEST_1935_LANE_KEY", env_vars);
         let lane = build_goal_verifier_provider(&config)
             .expect("lane with a resolvable api_key_env must build");
         assert_eq!(lane.model_id(), "gpt-4o-mini");
@@ -3518,7 +3518,7 @@ mod tests {
     #[test]
     fn should_refuse_goal_verifier_lane_when_api_key_env_unset_even_with_auth_store() {
         let config =
-            openai_goal_verifier_config("ra_TEST_1935_DEFINITELY_UNSET_KEY", HashMap::new());
+            openai_goal_verifier_config("RA_TEST_1935_DEFINITELY_UNSET_KEY", HashMap::new());
         assert!(
             build_goal_verifier_provider(&config).is_none(),
             "unset lane api_key_env must fail the lane build (fail-open to the \

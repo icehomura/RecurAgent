@@ -34,13 +34,13 @@ From the RecurAgent repo:
 Useful overrides:
 
   RA_TUI_REPO=~/home/ra-tui \
-  ra_M16_UX_RUN_ID=m16-local \
+  RA_M16_UX_RUN_ID=m16-local \
   bash e2e/scripts/m16-live-tui-tmux-soak.sh run
 
-Set ra_M16_BUILD=0 to skip building RecurAgent with the api feature.
-Set ra_M16_BUILD_TUI=1 to force rebuilding ra-tui; by default the script
+Set RA_M16_BUILD=0 to skip building RecurAgent with the api feature.
+Set RA_M16_BUILD_TUI=1 to force rebuilding ra-tui; by default the script
 uses an existing ra-tui binary and only builds it when missing.
-Set ra_M16_UX_KEEP_SESSION=1 to leave tmux open after the run.
+Set RA_M16_UX_KEEP_SESSION=1 to leave tmux open after the run.
 
 Evidence
 

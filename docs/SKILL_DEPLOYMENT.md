@@ -42,7 +42,7 @@ pushing mofa-skills onto the fleet. Differences from the old script:
 For each (host, profile, skill) triple, the script:
 
 1. `rsync -az --delete <mofa-skills>/<skill>/ <host>:/tmp/ra-fleet-install-staging/<skill>/`
-2. `ssh <host> "ra_PROFILE_ID=<p> /Users/cloud/.ra/bin/ra skills --profile <p> install /tmp/ra-fleet-install-staging/<skill> --force"`
+2. `ssh <host> "RA_PROFILE_ID=<p> /Users/cloud/.ra/bin/ra skills --profile <p> install /tmp/ra-fleet-install-staging/<skill> --force"`
 3. Records OK / FAIL with the tail of stderr.
 4. Cleans up staging at the end of the host.
 
@@ -137,5 +137,5 @@ Also runs `shellcheck` against `scripts/fleet-install-skills.sh`.
 
 The legacy script in `mofa-skills/scripts/deploy-mini.sh` now errors out
 with a redirect message pointing at `fleet-install-skills.sh`. The legacy
-behavior is gated behind `ra_DEPRECATED_SCP=1` for emergencies; do not
+behavior is gated behind `RA_DEPRECATED_SCP=1` for emergencies; do not
 rely on it.

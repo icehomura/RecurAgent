@@ -18,10 +18,10 @@
  *
  * Run from ~/home/ra/e2e:
  *
- *   ra_TEST_URL=https://dspfac.bot.ominix.io \
- *   ra_AUTH_TOKEN=ra-admin-2026 \
- *   ra_PROFILE=dspfac \
- *   ra_TEST_EMAIL=dspfac@gmail.com \
+ *   RA_TEST_URL=https://dspfac.bot.ominix.io \
+ *   RA_AUTH_TOKEN=ra-admin-2026 \
+ *   RA_PROFILE=dspfac \
+ *   RA_TEST_EMAIL=dspfac@gmail.com \
  *     npx playwright test tests/live-spawn-end-to-end.spec.ts --workers=1
  *
  * NEVER run against mini5 (`dspfac.ocean.ominix.io`) — reserved for coding-green.
@@ -31,9 +31,9 @@ import { test, expect } from '@playwright/test';
 import { execSync } from 'node:child_process';
 import { chatWS, type ChatWsEvent } from '../lib/m9-ws-client';
 
-const BASE = process.env.ra_TEST_URL || 'https://dspfac.bot.ominix.io';
-const TOKEN = process.env.ra_AUTH_TOKEN || 'ra-admin-2026';
-const PROFILE = process.env.ra_PROFILE || 'dspfac';
+const BASE = process.env.RA_TEST_URL || 'https://dspfac.bot.ominix.io';
+const TOKEN = process.env.RA_AUTH_TOKEN || 'ra-admin-2026';
+const PROFILE = process.env.RA_PROFILE || 'dspfac';
 
 // Refuse to run against mini5 — coding-green territory.
 if (BASE.includes('dspfac.ocean.ominix.io')) {
@@ -44,9 +44,9 @@ if (BASE.includes('dspfac.ocean.ominix.io')) {
 
 // SSH targets per fleet host come from the environment so no host
 // addresses live in the repo, e.g.
-//   ra_FLEET_SSH_MAP='dspfac.crew.ominix.io=cloud@<host>,dspfac.bot.ominix.io=cloud@<host>'
+//   RA_FLEET_SSH_MAP='dspfac.crew.ominix.io=cloud@<host>,dspfac.bot.ominix.io=cloud@<host>'
 const HOST_MAP: Record<string, string> = Object.fromEntries(
-  (process.env.ra_FLEET_SSH_MAP || '')
+  (process.env.RA_FLEET_SSH_MAP || '')
     .split(',')
     .map((pair): [string, string] => {
       const [k = '', v = ''] = pair.trim().split('=');
@@ -55,7 +55,7 @@ const HOST_MAP: Record<string, string> = Object.fromEntries(
     .filter(([k, v]) => k !== '' && v !== ''),
 );
 const SSH_HOST =
-  process.env.ra_TEST_SSH_HOST ||
+  process.env.RA_TEST_SSH_HOST ||
   (() => {
     try {
       return HOST_MAP[new URL(BASE).hostname] || '';
@@ -305,7 +305,7 @@ test.describe('M8 spawn end-to-end (slides)', () => {
     // If we can SSH, verify there are no orphan helper processes for this task.
     if (SSH_HOST) {
       const helpers = sshExec(
-        `pgrep -f "ra_TASK_ID=${taskId}" 2>/dev/null | head -5`,
+        `pgrep -f "RA_TASK_ID=${taskId}" 2>/dev/null | head -5`,
         { allowFail: true },
       );
       const orphans = helpers.split('\n').filter((line) => /^\d+$/.test(line.trim()));

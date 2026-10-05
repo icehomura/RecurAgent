@@ -136,7 +136,7 @@ fn run_completions(args: &[&str]) -> String {
     cmd.args(args)
         .current_dir(&scratch)
         .env_remove("RA_COMPLETE")
-        .env_remove("ra_COMPLETE")
+        .env_remove("RA_COMPLETE")
         .env_remove("COMPLETE");
     for home_var in ["HOME", "USERPROFILE"] {
         cmd.env(home_var, &scratch);
@@ -244,7 +244,7 @@ fn test_completions_env_channel_wiring() {
     // rename working, so it must still answer the channel.
     let legacy = Command::new(ra_binary())
         .env_remove("RA_COMPLETE")
-        .env("ra_COMPLETE", "bash")
+        .env("RA_COMPLETE", "bash")
         .current_dir(&scratch)
         .output()
         .expect("Failed to execute command");
@@ -261,7 +261,7 @@ fn test_completions_env_channel_wiring() {
     let unaffected = Command::new(ra_binary())
         .env("COMPLETE", "bash")
         .env_remove("RA_COMPLETE")
-        .env_remove("ra_COMPLETE")
+        .env_remove("RA_COMPLETE")
         .arg("--version")
         .output()
         .expect("Failed to execute command");
@@ -278,7 +278,7 @@ fn test_completions_env_channel_wiring() {
 
     let disabled = Command::new(ra_binary())
         .env("RA_COMPLETE", "")
-        .env_remove("ra_COMPLETE")
+        .env_remove("RA_COMPLETE")
         .arg("--version")
         .output()
         .expect("Failed to execute command");

@@ -36626,17 +36626,17 @@ fn maybe_spawn_cli_review_specialist(
         .args(args.iter().cloned())
         .cwd(workspace_root)
         .env("RA_REVIEW_OBJECTIVE", objective)
-        .env("ra_REVIEW_OBJECTIVE", objective)
+        .env("RA_REVIEW_OBJECTIVE", objective)
         .env("RA_REVIEW_TARGET", target)
-        .env("ra_REVIEW_TARGET", target)
+        .env("RA_REVIEW_TARGET", target)
         .env("RA_REVIEW_AGENT_ID", agent_id.clone())
-        .env("ra_REVIEW_AGENT_ID", agent_id.clone())
+        .env("RA_REVIEW_AGENT_ID", agent_id.clone())
         .env(
             "RA_REVIEW_ARTIFACT_PATH",
             artifact_path.to_string_lossy().into_owned(),
         )
         .env(
-            "ra_REVIEW_ARTIFACT_PATH",
+            "RA_REVIEW_ARTIFACT_PATH",
             artifact_path.to_string_lossy().into_owned(),
         )
         .timeout(std::time::Duration::from_secs(90))

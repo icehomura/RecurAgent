@@ -251,7 +251,7 @@ mod tests {
             "USER",
             "OPENAI_BASE_URL",
             "OMINIX_API_URL",
-            "ra_PROFILE_ID",
+            "RA_PROFILE_ID",
             "PPT_TEMPLATE_DIR",
             "TOKENIZERS_PARALLELISM",
             "NPM_CONFIG_CACHE",
@@ -348,14 +348,14 @@ mod tests {
     #[test]
     fn strict_allowlist_rejects_undeclared_ra_secrets() {
         let allowlist = EnvAllowlist::from_names(["MY_VAR"]);
-        for name in ["ra_AUTH_TOKEN", "ra_ADMIN_TOKEN"] {
+        for name in ["RA_AUTH_TOKEN", "RA_ADMIN_TOKEN"] {
             assert!(!should_forward_env_name_strict(name, &allowlist), "{name}");
             assert!(should_forward_env_name_strict(
                 name,
                 &EnvAllowlist::from_names([name])
             ));
         }
-        let registered = "ra_TEST_REGISTERED_CREDS";
+        let registered = "RA_TEST_REGISTERED_CREDS";
         register_secret_env_names([registered]);
         assert!(!should_forward_env_name_strict(registered, &allowlist));
         assert!(should_forward_env_name_strict(
@@ -363,21 +363,21 @@ mod tests {
             &EnvAllowlist::from_names([registered])
         ));
         for name in [
-            "ra_PROFILE_ID",
-            "ra_DATA_DIR",
-            "ra_WORK_DIR",
-            "ra_HOME",
-            "ra_VOICE_DIR",
-            "ra_SESSION_ID",
-            "ra_TASK_ID",
-            "ra_HARNESS_SESSION_ID",
-            "ra_HARNESS_TASK_ID",
-            "ra_EVENT_SINK",
-            "ra_SESSION_WORKSPACE",
-            "ra_PROFILE_LLM_MODEL",
-            "ra_PROFILE_LLM_PROVIDER",
-            "ra_ALLOW_SERP_SCRAPE",
-            "ra_RESPECT_ROBOTS",
+            "RA_PROFILE_ID",
+            "RA_DATA_DIR",
+            "RA_WORK_DIR",
+            "RA_HOME",
+            "RA_VOICE_DIR",
+            "RA_SESSION_ID",
+            "RA_TASK_ID",
+            "RA_HARNESS_SESSION_ID",
+            "RA_HARNESS_TASK_ID",
+            "RA_EVENT_SINK",
+            "RA_SESSION_WORKSPACE",
+            "RA_PROFILE_LLM_MODEL",
+            "RA_PROFILE_LLM_PROVIDER",
+            "RA_ALLOW_SERP_SCRAPE",
+            "RA_RESPECT_ROBOTS",
         ] {
             assert!(should_forward_env_name_strict(name, &allowlist), "{name}");
         }
@@ -386,8 +386,8 @@ mod tests {
     #[test]
     fn strict_allowlist_retains_ra_namespace() {
         let allowlist = EnvAllowlist::from_names(["MY_VAR"]);
-        assert!(should_forward_env_name_strict("ra_TASK_ID", &allowlist));
-        assert!(should_forward_env_name_strict("ra_WORK_DIR", &allowlist));
+        assert!(should_forward_env_name_strict("RA_TASK_ID", &allowlist));
+        assert!(should_forward_env_name_strict("RA_WORK_DIR", &allowlist));
     }
 
     #[test]

@@ -6,7 +6,7 @@ Milestone: `M7.8` (Swarm Dispatch Live Gate)
 
 This runbook defines the repo-side live release gate for the M7 swarm
 orchestrator family. The gate is canary-only and is skipped in default e2e
-runs unless `ra_M7_SWARM_LIVE=1` is explicitly set.
+runs unless `RA_M7_SWARM_LIVE=1` is explicitly set.
 
 ## What The Gate Proves
 
@@ -30,7 +30,7 @@ Supervisor runs:
 ```bash
 ./scripts/validate-m7-swarm-live.sh \
   --base-url https://dspfac.crew.ominix.io \
-  --auth-token "$ra_ADMIN_TOKEN" \
+  --auth-token "$RA_ADMIN_TOKEN" \
   --profile dspfac \
   --output-dir /tmp/m7-swarm-live-$(date -u +%Y%m%d-%H%M%S)
 ```

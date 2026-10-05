@@ -10,7 +10,7 @@
 # Config resolution mirrors the CLI:
 #   1. <cwd>/.ra/config.json  (project-local)
 #   2. <--data-dir>/config.json  (explicit override)
-#   3. $ra_HOME/config.json   (env var)
+#   3. $RA_HOME/config.json   (env var)
 #   4. ~/.ra/config.json      (default)
 set -euo pipefail
 
@@ -35,8 +35,8 @@ done
 # Resolve data directory: --data-dir flag > ra_HOME env var > ~/.ra
 if [[ -n "$DATA_DIR_OVERRIDE" ]]; then
   DATA_DIR="$DATA_DIR_OVERRIDE"
-elif [[ -n "${ra_HOME:-}" ]]; then
-  DATA_DIR="$ra_HOME"
+elif [[ -n "${RA_HOME:-}" ]]; then
+  DATA_DIR="$RA_HOME"
 else
   DATA_DIR="$HOME/.ra"
 fi
@@ -58,10 +58,10 @@ API_PORT="8080"
 API_BASE="http://${API_HOST}:${API_PORT}"
 
 # Auth token — mirrors `ra serve`'s own resolution (commands/serve.rs:109-114):
-#   1. $ra_AUTH_TOKEN         — the env var the server itself reads
+#   1. $RA_AUTH_TOKEN         — the env var the server itself reads
 #   2. config.json .auth_token   — the persisted fallback the server uses
 # (Not auth.json — that's a provider OAuth credential store, not an admin token.)
-AUTH_TOKEN="${ra_AUTH_TOKEN:-}"
+AUTH_TOKEN="${RA_AUTH_TOKEN:-}"
 if [[ -z "$AUTH_TOKEN" ]] && [[ -n "$CONFIG_FILE" ]]; then
   if command -v jq >/dev/null 2>&1; then
     AUTH_TOKEN=$(jq -r '.auth_token // empty' "$CONFIG_FILE" 2>/dev/null || true)

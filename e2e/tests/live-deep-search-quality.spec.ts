@@ -7,10 +7,10 @@
  *
  * Usage:
  *
- *   ra_TEST_URL=https://dspfac.bot.ominix.io \
- *   ra_AUTH_TOKEN=ra-admin-2026 \
- *   ra_PROFILE=dspfac \
- *   ra_TEST_EMAIL=dspfac@gmail.com \
+ *   RA_TEST_URL=https://dspfac.bot.ominix.io \
+ *   RA_AUTH_TOKEN=ra-admin-2026 \
+ *   RA_PROFILE=dspfac \
+ *   RA_TEST_EMAIL=dspfac@gmail.com \
  *   npx playwright test tests/live-deep-search-quality.spec.ts
  *
  * What this test asserts:
@@ -39,7 +39,7 @@ import {
 } from './live-browser-helpers';
 
 const QUALITY_PROMPT =
-  process.env.ra_DEEP_SEARCH_QUERY ||
+  process.env.RA_DEEP_SEARCH_QUERY ||
   'Do a deep research on the latest developments in Rust async runtimes in 2026. Run the deep_search pipeline directly.';
 
 const PER_RUN_TIMEOUT_MS = 12 * 60 * 1000;

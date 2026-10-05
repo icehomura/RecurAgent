@@ -212,8 +212,8 @@ plus `live-overflow-stress`:
 
 ```bash
 # Single canonical run
-ra_TEST_URL=http://127.0.0.1:56831 \
-ra_AUTH_TOKEN=test-token-please-change \
+RA_TEST_URL=http://127.0.0.1:56831 \
+RA_AUTH_TOKEN=test-token-please-change \
   npx playwright test \
     live-overflow-thread-binding.spec.ts \
     live-thread-interleave.spec.ts \
@@ -277,8 +277,8 @@ report and ask the maintainer about a redeploy.
 ```bash
 # Pick mini1, mini3, or mini4 — these are the safe-to-soak targets
 
-ra_TEST_URL=https://dspfac.ra.ominix.io \
-ra_AUTH_TOKEN='<production-token-from-maintainer>' \
+RA_TEST_URL=https://dspfac.ra.ominix.io \
+RA_AUTH_TOKEN='<production-token-from-maintainer>' \
   npx playwright test \
     live-overflow-thread-binding.spec.ts \
     live-thread-interleave.spec.ts \

@@ -26,9 +26,9 @@
  * each user bubble in DOM order matches the prompt by content.
  *
  * Required env:
- *   ra_TEST_URL=https://dspfac.ra.ominix.io   (mini3, pre-#649)
- *   ra_AUTH_TOKEN=ra-admin-2026
- *   ra_PROFILE=dspfac
+ *   RA_TEST_URL=https://dspfac.ra.ominix.io   (mini3, pre-#649)
+ *   RA_AUTH_TOKEN=ra-admin-2026
+ *   RA_PROFILE=dspfac
  *
  * Behind the same v2 flag as live-thread-interleave: the new thread-by-cmid
  * renderer is gated by `localStorage.ra_thread_store_v2 = '1'`.

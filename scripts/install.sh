@@ -36,8 +36,8 @@ set -euo pipefail
 
 # ── Defaults ──────────────────────────────────────────────────────────
 VERSION=""
-PREFIX="${ra_PREFIX:-$HOME/.ra/bin}"
-DATA_DIR="${ra_HOME:-$HOME/.ra}"
+PREFIX="${RA_PREFIX:-$HOME/.ra/bin}"
+DATA_DIR="${RA_HOME:-$HOME/.ra}"
 FRPC_VERSION="0.65.0"
 
 # The script's own path — used to locate the source tree (and ra-doctor.sh)
@@ -176,7 +176,7 @@ DATA_DIR="$(normalize_path "$DATA_DIR")"
 # ── Config home resolver (bash mirror of resolve_config_context in Rust) ──
 # Keep this EXACTLY consistent with crates/ra-cli/src/config_context.rs.
 #
-#   config_home = $ra_CONFIG_DIR                       (if set, non-empty)
+#   config_home = $RA_CONFIG_DIR                       (if set, non-empty)
 #               | $DATA_DIR                               (if explicit: an
 #                                                          ra_HOME override
 #                                                          != $HOME/.ra)
@@ -209,7 +209,7 @@ xdg_config_home() {
 canonicalize_path() {
     local p="$1"
     if command -v python3 >/dev/null 2>&1; then
-        ra_CANON_IN="$p" python3 -c 'import os; print(os.path.realpath(os.environ["ra_CANON_IN"]))' 2>/dev/null && return 0
+        RA_CANON_IN="$p" python3 -c 'import os; print(os.path.realpath(os.environ["RA_CANON_IN"]))' 2>/dev/null && return 0
     fi
     if command -v realpath >/dev/null 2>&1; then
         # GNU realpath supports -m (no existence requirement); BSD does not.
@@ -224,8 +224,8 @@ canonicalize_path() {
 }
 
 compute_config_home() {
-    if [ -n "${ra_CONFIG_DIR:-}" ]; then
-        normalize_path "$ra_CONFIG_DIR"
+    if [ -n "${RA_CONFIG_DIR:-}" ]; then
+        normalize_path "$RA_CONFIG_DIR"
         return 0
     fi
     # Explicit when DATA_DIR (from ra_HOME) is a non-default override.
@@ -351,7 +351,7 @@ write_serve_env_file() {
     # the chmod below stays as belt-and-braces.
     (
         umask 077
-        printf 'ra_AUTH_TOKEN="%s"\n' "$token" > "$target"
+        printf 'RA_AUTH_TOKEN="%s"\n' "$token" > "$target"
         if [ -n "$FRPS_TOKEN" ]; then
             printf 'FRPS_TOKEN="%s"\n' "$frps" >> "$target"
         fi
@@ -698,7 +698,7 @@ write_ra_service() {
     <string>io.ra.serve</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$ra_BIN</string>
+        <string>$RA_BIN</string>
         <string>serve</string>
         <string>--port</string>
         <string>$PORT</string>
@@ -740,7 +740,7 @@ write_ra_service() {
     <key>ra_AUTH_TOKEN</key>
     <string>$AUTH_TOKEN</string>
 $(launchd_env_var_xml "XDG_CONFIG_HOME" "${XDG_CONFIG_HOME:-}")
-$(launchd_env_var_xml "ra_CONFIG_DIR" "${ra_CONFIG_DIR:+$CONFIG_HOME}")
+$(launchd_env_var_xml "RA_CONFIG_DIR" "${RA_CONFIG_DIR:+$CONFIG_HOME}")
 $(launchd_env_var_xml "FRPS_TOKEN" "${FRPS_TOKEN:-}")
 $(launchd_env_var_xml "SMTP_HOST" "${SMTP_HOST:-}")
 $(launchd_env_var_xml "SMTP_PORT" "${SMTP_PORT:-}")
@@ -782,16 +782,16 @@ User=$(whoami)
 # local user via systemctl cat / ps. #2388: it does not travel inline here
 # either — the unit file is world-readable; secrets load from the 0600
 # DATA_DIR/serve.env via EnvironmentFile.
-ExecStart=$ra_BIN serve --port $PORT --host 0.0.0.0
+ExecStart=$RA_BIN serve --port $PORT --host 0.0.0.0
 Restart=on-failure
 RestartSec=5
 EnvironmentFile=$DATA_DIR/serve.env
 Environment=HOME=$HOME
-Environment=ra_DATA_DIR=$DATA_DIR
-Environment=ra_HOME=$DATA_DIR
+Environment=RA_DATA_DIR=$DATA_DIR
+Environment=RA_HOME=$DATA_DIR
 Environment=PATH=$PREFIX:/usr/local/bin:/usr/bin:/bin
 $(systemd_env_var_line "XDG_CONFIG_HOME" "${XDG_CONFIG_HOME:-}")
-$(systemd_env_var_line "ra_CONFIG_DIR" "${ra_CONFIG_DIR:+$CONFIG_HOME}")
+$(systemd_env_var_line "RA_CONFIG_DIR" "${RA_CONFIG_DIR:+$CONFIG_HOME}")
 $(systemd_env_var_line "SMTP_HOST" "${SMTP_HOST:-}")
 $(systemd_env_var_line "SMTP_PORT" "${SMTP_PORT:-}")
 $(systemd_env_var_line "SMTP_USERNAME" "${SMTP_USERNAME:-}")
@@ -813,7 +813,7 @@ EOF
 
         *)
             warn "ra serve service setup not supported on $OS"
-            hint "Run manually: ra_AUTH_TOKEN=$AUTH_TOKEN $ra_BIN serve --port $PORT --host 0.0.0.0"
+            hint "Run manually: RA_AUTH_TOKEN=$AUTH_TOKEN $RA_BIN serve --port $PORT --host 0.0.0.0"
             ;;
     esac
 }
@@ -946,25 +946,25 @@ if [ "$RUN_DOCTOR" = true ]; then
     # ── Binary ───────────────────────────────────────────────────────
     section "ra binary"
 
-    ra_BIN="$PREFIX/ra"
-    if [ -f "$ra_BIN" ]; then
-        ok "found: $ra_BIN"
-        if "$ra_BIN" --version &>/dev/null; then
-            ok "version: $("$ra_BIN" --version 2>&1 | head -1)"
+    RA_BIN="$PREFIX/ra"
+    if [ -f "$RA_BIN" ]; then
+        ok "found: $RA_BIN"
+        if "$RA_BIN" --version &>/dev/null; then
+            ok "version: $("$RA_BIN" --version 2>&1 | head -1)"
         else
             err "binary exists but failed to run"
             if [ "$OS" = "Darwin" ]; then
-                hint "Try: xattr -d com.apple.quarantine $ra_BIN && codesign -s - $ra_BIN"
+                hint "Try: xattr -d com.apple.quarantine $RA_BIN && codesign -s - $RA_BIN"
             else
-                hint "Try: chmod +x $ra_BIN"
-                hint "Check dependencies: ldd $ra_BIN"
+                hint "Try: chmod +x $RA_BIN"
+                hint "Check dependencies: ldd $RA_BIN"
             fi
             hint "Or re-run install.sh"
         fi
     else
         if command -v ra &>/dev/null; then
             FOUND="$(command -v ra)"
-            warn "not found at $ra_BIN, but found at $FOUND"
+            warn "not found at $RA_BIN, but found at $FOUND"
             hint "Set ra_PREFIX or add $PREFIX to PATH"
         else
             err "ra binary not found"
@@ -991,7 +991,7 @@ if [ "$RUN_DOCTOR" = true ]; then
     _DOCTOR_LEGACY_CONFIG="$HOME/.ra/config.json"
     if [ -f "$CONFIG_HOME/config.json" ]; then
         ok "config.json: $CONFIG_HOME/config.json"
-    elif [ "$CONFIG_HOME" = "$(xdg_config_home)" ] && [ -z "${ra_CONFIG_DIR:-}" ] \
+    elif [ "$CONFIG_HOME" = "$(xdg_config_home)" ] && [ -z "${RA_CONFIG_DIR:-}" ] \
          && [ -f "$_DOCTOR_LEGACY_CONFIG" ]; then
         ok "config.json (legacy): $_DOCTOR_LEGACY_CONFIG"
         hint "Run 'ra init' to migrate it to $CONFIG_HOME"
@@ -1003,11 +1003,11 @@ if [ "$RUN_DOCTOR" = true ]; then
     # ── ra serve process ──────────────────────────────────────────
     section "ra serve"
 
-    ra_PID=$(pgrep -f "ra serve" 2>/dev/null | head -1 || true)
-    if [ -n "$ra_PID" ]; then
-        ra_CMD=$(ps -p "$ra_PID" -o args= 2>/dev/null || true)
-        ok "running (PID: $ra_PID)"
-        echo "    CMD: $ra_CMD"
+    RA_PID=$(pgrep -f "ra serve" 2>/dev/null | head -1 || true)
+    if [ -n "$RA_PID" ]; then
+        RA_CMD=$(ps -p "$RA_PID" -o args= 2>/dev/null || true)
+        ok "running (PID: $RA_PID)"
+        echo "    CMD: $RA_CMD"
     else
         err "ra serve is not running"
         hint "Start: $(svc_hint start serve)"
@@ -1064,9 +1064,9 @@ if [ "$RUN_DOCTOR" = true ]; then
             fi
         fi
     elif [ "$PORT_CHECK_AVAILABLE" = true ]; then
-        if [ -n "$ra_PID" ]; then
+        if [ -n "$RA_PID" ]; then
             err "ra serve is running but nothing is listening on $PORT"
-            hint "Check if it's bound to a different port: ps -p $ra_PID -o args="
+            hint "Check if it's bound to a different port: ps -p $RA_PID -o args="
         else
             warn "nothing listening on port $PORT"
         fi
@@ -1607,11 +1607,11 @@ is_ra_source_root() {
 }
 
 # Print the source tree to build from, or return 1 when none can be found.
-# Order: $ra_SOURCE_DIR, the tree this script lives in, $PWD, the enclosing
+# Order: $RA_SOURCE_DIR, the tree this script lives in, $PWD, the enclosing
 # git work tree.
 resolve_source_root() {
     local candidate
-    for candidate in "${ra_SOURCE_DIR:-}" "$(dirname "$SCRIPT_SELF")/.." "$PWD"; do
+    for candidate in "${RA_SOURCE_DIR:-}" "$(dirname "$SCRIPT_SELF")/.." "$PWD"; do
         [ -n "$candidate" ] || continue
         if is_ra_source_root "$candidate"; then
             (cd "$candidate" && pwd)
@@ -1639,7 +1639,7 @@ build_from_source() {
     if ! command -v cargo >/dev/null 2>&1; then
         err "cargo not found — building from source needs the Rust toolchain."
         hint "Install Rust:        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
-        hint "Or install a bundle: ra_DOWNLOAD_URL=<dir|file://path> $SCRIPT_SELF"
+        hint "Or install a bundle: RA_DOWNLOAD_URL=<dir|file://path> $SCRIPT_SELF"
         return 1
     fi
 
@@ -1685,7 +1685,7 @@ build_from_source() {
 section "Resolving install source"
 
 TARBALL="ra-bundle-${TRIPLE}.tar.gz"
-DOWNLOAD_BASE="${ra_DOWNLOAD_URL:-}"
+DOWNLOAD_BASE="${RA_DOWNLOAD_URL:-}"
 
 # Auto-detect: a bundle tarball next to the script or in the current directory
 # (scripts/build-local-bundle.sh writes it there).
@@ -1714,7 +1714,7 @@ else
     if ! SOURCE_ROOT="$(resolve_source_root)"; then
         err "Could not find the ra source tree to build from."
         hint "Run this script from the checkout (scripts/install.sh), set"
-        hint "ra_SOURCE_DIR, or point ra_DOWNLOAD_URL at a bundle."
+        hint "RA_SOURCE_DIR, or point ra_DOWNLOAD_URL at a bundle."
         exit 1
     fi
     ok "source tree: $SOURCE_ROOT"
@@ -1808,7 +1808,7 @@ section "Initializing ra"
 
 # Temporarily add PREFIX to PATH for subsequent commands
 export PATH="$PREFIX:$PATH"
-export ra_HOME="$DATA_DIR"
+export RA_HOME="$DATA_DIR"
 
 if [ ! -d "$DATA_DIR" ]; then
     # ra init always writes to $cwd/.ra/, which won't match a custom
@@ -1846,7 +1846,7 @@ _CONFIG_FILE="$CONFIG_HOME/config.json"
 _WRITE_CONFIG=true
 if [ -f "$_CONFIG_FILE" ]; then
     _WRITE_CONFIG=false
-elif [ "$CONFIG_HOME" = "$(xdg_config_home)" ] && [ -z "${ra_CONFIG_DIR:-}" ] \
+elif [ "$CONFIG_HOME" = "$(xdg_config_home)" ] && [ -z "${RA_CONFIG_DIR:-}" ] \
      && [ -f "$_LEGACY_CONFIG" ]; then
     # Default install with an existing legacy config — do not shadow it.
     _WRITE_CONFIG=false
@@ -1916,7 +1916,7 @@ fi
 # ── Set up ra serve as system service ──────────────────────────────
 section "Setting up ra serve"
 
-ra_BIN="$PREFIX/ra"
+RA_BIN="$PREFIX/ra"
 write_ra_service
 
 # ── Verify ra serve ────────────────────────────────────────────────

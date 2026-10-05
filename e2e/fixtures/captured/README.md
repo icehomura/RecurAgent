@@ -1,7 +1,7 @@
 # Captured live-soak fixtures
 
 This directory holds JSON fixtures that the live e2e harness auto-saves
-when running with `ra_CAPTURE_FIXTURE=1` or when a soak test fails.
+when running with `RA_CAPTURE_FIXTURE=1` or when a soak test fails.
 Each fixture is a snapshot of the SSE event stream + final DOM state from
 ONE live spec run, suitable for promoting to the Layer 1 SPA reducer
 test corpus.
@@ -22,13 +22,13 @@ it forms the 3-tier promotion workflow:
 
 Two trigger paths:
 
-1. **Operator-driven**: set `ra_CAPTURE_FIXTURE=1` (or `=true`/`=yes`)
+1. **Operator-driven**: set `RA_CAPTURE_FIXTURE=1` (or `=true`/`=yes`)
    when invoking Playwright. The harness writes a fixture for every spec
    that calls `attachCapture(page, testInfo)`, regardless of pass/fail.
 2. **On failure**: even without the env flag, if a spec fails AND the
    spec called `attachCapture()`, the harness writes the fixture. To
    suppress capture entirely (e.g. constrained CI shards) set
-   `ra_CAPTURE_DISABLE=1`.
+   `RA_CAPTURE_DISABLE=1`.
 
 Both paths write to `e2e/fixtures/captured/<sanitized-test-title>-<iso-timestamp>.json`.
 The file is also added as a Playwright attachment to the failing test
@@ -58,7 +58,7 @@ test('reproduces overflow-stress thread binding', async ({ page }, testInfo) => 
 });
 ```
 
-`attachCapture` is a no-op on `ra_CAPTURE_DISABLE=1`; otherwise it
+`attachCapture` is a no-op on `RA_CAPTURE_DISABLE=1`; otherwise it
 installs a fetch + EventSource tee via `addInitScript` BEFORE
 `page.goto()`. Calling `attachCapture` after navigation will not capture
 the streams that were opened pre-attach.
@@ -201,7 +201,7 @@ usually mean the spec ran for many minutes; consider trimming.
   PR I demo run produced 8.9KB / 9 events).
 
 If a long-running spec produces oversize captures, set
-`ra_CAPTURE_DISABLE=1` for that shard or trim `raw_events` at
+`RA_CAPTURE_DISABLE=1` for that shard or trim `raw_events` at
 promotion time.
 
 ### Replace vs. delta semantics

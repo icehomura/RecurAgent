@@ -66,7 +66,7 @@ pub const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
 pub const RUN_ra_SESSION_TOOL: &str = "run_ra_session";
 
 /// Environment variable name that the HTTP transport reads for its bearer token.
-pub const ra_MCP_SERVER_TOKEN_ENV: &str = "ra_MCP_SERVER_TOKEN";
+pub const ra_MCP_SERVER_TOKEN_ENV: &str = "RA_MCP_SERVER_TOKEN";
 
 /// Idle keep-alive for HTTP Streamable sessions. rmcp's 300s default reaps a
 /// session mid-call for a long synchronous `run_ra_session` (which emits no

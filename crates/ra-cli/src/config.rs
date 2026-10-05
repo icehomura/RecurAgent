@@ -700,7 +700,7 @@ pub struct EmbeddingConfig {
 
     /// Allow RecurAgent to download the default embedding model when it is missing
     /// (default true; `RA_NO_MODEL_DOWNLOAD=1` — legacy
-    /// `ra_NO_MODEL_DOWNLOAD=1` — also disables it).
+    /// `RA_NO_MODEL_DOWNLOAD=1` — also disables it).
     #[serde(default)]
     pub auto_download: Option<bool>,
 }
@@ -742,7 +742,7 @@ pub struct MemoryRefreshConfig {
     /// Master switch for the capture layer + read-side refresh + the
     /// background extraction sweep. DEFAULT-ON: `None` means enabled —
     /// automatic memory is the product behavior; set `false` (or
-    /// `RA_MEMORY_REFRESH_ENABLED=0`, legacy `ra_MEMORY_REFRESH_ENABLED=0`) to opt out.
+    /// `RA_MEMORY_REFRESH_ENABLED=0`, legacy `RA_MEMORY_REFRESH_ENABLED=0`) to opt out.
     #[serde(default)]
     pub enabled: Option<bool>,
 
@@ -1438,7 +1438,7 @@ fn merge_env_memory_policy(config: &mut Config) {
     // (block absent OR the tri-state left unset). With the DEFAULT-ON
     // semantics the OFF direction matters most: a host that disabled
     // memory mirrors `RA_MEMORY_REFRESH_ENABLED=0` (legacy
-    // `ra_MEMORY_REFRESH_ENABLED=0`) to spawned
+    // `RA_MEMORY_REFRESH_ENABLED=0`) to spawned
     // subprocesses, and that must beat the child's default-on. An explicit
     // `enabled` in the config file still wins over the env.
     if config
@@ -2822,9 +2822,9 @@ mod tests {
         let keys = [
             "HOME",
             "RA_HOME",
-            "ra_HOME",
+            "RA_HOME",
             "RA_CONFIG_DIR",
-            "ra_CONFIG_DIR",
+            "RA_CONFIG_DIR",
             "XDG_CONFIG_HOME",
         ];
         let saved: Vec<(&str, Option<std::ffi::OsString>)> =
@@ -2833,9 +2833,9 @@ mod tests {
         unsafe {
             std::env::set_var("HOME", fake_home);
             std::env::remove_var("RA_HOME");
-            std::env::remove_var("ra_HOME");
+            std::env::remove_var("RA_HOME");
             std::env::remove_var("RA_CONFIG_DIR");
-            std::env::remove_var("ra_CONFIG_DIR");
+            std::env::remove_var("RA_CONFIG_DIR");
             // Must also clear XDG_CONFIG_HOME: auth_home derives from it, so an
             // ambient absolute value would write auth.json outside the temp HOME.
             std::env::remove_var("XDG_CONFIG_HOME");
@@ -2888,9 +2888,9 @@ mod tests {
         let keys = [
             "HOME",
             "RA_HOME",
-            "ra_HOME",
+            "RA_HOME",
             "RA_CONFIG_DIR",
-            "ra_CONFIG_DIR",
+            "RA_CONFIG_DIR",
             "XDG_CONFIG_HOME",
             "MOONSHOT_API_KEY",
             "KIMI_API_KEY",
@@ -3581,9 +3581,9 @@ mod tests {
         let keys = [
             "HOME",
             "RA_HOME",
-            "ra_HOME",
+            "RA_HOME",
             "RA_CONFIG_DIR",
-            "ra_CONFIG_DIR",
+            "RA_CONFIG_DIR",
             "XDG_CONFIG_HOME",
         ];
         let saved: Vec<(&str, Option<std::ffi::OsString>)> =
@@ -3592,9 +3592,9 @@ mod tests {
         unsafe {
             std::env::set_var("HOME", tmp.path());
             std::env::remove_var("RA_HOME");
-            std::env::remove_var("ra_HOME");
+            std::env::remove_var("RA_HOME");
             std::env::remove_var("RA_CONFIG_DIR");
-            std::env::remove_var("ra_CONFIG_DIR");
+            std::env::remove_var("RA_CONFIG_DIR");
             std::env::remove_var("XDG_CONFIG_HOME");
         }
 

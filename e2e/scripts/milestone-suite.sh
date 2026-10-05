@@ -6,15 +6,15 @@ SCRIPT_PATH="${SCRIPT_DIR}/$(basename "$0")"
 ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$ROOT"
 
-AUTH_TOKEN="${ra_AUTH_TOKEN:-ra-admin-2026}"
-PROFILE_ID="${ra_PROFILE:-dspfac}"
-TEST_EMAIL="${ra_TEST_EMAIL:-dspfac@gmail.com}"
+AUTH_TOKEN="${RA_AUTH_TOKEN:-ra-admin-2026}"
+PROFILE_ID="${RA_PROFILE:-dspfac}"
+TEST_EMAIL="${RA_TEST_EMAIL:-dspfac@gmail.com}"
 
-CREW_URL="${ra_CREW_URL:-https://dspfac.crew.ominix.io}"
-BOT_URL="${ra_BOT_URL:-https://dspfac.bot.ominix.io}"
-OCEAN_URL="${ra_OCEAN_URL:-https://dspfac.ocean.ominix.io}"
-OUTPUT_ROOT="${ra_E2E_OUTPUT_ROOT:-test-results/milestone}"
-PLAYWRIGHT_EXTRA_ARGS="${ra_PLAYWRIGHT_ARGS:-}"
+CREW_URL="${RA_CREW_URL:-https://dspfac.crew.ominix.io}"
+BOT_URL="${RA_BOT_URL:-https://dspfac.bot.ominix.io}"
+OCEAN_URL="${RA_OCEAN_URL:-https://dspfac.ocean.ominix.io}"
+OUTPUT_ROOT="${RA_E2E_OUTPUT_ROOT:-test-results/milestone}"
+PLAYWRIGHT_EXTRA_ARGS="${RA_PLAYWRIGHT_ARGS:-}"
 
 usage() {
   cat <<'EOF'
@@ -59,10 +59,10 @@ run_suite() {
 
   local cmd=(
     env
-    ra_TEST_URL="$base_url"
-    ra_AUTH_TOKEN="$AUTH_TOKEN"
-    ra_PROFILE="$PROFILE_ID"
-    ra_TEST_EMAIL="$TEST_EMAIL"
+    RA_TEST_URL="$base_url"
+    RA_AUTH_TOKEN="$AUTH_TOKEN"
+    RA_PROFILE="$PROFILE_ID"
+    RA_TEST_EMAIL="$TEST_EMAIL"
     npx
     playwright
     test

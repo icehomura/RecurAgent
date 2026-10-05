@@ -24,7 +24,7 @@ and is why the TUI can be rebuilt without touching the kernel.
 
 1. ~~**Backend identity**~~ — **done.** `src/backend_ensure.rs` resolves **`ra`**/`ra.exe` in order:
    (a) a sibling of the running TUI binary, (b) `ra` on `PATH`, (c) the install dir `~/.ra/bin/ra`
-   (`$RA_PREFIX`, with the legacy `$ra_PREFIX` env fallback). `DEFAULT_STDIO_COMMAND` is
+   (`$RA_PREFIX`, with the legacy `$RA_PREFIX` env fallback). `DEFAULT_STDIO_COMMAND` is
    `ra serve --stdio --solo`; the version parser reads the leading `X.Y.Z` from `ra 0.1.0 (…)`; and no
    upstream install is attempted — a missing backend errors with `cargo build --bin ra` /
    `--stdio-command` guidance. The upstream installer/download helpers were **deleted**. The child-PATH

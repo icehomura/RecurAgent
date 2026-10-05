@@ -12,8 +12,8 @@
  *
  * Run from ~/home/ra/e2e:
  *
- *   ra_TEST_URL=https://dspfac.ocean.ominix.io ra_PROFILE=dspfac \
- *   ra_TEST_EMAIL=dspfac@gmail.com \
+ *   RA_TEST_URL=https://dspfac.ocean.ominix.io RA_PROFILE=dspfac \
+ *   RA_TEST_EMAIL=dspfac@gmail.com \
  *     npx playwright test tests/m8-runtime-invariants-live.spec.ts --workers=1
  *
  * Mini5 SSH: set ra_FLEET_SSH_MAP or ra_TEST_SSH_HOST (key auth assumed).
@@ -26,9 +26,9 @@ import { test, expect } from '@playwright/test';
 import { execSync } from 'node:child_process';
 import { chatWS, type ChatWsEvent } from '../lib/m9-ws-client';
 
-const BASE = process.env.ra_TEST_URL || 'https://dspfac.ocean.ominix.io';
-const TOKEN = process.env.ra_AUTH_TOKEN || 'e2e-test-2026';
-const PROFILE = process.env.ra_PROFILE || 'dspfac';
+const BASE = process.env.RA_TEST_URL || 'https://dspfac.ocean.ominix.io';
+const TOKEN = process.env.RA_AUTH_TOKEN || 'e2e-test-2026';
+const PROFILE = process.env.RA_PROFILE || 'dspfac';
 
 // Per spec, time-box at 3 minutes.
 test.setTimeout(180_000);
@@ -42,9 +42,9 @@ test.setTimeout(180_000);
 // ra_TEST_SSH_HOST when running against an unmapped target.
 // SSH targets per fleet host come from the environment so no host
 // addresses live in the repo, e.g.
-//   ra_FLEET_SSH_MAP='dspfac.crew.ominix.io=cloud@<host>,dspfac.bot.ominix.io=cloud@<host>'
+//   RA_FLEET_SSH_MAP='dspfac.crew.ominix.io=cloud@<host>,dspfac.bot.ominix.io=cloud@<host>'
 const HOST_MAP: Record<string, string> = Object.fromEntries(
-  (process.env.ra_FLEET_SSH_MAP || '')
+  (process.env.RA_FLEET_SSH_MAP || '')
     .split(',')
     .map((pair): [string, string] => {
       const [k = '', v = ''] = pair.trim().split('=');
@@ -53,7 +53,7 @@ const HOST_MAP: Record<string, string> = Object.fromEntries(
     .filter(([k, v]) => k !== '' && v !== ''),
 );
 const SSH_HOST =
-  process.env.ra_TEST_SSH_HOST ||
+  process.env.RA_TEST_SSH_HOST ||
   (() => {
     try {
       const host = new URL(BASE).hostname;

@@ -14,11 +14,11 @@
 # it unless --force-mini5 is supplied.
 set -euo pipefail
 
-HOST_1="${ra_MINI1_HOST:-}"; PW_1="${ra_MINI1_PASSWORD:-}"
-HOST_2="${ra_MINI2_HOST:-}"; PW_2="${ra_MINI2_PASSWORD:-}"
-HOST_3="${ra_MINI3_HOST:-}"; PW_3="${ra_MINI3_PASSWORD:-}"
-HOST_4="${ra_MINI4_HOST:-}"; PW_4="${ra_MINI4_PASSWORD:-}"
-HOST_5="${ra_MINI5_HOST:-}"; PW_5="${ra_MINI5_PASSWORD:-}"
+HOST_1="${RA_MINI1_HOST:-}"; PW_1="${RA_MINI1_PASSWORD:-}"
+HOST_2="${RA_MINI2_HOST:-}"; PW_2="${RA_MINI2_PASSWORD:-}"
+HOST_3="${RA_MINI3_HOST:-}"; PW_3="${RA_MINI3_PASSWORD:-}"
+HOST_4="${RA_MINI4_HOST:-}"; PW_4="${RA_MINI4_PASSWORD:-}"
+HOST_5="${RA_MINI5_HOST:-}"; PW_5="${RA_MINI5_PASSWORD:-}"
 
 FORCE_MINI5=false
 TARGETS=()

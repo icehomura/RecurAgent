@@ -17,7 +17,7 @@
 
 import { test, expect, type Page } from '@playwright/test';
 
-const ADMIN_TOKEN = process.env.ra_ADMIN_TOKEN || 'harness-dashboard-test';
+const ADMIN_TOKEN = process.env.RA_ADMIN_TOKEN || 'harness-dashboard-test';
 
 type LifecycleState = 'queued' | 'running' | 'verifying' | 'ready' | 'failed';
 

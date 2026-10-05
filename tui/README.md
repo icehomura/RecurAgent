@@ -393,8 +393,8 @@ WebSocket instead of spawning a child:
 ```bash
 # terminal 1 — the server, bound to a port
 # (~/.ra/bin is where ra-tui installs it; it is not on your PATH)
-export ra_AUTH_TOKEN=local-dev-token
-~/.ra/bin/ra serve --host 127.0.0.1 --port 50080 --auth-token "$ra_AUTH_TOKEN"
+export RA_AUTH_TOKEN=local-dev-token
+~/.ra/bin/ra serve --host 127.0.0.1 --port 50080 --auth-token "$RA_AUTH_TOKEN"
 
 # terminal 2 — the TUI, attaching to it
 ra-tui --endpoint ws://127.0.0.1:50080/api/ui-protocol/ws
@@ -409,12 +409,12 @@ Or from a source checkout of the sibling repo:
 
 ```bash
 cd ../ra
-export ra_AUTH_TOKEN=local-dev-token
+export RA_AUTH_TOKEN=local-dev-token
 cargo run -p ra-cli --features api --bin ra -- serve \
   --host 127.0.0.1 --port 50080 \
   --cwd "$PWD" \
   --data-dir /tmp/ra-tui-dev-data \
-  --auth-token "$ra_AUTH_TOKEN"
+  --auth-token "$RA_AUTH_TOKEN"
 ```
 
 Then connect in another terminal:
@@ -446,9 +446,9 @@ client; `corepack enable` installs the right pnpm.
 **1. Start the server** — terminal 1:
 
 ```bash
-export ra_AUTH_TOKEN=my-local-token
+export RA_AUTH_TOKEN=my-local-token
 ~/.ra/bin/ra serve --host 127.0.0.1 --port 50080 \
-  --auth-token "$ra_AUTH_TOKEN" --solo
+  --auth-token "$RA_AUTH_TOKEN" --solo
 ```
 
 `--solo` is what lets the browser set up your profile on first run. Leave it
@@ -485,7 +485,7 @@ even though both are fine.
 **4. Attach the terminal** — terminal 3, using the **Profile ID** from step 3:
 
 ```bash
-ra_AUTH_TOKEN=my-local-token ra-tui \
+RA_AUTH_TOKEN=my-local-token ra-tui \
   --endpoint ws://127.0.0.1:50080/api/ui-protocol/ws --profile-id main
 ```
 
@@ -505,7 +505,7 @@ the browser.
 
 **Hosting the browser client somewhere else?** If you serve it without that
 proxy, the server has to be told to trust its address: set
-`ra_APPUI_ALLOWED_ORIGINS=http://<client host>:<port>` on the server, or
+`RA_APPUI_ALLOWED_ORIGINS=http://<client host>:<port>` on the server, or
 `appui.allowed_origins` in its config. It trusts only its own address otherwise.
 
 > RecurAgent `v0.1.0` can print a one-time pairing link with

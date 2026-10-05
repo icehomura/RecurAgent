@@ -340,7 +340,7 @@ if (Test-Path -LiteralPath $configPath) {
 $wrapperPath = Join-Path $dataDir "serve-launcher.cmd"
 Write-Utf8NoBom $wrapperPath @"
 @echo off
-set /p ra_AUTH_TOKEN=<"$dataDir\serve-token"
+set /p RA_AUTH_TOKEN=<"$dataDir\serve-token"
 if not defined ra_AUTH_TOKEN (
     echo [ra] serve-token file missing or empty; re-run deploy.ps1
     exit /b 1
@@ -359,7 +359,7 @@ if ($LASTEXITCODE -ne 0) {
 & $nssmExe set $serviceName AppRotateFiles 1 | Out-Null
 & $nssmExe set $serviceName Start SERVICE_AUTO_START | Out-Null
 # Non-secret env only — the token arrives through the wrapper (#2496).
-& $nssmExe set $serviceName AppEnvironmentExtra "ra_HOME=$dataDir" "ra_DATA_DIR=$dataDir" | Out-Null
+& $nssmExe set $serviceName AppEnvironmentExtra "RA_HOME=$dataDir" "RA_DATA_DIR=$dataDir" | Out-Null
 if ($LASTEXITCODE -ne 0) {
     throw "nssm.exe failed to set the service environment"
 }

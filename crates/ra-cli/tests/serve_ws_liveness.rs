@@ -97,9 +97,9 @@ mod serve_ws_liveness {
             .env("RA_AUTH_TOKEN", AUTH_TOKEN)
             .env_remove("RA_INSTANCE_DATA_DIR")
             .env_remove("RA_HOME")
-            .env_remove("ra_HOME")
+            .env_remove("RA_HOME")
             .env_remove("RA_DATA_DIR")
-            .env_remove("ra_DATA_DIR")
+            .env_remove("RA_DATA_DIR")
             .spawn()
             .expect("failed to spawn ra serve");
         ServeProcess {

@@ -6,10 +6,10 @@
  * - site: the built preview page is reachable and stays stable after reload
  *
  * Run against a live browser host:
- *   ra_TEST_URL=https://dspfac.crew.ominix.io \
- *   ra_AUTH_TOKEN=ra-admin-2026 \
- *   ra_PROFILE=dspfac \
- *   ra_TEST_EMAIL=dspfac@gmail.com \
+ *   RA_TEST_URL=https://dspfac.crew.ominix.io \
+ *   RA_AUTH_TOKEN=ra-admin-2026 \
+ *   RA_PROFILE=dspfac \
+ *   RA_TEST_EMAIL=dspfac@gmail.com \
  *   npx playwright test tests/live-slides-site.spec.ts
  */
 import { expect, test, type Page } from '@playwright/test';
@@ -21,9 +21,9 @@ import {
   SEL,
 } from './live-browser-helpers';
 
-const AUTH_TOKEN = process.env.ra_AUTH_TOKEN || 'ra-admin-2026';
-const PROFILE_ID = process.env.ra_PROFILE || 'dspfac';
-const BASE_URL = process.env.ra_TEST_URL || 'http://localhost:3000';
+const AUTH_TOKEN = process.env.RA_AUTH_TOKEN || 'ra-admin-2026';
+const PROFILE_ID = process.env.RA_PROFILE || 'dspfac';
+const BASE_URL = process.env.RA_TEST_URL || 'http://localhost:3000';
 
 // The canonical skill names in mofa-org/mofa-skills are hyphenated:
 // `mofa-slides` and `mofa-site` (singular). The dashboard's installed-skill

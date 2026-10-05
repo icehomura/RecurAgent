@@ -16,9 +16,9 @@
  * before any messages are sent.
  *
  * Required env:
- *   ra_TEST_URL=https://dspfac.bot.ominix.io
- *   ra_AUTH_TOKEN=ra-admin-2026
- *   ra_PROFILE=dspfac
+ *   RA_TEST_URL=https://dspfac.bot.ominix.io
+ *   RA_AUTH_TOKEN=ra-admin-2026
+ *   RA_PROFILE=dspfac
  *
  * NEVER point at mini5 — that host is reserved for coding-green tests.
  */
@@ -36,11 +36,11 @@ import {
 } from './live-browser-helpers';
 
 const SLOW_PROMPT =
-  process.env.ra_INTERLEAVE_SLOW_PROMPT ||
+  process.env.RA_INTERLEAVE_SLOW_PROMPT ||
   'Use deep research to find the latest news about Rust language. ' +
     "Run the pipeline directly, don't ask. One paragraph.";
 const FAST_PROMPT =
-  process.env.ra_INTERLEAVE_FAST_PROMPT || '1+1 等于几？只回答数字。';
+  process.env.RA_INTERLEAVE_FAST_PROMPT || '1+1 等于几？只回答数字。';
 
 // Marker used to detect the actual deep_research RESULT (not the
 // spawn-ack). The slow prompt asks for "latest news about Rust

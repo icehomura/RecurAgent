@@ -16,7 +16,7 @@ set -euo pipefail
 # ── Configuration ─────────────────────────────────────────────────────
 FRPS_VERSION="${FRPS_VERSION:-0.65.0}"
 FRPS_DASHBOARD_PASSWORD="${FRPS_DASHBOARD_PASSWORD:-$(openssl rand -hex 16)}"
-ra_SERVE_PORT="${ra_SERVE_PORT:-8080}"
+RA_SERVE_PORT="${RA_SERVE_PORT:-8080}"
 FRPS_BIND_PORT="${FRPS_BIND_PORT:-7000}"
 FRPS_VHOST_HTTP_PORT="${FRPS_VHOST_HTTP_PORT:-8081}"
 FRPS_VHOST_HTTPS_PORT="${FRPS_VHOST_HTTPS_PORT:-8443}"
@@ -99,7 +99,7 @@ auth.token = ""
 
 [[httpPlugins]]
 name = "ra-auth"
-addr = "127.0.0.1:${ra_SERVE_PORT}"
+addr = "127.0.0.1:${RA_SERVE_PORT}"
 path = "/api/internal/frps-auth"
 ops = ["Login", "NewProxy"]
 EOF

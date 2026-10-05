@@ -66,9 +66,9 @@
  *
  * Run from ~/home/ra/e2e:
  *
- *   ra_TEST_URL=https://dspfac.bot.ominix.io \
- *   ra_AUTH_TOKEN=ra-admin-2026 \
- *   ra_PROFILE=dspfac \
+ *   RA_TEST_URL=https://dspfac.bot.ominix.io \
+ *   RA_AUTH_TOKEN=ra-admin-2026 \
+ *   RA_PROFILE=dspfac \
  *     npx playwright test tests/live-realtime-status.spec.ts --workers=1
  */
 
@@ -84,8 +84,8 @@ import {
   login,
 } from './live-browser-helpers';
 
-const BASE = process.env.ra_TEST_URL || 'https://dspfac.bot.ominix.io';
-const PROFILE = process.env.ra_PROFILE || 'dspfac';
+const BASE = process.env.RA_TEST_URL || 'https://dspfac.bot.ominix.io';
+const PROFILE = process.env.RA_PROFILE || 'dspfac';
 
 if (BASE.includes('dspfac.ocean.ominix.io')) {
   throw new Error('live-realtime-status refuses to run against mini5; pick mini1/2/3/4 instead.');

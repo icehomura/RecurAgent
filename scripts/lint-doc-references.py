@@ -64,6 +64,7 @@ EXTERNAL_NAMES: dict[str, str] = {
     "OpenSSL": "external library name",
     "PathBuf": "std path type",
     "R9S": "external platform name",
+    "RecurAgent": "external product name",
     "RwLock": "std sync primitive",
     "SecretString": "secrecy dependency type",
     "WalkBuilder": "ignore dependency type",

@@ -85,7 +85,7 @@ test.describe('M12 solo AppUI soak artifacts', () => {
         ]),
       );
     } finally {
-      if (process.env.ra_M12_SOAK_TEST_KEEP !== '1') {
+      if (process.env.RA_M12_SOAK_TEST_KEEP !== '1') {
         fs.rmSync(tmpRoot, { recursive: true, force: true });
       }
     }

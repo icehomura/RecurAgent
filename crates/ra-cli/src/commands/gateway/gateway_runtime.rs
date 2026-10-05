@@ -303,7 +303,7 @@ impl GatewayRuntime {
         // bypasses `Config::from_file`, so call the same env-var OR-merge
         // helper here. A host-level `plugins.require_signed = true`
         // propagates to spawned gateways via
-        // `ra_PLUGINS_REQUIRE_SIGNED=1` (set by `ProcessManager`).
+        // `RA_PLUGINS_REQUIRE_SIGNED=1` (set by `ProcessManager`).
         crate::config::merge_env_plugin_policy_pub(&mut config);
 
         // Track whether any CLI override (`--model`, `--provider`,

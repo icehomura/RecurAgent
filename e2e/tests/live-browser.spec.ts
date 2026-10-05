@@ -7,17 +7,17 @@
  * - user prompt remains ordered before the final assistant artifact
  *
  * Run against a live browser host:
- *   ra_TEST_URL=https://dspfac.crew.ominix.io \
- *   ra_AUTH_TOKEN=ra-admin-2026 \
- *   ra_PROFILE=dspfac \
- *   ra_TEST_EMAIL=dspfac@gmail.com \
+ *   RA_TEST_URL=https://dspfac.crew.ominix.io \
+ *   RA_AUTH_TOKEN=ra-admin-2026 \
+ *   RA_PROFILE=dspfac \
+ *   RA_TEST_EMAIL=dspfac@gmail.com \
  *   npx playwright test tests/live-browser.spec.ts
  */
 import { expect, test, type Page } from '@playwright/test';
 
-const AUTH_TOKEN = process.env.ra_AUTH_TOKEN || 'ra-admin-2026';
-const PROFILE_ID = process.env.ra_PROFILE || 'dspfac';
-const TEST_EMAIL = process.env.ra_TEST_EMAIL || 'dspfac@gmail.com';
+const AUTH_TOKEN = process.env.RA_AUTH_TOKEN || 'ra-admin-2026';
+const PROFILE_ID = process.env.RA_PROFILE || 'dspfac';
+const TEST_EMAIL = process.env.RA_TEST_EMAIL || 'dspfac@gmail.com';
 
 const SEL = {
   chatInput: "[data-testid='chat-input']",

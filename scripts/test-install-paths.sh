@@ -23,7 +23,7 @@ run_installer() {
     set +e
     (
         cd "$workdir"
-        HOME="$home_dir" ra_DOWNLOAD_URL="$DOWNLOAD_BASE" PATH="$mock_bin:$PATH" \
+        HOME="$home_dir" RA_DOWNLOAD_URL="$DOWNLOAD_BASE" PATH="$mock_bin:$PATH" \
             bash "$INSTALLER" --prefix "$prefix" --version test
     ) >"$output_file" 2>&1
     local status=$?
@@ -82,7 +82,7 @@ run_corrupt_installer() {
     set +e
     (
         cd "$workdir"
-        HOME="$home_dir" ra_DOWNLOAD_URL="file://$bundle_dir" PATH="$mock_bin:$PATH" \
+        HOME="$home_dir" RA_DOWNLOAD_URL="file://$bundle_dir" PATH="$mock_bin:$PATH" \
             bash "$INSTALLER" --prefix "$prefix" --version test
     ) >"$output_file" 2>&1
     local status=$?

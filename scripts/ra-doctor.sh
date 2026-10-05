@@ -12,8 +12,8 @@
 
 set -euo pipefail
 
-PREFIX="${ra_PREFIX:-$HOME/.ra/bin}"
-DATA_DIR="${ra_HOME:-$HOME/.ra}"
+PREFIX="${RA_PREFIX:-$HOME/.ra/bin}"
+DATA_DIR="${RA_HOME:-$HOME/.ra}"
 
 needval() {
     # Ensure that option "$1" has a non-empty value in "$2".
@@ -255,25 +255,25 @@ echo "============"
 # ── Binary ───────────────────────────────────────────────────────
 section "ra binary"
 
-ra_BIN="$PREFIX/ra"
-if [ -f "$ra_BIN" ]; then
-    ok "found: $ra_BIN"
-    if "$ra_BIN" --version &>/dev/null; then
-        ok "version: $("$ra_BIN" --version 2>&1 | head -1)"
+RA_BIN="$PREFIX/ra"
+if [ -f "$RA_BIN" ]; then
+    ok "found: $RA_BIN"
+    if "$RA_BIN" --version &>/dev/null; then
+        ok "version: $("$RA_BIN" --version 2>&1 | head -1)"
     else
         err "binary exists but failed to run"
         if [ "$OS" = "Darwin" ]; then
-            hint "Try: xattr -d com.apple.quarantine $ra_BIN && codesign -s - $ra_BIN"
+            hint "Try: xattr -d com.apple.quarantine $RA_BIN && codesign -s - $RA_BIN"
         else
-            hint "Try: chmod +x $ra_BIN"
-            hint "Check dependencies: ldd $ra_BIN"
+            hint "Try: chmod +x $RA_BIN"
+            hint "Check dependencies: ldd $RA_BIN"
         fi
         hint "Or re-run install.sh"
     fi
 else
     if command -v ra &>/dev/null; then
         FOUND="$(command -v ra)"
-        warn "not found at $ra_BIN, but found at $FOUND"
+        warn "not found at $RA_BIN, but found at $FOUND"
         hint "Set ra_PREFIX or add $PREFIX to PATH"
     else
         err "ra binary not found"
@@ -320,11 +320,11 @@ fi
 # ── ra serve process ──────────────────────────────────────────
 section "ra serve"
 
-ra_PID="$(find_ra_serve_pid)"
-if [ -n "$ra_PID" ]; then
-    ra_CMD=$(ps -p "$ra_PID" -o args= 2>/dev/null || true)
-    ok "running (PID: $ra_PID)"
-    echo "    CMD: $ra_CMD"
+RA_PID="$(find_ra_serve_pid)"
+if [ -n "$RA_PID" ]; then
+    RA_CMD=$(ps -p "$RA_PID" -o args= 2>/dev/null || true)
+    ok "running (PID: $RA_PID)"
+    echo "    CMD: $RA_CMD"
 else
     if is_service_active serve; then
         warn "service appears active but process match failed"
@@ -378,9 +378,9 @@ fi
 if [ -n "$PORT_CMD" ]; then
     if echo "$PORT_CMD" | grep -qi ra; then
         ok "port 8080 held by ra (PID: $PORT_PID)"
-        if [ -z "$ra_PID" ]; then
-            ra_PID="$PORT_PID"
-            ra_CMD=$(ps -p "$ra_PID" -o args= 2>/dev/null || true)
+        if [ -z "$RA_PID" ]; then
+            RA_PID="$PORT_PID"
+            RA_CMD=$(ps -p "$RA_PID" -o args= 2>/dev/null || true)
         fi
     else
         err "port 8080 held by $PORT_CMD (PID: $PORT_PID) — not ra"
@@ -391,9 +391,9 @@ if [ -n "$PORT_CMD" ]; then
         fi
     fi
 elif [ "$PORT_CHECK_AVAILABLE" = true ]; then
-    if [ -n "$ra_PID" ]; then
+    if [ -n "$RA_PID" ]; then
         err "ra serve is running but nothing is listening on 8080"
-        hint "Check if it's bound to a different port: ps -p $ra_PID -o args="
+        hint "Check if it's bound to a different port: ps -p $RA_PID -o args="
     else
         warn "nothing listening on port 8080"
     fi

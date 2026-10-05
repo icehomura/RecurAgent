@@ -36,7 +36,7 @@ UNINSTALL=false
 PURGE=false
 PROFILE="release"
 PREFIX="${CARGO_HOME:-$HOME/.cargo}/bin"
-DATA_DIR="${ra_HOME:-$HOME/.ra}"
+DATA_DIR="${RA_HOME:-$HOME/.ra}"
 
 # Tunnel defaults
 SKIP_TUNNEL=false
@@ -120,7 +120,7 @@ write_serve_env_file() {
     # the chmod below stays as belt-and-braces.
     (
         umask 077
-        printf 'ra_AUTH_TOKEN="%s"\n' "$token" > "$target"
+        printf 'RA_AUTH_TOKEN="%s"\n' "$token" > "$target"
     )
     chmod 600 "$target"
     ok "wrote serve secrets to $target (mode 0600)"
@@ -465,7 +465,7 @@ write_launchd_service() {
     <string>${PLIST_LABEL}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$ra_BIN</string>
+        <string>$RA_BIN</string>
         <string>serve</string>
         <string>--port</string>
         <string>8080</string>
@@ -531,11 +531,11 @@ User=$(whoami)
 # #2371: the token never travels via argv — ExecStart is readable by any
 # local user via systemctl cat / ps. It loads from the 0600 serve.env
 # written by write_serve_env_file (#2496).
-ExecStart=$ra_BIN serve --port 8080 --host 0.0.0.0
+ExecStart=$RA_BIN serve --port 8080 --host 0.0.0.0
 Restart=on-failure
 RestartSec=5
 Environment=HOME=$HOME
-Environment=ra_DATA_DIR=$DATA_DIR
+Environment=RA_DATA_DIR=$DATA_DIR
 EnvironmentFile=$DATA_DIR/serve.env
 Environment=PATH=$PREFIX:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=$HOME
@@ -555,7 +555,7 @@ EOF
 if [ "$SETUP_SERVICE" = true ] && [ -n "$CLI_FEATURES" ]; then
     section "Setting up background service"
 
-    ra_BIN="$PREFIX/ra"
+    RA_BIN="$PREFIX/ra"
 
     # Generate auth token if not provided
     if [ -z "$AUTH_TOKEN" ]; then

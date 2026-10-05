@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
 # Shell primitives for deterministic tmux-driven CLI/TUI acceptance tests.
 
-if [ -n "${ra_TMUX_DRIVER_SH:-}" ]; then
+if [ -n "${RA_TMUX_DRIVER_SH:-}" ]; then
   return 0 2>/dev/null || exit 0
 fi
-ra_TMUX_DRIVER_SH=1
+RA_TMUX_DRIVER_SH=1
 
 set -euo pipefail
 
-ra_TMUX_ROOT="${ra_TMUX_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-ra_TMUX_COLS="${ra_TMUX_COLS:-140}"
-ra_TMUX_ROWS="${ra_TMUX_ROWS:-40}"
-ra_TMUX_PREFIX="${ra_TMUX_PREFIX:-ra-tmux-}"
-ra_TMUX_RUN_ID="${ra_TMUX_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
-ra_TMUX_RUN_PREFIX="${ra_TMUX_PREFIX}${ra_TMUX_RUN_ID}-"
-ra_TMUX_ARTIFACT_ROOT="${ra_TMUX_ARTIFACT_ROOT:-${ra_TMUX_ROOT}/e2e/test-results-tmux}"
-ra_TMUX_ARTIFACT_DIR="${ra_TMUX_ARTIFACT_DIR:-${ra_TMUX_ARTIFACT_ROOT}/${ra_TMUX_RUN_ID}}"
-ra_TMUX_KEEP="${ra_TMUX_KEEP:-0}"
+RA_TMUX_ROOT="${RA_TMUX_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+RA_TMUX_COLS="${RA_TMUX_COLS:-140}"
+RA_TMUX_ROWS="${RA_TMUX_ROWS:-40}"
+RA_TMUX_PREFIX="${RA_TMUX_PREFIX:-ra-tmux-}"
+RA_TMUX_RUN_ID="${RA_TMUX_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
+RA_TMUX_RUN_PREFIX="${RA_TMUX_PREFIX}${RA_TMUX_RUN_ID}-"
+RA_TMUX_ARTIFACT_ROOT="${RA_TMUX_ARTIFACT_ROOT:-${RA_TMUX_ROOT}/e2e/test-results-tmux}"
+RA_TMUX_ARTIFACT_DIR="${RA_TMUX_ARTIFACT_DIR:-${RA_TMUX_ARTIFACT_ROOT}/${RA_TMUX_RUN_ID}}"
+RA_TMUX_KEEP="${RA_TMUX_KEEP:-0}"
 
-declare -a ra_TMUX_SESSIONS=()
-declare -i ra_TMUX_CAPTURE_SEQ=0
+declare -a RA_TMUX_SESSIONS=()
+declare -i RA_TMUX_CAPTURE_SEQ=0
 
 tmux_log() {
   printf '[tmux] %s\n' "$*"
@@ -37,13 +37,13 @@ tmux_require() {
 }
 
 tmux_init_artifacts() {
-  mkdir -p "$ra_TMUX_ARTIFACT_DIR"
+  mkdir -p "$RA_TMUX_ARTIFACT_DIR"
 }
 
 tmux_session_name() {
   local slug="${1:-session}"
   slug="${slug//[^a-zA-Z0-9_-]/-}"
-  printf '%s%s' "$ra_TMUX_RUN_PREFIX" "$slug"
+  printf '%s%s' "$RA_TMUX_RUN_PREFIX" "$slug"
 }
 
 tmux_quote_command() {
@@ -77,15 +77,15 @@ tmux_unregister_session() {
   local next=()
   local item
 
-  for item in "${ra_TMUX_SESSIONS[@]}"; do
+  for item in "${RA_TMUX_SESSIONS[@]}"; do
     if [ "$item" != "$session" ]; then
       next+=("$item")
     fi
   done
   if [ "${#next[@]}" -eq 0 ]; then
-    ra_TMUX_SESSIONS=()
+    RA_TMUX_SESSIONS=()
   else
-    ra_TMUX_SESSIONS=("${next[@]}")
+    RA_TMUX_SESSIONS=("${next[@]}")
   fi
 }
 
@@ -108,7 +108,7 @@ tmux_new() {
 tmux_new_default() {
   local session="$1"
   shift
-  tmux_new "$session" "$ra_TMUX_COLS" "$ra_TMUX_ROWS" "$@"
+  tmux_new "$session" "$RA_TMUX_COLS" "$RA_TMUX_ROWS" "$@"
 }
 
 tmux_send() {
@@ -133,7 +133,7 @@ tmux_redact() {
     }
     s/(Authorization:\s*Bearer\s+)[^\s]+/${1}[REDACTED]/gi;
     s/(--auth-token(?:=|\s+))[^\s]+/${1}[REDACTED]/g;
-    s/(ra_AUTH_TOKEN=)[^\s]+/${1}[REDACTED]/g;
+    s/(RA_AUTH_TOKEN=)[^\s]+/${1}[REDACTED]/g;
   '
 }
 
@@ -148,8 +148,8 @@ tmux_artifact_path() {
   local safe_session="${session//[^a-zA-Z0-9_.-]/-}"
   local safe_label="${label//[^a-zA-Z0-9_.-]/-}"
   printf '%s/%03d-%s-%s.%s.log' \
-    "$ra_TMUX_ARTIFACT_DIR" \
-    "$ra_TMUX_CAPTURE_SEQ" \
+    "$RA_TMUX_ARTIFACT_DIR" \
+    "$RA_TMUX_CAPTURE_SEQ" \
     "$safe_session" \
     "$safe_label" \
     "$suffix"
@@ -160,7 +160,7 @@ tmux_capture() {
   local label="${2:-capture}"
 
   tmux_init_artifacts
-  ra_TMUX_CAPTURE_SEQ=$((ra_TMUX_CAPTURE_SEQ + 1))
+  RA_TMUX_CAPTURE_SEQ=$((ra_TMUX_CAPTURE_SEQ + 1))
 
   local raw_path
   raw_path="$(tmux_artifact_path "$session" "$label" "raw")"
@@ -181,7 +181,7 @@ tmux_capture_clean() {
   local label="${2:-capture}"
 
   tmux_init_artifacts
-  ra_TMUX_CAPTURE_SEQ=$((ra_TMUX_CAPTURE_SEQ + 1))
+  RA_TMUX_CAPTURE_SEQ=$((ra_TMUX_CAPTURE_SEQ + 1))
 
   local raw_path
   local clean_path
@@ -207,7 +207,7 @@ tmux_print_failure_capture() {
   printf '\nFAIL: %s\n' "$message" >&2
   printf -- '--- last clean tmux capture: %s ---\n' "$session" >&2
   tmux_capture_clean "$session" "failure" >&2 || true
-  printf -- '--- artifacts: %s ---\n' "$ra_TMUX_ARTIFACT_DIR" >&2
+  printf -- '--- artifacts: %s ---\n' "$RA_TMUX_ARTIFACT_DIR" >&2
 }
 
 tmux_fail() {
@@ -265,17 +265,17 @@ tmux_kill() {
 
 tmux_cleanup() {
   local session
-  if [ "${ra_TMUX_KEEP:-0}" = "1" ]; then
+  if [ "${RA_TMUX_KEEP:-0}" = "1" ]; then
     set +u
     if [ "${#ra_TMUX_SESSIONS[@]}" -gt 0 ]; then
-      tmux_log "ra_TMUX_KEEP=1; keeping sessions: ${ra_TMUX_SESSIONS[*]}"
+      tmux_log "RA_TMUX_KEEP=1; keeping sessions: ${RA_TMUX_SESSIONS[*]}"
     fi
     set -u
     return 0
   fi
 
   set +u
-  for session in "${ra_TMUX_SESSIONS[@]}"; do
+  for session in "${RA_TMUX_SESSIONS[@]}"; do
     tmux kill-session -t "$session" 2>/dev/null || true
   done
   set -u
@@ -316,7 +316,7 @@ tmux_assert_no_registered_sessions() {
   local live=()
   local session
   set +u
-  for session in "${ra_TMUX_SESSIONS[@]}"; do
+  for session in "${RA_TMUX_SESSIONS[@]}"; do
     if tmux has-session -t "$session" 2>/dev/null; then
       live+=("$session")
     fi
@@ -333,7 +333,7 @@ tmux_assert_no_orphan_sessions() {
   local live=()
   local session
   while IFS= read -r session; do
-    if [[ "$session" == "$ra_TMUX_RUN_PREFIX"* ]]; then
+    if [[ "$session" == "$RA_TMUX_RUN_PREFIX"* ]]; then
       live+=("$session")
     fi
   done < <(tmux list-sessions -F '#S' 2>/dev/null || true)

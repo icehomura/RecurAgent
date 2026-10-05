@@ -3,7 +3,7 @@
 //! Provider order (see `ra_research::plan`): the RecurAgent metasearch first
 //! (key-less Rascript engines over official APIs and feeds: GDELT, Hacker
 //! News, Wikipedia, arXiv, ...; disable with `RA_METASEARCH=0` — legacy
-//! `ra_METASEARCH=0` still honoured — to call
+//! `RA_METASEARCH=0` still honoured — to call
 //! GDELT + Google News RSS directly for news), then a
 //! self-hosted SearXNG (`SEARXNG_URL`), then search APIs with keys, then
 //! results-page search (DuckDuckGo HTML, Bing in headless Chrome) for general

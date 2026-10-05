@@ -90,7 +90,7 @@ a toolchain such as cargo or npm, you must either:
 
 - pick tier **5, Full Access** (no sandbox) in the permission menu, or
 - start serve with `--danger-full-access` (equivalent to
-  `ra_DANGER_FULL_ACCESS=1`). The standard command:
+  `RA_DANGER_FULL_ACCESS=1`). The standard command:
 
 ```bash
 ra-tui --stdio-command 'ra serve --stdio --solo --danger-full-access'

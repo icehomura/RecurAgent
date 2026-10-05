@@ -226,7 +226,7 @@ acceptance = [
   "appui.no_tool_call_after_denial",
   "approval_denial_visible_contract",
 ]
-notes = "Uses the current ra-tui onboarding runner with ra_M9_PROTOCOL_FIXTURES=1 to trigger a real AppUI approval request and drive denial through the TUI."
+notes = "Uses the current ra-tui onboarding runner with RA_M9_PROTOCOL_FIXTURES=1 to trigger a real AppUI approval request and drive denial through the TUI."
 
 [[scenario]]
 id = "task-subagent-tree"
@@ -264,7 +264,7 @@ acceptance = [
   "tui.task_tree_rendered",
   "task_subagent_tree_visible_contract",
 ]
-notes = "Uses the current ra-tui onboarding runner with ra_M15_LIVE_SUBAGENT_FIXTURE=1 to trigger the real M15 live subagent fixture and preserve task/subagent captures."
+notes = "Uses the current ra-tui onboarding runner with RA_M15_LIVE_SUBAGENT_FIXTURE=1 to trigger the real M15 live subagent fixture and preserve task/subagent captures."
 
 [[scenario]]
 id = "restart-reconnect"

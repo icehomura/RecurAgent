@@ -16,8 +16,8 @@ FRPS_SCRIPT="$ROOT_DIR/scripts/frp/setup-frps.sh"
 CADDY_SCRIPT="$ROOT_DIR/scripts/frp/setup-caddy.sh"
 
 VERSION="latest"
-PREFIX="${ra_PREFIX:-$HOME/.ra/bin}"
-DATA_DIR="${ra_HOME:-$HOME/.ra}"
+PREFIX="${RA_PREFIX:-$HOME/.ra/bin}"
+DATA_DIR="${RA_HOME:-$HOME/.ra}"
 PORT="8080"
 AUTH_TOKEN="${AUTH_TOKEN:-}"
 FRPS_TOKEN="${FRPS_TOKEN:-}"
@@ -599,7 +599,7 @@ run_install() {
     local cmd=("$INSTALL_SCRIPT" --version "$VERSION" --prefix "$PREFIX" --port "$PORT" --auth-token "$AUTH_TOKEN")
     [ "$INSTALL_DEPS" = true ] && cmd+=(--install-deps)
     if [ "$DRY_RUN" = true ]; then
-        printf '    DRY RUN: ra_HOME=%q' "$DATA_DIR"
+        printf '    DRY RUN: RA_HOME=%q' "$DATA_DIR"
         if [ "$ENABLE_SMTP" = true ]; then
             printf ' SMTP_HOST=%q SMTP_PORT=%q SMTP_USERNAME=%q SMTP_FROM=%q SMTP_PASSWORD=***' \
                 "$SMTP_HOST" "$SMTP_PORT" "$SMTP_USERNAME" "$SMTP_FROM"
@@ -608,19 +608,19 @@ run_install() {
         printf '\n'
     else
         [ "$ENABLE_SMTP" = true ] && export_smtp_env
-        ra_HOME="$DATA_DIR" FRPS_TOKEN="$FRPS_TOKEN" "${cmd[@]}"
+        RA_HOME="$DATA_DIR" FRPS_TOKEN="$FRPS_TOKEN" "${cmd[@]}"
     fi
 }
 
 run_setup_frps() {
     section "Installing frps"
     if [ "$DRY_RUN" = true ]; then
-        printf '    DRY RUN: TUNNEL_DOMAIN=%q ra_SERVE_PORT=%q FRPS_TOKEN=*** FRPS_BIND_PORT=%q FRPS_VHOST_HTTP_PORT=%q FRPS_VHOST_HTTPS_PORT=%q FRPS_DASHBOARD_PORT=%q FRPS_SSH_PORT_START=%q FRPS_SSH_PORT_END=%q %q\n' \
+        printf '    DRY RUN: TUNNEL_DOMAIN=%q RA_SERVE_PORT=%q FRPS_TOKEN=*** FRPS_BIND_PORT=%q FRPS_VHOST_HTTP_PORT=%q FRPS_VHOST_HTTPS_PORT=%q FRPS_DASHBOARD_PORT=%q FRPS_SSH_PORT_START=%q FRPS_SSH_PORT_END=%q %q\n' \
             "$TUNNEL_DOMAIN" "$PORT" "$FRPS_BIND_PORT" "$FRPS_VHOST_HTTP_PORT" "$FRPS_VHOST_HTTPS_PORT" \
             "$FRPS_DASHBOARD_PORT" "$FRPS_SSH_PORT_START" "$FRPS_SSH_PORT_END" "$FRPS_SCRIPT"
     else
         TUNNEL_DOMAIN="$TUNNEL_DOMAIN" \
-        ra_SERVE_PORT="$PORT" \
+        RA_SERVE_PORT="$PORT" \
         FRPS_TOKEN="$FRPS_TOKEN" \
         FRPS_BIND_PORT="$FRPS_BIND_PORT" \
         FRPS_VHOST_HTTP_PORT="$FRPS_VHOST_HTTP_PORT" \
@@ -641,14 +641,14 @@ run_setup_caddy() {
     cmd+=(--domain "$TUNNEL_DOMAIN")
 
     if [ "$DRY_RUN" = true ]; then
-        printf '    DRY RUN: TUNNEL_DOMAIN=%q ra_SERVE_PORT=%q FRPS_VHOST_HTTP_PORT=%q' \
+        printf '    DRY RUN: TUNNEL_DOMAIN=%q RA_SERVE_PORT=%q FRPS_VHOST_HTTP_PORT=%q' \
             "$TUNNEL_DOMAIN" "$PORT" "$FRPS_VHOST_HTTP_PORT"
         printf ' %q' "${cmd[@]}"
         printf '\n'
     else
         export_dns_env
         TUNNEL_DOMAIN="$TUNNEL_DOMAIN" \
-        ra_SERVE_PORT="$PORT" \
+        RA_SERVE_PORT="$PORT" \
         FRPS_VHOST_HTTP_PORT="$FRPS_VHOST_HTTP_PORT" \
         "${cmd[@]}"
     fi
@@ -661,11 +661,11 @@ run_install_uninstall() {
         cmd+=(--port "$PORT")
     fi
     if [ "$DRY_RUN" = true ]; then
-        printf '    DRY RUN: ra_HOME=%q' "$DATA_DIR"
+        printf '    DRY RUN: RA_HOME=%q' "$DATA_DIR"
         printf ' %q' "${cmd[@]}"
         printf '\n'
     else
-        ra_HOME="$DATA_DIR" INSTALL_SUPPRESS_DATA_DIR_HINT=1 "${cmd[@]}"
+        RA_HOME="$DATA_DIR" INSTALL_SUPPRESS_DATA_DIR_HINT=1 "${cmd[@]}"
     fi
 }
 

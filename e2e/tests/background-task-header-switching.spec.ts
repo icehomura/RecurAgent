@@ -2,7 +2,7 @@
  * Live UI contract for long-running background task state.
  *
  * Run against mini2:
- *   ra_TEST_URL=https://dspfac.bot.ominix.io npx playwright test tests/background-task-header-switching.spec.ts --workers=1
+ *   RA_TEST_URL=https://dspfac.bot.ominix.io npx playwright test tests/background-task-header-switching.spec.ts --workers=1
  */
 import { expect, test, type Page } from '@playwright/test';
 import {

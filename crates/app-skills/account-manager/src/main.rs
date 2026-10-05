@@ -1,7 +1,7 @@
 //! Standalone account-manager skill binary.
 //!
 //! Manages sub-accounts under a parent profile by reading/writing profile JSON
-//! files in `$RA_HOME/profiles/` (the legacy `$ra_HOME` is still honoured).
+//! files in `$RA_HOME/profiles/` (the legacy `$RA_HOME` is still honoured).
 //! Communicates via stdin/stdout JSON protocol.
 
 use std::collections::HashMap;

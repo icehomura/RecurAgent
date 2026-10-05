@@ -7,7 +7,7 @@
 //! env vars when set (forwarded by the gateway/serve runtime from the resolved
 //! profile, or exported by hand in `ra chat`), falling back to reading the
 //! profile JSON directly from `$RA_HOME/profiles/<id>.json` (the legacy
-//! `$ra_HOME` is still honoured; same
+//! `$RA_HOME` is still honoured; same
 //! convention as the `account-manager` skill). Either way this talks to the
 //! bridge itself rather than proxying through the running RecurAgent server,
 //! mirroring the wire contract in
@@ -113,8 +113,8 @@ fn http_client() -> reqwest::blocking::Client {
 ///    gateway/serve runtime forwards these from the RESOLVED profile
 ///    (parent + defaults merged, keychain markers resolved) via
 ///    `profile_plugin_env`, and `ra chat` users can export them by hand.
-/// 2. `$RA_HOME/profiles/$RA_PROFILE_ID.json` (legacy `$ra_HOME` /
-///    `$ra_PROFILE_ID` still honoured) read directly (same
+/// 2. `$RA_HOME/profiles/$RA_PROFILE_ID.json` (legacy `$RA_HOME` /
+///    `$RA_PROFILE_ID` still honoured) read directly (same
 ///    convention as the `account-manager` skill) — fallback for runtimes
 ///    that predate the env forwarding. This path cannot see parent/defaults
 ///    inheritance or keychain-stored tokens.

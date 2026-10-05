@@ -4,29 +4,29 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
 
-run_id="${ra_M12_SOAK_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
-artifact_root="${ra_M12_SOAK_ARTIFACT_ROOT:-$repo_root/e2e/test-results-m12-solo-soak}"
-artifact_dir="${ra_M12_SOAK_ARTIFACT_DIR:-$artifact_root/$run_id}"
-runtime_root="${ra_M12_SOAK_RUNTIME_ROOT:-/tmp/ra-m12-solo-$run_id}"
-workspace="${ra_M12_SOAK_WORKSPACE:-$runtime_root/workspace}"
-data_dir="${ra_M12_SOAK_DATA_DIR:-$runtime_root/data}"
-logs_dir="${ra_M12_SOAK_LOGS_DIR:-$runtime_root/logs}"
-ra_bin="${ra_BIN:-$repo_root/target/debug/ra}"
-transport="${ra_M12_SOAK_TRANSPORT:-both}"
-host="${ra_M12_SOAK_HOST:-127.0.0.1}"
-port="${ra_M12_SOAK_PORT:-50179}"
-auth_token="${ra_M12_SOAK_AUTH_TOKEN:-ra-m12-solo-soak-token}"
-profile_id="${ra_M12_SOAK_PROFILE:-m12solo}"
-session_id="${ra_M12_SOAK_SESSION:-$profile_id:local:m12-solo#$run_id}"
-serve_args="${ra_M12_SOAK_SERVE_ARGS:-}"
+run_id="${RA_M12_SOAK_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
+artifact_root="${RA_M12_SOAK_ARTIFACT_ROOT:-$repo_root/e2e/test-results-m12-solo-soak}"
+artifact_dir="${RA_M12_SOAK_ARTIFACT_DIR:-$artifact_root/$run_id}"
+runtime_root="${RA_M12_SOAK_RUNTIME_ROOT:-/tmp/ra-m12-solo-$run_id}"
+workspace="${RA_M12_SOAK_WORKSPACE:-$runtime_root/workspace}"
+data_dir="${RA_M12_SOAK_DATA_DIR:-$runtime_root/data}"
+logs_dir="${RA_M12_SOAK_LOGS_DIR:-$runtime_root/logs}"
+ra_bin="${RA_BIN:-$repo_root/target/debug/ra}"
+transport="${RA_M12_SOAK_TRANSPORT:-both}"
+host="${RA_M12_SOAK_HOST:-127.0.0.1}"
+port="${RA_M12_SOAK_PORT:-50179}"
+auth_token="${RA_M12_SOAK_AUTH_TOKEN:-ra-m12-solo-soak-token}"
+profile_id="${RA_M12_SOAK_PROFILE:-m12solo}"
+session_id="${RA_M12_SOAK_SESSION:-$profile_id:local:m12-solo#$run_id}"
+serve_args="${RA_M12_SOAK_SERVE_ARGS:-}"
 # The no-password local-solo gate is opt-in (OFF by default; see
 # `api::solo_auth`). This soak intentionally exercises solo onboarding, so opt
 # in for both the WS and stdio serve launches below.
-export ra_SOLO_LOGIN=1
-strict="${ra_M12_SOAK_STRICT:-0}"
-tenant_negative="${ra_M12_SOAK_TENANT_NEGATIVE:-0}"
-api_key_env="${ra_M12_SOAK_API_KEY_ENV:-OPENAI_API_KEY}"
-api_key="${ra_M12_SOAK_API_KEY:-ra-m12-soak-test-key}"
+export RA_SOLO_LOGIN=1
+strict="${RA_M12_SOAK_STRICT:-0}"
+tenant_negative="${RA_M12_SOAK_TENANT_NEGATIVE:-0}"
+api_key_env="${RA_M12_SOAK_API_KEY_ENV:-OPENAI_API_KEY}"
+api_key="${RA_M12_SOAK_API_KEY:-ra-m12-soak-test-key}"
 endpoint="ws://$host:$port/api/ui-protocol/ws"
 
 usage() {
@@ -41,8 +41,8 @@ Environment:
   ra_M12_SOAK_DATA_DIR      Backend data dir.
   ra_BIN                    ra binary. Default: target/debug/ra.
   ra_M12_SOAK_SERVE_ARGS    Extra args for `ra serve`.
-  ra_M12_SOAK_STRICT=1      Fail when M12-A/C methods are blocked instead of recording blockers.
-  ra_M12_SOAK_TENANT_NEGATIVE=1
+  RA_M12_SOAK_STRICT=1      Fail when M12-A/C methods are blocked instead of recording blockers.
+  RA_M12_SOAK_TENANT_NEGATIVE=1
                               Also run the tenant/cloud dangerous-mode negative probe. Default 0
                               because local solo live runs cannot change deployment mode.
 
@@ -175,9 +175,9 @@ require_node() {
 }
 
 require_ra() {
-  [ -x "$ra_bin" ] || die "ra_BIN is not executable: $ra_bin"
+  [ -x "$ra_bin" ] || die "RA_BIN is not executable: $ra_bin"
   if ! "$ra_bin" serve --help >/dev/null 2>&1; then
-    die "ra_BIN does not expose 'serve'; build ra-cli with the api feature or set ra_BIN to an API-enabled binary"
+    die 'RA_BIN does not expose 'serve'; build ra-cli with the api feature or set ra_BIN to an API-enabled binary"
   fi
 }
 
@@ -264,7 +264,7 @@ run_ws() {
   env "$api_key_env=$api_key" "${server_cmd[@]}" >"$server_log" 2>&1 &
   local server_pid=$!
   trap 'kill "$server_pid" 2>/dev/null || true' RETURN
-  sleep "${ra_M12_SOAK_SERVER_WAIT_SECS:-3}"
+  sleep "${RA_M12_SOAK_SERVER_WAIT_SECS:-3}"
   run_probe ws "$out_dir" "$server_log"
   kill "$server_pid" 2>/dev/null || true
   wait "$server_pid" 2>/dev/null || true
@@ -309,7 +309,7 @@ run_all() {
       run_stdio
       ;;
     fixture) run_fixture ;;
-    *) die "ra_M12_SOAK_TRANSPORT must be ws, stdio, both, or fixture; got: $transport" ;;
+    *) die "RA_M12_SOAK_TRANSPORT must be ws, stdio, both, or fixture; got: $transport" ;;
   esac
   echo "M12 solo soak artifacts: $artifact_dir"
 }
@@ -318,9 +318,9 @@ self_test() {
   require_node
   local tmp_root
   tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/ra-m12-solo-self-test.XXXXXX")"
-  ra_M12_SOAK_ARTIFACT_DIR="$tmp_root/artifacts" \
-  ra_M12_SOAK_RUNTIME_ROOT="$tmp_root/runtime" \
-  ra_M12_SOAK_TRANSPORT=fixture \
+  RA_M12_SOAK_ARTIFACT_DIR="$tmp_root/artifacts" \
+  RA_M12_SOAK_RUNTIME_ROOT="$tmp_root/runtime" \
+  RA_M12_SOAK_TRANSPORT=fixture \
   "$0" run >/tmp/ra-m12-solo-self-test.out
   local out_dir="$tmp_root/artifacts/fixture"
   [ -f "$out_dir/appui-transcript.jsonl" ] || die "self-test missing appui-transcript.jsonl"
@@ -335,7 +335,7 @@ self_test() {
   if ! grep -q '"status": "passed"' "$out_dir/soak-summary.json"; then
     die "self-test fixture did not pass"
   fi
-  if [ "${ra_M12_SOAK_SELF_TEST_KEEP:-0}" = "1" ]; then
+  if [ "${RA_M12_SOAK_SELF_TEST_KEEP:-0}" = "1" ]; then
     echo "Self-test passed; artifacts kept at $tmp_root/artifacts"
   else
     rm -rf "$tmp_root"

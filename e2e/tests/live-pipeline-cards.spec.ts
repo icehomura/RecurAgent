@@ -20,15 +20,15 @@
  *    keeps the spec robust against React markup drift.
  *
  * Run from `e2e/`:
- *   ra_TEST_URL=https://dspfac.bot.ominix.io \
+ *   RA_TEST_URL=https://dspfac.bot.ominix.io \
  *     npx playwright test tests/live-pipeline-cards.spec.ts --workers=1
  */
 
 import { test, expect } from '@playwright/test';
 
-const BASE = process.env.ra_TEST_URL || 'https://dspfac.bot.ominix.io';
-const TOKEN = process.env.ra_AUTH_TOKEN || 'ra-admin-2026';
-const PROFILE = process.env.ra_PROFILE || 'dspfac';
+const BASE = process.env.RA_TEST_URL || 'https://dspfac.bot.ominix.io';
+const TOKEN = process.env.RA_AUTH_TOKEN || 'ra-admin-2026';
+const PROFILE = process.env.RA_PROFILE || 'dspfac';
 
 test.setTimeout(180_000);
 

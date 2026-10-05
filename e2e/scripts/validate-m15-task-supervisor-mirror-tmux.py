@@ -121,7 +121,7 @@ class Validator:
         launch = read_text(self.out_dir / "launch-command.txt").replace("\\ ", " ")
         ok = (
             "serve --stdio" in launch
-            and "ra_M9_PROTOCOL_FIXTURES=1" in launch
+            and "RA_M9_PROTOCOL_FIXTURES=1" in launch
             and "m15-fixture-appui-backend.py" not in launch
         )
         self.add(

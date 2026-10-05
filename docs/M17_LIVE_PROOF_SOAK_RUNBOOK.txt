@@ -64,9 +64,9 @@ From the RecurAgent repo:
 
 Useful overrides:
 
-  ra_M17_SKIP_TUI=1 \
-  ra_M17_SPAWN_DIR=/path/to/direct-spawn-evidence \
-  ra_M17_BUDGET_GRACE_DIR=/path/to/budget-grace-evidence \
+  RA_M17_SKIP_TUI=1 \
+  RA_M17_SPAWN_DIR=/path/to/direct-spawn-evidence \
+  RA_M17_BUDGET_GRACE_DIR=/path/to/budget-grace-evidence \
   bash e2e/scripts/m17-live-proof-soak.sh run
 
 To validate already-captured evidence without running live services:

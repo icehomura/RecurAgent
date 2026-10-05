@@ -125,7 +125,7 @@ def check_install_sh(text: str) -> list[str]:
         return [str(exc)]
     problems: list[str] = []
 
-    if "Environment=ra_AUTH_TOKEN=" in writer:
+    if "Environment=RA_AUTH_TOKEN=" in writer:
         problems.append(
             "systemd unit template inlines ra_AUTH_TOKEN — the unit is "
             "installed world-readable (0644); secrets must load from "
@@ -160,20 +160,20 @@ def check_install_sh(text: str) -> list[str]:
         return problems
     if 'chmod 600 "$target"' not in env_writer:
         problems.append("write_serve_env_file does not chmod 600 the env file")
-    if "ra_AUTH_TOKEN=" not in env_writer:
+    if "RA_AUTH_TOKEN=" not in env_writer:
         problems.append("write_serve_env_file does not write ra_AUTH_TOKEN")
     return problems
 
 
 def check_install_ps1(text: str) -> list[str]:
     problems: list[str] = []
-    if 'set "ra_AUTH_TOKEN=' in text:
+    if 'set "RA_AUTH_TOKEN=' in text:
         problems.append(
             "install.ps1 embeds the token inline in serve-launcher.cmd — the "
             "wrapper is world-readable on default ACLs; read the restricted "
             "serve-token file instead (#2388)"
         )
-    if "set /p ra_AUTH_TOKEN=<" not in text:
+    if "set /p RA_AUTH_TOKEN=<" not in text:
         problems.append(
             "serve-launcher.cmd does not read ra_AUTH_TOKEN from the "
             "restricted serve-token file"
@@ -197,14 +197,14 @@ def check_serve_env_writer(text: str, where: str) -> list[str]:
     problems: list[str] = []
     if "chmod 600" not in env_writer:
         problems.append(f"{where}: write_serve_env_file does not chmod 600 the env file")
-    if "ra_AUTH_TOKEN=" not in env_writer:
+    if "RA_AUTH_TOKEN=" not in env_writer:
         problems.append(f"{where}: write_serve_env_file does not write ra_AUTH_TOKEN")
     return problems
 
 
 def check_tenant_deploy_sh(text: str) -> list[str]:
     problems: list[str] = []
-    if "Environment=ra_AUTH_TOKEN=" in text:
+    if "Environment=RA_AUTH_TOKEN=" in text:
         problems.append(
             "systemd unit template inlines ra_AUTH_TOKEN — the unit is "
             "world-readable; secrets must load from {DATA_DIR}/serve.env "
@@ -227,7 +227,7 @@ def check_tenant_deploy_sh(text: str) -> list[str]:
 
 def check_bootstrap_tenant_sh(text: str) -> list[str]:
     problems: list[str] = []
-    if "Environment=ra_AUTH_TOKEN=" in text:
+    if "Environment=RA_AUTH_TOKEN=" in text:
         problems.append(
             "systemd unit template inlines ra_AUTH_TOKEN — the unit lands "
             "world-readable via sudo tee; secrets must load from serve.env "
@@ -247,7 +247,7 @@ def check_bootstrap_tenant_sh(text: str) -> list[str]:
 
 def check_deploy_ps1(text: str) -> list[str]:
     problems: list[str] = []
-    if re.search(r"AppEnvironmentExtra[^\n]*ra_AUTH_TOKEN=", text):
+    if re.search(r"AppEnvironmentExtra[^\n]*RA_AUTH_TOKEN=", text):
         problems.append(
             "deploy.ps1 delivers the token via NSSM AppEnvironmentExtra — "
             "NSSM stores it under HKLM\\SYSTEM\\CurrentControlSet\\Services\\"
@@ -258,7 +258,7 @@ def check_deploy_ps1(text: str) -> list[str]:
         problems.append(
             "serve-token file is not ACL-restricted (icacls /inheritance:r)"
         )
-    if "set /p ra_AUTH_TOKEN=<" not in text:
+    if "set /p RA_AUTH_TOKEN=<" not in text:
         problems.append(
             "serve-launcher.cmd does not read ra_AUTH_TOKEN from the "
             "restricted serve-token file"
@@ -300,7 +300,7 @@ DATA_DIR='{data_dir}'
 CONFIG_HOME='{data_dir / "config"}'
 XDG_CONFIG_HOME=''
 PREFIX='{sandbox / "prefix"}'
-ra_BIN='{sandbox / "prefix" / "ra"}'
+RA_BIN='{sandbox / "prefix" / "ra"}'
 PORT='8080'
 AUTH_TOKEN='{FAKE_TOKEN}'
 FRPS_TOKEN='{frps_token}'
@@ -382,7 +382,7 @@ def check_rendered(os_name: str, frps_token: str, artifacts: dict[str, str], san
         if not unit.exists():
             return [f"{tag}: systemd unit was not produced"]
         unit_text = artifacts.get("root/etc/systemd/system/ra-serve.service", "")
-        if FAKE_TOKEN in unit_text or "ra_AUTH_TOKEN" in unit_text:
+        if FAKE_TOKEN in unit_text or "RA_AUTH_TOKEN" in unit_text:
             problems.append(f"{tag}: systemd unit carries the token inline")
         if "FRPS_TOKEN" in unit_text:
             problems.append(f"{tag}: systemd unit carries FRPS_TOKEN inline")
@@ -433,7 +433,7 @@ export TMPDIR='{tmpdir}'
 export HOME='{sandbox / "home"}'
 DATA_DIR='{data_dir}'
 PREFIX='{sandbox / "prefix"}'
-ra_BIN='{sandbox / "prefix" / "ra"}'
+RA_BIN='{sandbox / "prefix" / "ra"}'
 PLIST_LABEL='io.ra.serve'
 AUTH_TOKEN='{FAKE_TOKEN}'
 OS='{os_name}'
@@ -501,7 +501,7 @@ def check_rendered_tenant(os_name: str, artifacts: dict[str, str], sandbox: Path
         if not unit.exists():
             return [f"{tag}: systemd unit was not produced"]
         unit_text = artifacts.get(unit_rel, "")
-        if FAKE_TOKEN in unit_text or "ra_AUTH_TOKEN" in unit_text:
+        if FAKE_TOKEN in unit_text or "RA_AUTH_TOKEN" in unit_text:
             problems.append(f"{tag}: systemd unit carries the token inline")
         if "EnvironmentFile=" not in unit_text:
             problems.append(f"{tag}: systemd unit lacks EnvironmentFile=")
@@ -624,7 +624,7 @@ def check_rendered_bootstrap(os_name: str, artifacts: dict[str, str], sandbox: P
         if not unit.exists():
             return [f"{tag}: remote systemd unit was not produced"]
         unit_text = artifacts.get(unit_rel, "")
-        if FAKE_TOKEN in unit_text or "ra_AUTH_TOKEN" in unit_text:
+        if FAKE_TOKEN in unit_text or "RA_AUTH_TOKEN" in unit_text:
             problems.append(f"{tag}: systemd unit carries the token inline")
         if "EnvironmentFile=" not in unit_text:
             problems.append(f"{tag}: systemd unit lacks EnvironmentFile=")
@@ -708,7 +708,7 @@ def self_test() -> int:
     bad_unit = (
         "write_ra_service() {\n"
         "    cat > \"$tmp\" << EOF\n"
-        "Environment=ra_AUTH_TOKEN=$AUTH_TOKEN\n"
+        "Environment=RA_AUTH_TOKEN=$AUTH_TOKEN\n"
         "EOF\n"
         "            sudo chmod 644 \"$unit\"\n"
         "            sudo chmod 644 \"$plist\"\n"
@@ -726,32 +726,32 @@ def self_test() -> int:
         "            sudo chmod 600 \"$plist\"\n"
         "}\n"
         "write_serve_env_file() {\n"
-        "    printf 'ra_AUTH_TOKEN=\"%s\"\\n' \"$AUTH_TOKEN\" > \"$target\"\n"
+        "    printf 'RA_AUTH_TOKEN=\"%s\"\\n' \"$AUTH_TOKEN\" > \"$target\"\n"
         "    chmod 600 \"$target\"\n"
         "}\n"
     )
     if check_install_sh(good_unit):
         failures.append(f"good unit flagged: {check_install_sh(good_unit)}")
 
-    bad_wrapper = '@echo off\nset "ra_AUTH_TOKEN=secret"\n'
+    bad_wrapper = '@echo off\nset "RA_AUTH_TOKEN=secret"\n'
     expect_problems("bad wrapper", check_install_ps1(bad_wrapper), "embeds the token inline")
     good_wrapper = (
         "@echo off\n"
-        'set /p ra_AUTH_TOKEN=<"C:\\dir\\serve-token"\n'
+        'set /p RA_AUTH_TOKEN=<"C:\\dir\\serve-token"\n'
         "icacls $tokenTmp /inheritance:r /grant:r \"${env:USERNAME}:F\"\n"
     )
     if check_install_ps1(good_wrapper):
         failures.append(f"good wrapper flagged: {check_install_ps1(good_wrapper)}")
 
     bad_tenant = (
-        "Environment=ra_AUTH_TOKEN=$AUTH_TOKEN\n"
+        "Environment=RA_AUTH_TOKEN=$AUTH_TOKEN\n"
         "sudo chmod 644 \"$PLIST_FILE\"\n"
     )
     expect_problems("bad tenant deploy", check_tenant_deploy_sh(bad_tenant), "inlines ra_AUTH_TOKEN")
     expect_problems("bad tenant deploy", check_tenant_deploy_sh(bad_tenant), "0644")
     good_tenant = (
         "write_serve_env_file() {\n"
-        "    printf 'ra_AUTH_TOKEN=\"%s\"\\n' \"$AUTH_TOKEN\" > \"$target\"\n"
+        "    printf 'RA_AUTH_TOKEN=\"%s\"\\n' \"$AUTH_TOKEN\" > \"$target\"\n"
         "    chmod 600 \"$target\"\n"
         "}\n"
         "EnvironmentFile=$DATA_DIR/serve.env\n"
@@ -761,9 +761,9 @@ def self_test() -> int:
         failures.append(f"good tenant deploy flagged: {check_tenant_deploy_sh(good_tenant)}")
 
     bad_bootstrap = (
-        "Environment=ra_AUTH_TOKEN=${AUTH_TOKEN}\n"
+        "Environment=RA_AUTH_TOKEN=${AUTH_TOKEN}\n"
         "write_serve_env_file() {\n"
-        "    printf 'ra_AUTH_TOKEN=\"%s\"\\n' \"$AUTH_TOKEN\" > \"$target\"\n"
+        "    printf 'RA_AUTH_TOKEN=\"%s\"\\n' \"$AUTH_TOKEN\" > \"$target\"\n"
         "    chmod 600 \"$target\"\n"
         "}\n"
         "EnvironmentFile=${RDATA}/serve.env\n"
@@ -771,21 +771,21 @@ def self_test() -> int:
     expect_problems("bad bootstrap", check_bootstrap_tenant_sh(bad_bootstrap), "inlines ra_AUTH_TOKEN")
     expect_problems("bad bootstrap", check_bootstrap_tenant_sh(bad_bootstrap), "0600 (chmod 600 over SSH)")
     good_bootstrap = bad_bootstrap.replace(
-        "Environment=ra_AUTH_TOKEN=${AUTH_TOKEN}\n",
+        "Environment=RA_AUTH_TOKEN=${AUTH_TOKEN}\n",
         "chmod 600 ~/Library/LaunchAgents/${PLIST_LABEL}.plist\n",
     )
     if check_bootstrap_tenant_sh(good_bootstrap):
         failures.append(f"good bootstrap flagged: {check_bootstrap_tenant_sh(good_bootstrap)}")
 
     bad_deploy_ps1 = (
-        '& $nssmExe set $serviceName AppEnvironmentExtra "ra_AUTH_TOKEN=$authToken"\n'
+        '& $nssmExe set $serviceName AppEnvironmentExtra "RA_AUTH_TOKEN=$authToken"\n'
         "auth_token = $authToken\n"
     )
     expect_problems("bad deploy.ps1", check_deploy_ps1(bad_deploy_ps1), "AppEnvironmentExtra")
     expect_problems("bad deploy.ps1", check_deploy_ps1(bad_deploy_ps1), "config.json")
     good_deploy_ps1 = (
         "icacls $tokenTmp /inheritance:r /grant:r \"${env:USERNAME}:F\"\n"
-        'set /p ra_AUTH_TOKEN=<"$dataDir\\serve-token"\n'
+        'set /p RA_AUTH_TOKEN=<"$dataDir\\serve-token"\n'
     )
     if check_deploy_ps1(good_deploy_ps1):
         failures.append(f"good deploy.ps1 flagged: {check_deploy_ps1(good_deploy_ps1)}")

@@ -152,12 +152,12 @@ else
 fi
 
 # ─── 10. ra_FLEET_HOSTS env override ──────────────────────────────────
-out=$(MOFA_SKILLS_DIR="$fixture" ra_FLEET_HOSTS="env-host-1,env-host-2" \
+out=$(MOFA_SKILLS_DIR="$fixture" RA_FLEET_HOSTS="env-host-1,env-host-2" \
         bash "$TARGET" --dry-run --profile p1 --skill mofa-foo 2>&1)
 if echo "$out" | grep -q "env-host-1" && echo "$out" | grep -q "env-host-2"; then
-    pass "ra_FLEET_HOSTS env override applied"
+    pass "RA_FLEET_HOSTS env override applied"
 else
-    fail "ra_FLEET_HOSTS env override not applied"
+    fail "RA_FLEET_HOSTS env override not applied"
     echo "$out" >&2
 fi
 

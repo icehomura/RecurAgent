@@ -1126,7 +1126,7 @@ class Config:
     Whether an `embed-llama` build may download the default embedding
     model (EmbeddingGemma-300M, 334 MB, once, into `<data_dir>/models/`)
     when `embedding_model_path` is unset and the file is not on disk.
-    Default `true` (`ra_NO_MODEL_DOWNLOAD=1` in the environment forces
+    Default `true` (`RA_NO_MODEL_DOWNLOAD=1` in the environment forces
     `false`). The download blocks [`Runtime::new`]; hosts that want to
     control it call [`embedding_model_ensure`] first. With `false` and no
     model the runtime is keyword-only (`embed` raises `NoEmbedder`).

@@ -51,34 +51,34 @@ import readline from 'node:readline';
 const repoRoot = path.resolve(import.meta.dirname, '..', '..');
 const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z');
 const runRoot = path.resolve(
-  process.env.ra_M15_GOAL_SOAK_DIR
+  process.env.RA_M15_GOAL_SOAK_DIR
     || path.join(repoRoot, 'e2e', 'test-results-m15-goal-runtime-stdio', stamp),
 );
 const dataDir = path.join(runRoot, 'data');
 const workspace = path.join(runRoot, 'workspace');
-const raBin = process.env.ra_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
-const profileId = process.env.ra_M15_GOAL_PROFILE || 'm15-goal';
+const raBin = process.env.RA_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
+const profileId = process.env.RA_M15_GOAL_PROFILE || 'm15-goal';
 const sessionAId =
-  process.env.ra_M15_GOAL_SESSION_A
+  process.env.RA_M15_GOAL_SESSION_A
   || `${profileId}:local:m15-goal-budget-${stamp}`;
 const sessionBId =
-  process.env.ra_M15_GOAL_SESSION_B
+  process.env.RA_M15_GOAL_SESSION_B
   || `${profileId}:local:m15-goal-sentinel-${stamp}`;
 // Two scenarios × (initial continuation + 30s recurrence + model time)
 // → allow ~10 minutes.
-const timeoutMs = Number(process.env.ra_M15_GOAL_TIMEOUT_MS || 600_000);
+const timeoutMs = Number(process.env.RA_M15_GOAL_TIMEOUT_MS || 600_000);
 // GOAL_MIN_CONTINUATION_INTERVAL_MS = 30_000. Mirror it here so the
 // soak's wait derives from the runtime constant the orchestrator
 // enforces.
 const goalMinContinuationIntervalMs = Number(
-  process.env.ra_M15_GOAL_MIN_CONTINUATION_INTERVAL_MS || 30_000,
+  process.env.RA_M15_GOAL_MIN_CONTINUATION_INTERVAL_MS || 30_000,
 );
-const providerFamily = process.env.ra_M15_GOAL_PROVIDER || 'deepseek';
-const modelId = process.env.ra_M15_GOAL_MODEL || 'deepseek-chat';
+const providerFamily = process.env.RA_M15_GOAL_PROVIDER || 'deepseek';
+const modelId = process.env.RA_M15_GOAL_MODEL || 'deepseek-chat';
 const providerKey =
-  process.env.ra_M15_GOAL_API_KEY
-  || process.env.ra_M15_NATIVE_API_KEY
-  || process.env.ra_M16_NATIVE_API_KEY
+  process.env.RA_M15_GOAL_API_KEY
+  || process.env.RA_M15_NATIVE_API_KEY
+  || process.env.RA_M16_NATIVE_API_KEY
   || process.env.DEEPSEEK_API_KEY
   || '';
 

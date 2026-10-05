@@ -70,7 +70,7 @@ async fn install_runs_preflight_init_ready_check_in_order_with_skill_dir_env() {
     #[cfg(not(windows))]
     let (pre_cmd, init_cmd, ready_cmd) = (
         format!("echo preflight >> '{log_str}'"),
-        format!("echo init >> '{log_str}'; printf '%s' \"$ra_SKILL_DIR\" > '{env_str}'"),
+        format!("echo init >> '{log_str}'; printf '%s' \"$RA_SKILL_DIR\" > '{env_str}'"),
         format!("echo ready_check >> '{log_str}'"),
     );
     let manifest = json!({
@@ -109,7 +109,7 @@ async fn install_runs_preflight_init_ready_check_in_order_with_skill_dir_env() {
     assert_eq!(
         captured_dir.trim(),
         skill_dir.to_string_lossy().trim(),
-        "ra_SKILL_DIR mismatch"
+        "RA_SKILL_DIR mismatch"
     );
 
     // No tools registered (manifest has empty tools array).

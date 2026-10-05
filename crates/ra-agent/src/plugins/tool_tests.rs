@@ -1475,7 +1475,7 @@ async fn execute_structured_progress_event_updates_task_supervisor() {
     let script_path = dir.path().join("script.sh");
     write_test_script(
         &script_path,
-        "#!/bin/sh\ncat >/dev/null\nprintf '{\"schema\":\"ra.harness.event.v1\",\"kind\":\"progress\",\"session_id\":\"%s\",\"task_id\":\"%s\",\"workflow\":\"deep_research\",\"phase\":\"fetching_sources\",\"message\":\"Fetching source 3/12\",\"progress\":0.42}\\n' \"$ra_SESSION_ID\" \"$ra_TASK_ID\" >> \"$ra_EVENT_SINK\"\nprintf '{\"output\":\"ok\",\"success\":true}'\n",
+        "#!/bin/sh\ncat >/dev/null\nprintf '{\"schema\":\"ra.harness.event.v1\",\"kind\":\"progress\",\"session_id\":\"%s\",\"task_id\":\"%s\",\"workflow\":\"deep_research\",\"phase\":\"fetching_sources\",\"message\":\"Fetching source 3/12\",\"progress\":0.42}\\n' \"$RA_SESSION_ID\" \"$RA_TASK_ID\" >> \"$RA_EVENT_SINK\"\nprintf '{\"output\":\"ok\",\"success\":true}'\n",
     );
 
     let def = make_tool_def("structured_tool", "writes harness events");
@@ -3212,11 +3212,11 @@ async fn plugin_exposes_session_workspace_separately_from_skill_output_cwd() {
     let script_path = bin_dir.path().join("script.sh");
     write_test_script(
         &script_path,
-        "#!/bin/sh\nprintf '{\"output\":\"%s|%s\",\"success\":true}' \"$ra_WORK_DIR\" \"$ra_SESSION_WORKSPACE\"\n",
+        "#!/bin/sh\nprintf '{\"output\":\"%s|%s\",\"success\":true}' \"$RA_WORK_DIR\" \"$RA_SESSION_WORKSPACE\"\n",
     );
 
     let mut def = make_tool_def("workspace_env", "echo workspace env");
-    def.env.push("ra_SESSION_WORKSPACE".into());
+    def.env.push("RA_SESSION_WORKSPACE".into());
     let tool = PluginTool::new("plug".into(), def, script_path)
         .with_work_dir(skill_output.clone())
         .with_timeout(TEST_PLUGIN_TIMEOUT);
@@ -3256,7 +3256,7 @@ async fn plugin_does_not_receive_session_workspace_without_manifest_permission()
     let script_path = bin_dir.path().join("script.sh");
     write_test_script(
         &script_path,
-        "#!/bin/sh\nprintf '{\"output\":\"%s\",\"success\":true}' \"${ra_SESSION_WORKSPACE:-missing}\"\n",
+        "#!/bin/sh\nprintf '{\"output\":\"%s\",\"success\":true}' \"${RA_SESSION_WORKSPACE:-missing}\"\n",
     );
 
     let def = make_tool_def("workspace_env", "echo workspace env");
@@ -4486,7 +4486,7 @@ async fn strict_env_allowlist_rejects_ra_secret_extra_env() {
         &script_path,
         r#"#!/bin/sh
 read INPUT || true
-if [ -n "${ra_AUTH_TOKEN:-}" ] || [ -n "${ra_ADMIN_TOKEN:-}" ]; then
+if [ -n "${RA_AUTH_TOKEN:-}" ] || [ -n "${RA_ADMIN_TOKEN:-}" ]; then
   echo '{"output":"secret present","success":false}'
 else
   echo '{"output":"secret absent","success":true}'
@@ -4494,11 +4494,11 @@ fi
 "#,
     );
     let mut def = make_tool_def("strict_secret", "test env isolation");
-    def.env.push("ra_PROFILE_ID".into());
+    def.env.push("RA_PROFILE_ID".into());
     let tool = PluginTool::new("p".into(), def, script_path)
         .with_extra_env(vec![
-            ("ra_AUTH_TOKEN".into(), "fixture".into()),
-            ("ra_ADMIN_TOKEN".into(), "fixture".into()),
+            ("RA_AUTH_TOKEN".into(), "fixture".into()),
+            ("RA_ADMIN_TOKEN".into(), "fixture".into()),
         ])
         .with_timeout(TEST_PLUGIN_TIMEOUT);
     let result = tool.execute(&json!({})).await.unwrap();

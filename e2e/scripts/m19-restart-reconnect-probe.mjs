@@ -6,14 +6,14 @@ import path from 'node:path';
 import WebSocket from 'ws';
 
 const artifactDir = path.resolve(
-  process.env.ra_M19_RESTART_ARTIFACT_DIR || process.cwd(),
+  process.env.RA_M19_RESTART_ARTIFACT_DIR || process.cwd(),
 );
-const phase = process.env.ra_M19_RESTART_PHASE || 'pre';
-const endpoint = process.env.ra_M19_RESTART_WS_ENDPOINT;
-const authToken = process.env.ra_M19_RESTART_AUTH_TOKEN;
-const profileId = process.env.ra_M19_RESTART_PROFILE_ID || 'coding';
-const sessionId = process.env.ra_M19_RESTART_SESSION_ID;
-const workspace = process.env.ra_M19_RESTART_WORKSPACE || process.cwd();
+const phase = process.env.RA_M19_RESTART_PHASE || 'pre';
+const endpoint = process.env.RA_M19_RESTART_WS_ENDPOINT;
+const authToken = process.env.RA_M19_RESTART_AUTH_TOKEN;
+const profileId = process.env.RA_M19_RESTART_PROFILE_ID || 'coding';
+const sessionId = process.env.RA_M19_RESTART_SESSION_ID;
+const workspace = process.env.RA_M19_RESTART_WORKSPACE || process.cwd();
 function positiveIntegerEnv(name, fallback) {
   const raw = process.env[name];
   if (!raw) return fallback;
@@ -21,7 +21,7 @@ function positiveIntegerEnv(name, fallback) {
   return Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
-const timeoutMs = positiveIntegerEnv('ra_M19_RESTART_TIMEOUT_MS', 15_000);
+const timeoutMs = positiveIntegerEnv('RA_M19_RESTART_TIMEOUT_MS', 15_000);
 const appuiTranscript = path.join(artifactDir, 'appui-transcript.jsonl');
 const websocketTranscript = path.join(artifactDir, 'websocket-transcript.jsonl');
 const reconnectEvents = path.join(artifactDir, 'reconnect-events.jsonl');
@@ -216,9 +216,9 @@ async function ensureProfile(client) {
 }
 
 async function main() {
-  assert(endpoint, 'ra_M19_RESTART_WS_ENDPOINT is required');
-  assert(authToken, 'ra_M19_RESTART_AUTH_TOKEN is required');
-  assert(sessionId, 'ra_M19_RESTART_SESSION_ID is required');
+  assert(endpoint, 'RA_M19_RESTART_WS_ENDPOINT is required');
+  assert(authToken, 'RA_M19_RESTART_AUTH_TOKEN is required');
+  assert(sessionId, 'RA_M19_RESTART_SESSION_ID is required');
   resetTranscriptsForPrePhase();
 
   const client = new WsProbeClient();

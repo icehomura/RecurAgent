@@ -777,7 +777,7 @@ async fn should_bootstrap_appui_runtime_when_gateway_autostart_is_disabled() {
             family_id: Some("openai".to_string()),
             model_id: Some("gpt-4o-mini".to_string()),
             route: Some(crate::profiles::LlmRouteConfig {
-                api_key_env: Some("ra_TEST_APPUI_DISABLED_PROFILE_KEY".to_string()),
+                api_key_env: Some("RA_TEST_APPUI_DISABLED_PROFILE_KEY".to_string()),
                 ..Default::default()
             }),
             ..Default::default()
@@ -785,7 +785,7 @@ async fn should_bootstrap_appui_runtime_when_gateway_autostart_is_disabled() {
         fallbacks: Vec::new(),
     });
     profile.config.env_vars.insert(
-        "ra_TEST_APPUI_DISABLED_PROFILE_KEY".to_string(),
+        "RA_TEST_APPUI_DISABLED_PROFILE_KEY".to_string(),
         "test-key".to_string(),
     );
     state
@@ -1128,7 +1128,7 @@ async fn llm_select_rejects_keyless_models_before_persisting() {
                     "route_id": "official",
                     // A test-scoped variable name so resolution can't
                     // fall through to a real key in the process env.
-                    "api_key_env": format!("ra_TEST_{}_KEY", model.replace(['-', '.'], "_").to_uppercase()),
+                    "api_key_env": format!("RA_TEST_{}_KEY", model.replace(['-', '.'], "_").to_uppercase()),
                 },
             },
             "set_primary": set_primary,
@@ -1167,7 +1167,7 @@ async fn llm_select_rejects_keyless_models_before_persisting() {
         "got {error:?}"
     );
     assert!(
-        error.message.contains("ra_TEST_GLM_5_3_KEY"),
+        error.message.contains("RA_TEST_GLM_5_3_KEY"),
         "message must name the missing variable: {}",
         error.message
     );
@@ -1909,7 +1909,7 @@ async fn llm_select_rejects_unactivatable_api_type_and_unknown_families() {
                 "selection": {
                     "family_id": "deepseek",
                     "model_id": "deepseek-chat",
-                    "route": { "route_id": "official", "api_key_env": "ra_TEST_DS_KEY" },
+                    "route": { "route_id": "official", "api_key_env": "RA_TEST_DS_KEY" },
                 },
                 "api_key": "dk",
                 "set_primary": true,
@@ -1930,7 +1930,7 @@ async fn llm_select_rejects_unactivatable_api_type_and_unknown_families() {
             json!({
                 "route_id": "official",
                 "api_type": "anthropic",
-                "api_key_env": "ra_TEST_OLLAMA_ANTHROPIC_KEY",
+                "api_key_env": "RA_TEST_OLLAMA_ANTHROPIC_KEY",
             }),
         ),
         None,
@@ -1996,7 +1996,7 @@ async fn llm_select_rejects_unactivatable_api_type_and_unknown_families() {
                     "route": {
                         "route_id": "official",
                         "api_type": "anthropic",
-                        "api_key_env": "ra_TEST_FROB_KEY",
+                        "api_key_env": "RA_TEST_FROB_KEY",
                     },
                 },
                 "api_key": "fk",
@@ -2279,7 +2279,7 @@ fn llm_upsert_rpc(
                 "route_id": "official",
                 // A test-scoped variable name so resolution can't fall
                 // through to a real key in the process env.
-                "api_key_env": "ra_TEST_LLM_RUNTIME_INVALIDATION_KEY",
+                "api_key_env": "RA_TEST_LLM_RUNTIME_INVALIDATION_KEY",
             },
         },
         "api_key": "test-invalidation-key",
@@ -2906,7 +2906,7 @@ async fn should_report_persisted_but_not_live_when_runtime_rebuild_fails() {
             family_id: Some("openai".to_string()),
             model_id: Some("gpt-4o-mini".to_string()),
             route: Some(crate::profiles::LlmRouteConfig {
-                api_key_env: Some("ra_TEST_LLM_RUNTIME_INVALIDATION_KEY".to_string()),
+                api_key_env: Some("RA_TEST_LLM_RUNTIME_INVALIDATION_KEY".to_string()),
                 ..Default::default()
             }),
             ..Default::default()
@@ -2914,7 +2914,7 @@ async fn should_report_persisted_but_not_live_when_runtime_rebuild_fails() {
         fallbacks: Vec::new(),
     });
     profile.config.env_vars.insert(
-        "ra_TEST_LLM_RUNTIME_INVALIDATION_KEY".to_string(),
+        "RA_TEST_LLM_RUNTIME_INVALIDATION_KEY".to_string(),
         "k".to_string(),
     );
     state
@@ -2967,7 +2967,7 @@ async fn should_reload_runtime_while_in_flight_turn_holds_episode_store() {
             family_id: Some("openai".to_string()),
             model_id: Some("gpt-4o-mini".to_string()),
             route: Some(crate::profiles::LlmRouteConfig {
-                api_key_env: Some("ra_TEST_LLM_RUNTIME_INVALIDATION_KEY".to_string()),
+                api_key_env: Some("RA_TEST_LLM_RUNTIME_INVALIDATION_KEY".to_string()),
                 ..Default::default()
             }),
             ..Default::default()
@@ -2975,7 +2975,7 @@ async fn should_reload_runtime_while_in_flight_turn_holds_episode_store() {
         fallbacks: Vec::new(),
     });
     profile.config.env_vars.insert(
-        "ra_TEST_LLM_RUNTIME_INVALIDATION_KEY".to_string(),
+        "RA_TEST_LLM_RUNTIME_INVALIDATION_KEY".to_string(),
         "k".to_string(),
     );
     state
@@ -39760,7 +39760,7 @@ fn s3_zai_lane_real_three_layer_probe() {
         usage.output_tokens
     );
     assert!(
-        reply.contains("ra_S3_ZAI_OK"),
+        reply.contains("RA_S3_ZAI_OK"),
         "LAYER 2 FAIL: real GLM-5.2 reply must echo the marker, got: {reply}"
     );
     assert!(
@@ -39784,7 +39784,7 @@ fn s3_zai_lane_real_three_layer_probe() {
     .unwrap();
     let delivered = std::fs::read_to_string(&result_path).unwrap();
     assert!(
-        delivered.contains("model: glm-5.2") && delivered.contains("ra_S3_ZAI_OK"),
+        delivered.contains("model: glm-5.2") && delivered.contains("RA_S3_ZAI_OK"),
         "LAYER 3 FAIL: result.md must carry the model id and the real reply"
     );
 }

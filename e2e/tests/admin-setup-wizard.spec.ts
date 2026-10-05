@@ -99,7 +99,7 @@ async function startServe(testInfo: TestInfo): Promise<SpawnedServe> {
 }
 
 function serveCommand(serveArgs: string[]): { bin: string; args: string[] } {
-  const configured = process.env.ra_SETUP_WIZARD_BIN;
+  const configured = process.env.RA_SETUP_WIZARD_BIN;
   const candidates = [
     configured,
     path.join(repoRoot, 'target', 'release', 'ra'),

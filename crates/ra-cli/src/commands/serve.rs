@@ -963,7 +963,7 @@ impl ServeCommand {
         {
             // Solo-boot loop safety: restored loops must not silently resume
             // firing model turns on a single-operator box. Park them paused;
-            // `/loop resume <id>` re-arms, ra_SOLO_RESUME_LOOPS=1 opts out.
+            // `/loop resume <id>` re-arms, RA_SOLO_RESUME_LOOPS=1 opts out.
             for (loop_id, session_id) in
                 crate::autonomy::agent_orchestrator::default_agent_orchestrator()
                     .pause_restored_loops_for_solo_boot()
@@ -977,7 +977,7 @@ impl ServeCommand {
             // Same safety for GOALS (#1694): a goal restored `active`
             // resumes autonomous model turns nobody asked this process
             // for. Park paused; `/goal resume` re-arms,
-            // ra_SOLO_RESUME_GOALS=1 opts out.
+            // RA_SOLO_RESUME_GOALS=1 opts out.
             if ra_core::brand::env_compat_str("SOLO_RESUME_GOALS").as_deref() != Some("1") {
                 // #1973 fix C — resolve each parked goal's PROFILE data dir so
                 // the park also flips the durable per-goal SQLite ledger row to
@@ -2700,7 +2700,7 @@ mod tests {
             let body = std::fs::read_to_string(scripts.join(name))
                 .unwrap_or_else(|e| panic!("read {name}: {e}"));
             assert!(
-                body.contains("ra_AUTH_TOKEN"),
+                body.contains("RA_AUTH_TOKEN"),
                 "{name} must still deliver the token via ra_AUTH_TOKEN"
             );
             for line in body.lines() {
@@ -3185,7 +3185,7 @@ mod tests {
     #[test]
     fn dashboard_smtp_password_prefers_matching_admin_profile_email_tool() {
         let _guard = dashboard_smtp_test_env_lock().lock().unwrap();
-        let _env = EnvVarGuard::remove("ra_TEST_DASHBOARD_AUTH_ADMIN_SMTP_PASSWORD");
+        let _env = EnvVarGuard::remove("RA_TEST_DASHBOARD_AUTH_ADMIN_SMTP_PASSWORD");
         let dir = tempfile::tempdir().unwrap();
         let store = crate::profiles::ProfileStore::open_unified(dir.path()).unwrap();
         store
@@ -3223,7 +3223,7 @@ mod tests {
                 host: "smtp.example.com".into(),
                 port: 465,
                 username: "admin@example.com".into(),
-                password_env: "ra_TEST_DASHBOARD_AUTH_ADMIN_SMTP_PASSWORD".into(),
+                password_env: "RA_TEST_DASHBOARD_AUTH_ADMIN_SMTP_PASSWORD".into(),
                 from_address: "admin@example.com".into(),
             }),
             session_expiry_hours: 24,
@@ -3309,7 +3309,7 @@ mod tests {
     #[test]
     fn dashboard_smtp_password_prefers_matching_non_admin_profile_email_tool() {
         let _guard = dashboard_smtp_test_env_lock().lock().unwrap();
-        let _env = EnvVarGuard::remove("ra_TEST_DASHBOARD_AUTH_PROFILE_SMTP_PASSWORD");
+        let _env = EnvVarGuard::remove("RA_TEST_DASHBOARD_AUTH_PROFILE_SMTP_PASSWORD");
         let dir = tempfile::tempdir().unwrap();
         let store = crate::profiles::ProfileStore::open_unified(dir.path()).unwrap();
         store
@@ -3354,7 +3354,7 @@ mod tests {
                 host: "smtp.gmail.com".into(),
                 port: 465,
                 username: "dspfac@gmail.com".into(),
-                password_env: "ra_TEST_DASHBOARD_AUTH_PROFILE_SMTP_PASSWORD".into(),
+                password_env: "RA_TEST_DASHBOARD_AUTH_PROFILE_SMTP_PASSWORD".into(),
                 from_address: "dspfac@gmail.com".into(),
             }),
             session_expiry_hours: 24,

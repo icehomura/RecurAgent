@@ -20,7 +20,7 @@ use tokio::sync::mpsc;
 use tokio::sync::{Mutex, RwLock, broadcast, watch};
 
 use crate::profiles::{
-    ChannelCredentials, HOST_ASR_LANGUAGE_ENV, ProfileStore, RA_HOST_ASR_LANGUAGE_ENV, UserProfile,
+    ChannelCredentials, HOST_ASR_LANGUAGE_ENV, ProfileStore, ra_HOST_ASR_LANGUAGE_ENV, UserProfile,
 };
 
 /// Base port for managed WhatsApp bridge WebSocket servers.
@@ -498,7 +498,7 @@ impl ProcessManager {
                         // profile env_vars entry that would override
                         // it (sub-account inheritance otherwise lets
                         // a parent silently flip strict signing on).
-                        if key.eq_ignore_ascii_case("ra_PLUGINS_REQUIRE_SIGNED")
+                        if key.eq_ignore_ascii_case("RA_PLUGINS_REQUIRE_SIGNED")
                             || key.eq_ignore_ascii_case("RA_PLUGINS_REQUIRE_SIGNED")
                         {
                             tracing::warn!(
@@ -512,12 +512,12 @@ impl ProcessManager {
                         // The host memory envs are equally
                         // host-reserved: a parent profile must not
                         // impersonate them toward sub-accounts.
-                        if key.eq_ignore_ascii_case("ra_MEMORY_MAX_INJECT_TOKENS")
-                            || key.eq_ignore_ascii_case("ra_MEMORY_REFRESH_ENABLED")
+                        if key.eq_ignore_ascii_case("RA_MEMORY_MAX_INJECT_TOKENS")
+                            || key.eq_ignore_ascii_case("RA_MEMORY_REFRESH_ENABLED")
                             || key.eq_ignore_ascii_case("RA_MEMORY_MAX_INJECT_TOKENS")
                             || key.eq_ignore_ascii_case("RA_MEMORY_REFRESH_ENABLED")
                             || key.eq_ignore_ascii_case(HOST_ASR_LANGUAGE_ENV)
-                            || key.eq_ignore_ascii_case(RA_HOST_ASR_LANGUAGE_ENV)
+                            || key.eq_ignore_ascii_case(ra_HOST_ASR_LANGUAGE_ENV)
                         {
                             tracing::warn!(
                                 profile = %profile.id,
@@ -544,11 +544,11 @@ impl ProcessManager {
             if let Some(port) = self.serve_port {
                 let url = format!("http://127.0.0.1:{}", port);
                 cmd.env("RA_SERVE_URL", &url);
-                cmd.env("ra_SERVE_URL", url);
+                cmd.env("RA_SERVE_URL", url);
             }
             if let Some(token) = &self.admin_token {
                 cmd.env("RA_ADMIN_TOKEN", token);
-                cmd.env("ra_ADMIN_TOKEN", token);
+                cmd.env("RA_ADMIN_TOKEN", token);
             }
         }
 
@@ -603,7 +603,7 @@ impl ProcessManager {
             // env is reserved for the parent serve to control. A profile
             // env_vars entry with this key would otherwise silently turn
             // off the host policy in the spawned gateway — refuse it.
-            if key.eq_ignore_ascii_case("ra_PLUGINS_REQUIRE_SIGNED")
+            if key.eq_ignore_ascii_case("RA_PLUGINS_REQUIRE_SIGNED")
                 || key.eq_ignore_ascii_case("RA_PLUGINS_REQUIRE_SIGNED")
             {
                 tracing::warn!(
@@ -616,12 +616,12 @@ impl ProcessManager {
             // Same reservation for the host memory settings: profiles
             // override them via their own `memory` config block, not by
             // spoofing the host-controlled env vars.
-            if key.eq_ignore_ascii_case("ra_MEMORY_MAX_INJECT_TOKENS")
-                || key.eq_ignore_ascii_case("ra_MEMORY_REFRESH_ENABLED")
+            if key.eq_ignore_ascii_case("RA_MEMORY_MAX_INJECT_TOKENS")
+                || key.eq_ignore_ascii_case("RA_MEMORY_REFRESH_ENABLED")
                 || key.eq_ignore_ascii_case("RA_MEMORY_MAX_INJECT_TOKENS")
                 || key.eq_ignore_ascii_case("RA_MEMORY_REFRESH_ENABLED")
                 || key.eq_ignore_ascii_case(HOST_ASR_LANGUAGE_ENV)
-                || key.eq_ignore_ascii_case(RA_HOST_ASR_LANGUAGE_ENV)
+                || key.eq_ignore_ascii_case(ra_HOST_ASR_LANGUAGE_ENV)
             {
                 tracing::warn!(
                     profile = %profile.id,
@@ -640,7 +640,7 @@ impl ProcessManager {
         // var onto whatever the profile JSON declares.
         if self.host_plugins_require_signed {
             cmd.env("RA_PLUGINS_REQUIRE_SIGNED", "1");
-            cmd.env("ra_PLUGINS_REQUIRE_SIGNED", "1");
+            cmd.env("RA_PLUGINS_REQUIRE_SIGNED", "1");
         }
         // Set-or-CLEAR: `Command` inherits the parent environment, so when
         // the host does not forward a memory setting we must remove any
@@ -650,30 +650,30 @@ impl ProcessManager {
         match self.host_max_inject_tokens {
             Some(n) => {
                 cmd.env("RA_MEMORY_MAX_INJECT_TOKENS", n.to_string());
-                cmd.env("ra_MEMORY_MAX_INJECT_TOKENS", n.to_string());
+                cmd.env("RA_MEMORY_MAX_INJECT_TOKENS", n.to_string());
             }
             None => {
                 cmd.env_remove("RA_MEMORY_MAX_INJECT_TOKENS");
-                cmd.env_remove("ra_MEMORY_MAX_INJECT_TOKENS");
+                cmd.env_remove("RA_MEMORY_MAX_INJECT_TOKENS");
             }
         }
         if self.host_memory_refresh_enabled {
             cmd.env("RA_MEMORY_REFRESH_ENABLED", "1");
-            cmd.env("ra_MEMORY_REFRESH_ENABLED", "1");
+            cmd.env("RA_MEMORY_REFRESH_ENABLED", "1");
         } else {
             // DEFAULT-ON semantics: an absent var means enabled, so a
             // disabled host must mirror an explicit OFF — env_remove would
             // let the child fall back to on.
             cmd.env("RA_MEMORY_REFRESH_ENABLED", "0");
-            cmd.env("ra_MEMORY_REFRESH_ENABLED", "0");
+            cmd.env("RA_MEMORY_REFRESH_ENABLED", "0");
         }
         match self.host_asr_language.as_deref() {
             Some(language) => {
-                cmd.env(RA_HOST_ASR_LANGUAGE_ENV, language);
+                cmd.env(ra_HOST_ASR_LANGUAGE_ENV, language);
                 cmd.env(HOST_ASR_LANGUAGE_ENV, language);
             }
             None => {
-                cmd.env_remove(RA_HOST_ASR_LANGUAGE_ENV);
+                cmd.env_remove(ra_HOST_ASR_LANGUAGE_ENV);
                 cmd.env_remove(HOST_ASR_LANGUAGE_ENV);
             }
         }

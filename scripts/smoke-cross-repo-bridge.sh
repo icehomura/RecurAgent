@@ -17,7 +17,7 @@
 set -euo pipefail
 
 BRIDGE_REPO="${BRIDGE_REPO:?BRIDGE_REPO must point to your local ra-robot-skills clone}"
-ra_BIN="${ra_BIN:-$HOME/.cargo/bin/ra}"
+RA_BIN="${RA_BIN:-$HOME/.cargo/bin/ra}"
 BRIDGE_HEALTH_URL="${BRIDGE_HEALTH_URL:-http://127.0.0.1:8765/healthz}"
 
 # `ra skills` resolves the skills dir from --cwd (or the configured
@@ -34,8 +34,8 @@ test -f "$BRIDGE_REPO/skills/$SKILL_NAME/SKILL.md" || {
   exit 1
 }
 command -v dora >/dev/null || { echo "  dora CLI not on PATH" >&2; exit 1; }
-test -x "$ra_BIN" || {
-  echo "  ra binary not at $ra_BIN; build with:" >&2
+test -x "$RA_BIN" || {
+  echo "  ra binary not at $RA_BIN; build with:" >&2
   echo "    cargo install --path crates/ra-cli --force" >&2
   exit 1
 }
@@ -58,7 +58,7 @@ cp "$BRIDGE_REPO/dataflows/venv-python" "$STAGING/$SKILL_NAME/dataflows/venv-pyt
 chmod +x "$STAGING/$SKILL_NAME/dataflows/venv-python" 2>/dev/null || true
 
 echo "[4/6] install skill (runs preflight → init → ready_check via lifecycle)"
-"$ra_BIN" skills --cwd "$INSTALL_CWD" install "$STAGING/$SKILL_NAME" --force || {
+"$RA_BIN" skills --cwd "$INSTALL_CWD" install "$STAGING/$SKILL_NAME" --force || {
   echo "  skill install failed" >&2
   exit 1
 }
@@ -77,7 +77,7 @@ for i in {1..15}; do
 done
 
 echo "[6/6] fire robot.heartbeat through ra chat"
-RESPONSE=$("$ra_BIN" chat --no-interactive --prompt 'call robot.heartbeat once and report the JSON ok flag' 2>&1 || true)
+RESPONSE=$("$RA_BIN" chat --no-interactive --prompt 'call robot.heartbeat once and report the JSON ok flag' 2>&1 || true)
 echo "$RESPONSE" | grep -qE '"ok"\s*:\s*true' || {
   echo "  ra did not return ok=true; full response below:" >&2
   echo "$RESPONSE" >&2
@@ -88,4 +88,4 @@ echo
 echo "smoke OK"
 echo
 echo "cleanup: ra skills --cwd $INSTALL_CWD remove $SKILL_NAME"
-"$ra_BIN" skills --cwd "$INSTALL_CWD" remove "$SKILL_NAME" || true
+"$RA_BIN" skills --cwd "$INSTALL_CWD" remove "$SKILL_NAME" || true

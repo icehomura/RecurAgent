@@ -27,7 +27,7 @@
  * mini is observed cleanly:
  *
  *   cd ~/home/ra/e2e
- *   ra_AUTH_TOKEN=ra-admin-2026 ra_PROFILE=dspfac \
+ *   RA_AUTH_TOKEN=ra-admin-2026 RA_PROFILE=dspfac \
  *     npx playwright test tests/fleet-round2-spawn-only-ui.spec.ts \
  *     --reporter=list --workers=1 \
  *     --output=test-results-fleet-round2

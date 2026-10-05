@@ -13,10 +13,10 @@
  * do NOT mock the backend. Pointing them at localhost only makes sense if the
  * canary stack is running locally.
  *
- *   ra_TEST_URL=https://dspfac.crew.ominix.io \
- *   ra_AUTH_TOKEN=ra-admin-2026 \
- *   ra_PROFILE=dspfac \
- *   ra_TEST_EMAIL=dspfac@gmail.com \
+ *   RA_TEST_URL=https://dspfac.crew.ominix.io \
+ *   RA_AUTH_TOKEN=ra-admin-2026 \
+ *   RA_PROFILE=dspfac \
+ *   RA_TEST_EMAIL=dspfac@gmail.com \
  *   npx playwright test tests/live-progress-gate.spec.ts
  */
 import fs from 'node:fs';

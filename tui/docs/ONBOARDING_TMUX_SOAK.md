@@ -106,7 +106,7 @@ Run the live preflight before validation-only closure attempts for M12/M13/M15
 tmux evidence:
 
 ```sh
-ra_BIN=/path/to/ra \
+RA_BIN=/path/to/ra \
 RA_TUI_BIN=/path/to/ra-tui \
 scripts/run-onboarding-tmux-soak.sh preflight-live
 ```
@@ -158,7 +158,7 @@ Minimum closeable bundle per issue:
 Run live preflight first:
 
 ```sh
-ra_BIN=/path/to/ra \
+RA_BIN=/path/to/ra \
 RA_TUI_BIN=/path/to/ra-tui \
 scripts/run-onboarding-tmux-soak.sh preflight-live
 ```

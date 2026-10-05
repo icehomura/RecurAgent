@@ -10,8 +10,8 @@
 #   .\install.ps1 -Uninstall
 #
 # Environment variables (for piped installs):
-#   $env:ra_VERSION   - Release version (default: latest)
-#   $env:ra_PREFIX    - Install prefix (default: ~\.ra\bin)
+#   $env:RA_VERSION   - Release version (default: latest)
+#   $env:RA_PREFIX    - Install prefix (default: ~\.ra\bin)
 
 [CmdletBinding(DefaultParameterSetName = 'Install')]
 param(
@@ -114,10 +114,10 @@ ENVIRONMENT VARIABLES
 # -- Defaults ----------------------------------------------------------
 $GithubRepo = "icehomura/RecurAgent"
 
-if (-not $Version)   { $Version = if ($env:ra_VERSION) { $env:ra_VERSION } else { "latest" } }
-if (-not $Prefix)    { $Prefix  = if ($env:ra_PREFIX)  { $env:ra_PREFIX }  else { Join-Path $HOME ".ra\bin" } }
+if (-not $Version)   { $Version = if ($env:RA_VERSION) { $env:RA_VERSION } else { "latest" } }
+if (-not $Prefix)    { $Prefix  = if ($env:RA_PREFIX)  { $env:RA_PREFIX }  else { Join-Path $HOME ".ra\bin" } }
 
-$DataDir = if ($env:ra_HOME) { $env:ra_HOME } else { Join-Path $HOME ".ra" }
+$DataDir = if ($env:RA_HOME) { $env:RA_HOME } else { Join-Path $HOME ".ra" }
 
 # -- Tunnel defaults --------------------------------------------------
 $FrpcVersion = "0.65.0"
@@ -542,7 +542,7 @@ if ($Doctor) {
         if (Test-Command "ra") {
             $found = (Get-Command ra).Source
             Warn "not found at $RaBin, but found at $found"
-            Hint "Set `$env:ra_PREFIX or check your PATH"
+            Hint "Set `$env:RA_PREFIX or check your PATH"
         } else {
             Err "ra binary not found"
             Hint "Run install.ps1 to install"
@@ -1070,7 +1070,7 @@ if (Test-Command "caddy") {
 Section "Resolving release"
 
 $Zipfile = "ra-bundle-${Triple}.zip"
-$DownloadBase = $env:ra_DOWNLOAD_URL
+$DownloadBase = $env:RA_DOWNLOAD_URL
 
 # Auto-detect: check if zip is next to the script or in the current directory
 if (-not $DownloadBase) {
@@ -1199,7 +1199,7 @@ if (-not ($userPath -split ";" | Where-Object { $_ -eq $Prefix })) {
 # -- Initialize ra workspace ----------------------------------------
 Section "Initializing ra"
 
-$env:ra_HOME = $DataDir
+$env:RA_HOME = $DataDir
 $raBin = Join-Path $Prefix "ra.exe"
 
 if (-not (Test-Path $DataDir)) {
@@ -1303,7 +1303,7 @@ if (-not (Test-Path $userPath2)) {
 Ok "data directory: $DataDir"
 
 # -- Generate auth token ----------------------------------------------
-if (-not $AuthToken) { $AuthToken = if ($env:ra_AUTH_TOKEN) { $env:ra_AUTH_TOKEN } else { "" } }
+if (-not $AuthToken) { $AuthToken = if ($env:RA_AUTH_TOKEN) { $env:RA_AUTH_TOKEN } else { "" } }
 if (-not $AuthToken) {
     # Generate 32-byte hex token
     $bytes = New-Object byte[] 32
@@ -1367,9 +1367,9 @@ try {
 $wrapperPath = Join-Path $DataDir "serve-launcher.cmd"
 $wrapperContent = @"
 @echo off
-set "ra_HOME=$DataDir"
-set "ra_DATA_DIR=$DataDir"
-set /p ra_AUTH_TOKEN=<"$DataDir\serve-token"
+set "RA_HOME=$DataDir"
+set "RA_DATA_DIR=$DataDir"
+set /p RA_AUTH_TOKEN=<"$DataDir\serve-token"
 if not defined ra_AUTH_TOKEN (
     echo [ra] serve-token file missing or empty; re-run install.ps1 >> "$serveLog"
     exit /b 1

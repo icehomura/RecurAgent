@@ -450,7 +450,7 @@ impl Cli {
                 .lang
                 .or(file_config.lang)
                 .or_else(|| {
-                    crate::env::env_compat("RA_LANG", "ra_LANG")
+                    crate::env::env_compat("RA_LANG", "RA_LANG")
                         .and_then(|v| Lang::from_env_value(&v))
                 })
                 .or_else(|| {

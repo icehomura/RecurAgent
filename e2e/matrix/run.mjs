@@ -710,7 +710,7 @@ export class StdioClient {
           ...process.env,
           RUST_BACKTRACE: process.env.RUST_BACKTRACE || '1',
           // Defensive: block accidental OTP wiring during onboarding probes.
-          ra_DISABLE_SMTP: process.env.ra_DISABLE_SMTP || '1',
+          RA_DISABLE_SMTP: process.env.RA_DISABLE_SMTP || '1',
         },
         stdio: ['pipe', 'pipe', 'pipe'],
       },
@@ -1062,10 +1062,10 @@ async function main() {
   }
 
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z');
-  const runRoot = process.env.ra_MATRIX_DIR
+  const runRoot = process.env.RA_MATRIX_DIR
     || path.join(repoRoot, 'e2e', 'test-results-matrix', `${args.pack}-${args.tier}`, stamp);
   fs.mkdirSync(runRoot, { recursive: true });
-  const raBin = process.env.ra_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
+  const raBin = process.env.RA_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
   if (!fs.existsSync(raBin)) {
     const failure = {
       ok: false,
@@ -1079,7 +1079,7 @@ async function main() {
     process.exit(2);
   }
 
-  const rpcTimeoutMs = Number(process.env.ra_MATRIX_RPC_TIMEOUT_MS || 10_000);
+  const rpcTimeoutMs = Number(process.env.RA_MATRIX_RPC_TIMEOUT_MS || 10_000);
   const ctx = { runRoot, runStamp: stamp };
 
   const startedAt = new Date().toISOString();

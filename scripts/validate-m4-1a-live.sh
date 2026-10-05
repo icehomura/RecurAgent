@@ -41,11 +41,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 FIXTURE_PATH="${ROOT}/e2e/fixtures/m4-1a-progress-expected.json"
 
-BASE_URL="${ra_TEST_URL:-}"
-AUTH_TOKEN="${ra_AUTH_TOKEN:-}"
-PROFILE_ID="${ra_PROFILE:-dspfac}"
-TEST_EMAIL="${ra_TEST_EMAIL:-dspfac@gmail.com}"
-TIMEOUT_SECONDS="${ra_M4_1A_TIMEOUT:-600}"
+BASE_URL="${RA_TEST_URL:-}"
+AUTH_TOKEN="${RA_AUTH_TOKEN:-}"
+PROFILE_ID="${RA_PROFILE:-dspfac}"
+TEST_EMAIL="${RA_TEST_EMAIL:-dspfac@gmail.com}"
+TIMEOUT_SECONDS="${RA_M4_1A_TIMEOUT:-600}"
 OUTPUT_DIR=""
 SKIP_E2E=false
 E2E_ONLY=false
@@ -127,7 +127,7 @@ fi
 BASE_URL="${BASE_URL%/}"
 
 if [[ -z "$OUTPUT_DIR" ]]; then
-  OUTPUT_DIR="${ra_E2E_OUTPUT_ROOT:-${ROOT}/e2e/test-results-m4-1a-live}"
+  OUTPUT_DIR="${RA_E2E_OUTPUT_ROOT:-${ROOT}/e2e/test-results-m4-1a-live}"
 fi
 mkdir -p "$OUTPUT_DIR"
 
@@ -581,10 +581,10 @@ run_e2e_specs() {
   if ! (
     cd "$ROOT/e2e" && \
     env \
-      ra_TEST_URL="$BASE_URL" \
-      ra_AUTH_TOKEN="$AUTH_TOKEN" \
-      ra_PROFILE="$PROFILE_ID" \
-      ra_TEST_EMAIL="$TEST_EMAIL" \
+      RA_TEST_URL="$BASE_URL" \
+      RA_AUTH_TOKEN="$AUTH_TOKEN" \
+      RA_PROFILE="$PROFILE_ID" \
+      RA_TEST_EMAIL="$TEST_EMAIL" \
       npx playwright test tests/live-progress-gate.spec.ts \
         --reporter=line \
         --output="$pw_output"
@@ -592,7 +592,7 @@ run_e2e_specs() {
     emit_diagnostic \
       "playwright_failed" \
       "Playwright live-progress-gate specs failed. Inspect ${pw_output} for traces/screenshots." \
-      "cd ${ROOT}/e2e && ra_TEST_URL=${BASE_URL} ra_AUTH_TOKEN=*** ra_PROFILE=${PROFILE_ID} npx playwright test tests/live-progress-gate.spec.ts"
+      "cd ${ROOT}/e2e && RA_TEST_URL=${BASE_URL} RA_AUTH_TOKEN=*** RA_PROFILE=${PROFILE_ID} npx playwright test tests/live-progress-gate.spec.ts"
     exit 3
   fi
   pass "Playwright live-progress-gate passed"

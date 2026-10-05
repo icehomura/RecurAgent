@@ -473,7 +473,7 @@ pub fn locate_ra_tui() -> LocatedBinaries {
 }
 
 /// `ra` (the backend) discovered across `$PATH` + the known install prefixes,
-/// plus the sibling of the running `ra-tui` and `$RA_PREFIX`/`$ra_PREFIX` /
+/// plus the sibling of the running `ra-tui` and `$RA_PREFIX`/`$RA_PREFIX` /
 /// `~/.ra/bin`. Same candidate set as `backend_ensure`'s resolver. Same
 /// PATH-vs-off-PATH bookkeeping as [`locate_ra_tui`].
 fn locate_backend() -> LocatedBinaries {
@@ -485,7 +485,7 @@ fn locate_backend() -> LocatedBinaries {
     {
         dirs.push(sibling_dir);
     }
-    if let Some(prefix) = crate::env::env_compat("RA_PREFIX", "ra_PREFIX") {
+    if let Some(prefix) = crate::env::env_compat("RA_PREFIX", "RA_PREFIX") {
         dirs.push(PathBuf::from(prefix));
     }
     if let Some(home) = std::env::var_os("HOME") {
@@ -1092,7 +1092,7 @@ fn backend_checks(args: &DoctorArgs) -> Vec<Check> {
         checks.push(stdio_command_check(cmd));
     } else if let Some(endpoint) = &args.endpoint {
         let auth_token = args.auth_token.clone().or_else(|| {
-            std::env::var("ra_AUTH_TOKEN")
+            std::env::var("RA_AUTH_TOKEN")
                 .ok()
                 .filter(|t| !t.is_empty())
         });

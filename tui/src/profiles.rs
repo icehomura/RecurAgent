@@ -5,7 +5,7 @@
 //! straight from the server's on-disk layout: `<data_dir>/profiles/<id>.json`.
 //! The data dir is resolved from the launch command — an explicit
 //! `--data-dir <path>` flag or a leading `RA_HOME=<path>` env assignment
-//! (legacy `ra_HOME=<path>` still works) — falling back to `~/.ra`. No
+//! (legacy `RA_HOME=<path>` still works) — falling back to `~/.ra`. No
 //! legacy directory is consulted, migrated or deleted.
 //!
 //! Every step is best-effort: any failure (no home dir, unreadable dir, a
@@ -37,7 +37,7 @@ enum DataDirResolution {
 }
 
 /// Resolve `<data_dir>/profiles` from the launch command. An explicit
-/// `--data-dir` wins over a `RA_HOME=` prefix (legacy `ra_HOME=`), which
+/// `--data-dir` wins over a `RA_HOME=` prefix (legacy `RA_HOME=`), which
 /// wins over the conventional `~/.ra`. Returns `None` (no
 /// profiles dir) when there is no launch command, or when the command names an
 /// override we cannot resolve — the latter degrades the picker to onboarding
@@ -57,7 +57,7 @@ pub fn solo_profiles_dir(stdio_command: Option<&str>) -> Option<PathBuf> {
 
 /// Parse the server data dir out of a launch command's tokens: `--data-dir
 /// <path>` / `--data-dir=<path>`, else a leading `RA_HOME=<path>` env
-/// assignment (legacy `ra_HOME=<path>` still honoured; the new spelling wins
+/// assignment (legacy `RA_HOME=<path>` still honoured; the new spelling wins
 /// when both are present). Distinguishes "no override present"
 /// ([`DataDirResolution::None`]) from "override present but unresolvable"
 /// ([`DataDirResolution::Unresolvable`]) so the caller can default only in the
@@ -81,7 +81,7 @@ fn data_dir_from_command(command: &str) -> DataDirResolution {
         }
     }
 
-    // Leading `RA_HOME=<path>` (new) / `ra_HOME=<path>` (legacy) env
+    // Leading `RA_HOME=<path>` (new) / `RA_HOME=<path>` (legacy) env
     // assignments, before the program token. The new spelling wins when both are
     // set, regardless of order.
     let mut legacy_home: Option<DataDirResolution> = None;
@@ -89,7 +89,7 @@ fn data_dir_from_command(command: &str) -> DataDirResolution {
         if let Some(rest) = token.strip_prefix("RA_HOME=") {
             return resolve_path_token(rest);
         }
-        if let Some(rest) = token.strip_prefix("ra_HOME=") {
+        if let Some(rest) = token.strip_prefix("RA_HOME=") {
             legacy_home = Some(resolve_path_token(rest));
             continue;
         }
@@ -397,7 +397,7 @@ mod tests {
         );
         // The RecurAgent spelling wins when both are present, in either order.
         assert_eq!(
-            data_dir_from_command("ra_HOME=/legacy RA_HOME=/new ra serve --stdio"),
+            data_dir_from_command("RA_HOME=/legacy RA_HOME=/new ra serve --stdio"),
             DataDirResolution::Resolved(PathBuf::from("/new"))
         );
     }
@@ -405,14 +405,14 @@ mod tests {
     #[test]
     fn should_read_data_dir_from_legacy_ra_home_env_prefix() {
         assert_eq!(
-            data_dir_from_command("ra_HOME=/srv/home ra serve --stdio"),
+            data_dir_from_command("RA_HOME=/srv/home ra serve --stdio"),
             DataDirResolution::Resolved(PathBuf::from("/srv/home"))
         );
     }
 
     #[test]
     fn should_report_none_when_no_override_present() {
-        // No `--data-dir` / `RA_HOME=` / `ra_HOME=` → the default home applies.
+        // No `--data-dir` / `RA_HOME=` / `RA_HOME=` → the default home applies.
         assert_eq!(
             data_dir_from_command("ra serve --stdio --solo"),
             DataDirResolution::None
@@ -428,7 +428,7 @@ mod tests {
             DataDirResolution::Unresolvable
         );
         assert_eq!(
-            data_dir_from_command("ra_HOME=\"$PWD/.ra\" ra serve"),
+            data_dir_from_command("RA_HOME=\"$PWD/.ra\" ra serve"),
             DataDirResolution::Unresolvable
         );
         assert_eq!(
@@ -484,7 +484,7 @@ mod tests {
     #[test]
     fn instance_dir_is_none_for_explicit_override_or_remote() {
         // Operator-controlled placement (explicit --data-dir / RA_HOME= /
-        // legacy ra_HOME=) and remote/WebSocket launches (no command) must
+        // legacy RA_HOME=) and remote/WebSocket launches (no command) must
         // NOT be isolated.
         let cwd = std::env::temp_dir();
         assert!(
@@ -496,8 +496,8 @@ mod tests {
             "explicit RA_HOME= must opt out of isolation"
         );
         assert!(
-            instance_data_dir_for_launch(Some("ra_HOME=/srv/h ra serve"), &cwd).is_none(),
-            "explicit legacy ra_HOME= must opt out of isolation"
+            instance_data_dir_for_launch(Some("RA_HOME=/srv/h ra serve"), &cwd).is_none(),
+            "explicit legacy RA_HOME= must opt out of isolation"
         );
         assert!(
             instance_data_dir_for_launch(Some("ra serve --data-dir $HOME/x"), &cwd).is_none(),
@@ -515,7 +515,7 @@ mod tests {
         // "no profiles" (→ onboarding) instead of falling back to the default
         // dir and offering foreign profiles.
         assert!(solo_profiles_dir(Some("RA_HOME=$PWD/.ra ra serve --stdio")).is_none());
-        assert!(solo_profiles_dir(Some("ra_HOME=$PWD/.ra ra serve --stdio")).is_none());
+        assert!(solo_profiles_dir(Some("RA_HOME=$PWD/.ra ra serve --stdio")).is_none());
         // No command at all (remote launch) also yields no local profiles dir.
         assert!(solo_profiles_dir(None).is_none());
     }

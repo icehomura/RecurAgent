@@ -29,7 +29,7 @@ require_grep 'scp' "$SCRIPT" "deploy.ps1 must use SCP for local bundle uploads"
 require_grep 'EncodedCommand' "$SCRIPT" "deploy.ps1 must send encoded PowerShell to the remote host"
 require_grep '\$nssmExe install' "$SCRIPT" "deploy.ps1 must register RaServe through NSSM"
 require_grep 'SERVICE_AUTO_START' "$SCRIPT" "deploy.ps1 must configure auto-start service behavior"
-require_grep 'ra_HOME=' "$SCRIPT" "deploy.ps1 must set the remote ra data path"
+require_grep 'RA_HOME=' "$SCRIPT" "deploy.ps1 must set the remote ra data path"
 require_grep 'C:\\ra' "$SCRIPT" "deploy.ps1 must document the default Windows install root"
 
 if grep -q -- '--auth-token' "$SCRIPT"; then
@@ -62,7 +62,7 @@ if command -v pwsh >/dev/null 2>&1; then
     fi
     grep -q 'AppEnvironmentExtra' <<<"$out" \
         || fail "dry run should deliver the token via AppEnvironmentExtra"
-    grep -q 'ra_AUTH_TOKEN=' <<<"$out" \
+    grep -q 'RA_AUTH_TOKEN=' <<<"$out" \
         || fail "dry run should deliver the token via ra_AUTH_TOKEN"
     grep -q 'test-token' <<<"$out" \
         || fail "dry run should include the requested auth token"

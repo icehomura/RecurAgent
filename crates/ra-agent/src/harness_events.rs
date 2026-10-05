@@ -27,11 +27,11 @@ use crate::task_supervisor::TaskSupervisor;
 use crate::validators::VALIDATOR_RESULT_SCHEMA_VERSION;
 
 pub const HARNESS_EVENT_SCHEMA_V1: &str = "ra.harness.event.v1";
-pub const ra_EVENT_SINK_ENV: &str = "ra_EVENT_SINK";
-pub const ra_SESSION_ID_ENV: &str = "ra_SESSION_ID";
-pub const ra_TASK_ID_ENV: &str = "ra_TASK_ID";
-pub const ra_HARNESS_SESSION_ID_ENV: &str = "ra_HARNESS_SESSION_ID";
-pub const ra_HARNESS_TASK_ID_ENV: &str = "ra_HARNESS_TASK_ID";
+pub const ra_EVENT_SINK_ENV: &str = "RA_EVENT_SINK";
+pub const ra_SESSION_ID_ENV: &str = "RA_SESSION_ID";
+pub const ra_TASK_ID_ENV: &str = "RA_TASK_ID";
+pub const ra_HARNESS_SESSION_ID_ENV: &str = "RA_HARNESS_SESSION_ID";
+pub const ra_HARNESS_TASK_ID_ENV: &str = "RA_HARNESS_TASK_ID";
 pub const MAX_HARNESS_EVENT_LINE_BYTES: usize = 16 * 1024;
 const MAX_SESSION_ID_BYTES: usize = 256;
 const MAX_TASK_ID_BYTES: usize = 128;

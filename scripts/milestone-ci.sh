@@ -103,7 +103,7 @@ run_workspace_all_features() {
 run_oup_runtime() {
   cargo build --locked -p ra-cli -p ra-ffi -p ra-uniffi
   local build_dir="${CARGO_TARGET_DIR:-target}/debug"
-  ra_BIN="$build_dir/ra" python3 scripts/tests/test-oup-runtime.py
+  RA_BIN="$build_dir/ra" python3 scripts/tests/test-oup-runtime.py
   python3 scripts/check-oup-bindings.py --library-dir "$build_dir"
 }
 
@@ -114,7 +114,7 @@ run_oup_minimal() {
     --skip serve_broken_pipe --skip serve_sigterm --skip serve_ws_liveness --skip serve_solo_gateway_guard
   cargo clippy --locked -p ra-cli --no-default-features --all-targets -- -D warnings
   cargo build --locked -p ra-cli --no-default-features
-  ra_BIN="${CARGO_TARGET_DIR:-target}/debug/ra" python3 scripts/tests/test-oup-runtime.py --minimal
+  RA_BIN="${CARGO_TARGET_DIR:-target}/debug/ra" python3 scripts/tests/test-oup-runtime.py --minimal
 }
 
 run_release_bundle() {

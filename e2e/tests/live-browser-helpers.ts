@@ -1,10 +1,10 @@
 import { expect, type Page } from '@playwright/test';
 import type { CaptureHandle } from '../lib/capture-replay';
 
-const AUTH_TOKEN = process.env.ra_AUTH_TOKEN || 'ra-admin-2026';
-const PROFILE_ID = process.env.ra_PROFILE || 'dspfac';
-const TEST_EMAIL = process.env.ra_TEST_EMAIL || 'dspfac@gmail.com';
-const BASE_URL = process.env.ra_TEST_URL || 'http://localhost:3000';
+const AUTH_TOKEN = process.env.RA_AUTH_TOKEN || 'ra-admin-2026';
+const PROFILE_ID = process.env.RA_PROFILE || 'dspfac';
+const TEST_EMAIL = process.env.RA_TEST_EMAIL || 'dspfac@gmail.com';
+const BASE_URL = process.env.RA_TEST_URL || 'http://localhost:3000';
 
 // When the daemon comes up with no `admin_token.json` (bootstrap mode), the
 // dashboard's BootstrapGate redirects every `/admin/*` route to
@@ -14,7 +14,7 @@ const BASE_URL = process.env.ra_TEST_URL || 'http://localhost:3000';
 // daemon's strength check (>=32 chars, >=3 char classes from
 // {lowercase, uppercase, digits, symbols}).
 const STRONG_ADMIN_TOKEN =
-  process.env.ra_TEST_ADMIN_TOKEN || 'ra-E2E-Strong-Token-2026-XYZ-123!';
+  process.env.RA_TEST_ADMIN_TOKEN || 'ra-E2E-Strong-Token-2026-XYZ-123!';
 
 // Cache of `host -> effective token`. The token rotation flow is per-host
 // because every mini in the fleet has its own `admin_token.json`. Memoising

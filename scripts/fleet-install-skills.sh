@@ -23,7 +23,7 @@
 #
 # Per host, per profile, per skill:
 #   1. rsync the local skill directory to a remote staging path
-#   2. SSH in, run `ra_PROFILE_ID=<p> ra skills --profile <p> install
+#   2. SSH in, run `RA_PROFILE_ID=<p> ra skills --profile <p> install
 #      <staging_path> --force` so the install routes through the same code
 #      path as the runtime tool (verifies manifest sha256, builds binaries,
 #      writes .source for `skills update`)
@@ -36,19 +36,19 @@
 set -eEuo pipefail
 
 # ─── Defaults ────────────────────────────────────────────────────────────
-DEFAULT_HOSTS="${ra_FLEET_DEFAULT_HOSTS:-}"  # no built-in host list
+DEFAULT_HOSTS="${RA_FLEET_DEFAULT_HOSTS:-}"  # no built-in host list
 DEFAULT_MOFA_DIR="$HOME/home/mofa-skills"
 DEFAULT_REMOTE_BIN="/Users/cloud/.ra/bin/ra"
 DEFAULT_REMOTE_USER="cloud"
 DEFAULT_REMOTE_STAGING="/tmp/ra-fleet-install-staging"
 
-HOSTS_ARG="${ra_FLEET_HOSTS:-}"
+HOSTS_ARG="${RA_FLEET_HOSTS:-}"
 PROFILES_ARG=""
 SKILLS_ARG=""
 MOFA_DIR="${MOFA_SKILLS_DIR:-$DEFAULT_MOFA_DIR}"
-REMOTE_BIN="${ra_REMOTE_BIN:-$DEFAULT_REMOTE_BIN}"
-REMOTE_USER="${ra_REMOTE_USER:-$DEFAULT_REMOTE_USER}"
-REMOTE_STAGING="${ra_REMOTE_STAGING:-$DEFAULT_REMOTE_STAGING}"
+REMOTE_BIN="${RA_REMOTE_BIN:-$DEFAULT_REMOTE_BIN}"
+REMOTE_USER="${RA_REMOTE_USER:-$DEFAULT_REMOTE_USER}"
+REMOTE_STAGING="${RA_REMOTE_STAGING:-$DEFAULT_REMOTE_STAGING}"
 DRY_RUN=false
 FORCE=true   # default: re-install on every run; idempotent because content hashes match
 VERBOSE=false
@@ -95,7 +95,7 @@ Examples:
       --host <host> --profile dspfac --skill mofa-cli
 
   # Override host list via env
-  ra_FLEET_HOSTS=<host> scripts/fleet-install-skills.sh
+  RA_FLEET_HOSTS=<host> scripts/fleet-install-skills.sh
 USAGE
 }
 
@@ -347,7 +347,7 @@ for host in "${HOSTS[@]}"; do
         for profile in "${PROFILES[@]}"; do
             force_flag=""
             [ "$FORCE" = "true" ] && force_flag="--force"
-            install_cmd="ra_PROFILE_ID='$profile' '$REMOTE_BIN' skills --profile '$profile' install '$REMOTE_STAGING/$skill' $force_flag"
+            install_cmd="RA_PROFILE_ID='$profile' '$REMOTE_BIN' skills --profile '$profile' install '$REMOTE_STAGING/$skill' $force_flag"
 
             if [ "$DRY_RUN" = "true" ]; then
                 log "[dry-run] would: ssh $host -- $install_cmd"

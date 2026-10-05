@@ -1384,10 +1384,10 @@ function checkTaskSubagentTreeScenario(artifactDir) {
     problems.push(`launch-command.txt could not be read: ${launchCommand.error}`);
   } else {
     for (const expected of [
-      'ra_M15_LIVE_SUBAGENT_FIXTURE=',
+      'RA_M15_LIVE_SUBAGENT_FIXTURE=',
       'RA_TUI_M15_UX_OUTPUT_DIR=',
       'RA_TUI_M15_UX_WORKDIR=',
-      'ra_M15_LIVE_SUBAGENT_DELAY_SCALE=',
+      'RA_M15_LIVE_SUBAGENT_DELAY_SCALE=',
     ]) {
       if (!launchCommand.text.includes(expected)) {
         problems.push(`launch-command.txt is missing ${expected}`);
@@ -1396,12 +1396,12 @@ function checkTaskSubagentTreeScenario(artifactDir) {
   }
   const fixtureEnv = isPlainObject(scenario.value.fixture_env) ? scenario.value.fixture_env : {};
   if (fixtureEnv.ra_M15_LIVE_SUBAGENT_FIXTURE !== '1') {
-    problems.push('scenario fixture_env missing ra_M15_LIVE_SUBAGENT_FIXTURE=1');
+    problems.push('scenario fixture_env missing RA_M15_LIVE_SUBAGENT_FIXTURE=1');
   }
   for (const expected of [
     'RA_TUI_M15_UX_OUTPUT_DIR',
     'RA_TUI_M15_UX_WORKDIR',
-    'ra_M15_LIVE_SUBAGENT_DELAY_SCALE',
+    'RA_M15_LIVE_SUBAGENT_DELAY_SCALE',
   ]) {
     if (typeof fixtureEnv[expected] !== 'string' || fixtureEnv[expected].length === 0) {
       problems.push(`scenario fixture_env missing ${expected}`);

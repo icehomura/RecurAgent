@@ -776,14 +776,14 @@ fn apply_git_tool_env(cmd: &mut tokio::process::Command, command: &str) {
 
 fn apply_harness_event_sink_env(cmd: &mut tokio::process::Command, ctx: &ToolContext) {
     if let Some(sink) = ctx.harness_event_sink.as_deref() {
-        cmd.env("ra_EVENT_SINK", sink);
+        cmd.env("RA_EVENT_SINK", sink);
         return;
     }
     // Legacy callers that route through `execute()` pass `ToolContext::zero()` —
     // the sink isn't on the typed context but may still live on the
     // task-local `TOOL_CTX` that older executor paths populate.
     if let Ok(Some(sink)) = TOOL_CTX.try_with(|inner| inner.harness_event_sink.clone()) {
-        cmd.env("ra_EVENT_SINK", sink);
+        cmd.env("RA_EVENT_SINK", sink);
     }
 }
 

@@ -91,7 +91,7 @@ cargo test -p ra-cli ui_protocol --features api -- --nocapture
 
 # 4. Build and boot a local API server for live browser/protocol checks.
 cargo build --release -p ra-cli --features "ra-cli/api,ra-cli/telegram"
-ra_AUTH_TOKEN=ci-test-token ./target/release/ra serve --port 3000
+RA_AUTH_TOKEN=ci-test-token ./target/release/ra serve --port 3000
 # M12 Phase D-5: `/api/status` was retired; use `/health` for liveness
 # probes and the WS `system/status.get` RPC for the structured payload.
 curl -sf http://localhost:3000/health
@@ -100,10 +100,10 @@ curl -sf http://localhost:3000/health
 npm --prefix e2e install
 (
   cd e2e
-  ra_LIVE_URL=http://localhost:3000 \
-  ra_LIVE_TOKEN=ci-test-token \
-  ra_M9_APPROVAL_FIXTURE=1 \
-  ra_M9_REPLAY_LOSSY_FIXTURE=1 \
+  RA_LIVE_URL=http://localhost:3000 \
+  RA_LIVE_TOKEN=ci-test-token \
+  RA_M9_APPROVAL_FIXTURE=1 \
+  RA_M9_REPLAY_LOSSY_FIXTURE=1 \
     npx playwright test --workers=1 tests/m9-protocol-*.spec.ts --reporter=line
 )
 
@@ -111,9 +111,9 @@ npm --prefix e2e install
 ./e2e/tmux/run.sh m9-protocol
 
 # 6. TUI/protocol smoke lanes. The live lane boots its own server only when
-# ra_TMUX_LIVE=1 is set.
+# RA_TMUX_LIVE=1 is set.
 ./e2e/tmux/run.sh default
-ra_TMUX_LIVE=1 ./e2e/tmux/run.sh live
+RA_TMUX_LIVE=1 ./e2e/tmux/run.sh live
 
 # 7. Long-running real-LLM coding UX checks, only when provider keys are set.
 KIMI_API_KEY=... DEEPSEEK_API_KEY=... ./scripts/ux-test.sh
@@ -138,10 +138,10 @@ provider. Live transports require an API-enabled `ra` binary with the
 ./scripts/m12-solo-appui-soak.sh self-test
 
 # Live stdio dry-run against the current local backend.
-ra_M12_SOAK_TRANSPORT=stdio ./scripts/m12-solo-appui-soak.sh run
+RA_M12_SOAK_TRANSPORT=stdio ./scripts/m12-solo-appui-soak.sh run
 
 # Live stdio + WebSocket matrix.
-ra_M12_SOAK_TRANSPORT=both ./scripts/m12-solo-appui-soak.sh run
+RA_M12_SOAK_TRANSPORT=both ./scripts/m12-solo-appui-soak.sh run
 ```
 
 Artifacts are written under `e2e/test-results-m12-solo-soak/<run-id>/`. Each
@@ -160,16 +160,16 @@ The runner calls `profile/local/create` for local no-OTP onboarding and fails if
 the retained transcript contains `auth/send_code` or `auth/verify`. Until
 Workers M12-A/C land their backend methods, non-strict runs may finish with
 `"status": "blocked"` and detailed blockers in `soak-summary.json`. Set
-`ra_M12_SOAK_STRICT=1` once those workers land to require a fully passing
+`RA_M12_SOAK_STRICT=1` once those workers land to require a fully passing
 run.
 
 On shared 249/mini hosts, prefer an explicit run id and port to avoid collisions:
 
 ```bash
-ra_M12_SOAK_RUN_ID="$(hostname)-$(date -u +%Y%m%dT%H%M%SZ)" \
-ra_M12_SOAK_PORT=50249 \
-ra_M12_SOAK_ARTIFACT_ROOT="$PWD/e2e/test-results-m12-solo-soak" \
-ra_M12_SOAK_TRANSPORT=both \
+RA_M12_SOAK_RUN_ID="$(hostname)-$(date -u +%Y%m%dT%H%M%SZ)" \
+RA_M12_SOAK_PORT=50249 \
+RA_M12_SOAK_ARTIFACT_ROOT="$PWD/e2e/test-results-m12-solo-soak" \
+RA_M12_SOAK_TRANSPORT=both \
   ./scripts/m12-solo-appui-soak.sh run
 ```
 
@@ -235,7 +235,7 @@ Required backend checks:
 
 ```bash
 ./scripts/m12-solo-appui-soak.sh self-test
-ra_M12_SOAK_TRANSPORT=both ra_M12_SOAK_STRICT=1 \
+RA_M12_SOAK_TRANSPORT=both RA_M12_SOAK_STRICT=1 \
   ./scripts/m12-solo-appui-soak.sh run
 ```
 

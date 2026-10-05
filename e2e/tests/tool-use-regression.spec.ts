@@ -6,7 +6,7 @@
  *   2. ffmpeg not found in sandbox PATH
  *
  * Run against a live ra-serve instance:
- *   ra_TEST_URL=http://localhost:3000 ra_AUTH_TOKEN=<token> npx playwright test
+ *   RA_TEST_URL=http://localhost:3000 RA_AUTH_TOKEN=<token> npx playwright test
  *
  * Transport: chat turns ride the M9 WebSocket UI Protocol via `chatWS()`
  * (`/api/ui-protocol/ws`). The legacy `POST /api/chat` route was retired
@@ -16,8 +16,8 @@
 import { test, expect } from '@playwright/test';
 import { chatWS, type ChatWsResult } from '../lib/m9-ws-client';
 
-const AUTH_TOKEN = process.env.ra_AUTH_TOKEN || '';
-const PROFILE_ID = process.env.ra_PROFILE || undefined;
+const AUTH_TOKEN = process.env.RA_AUTH_TOKEN || '';
+const PROFILE_ID = process.env.RA_PROFILE || undefined;
 
 function headers() {
   const h: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -65,7 +65,7 @@ async function adminShell(request: any, baseURL: string, command: string) {
 // PATH without /opt/homebrew/bin, so the agent sandbox couldn't find ffmpeg.
 // ---------------------------------------------------------------------------
 test('ffmpeg is reachable via shell PATH', async ({ request, baseURL }) => {
-  test.skip(!AUTH_TOKEN, 'ra_AUTH_TOKEN required');
+  test.skip(!AUTH_TOKEN, 'RA_AUTH_TOKEN required');
 
   const result = await adminShell(request, baseURL!, 'which ffmpeg');
   expect(result.exit_code).toBe(0);
@@ -73,7 +73,7 @@ test('ffmpeg is reachable via shell PATH', async ({ request, baseURL }) => {
 });
 
 test('ffmpeg version is functional', async ({ request, baseURL }) => {
-  test.skip(!AUTH_TOKEN, 'ra_AUTH_TOKEN required');
+  test.skip(!AUTH_TOKEN, 'RA_AUTH_TOKEN required');
 
   const result = await adminShell(request, baseURL!, 'ffmpeg -version 2>&1 | head -1');
   expect(result.exit_code).toBe(0);
@@ -87,7 +87,7 @@ test('ffmpeg version is functional', async ({ request, baseURL }) => {
 // ffmpeg, verify output. This is what mofa-fm does.
 // ---------------------------------------------------------------------------
 test('ffmpeg concat works in sandbox workdir', async ({ request, baseURL }) => {
-  test.skip(!AUTH_TOKEN, 'ra_AUTH_TOKEN required');
+  test.skip(!AUTH_TOKEN, 'RA_AUTH_TOKEN required');
 
   // Generate two tiny WAV files with ffmpeg, concat them
   const script = [
@@ -125,7 +125,7 @@ test('ffmpeg concat works in sandbox workdir', async ({ request, baseURL }) => {
 // ---------------------------------------------------------------------------
 test('activate_tools works across different sessions', async ({ baseURL }) => {
   test.setTimeout(300_000);
-  test.skip(!AUTH_TOKEN, 'ra_AUTH_TOKEN required');
+  test.skip(!AUTH_TOKEN, 'RA_AUTH_TOKEN required');
 
   // Session A: trigger activate_tools without also asking for shell execution.
   // This keeps the proof focused on the registry rewire bug: stale OnceLock
@@ -167,7 +167,7 @@ test('full tool chain: chat triggers activate_tools → shell → ffmpeg', async
   baseURL,
 }) => {
   test.setTimeout(180_000);
-  test.skip(!AUTH_TOKEN, 'ra_AUTH_TOKEN required');
+  test.skip(!AUTH_TOKEN, 'RA_AUTH_TOKEN required');
 
   const baseSessionId = `test-ffmpeg-chain-${Date.now()}`;
   const prompt =
@@ -202,7 +202,7 @@ test('full tool chain: chat triggers activate_tools → shell → ffmpeg', async
 // Verifies the launchd PATH propagation fix.
 // ---------------------------------------------------------------------------
 test('PATH includes /opt/homebrew/bin', async ({ request, baseURL }) => {
-  test.skip(!AUTH_TOKEN, 'ra_AUTH_TOKEN required');
+  test.skip(!AUTH_TOKEN, 'RA_AUTH_TOKEN required');
 
   const result = await adminShell(request, baseURL!, 'echo $PATH');
   expect(result.exit_code).toBe(0);

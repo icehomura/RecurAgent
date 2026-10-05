@@ -23,17 +23,17 @@
  *      it's gone from the DOM.
  *
  * Required env:
- *   ra_TEST_URL=https://dspfac.crew.ominix.io
- *   ra_AUTH_TOKEN=ra-admin-2026
- *   ra_PROFILE=dspfac
+ *   RA_TEST_URL=https://dspfac.crew.ominix.io
+ *   RA_AUTH_TOKEN=ra-admin-2026
+ *   RA_PROFILE=dspfac
  *
  * Optional env:
  *   ra_MOFA_INSTALL_SOURCE  default: mofa-org/mofa-skills/mofa-cli
  *   ra_MOFA_SKILL_NAME      default: mofa-cli
  *   ra_MOFA_BUILTIN_VOICE   default: vivian
  *   ra_MOFA_CLONED_VOICE    default: yangmi
- *   ra_MOFA_SKIP_INSTALL=1  reuse an already-installed skill
- *   ra_MOFA_SKIP_REMOVE=1   leave skill installed for later runs
+ *   RA_MOFA_SKIP_INSTALL=1  reuse an already-installed skill
+ *   RA_MOFA_SKIP_REMOVE=1   leave skill installed for later runs
  *
  * NEVER point at mini5 — that host is reserved for coding-green.
  */
@@ -50,15 +50,15 @@ import {
   login,
 } from './live-browser-helpers';
 
-const AUTH_TOKEN = process.env.ra_AUTH_TOKEN || 'ra-admin-2026';
-const PROFILE_ID = process.env.ra_PROFILE || 'dspfac';
+const AUTH_TOKEN = process.env.RA_AUTH_TOKEN || 'ra-admin-2026';
+const PROFILE_ID = process.env.RA_PROFILE || 'dspfac';
 const INSTALL_SOURCE =
-  process.env.ra_MOFA_INSTALL_SOURCE || 'mofa-org/mofa-skills/mofa-cli';
-const SKILL_NAME = process.env.ra_MOFA_SKILL_NAME || 'mofa-cli';
-const BUILTIN_VOICE = process.env.ra_MOFA_BUILTIN_VOICE || 'vivian';
-const CLONED_VOICE = process.env.ra_MOFA_CLONED_VOICE || 'yangmi';
-const SKIP_INSTALL = process.env.ra_MOFA_SKIP_INSTALL === '1';
-const SKIP_REMOVE = process.env.ra_MOFA_SKIP_REMOVE === '1';
+  process.env.RA_MOFA_INSTALL_SOURCE || 'mofa-org/mofa-skills/mofa-cli';
+const SKILL_NAME = process.env.RA_MOFA_SKILL_NAME || 'mofa-cli';
+const BUILTIN_VOICE = process.env.RA_MOFA_BUILTIN_VOICE || 'vivian';
+const CLONED_VOICE = process.env.RA_MOFA_CLONED_VOICE || 'yangmi';
+const SKIP_INSTALL = process.env.RA_MOFA_SKIP_INSTALL === '1';
+const SKIP_REMOVE = process.env.RA_MOFA_SKIP_REMOVE === '1';
 
 const FLAG_KEY = 'ra_thread_store_v2';
 

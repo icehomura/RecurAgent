@@ -53,11 +53,11 @@ const OPT_OUT_ENV: &str = "RA_TUI_NO_AUTO_INSTALL";
 /// documented `ra-tui` contract (the other ~157 `ra_TUI_*` names belong
 /// to the soak harness, and the two `_BIN`/`_DIR` ones are read by our own
 /// scripts — all renamed in lockstep). Someone with
-/// `ra_TUI_NO_AUTO_INSTALL=1` in a CI job or shell profile would otherwise
+/// `RA_TUI_NO_AUTO_INSTALL=1` in a CI job or shell profile would otherwise
 /// find auto-install silently switching itself back on, which is exactly the
 /// kind of quiet breakage a rename must not cause. Honour it, say so once,
 /// and drop it a release or two after the rename has settled.
-const OPT_OUT_ENV_LEGACY: &str = "ra_TUI_NO_AUTO_INSTALL";
+const OPT_OUT_ENV_LEGACY: &str = "RA_TUI_NO_AUTO_INSTALL";
 
 /// Ensure a usable `ra` backend for a stdio launch, rewriting
 /// `cli.stdio_command` to an explicit path when the backend is usable only off
@@ -192,7 +192,7 @@ pub(crate) enum CandidateKind {
     Sibling,
     /// Bare `ra` resolved through `PATH`.
     Path,
-    /// The install dir (`$RA_PREFIX`/`$ra_PREFIX` or `~/.ra/bin`).
+    /// The install dir (`$RA_PREFIX`/`$RA_PREFIX` or `~/.ra/bin`).
     InstallDir,
 }
 
@@ -362,10 +362,10 @@ fn where_first(name: &Path) -> Option<PathBuf> {
 }
 
 /// The RecurAgent binary this fork installs: `$RA_PREFIX/ra` (or the legacy
-/// `$ra_PREFIX` env fallback) or `~/.ra/bin/ra` (`ra.exe` on Windows).
+/// `$RA_PREFIX` env fallback) or `~/.ra/bin/ra` (`ra.exe` on Windows).
 /// `None` if no home dir.
 fn install_dir_backend() -> Option<PathBuf> {
-    let dir = match crate::env::env_os_compat("RA_PREFIX", "ra_PREFIX") {
+    let dir = match crate::env::env_os_compat("RA_PREFIX", "RA_PREFIX") {
         Some(p) => PathBuf::from(p),
         _ => home_dir()?.join(".ra").join("bin"),
     };
@@ -844,12 +844,12 @@ mod tests {
         // A DIRECT assignment prefix (no `env` keyword) gains one, so `sh -c`
         // keeps it an assignment instead of reading the re-quoted token as a
         // command name (codex).
-        let rewritten = rewrite_program("ra_HOME=/data ra serve", p).unwrap();
+        let rewritten = rewrite_program("RA_HOME=/data ra serve", p).unwrap();
         assert_eq!(
             shlex::split(&rewritten).unwrap(),
             [
                 "env",
-                "ra_HOME=/data",
+                "RA_HOME=/data",
                 "/home/u/.ra/bin/ra",
                 "serve"
             ]
@@ -858,7 +858,7 @@ mod tests {
         // "add RecurAgent to PATH" message rather than emitting a mangled command.
         for cmd in [
             "ra serve --data-dir ~/data",          // ~ would stop expanding
-            "ra_HOME=\"$PWD/.ra\" ra serve", // $PWD would become literal
+            "RA_HOME=\"$PWD/.ra\" ra serve", // $PWD would become literal
             "ra serve | tee log",                  // pipe quoted into an argument
             "ra serve && echo done",               // control operator
         ] {

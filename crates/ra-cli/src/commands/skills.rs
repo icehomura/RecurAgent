@@ -21,7 +21,7 @@ use super::Executable;
 ///   we bail with the structured violation list so the operator sees
 ///   every problem at once.
 /// - Operators who need to install a known-bad manifest can set
-///   `ra_MANIFEST_VALIDATION=lenient` (Draft 07 sanity only) or
+///   `RA_MANIFEST_VALIDATION=lenient` (Draft 07 sanity only) or
 ///   `=off` (skip entirely). Default is `strict`.
 fn validate_skill_manifest(skill_dir: &Path) -> Result<()> {
     let manifest_path = skill_dir.join("manifest.json");
@@ -35,7 +35,7 @@ fn validate_skill_manifest(skill_dir: &Path) -> Result<()> {
         .map(|_| ())
         .wrap_err_with(|| {
             format!(
-                "manifest at {} failed RFC-2 schema validation\n\nSet ra_MANIFEST_VALIDATION=lenient to skip the strict ra rules, or =off to skip validation entirely.",
+                "manifest at {} failed RFC-2 schema validation\n\nSet RA_MANIFEST_VALIDATION=lenient to skip the strict ra rules, or =off to skip validation entirely.",
                 manifest_path.display()
             )
         })
@@ -2064,7 +2064,7 @@ fi
     }
 
     /// Installing a local skill with `hardware_lifecycle.init` containing
-    /// `touch $ra_SKILL_DIR/init_marker` must produce `init_marker` in the
+    /// `touch $RA_SKILL_DIR/init_marker` must produce `init_marker` in the
     /// installed skill directory.
     ///
     /// Uses a fake skill source (local temp dir) so no network or git is needed.
@@ -2081,14 +2081,14 @@ fi
         std::fs::write(src_dir.join("SKILL.md"), "# hw-test-skill\n").unwrap();
 
         // manifest.json with a hardware_lifecycle.init step that writes a
-        // sentinel file into $ra_SKILL_DIR.
+        // sentinel file into $RA_SKILL_DIR.
         let manifest = r#"{
             "name": "hw-test-skill",
             "version": "0.1.0",
             "tools": [],
             "hardware_lifecycle": {
                 "init": [
-                    {"label": "write-marker", "command": "touch \"$ra_SKILL_DIR/init_marker\""}
+                    {"label": "write-marker", "command": "touch \"$RA_SKILL_DIR/init_marker\""}
                 ]
             }
         }"#;
