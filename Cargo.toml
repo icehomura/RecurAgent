@@ -2,7 +2,7 @@
 resolver = "2"
 # `tui/` is its own workspace (the RecurAgent terminal client ships and releases on its
 # own cadence, like upstream's ra-tui); it path-depends on crates/ra-core.
-exclude = ["tui"]
+exclude = ["tui", "vendor"]
 members = [
     "crates/ra-core",
     "crates/ra-diagnostics",

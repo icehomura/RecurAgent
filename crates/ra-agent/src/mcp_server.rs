@@ -63,7 +63,7 @@ use crate::validators::ValidatorOutcome;
 pub const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
 
 /// The single session-level MCP tool exposed by the server.
-pub const RUN_ra_SESSION_TOOL: &str = "run_ra_session";
+pub const RUN_RA_SESSION_TOOL: &str = "run_ra_session";
 
 /// Environment variable name that the HTTP transport reads for its bearer token.
 pub const RA_MCP_SERVER_TOKEN_ENV: &str = "RA_MCP_SERVER_TOKEN";
@@ -226,7 +226,7 @@ impl McpServer {
             .get("name")
             .and_then(Value::as_str)
             .unwrap_or_default();
-        if tool_name != RUN_ra_SESSION_TOOL {
+        if tool_name != RUN_RA_SESSION_TOOL {
             return render_mcp_error(id, McpServerError::UnknownTool(tool_name.to_string()));
         }
 
@@ -385,10 +385,10 @@ impl ServerHandler for RaMcpHandler {
         request: CallToolRequestParams,
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
-        if request.name.as_ref() != RUN_ra_SESSION_TOOL {
+        if request.name.as_ref() != RUN_RA_SESSION_TOOL {
             return Err(ErrorData::invalid_params(
                 format!(
-                    "unknown tool '{}'; this server exposes only '{RUN_ra_SESSION_TOOL}'",
+                    "unknown tool '{}'; this server exposes only '{RUN_RA_SESSION_TOOL}'",
                     request.name
                 ),
                 None,
@@ -402,7 +402,7 @@ impl ServerHandler for RaMcpHandler {
             .arguments
             .map(Value::Object)
             .unwrap_or_else(|| Value::Object(Default::default()));
-        let params = json!({ "name": RUN_ra_SESSION_TOOL, "arguments": arguments });
+        let params = json!({ "name": RUN_RA_SESSION_TOOL, "arguments": arguments });
 
         // Run the session, but abort it if rmcp cancels this request: a client
         // `notifications/cancelled`, a disconnect, or session teardown (e.g. the
@@ -432,7 +432,7 @@ fn run_ra_session_tool() -> Tool {
     let schema = run_ra_session_schema();
     let input_schema = schema.as_object().cloned().unwrap_or_default();
     Tool::new(
-        RUN_ra_SESSION_TOOL,
+        RUN_RA_SESSION_TOOL,
         "Run a complete ra session. The caller supplies a workspace contract name and an \
          input payload; ra runs its normal loop to completion (including workspace-contract \
          enforcement) and returns the resulting artifact. Internal tool calls and progress \
@@ -532,7 +532,7 @@ fn emit_call_outcome(
         let event = HarnessEvent::mcp_server_call(
             format!("mcp:{transport}"),
             TaskId::new().to_string(),
-            RUN_ra_SESSION_TOOL,
+            RUN_RA_SESSION_TOOL,
             caller_id_for_transport(transport),
             transport,
             &outcome_label,
@@ -543,7 +543,7 @@ fn emit_call_outcome(
     }
     counter!(
         "ra_mcp_server_call_total",
-        "tool" => RUN_ra_SESSION_TOOL.to_string(),
+        "tool" => RUN_RA_SESSION_TOOL.to_string(),
         "outcome" => outcome_label,
     )
     .increment(1);
@@ -568,7 +568,7 @@ pub fn build_initialize_response(_server: &McpServer) -> Value {
 pub fn build_tools_list_response(_server: &McpServer) -> Value {
     json!({
         "tools": [{
-            "name": RUN_ra_SESSION_TOOL,
+            "name": RUN_RA_SESSION_TOOL,
             "description": "Run a complete ra session. The caller supplies a workspace contract name and an input payload; ra runs its normal loop to completion (including workspace-contract enforcement) and returns the resulting artifact. Internal tool calls and progress events are not streamed to the caller.",
             "inputSchema": run_ra_session_schema()
         }]
@@ -627,7 +627,7 @@ pub async fn dispatch_run_ra_session(
         .cloned()
         .unwrap_or(Value::Object(Default::default()));
 
-    let task_id = supervisor.register(RUN_ra_SESSION_TOOL, "mcp-call", Some("mcp:server"));
+    let task_id = supervisor.register(RUN_RA_SESSION_TOOL, "mcp-call", Some("mcp:server"));
     let observer = SupervisorObserver {
         supervisor,
         task_id: task_id.clone(),
@@ -915,10 +915,10 @@ mod tests {
         // tools/list advertises exactly the one session-level tool.
         let tools = client.list_all_tools().await.expect("tools/list");
         assert_eq!(tools.len(), 1);
-        assert_eq!(tools[0].name.as_ref(), RUN_ra_SESSION_TOOL);
+        assert_eq!(tools[0].name.as_ref(), RUN_RA_SESSION_TOOL);
 
         // tools/call routes through the dispatch and returns a non-error bundle.
-        let mut param = CallToolRequestParams::new(RUN_ra_SESSION_TOOL);
+        let mut param = CallToolRequestParams::new(RUN_RA_SESSION_TOOL);
         param.arguments = json!({ "contract": "coding", "input": {} })
             .as_object()
             .cloned();

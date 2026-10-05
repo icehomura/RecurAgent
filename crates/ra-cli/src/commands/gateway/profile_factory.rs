@@ -167,24 +167,15 @@ pub(crate) fn apply_resolved_profile_llm_env(
             Some(config_revision.to_string()),
         ),
     ];
-    // Both spellings are always replaced: a value that is now absent (e.g. a
-    // cleared `base_url`) must be REMOVED in both spellings, not left behind as
-    // a stale legacy key. New brand names come first, legacy `RA_*` second so
-    // readers that have not migrated still find the same values.
-    let mut all_keys: Vec<String> = Vec::with_capacity(values.len() * 2);
-    let mut all_values: Vec<(String, String)> = Vec::with_capacity(values.len() * 2);
-    for (name, value) in values {
-        let new_name = format!("RA_{}", name.strip_prefix("RA_").unwrap_or(name));
-        all_keys.push(new_name.clone());
-        all_keys.push(name.to_string());
-        let Some(value) = value.filter(|value| !value.trim().is_empty()) else {
-            continue;
-        };
-        all_values.push((new_name, value.clone()));
-        all_values.push((name.to_string(), value));
-    }
-    env.retain(|(name, _)| !all_keys.iter().any(|key| name == key));
-    env.extend(all_values);
+    // A value that is now absent (e.g. a cleared `base_url`) must be REMOVED,
+    // not left behind as a stale key.
+    let keys: Vec<&str> = values.iter().map(|(name, _)| *name).collect();
+    env.retain(|(name, _)| !keys.iter().any(|key| name == key));
+    env.extend(values.into_iter().filter_map(|(name, value)| {
+        value
+            .filter(|value| !value.trim().is_empty())
+            .map(|value| (name.to_string(), value))
+    }));
 }
 
 pub(crate) fn profile_plugin_env(profile: &crate::profiles::UserProfile) -> Vec<(String, String)> {

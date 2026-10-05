@@ -4339,7 +4339,6 @@ name = "makepad-live-id"
 version = "1.0.0"
 dependencies = [
  "makepad-live-id-macros",
- "serde",
 ]
 
 [[package]]
@@ -7481,9 +7480,6 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 [[package]]
 name = "smallvec"
 version = "1.15.1"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "smallvec"
