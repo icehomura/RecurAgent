@@ -352,10 +352,8 @@ const APPUI_METHOD_CLIENT_HELLO: &str = "client_hello";
 /// Stop this `ra serve`, exactly as Ctrl+C would. Local `--solo` HTTP
 /// servers only — see [`supports_server_shutdown`].
 const APPUI_METHOD_SERVER_SHUTDOWN: &str = "server/shutdown";
-const APPUI_METHOD_SESSION_STATUS_READ: &str =
-    ra_core::ui_protocol::methods::SESSION_STATUS_READ;
-const APPUI_METHOD_PROFILE_LOCAL_CREATE: &str =
-    ra_core::ui_protocol::methods::PROFILE_LOCAL_CREATE;
+const APPUI_METHOD_SESSION_STATUS_READ: &str = ra_core::ui_protocol::methods::SESSION_STATUS_READ;
+const APPUI_METHOD_PROFILE_LOCAL_CREATE: &str = ra_core::ui_protocol::methods::PROFILE_LOCAL_CREATE;
 const APPUI_METHOD_PROFILE_LLM_LIST: &str = "profile/llm/list";
 const APPUI_METHOD_PROFILE_LLM_SELECT: &str = "profile/llm/select";
 const APPUI_METHOD_MCP_STATUS_LIST: &str = "mcp/status/list";
@@ -3693,10 +3691,7 @@ fn appui_compaction_budgets_for(
 }
 
 fn appui_compaction_budgets(threshold_tokens: usize) -> AppUiCompactionBudgets {
-    appui_compaction_budgets_for(
-        threshold_tokens,
-        env_usize("CONTEXT_COMPACT_TARGET_TOKENS"),
-    )
+    appui_compaction_budgets_for(threshold_tokens, env_usize("CONTEXT_COMPACT_TARGET_TOKENS"))
 }
 
 fn appui_semantic_compact_policy(
@@ -3792,9 +3787,7 @@ fn appui_compaction_summary(
         llm_provider,
         &frame.messages,
         budget_tokens,
-        std::time::Duration::from_secs(
-            ra_agent::compaction::DEFAULT_LLM_COMPACTION_TIMEOUT_SECS,
-        ),
+        std::time::Duration::from_secs(ra_agent::compaction::DEFAULT_LLM_COMPACTION_TIMEOUT_SECS),
     ) {
         return summary;
     }
@@ -11143,9 +11136,7 @@ fn permission_selection_policy_fields(
     &'static str,
     &'static str,
 ) {
-    use ra_core::ui_protocol::{
-        PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
-    };
+    use ra_core::ui_protocol::{PermissionNetworkPolicy as Network, PermissionProfileMode as Mode};
 
     let approval_policy = if selection.mode == Mode::DangerFullAccess
         || approval_policy == Some(ra_agent::ApprovalPolicy::Never)
@@ -11361,9 +11352,7 @@ fn permission_selection_allowed(
     approval_policy: Option<ra_agent::ApprovalPolicy>,
     requested_runtime_mode: Option<&str>,
 ) -> bool {
-    use ra_core::ui_protocol::{
-        PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
-    };
+    use ra_core::ui_protocol::{PermissionNetworkPolicy as Network, PermissionProfileMode as Mode};
 
     // Only treat the request as solo-relaxed when it explicitly says so
     // (or omits the override). The UPCR-2026-018 runtime_mode override
@@ -11406,9 +11395,7 @@ fn effective_permissions_for_session(
     state: &AppState,
     session_id: &SessionKey,
 ) -> Result<ra_agent::EffectivePermissions, RpcError> {
-    use ra_core::ui_protocol::{
-        PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
-    };
+    use ra_core::ui_protocol::{PermissionNetworkPolicy as Network, PermissionProfileMode as Mode};
 
     let permission_state = effective_session_permission_state(state, session_id);
     let requested = match permission_state.selection.mode {
@@ -11432,12 +11419,12 @@ fn effective_permissions_for_session(
     };
     let mut permissions = ra_agent::EffectivePermissions::for_runtime(requested, runtime_mode)
         .map_err(|err| {
-        RpcError::permission_denied(err.to_string()).with_data(json!({
-            "kind": "permission_profile_disallowed",
-            "runtime_mode": runtime_mode_for_state(state),
-            "permission_profile": format!("{:?}", requested),
-        }))
-    })?;
+            RpcError::permission_denied(err.to_string()).with_data(json!({
+                "kind": "permission_profile_disallowed",
+                "runtime_mode": runtime_mode_for_state(state),
+                "permission_profile": format!("{:?}", requested),
+            }))
+        })?;
     if let Some(approval_policy) = permission_state.approval_policy {
         permissions = permissions.with_approval_policy(approval_policy);
     }
@@ -12589,14 +12576,12 @@ fn materialize_action_file_path(
         ra_agent::plugins::SkillActionFileMaterialization::WorkspaceRelative => {
             use ra_bus::file_handle::ToolPathScope;
 
-            let resolved =
-                ra_bus::file_handle::resolve_tool_path(workspace_root, None, raw_path).map_err(
-                    |error| {
-                        RpcError::invalid_params(format!(
-                            "skill action input path `{raw_path}` is invalid: {error}"
-                        ))
-                    },
-                )?;
+            let resolved = ra_bus::file_handle::resolve_tool_path(workspace_root, None, raw_path)
+                .map_err(|error| {
+                RpcError::invalid_params(format!(
+                    "skill action input path `{raw_path}` is invalid: {error}"
+                ))
+            })?;
             match resolved.scope {
                 ToolPathScope::UploadTmpdir => {
                     let paths = ra_bus::file_handle::materialize_uploads_as_workspace_relative(
@@ -14483,13 +14468,9 @@ async fn raw_profile_llm_fetch_models(
         nonempty(params.selection.model_id).as_deref(),
         base_url.as_deref(),
     );
-    let outcome = ra_llm::discovery::discover_models(
-        &route,
-        &api_key,
-        base_url.as_deref(),
-        Some(&family_id),
-    )
-    .await;
+    let outcome =
+        ra_llm::discovery::discover_models(&route, &api_key, base_url.as_deref(), Some(&family_id))
+            .await;
     let status = outcome.status_label();
     let mut result = json!({
         "profile_id": profile_id,
@@ -16847,8 +16828,7 @@ fn build_peer_lane_provider(
         sp.api_type.as_deref(),
     ) {
         Ok(p) => {
-            let provider: Arc<dyn ra_llm::LlmProvider> =
-                Arc::new(ra_llm::RetryProvider::new(p));
+            let provider: Arc<dyn ra_llm::LlmProvider> = Arc::new(ra_llm::RetryProvider::new(p));
             Some(provider)
         }
         Err(err) => {
@@ -19455,10 +19435,7 @@ fn evaluate_peer_fleet_synthesis(
 /// the fleet scan only accepts real dirs carrying `brief.md` (via
 /// [`staged_peer_dir`]), so it is skipped.
 fn peer_fleet_synthesized_stamp_path(peers_root: &Path, master: &str) -> PathBuf {
-    peers_root.join(format!(
-        ".synthesized-{}",
-        ra_core::safe_filename(master)
-    ))
+    peers_root.join(format!(".synthesized-{}", ra_core::safe_filename(master)))
 }
 
 /// True when the per-master `.synthesized` stamp file is present, in EITHER
@@ -26828,8 +26805,7 @@ async fn maybe_spawn_appui_master_continuation_runner(
     let (start_tx, start_rx) = tokio::sync::oneshot::channel();
     // Continuation turns run the ordinary agent loop, so they are steerable
     // like any regular turn (codex steers every RegularTask).
-    let steer_buffer: ra_agent::SharedSteerBuffer =
-        Arc::new(ra_agent::SteerBuffer::default());
+    let steer_buffer: ra_agent::SharedSteerBuffer = Arc::new(ra_agent::SteerBuffer::default());
     let steer_buffer_for_turn = steer_buffer.clone();
 
     let ws_for_turn = ws.clone();
@@ -29020,12 +28996,7 @@ async fn handle_task_cancel(
                 task_id,
                 status: UiTaskRuntimeState::Cancelled,
             };
-            send_serialized_rpc_result(
-                ws,
-                id,
-                ra_core::ui_protocol::methods::TASK_CANCEL,
-                result,
-            );
+            send_serialized_rpc_result(ws, id, ra_core::ui_protocol::methods::TASK_CANCEL, result);
         }
         Err(error) => {
             let _ = send_rpc_error(ws, Some(id), error);
@@ -31239,12 +31210,7 @@ async fn handle_session_btw(
             answer,
             model: Some(metadata.model.clone()),
         };
-        send_serialized_rpc_result(
-            &ws,
-            id,
-            ra_core::ui_protocol::methods::SESSION_BTW,
-            result,
-        );
+        send_serialized_rpc_result(&ws, id, ra_core::ui_protocol::methods::SESSION_BTW, result);
     });
     Some(task)
 }
@@ -31896,12 +31862,7 @@ async fn handle_launch_resolve(
     match resolve_launch_result(state, connection_profile_id, features, &params) {
         Ok(result) => {
             let body = serde_json::to_value(&result).unwrap_or_else(|_| json!({}));
-            send_aux_rpc_result(
-                ws,
-                id,
-                ra_core::ui_protocol::methods::LAUNCH_RESOLVE,
-                body,
-            );
+            send_aux_rpc_result(ws, id, ra_core::ui_protocol::methods::LAUNCH_RESOLVE, body);
         }
         Err(error) => {
             let _ = send_rpc_error(ws, Some(id), error);
@@ -33017,9 +32978,7 @@ fn parse_memory_time_bound(
 /// must parse and be ordered, and `limit` defaults to
 /// [`MEMORY_SEARCH_DEFAULT_LIMIT`] and is clamped to
 /// `1..=MEMORY_SEARCH_MAX_LIMIT`. Pure — unit-tested directly.
-fn memory_search_filter(
-    params: &MemorySearchParams,
-) -> Result<ra_memory::SearchFilter, RpcError> {
+fn memory_search_filter(params: &MemorySearchParams) -> Result<ra_memory::SearchFilter, RpcError> {
     let method = ra_core::ui_protocol::methods::MEMORY_SEARCH;
     if params.query.trim().is_empty() {
         return Err(RpcError::invalid_params(format!(
@@ -36147,9 +36106,8 @@ async fn run_native_code_review_turn(
     let task_id = TaskId::new();
     let target = review_target_summary(params.target.as_ref());
     let objective = review_objective(&params, &target);
-    let review_runtime_policy_stamp =
-        ra_agent::RoleTemplate::for_name(ra_agent::ROLE_REVIEWER)
-            .map(|template| template.runtime_policy_stamp("supervisor", "native_review", None));
+    let review_runtime_policy_stamp = ra_agent::RoleTemplate::for_name(ra_agent::ROLE_REVIEWER)
+        .map(|template| template.runtime_policy_stamp("supervisor", "native_review", None));
     let workspace_root = session_runtime.workspace_root.clone();
     let llm_provider = session_runtime.profile.llm.clone();
     let memory_store = session_runtime.memory.episodes.clone();
@@ -36710,8 +36668,8 @@ fn maybe_spawn_mcp_review_specialist(
             path: artifact_path.clone(),
         }],
     };
-    let tool_name =
-        ra_core::brand::env_compat_str("REVIEW_MCP_TOOL_NAME").unwrap_or_else(|| "run_task".to_owned());
+    let tool_name = ra_core::brand::env_compat_str("REVIEW_MCP_TOOL_NAME")
+        .unwrap_or_else(|| "run_task".to_owned());
     let task = json!({
         "objective": objective,
         "target": target,
@@ -38651,10 +38609,7 @@ async fn run_standalone_turn(
     // its original Weak (set at SessionRuntime bootstrap), so other
     // turns are unaffected.
     if let Some(existing) = tool_registry.get("mofa_make").cloned() {
-        if let Some(dispatcher) = existing
-            .as_any()
-            .downcast_ref::<ra_agent::MofaMakeTool>()
-        {
+        if let Some(dispatcher) = existing.as_any().downcast_ref::<ra_agent::MofaMakeTool>() {
             let entries = dispatcher.entries();
             let fresh_dispatcher = ra_agent::MofaMakeTool::new();
             for entry in &entries {
@@ -40773,9 +40728,7 @@ async fn run_standalone_turn(
         ?asr_status,
         "voice_turn: STT result"
     );
-    let had_non_audio_media = asr_media
-        .iter()
-        .any(|path| !ra_bus::media::is_audio(path));
+    let had_non_audio_media = asr_media.iter().any(|path| !ra_bus::media::is_audio(path));
     if should_short_circuit_no_speech(
         had_audio_media,
         had_non_audio_media,
@@ -42237,9 +42190,7 @@ async fn run_standalone_turn(
                             voice_streamed_count = handle.await.unwrap_or(voice_streamed_count);
                         }
                         let code = match failure {
-                            ra_agent::TurnFailure::LlmError { error, .. } => {
-                                error.variant_name()
-                            }
+                            ra_agent::TurnFailure::LlmError { error, .. } => error.variant_name(),
                             ra_agent::TurnFailure::EmptyResponse => "empty_response",
                         };
                         (code, speech.to_string())
@@ -42770,10 +42721,7 @@ async fn run_standalone_turn(
         crate::session_actor::emit_lifecycle_hook_payload(
             turn_end_hooks.as_ref(),
             &session_id,
-            ra_agent::HookPayload::on_turn_end(
-                turn_end_summary.clone(),
-                Some(&turn_end_hook_ctx),
-            ),
+            ra_agent::HookPayload::on_turn_end(turn_end_summary.clone(), Some(&turn_end_hook_ctx)),
         )
         .await;
         // codex #2 residual — a client-interrupted peer takes THIS branch, not
@@ -43088,11 +43036,9 @@ async fn run_standalone_turn(
                             {
                                 Ok(html) => {
                                     let html = match png_bytes {
-                                        Some(bytes) => {
-                                            ra_agent::rich_output::inline_illustration(
-                                                &html, &bytes,
-                                            )
-                                        }
+                                        Some(bytes) => ra_agent::rich_output::inline_illustration(
+                                            &html, &bytes,
+                                        ),
                                         None => html,
                                     };
                                     let name = format!("visual-{}.html", uuid::Uuid::now_v7());
@@ -43641,10 +43587,7 @@ fn build_turn_session_result_from_done(event: &Value) -> Option<TurnSessionResul
 /// Turns are serialized per session, so the live background tasks belong to
 /// the turn being interrupted. Already-terminal tasks are skipped
 /// (`cancel` would return `AlreadyTerminal`); the call is idempotent.
-fn cancel_session_spawn_only_tasks(
-    supervisor: &ra_agent::TaskSupervisor,
-    session_id: &SessionKey,
-) {
+fn cancel_session_spawn_only_tasks(supervisor: &ra_agent::TaskSupervisor, session_id: &SessionKey) {
     for task in supervisor.get_tasks_for_session(&session_id.to_string()) {
         if !task.status.is_terminal() {
             let _ = supervisor.cancel(&task.id);
@@ -46704,15 +46647,14 @@ fn spawn_router_failover_forwarder(
                             );
                         }
                     }
-                    let notif = UiNotification::RouterFailover(
-                        ra_core::ui_protocol::RouterFailoverEvent {
+                    let notif =
+                        UiNotification::RouterFailover(ra_core::ui_protocol::RouterFailoverEvent {
                             session_id: session_id.clone(),
                             from_provider: event.from_provider,
                             to_provider: event.to_provider,
                             reason: event.reason,
                             elapsed_ms: event.elapsed_ms,
-                        },
-                    );
+                        });
                     // Best-effort durable — failover events ledger for
                     // reconnect-replay. Hard-close errors (FatalClosed,
                     // Closed) mean the client is gone; break out so

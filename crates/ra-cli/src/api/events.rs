@@ -359,8 +359,7 @@ mod tests {
         let json = event_to_json(&event, None);
         let preview = json["output_preview"].as_str().expect("preview");
         assert!(
-            preview.chars().count()
-                <= ra_core::ui_protocol::ENVELOPE_TOOL_OUTPUT_PREVIEW_MAX + 1,
+            preview.chars().count() <= ra_core::ui_protocol::ENVELOPE_TOOL_OUTPUT_PREVIEW_MAX + 1,
             "preview must be bounded, got {} chars",
             preview.chars().count()
         );

@@ -6844,15 +6844,7 @@ mod peer_turn_status_tests {
             peer_io::read_peer_file(&dir, "result.md", peer_io::PEER_FILE_READ_CAP_LARGE).unwrap();
         use sha2::{Digest, Sha256};
         let digest = format!("{:x}", Sha256::digest(body.as_bytes()));
-        lifetime(
-            &dir,
-            "ra",
-            "p-idle",
-            "idle",
-            0,
-            Some("t1"),
-            Some(&digest),
-        );
+        lifetime(&dir, "ra", "p-idle", "idle", 0, Some("t1"), Some(&digest));
         let f = facet(temp.path(), "p-idle");
         assert_eq!(f.execution, "idle");
         assert_eq!(f.master_session_id.as_deref(), Some("master-p-idle"));

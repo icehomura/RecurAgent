@@ -1385,8 +1385,7 @@ async fn run() -> Output {
 
                 // Sign-in, sign-up and sign-out pages hold no content; an
                 // explicit path_prefix (already applied above) crawls them.
-                if input.path_prefix.is_none() && ra_research::urls::is_account_link(&normalized)
-                {
+                if input.path_prefix.is_none() && ra_research::urls::is_account_link(&normalized) {
                     if !skipped_account.contains(&normalized) {
                         skipped_account.push(normalized);
                     }

@@ -3454,11 +3454,7 @@ fn olp_review_identity_cwd_trunk_normalization() {
     std::fs::write(&state2, serde_json::to_string(&st2).unwrap()).unwrap();
     let (glmn, k3n, gdirn) =
         m35_native_baseline_with_k3_originator(&dn, &h, "rafix:local:tui#coding\u{0}~cwd-abc");
-    std::fs::write(
-        gdirn.join("originator"),
-        "rafix:local:tui#other-master\n",
-    )
-    .unwrap();
+    std::fs::write(gdirn.join("originator"), "rafix:local:tui#other-master\n").unwrap();
     let (ok2, so2, _) = m35_freeze(&dn, &h, &glmn, &k3n);
     assert!(!ok2, "不同 master leaf 不得通过: {so2}");
     assert!(

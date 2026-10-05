@@ -17,8 +17,8 @@ use ra_llm::vertex_auth::TokenSource;
 
 use crate::harness_errors::HarnessError;
 use crate::harness_events::{
-    ra_EVENT_SINK_ENV, ra_HARNESS_SESSION_ID_ENV, ra_HARNESS_TASK_ID_ENV,
-    ra_SESSION_ID_ENV, ra_TASK_ID_ENV, lookup_event_sink_context, write_event_to_sink,
+    lookup_event_sink_context, ra_EVENT_SINK_ENV, ra_HARNESS_SESSION_ID_ENV,
+    ra_HARNESS_TASK_ID_ENV, ra_SESSION_ID_ENV, ra_TASK_ID_ENV, write_event_to_sink,
 };
 use crate::policy::ApprovalPolicy;
 use crate::progress::ProgressEvent;
@@ -1796,8 +1796,7 @@ fn resolve_plugin_input_path(
     // when it exists.
     let stripped = strip_redundant_skill_output_prefix(raw_path, work_dir);
     if let Some(ref stripped_path) = stripped {
-        if let Ok(resolved) =
-            ra_bus::file_handle::resolve_tool_path(work_dir, None, stripped_path)
+        if let Ok(resolved) = ra_bus::file_handle::resolve_tool_path(work_dir, None, stripped_path)
         {
             if matches!(resolved.scope, ToolPathScope::Workspace) && resolved.absolute.exists() {
                 return Ok(resolved.absolute.to_string_lossy().into_owned());

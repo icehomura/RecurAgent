@@ -81,7 +81,10 @@ mod tests {
 
     #[test]
     fn should_detect_opencode_by_host_for_unknown_provider_labels() {
-        for base_url in ["https://opencode.ai/zen/v1", "https://opencode.ai/zen/go/v1"] {
+        for base_url in [
+            "https://opencode.ai/zen/v1",
+            "https://opencode.ai/zen/go/v1",
+        ] {
             assert!(
                 is_opencode_endpoint("unrelated-lane", base_url),
                 "{base_url} must be treated as OpenCode"
@@ -108,9 +111,7 @@ mod tests {
 
     #[test]
     fn should_emit_no_headers_for_non_opencode_endpoints() {
-        assert!(
-            opencode_headers("openai", "https://api.openai.com/v1", Some("sess-1")).is_empty()
-        );
+        assert!(opencode_headers("openai", "https://api.openai.com/v1", Some("sess-1")).is_empty());
         assert!(
             opencode_headers("anthropic", "https://api.anthropic.com", Some("sess-1")).is_empty()
         );

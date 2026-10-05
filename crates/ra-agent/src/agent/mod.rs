@@ -245,14 +245,8 @@ impl Default for AgentConfig {
                 "LLM_FIRST_TOKEN_GRACE_SECS",
                 DEFAULT_LLM_FIRST_TOKEN_GRACE_SECS,
             ),
-            llm_stream_idle: env_secs_or(
-                "LLM_STREAM_IDLE_SECS",
-                DEFAULT_LLM_STREAM_IDLE_SECS,
-            ),
-            llm_call_max: env_secs_allow_zero_or(
-                "LLM_CALL_MAX_SECS",
-                DEFAULT_LLM_CALL_MAX_SECS,
-            ),
+            llm_stream_idle: env_secs_or("LLM_STREAM_IDLE_SECS", DEFAULT_LLM_STREAM_IDLE_SECS),
+            llm_call_max: env_secs_allow_zero_or("LLM_CALL_MAX_SECS", DEFAULT_LLM_CALL_MAX_SECS),
             human_approval_rules: None,
             voice_overall_deadline: env_secs_or(
                 "VOICE_LLM_DEADLINE_SECS",

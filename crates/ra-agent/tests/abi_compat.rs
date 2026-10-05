@@ -18,9 +18,7 @@ use ra_agent::abi_schema::{
 };
 use ra_agent::hooks::{HookEvent, HookPayload};
 use ra_agent::progress::{HARNESS_PROGRESS_EVENT_SCHEMA, ProgressEvent, ProgressEventEnvelope};
-use ra_agent::workspace_policy::{
-    WORKSPACE_POLICY_FILE, WorkspacePolicy, read_workspace_policy,
-};
+use ra_agent::workspace_policy::{WORKSPACE_POLICY_FILE, WorkspacePolicy, read_workspace_policy};
 use ra_core::{TASK_RESULT_SCHEMA_VERSION, TaskResult};
 
 fn fixtures_dir() -> PathBuf {
@@ -51,10 +49,7 @@ fn should_load_workspace_policy_v1_slides_fixture() {
         .expect("policy file should exist");
 
     assert_eq!(policy.schema_version, WORKSPACE_POLICY_SCHEMA_VERSION);
-    assert_eq!(
-        policy.workspace.kind,
-        ra_agent::WorkspacePolicyKind::Slides
-    );
+    assert_eq!(policy.workspace.kind, ra_agent::WorkspacePolicyKind::Slides);
     assert!(
         policy
             .validation
@@ -82,9 +77,7 @@ fn should_load_workspace_policy_v1_slides_fixture() {
 
 #[test]
 fn should_load_workspace_policy_v1_session_fixture() {
-    use ra_agent::workspace_policy::{
-        SpawnTaskValidatorSpec, ValidatorFileSource, ValidatorSpec,
-    };
+    use ra_agent::workspace_policy::{SpawnTaskValidatorSpec, ValidatorFileSource, ValidatorSpec};
 
     let temp = tempfile::tempdir().unwrap();
     copy_fixture_into_workspace("workspace_policy_v1_session.toml", temp.path());
@@ -206,10 +199,7 @@ fn should_default_workspace_policy_to_v1_when_schema_version_missing() {
         policy.schema_version, WORKSPACE_POLICY_SCHEMA_VERSION,
         "pre-M4.6 policy files must load as v1",
     );
-    assert_eq!(
-        policy.workspace.kind,
-        ra_agent::WorkspacePolicyKind::Sites
-    );
+    assert_eq!(policy.workspace.kind, ra_agent::WorkspacePolicyKind::Sites);
 }
 
 #[test]

@@ -21,9 +21,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use ra_agent::cost_ledger::{
-    CostAccountant, CostBudgetPolicy, CostLedger, PersistentCostLedger,
-};
+use ra_agent::cost_ledger::{CostAccountant, CostBudgetPolicy, CostLedger, PersistentCostLedger};
 use ra_agent::tools::mcp_agent::{
     DispatchOutcome, DispatchRequest, DispatchResponse, McpAgentBackend,
 };

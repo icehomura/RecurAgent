@@ -347,10 +347,7 @@ mod tests {
         assert!(!r.is_allowed("ra-research", "/news"));
         assert!(r.is_allowed("ra-research", "/public/a"));
         assert!(r.is_allowed("someone-else", "/news"));
-        assert_eq!(
-            r.crawl_delay("ra-research"),
-            Some(Duration::from_secs(2))
-        );
+        assert_eq!(r.crawl_delay("ra-research"), Some(Duration::from_secs(2)));
         assert_eq!(r.crawl_delay("someone-else"), None);
     }
 

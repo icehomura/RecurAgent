@@ -1276,9 +1276,7 @@ fn resolve_for_scope(
             );
         }
         match ra_bus::file_handle::resolve_tool_path(scope.workspace(), None, user_path) {
-            Ok(resolved)
-                if resolved.scope == ra_bus::file_handle::ToolPathScope::UploadTmpdir =>
-            {
+            Ok(resolved) if resolved.scope == ra_bus::file_handle::ToolPathScope::UploadTmpdir => {
                 return if for_write {
                     Err("Writes to uploaded files are not permitted")
                 } else {

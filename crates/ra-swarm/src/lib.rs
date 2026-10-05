@@ -105,7 +105,7 @@ pub use dispatcher::{
 // here so existing `ra_swarm::DispatchPolicy` callers (CLI / tests
 // / harness) keep compiling without changes.
 pub use ledger::{CostLedger, NoopCostLedger, SwarmCostAttribution};
-pub use ra_agent::DispatchPolicy;
 pub use persistence::{DISPATCH_RECORD_SCHEMA_VERSION, DispatchRecord, DispatchStore};
+pub use ra_agent::DispatchPolicy;
 pub use result::{AggregateArtifact, SubtaskOutcome, SubtaskStatus, SwarmOutcomeKind, SwarmResult};
 pub use topology::{ContractSpec, FanoutPattern, MAX_CONTRACTS_PER_DISPATCH, SwarmTopology};

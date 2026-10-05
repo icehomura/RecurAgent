@@ -569,14 +569,15 @@ fn should_read_keys_settings_and_contact_from_the_environment() {
     );
     assert_eq!(c.settings["mastodon"]["instance"], "fosstodon.org");
     assert_eq!(
-        c.settings["stackexchange"]["site"],
-        "serverfault",
+        c.settings["stackexchange"]["site"], "serverfault",
         "the legacy settings spelling is honoured"
     );
     assert_eq!(c.contact.as_deref(), Some("new@example.org"));
     assert!(enabled(|_| None));
     assert!(!enabled(|_| Some("0".into())));
-    assert!(!enabled(|k| (k == LEGACY_METASEARCH_ENV).then(|| "0".into())));
+    assert!(!enabled(
+        |k| (k == LEGACY_METASEARCH_ENV).then(|| "0".into())
+    ));
 }
 
 #[tokio::test(start_paused = true)]

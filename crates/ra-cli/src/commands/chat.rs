@@ -1059,8 +1059,7 @@ pub(crate) fn create_embedder_in(
         // A non-openai provider without an explicit base_url falls back to
         // the registry's default endpoint — otherwise the request goes to
         // api.openai.com with the other provider's key/model (codex R8).
-        if let Some(url) =
-            ra_llm::registry::lookup(&cfg.provider).and_then(|e| e.default_base_url)
+        if let Some(url) = ra_llm::registry::lookup(&cfg.provider).and_then(|e| e.default_base_url)
         {
             e = e.with_base_url(url);
         }
@@ -1890,8 +1889,7 @@ pub fn create_provider_with_api_type(
                 .unwrap_or("https://api.anthropic.com")
                 .into()
         });
-        let mut provider =
-            ra_llm::anthropic::AnthropicProvider::new(&key, &m).with_base_url(&url);
+        let mut provider = ra_llm::anthropic::AnthropicProvider::new(&key, &m).with_base_url(&url);
         if let Some(t) = llm_timeout_secs {
             let c = llm_connect_timeout_secs.unwrap_or(ra_llm::DEFAULT_LLM_CONNECT_TIMEOUT_SECS);
             provider = provider.with_http_timeout(t, c);

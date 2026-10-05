@@ -415,5 +415,4 @@ mod tests {
             other => panic!("expected Route::Config(Show), got {other:?}"),
         }
     }
-
 }

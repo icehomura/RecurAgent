@@ -101,20 +101,19 @@ impl Agent {
         // Voice fail-fast tightens TTFT / idle (a spoken reply can't wait
         // minutes for the first token) and caps the overall at the voice
         // deadline. Normal turns keep the generous production thresholds.
-        let thresholds =
-            if ra_llm::current_llm_call_policy() == ra_llm::LlmCallPolicy::FailFast {
-                StreamTimeouts {
-                    first_token_grace_secs: super::VOICE_STREAM_TTFT_SECS,
-                    inter_chunk_idle_secs: super::VOICE_STREAM_IDLE_SECS,
-                    overall_max_secs: self.config.voice_overall_deadline.as_secs(),
-                }
-            } else {
-                StreamTimeouts {
-                    first_token_grace_secs: self.config.llm_first_token_grace.as_secs(),
-                    inter_chunk_idle_secs: self.config.llm_stream_idle.as_secs(),
-                    overall_max_secs: self.effective_llm_call_max_secs(),
-                }
-            };
+        let thresholds = if ra_llm::current_llm_call_policy() == ra_llm::LlmCallPolicy::FailFast {
+            StreamTimeouts {
+                first_token_grace_secs: super::VOICE_STREAM_TTFT_SECS,
+                inter_chunk_idle_secs: super::VOICE_STREAM_IDLE_SECS,
+                overall_max_secs: self.config.voice_overall_deadline.as_secs(),
+            }
+        } else {
+            StreamTimeouts {
+                first_token_grace_secs: self.config.llm_first_token_grace.as_secs(),
+                inter_chunk_idle_secs: self.config.llm_stream_idle.as_secs(),
+                overall_max_secs: self.effective_llm_call_max_secs(),
+            }
+        };
         self.consume_stream_inner(
             stream,
             iteration,

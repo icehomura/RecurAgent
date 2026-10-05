@@ -565,10 +565,7 @@ mod tests {
             "bundle must be written to the dedicated <root>/bundled-pipelines dir"
         );
         assert!(
-            !ra_home
-                .join("pipelines")
-                .join("deep_research.dot")
-                .exists(),
+            !ra_home.join("pipelines").join("deep_research.dot").exists(),
             "bundle must NOT be written to <root>/pipelines (would shadow installs)"
         );
     }

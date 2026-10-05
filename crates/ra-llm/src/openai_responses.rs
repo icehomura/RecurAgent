@@ -292,17 +292,14 @@ impl OpenAIResponsesProvider {
             ) {
                 builder = builder.header(name, value);
             }
-            let response = builder
-                .send()
-                .await
-                .wrap_err_with(|| {
-                    crate::provider::transport_error_message(
-                        streaming,
-                        self.provider_name(),
-                        &self.model,
-                        crate::provider::ApiStyle::OpenAiResponses,
-                    )
-                })?;
+            let response = builder.send().await.wrap_err_with(|| {
+                crate::provider::transport_error_message(
+                    streaming,
+                    self.provider_name(),
+                    &self.model,
+                    crate::provider::ApiStyle::OpenAiResponses,
+                )
+            })?;
             if response.status().is_success() {
                 return Ok((response, pending));
             }

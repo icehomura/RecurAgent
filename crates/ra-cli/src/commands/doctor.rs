@@ -356,10 +356,7 @@ fn installations_checks(ra: &ProductSpec) -> Vec<Check> {
 /// matters for enumeration; the rest are placeholders.
 fn ra_tui_spec() -> ProductSpec {
     ProductSpec::new(
-        "ra-tui",
-        "ra-tui",
-        "0.0.0",
-        "",             // no release channel (source-built)
+        "ra-tui", "ra-tui", "0.0.0", "", // no release channel (source-built)
         "ra-tui",
     )
 }
@@ -375,8 +372,7 @@ fn locate_with_ra_bin(spec: &ProductSpec) -> LocatedBinaries {
             .join("bin")
             .join(spec.binary_file_name());
         if candidate.is_file() {
-            let canonical =
-                std::fs::canonicalize(&candidate).unwrap_or_else(|_| candidate.clone());
+            let canonical = std::fs::canonicalize(&candidate).unwrap_or_else(|_| candidate.clone());
             let already = located
                 .all()
                 .iter()
@@ -2045,10 +2041,7 @@ mod tests {
             install_method_for_path(Path::new("/home/u/.ra/bin/ra")),
             "ra-tui auto-install"
         );
-        assert_eq!(
-            install_method_for_path(Path::new("/usr/bin/ra")),
-            "system"
-        );
+        assert_eq!(install_method_for_path(Path::new("/usr/bin/ra")), "system");
         assert_eq!(
             install_method_for_path(Path::new("/x/node_modules/.bin/ra-tui")),
             "npm"

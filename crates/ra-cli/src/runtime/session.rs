@@ -512,10 +512,8 @@ impl SessionRuntime {
         let mut sandbox = sandbox_override
             .unwrap_or_else(|| permissions.apply_to_sandbox(&profile.default_sandbox));
         if let Some((root, excluded)) = context_read_view(&bootstrapped_binding) {
-            sandbox.read_only_view = Some(Box::new(ra_agent::SandboxReadOnlyView {
-                root,
-                excluded,
-            }));
+            sandbox.read_only_view =
+                Some(Box::new(ra_agent::SandboxReadOnlyView { root, excluded }));
         }
         let mut tools = profile.tool_specs.rebind_cwd_with_permissions(
             &workspace_root,
@@ -723,8 +721,7 @@ impl SessionRuntime {
                     // dirs that fail canonicalize (fail-closed) — a raw path
                     // later replaced by a symlink to `/etc` would otherwise be
                     // legitimised as `InSkillDir`.
-                    let skill_dirs =
-                        ra_core::canonicalize_skill_read_zones(&profile.plugin_dirs);
+                    let skill_dirs = ra_core::canonicalize_skill_read_zones(&profile.plugin_dirs);
                     let scope = scope.with_skill_read_zones(skill_dirs).unwrap_or_else(|err| {
                         tracing::warn!(
                             profile_id = %profile.profile_id,
@@ -1587,8 +1584,7 @@ tools = ["read_file"]
         let memory = Arc::new(EpisodeStore::open(&data_dir).await.unwrap());
         let memory_store = Arc::new(MemoryStore::open(&data_dir).await.unwrap());
         let recall = Arc::new(
-            ra_memory::RecallStore::open(&data_dir, ra_memory::RecallConfig::default())
-                .unwrap(),
+            ra_memory::RecallStore::open(&data_dir, ra_memory::RecallConfig::default()).unwrap(),
         );
         let tool_config = Arc::new(ra_agent::ToolConfigStore::open(&data_dir).await.unwrap());
         let base_tools =
@@ -2440,8 +2436,7 @@ tools = ["read_file"]
         let memory = Arc::new(EpisodeStore::open(&data_dir).await.unwrap());
         let memory_store = Arc::new(MemoryStore::open(&data_dir).await.unwrap());
         let recall = Arc::new(
-            ra_memory::RecallStore::open(&data_dir, ra_memory::RecallConfig::default())
-                .unwrap(),
+            ra_memory::RecallStore::open(&data_dir, ra_memory::RecallConfig::default()).unwrap(),
         );
         let tool_config = Arc::new(ra_agent::ToolConfigStore::open(&data_dir).await.unwrap());
         let sandbox = SandboxConfig::default();

@@ -499,13 +499,10 @@ impl McpClient {
             .spawn()
             .wrap_err_with(|| format!("failed to spawn MCP server '{command}'"))?;
 
-        let service = timeout(
-            HANDSHAKE_TIMEOUT,
-            serve_client(ra_client_info(), transport),
-        )
-        .await
-        .map_err(|_| eyre::eyre!("MCP handshake timed out after {HANDSHAKE_TIMEOUT:?}"))?
-        .map_err(|e| eyre::eyre!("MCP initialize failed: {e}"))?;
+        let service = timeout(HANDSHAKE_TIMEOUT, serve_client(ra_client_info(), transport))
+            .await
+            .map_err(|_| eyre::eyre!("MCP handshake timed out after {HANDSHAKE_TIMEOUT:?}"))?
+            .map_err(|e| eyre::eyre!("MCP initialize failed: {e}"))?;
         Ok(Arc::new(service))
     }
 
@@ -531,13 +528,10 @@ impl McpClient {
             StreamableHttpClientTransportConfig::with_uri(url.to_string()),
         );
 
-        let service = timeout(
-            HANDSHAKE_TIMEOUT,
-            serve_client(ra_client_info(), transport),
-        )
-        .await
-        .map_err(|_| eyre::eyre!("MCP handshake timed out after {HANDSHAKE_TIMEOUT:?}"))?
-        .map_err(|e| eyre::eyre!("MCP initialize failed: {e}"))?;
+        let service = timeout(HANDSHAKE_TIMEOUT, serve_client(ra_client_info(), transport))
+            .await
+            .map_err(|_| eyre::eyre!("MCP handshake timed out after {HANDSHAKE_TIMEOUT:?}"))?
+            .map_err(|e| eyre::eyre!("MCP initialize failed: {e}"))?;
         Ok(Arc::new(service))
     }
 

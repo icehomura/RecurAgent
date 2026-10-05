@@ -447,7 +447,9 @@ pub const DEFAULT_CREDENTIAL_POOL_DB_FILENAME: &str = "credential_pool.redb";
 /// `<RA_HOME>/credential_pool.redb` (see [`ra_core::brand::state_path`]).
 /// Returns `None` when no state home can be resolved.
 pub fn default_credential_pool_path() -> Option<std::path::PathBuf> {
-    Some(ra_core::brand::state_path(DEFAULT_CREDENTIAL_POOL_DB_FILENAME))
+    Some(ra_core::brand::state_path(
+        DEFAULT_CREDENTIAL_POOL_DB_FILENAME,
+    ))
 }
 
 /// redb-backed implementation of [`CredentialPool`].

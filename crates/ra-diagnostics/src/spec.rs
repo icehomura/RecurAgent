@@ -153,7 +153,10 @@ mod tests {
             .with_cargo_install("ra-cli")
             .with_cargo_dist_app("ra");
         assert_eq!(spec.current_version, "1.2.3");
-        assert_eq!(spec.brew_formula.as_deref(), Some("icehomura/RecurAgent/ra"));
+        assert_eq!(
+            spec.brew_formula.as_deref(),
+            Some("icehomura/RecurAgent/ra")
+        );
         assert_eq!(spec.npm_package.as_deref(), Some("@icehomura/RecurAgent"));
         assert_eq!(spec.cargo_install.as_deref(), Some("ra-cli"));
         assert_eq!(spec.cargo_dist_app.as_deref(), Some("ra"));

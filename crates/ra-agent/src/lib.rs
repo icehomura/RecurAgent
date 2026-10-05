@@ -92,8 +92,8 @@ pub use agent::{
     IncompleteResponseError, MAX_TOOL_TIMEOUT_SECS, PartialTurnUsage, PromptSegmentProvider,
     RealtimeController, TASK_REPORTER, TokenTracker,
     loop_state::{
-        LoopDecision, LoopRetryCounters, LoopRetryLimits, LoopRetryState, ra_LOOP_RETRY_TOTAL,
-        SHELL_SPIRAL_VARIANT,
+        LoopDecision, LoopRetryCounters, LoopRetryLimits, LoopRetryState, SHELL_SPIRAL_VARIANT,
+        ra_LOOP_RETRY_TOTAL,
     },
     memory::MIN_EPISODE_SIMILARITY,
     normalize_tool_call_id,
@@ -135,7 +135,7 @@ pub use file_state_cache::{
     DEFAULT_MAX_TOTAL_BYTES as FILE_CACHE_DEFAULT_MAX_TOTAL_BYTES, FILE_UNCHANGED_STUB_PREFIX,
     FileStateCache, FileStateCacheBuilder, format_file_unchanged_stub,
 };
-pub use harness_errors::{HarnessError, HarnessErrorEvent, ra_LOOP_ERROR_TOTAL, RecoveryHint};
+pub use harness_errors::{HarnessError, HarnessErrorEvent, RecoveryHint, ra_LOOP_ERROR_TOTAL};
 pub use harness_events::{
     HARNESS_EVENT_SCHEMA_V1, HarnessArtifactEvent, HarnessCostAttributionEvent,
     HarnessCredentialRotationEvent, HarnessCredentialRotationSink, HarnessEvent, HarnessEventError,

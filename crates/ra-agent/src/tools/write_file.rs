@@ -391,11 +391,8 @@ impl WriteFileTool {
                 // drop debug_assert). shown_path is already bounded to ~200
                 // bytes, so this never actually cuts; it is the enforced
                 // backstop keeping the loop's blind cut off the advice.
-                let output = ra_core::truncated_utf8(
-                    &output,
-                    ra_core::tool_output_limit("write_file"),
-                    "",
-                );
+                let output =
+                    ra_core::truncated_utf8(&output, ra_core::tool_output_limit("write_file"), "");
                 return Ok(ToolResult {
                     output,
                     success: false,

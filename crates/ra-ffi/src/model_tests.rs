@@ -193,10 +193,7 @@ fn should_serve_model_status_and_ensure_through_c_without_a_runtime() {
     assert_eq!(status["present"], false);
     assert_eq!(status["complete"], false);
     assert_eq!(status["sha256"], embed_model::DEFAULT_MODEL_SHA256);
-    assert!(
-        ra_last_error().is_null(),
-        "success clears the last error"
-    );
+    assert!(ra_last_error().is_null(), "success clears the last error");
 
     assert!(ra_embedding_model_ensure(data_dir.as_ptr(), false).is_null());
     assert!(

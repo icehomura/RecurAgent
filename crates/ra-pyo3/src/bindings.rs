@@ -2,10 +2,10 @@
 //! root). Everything that touches pyo3 / libpython lives here so the default
 //! build stays libpython-free.
 
-use ra_ffi::{CoreError, RaRuntime, RuntimeConfig, TaskBrief};
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
+use ra_ffi::{CoreError, RaRuntime, RuntimeConfig, TaskBrief};
 
 create_exception!(
     ra,

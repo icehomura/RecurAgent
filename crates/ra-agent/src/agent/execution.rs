@@ -2300,8 +2300,7 @@ impl Agent {
                         .map(|p| p.to_string_lossy().into_owned())
                         .collect();
 
-                    let output_preview =
-                        ra_core::truncated_utf8(&tool_result.output, 200, "...");
+                    let output_preview = ra_core::truncated_utf8(&tool_result.output, 200, "...");
 
                     reporter.report(ProgressEvent::ToolCompleted {
                         name: tc_name.clone(),

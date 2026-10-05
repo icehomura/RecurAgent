@@ -1747,11 +1747,7 @@ fn olp_review_monitor_v3_foreign_originator_thread_not_running() {
     // peer originator 指向别的 wire master(同 channel 同 cwd,不同 master leaf)
     let foreign = peers_root.join("worker");
     std::fs::create_dir_all(&foreign).unwrap();
-    std::fs::write(
-        foreign.join("originator"),
-        "rafix:local:tui#other-master\n",
-    )
-    .unwrap();
+    std::fs::write(foreign.join("originator"), "rafix:local:tui#other-master\n").unwrap();
     std::fs::write(foreign.join("goal"), "goal_01\n").unwrap();
     // 无 lifetime.json(fallback 链): 未完 native thread 形似本 session(cwd 相同)
     let sid = "rafix:local:tui#peer-worker\u{0}~cwd-abc";

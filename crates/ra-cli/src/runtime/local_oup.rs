@@ -125,8 +125,7 @@ async fn bootstrap_with_profile_root(
     }
     let mut state = AppState::without_services(&options.data_dir);
     state.sessions = Some(Arc::new(tokio::sync::Mutex::new(
-        ra_bus::SessionManager::open(&options.data_dir)
-            .wrap_err("open local OUP session store")?,
+        ra_bus::SessionManager::open(&options.data_dir).wrap_err("open local OUP session store")?,
     )));
     // This state is reachable only through an in-process pipe. No network
     // listener or login endpoint is exposed by local frontend bootstrap.
@@ -453,10 +452,7 @@ mod tests {
         let config = profile.session_defaults.as_ref().unwrap();
         assert_eq!(config.chat_temperature, Some(0.3));
         assert_eq!(config.chat_max_tokens, Some(1234));
-        assert_eq!(
-            config.reasoning_effort,
-            Some(ra_llm::ReasoningEffort::High)
-        );
+        assert_eq!(config.reasoning_effort, Some(ra_llm::ReasoningEffort::High));
         let sampling = config.chat_sampling_params.as_ref().unwrap();
         assert_eq!(sampling["top_p"], serde_json::json!(0.8_f32));
         assert_eq!(sampling["repeat_penalty"], serde_json::json!(1.1));

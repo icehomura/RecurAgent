@@ -323,8 +323,7 @@ mod tests {
         append_reviewer_steer(temp.path(), session, "first-canary").expect("s1");
         append_reviewer_steer(temp.path(), session, "second-canary").expect("s2");
         orchestrator.steer_inbox_sweep(temp.path(), "ra");
-        let after_first_sweep =
-            orchestrator.pending_steer_continuation_count_for_test(&key, "ra");
+        let after_first_sweep = orchestrator.pending_steer_continuation_count_for_test(&key, "ra");
         // exactly-once: BOTH steers must be queued as their own
         // continuations (per-line), never one swallowed, never one
         // carrying stale text.

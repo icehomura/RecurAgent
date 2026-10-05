@@ -309,14 +309,8 @@ fn push_runtime_plugin_env(
         "RA_DATA_DIR".to_string(),
         data_dir.to_string_lossy().to_string(),
     ));
-    plugin_env.push((
-        "RA_HOME".to_string(),
-        ra_home.to_string_lossy().to_string(),
-    ));
-    plugin_env.push((
-        "RA_HOME".to_string(),
-        ra_home.to_string_lossy().to_string(),
-    ));
+    plugin_env.push(("RA_HOME".to_string(), ra_home.to_string_lossy().to_string()));
+    plugin_env.push(("RA_HOME".to_string(), ra_home.to_string_lossy().to_string()));
     plugin_env.push(("RA_PROFILE_ID".to_string(), profile_id.to_string()));
     plugin_env.push(("RA_PROFILE_ID".to_string(), profile_id.to_string()));
     plugin_env.push((
@@ -1079,10 +1073,7 @@ impl ProfileActorFactoryBuilder {
             }
 
             impl crate::session_actor::PipelineToolFactory for ChildPipelineToolFactory {
-                fn create(
-                    &self,
-                    sandbox: &ra_agent::SandboxConfig,
-                ) -> Arc<dyn ra_agent::Tool> {
+                fn create(&self, sandbox: &ra_agent::SandboxConfig) -> Arc<dyn ra_agent::Tool> {
                     let mut pt = ra_pipeline::RunPipelineTool::new(
                         self.llm.clone(),
                         self.memory.clone(),
@@ -1367,14 +1358,8 @@ mod tests {
 
         let env = profile_plugin_env(&profile);
 
-        assert!(env.contains(&(
-            "RA_PROFILE_LLM_PROVIDER".to_string(),
-            "google".to_string()
-        )));
-        assert!(env.contains(&(
-            "RA_PROFILE_LLM_PROVIDER".to_string(),
-            "google".to_string()
-        )));
+        assert!(env.contains(&("RA_PROFILE_LLM_PROVIDER".to_string(), "google".to_string())));
+        assert!(env.contains(&("RA_PROFILE_LLM_PROVIDER".to_string(), "google".to_string())));
         assert!(env.contains(&(
             "RA_PROFILE_LLM_MODEL".to_string(),
             "gemini-3.6-flash".to_string()
@@ -1730,11 +1715,8 @@ mod tests {
         let memory = Arc::new(EpisodeStore::open(&effective_ra_home).await.unwrap());
         let memory_store = Arc::new(MemoryStore::open(&effective_ra_home).await.unwrap());
         let recall = Arc::new(
-            ra_memory::RecallStore::open(
-                &effective_ra_home,
-                ra_memory::RecallConfig::default(),
-            )
-            .unwrap(),
+            ra_memory::RecallStore::open(&effective_ra_home, ra_memory::RecallConfig::default())
+                .unwrap(),
         );
         let session_mgr = Arc::new(Mutex::new(
             SessionManager::open(&effective_ra_home).unwrap(),
@@ -1747,10 +1729,7 @@ mod tests {
         let (out_tx, _out_rx) = mpsc::channel(4);
         let (spawn_inbound_tx, _spawn_inbound_rx) = mpsc::channel(4);
         let (cron_in_tx, _cron_in_rx) = mpsc::channel(1);
-        let cron_service = Arc::new(CronService::new(
-            effective_ra_home.join("cron"),
-            cron_in_tx,
-        ));
+        let cron_service = Arc::new(CronService::new(effective_ra_home.join("cron"), cron_in_tx));
 
         let builder = ProfileActorFactoryBuilder {
             profile_store: store,

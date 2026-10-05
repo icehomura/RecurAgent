@@ -190,9 +190,10 @@ impl McpServeCommand {
                 // New name first; the legacy `ra_MCP_SERVER_TOKEN` (the name
                 // ra-agent's `ra_MCP_SERVER_TOKEN_ENV` const still spells)
                 // keeps existing deployments working.
-                let token = ra_core::brand::env_compat_str("MCP_SERVER_TOKEN").ok_or_else(|| {
-                    eyre::eyre!("{MCP_SERVER_TOKEN_ENV} must be set for the http transport")
-                })?;
+                let token =
+                    ra_core::brand::env_compat_str("MCP_SERVER_TOKEN").ok_or_else(|| {
+                        eyre::eyre!("{MCP_SERVER_TOKEN_ENV} must be set for the http transport")
+                    })?;
                 if token.trim().is_empty() {
                     eyre::bail!("{MCP_SERVER_TOKEN_ENV} must not be empty");
                 }

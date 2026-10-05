@@ -2529,7 +2529,10 @@ mod tests {
 /// command line explicitly authorizes a write-shaped command under `deny`.
 pub(crate) fn command_allows_write_explicitly(command: &str) -> bool {
     const MARKER: &str = "# ra:allow-write";
-    command.lines().last().is_some_and(|last| last.contains(MARKER))
+    command
+        .lines()
+        .last()
+        .is_some_and(|last| last.contains(MARKER))
 }
 
 /// #28b — heuristic: does this command LOOK like it writes files? A

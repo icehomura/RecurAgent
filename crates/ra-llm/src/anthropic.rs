@@ -485,17 +485,14 @@ impl LlmProvider for AnthropicProvider {
         ) {
             builder = builder.header(name, value);
         }
-        let response = builder
-            .send()
-            .await
-            .wrap_err_with(|| {
-                crate::provider::transport_error_message(
-                    false,
-                    &self.provider_label,
-                    &self.model,
-                    crate::provider::ApiStyle::AnthropicMessages,
-                )
-            })?;
+        let response = builder.send().await.wrap_err_with(|| {
+            crate::provider::transport_error_message(
+                false,
+                &self.provider_label,
+                &self.model,
+                crate::provider::ApiStyle::AnthropicMessages,
+            )
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -556,17 +553,14 @@ impl LlmProvider for AnthropicProvider {
         ) {
             builder = builder.header(name, value);
         }
-        let response = builder
-            .send()
-            .await
-            .wrap_err_with(|| {
-                crate::provider::transport_error_message(
-                    true,
-                    &self.provider_label,
-                    &self.model,
-                    crate::provider::ApiStyle::AnthropicMessages,
-                )
-            })?;
+        let response = builder.send().await.wrap_err_with(|| {
+            crate::provider::transport_error_message(
+                true,
+                &self.provider_label,
+                &self.model,
+                crate::provider::ApiStyle::AnthropicMessages,
+            )
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();

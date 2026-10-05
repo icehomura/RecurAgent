@@ -922,10 +922,7 @@ mod tests {
 
     #[test]
     fn should_infer_protocol_mode_from_config_transport_without_mode() {
-        let path = write_config(
-            "infer-mode",
-            r#"{ "stdio_command": "ra serve --stdio" }"#,
-        );
+        let path = write_config("infer-mode", r#"{ "stdio_command": "ra serve --stdio" }"#);
 
         let cli = Cli::try_parse_from(["ra-tui", "--config", path.to_str().unwrap()])
             .expect("cli parses");

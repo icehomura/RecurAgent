@@ -18,9 +18,7 @@ use std::io::Write as _;
 use std::os::unix::fs::PermissionsExt;
 use std::sync::Arc;
 
-use ra_agent::{
-    HookConfig, HookEvent, HookExecutor, HookPayload, HookPayloadEnricher, HookResult,
-};
+use ra_agent::{HookConfig, HookEvent, HookExecutor, HookPayload, HookPayloadEnricher, HookResult};
 
 /// Test enricher that attaches a fixed `force_n` reading.
 struct StaticForceEnricher {

@@ -2397,10 +2397,7 @@ impl Channel for MatrixChannel {
             .route("/_matrix/app/v1/users/{user_id}", get(handle_user_query))
             .route("/_matrix/app/v1/rooms/{room_alias}", get(handle_room_query))
             .route("/_matrix/app/v1/ping", axum::routing::post(handle_ping))
-            .route(
-                "/_ra/reload-bots",
-                axum::routing::post(handle_reload_bots),
-            )
+            .route("/_ra/reload-bots", axum::routing::post(handle_reload_bots))
             .with_state(state);
 
         let addr = default_appservice_bind_addr(self.port);

@@ -87,10 +87,7 @@ mod tests {
     #[test]
     fn sanitize_display_path_passes_through_safe_relative_paths() {
         assert_eq!(sanitize_display_path("src/lib.rs"), "src/lib.rs");
-        assert_eq!(
-            sanitize_display_path("/etc/ra/config"),
-            "/etc/ra/config"
-        );
+        assert_eq!(sanitize_display_path("/etc/ra/config"), "/etc/ra/config");
         assert_eq!(sanitize_display_path(""), "");
     }
 

@@ -477,9 +477,7 @@ impl FreeTierAnswer {
 /// GDELT asks for at most one request every 5 seconds (process-wide).
 fn gdelt_throttle() -> &'static ra_research::HostThrottle {
     static T: std::sync::OnceLock<ra_research::HostThrottle> = std::sync::OnceLock::new();
-    T.get_or_init(|| {
-        ra_research::HostThrottle::new(ra_research::providers::GDELT_MIN_INTERVAL)
-    })
+    T.get_or_init(|| ra_research::HostThrottle::new(ra_research::providers::GDELT_MIN_INTERVAL))
 }
 
 // --- Brave types ---
@@ -1749,10 +1747,7 @@ impl WebSearchTool {
 }
 
 /// Results-page rows `(title, url, snippet)` as search hits from `provider`.
-fn serp_hits(
-    rows: Vec<(String, String, String)>,
-    provider: &str,
-) -> Vec<ra_research::SearchHit> {
+fn serp_hits(rows: Vec<(String, String, String)>, provider: &str) -> Vec<ra_research::SearchHit> {
     rows.into_iter()
         .map(|(title, url, snippet)| ra_research::SearchHit {
             url,
@@ -2465,10 +2460,7 @@ mod tests {
     fn should_gate_both_results_page_providers_on_one_switch() {
         assert!(serp_scrape_opted_in(|_| None), "on by default");
         assert!(!serp_scrape_opted_in(|_| Some("false".into())));
-        for key in [
-            ra_research::SERP_SCRAPE_ENV,
-            ra_research::BROWSER_SERP_ENV,
-        ] {
+        for key in [ra_research::SERP_SCRAPE_ENV, ra_research::BROWSER_SERP_ENV] {
             assert!(!serp_scrape_opted_in(
                 |k| (k == key).then(|| "0".to_string())
             ));

@@ -641,9 +641,9 @@ async fn test_9_per_bearer_cap_returns_429() {
 async fn test_10_background_sweeper_removes_expired() {
     use std::time::Duration;
 
-    let cache = std::sync::Arc::new(ra_cli::api::PreviewTokens::with_ttl(
-        Duration::from_millis(50),
-    ));
+    let cache = std::sync::Arc::new(ra_cli::api::PreviewTokens::with_ttl(Duration::from_millis(
+        50,
+    )));
 
     // Seed the cache with one token. We use the in-process API directly
     // (no HTTP) — the background-sweeper contract is on the cache type,

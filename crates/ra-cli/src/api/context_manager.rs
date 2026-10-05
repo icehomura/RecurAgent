@@ -4981,8 +4981,7 @@ mod tests {
     fn rebuilds_context_from_session_history_with_source_sequences() {
         let mut user = Message::user("hello");
         user.thread_id = Some("thread-a".into());
-        let assistant =
-            Message::assistant_with_thread("world", ra_core::ThreadId::new("thread-a"));
+        let assistant = Message::assistant_with_thread("world", ra_core::ThreadId::new("thread-a"));
         let manager =
             ContextManager::from_session_history("coding:local:test", None, &[user, assistant]);
 
@@ -7474,11 +7473,7 @@ mod tests {
             &[
                 Message::user("inspect both"),
                 assistant,
-                Message::tool_with_thread(
-                    "a result",
-                    "call_a",
-                    ra_core::ThreadId::new("thread-1"),
-                ),
+                Message::tool_with_thread("a result", "call_a", ra_core::ThreadId::new("thread-1"),),
                 Message::user("continue without b"),
             ]
         ));

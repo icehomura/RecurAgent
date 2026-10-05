@@ -227,8 +227,7 @@ pub(crate) fn render_transcript(
                     Some((l, b)) => (format!("{l}] "), b.to_string()),
                     None => (String::new(), candidate),
                 };
-                let budget_tokens =
-                    max_tokens.saturating_sub(ra_memory::estimate_tokens(&label));
+                let budget_tokens = max_tokens.saturating_sub(ra_memory::estimate_tokens(&label));
                 let budget_bytes = max_bytes.saturating_sub(label.len());
                 candidate = format!(
                     "{label}{}",

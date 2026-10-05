@@ -1320,9 +1320,7 @@ mod tests_2116_readonly {
         let temp = tempfile::tempdir().expect("tempdir");
         let store = SupervisorStore::new(temp.path().join("supervisor"));
         store
-            .record_group_registered(supervisor_goal_group(
-                "api:s1", "ra", "goal_01", "active",
-            ))
+            .record_group_registered(supervisor_goal_group("api:s1", "ra", "goal_01", "active"))
             .expect("seed supervisor goal");
         let lock_path = temp.path().join(".ra-serve.lock");
         let lock = std::fs::OpenOptions::new()
@@ -1364,9 +1362,7 @@ mod tests_2116_readonly {
         let temp = tempfile::tempdir().expect("tempdir");
         let store = SupervisorStore::new(temp.path().join("supervisor"));
         store
-            .record_group_registered(supervisor_goal_group(
-                "api:s1", "ra", "goal_01", "active",
-            ))
+            .record_group_registered(supervisor_goal_group("api:s1", "ra", "goal_01", "active"))
             .expect("seed supervisor goal");
         let groups = store.load_goal_groups_by_id().expect("goal view");
         route_transition(temp.path(), &store, &groups, "ra", "goal_01", "archive")
@@ -1392,9 +1388,7 @@ mod tests_2116_readonly {
         let temp = tempfile::tempdir().expect("tempdir");
         let store = SupervisorStore::new(temp.path().join("supervisor"));
         store
-            .record_group_registered(supervisor_goal_group(
-                "api:s1", "ra", "goal_01", "active",
-            ))
+            .record_group_registered(supervisor_goal_group("api:s1", "ra", "goal_01", "active"))
             .expect("seed supervisor goal");
 
         let observed = std::rc::Rc::new(std::cell::RefCell::new(false));
@@ -1583,10 +1577,7 @@ mod tests_2248_sun_len {
         let (base, ours) = fallback_base_dir(None, PathBuf::from("/tmp"), 0o1777);
         assert_eq!(
             (base, ours),
-            (
-                PathBuf::from(format!("/tmp/ra-goal-control-{uid}")),
-                true
-            )
+            (PathBuf::from(format!("/tmp/ra-goal-control-{uid}")), true)
         );
         // A per-user (0700) temp dir is used directly.
         let (base, ours) = fallback_base_dir(None, PathBuf::from("/var/folders/xx/T"), 0o700);

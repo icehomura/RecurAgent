@@ -655,8 +655,7 @@ pub(crate) async fn run_consolidation_pass(
         // reply) plus the staging payload.
         let memory_md =
             std::fs::read_to_string(data_dir.join("memory").join("MEMORY.md")).unwrap_or_default();
-        let estimate =
-            2 * ra_memory::estimate_tokens(&memory_md) as u64 + staging_bytes_before / 4;
+        let estimate = 2 * ra_memory::estimate_tokens(&memory_md) as u64 + staging_bytes_before / 4;
         spent = estimate.max(1);
     }
     // Failed/rejected merges spent provider calls too — charging them is

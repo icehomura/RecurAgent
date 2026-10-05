@@ -1673,8 +1673,7 @@ mod tests {
             .is_err()
         );
         // Bare `ra cache` still parses (overview).
-        crate::commands::Args::try_parse_from(["ra", "cache"])
-            .expect("bare `ra cache` must parse");
+        crate::commands::Args::try_parse_from(["ra", "cache"]).expect("bare `ra cache` must parse");
         // Rejects an unknown subcommand (typo protection).
         assert!(crate::commands::Args::try_parse_from(["ra", "cache", "stat"]).is_err());
     }

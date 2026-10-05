@@ -170,9 +170,7 @@ pub fn resolve_config_context(cli_data_dir: Option<&Path>) -> ConfigContext {
 
     // auth_home is GLOBAL: the config-dir env if set, else the brand config
     // home. NEVER data_dir.
-    let auth_home = config_override
-        .clone()
-        .unwrap_or_else(default_config_home);
+    let auth_home = config_override.clone().unwrap_or_else(default_config_home);
 
     let is_default = !(data_dir_is_explicit || config_override.is_some());
 

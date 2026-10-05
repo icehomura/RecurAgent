@@ -480,8 +480,7 @@ mod tests {
         // "bad config line 6" on every git invocation (#2662): the
         // backslash starts an invalid config escape and the unquoted
         // value could not contain spaces either.
-        let windowsish =
-            std::path::Path::new("C:\\Users\\runneradmin\\app\\.ra-git-1\\no-hooks");
+        let windowsish = std::path::Path::new("C:\\Users\\runneradmin\\app\\.ra-git-1\\no-hooks");
         let rendered = PrivateGitDir::config_hooks_value(windowsish);
         assert_eq!(rendered, "C:/Users/runneradmin/app/.ra-git-1/no-hooks");
         assert!(

@@ -12898,10 +12898,7 @@ mod tests {
         // canonical takeover will ever arrive, so the completed v1 segment
         // must keep flushing progressively. (While capabilities are still
         // UNKNOWN, v1 bytes are held instead — see P2-17.)
-        app.set_capabilities(ra_core::ui_protocol::UiProtocolCapabilities::new(
-            &[],
-            &[],
-        ));
+        app.set_capabilities(ra_core::ui_protocol::UiProtocolCapabilities::new(&[], &[]));
         app.assistant_projection_lanes
             .insert(turn_key, crate::model::AssistantProjectionLane::V1);
 

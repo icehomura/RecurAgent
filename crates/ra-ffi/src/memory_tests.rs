@@ -401,10 +401,7 @@ fn should_round_trip_through_c_memory_entry_points() {
     .unwrap();
     let report = take_json(ra_memory_upsert(&mut rt, req.as_ptr()));
     assert_eq!(report["inserted"], 1);
-    assert!(
-        ra_last_error().is_null(),
-        "success clears the last error"
-    );
+    assert!(ra_last_error().is_null(), "success clears the last error");
 
     let q = CString::new(r#"{"query":"hiking","sources":["contacts"],"limit":5}"#).unwrap();
     let hits = take_json(ra_memory_search(&mut rt, q.as_ptr()));

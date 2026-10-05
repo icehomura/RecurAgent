@@ -261,7 +261,10 @@ mod tests {
         }
         assert!(!serp_scrape_allowed(only(BROWSER_SERP_ENV, "0")), "alias");
         // The legacy `RA_` spellings are still honoured…
-        assert!(!serp_scrape_allowed(only(LEGACY_SERP_SCRAPE_ENV, "0")), "legacy");
+        assert!(
+            !serp_scrape_allowed(only(LEGACY_SERP_SCRAPE_ENV, "0")),
+            "legacy"
+        );
         assert!(
             !serp_scrape_allowed(only(LEGACY_BROWSER_SERP_ENV, "0")),
             "legacy alias"
@@ -278,7 +281,10 @@ mod tests {
                 }
             }
         };
-        assert!(serp_scrape_allowed(both(SERP_SCRAPE_ENV, LEGACY_SERP_SCRAPE_ENV)));
+        assert!(serp_scrape_allowed(both(
+            SERP_SCRAPE_ENV,
+            LEGACY_SERP_SCRAPE_ENV
+        )));
         assert!(serp_scrape_allowed(only("OTHER", "0")));
     }
 
@@ -330,8 +336,14 @@ mod tests {
         let legacy = |v: &'static str| {
             move |k: &str| (k == LEGACY_READ_BLOCKED_IN_BROWSER_ENV).then(|| v.to_string())
         };
-        assert!(read_blocked_in_browser(legacy("1")), "legacy spelling honoured");
-        assert!(!read_blocked_in_browser(legacy("0")), "legacy opt-out honoured");
+        assert!(
+            read_blocked_in_browser(legacy("1")),
+            "legacy spelling honoured"
+        );
+        assert!(
+            !read_blocked_in_browser(legacy("0")),
+            "legacy opt-out honoured"
+        );
     }
 
     #[test]
@@ -354,7 +366,10 @@ mod tests {
         assert_eq!(env_lookup("NOT_SET_XYZ"), None);
         assert_eq!(env_lookup("RA_NOT_SET_XYZ"), None);
         assert_eq!(env_lookup("RA_NOT_SET_XYZ"), None);
-        assert_eq!(legacy_env_name("RA_RESPECT_ROBOTS"), LEGACY_RESPECT_ROBOTS_ENV);
+        assert_eq!(
+            legacy_env_name("RA_RESPECT_ROBOTS"),
+            LEGACY_RESPECT_ROBOTS_ENV
+        );
         assert_eq!(legacy_env_name("RESPECT_ROBOTS"), LEGACY_RESPECT_ROBOTS_ENV);
         assert_eq!(
             legacy_env_name(LEGACY_RESPECT_ROBOTS_ENV),

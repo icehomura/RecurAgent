@@ -3606,12 +3606,11 @@ impl ActorFactory {
         // that goes onto the parent Agent so the child workers we spawn
         // observe an identical contract. (The Agent::new wiring further
         // down also consumes this Arc — keep them in sync.)
-        let subagent_summary_generator_for_spawn =
-            Arc::new(ra_agent::AgentSummaryGenerator::new(
-                self.llm_for_compaction.clone(),
-                self.subagent_output_router.clone(),
-                (*supervisor).clone(),
-            ));
+        let subagent_summary_generator_for_spawn = Arc::new(ra_agent::AgentSummaryGenerator::new(
+            self.llm_for_compaction.clone(),
+            self.subagent_output_router.clone(),
+            (*supervisor).clone(),
+        ));
 
         // Spawn tool (per-session context, fully configured)
         let mut spawn_tool = SpawnTool::with_context(
@@ -5509,9 +5508,7 @@ impl SessionActor {
                 match ra_bus::session::persist_system_note_once_through_canonical_path(
                     &self.data_dir,
                     &self.session_key,
-                    ra_core::Message::system(format!(
-                        "goal completion not verified — {outcome}"
-                    )),
+                    ra_core::Message::system(format!("goal completion not verified — {outcome}")),
                     &note_id,
                 )
                 .await
@@ -8164,8 +8161,7 @@ impl SessionActor {
         }
 
         // Reset reporter to silent (drops stream_tx → forwarder finishes)
-        self.agent
-            .set_reporter(Arc::new(ra_agent::SilentReporter));
+        self.agent.set_reporter(Arc::new(ra_agent::SilentReporter));
 
         // Clear adaptive router status callback (stream_tx is being dropped)
         if let Some(ref router) = self.adaptive_router {
@@ -9815,8 +9811,7 @@ impl SessionActor {
         }
 
         // Reset reporter to silent (drop the stream sender → forwarder will finish)
-        self.agent
-            .set_reporter(Arc::new(ra_agent::SilentReporter));
+        self.agent.set_reporter(Arc::new(ra_agent::SilentReporter));
 
         // Clear adaptive router status callback
         if let Some(ref router) = self.adaptive_router {

@@ -20,7 +20,7 @@ use tokio::sync::mpsc;
 use tokio::sync::{Mutex, RwLock, broadcast, watch};
 
 use crate::profiles::{
-    ChannelCredentials, HOST_ASR_LANGUAGE_ENV, ProfileStore, ra_HOST_ASR_LANGUAGE_ENV, UserProfile,
+    ChannelCredentials, HOST_ASR_LANGUAGE_ENV, ProfileStore, UserProfile, ra_HOST_ASR_LANGUAGE_ENV,
 };
 
 /// Base port for managed WhatsApp bridge WebSocket servers.
@@ -471,8 +471,7 @@ impl ProcessManager {
         }
 
         // Pass RecurAgent home dir so gateway can open ProfileStore for /account commands
-        cmd.arg("--ra-home")
-            .arg(self.profile_store.ra_home_dir());
+        cmd.arg("--ra-home").arg(self.profile_store.ra_home_dir());
 
         // Sub-account: pass parent profile path and merge parent env vars
         tracing::debug!(profile = %profile.id, "start: checking sub-account");

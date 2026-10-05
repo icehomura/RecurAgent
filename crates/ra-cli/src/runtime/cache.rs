@@ -820,8 +820,7 @@ mod tests {
         let memory = Arc::new(EpisodeStore::open(&data_dir).await.unwrap());
         let memory_store = Arc::new(MemoryStore::open(&data_dir).await.unwrap());
         let recall = Arc::new(
-            ra_memory::RecallStore::open(&data_dir, ra_memory::RecallConfig::default())
-                .unwrap(),
+            ra_memory::RecallStore::open(&data_dir, ra_memory::RecallConfig::default()).unwrap(),
         );
         let tool_config = Arc::new(ra_agent::ToolConfigStore::open(&data_dir).await.unwrap());
         let sandbox = SandboxConfig::default();

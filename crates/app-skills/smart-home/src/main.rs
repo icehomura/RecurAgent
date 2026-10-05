@@ -141,9 +141,7 @@ fn resolve_bridge_from_profile() -> Result<BridgeConfig, String> {
     let state_home = match ra_core::brand::state_home() {
         Some(h) => h,
         None => {
-            return Err(
-                "cannot determine the ra home directory (set RA_HOME or HOME)".to_string(),
-            )
+            return Err("cannot determine the ra home directory (set RA_HOME or HOME)".to_string())
         }
     };
 

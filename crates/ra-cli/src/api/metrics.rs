@@ -441,19 +441,11 @@ fn build_breakdowns(samples: &[ParsedMetricSample]) -> BTreeMap<String, Vec<Valu
         ),
         (
             "swarm_dispatches".to_string(),
-            breakdown(
-                samples,
-                "ra_swarm_dispatch_total",
-                &["topology", "outcome"],
-            ),
+            breakdown(samples, "ra_swarm_dispatch_total", &["topology", "outcome"]),
         ),
         (
             "cost_attributions".to_string(),
-            breakdown(
-                samples,
-                "ra_cost_attribution_total",
-                &["model", "outcome"],
-            ),
+            breakdown(samples, "ra_cost_attribution_total", &["model", "outcome"]),
         ),
         (
             "delegations".to_string(),
@@ -929,8 +921,7 @@ fn lifecycle_priority(state: &str) -> u8 {
 pub fn record_tool_call(name: &str, success: bool, duration_secs: f64) {
     let labels = [("tool", name.to_string()), ("success", success.to_string())];
     counter!("ra_tool_calls_total", &labels).increment(1);
-    histogram!("ra_tool_call_duration_seconds", "tool" => name.to_string())
-        .record(duration_secs);
+    histogram!("ra_tool_call_duration_seconds", "tool" => name.to_string()).record(duration_secs);
 }
 
 /// Record LLM token usage.

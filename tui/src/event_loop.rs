@@ -4542,17 +4542,15 @@ mod tests {
 
         // The turn settles while the popup is open: restore defers again.
         store.apply_event(AppUiEvent::Protocol(
-            ra_core::ui_protocol::UiNotification::TurnError(
-                ra_core::ui_protocol::TurnErrorEvent {
-                    token_usage: None,
-                    partial_result: None,
-                    session_id,
-                    topic: None,
-                    turn_id,
-                    code: "interrupted".into(),
-                    message: "turn interrupted by client".into(),
-                },
-            ),
+            ra_core::ui_protocol::UiNotification::TurnError(ra_core::ui_protocol::TurnErrorEvent {
+                token_usage: None,
+                partial_result: None,
+                session_id,
+                topic: None,
+                turn_id,
+                code: "interrupted".into(),
+                message: "turn interrupted by client".into(),
+            }),
         ));
         assert!(store.state.menu_stack.is_active(), "popup stays up");
 

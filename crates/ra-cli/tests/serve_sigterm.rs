@@ -605,8 +605,7 @@ mod serve_sigterm {
     fn serve_sigterm_with_open_sse_stream_still_reaps_gateways() {
         let _guard = serial_guard();
         let port = find_free_port();
-        let data_dir =
-            std::env::temp_dir().join(format!("ra_sigterm_sse_{}", std::process::id()));
+        let data_dir = std::env::temp_dir().join(format!("ra_sigterm_sse_{}", std::process::id()));
         std::fs::create_dir_all(data_dir.join("profiles")).unwrap();
 
         let profile_prefix = format!("sigterm-sse-{}", std::process::id());

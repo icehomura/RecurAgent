@@ -264,11 +264,7 @@ mod tests {
                 .status,
             SkillActionJobStatus::Running
         );
-        supervisor.mark_runtime_state(
-            &task_id,
-            ra_agent::TaskRuntimeState::VerifyingOutputs,
-            None,
-        );
+        supervisor.mark_runtime_state(&task_id, ra_agent::TaskRuntimeState::VerifyingOutputs, None);
         assert_eq!(
             project_skill_action_job(&supervisor.get_task(&task_id).unwrap())
                 .unwrap()

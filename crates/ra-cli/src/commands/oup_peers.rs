@@ -303,8 +303,7 @@ mod tests {
         .expect("first peer turn did not charge its budget");
         host.close().await;
 
-        let second_master =
-            SessionKey::with_profile(ra_core::MAIN_PROFILE_ID, "cli", "budget-b");
+        let second_master = SessionKey::with_profile(ra_core::MAIN_PROFILE_ID, "cli", "budget-b");
         let second_key = SessionKey(format!("{}#peer-{}", second_master.0, staged.slug));
         let second = OupSession::open(
             state,

@@ -239,7 +239,7 @@ fn choose_backend(
                 return Choice::Resolved(match kind {
                     CandidateKind::Path => Resolved::OnPath,
                     _ => Resolved::AtPath(path.clone()),
-                })
+                });
             }
             Probe::Outdated(found) => {
                 if outdated.is_none() {
@@ -422,7 +422,10 @@ fn program_token_span(command: &str) -> Option<std::ops::Range<usize>> {
         if idx >= command.len() {
             break;
         }
-        let end = idx + command[idx..].find(char::is_whitespace).unwrap_or(command.len() - idx);
+        let end = idx
+            + command[idx..]
+                .find(char::is_whitespace)
+                .unwrap_or(command.len() - idx);
         let token = &command[idx..end];
         if !saw_env && token == "env" {
             saw_env = true;
@@ -799,21 +802,17 @@ mod tests {
     #[test]
     fn bare_ra_program_skips_explicit_paths_shell_syntax_and_others() {
         for cmd in [
-            "/usr/local/bin/ra serve --stdio", // explicit path — user-managed
+            "/usr/local/bin/ra serve --stdio",   // explicit path — user-managed
             "$HOME/.local/bin/ra serve --stdio", // path (leading program) — user-managed
-            "./ra serve",                      // explicit path
-            "my-custom-backend --stdio",          // not ra
-            "env A=1 my-backend serve",           // not ra
-            "ra.exe serve --stdio",               // not canonical; bare `ra` is
-            "ra serve --stdio",             // legacy name — user-managed
+            "./ra serve",                        // explicit path
+            "my-custom-backend --stdio",         // not ra
+            "env A=1 my-backend serve",          // not ra
+            "ra.exe serve --stdio",              // not canonical; bare `ra` is
+            "ra serve --stdio",                  // legacy name — user-managed
             "env PATH=/custom/bin:$PATH ra serve", // PATH override — can't probe same ra
-            "PATH=/opt/ra/bin ra serve",          // leading PATH override
+            "PATH=/opt/ra/bin ra serve",         // leading PATH override
         ] {
-            assert_eq!(
-                bare_ra_program(cmd),
-                None,
-                "should NOT auto-manage: {cmd}"
-            );
+            assert_eq!(bare_ra_program(cmd), None, "should NOT auto-manage: {cmd}");
         }
     }
 
@@ -847,20 +846,15 @@ mod tests {
         let rewritten = rewrite_program("RA_HOME=/data ra serve", p).unwrap();
         assert_eq!(
             shlex::split(&rewritten).unwrap(),
-            [
-                "env",
-                "RA_HOME=/data",
-                "/home/u/.ra/bin/ra",
-                "serve"
-            ]
+            ["env", "RA_HOME=/data", "/home/u/.ra/bin/ra", "serve"]
         );
         // Shell syntax we can't round-trip → None, so the caller errors with an
         // "add RecurAgent to PATH" message rather than emitting a mangled command.
         for cmd in [
-            "ra serve --data-dir ~/data",          // ~ would stop expanding
+            "ra serve --data-dir ~/data",    // ~ would stop expanding
             "RA_HOME=\"$PWD/.ra\" ra serve", // $PWD would become literal
-            "ra serve | tee log",                  // pipe quoted into an argument
-            "ra serve && echo done",               // control operator
+            "ra serve | tee log",            // pipe quoted into an argument
+            "ra serve && echo done",         // control operator
         ] {
             assert_eq!(
                 rewrite_program(cmd, p),
@@ -876,10 +870,7 @@ mod tests {
             parse_ra_version("ra 1.1.0 (79c19f6d4 2026-07-11)").as_deref(),
             Some("1.1.0")
         );
-        assert_eq!(
-            parse_ra_version("ra v2.10.3\n").as_deref(),
-            Some("2.10.3")
-        );
+        assert_eq!(parse_ra_version("ra v2.10.3\n").as_deref(), Some("2.10.3"));
         assert_eq!(parse_ra_version("no version here"), None);
         assert_eq!(parse_ra_version("ra 1.2.3.4"), None); // 4-part isn't X.Y.Z
         // `ra --version` prints a prerelease; the leading X.Y.Z must still read.

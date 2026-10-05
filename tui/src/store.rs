@@ -5,13 +5,12 @@ use ra_core::ui_protocol::{
     ApprovalAutoResolvedEvent, ApprovalCancelledEvent, ApprovalDecidedEvent, ApprovalId,
     ApprovalRespondParams, DiffPreviewGetParams, EnvelopeToolEndStatus, EnvelopeV2,
     EnvelopeV2Notification, HydratedMessage, InputItem, MessageDeltaEvent, PayloadV2,
-    TurnOrigin, TurnOriginKind,
     ReplayLossyEvent, SessionHydrateParams, SessionHydrateResult, SessionListParams,
     SessionListResult, SessionOpenParams, SessionRollbackParams, SessionRollbackResult,
     TaskArtifactReadParams, TaskOutputDeltaEvent, TaskOutputReadParams, TaskRuntimeState,
     TaskUpdatedEvent, ThreadGraphGetParams, TurnCompletedEvent, TurnErrorEvent, TurnId,
-    TurnInterruptParams, TurnLifecycleState, TurnStartParams, TurnStateGetParams,
-    TurnTerminalOutcome, UiContextState, UiNotification, UiProgressEvent,
+    TurnInterruptParams, TurnLifecycleState, TurnOrigin, TurnOriginKind, TurnStartParams,
+    TurnStateGetParams, TurnTerminalOutcome, UiContextState, UiNotification, UiProgressEvent,
     UserQuestionRequestedEvent,
 };
 use ra_core::{Message, MessageRole, SessionKey, TaskId, ThreadId};
@@ -2882,7 +2881,10 @@ impl Store {
                     // `ProtocolAppUiBackend::fill_session_list_cwd`) so a
                     // server with per-project session storage scopes the
                     // listing to this project.
-                    Some(AppUiCommand::ListSessions(SessionListParams { cwd: None, profile_id: None }))
+                    Some(AppUiCommand::ListSessions(SessionListParams {
+                        cwd: None,
+                        profile_id: None,
+                    }))
                 } else if !self.state.resume_list_loaded {
                     // `/resume <query>` before the list ever loaded: the local
                     // resolve below would ALWAYS fail (`resume_sessions` is only
@@ -2900,7 +2902,10 @@ impl Store {
                     // `ProtocolAppUiBackend::fill_session_list_cwd`) so a
                     // server with per-project session storage scopes the
                     // listing to this project.
-                    Some(AppUiCommand::ListSessions(SessionListParams { cwd: None, profile_id: None }))
+                    Some(AppUiCommand::ListSessions(SessionListParams {
+                        cwd: None,
+                        profile_id: None,
+                    }))
                 } else {
                     // `/resume <query>` shortcut: resolve to a session id
                     // (exact / prefix / substring) and switch directly, reusing
@@ -12646,9 +12651,7 @@ impl Store {
                     .plan
                     .items
                     .iter()
-                    .filter(|item| {
-                        item.status == ra_core::ui_protocol::PlanItemStatus::Completed
-                    })
+                    .filter(|item| item.status == ra_core::ui_protocol::PlanItemStatus::Completed)
                     .count();
                 self.state.set_session_plan(
                     &event.session_id,
@@ -15681,10 +15684,7 @@ impl Store {
             .is_some_and(|session| &session.id == session_id)
     }
 
-    fn find_session_mut(
-        &mut self,
-        session_id: &ra_core::SessionKey,
-    ) -> Option<&mut SessionView> {
+    fn find_session_mut(&mut self, session_id: &ra_core::SessionKey) -> Option<&mut SessionView> {
         self.state
             .sessions
             .iter_mut()
@@ -16812,14 +16812,20 @@ fn hydrated_tool_activities(rows: &[HydratedMessage]) -> Vec<crate::model::Activ
             let mut item = ActivityItem::new(
                 ActivityKind::Tool,
                 call.tool_name.clone(),
-                if answered.is_some() { "complete" } else { "running" },
+                if answered.is_some() {
+                    "complete"
+                } else {
+                    "running"
+                },
             )
             .with_tool_call(id);
             if let Some(turn) = row.turn_id.clone() {
                 item = item.with_turn(turn);
             }
             if let Some((content, turn)) = answered {
-                item = item.with_output_preview(preview(content)).with_success(true);
+                item = item
+                    .with_output_preview(preview(content))
+                    .with_success(true);
                 if item.turn_id.is_none() {
                     if let Some(turn) = turn.clone() {
                         item = item.with_turn(turn);
@@ -25491,8 +25497,7 @@ now analyzing the bus module"
     fn onboarding_session_open_extracts_cwd_from_stdio_target_label() {
         let mut store = protocol_store_with_methods(&[crate::model::APPUI_METHOD_AUTH_STATUS]);
         store.state.workspace.root =
-            "stdio:/opt/ra serve --stdio --data-dir /tmp/ra/data --cwd /tmp/ra/workspace"
-                .into();
+            "stdio:/opt/ra serve --stdio --data-dir /tmp/ra/data --cwd /tmp/ra/workspace".into();
         store.state.onboarding.provider_saved = true;
         // M22-C: pre-set workspace validation; this test focuses on
         // cwd extraction from a stdio target string and not on the
@@ -29309,9 +29314,7 @@ now analyzing the bus module"
     #[test]
     fn session_opened_without_set_capability_does_not_emit_follow_up() {
         use ra_core::SessionKey;
-        use ra_core::ui_protocol::{
-            PermissionProfileMode, PermissionProfileUpdate, SessionOpened,
-        };
+        use ra_core::ui_protocol::{PermissionProfileMode, PermissionProfileUpdate, SessionOpened};
 
         let mut store =
             protocol_store_with_methods(&[crate::model::APPUI_METHOD_PROFILE_LOCAL_CREATE]);
@@ -48372,9 +48375,9 @@ now analyzing the bus module"
 
         let mut store = store_with_empty_session();
         store.state.set_capabilities(
-            ra_core::ui_protocol::UiProtocolCapabilities::new(&[], &[]).with_supported_features(
-                [ra_core::ui_protocol::UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2],
-            ),
+            ra_core::ui_protocol::UiProtocolCapabilities::new(&[], &[]).with_supported_features([
+                ra_core::ui_protocol::UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2,
+            ]),
         );
         let session_id = store.state.sessions[0].id.clone();
         let mut tracker = ScrollbackTracker::new();
@@ -48521,9 +48524,9 @@ now analyzing the bus module"
 
         // The capabilities response arrives: this connection speaks v2.
         store.state.set_capabilities(
-            ra_core::ui_protocol::UiProtocolCapabilities::new(&[], &[]).with_supported_features(
-                [ra_core::ui_protocol::UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2],
-            ),
+            ra_core::ui_protocol::UiProtocolCapabilities::new(&[], &[]).with_supported_features([
+                ra_core::ui_protocol::UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2,
+            ]),
         );
         sync(&mut tracker, &store, &mut emitted);
 

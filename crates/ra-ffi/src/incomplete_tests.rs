@@ -163,9 +163,7 @@ fn should_transfer_c_partial_once_without_putting_body_in_last_error() {
     assert!(take_partial_json().is_none());
     // SAFETY: taking/freeing output preserves the thread-local diagnostic.
     assert_eq!(
-        unsafe { CStr::from_ptr(ra_last_error()) }
-            .to_str()
-            .unwrap(),
+        unsafe { CStr::from_ptr(ra_last_error()) }.to_str().unwrap(),
         diagnostic
     );
 }

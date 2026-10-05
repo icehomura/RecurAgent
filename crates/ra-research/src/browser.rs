@@ -221,12 +221,17 @@ pub fn check_profile(profile: &Path, default: bool, home: Option<&Path>) -> Resu
 /// Default profile directory: `~/.ra/browser-profile`. Only the new-name state
 /// home is consulted — a profile created before the rename is not reused.
 pub fn default_profile(lookup: impl Fn(&str) -> Option<String>) -> Option<PathBuf> {
-    if let Some(p) = crate::resolve_env(&lookup, BROWSER_PROFILE_ENV).filter(|p| !p.trim().is_empty())
+    if let Some(p) =
+        crate::resolve_env(&lookup, BROWSER_PROFILE_ENV).filter(|p| !p.trim().is_empty())
     {
         return Some(PathBuf::from(p));
     }
     let home = lookup("HOME").or_else(|| lookup("USERPROFILE"))?;
-    Some(Path::new(&home).join(ra_core::brand::STATE_DIR).join("browser-profile"))
+    Some(
+        Path::new(&home)
+            .join(ra_core::brand::STATE_DIR)
+            .join("browser-profile"),
+    )
 }
 
 /// Chrome's `DevToolsActivePort` file (first line port, second line the
@@ -811,9 +816,7 @@ mod tests {
             let err = check_profile(Path::new(real), false, Some(home)).unwrap_err();
             assert!(err.contains("browser's own profile"), "{real}: {err}");
         }
-        assert!(
-            check_profile(Path::new("/home/p/.ra/browser-profile"), true, Some(home)).is_ok()
-        );
+        assert!(check_profile(Path::new("/home/p/.ra/browser-profile"), true, Some(home)).is_ok());
     }
 
     #[test]

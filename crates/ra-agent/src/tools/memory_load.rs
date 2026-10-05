@@ -129,8 +129,7 @@ impl Tool for MemoryLoadTool {
         let limit = ra_core::tool_output_limit("memory_load");
         let mut output = render_record(&record, page);
         if output.len() > limit {
-            output =
-                ra_core::truncated_utf8(&output, limit.saturating_sub(64), "\n\n[truncated]");
+            output = ra_core::truncated_utf8(&output, limit.saturating_sub(64), "\n\n[truncated]");
         }
         Ok(ToolResult {
             output,

@@ -718,9 +718,7 @@ mod tests {
         // `echo <var> >file` appends a trailing space + CRLF, so both sides are
         // trimmed before comparison.
         #[cfg(windows)]
-        let command = format!(
-            "echo %RA_SKILL_DIR% >{ra_str} & echo %ra_SKILL_DIR% >{legacy_str}"
-        );
+        let command = format!("echo %RA_SKILL_DIR% >{ra_str} & echo %ra_SKILL_DIR% >{legacy_str}");
         #[cfg(not(windows))]
         let command = format!(
             r#"printf '%s' "$RA_SKILL_DIR" > "{ra_str}" && printf '%s' "$RA_SKILL_DIR" > "{legacy_str}""#

@@ -442,15 +442,9 @@ fn build_filters(input: &Input) -> std::result::Result<ra_research::Filters, Str
 }
 
 /// Structured item for a read page (`citation` = its `Source [N]`).
-fn page_item(
-    url: &str,
-    page: &PageRead,
-    citation: usize,
-    file: &str,
-) -> ra_research::ResearchItem {
-    let canonical = ra_research::urls::canonicalize(
-        page.meta.canonical.as_deref().unwrap_or(&page.final_url),
-    );
+fn page_item(url: &str, page: &PageRead, citation: usize, file: &str) -> ra_research::ResearchItem {
+    let canonical =
+        ra_research::urls::canonicalize(page.meta.canonical.as_deref().unwrap_or(&page.final_url));
     let domain = ra_research::urls::domain_of(&canonical).unwrap_or_default();
     let summary = ra_research::item::extractive_summary(&page.content, 400);
     ra_research::ResearchItem {

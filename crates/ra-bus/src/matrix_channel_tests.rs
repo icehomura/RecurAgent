@@ -2281,10 +2281,7 @@ async fn test_matrix_unregister_bot_removes_route() {
 
     ch.unregister_bot("@ra_weather:localhost").await.unwrap();
 
-    assert_eq!(
-        ch.bot_router().route("@ra_weather:localhost").await,
-        None
-    );
+    assert_eq!(ch.bot_router().route("@ra_weather:localhost").await, None);
 }
 
 #[tokio::test]
@@ -2819,10 +2816,7 @@ async fn test_unregister_bot_cleans_room_mappings() {
     // Room mapping should be cleaned up
     assert_eq!(ch.bot_router().route_by_room("!dm1:localhost").await, None);
     // User route should also be gone
-    assert_eq!(
-        ch.bot_router().route("@ra_weather:localhost").await,
-        None
-    );
+    assert_eq!(ch.bot_router().route("@ra_weather:localhost").await, None);
 }
 
 #[tokio::test]

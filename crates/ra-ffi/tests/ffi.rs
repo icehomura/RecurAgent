@@ -9,10 +9,9 @@ use std::ffi::{CStr, CString};
 use std::ptr;
 
 use ra_ffi::{
-    RaRuntime, ra_embed, ra_embedding_model_ensure, ra_embedding_model_status,
-    ra_last_error, ra_memory_load, ra_memory_search, ra_memory_stats,
-    ra_memory_upsert, ra_run_task, ra_runtime_free, ra_runtime_new, ra_string_free,
-    ra_version,
+    RaRuntime, ra_embed, ra_embedding_model_ensure, ra_embedding_model_status, ra_last_error,
+    ra_memory_load, ra_memory_search, ra_memory_stats, ra_memory_upsert, ra_run_task,
+    ra_runtime_free, ra_runtime_new, ra_string_free, ra_version,
 };
 
 /// Helper: read the thread-local last-error as an owned String (or empty).
@@ -265,10 +264,7 @@ fn embedding_model_status_reports_absent_model_without_a_runtime() {
             .starts_with("https://")
     );
     assert_eq!(status["sha256"].as_str().unwrap().len(), 64);
-    assert!(
-        ra_last_error().is_null(),
-        "success clears the last error"
-    );
+    assert!(ra_last_error().is_null(), "success clears the last error");
 
     // NULL data_dir is rejected, not dereferenced.
     assert!(ra_embedding_model_status(ptr::null()).is_null());
@@ -326,8 +322,8 @@ fn runtime_without_model_and_downloads_disabled_is_keyword_only() {
 #[test]
 #[ignore = "needs a real API key + network"]
 fn e2e_run_task_returns_output_containing_ok() {
-    let provider = ra_core::brand::env_compat_str("FFI_TEST_PROVIDER")
-        .unwrap_or_else(|| "openai".into());
+    let provider =
+        ra_core::brand::env_compat_str("FFI_TEST_PROVIDER").unwrap_or_else(|| "openai".into());
     let model =
         ra_core::brand::env_compat_str("FFI_TEST_MODEL").unwrap_or_else(|| "gpt-4o-mini".into());
     let key_env = ra_core::brand::env_compat_str("FFI_TEST_KEY_ENV")

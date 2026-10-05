@@ -135,8 +135,8 @@ mod tests {
 
     #[test]
     fn should_carry_the_config_flag_through() {
-        let args = ConfigCli::parse_from(["ra-tui config", "show", "--config", "/tmp/c.json"])
-            .into_args();
+        let args =
+            ConfigCli::parse_from(["ra-tui config", "show", "--config", "/tmp/c.json"]).into_args();
         assert_eq!(
             args.config.as_deref(),
             Some(std::path::Path::new("/tmp/c.json"))

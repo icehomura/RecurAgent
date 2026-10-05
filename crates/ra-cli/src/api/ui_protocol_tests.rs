@@ -6670,10 +6670,7 @@ fn effective_permissions_rejects_danger_without_solo_opt_in() {
     let permissions = effective_permissions_for_session(&local_solo, &session_id)
         .expect("Local + --solo resolves danger_full_access");
     assert!(permissions.is_dangerous());
-    assert_eq!(
-        permissions.approval_policy,
-        ra_agent::ApprovalPolicy::Never
-    );
+    assert_eq!(permissions.approval_policy, ra_agent::ApprovalPolicy::Never);
     // The session key is unique to this test, so the process-global store
     // holds no cross-test state — no explicit cleanup needed.
 }
@@ -11583,9 +11580,7 @@ async fn newly_configured_local_profile_allows_session_open_cwd_validation() {
 /// `runtime_policy_stamp_exposes_effective_permission_fields`.
 #[test]
 fn dangerous_default_permissions_resolves_without_an_explicit_choice() {
-    use ra_core::ui_protocol::{
-        PermissionNetworkPolicy as Network, PermissionProfileMode as Mode,
-    };
+    use ra_core::ui_protocol::{PermissionNetworkPolicy as Network, PermissionProfileMode as Mode};
 
     // Fresh unique solo-scoped session — never stored, so the resolver
     // takes the no-explicit-selection path in every case below.
@@ -16084,10 +16079,7 @@ fn null_id_envelope_is_rejected_with_parse_error() {
     let frame =
         r#"{"jsonrpc":"2.0","id":null,"method":"session/open","params":{"session_id":"x"}}"#;
     let err = parse_ws_text_frame(frame).expect_err("null id must reject");
-    assert_eq!(
-        err.code,
-        ra_core::ui_protocol::rpc_error_codes::PARSE_ERROR
-    );
+    assert_eq!(err.code, ra_core::ui_protocol::rpc_error_codes::PARSE_ERROR);
     assert!(
         err.message.contains("null"),
         "parse error message should mention the null id; got {}",
@@ -16101,10 +16093,7 @@ fn null_id_envelope_is_rejected_with_parse_error() {
 fn numeric_id_envelope_is_rejected_with_parse_error() {
     let frame = r#"{"jsonrpc":"2.0","id":42,"method":"session/open","params":{"session_id":"x"}}"#;
     let err = parse_ws_text_frame(frame).expect_err("numeric id must reject");
-    assert_eq!(
-        err.code,
-        ra_core::ui_protocol::rpc_error_codes::PARSE_ERROR
-    );
+    assert_eq!(err.code, ra_core::ui_protocol::rpc_error_codes::PARSE_ERROR);
 }
 
 #[test]
@@ -21552,7 +21541,7 @@ fn filter_capabilities_for_session_ingress_keeps_only_callable_methods() {
             ra_core::ui_protocol::methods::TURN_START,            // keep (session-scoped)
             ra_core::ui_protocol::methods::SESSION_LIST,          // drop (global typed)
             ra_core::ui_protocol::methods::SYSTEM_STATUS_GET,     // drop (global typed)
-            APPUI_METHOD_PROFILE_LLM_UPSERT,                         // drop (raw)
+            APPUI_METHOD_PROFILE_LLM_UPSERT,                      // drop (raw)
             ra_core::ui_protocol::methods::SESSION_GOAL_SET,      // drop (raw)
         ],
         &[],
@@ -26994,10 +26983,8 @@ async fn should_keep_background_identity_when_mixed_store_merge_reindexes_the_ro
         .unwrap();
     assert_eq!(committed, 52, "actual canonical writer starts at row 52");
 
-    let mut user = Message::user_rooting_thread(
-        "start background",
-        ra_core::ClientMessageId(parent.into()),
-    );
+    let mut user =
+        Message::user_rooting_thread("start background", ra_core::ClientMessageId(parent.into()));
     user.timestamp = start + chrono::Duration::seconds(90);
     let mut call = Message::assistant_with_thread("", ra_core::ThreadId(parent.into()));
     call.timestamp = start + chrono::Duration::seconds(91);
@@ -30643,8 +30630,7 @@ async fn synth_ack_skip_invariants_hold_for_each_spawn_only_tool_name() {
         let mut subscriber = ledger.subscribe(&session_id);
 
         let tmp = tempfile::tempdir().expect("tempdir");
-        let mut manager =
-            ra_bus::SessionManager::open(tmp.path()).expect("session manager open");
+        let mut manager = ra_bus::SessionManager::open(tmp.path()).expect("session manager open");
 
         // Step 1: the iter-1 preamble assistant row WITH a
         // spawn_only tool call — this row is always persisted (the
@@ -36543,8 +36529,7 @@ async fn peer_terminal_wake_should_not_wake_master_when_gathered_peer_is_closed(
     let task_id =
         bind_peer_supervised_task(&supervisor, peer_wire_key(profile, slug), &master.0).unwrap();
     let gathered =
-        build_peer_gather_callback(root.clone(), "ra".to_owned())(Some(vec![slug.into()]))
-            .unwrap();
+        build_peer_gather_callback(root.clone(), "ra".to_owned())(Some(vec![slug.into()])).unwrap();
     assert!(gathered.contains("Actual peer result"));
     let close_supervisor = supervisor.clone();
     let close = build_peer_close_callback(
@@ -38553,12 +38538,8 @@ fn stage_and_open_peer(
     })
     .expect("stage peer")
     .slug;
-    let peer_key = ra_core::SessionKey::with_profile_topic(
-        profile_id,
-        "api",
-        "tab",
-        &format!("peer-{slug}"),
-    );
+    let peer_key =
+        ra_core::SessionKey::with_profile_topic(profile_id, "api", "tab", &format!("peer-{slug}"));
     peer_wire_registry().register(peer_wire_key(profile_id, &slug), peer_key.clone());
     (slug, peer_key)
 }
@@ -39792,9 +39773,7 @@ fn s3_zai_lane_real_three_layer_probe() {
 /// Layer-2 helper: perform ONE blocking real chat call against the zai lane
 /// provider and return the reply text plus the billed token usage. Kept
 /// separate so the probe body reads as the three acceptance layers.
-fn run_zai_real_call(
-    provider: &Arc<dyn ra_llm::LlmProvider>,
-) -> (String, ra_llm::TokenUsage) {
+fn run_zai_real_call(provider: &Arc<dyn ra_llm::LlmProvider>) -> (String, ra_llm::TokenUsage) {
     use ra_core::Message;
     use ra_llm::ChatConfig;
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -40171,8 +40150,7 @@ fn peer_results_ready_note_scopes_to_the_originating_session() {
 
     // The guard short-circuits on the topic BEFORE any originator match: a
     // peer dir naming a peer session as its originator still nudges nobody.
-    let peer_session =
-        ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "peer-beta");
+    let peer_session = ra_core::SessionKey::with_profile_topic("dev", "local", "tui", "peer-beta");
     let peer_owned = peers_root.join("beta-child");
     std::fs::create_dir_all(&peer_owned).unwrap();
     std::fs::write(peer_owned.join("brief.md"), "brief").unwrap();
@@ -43804,12 +43782,8 @@ mod obs_malformed_exhausted_48b {
                 .await
                 .unwrap(),
         );
-        let agent = ra_agent::Agent::new(
-            ra_core::AgentId::new("mfe-real"),
-            provider,
-            tools,
-            memory,
-        );
+        let agent =
+            ra_agent::Agent::new(ra_core::AgentId::new("mfe-real"), provider, tools, memory);
         // The REAL exhausted error (marker prefix comes from the loop_runner
         // return, NOT from this test's format!).
         let error = agent
@@ -43984,23 +43958,18 @@ fn default_oup_compaction_keeps_newest_user_raw_and_tool_groups_atomic() {
         },
     ]);
     let mut old_group_ids = manager.record_message(&old_calls);
-    old_group_ids.extend(
-        manager.record_message(&ra_core::Message::tool_with_thread(
-            "old a output ".repeat(40),
-            "call_old_a",
-            ra_core::ThreadId::new("thread-1"),
-        )),
-    );
-    old_group_ids.extend(
-        manager.record_message(&ra_core::Message::tool_with_thread(
-            "old b output ".repeat(40),
-            "call_old_b",
-            ra_core::ThreadId::new("thread-1"),
-        )),
-    );
+    old_group_ids.extend(manager.record_message(&ra_core::Message::tool_with_thread(
+        "old a output ".repeat(40),
+        "call_old_a",
+        ra_core::ThreadId::new("thread-1"),
+    )));
+    old_group_ids.extend(manager.record_message(&ra_core::Message::tool_with_thread(
+        "old b output ".repeat(40),
+        "call_old_b",
+        ra_core::ThreadId::new("thread-1"),
+    )));
 
-    let newest_user_id =
-        manager.record_message(&ra_core::Message::user("CURRENT USER"))[0].clone();
+    let newest_user_id = manager.record_message(&ra_core::Message::user("CURRENT USER"))[0].clone();
     let mut current_calls = ra_core::Message::assistant("");
     current_calls.tool_calls = Some(vec![
         ra_core::ToolCall {
@@ -44017,20 +43986,16 @@ fn default_oup_compaction_keeps_newest_user_raw_and_tool_groups_atomic() {
         },
     ]);
     let mut current_group_ids = manager.record_message(&current_calls);
-    current_group_ids.extend(
-        manager.record_message(&ra_core::Message::tool_with_thread(
-            "current a",
-            "call_current_a",
-            ra_core::ThreadId::new("thread-1"),
-        )),
-    );
-    current_group_ids.extend(
-        manager.record_message(&ra_core::Message::tool_with_thread(
-            "current b",
-            "call_current_b",
-            ra_core::ThreadId::new("thread-1"),
-        )),
-    );
+    current_group_ids.extend(manager.record_message(&ra_core::Message::tool_with_thread(
+        "current a",
+        "call_current_a",
+        ra_core::ThreadId::new("thread-1"),
+    )));
+    current_group_ids.extend(manager.record_message(&ra_core::Message::tool_with_thread(
+        "current b",
+        "call_current_b",
+        ra_core::ThreadId::new("thread-1"),
+    )));
 
     let record = manager.compact_context("old tool work summarized", policy);
     assert_eq!(

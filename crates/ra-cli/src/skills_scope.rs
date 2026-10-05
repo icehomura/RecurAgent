@@ -226,14 +226,8 @@ pub(crate) fn push_runtime_plugin_env(
         "RA_DATA_DIR".to_string(),
         data_dir.to_string_lossy().to_string(),
     ));
-    plugin_env.push((
-        "RA_HOME".to_string(),
-        ra_home.to_string_lossy().to_string(),
-    ));
-    plugin_env.push((
-        "RA_HOME".to_string(),
-        ra_home.to_string_lossy().to_string(),
-    ));
+    plugin_env.push(("RA_HOME".to_string(), ra_home.to_string_lossy().to_string()));
+    plugin_env.push(("RA_HOME".to_string(), ra_home.to_string_lossy().to_string()));
     if let Some(profile_id) = profile_id {
         plugin_env.push(("RA_PROFILE_ID".to_string(), profile_id.to_string()));
         plugin_env.push(("RA_PROFILE_ID".to_string(), profile_id.to_string()));
@@ -501,14 +495,8 @@ mod tests {
             map.get("RA_HOME").map(String::as_str),
             Some("/home/user/.ra")
         );
-        assert_eq!(
-            map.get("RA_PROFILE_ID").map(String::as_str),
-            Some("dspfac")
-        );
-        assert_eq!(
-            map.get("RA_PROFILE_ID").map(String::as_str),
-            Some("dspfac")
-        );
+        assert_eq!(map.get("RA_PROFILE_ID").map(String::as_str), Some("dspfac"));
+        assert_eq!(map.get("RA_PROFILE_ID").map(String::as_str), Some("dspfac"));
         // Derive the expectation the way the product does (`Path::join`), so
         // the separator matches on Windows (`\`) as well as Unix (`/`).
         let expected_voice = data_dir

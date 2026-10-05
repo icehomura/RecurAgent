@@ -92,9 +92,7 @@ pub(crate) fn prompt_cache_features_enabled_from(env_value: Option<&str>) -> boo
 }
 
 pub(crate) fn prompt_cache_features_enabled() -> bool {
-    prompt_cache_features_enabled_from(
-        ra_core::brand::env_compat_str("PROMPT_CACHING").as_deref(),
-    )
+    prompt_cache_features_enabled_from(ra_core::brand::env_compat_str("PROMPT_CACHING").as_deref())
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

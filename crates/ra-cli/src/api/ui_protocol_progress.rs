@@ -901,8 +901,7 @@ mod tests {
         };
         let preview = completed.output_preview.as_deref().expect("preview");
         assert!(
-            preview.chars().count()
-                <= ra_core::ui_protocol::ENVELOPE_TOOL_OUTPUT_PREVIEW_MAX + 1,
+            preview.chars().count() <= ra_core::ui_protocol::ENVELOPE_TOOL_OUTPUT_PREVIEW_MAX + 1,
             "mapper must bound raw-JSON previews, got {} chars",
             preview.chars().count()
         );

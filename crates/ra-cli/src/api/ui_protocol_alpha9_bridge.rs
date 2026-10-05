@@ -825,8 +825,7 @@ mod tests {
         // path inherits the same list (see api/ui_protocol.rs
         // envelope_media fallback). Soak captured this exact shape.
         let media = vec![
-            "/Users/cloud/.ra/profiles/dspfac/data/slides/deck-soak/output/deck.pptx"
-                .to_string(),
+            "/Users/cloud/.ra/profiles/dspfac/data/slides/deck-soak/output/deck.pptx".to_string(),
         ];
         let envelope_media = media.clone();
 
@@ -1114,8 +1113,8 @@ mod tests {
     fn should_emit_file_attached_once_per_distinct_envelope_media_entry() {
         let primary =
             "/Users/cloud/.ra/profiles/dspfac/data/slides/round13/output/deck.pptx".to_string();
-        let alt = "/Users/cloud/.ra/profiles/dspfac/data/slides/round13/output/deck-alt.pptx"
-            .to_string();
+        let alt =
+            "/Users/cloud/.ra/profiles/dspfac/data/slides/round13/output/deck-alt.pptx".to_string();
         let payload = build_payload(
             "mofa_slides",
             "tc-slides-multi",

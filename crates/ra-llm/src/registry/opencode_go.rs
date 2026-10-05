@@ -7,7 +7,7 @@ use crate::openai::OpenAIProvider;
 use crate::openai_responses::OpenAIResponsesProvider;
 use crate::provider::LlmProvider;
 
-use super::opencode::{anthropic_root, dialect, Dialect};
+use super::opencode::{Dialect, anthropic_root, dialect};
 use super::{CreateParams, ProviderEntry};
 
 /// The default OpenAI-compatible API root for the OpenCode Go tier: the same

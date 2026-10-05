@@ -580,10 +580,7 @@ mod tests {
             RaError::NoEmbedder
         ));
         // Display renders the scrubbed message / the fixed NoEmbedder text.
-        assert_eq!(
-            RaError::Provider { msg: "boom".into() }.to_string(),
-            "boom"
-        );
+        assert_eq!(RaError::Provider { msg: "boom".into() }.to_string(), "boom");
         assert_eq!(RaError::NoEmbedder.to_string(), "no embedder configured");
     }
 

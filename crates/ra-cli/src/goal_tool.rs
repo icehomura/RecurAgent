@@ -2366,8 +2366,7 @@ mod tests {
         let data_dir = tempfile::tempdir().unwrap();
         let ledger_dir = data_dir.path().join("goal-ledgers");
         std::fs::create_dir_all(&ledger_dir).unwrap();
-        let ledger =
-            ra_fleet::GoalLedger::open(ledger_dir.join(format!("{goal_id}.db"))).unwrap();
+        let ledger = ra_fleet::GoalLedger::open(ledger_dir.join(format!("{goal_id}.db"))).unwrap();
         ledger
             .upsert_goal(&ra_fleet::Goal {
                 goal_id: goal_id.clone(),
@@ -2753,8 +2752,7 @@ mod tests {
         let data_dir = tempfile::tempdir().unwrap();
         let ledger_dir = data_dir.path().join("goal-ledgers");
         std::fs::create_dir_all(&ledger_dir).unwrap();
-        let ledger =
-            ra_fleet::GoalLedger::open(ledger_dir.join(format!("{goal_id}.db"))).unwrap();
+        let ledger = ra_fleet::GoalLedger::open(ledger_dir.join(format!("{goal_id}.db"))).unwrap();
         ledger
             .upsert_goal(&ra_fleet::Goal {
                 goal_id: goal_id.clone(),

@@ -477,10 +477,7 @@ mod tests {
         );
 
         let updated = store.get(&sub_id).expect("load sub").expect("sub exists");
-        assert_eq!(
-            updated.config.sandbox.mode,
-            ra_agent::SandboxMode::Landlock
-        );
+        assert_eq!(updated.config.sandbox.mode, ra_agent::SandboxMode::Landlock);
         assert!(updated.config.sandbox.enabled);
     }
 

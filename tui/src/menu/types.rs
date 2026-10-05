@@ -217,9 +217,7 @@ impl AppUiActionKind {
             Self::ProfileLlmFetchModels => crate::model::APPUI_METHOD_PROFILE_LLM_FETCH_MODELS,
             Self::SessionStatusRead => crate::model::APPUI_METHOD_SESSION_STATUS_READ,
             Self::ReviewStart => crate::model::APPUI_METHOD_REVIEW_START,
-            Self::PermissionProfileList => {
-                ra_core::ui_protocol::methods::PERMISSION_PROFILE_LIST
-            }
+            Self::PermissionProfileList => ra_core::ui_protocol::methods::PERMISSION_PROFILE_LIST,
             Self::PermissionProfileSet => ra_core::ui_protocol::methods::PERMISSION_PROFILE_SET,
             Self::ApprovalScopesClear => "approval/scopes/clear",
             Self::McpStatusList => crate::model::APPUI_METHOD_MCP_STATUS_LIST,

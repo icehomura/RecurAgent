@@ -805,8 +805,7 @@ impl LlmProvider for RequestRecordingProvider {
 const CHECKPOINT_ENVELOPE_OPEN: &str = "<context_event kind=\"convergence_checkpoint\"";
 
 /// `(messages, tools, config)` of every provider request, in call order.
-type RecordedConfigRequests =
-    Arc<StdMutex<Vec<(Vec<Message>, Vec<ra_llm::ToolSpec>, ChatConfig)>>>;
+type RecordedConfigRequests = Arc<StdMutex<Vec<(Vec<Message>, Vec<ra_llm::ToolSpec>, ChatConfig)>>>;
 
 /// Like [`RequestRecordingProvider`] but also keeps the `ChatConfig` of each
 /// call, so a test can compare the cache-relevant request controls of the
@@ -1064,10 +1063,7 @@ async fn should_send_checkpoint_with_identical_cache_relevant_config_and_tool_ch
         matches!(checkpoint.tool_choice, ra_llm::ToolChoice::None),
         "the reflection must forbid tool use on the wire"
     );
-    assert!(matches!(
-        next_action.tool_choice,
-        ra_llm::ToolChoice::Auto
-    ));
+    assert!(matches!(next_action.tool_choice, ra_llm::ToolChoice::Auto));
     assert_eq!(checkpoint.reasoning_effort, action.reasoning_effort);
     assert_eq!(
         checkpoint.max_tokens, action.max_tokens,

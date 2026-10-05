@@ -277,9 +277,7 @@ pub(crate) fn rebind_memory_tools(
         ));
     }
     if tools.get_tool("save_memory").is_some() {
-        tools.register(ra_agent::SaveMemoryTool::new(
-            memory.memory_store.clone(),
-        ));
+        tools.register(ra_agent::SaveMemoryTool::new(memory.memory_store.clone()));
     }
     if tools.get_tool("record_memory_use").is_some() {
         tools.register(ra_agent::RecordMemoryUseTool::new(
@@ -288,9 +286,7 @@ pub(crate) fn rebind_memory_tools(
     }
     if memory.refresh_enabled {
         if tools.get_tool("memory_note").is_some() {
-            tools.register(ra_agent::MemoryNoteTool::new(
-                memory.memory_store.clone(),
-            ));
+            tools.register(ra_agent::MemoryNoteTool::new(memory.memory_store.clone()));
         }
     } else {
         tools.retain(|name| name != "memory_note");

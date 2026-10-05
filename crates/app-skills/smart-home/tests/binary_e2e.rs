@@ -256,10 +256,7 @@ fn should_fall_back_to_profile_json_when_env_config_absent() {
         "smart_home_list_devices",
         "{}",
         &[
-            (
-                "RA_HOME",
-                state_home.path().to_string_lossy().to_string(),
-            ),
+            ("RA_HOME", state_home.path().to_string_lossy().to_string()),
             ("RA_PROFILE_ID", "e2e-user".to_string()),
         ],
     );
@@ -300,10 +297,7 @@ fn should_prefer_env_config_over_profile_json_when_both_present() {
         "{}",
         &[
             ("SMART_HOME_BRIDGE_URL", format!("http://{addr}")),
-            (
-                "RA_HOME",
-                state_home.path().to_string_lossy().to_string(),
-            ),
+            ("RA_HOME", state_home.path().to_string_lossy().to_string()),
             ("RA_PROFILE_ID", "e2e-user".to_string()),
         ],
     );
@@ -329,10 +323,7 @@ fn should_report_clear_error_when_no_bridge_configured_anywhere() {
         &[
             // The legacy `RA_` spellings are still honoured (this test
             // keeps them on purpose; the others use `RA_*`).
-            (
-                "RA_HOME",
-                state_home.path().to_string_lossy().to_string(),
-            ),
+            ("RA_HOME", state_home.path().to_string_lossy().to_string()),
             ("RA_PROFILE_ID", "e2e-user".to_string()),
         ],
     );

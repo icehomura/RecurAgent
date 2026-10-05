@@ -2249,8 +2249,7 @@ fn launch_prompt_menu(ctx: &MenuContext<'_>) -> MenuBuildResult {
     };
 
     let open_session = |profile: &str| -> MenuAction {
-        let session_id =
-            ra_core::SessionKey::with_profile_topic(profile, "local", "tui", "coding");
+        let session_id = ra_core::SessionKey::with_profile_topic(profile, "local", "tui", "coding");
         MenuAction::send_appui(AppUiCommand::OpenSession(
             ra_core::ui_protocol::SessionOpenParams {
                 session_id,

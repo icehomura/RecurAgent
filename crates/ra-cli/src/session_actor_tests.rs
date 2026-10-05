@@ -2247,11 +2247,7 @@ fn conversation_response_with_usage(
     ConversationResponse {
         content: "done".to_string(),
         reasoning_content: None,
-        provider_metadata: Some(ra_llm::ProviderMetadata::new(
-            "test-provider",
-            model,
-            None,
-        )),
+        provider_metadata: Some(ra_llm::ProviderMetadata::new("test-provider", model, None)),
         token_usage: ra_core::TokenUsage {
             input_tokens,
             output_tokens,
@@ -4821,22 +4817,14 @@ async fn late_background_result_persists_with_originating_thread_id_not_derived_
     {
         let user_a =
             Message::user("Q1: kick off deep research").with_client_message_id(originating_cmid);
-        ra_bus::session::persist_message_through_canonical_path(
-            dir.path(),
-            &session_key,
-            user_a,
-        )
-        .await
-        .expect("persist Q1");
+        ra_bus::session::persist_message_through_canonical_path(dir.path(), &session_key, user_a)
+            .await
+            .expect("persist Q1");
         for cmid in later_cmids {
             let user = Message::user(format!("user msg {cmid}")).with_client_message_id(cmid);
-            ra_bus::session::persist_message_through_canonical_path(
-                dir.path(),
-                &session_key,
-                user,
-            )
-            .await
-            .expect("persist later user");
+            ra_bus::session::persist_message_through_canonical_path(dir.path(), &session_key, user)
+                .await
+                .expect("persist later user");
         }
     }
 
@@ -7854,11 +7842,9 @@ async fn actor_and_channel_persists_get_distinct_seqs_across_paths() {
                     format!("channel-{i}"),
                     ra_core::ThreadId::new(format!("test-thread-{i}")),
                 );
-                ra_bus::session::persist_message_through_canonical_path(
-                    &data_dir, &key, assistant,
-                )
-                .await
-                .ok()
+                ra_bus::session::persist_message_through_canonical_path(&data_dir, &key, assistant)
+                    .await
+                    .ok()
             }
         }));
     }
@@ -11062,11 +11048,9 @@ async fn session_actor_new_evidence_failure_appends_fresh_note() {
     // (non-replayed) failure → a SECOND durable note.
     {
         let mut h = actor.session_handle.lock().await;
-        h.session_mut()
-            .messages
-            .push(ra_core::Message::assistant(
-                "Step two also done now. <goal:complete>",
-            ));
+        h.session_mut().messages.push(ra_core::Message::assistant(
+            "Step two also done now. <goal:complete>",
+        ));
     }
     actor
         .maybe_advance_goal_runtime_after_turn("fresh-note-prof", None, std::time::Instant::now())

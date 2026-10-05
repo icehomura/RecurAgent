@@ -87,8 +87,8 @@ pub fn load_tokens(url: &str) -> Result<Option<StoredTokens>> {
     let entry = keyring_entry(KEYRING_SERVICE, url)?;
     match entry.get_password() {
         Ok(json) => {
-            let tokens: StoredTokens = serde_json::from_str(&json)
-                .map_err(|e| eyre::eyre!("parse stored tokens: {e}"))?;
+            let tokens: StoredTokens =
+                serde_json::from_str(&json).map_err(|e| eyre::eyre!("parse stored tokens: {e}"))?;
             Ok(Some(tokens))
         }
         Err(keyring::Error::NoEntry) => Ok(None),
@@ -116,9 +116,7 @@ pub async fn connect_oauth(
     client_info: ClientInfo,
 ) -> Result<McpService> {
     let stored = load_tokens(url)?.ok_or_else(|| {
-        eyre::eyre!(
-            "no stored OAuth tokens for MCP server '{url}'; run `ra mcp login {url}` first"
-        )
+        eyre::eyre!("no stored OAuth tokens for MCP server '{url}'; run `ra mcp login {url}` first")
     })?;
 
     let token: OAuthTokenResponse = serde_json::from_value(stored.token_response.clone())
@@ -221,11 +219,7 @@ pub async fn login(url: &str, scopes: &[String]) -> Result<()> {
 
     timeout(
         HANDSHAKE_TIMEOUT,
-        oauth_state.start_authorization(
-            &scope_refs,
-            &redirect_uri,
-            Some(ra_core::brand::APP_NAME),
-        ),
+        oauth_state.start_authorization(&scope_refs, &redirect_uri, Some(ra_core::brand::APP_NAME)),
     )
     .await
     .map_err(|_| eyre::eyre!("oauth authorization/registration for '{url}' timed out"))?

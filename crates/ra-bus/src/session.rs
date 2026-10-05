@@ -1507,8 +1507,7 @@ const SESSION_SEGMENT_BYTES_DEFAULT: u64 = 8 * 1024 * 1024;
 const SESSION_LOAD_BUDGET_DEFAULT: u64 = 32 * 1024 * 1024;
 
 fn env_bytes(suffix: &str) -> Option<u64> {
-    ra_core::brand::env_compat_str(suffix)
-        .and_then(|raw| raw.trim().parse::<u64>().ok())
+    ra_core::brand::env_compat_str(suffix).and_then(|raw| raw.trim().parse::<u64>().ok())
 }
 
 fn session_segment_bytes() -> u64 {

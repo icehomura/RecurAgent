@@ -100,10 +100,8 @@ fn should_block_write_outside_workspace() {
 
     let profile = ra_sbpl(&real_workspace, false);
     // Try to write to a temp file outside workspace
-    let (code, _stdout, stderr) = run_sandboxed(
-        &profile,
-        "echo 'escape' > /tmp/ra-security-test-escape.txt",
-    );
+    let (code, _stdout, stderr) =
+        run_sandboxed(&profile, "echo 'escape' > /tmp/ra-security-test-escape.txt");
     assert_ne!(code, 0, "should block write outside workspace");
     assert!(
         stderr.contains("Operation not permitted") || stderr.contains("Permission denied"),

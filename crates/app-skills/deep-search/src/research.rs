@@ -777,9 +777,7 @@ impl ReadPage {
     /// Canonical URL for the item: the page's own canonical link, else the
     /// final URL, both without tracking parameters.
     pub fn canonical_url(&self) -> String {
-        ra_research::urls::canonicalize(
-            self.meta.canonical.as_deref().unwrap_or(&self.final_url),
-        )
+        ra_research::urls::canonicalize(self.meta.canonical.as_deref().unwrap_or(&self.final_url))
     }
 
     fn from_shared(p: reader::ReadPage) -> Self {
@@ -861,10 +859,7 @@ impl Reader {
     }
 
     /// Read many URLs concurrently, preserving input order.
-    pub async fn read_all(
-        &self,
-        urls: &[String],
-    ) -> Vec<Result<ReadPage, ra_research::ReadError>> {
+    pub async fn read_all(&self, urls: &[String]) -> Vec<Result<ReadPage, ra_research::ReadError>> {
         stream::iter(urls.iter())
             .map(|u| self.read(u))
             .buffered(READ_CONCURRENCY)

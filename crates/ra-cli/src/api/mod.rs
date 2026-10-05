@@ -556,9 +556,9 @@ impl AppState {
             task_query_store: None,
             appui_default_session_cwd: None,
             preview_tokens: Arc::new(PreviewTokens::new()),
-            work_secret_store: Arc::new(
-                ra_agent::bridge::work_secret::WorkSecretGrantStore::new(data_dir),
-            ),
+            work_secret_store: Arc::new(ra_agent::bridge::work_secret::WorkSecretGrantStore::new(
+                data_dir,
+            )),
             // Tests don't spawn the sweeper. Tests that exercise the
             // sweeper either drive `sweep_expired_all` directly or
             // build their own `PreviewSweeperHandle::spawn(...)`.

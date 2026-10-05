@@ -1797,7 +1797,10 @@ impl Config {
                     path = %state_home_config.display(),
                     "loading config (state home)"
                 );
-                return Ok((Self::from_file(&state_home_config)?, Some(state_home_config)));
+                return Ok((
+                    Self::from_file(&state_home_config)?,
+                    Some(state_home_config),
+                ));
             }
         }
 

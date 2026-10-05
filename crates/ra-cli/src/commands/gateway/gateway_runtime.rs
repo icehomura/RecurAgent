@@ -696,16 +696,16 @@ impl GatewayRuntime {
         // `ProfileRuntime::bootstrap` when profile-mode took the
         // bootstrap path; otherwise (config-mode / CLI-override path)
         // open it inline as before.
-        let tool_config: Arc<ra_agent::ToolConfigStore> =
-            if let Some(rt) = profile_runtime.as_ref() {
-                rt.tool_config.clone()
-            } else {
-                Arc::new(
-                    ra_agent::ToolConfigStore::open(&data_dir)
-                        .await
-                        .wrap_err("failed to open tool config store")?,
-                )
-            };
+        let tool_config: Arc<ra_agent::ToolConfigStore> = if let Some(rt) = profile_runtime.as_ref()
+        {
+            rt.tool_config.clone()
+        } else {
+            Arc::new(
+                ra_agent::ToolConfigStore::open(&data_dir)
+                    .await
+                    .wrap_err("failed to open tool config store")?,
+            )
+        };
         let profile_search_keys = resolved_profile
             .as_ref()
             .map(profile_search_provider_keys)
@@ -801,10 +801,8 @@ impl GatewayRuntime {
                 // override; the no-op case is harmless).
                 if let Some(secs) = gw_config.browser_timeout_secs {
                     tools.register(
-                        ra_agent::BrowserTool::with_timeout(std::time::Duration::from_secs(
-                            secs,
-                        ))
-                        .with_config(tool_config.clone()),
+                        ra_agent::BrowserTool::with_timeout(std::time::Duration::from_secs(secs))
+                            .with_config(tool_config.clone()),
                     );
                 }
 
@@ -857,10 +855,8 @@ impl GatewayRuntime {
 
                 if let Some(secs) = gw_config.browser_timeout_secs {
                     tools.register(
-                        ra_agent::BrowserTool::with_timeout(std::time::Duration::from_secs(
-                            secs,
-                        ))
-                        .with_config(tool_config.clone()),
+                        ra_agent::BrowserTool::with_timeout(std::time::Duration::from_secs(secs))
+                            .with_config(tool_config.clone()),
                     );
                 }
 
@@ -1140,10 +1136,7 @@ impl GatewayRuntime {
                 }
 
                 impl crate::session_actor::PipelineToolFactory for DefaultPipelineToolFactory {
-                    fn create(
-                        &self,
-                        sandbox: &ra_agent::SandboxConfig,
-                    ) -> Arc<dyn ra_agent::Tool> {
+                    fn create(&self, sandbox: &ra_agent::SandboxConfig) -> Arc<dyn ra_agent::Tool> {
                         let mut pt = ra_pipeline::RunPipelineTool::new(
                             self.llm.clone(),
                             self.memory.clone(),
@@ -1613,9 +1606,7 @@ impl GatewayRuntime {
                         from_node: from_node.map(str::to_string),
                     };
                     match task_relaunch_store.relaunch_task(task_id, opts) {
-                        Ok(new_task_id) => {
-                            ra_bus::TaskRelaunchOutcome::Relaunched { new_task_id }
-                        }
+                        Ok(new_task_id) => ra_bus::TaskRelaunchOutcome::Relaunched { new_task_id },
                         Err(ra_agent::TaskRelaunchError::NotFound) => {
                             ra_bus::TaskRelaunchOutcome::NotFound
                         }

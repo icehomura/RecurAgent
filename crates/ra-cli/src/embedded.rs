@@ -111,8 +111,8 @@ mod tests {
     /// OpenAI-compatible endpoint at `base_url`. `_main` is reserved, so it
     /// bypasses `ProfileStore::save`'s id validation the way a host writes it.
     fn store_main_profile(home: &Path, base_url: &str) {
-        let store = crate::profiles::ProfileStore::open_unified(&home.join(".ra"))
-            .expect("profile store");
+        let store =
+            crate::profiles::ProfileStore::open_unified(&home.join(".ra")).expect("profile store");
         let profile = json!({
             "id": ra_core::MAIN_PROFILE_ID,
             "name": "Main",

@@ -1465,18 +1465,14 @@ fn terminal_settle_authority(
     task: &ra_agent::BackgroundTask,
 ) -> Option<(ra_fleet::TaskSettleAuthority, bool)> {
     match task.status {
-        ra_agent::TaskStatus::Completed => {
-            Some((ra_fleet::TaskSettleAuthority::Completion, true))
-        }
+        ra_agent::TaskStatus::Completed => Some((ra_fleet::TaskSettleAuthority::Completion, true)),
         ra_agent::TaskStatus::Cancelled => {
             Some((ra_fleet::TaskSettleAuthority::FinalFailure, true))
         }
         ra_agent::TaskStatus::Failed if task.failed_by_observer => {
             Some((ra_fleet::TaskSettleAuthority::ProvisionalFailure, false))
         }
-        ra_agent::TaskStatus::Failed => {
-            Some((ra_fleet::TaskSettleAuthority::FinalFailure, true))
-        }
+        ra_agent::TaskStatus::Failed => Some((ra_fleet::TaskSettleAuthority::FinalFailure, true)),
         ra_agent::TaskStatus::Spawned | ra_agent::TaskStatus::Running => None,
         // #27c — a PARKED task carries no settle verdict (it awaits client
         // re-attachment); rank it with the non-verdict statuses.
@@ -8237,11 +8233,7 @@ impl InProcessAgentOrchestrator {
     /// `time_used_seconds`. This snapshot can be the FIRST writer of a goal
     /// row (`create_goal_if_absent`), so dropping either one would persist a
     /// goal that answers half the cost question — the exact gap #2076 closed.
-    fn goal_ledger_row_snapshot(
-        &self,
-        profile_id: &str,
-        goal_id: &str,
-    ) -> Option<ra_fleet::Goal> {
+    fn goal_ledger_row_snapshot(&self, profile_id: &str, goal_id: &str) -> Option<ra_fleet::Goal> {
         let state = self.state();
         state
             .goals
@@ -8349,8 +8341,8 @@ impl InProcessAgentOrchestrator {
             created_at_ms: now,
             updated_at_ms: now,
         };
-        let written = ra_fleet::GoalLedger::open_with_busy_retry(binding.ledger_path())
-            .and_then(|ledger| {
+        let written =
+            ra_fleet::GoalLedger::open_with_busy_retry(binding.ledger_path()).and_then(|ledger| {
                 ledger.create_goal_if_absent(&binding.goal_row)?;
                 ledger.create_task_if_absent(&row)
             });
@@ -21542,9 +21534,8 @@ mod tests {
                 .await
                 .expect("open episode store"),
         );
-        let sandbox_factory: ra_fleet_worker::SandboxFactory = Arc::new(|_cwd, _grant| {
-            Arc::new(MarkerSandbox) as Arc<dyn ra_agent::sandbox::Sandbox>
-        });
+        let sandbox_factory: ra_fleet_worker::SandboxFactory =
+            Arc::new(|_cwd, _grant| Arc::new(MarkerSandbox) as Arc<dyn ra_agent::sandbox::Sandbox>);
         let factory = Arc::new(ra_fleet_worker::AgentFactory::new(
             Arc::new(NativeMockProvider {
                 content: Ok("done".to_owned()),
@@ -21849,10 +21840,7 @@ mod tests {
         assert!(matches!(d.launch, LaunchOutcome::Launched { .. }));
         let outcome = d.handle.expect("handle").await.expect("join");
         assert!(
-            matches!(
-                outcome,
-                ra_fleet_worker::AttemptOutcome::Completed { .. }
-            ),
+            matches!(outcome, ra_fleet_worker::AttemptOutcome::Completed { .. }),
             "the mock attempt must complete accepted, got {outcome:?}",
         );
 
@@ -29201,17 +29189,15 @@ mod tests {
             ra_agent::TerminalEvent {
                 task: task.clone(),
                 synth_ack_emitted: true,
-                outcome: ra_agent::TerminalOutcome::Failed(
-                    ra_agent::SpawnOnlyFailureSignal {
-                        task_id: task.id.clone(),
-                        tool_name: task.tool_name.clone(),
-                        tool_input: task.tool_input.clone().unwrap(),
-                        error_message: task.error.clone().unwrap(),
-                        suggested_alternatives: vec![],
-                        parent_session_key: task.parent_session_key.clone(),
-                        originating_client_message_id: None,
-                    },
-                ),
+                outcome: ra_agent::TerminalOutcome::Failed(ra_agent::SpawnOnlyFailureSignal {
+                    task_id: task.id.clone(),
+                    tool_name: task.tool_name.clone(),
+                    tool_input: task.tool_input.clone().unwrap(),
+                    error_message: task.error.clone().unwrap(),
+                    suggested_alternatives: vec![],
+                    parent_session_key: task.parent_session_key.clone(),
+                    originating_client_message_id: None,
+                }),
             }
         };
 
@@ -29908,8 +29894,7 @@ mod tests {
         supervisor.mark_running(&task_id);
         // Arm the process-global liveness for this worker (the guard is what
         // real workers hold for their whole critical section).
-        let live_guard =
-            ra_agent::TaskTerminalGuard::new(Arc::clone(&supervisor), task_id.clone());
+        let live_guard = ra_agent::TaskTerminalGuard::new(Arc::clone(&supervisor), task_id.clone());
         supervisor.mark_failed_observed(&task_id, "flaky".to_string());
 
         // Backdate the correction window past the deadline.
@@ -39213,15 +39198,11 @@ mod tests {
                     usage,
                     provider_index: None,
                 }),
-                Some(ScriptedReply::ErrRetryable(msg)) => {
-                    Err(eyre::eyre!(ra_llm::LlmError::new(
-                        ra_llm::LlmErrorKind::ServerError { status: 503 },
-                        msg,
-                    )))
-                }
-                Some(ScriptedReply::ErrAuth(msg)) => {
-                    Err(eyre::eyre!(ra_llm::LlmError::auth(msg)))
-                }
+                Some(ScriptedReply::ErrRetryable(msg)) => Err(eyre::eyre!(ra_llm::LlmError::new(
+                    ra_llm::LlmErrorKind::ServerError { status: 503 },
+                    msg,
+                ))),
+                Some(ScriptedReply::ErrAuth(msg)) => Err(eyre::eyre!(ra_llm::LlmError::auth(msg))),
                 None => Ok(ra_llm::ChatResponse {
                     // Exhausted script: a benign non-verdict so the wrapper
                     // classifies InvalidResponse instead of panicking.
@@ -46567,8 +46548,8 @@ mod tests {
         // goal_01 — bound caller on a non-default branch — is CLAIMED as the
         // owner by the provider itself (the "first goal to branch the tree"
         // rule), and sees that claim echoed in its context.
-        let provider = ra_agent::tools::shell::main_tree_sovereignty_provider()
-            .expect("provider installed");
+        let provider =
+            ra_agent::tools::shell::main_tree_sovereignty_provider().expect("provider installed");
         let goal_01_ctx = provider(Some("goal_01")).expect("context returned");
         assert_eq!(
             goal_01_ctx.main_tree_branch.as_deref(),
@@ -46642,8 +46623,8 @@ mod tests {
             profile_data_dir.clone(),
             main_tree.clone(),
         );
-        let provider = ra_agent::tools::shell::main_tree_sovereignty_provider()
-            .expect("provider installed");
+        let provider =
+            ra_agent::tools::shell::main_tree_sovereignty_provider().expect("provider installed");
         let ctx = provider(Some("goal_01")).expect("context returned");
         assert_eq!(ctx.main_tree_branch.as_deref(), Some("main"));
         assert_eq!(

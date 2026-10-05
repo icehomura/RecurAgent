@@ -2523,10 +2523,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert!(matches!(
-            edit,
-            ra_fleet::PlanMutateOutcome::Mutated { .. }
-        ));
+        assert!(matches!(edit, ra_fleet::PlanMutateOutcome::Mutated { .. }));
 
         // Attempt 2: FRESH launch (the child is Ready again) — its registry must
         // be rebuilt from the WIDER grant, so the agent is offered web_fetch.

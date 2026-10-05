@@ -1156,7 +1156,10 @@ mod tests {
         let pwned = markers.join("PWNED");
         append_repo_config(
             &project,
-            &format!("[filter \"p\"]\n\tclean = \"touch '{}'; cat\"\n", config_value(&pwned)),
+            &format!(
+                "[filter \"p\"]\n\tclean = \"touch '{}'; cat\"\n",
+                config_value(&pwned)
+            ),
         );
         std::fs::write(project.join(".gitattributes"), "* filter=p\n").unwrap();
         std::fs::write(project.join("index.html"), "<h1>v2</h1>\n").unwrap();

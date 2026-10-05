@@ -208,10 +208,7 @@ mod tests {
     #[test]
     fn slides_workspace_policy_is_standardized() {
         let policy = workspace_policy();
-        assert_eq!(
-            policy.workspace.kind,
-            ra_agent::WorkspacePolicyKind::Slides
-        );
+        assert_eq!(policy.workspace.kind, ra_agent::WorkspacePolicyKind::Slides);
         assert!(
             policy
                 .validation

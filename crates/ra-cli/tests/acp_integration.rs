@@ -825,11 +825,8 @@ async fn should_sanitize_stored_history_when_loading_a_session() {
     std::fs::create_dir_all(&memory_dir).unwrap();
 
     let session_id = agent_client_protocol::schema::v1::SessionId::new("ra-seeded");
-    let key = ra_core::SessionKey::with_profile(
-        ra_core::MAIN_PROFILE_ID,
-        "acp",
-        session_id.0.as_ref(),
-    );
+    let key =
+        ra_core::SessionKey::with_profile(ra_core::MAIN_PROFILE_ID, "acp", session_id.0.as_ref());
 
     // Seed the store directly: one healthy user + assistant pair, one assistant
     // tool_call with NO matching result (crash residue), one whitespace-only
@@ -864,12 +861,9 @@ async fn should_sanitize_stored_history_when_loading_a_session() {
         mgr.add_message(&key, msg(ra_core::MessageRole::Assistant, "   "))
             .await
             .expect("whitespace row");
-        mgr.add_message(
-            &key,
-            msg(ra_core::MessageRole::Assistant, "SEED_ASSISTANT"),
-        )
-        .await
-        .expect("assistant row");
+        mgr.add_message(&key, msg(ra_core::MessageRole::Assistant, "SEED_ASSISTANT"))
+            .await
+            .expect("assistant row");
     }
 
     let seen: Arc<Mutex<Vec<Vec<String>>>> = Arc::new(Mutex::new(Vec::new()));

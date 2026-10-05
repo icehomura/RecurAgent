@@ -315,9 +315,7 @@ async fn should_accept_a_bearer_subprotocol_without_echoing_it() {
     let offer = |request: &mut axum::http::Request<()>| {
         request.headers_mut().insert(
             "sec-websocket-protocol",
-            format!("ra-ui, ra.bearer.{EXTERNAL}")
-                .parse()
-                .unwrap(),
+            format!("ra-ui, ra.bearer.{EXTERNAL}").parse().unwrap(),
         );
     };
     let response = ws(server.addr, offer, "").await.unwrap();

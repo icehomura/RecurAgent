@@ -250,11 +250,7 @@ impl ChatCommand {
         let session_key = if self.goals {
             ra_core::SessionKey(chat_goal_session_key(&profile_id))
         } else {
-            ra_core::SessionKey::with_profile(
-                &profile_id,
-                "cli",
-                &uuid::Uuid::now_v7().to_string(),
-            )
+            ra_core::SessionKey::with_profile(&profile_id, "cli", &uuid::Uuid::now_v7().to_string())
         };
         let session = OupSession::open(state.clone(), session_key, &cwd, permissions).await?;
         let frontend = TerminalFrontend {

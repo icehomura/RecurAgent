@@ -459,10 +459,8 @@ mod tests {
         let grant = WorkerGrant {
             network: NetworkGrant::Hosts(vec!["example.com".into()]),
             tools: {
-                let mut t: Vec<String> = ra_fleet::BASE_TOOLS
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect();
+                let mut t: Vec<String> =
+                    ra_fleet::BASE_TOOLS.iter().map(|s| s.to_string()).collect();
                 t.push("web_fetch".into());
                 t
             },

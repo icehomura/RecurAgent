@@ -168,9 +168,7 @@ async fn erase_transcript_in(root: &Path, session: &SessionKey, errors: &mut Vec
     let encoded_topic = ra_bus::session::encode_path_component(topic);
     let user_sessions = root
         .join("users")
-        .join(ra_bus::session::encode_path_component(
-            session.base_key(),
-        ))
+        .join(ra_bus::session::encode_path_component(session.base_key()))
         .join("sessions");
     removed += remove_entries_with_stem(
         root,

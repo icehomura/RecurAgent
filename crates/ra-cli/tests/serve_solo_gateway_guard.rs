@@ -278,8 +278,7 @@ mod serve_solo_gateway_guard {
     fn solo_serve_refuses_manual_gateway_starts() {
         let _guard = serial_guard();
         let port = find_free_port();
-        let data_dir =
-            std::env::temp_dir().join(format!("ra_solo_guard_{}", std::process::id()));
+        let data_dir = std::env::temp_dir().join(format!("ra_solo_guard_{}", std::process::id()));
         std::fs::create_dir_all(data_dir.join("profiles")).unwrap();
 
         // An enabled profile with an LLM selection: auto-start already skips
@@ -379,8 +378,7 @@ mod serve_solo_gateway_guard {
     fn non_solo_serve_still_starts_gateways_manually() {
         let _guard = serial_guard();
         let port = find_free_port();
-        let data_dir =
-            std::env::temp_dir().join(format!("ra_solo_manual_{}", std::process::id()));
+        let data_dir = std::env::temp_dir().join(format!("ra_solo_manual_{}", std::process::id()));
         std::fs::create_dir_all(data_dir.join("profiles")).unwrap();
         write_profile(&data_dir, "manual-only-0", false, None);
 

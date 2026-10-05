@@ -285,8 +285,7 @@ pub(crate) async fn run_supervised_mcp_specialist(
     emit_agent_updated(sink, &request.spec.session_id, agent);
 
     if let Some(policy) = request.dispatch_policy.as_ref() {
-        let backend =
-            ra_agent::DispatchBackendMetadata::from_mcp_backend(request.backend.as_ref());
+        let backend = ra_agent::DispatchBackendMetadata::from_mcp_backend(request.backend.as_ref());
         if let Err(denial) = ra_agent::enforce_dispatch_gates_for_backend(
             policy.as_ref(),
             &backend,

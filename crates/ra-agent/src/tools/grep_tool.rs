@@ -795,9 +795,8 @@ mod tests {
             "# strategy insight\nNEEDLE marks the spot in the uploaded report\n",
         )
         .unwrap();
-        let handle =
-            ra_bus::file_handle::encode_tmp_upload_handle(&uploaded, Some("insight.md"))
-                .expect("encode upload handle");
+        let handle = ra_bus::file_handle::encode_tmp_upload_handle(&uploaded, Some("insight.md"))
+            .expect("encode upload handle");
 
         // Workspace is unrelated to the upload tmpdir.
         let workspace = tempfile::tempdir().unwrap();

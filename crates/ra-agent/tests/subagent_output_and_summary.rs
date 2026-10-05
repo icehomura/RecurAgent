@@ -15,9 +15,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use ra_agent::{AgentSummaryGenerator, AppendResult, SubAgentOutputRouter, TaskSupervisor};
 use ra_core::Message;
-use ra_llm::{
-    ChatConfig, ChatResponse, ChatStream, LlmProvider, StopReason, TokenUsage, ToolSpec,
-};
+use ra_llm::{ChatConfig, ChatResponse, ChatStream, LlmProvider, StopReason, TokenUsage, ToolSpec};
 
 struct StepProvider {
     responses: Arc<Vec<String>>,

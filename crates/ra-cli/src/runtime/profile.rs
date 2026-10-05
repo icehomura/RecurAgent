@@ -1024,8 +1024,7 @@ impl ProfileRuntime {
         ra_home: Option<&Path>,
         role: BootstrapRole,
     ) -> Result<Arc<Self>> {
-        Self::bootstrap_with_host_plugins(profile, data_dir, ra_home, role, None, None, None)
-            .await
+        Self::bootstrap_with_host_plugins(profile, data_dir, ra_home, role, None, None, None).await
     }
 
     /// Section B (codex review round-3): bootstrap a profile runtime while
@@ -3188,10 +3187,7 @@ mod tests {
         let _key = ScopedEnvKey::set("RA_PLUGIN_RELOAD_SIGN_KEY");
         let tmp = tempfile::tempdir().unwrap();
         let ra_home = tmp.path().join("ra-home");
-        let data_dir = ra_home
-            .join("profiles")
-            .join("reload-signed")
-            .join("data");
+        let data_dir = ra_home.join("profiles").join("reload-signed").join("data");
         let profile = fixture_profile("reload-signed", "RA_PLUGIN_RELOAD_SIGN_KEY");
         let strict = crate::config::PluginsConfig {
             require_signed: true,

@@ -663,9 +663,8 @@ fn installations_checks() -> Vec<Check> {
 /// leaving the user to infer it from the install list.
 fn resolved_backend_check() -> Check {
     match crate::backend_ensure::resolved_backend_report() {
-        Some((path, label)) => {
-            Check::pass(CAT_INSTALLS, "resolved backend", label).with_value(path.display().to_string())
-        }
+        Some((path, label)) => Check::pass(CAT_INSTALLS, "resolved backend", label)
+            .with_value(path.display().to_string()),
         None => Check::warn(
             CAT_INSTALLS,
             "resolved backend",

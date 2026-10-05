@@ -485,9 +485,7 @@ const ra_TOOL_SPECS: &[RaToolSpec] = &[
         category: "agent",
         aliases: &["spawn_agent"],
         policy: "allowed",
-        detail: Some(
-            "ra subagent launcher; spawn_agent is the Codex-compatible supervisor alias.",
-        ),
+        detail: Some("ra subagent launcher; spawn_agent is the Codex-compatible supervisor alias."),
     },
     RaToolSpec {
         name: "read_task_output",

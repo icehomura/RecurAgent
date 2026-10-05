@@ -56,10 +56,7 @@ pub(crate) fn mark_incomplete(metadata: &mut serde_json::Value, incomplete: bool
     }
 }
 
-pub(crate) fn mark_incomplete_usage(
-    metadata: &mut serde_json::Value,
-    usage: &ra_core::TokenUsage,
-) {
+pub(crate) fn mark_incomplete_usage(metadata: &mut serde_json::Value, usage: &ra_core::TokenUsage) {
     mark_incomplete(metadata, true);
     metadata["tokens_in"] = usage.input_tokens.into();
     metadata["tokens_out"] = usage.output_tokens.into();

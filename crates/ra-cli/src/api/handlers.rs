@@ -5557,11 +5557,9 @@ mod tests {
             Some(std::fs::canonicalize(ws.join("uploads/report.md")).unwrap())
         );
 
-        let handle = ra_bus::file_handle::encode_workspace_file_handle(
-            &ws,
-            &ws.join("uploads/report.md"),
-        )
-        .unwrap();
+        let handle =
+            ra_bus::file_handle::encode_workspace_file_handle(&ws, &ws.join("uploads/report.md"))
+                .unwrap();
         assert_eq!(
             resolve_scoped_download_path(data.path(), &handle, None, Some(ws.as_path())),
             Some(std::fs::canonicalize(ws.join("uploads/report.md")).unwrap())
@@ -5588,8 +5586,7 @@ mod tests {
         std::fs::create_dir_all(&upload_root).unwrap();
         let f = upload_root.join(format!("u-{}-secret.md", std::process::id()));
         std::fs::write(&f, b"theirs").unwrap();
-        let handle =
-            ra_bus::file_handle::encode_tmp_upload_handle(&f, Some("secret.md")).unwrap();
+        let handle = ra_bus::file_handle::encode_tmp_upload_handle(&f, Some("secret.md")).unwrap();
 
         // Requester is tenant-a → refused.
         assert!(
@@ -6153,10 +6150,7 @@ mod tests {
                 .unwrap();
             sess.add_message(
                 &raw_key,
-                Message::assistant_with_thread(
-                    "raw reply",
-                    ra_core::ThreadId::new("thread-raw"),
-                ),
+                Message::assistant_with_thread("raw reply", ra_core::ThreadId::new("thread-raw")),
             )
             .await
             .unwrap();

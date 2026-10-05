@@ -87,9 +87,7 @@ fn fleet_sandbox_is_isolating(sandbox_cfg: &ra_agent::sandbox::SandboxConfig) ->
 /// task (a worktree worker whose `git commit` can't reach `<repo>/.git` would
 /// lose its deliverable when the checkout is removed). Threaded into
 /// `PoolConfig.repo_git_write_supported`.
-fn fleet_sandbox_supports_repo_git_write(
-    sandbox_cfg: &ra_agent::sandbox::SandboxConfig,
-) -> bool {
+fn fleet_sandbox_supports_repo_git_write(sandbox_cfg: &ra_agent::sandbox::SandboxConfig) -> bool {
     ra_agent::sandbox::create_sandbox(sandbox_cfg).supports_repo_git_write()
 }
 
@@ -959,7 +957,8 @@ impl ServeCommand {
                 %error,
                 "failed to configure durable agent supervisor store; continuing with in-process supervision only"
             );
-        } else if self.solo && ra_core::brand::env_compat_str("SOLO_RESUME_LOOPS").as_deref() != Some("1")
+        } else if self.solo
+            && ra_core::brand::env_compat_str("SOLO_RESUME_LOOPS").as_deref() != Some("1")
         {
             // Solo-boot loop safety: restored loops must not silently resume
             // firing model turns on a single-operator box. Park them paused;
@@ -1372,8 +1371,7 @@ impl ServeCommand {
                         // `git commit` can reach `<repo>/.git` outside its cwd
                         // WITHOUT exposing host sockets via `--bind / /`).
                         let sandbox_factory: ra_fleet_worker::SandboxFactory = Arc::new(
-                            move |_cwd: &std::path::Path,
-                                  grant: ra_fleet_worker::SandboxGrant| {
+                            move |_cwd: &std::path::Path, grant: ra_fleet_worker::SandboxGrant| {
                                 let mut cfg = sandbox_cfg.clone();
                                 cfg.allow_network = grant.allow_network;
                                 cfg.repo_git_write = grant.repo_git_dir;
@@ -1400,25 +1398,27 @@ impl ServeCommand {
                         let denial_data_dir = rt.data_dir.clone();
                         let denial_profile_id = rt.profile_id.clone();
                         let violation_sink: ra_agent::tools::write_grant::WriteGrantViolationSink =
-                            Arc::new(move |v: ra_agent::tools::write_grant::WriteGrantViolation| {
-                                let data_dir = denial_data_dir.clone();
-                                let profile_id = denial_profile_id.clone();
-                                let record = move || {
-                                    crate::autonomy::agent_orchestrator::default_agent_orchestrator()
+                            Arc::new(
+                                move |v: ra_agent::tools::write_grant::WriteGrantViolation| {
+                                    let data_dir = denial_data_dir.clone();
+                                    let profile_id = denial_profile_id.clone();
+                                    let record = move || {
+                                        crate::autonomy::agent_orchestrator::default_agent_orchestrator()
                                         .record_fleet_write_grant_denial(
                                             &data_dir,
                                             &profile_id,
                                             &v.workspace,
                                             &v.detail,
                                         );
-                                };
-                                match tokio::runtime::Handle::try_current() {
-                                    Ok(handle) => {
-                                        handle.spawn_blocking(record);
+                                    };
+                                    match tokio::runtime::Handle::try_current() {
+                                        Ok(handle) => {
+                                            handle.spawn_blocking(record);
+                                        }
+                                        Err(_) => record(),
                                     }
-                                    Err(_) => record(),
-                                }
-                            });
+                                },
+                            );
                         let factory = Arc::new(
                             ra_fleet_worker::AgentFactory::new(
                                 rt.llm.clone(),
@@ -1924,9 +1924,9 @@ impl ServeCommand {
             // invalidates every grant (see
             // `crate::api::preview_tokens` for the design rationale).
             preview_tokens,
-            work_secret_store: Arc::new(
-                ra_agent::bridge::work_secret::WorkSecretGrantStore::new(&data_dir),
-            ),
+            work_secret_store: Arc::new(ra_agent::bridge::work_secret::WorkSecretGrantStore::new(
+                &data_dir,
+            )),
             // Issue #1009: owning sweeper handle. `Drop` aborts the
             // tokio task when the last `Arc<AppState>` is released,
             // replacing the previous `_preview_sweeper` local that

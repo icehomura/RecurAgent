@@ -29,9 +29,9 @@ pub(crate) use prompt::build_system_prompt;
 #[cfg(all(test, feature = "matrix"))]
 use {
     crate::session_actor::SnapshotToolRegistryFactory,
+    profile_factory::ProfileActorFactoryBuilder,
     ra_agent::{AgentConfig, ToolRegistry},
     ra_bus::{ActiveSessionStore, ChannelManager, CronService, SessionManager},
-    profile_factory::ProfileActorFactoryBuilder,
     std::sync::Arc,
     std::sync::atomic::{AtomicBool, AtomicUsize},
 };
@@ -284,11 +284,8 @@ mod tests {
             tool_config,
             memory,
             recall: Arc::new(
-                ra_memory::RecallStore::open(
-                    &project_dir,
-                    ra_memory::RecallConfig::default(),
-                )
-                .unwrap(),
+                ra_memory::RecallStore::open(&project_dir, ra_memory::RecallConfig::default())
+                    .unwrap(),
             ),
             memory_store,
             agent_config: AgentConfig::default(),
@@ -497,10 +494,7 @@ mod tests {
         assert!(settings.password.is_none());
         assert_eq!(settings.rooms, vec!["!a:matrix.org", "!b:matrix.org"]);
         assert_eq!(settings.auto_join, ra_bus::MatrixAutoJoin::Off);
-        assert_eq!(
-            settings.group_policy,
-            ra_bus::MatrixGroupPolicy::Allowlist
-        );
+        assert_eq!(settings.group_policy, ra_bus::MatrixGroupPolicy::Allowlist);
         assert!(settings.require_mention);
     }
 
@@ -575,10 +569,7 @@ mod tests {
             MATRIX_SETTING_ACCESS_TOKEN: "syt_token",
         }));
         let settings = MatrixUserChannelSettings::from_entry(&entry).unwrap();
-        assert_eq!(
-            settings.mention_policy,
-            ra_bus::MatrixMentionPolicy::Strict
-        );
+        assert_eq!(settings.mention_policy, ra_bus::MatrixMentionPolicy::Strict);
 
         let entry = matrix_entry(serde_json::json!({
             MATRIX_SETTING_MODE: MATRIX_MODE_USER,
@@ -586,10 +577,7 @@ mod tests {
             MATRIX_SETTING_MENTION_POLICY: "open",
         }));
         let settings = MatrixUserChannelSettings::from_entry(&entry).unwrap();
-        assert_eq!(
-            settings.mention_policy,
-            ra_bus::MatrixMentionPolicy::Open
-        );
+        assert_eq!(settings.mention_policy, ra_bus::MatrixMentionPolicy::Open);
 
         let entry = matrix_entry(serde_json::json!({
             MATRIX_SETTING_MODE: MATRIX_MODE_USER,
@@ -597,10 +585,7 @@ mod tests {
             MATRIX_SETTING_MENTION_POLICY_CAMEL: "open",
         }));
         let settings = MatrixUserChannelSettings::from_entry(&entry).unwrap();
-        assert_eq!(
-            settings.mention_policy,
-            ra_bus::MatrixMentionPolicy::Open
-        );
+        assert_eq!(settings.mention_policy, ra_bus::MatrixMentionPolicy::Open);
     }
 
     #[test]
@@ -620,10 +605,7 @@ mod tests {
             MATRIX_SETTING_MENTION_POLICY: "stric",
         }));
         let settings = MatrixUserChannelSettings::from_entry(&entry).unwrap();
-        assert_eq!(
-            settings.mention_policy,
-            ra_bus::MatrixMentionPolicy::Strict
-        );
+        assert_eq!(settings.mention_policy, ra_bus::MatrixMentionPolicy::Strict);
         let logs = capture.contents();
         assert!(
             logs.contains("unrecognized matrix mention_policy"),
@@ -638,10 +620,7 @@ mod tests {
             MATRIX_SETTING_MENTION_POLICY: "Strict",
         }));
         let settings = MatrixUserChannelSettings::from_entry(&entry).unwrap();
-        assert_eq!(
-            settings.mention_policy,
-            ra_bus::MatrixMentionPolicy::Strict
-        );
+        assert_eq!(settings.mention_policy, ra_bus::MatrixMentionPolicy::Strict);
         assert_eq!(
             capture
                 .contents()

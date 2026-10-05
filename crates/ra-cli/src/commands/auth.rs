@@ -988,8 +988,7 @@ mod tests {
         // a real profile row exists (so the reference guard passes) while
         // the SAVE step is injected to fail.
         let _root = crate::auth::keychain::test_override_secrets_root(tmp.path().join("secrets"));
-        let store =
-            crate::profiles::ProfileStore::open_unified(&tmp.path().join(".ra")).unwrap();
+        let store = crate::profiles::ProfileStore::open_unified(&tmp.path().join(".ra")).unwrap();
         let mut profile = profile_with_llm("zai-coding", None);
         profile
             .config
@@ -1188,8 +1187,7 @@ mod tests {
         let blocker = tmp.path().join("blocker");
         std::fs::write(&blocker, "not-a-dir").unwrap();
         let _root = crate::auth::keychain::test_override_secrets_root(blocker.clone());
-        let store =
-            crate::profiles::ProfileStore::open_unified(&tmp.path().join(".ra")).unwrap();
+        let store = crate::profiles::ProfileStore::open_unified(&tmp.path().join(".ra")).unwrap();
         let mut profile = profile_with_llm("zai-coding", None);
         profile
             .config
@@ -1459,8 +1457,7 @@ mod tests {
     #[test]
     fn get_profiles_not_found_lists_existing_ids() {
         let tmp = tempfile::tempdir().unwrap();
-        let store =
-            crate::profiles::ProfileStore::open_unified(&tmp.path().join(".ra")).unwrap();
+        let store = crate::profiles::ProfileStore::open_unified(&tmp.path().join(".ra")).unwrap();
 
         let error = get_profiles(&store, Some("nope")).unwrap_err();
         assert!(

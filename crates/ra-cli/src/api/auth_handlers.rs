@@ -141,11 +141,7 @@ fn is_local_request_host(host: &str) -> bool {
 
 fn resolve_routed_profile_id_candidate(state: &AppState, candidate: &str) -> Option<String> {
     let candidate = candidate.trim();
-    if candidate.is_empty()
-        || matches!(
-            candidate,
-            "www" | "app" | "admin" | "api" | "crew" | "ra"
-        )
+    if candidate.is_empty() || matches!(candidate, "www" | "app" | "admin" | "api" | "crew" | "ra")
     {
         return None;
     }
@@ -1441,25 +1437,25 @@ pub async fn list_voices(
     let profile_id = profile.id.clone();
 
     let registry_path = crate::api::voices::registry_path();
-    let (mut voices, registry_default) =
-        match ra_llm::ominix::VoicesRegistry::load(&registry_path) {
-            // Scope the listing to this tenant: shared presets + voices this
-            // profile owns. A clone cloned by another tenant must not appear.
-            Ok(reg) => (
-                reg.synthesizable_visible(|ref_audio| {
-                    crate::api::voices::voice_visible_to(&profile_id, ref_audio)
-                }),
-                reg.default_voice,
-            ),
-            Err(e) => {
-                tracing::warn!(
-                    error = %e,
-                    path = %registry_path.display(),
-                    "voices.json unavailable; returning current default only"
-                );
-                (Vec::new(), String::new())
-            }
-        };
+    let (mut voices, registry_default) = match ra_llm::ominix::VoicesRegistry::load(&registry_path)
+    {
+        // Scope the listing to this tenant: shared presets + voices this
+        // profile owns. A clone cloned by another tenant must not appear.
+        Ok(reg) => (
+            reg.synthesizable_visible(|ref_audio| {
+                crate::api::voices::voice_visible_to(&profile_id, ref_audio)
+            }),
+            reg.default_voice,
+        ),
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                path = %registry_path.display(),
+                "voices.json unavailable; returning current default only"
+            );
+            (Vec::new(), String::new())
+        }
+    };
 
     // Fallback chain for the "current" voice when no live override is set: the
     // bootstrapped per-profile default (already overlays the serve default),
@@ -5413,10 +5409,7 @@ mod tests {
         let err = matrix_test_channel_config(&profile, &request).unwrap_err();
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.contains("localpart like ra"));
-        assert!(
-            err.1
-                .contains("do not use ra:ra.meldry.com without @")
-        );
+        assert!(err.1.contains("do not use ra:ra.meldry.com without @"));
     }
 
     #[test]
@@ -5867,7 +5860,8 @@ mod tests {
     #[ignore = "requires built learning-coach and an explicitly supplied Gemini test key"]
     async fn profile_model_real_coach_acceptance() {
         use std::os::unix::fs::PermissionsExt;
-        let coach = std::path::PathBuf::from(ra_core::brand::env_compat_str("TEST_COACH_ROOT").unwrap());
+        let coach =
+            std::path::PathBuf::from(ra_core::brand::env_compat_str("TEST_COACH_ROOT").unwrap());
         let key = ra_core::brand::env_compat_str("TEST_LESSON_KEY").unwrap();
         let (_dir, mut state, _, store) = temp_app_state();
         state.deployment_mode = crate::config::DeploymentMode::Cloud;

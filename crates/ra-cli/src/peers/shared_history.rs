@@ -525,10 +525,9 @@ pub(crate) async fn shared_history_for_turn(
     let mut running: Vec<Vec<SharedRow>> = Vec::new();
     for (id, cwd, _) in &sharing {
         let key = context_session_key(session, slug, id);
-        let messages =
-            ra_bus::session::load_session_messages_locked(&transcript_root(cwd), &key)
-                .await
-                .unwrap_or_default();
+        let messages = ra_bus::session::load_session_messages_locked(&transcript_root(cwd), &key)
+            .await
+            .unwrap_or_default();
         let conversation = label.then_some(id.as_str());
         rows.extend(select_rows(&messages, conversation, last_n));
         let turn = running_rows(&key, &messages, conversation);

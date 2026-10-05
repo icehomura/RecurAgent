@@ -964,20 +964,16 @@ impl UiProtocolLedger {
         let Ok((events, _)) = self.snapshot_with_cursor(session_id, None) else {
             return 0;
         };
-        let mut tasks: std::collections::HashMap<
-            String,
-            ra_core::ui_protocol::TaskUpdatedEvent,
-        > = std::collections::HashMap::new();
+        let mut tasks: std::collections::HashMap<String, ra_core::ui_protocol::TaskUpdatedEvent> =
+            std::collections::HashMap::new();
         let mut started_turns: std::collections::HashMap<
             String,
             (SessionKey, ra_core::TurnId, Option<String>),
         > = std::collections::HashMap::new();
         let mut terminal_turns: std::collections::HashSet<String> =
             std::collections::HashSet::new();
-        let mut agents: std::collections::HashMap<
-            String,
-            ra_core::ui_protocol::AgentUpdatedEvent,
-        > = std::collections::HashMap::new();
+        let mut agents: std::collections::HashMap<String, ra_core::ui_protocol::AgentUpdatedEvent> =
+            std::collections::HashMap::new();
         for event in &events {
             let UiProtocolLedgerEvent::Notification(notification) = &event.event else {
                 continue;
@@ -4797,13 +4793,12 @@ mod tests {
             }))
             .expect("task event");
             ledger.append_notification(UiNotification::TaskUpdated(task));
-            let started: ra_core::ui_protocol::TurnStartedEvent =
-                serde_json::from_value(json!({
-                    "session_id": session_id.0,
-                    "turn_id": turn_id.0,
-                    "timestamp": chrono::Utc::now(),
-                }))
-                .expect("turn started");
+            let started: ra_core::ui_protocol::TurnStartedEvent = serde_json::from_value(json!({
+                "session_id": session_id.0,
+                "turn_id": turn_id.0,
+                "timestamp": chrono::Utc::now(),
+            }))
+            .expect("turn started");
             ledger.append_notification(UiNotification::TurnStarted(started));
             let agent: ra_core::ui_protocol::AgentUpdatedEvent = serde_json::from_value(json!({
                 "session_id": session_id.0,
@@ -5001,13 +4996,12 @@ mod tests {
         {
             let ledger = UiProtocolLedger::with_config(LedgerConfig::durable(temp.path().into()));
             ledger.set_session_scope(&key, Some("aaaa111122223333".into()));
-            let started: ra_core::ui_protocol::TurnStartedEvent =
-                serde_json::from_value(json!({
-                    "session_id": key.0,
-                    "turn_id": turn_id.0,
-                    "timestamp": chrono::Utc::now(),
-                }))
-                .expect("turn started");
+            let started: ra_core::ui_protocol::TurnStartedEvent = serde_json::from_value(json!({
+                "session_id": key.0,
+                "turn_id": turn_id.0,
+                "timestamp": chrono::Utc::now(),
+            }))
+            .expect("turn started");
             ledger.append_notification(UiNotification::TurnStarted(started));
         } // dies mid-turn, no terminal event
 

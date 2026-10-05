@@ -24,9 +24,7 @@ use std::io::Write as _;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use ra_agent::{
-    HookConfig, HookEvent, HookExecutor, HookPayload, HookPayloadEnricher, HookResult,
-};
+use ra_agent::{HookConfig, HookEvent, HookExecutor, HookPayload, HookPayloadEnricher, HookResult};
 
 /// A snapshot of the robot's physical state, refreshed by an external polling
 /// task in a real integration. Here we just hold fixed values for the demo.

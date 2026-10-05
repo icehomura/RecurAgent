@@ -39,8 +39,7 @@ pub(crate) const HOST_TOOLS_LEAF: &str = "host_tools.json";
 pub(crate) const TOOL_AUDIT_LEAF: &str = "tool_audit.jsonl";
 
 /// Server → host: run an app tool.
-pub(crate) const PEER_TOOL_CALL_NOTIFICATION: &str =
-    ra_core::ui_protocol::methods::PEER_TOOL_CALL;
+pub(crate) const PEER_TOOL_CALL_NOTIFICATION: &str = ra_core::ui_protocol::methods::PEER_TOOL_CALL;
 /// Server → host: stop a call the kernel no longer waits for.
 pub(crate) const PEER_TOOL_CANCEL_NOTIFICATION: &str =
     ra_core::ui_protocol::methods::PEER_TOOL_CANCEL;
@@ -2185,8 +2184,7 @@ pub(crate) fn host_approval_event_visible(
     match key {
         Some(key) => route_connection_by_key(&key) == Some(connection),
         None => {
-            event.approval_kind.as_deref()
-                != Some(ra_core::ui_protocol::approval_kinds::HOST_TOOL)
+            event.approval_kind.as_deref() != Some(ra_core::ui_protocol::approval_kinds::HOST_TOOL)
         }
     }
 }

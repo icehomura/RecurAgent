@@ -1540,9 +1540,7 @@ async fn nested_spawn_agent_resolves_a_real_agent_id_through_the_bound_delegate(
         .expect("spawn_agent executes");
 
     assert!(
-        !result
-            .output
-            .contains("No native ra spawn tool is bound"),
+        !result.output.contains("No native ra spawn tool is bound"),
         "the delegate must be bound behind spawn_agent: {}",
         result.output
     );
@@ -4132,8 +4130,8 @@ async fn worktree_isolation_runs_concurrent_writers_on_separate_branches() {
         ],
     );
 
-    let scope = ra_core::SessionScope::solo(repo.path().to_path_buf(), vec![])
-        .expect("scope construction");
+    let scope =
+        ra_core::SessionScope::solo(repo.path().to_path_buf(), vec![]).expect("scope construction");
     let (in_tx, _in_rx) = tokio::sync::mpsc::channel(16);
     let tool = SpawnTool::new(
         Arc::new(EditSameFileProvider),
@@ -4170,8 +4168,7 @@ async fn worktree_isolation_runs_concurrent_writers_on_separate_branches() {
             std::fs::read_to_string(worker_root.join("shared.txt")).unwrap(),
             "worker content\n"
         );
-        let status =
-            std::fs::read_to_string(worker_root.join(".ra/worker-worktree.json")).unwrap();
+        let status = std::fs::read_to_string(worker_root.join(".ra/worker-worktree.json")).unwrap();
         assert!(status.contains("\"status\": \"completed\""));
     }
 }

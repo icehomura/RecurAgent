@@ -1141,11 +1141,7 @@ impl HookExecutor {
                         } else {
                             format!("{stdout}\n{stderr}")
                         };
-                        ra_core::truncate_utf8(
-                            &mut output,
-                            2000,
-                            "\n... (hook output truncated)",
-                        );
+                        ra_core::truncate_utf8(&mut output, 2000, "\n... (hook output truncated)");
                         if output.trim().is_empty() {
                             let new_count = self.breaker_incr(&session_key, i);
                             let msg = format!(
@@ -2311,9 +2307,7 @@ mod tests {
             timeout_ms: 5000,
             tool_filter: vec![],
             path_filter: vec![],
-            requires_bin: Some(
-                "definitely-not-a-real-binary-on-this-host-ra-wave3c-test".into(),
-            ),
+            requires_bin: Some("definitely-not-a-real-binary-on-this-host-ra-wave3c-test".into()),
         };
         let executor = HookExecutor::new(vec![cfg]);
         let payload = HookPayload::before_tool("edit_file", serde_json::json!({}), "tc1", None);

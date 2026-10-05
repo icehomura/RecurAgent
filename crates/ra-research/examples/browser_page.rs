@@ -44,10 +44,7 @@ async fn main() {
     browser.close().await;
     match rendered {
         Ok(r) => {
-            eprintln!(
-                "final url: {}",
-                r.header("x-ra-final-url").unwrap_or("?")
-            );
+            eprintln!("final url: {}", r.header("x-ra-final-url").unwrap_or("?"));
             println!("{}", r.body);
         }
         Err(e) => {

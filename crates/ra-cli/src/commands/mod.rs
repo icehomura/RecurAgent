@@ -327,9 +327,8 @@ pub(crate) fn build_credential_pool(
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| data_dir.join(ra_llm::DEFAULT_CREDENTIAL_POOL_DB_FILENAME));
 
-    let mut options =
-        ra_llm::PersistentCredentialPoolOptions::new(cfg.name.clone(), credentials)
-            .with_strategy(strategy);
+    let mut options = ra_llm::PersistentCredentialPoolOptions::new(cfg.name.clone(), credentials)
+        .with_strategy(strategy);
     if let Some(ms) = cfg.default_cooldown_ms {
         options = options.with_default_cooldown_us(ms.saturating_mul(1_000));
     }
@@ -473,8 +472,8 @@ mod reserve_stdout_tests {
         // `ra doctor --json` emits the support bundle on stdout; the
         // config-parse check's tracing INFO lines must route to stderr so the
         // JSON stays parseable. Plain `ra doctor` keeps stdout logging.
-        let json = Args::try_parse_from(["ra", "doctor", "--json"])
-            .expect("`doctor --json` must parse");
+        let json =
+            Args::try_parse_from(["ra", "doctor", "--json"]).expect("`doctor --json` must parse");
         assert!(reserve_stdout(&json.command));
         let human = Args::try_parse_from(["ra", "doctor"]).expect("`doctor` must parse");
         assert!(!reserve_stdout(&human.command));

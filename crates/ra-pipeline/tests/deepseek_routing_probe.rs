@@ -140,11 +140,7 @@ async fn deepseek_prefers_run_pipeline_for_deep_research() {
     let web_fetch = WebFetchTool::new();
     let dir = tempfile::TempDir::new().unwrap();
     let data = tempfile::TempDir::new().unwrap();
-    let memory = Arc::new(
-        EpisodeStore::open(data.path().join(".ra"))
-            .await
-            .unwrap(),
-    );
+    let memory = Arc::new(EpisodeStore::open(data.path().join(".ra")).await.unwrap());
     let run_pipeline = RunPipelineTool::new(
         provider.clone(),
         memory,

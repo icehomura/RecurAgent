@@ -344,8 +344,7 @@ impl PluginLoader {
                             n -= 1;
                             continue;
                         }
-                        let risk =
-                            ra_core::ui_protocol::manifest_tool_risk(loaded.risk.as_deref());
+                        let risk = ra_core::ui_protocol::manifest_tool_risk(loaded.risk.as_deref());
                         ra_core::ui_protocol::register_tool_approval_risk(name.clone(), risk);
                         result.tool_names.push(name.clone());
                         registry.mark_as_plugin(&name);
@@ -2847,10 +2846,7 @@ mod tests {
             ra_core::ui_protocol::tool_approval_risk(missing_tool),
             "high"
         );
-        assert_eq!(
-            ra_core::ui_protocol::tool_approval_risk(blank_tool),
-            "high"
-        );
+        assert_eq!(ra_core::ui_protocol::tool_approval_risk(blank_tool), "high");
 
         let second_root = tempfile::tempdir().unwrap();
         write_plugin(

@@ -963,9 +963,7 @@ impl AppUiCommand {
             Self::GetDiffPreview(_) => ra_core::ui_protocol::methods::DIFF_PREVIEW_GET,
             Self::ListTasks(_) => ra_core::ui_protocol::methods::TASK_LIST,
             Self::CancelTask(_) => ra_core::ui_protocol::methods::TASK_CANCEL,
-            Self::RestartTaskFromNode(_) => {
-                ra_core::ui_protocol::methods::TASK_RESTART_FROM_NODE
-            }
+            Self::RestartTaskFromNode(_) => ra_core::ui_protocol::methods::TASK_RESTART_FROM_NODE,
             Self::ReadTaskOutput(_) => ra_core::ui_protocol::methods::TASK_OUTPUT_READ,
             Self::ReadTaskArtifact(_) => APPUI_METHOD_TASK_ARTIFACT_READ,
             Self::HydrateSession(_) => APPUI_METHOD_SESSION_HYDRATE,
@@ -985,9 +983,7 @@ impl AppUiCommand {
             Self::ListPermissionProfiles(_) => {
                 ra_core::ui_protocol::methods::PERMISSION_PROFILE_LIST
             }
-            Self::SetPermissionProfile(_) => {
-                ra_core::ui_protocol::methods::PERMISSION_PROFILE_SET
-            }
+            Self::SetPermissionProfile(_) => ra_core::ui_protocol::methods::PERMISSION_PROFILE_SET,
             Self::ListMcpStatus(_) => APPUI_METHOD_MCP_STATUS_LIST,
             Self::ListToolStatus(_) => APPUI_METHOD_TOOL_STATUS_LIST,
             Self::ListMcpConfig(_) => APPUI_METHOD_MCP_CONFIG_LIST,
@@ -13200,7 +13196,10 @@ mod tests {
         // historical empty object `{}`, byte-identical to what old clients
         // sent, so an OLD server (no per-project session storage) still
         // deserializes it unchanged (`cwd: None` -> legacy global listing).
-        let params = SessionListParams { cwd: None, profile_id: None };
+        let params = SessionListParams {
+            cwd: None,
+            profile_id: None,
+        };
         let wire = serde_json::to_value(&params).expect("SessionListParams serializes");
         assert_eq!(wire, serde_json::json!({}));
     }

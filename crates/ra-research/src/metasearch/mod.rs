@@ -192,7 +192,11 @@ impl Config {
                 .get(&m.id)
                 .cloned()
                 .filter(|v| !v.trim().is_empty())
-                .or_else(|| m.key_env.as_deref().and_then(|k| engine_key_env(&lookup, k)));
+                .or_else(|| {
+                    m.key_env
+                        .as_deref()
+                        .and_then(|k| engine_key_env(&lookup, k))
+                });
             if let Some(k) = key {
                 c.keys.insert(m.id.clone(), k.trim().to_string());
             }
@@ -203,7 +207,8 @@ impl Config {
                     m.id.to_ascii_uppercase(),
                     name.to_ascii_uppercase()
                 );
-                if let Some(v) = crate::resolve_env(&lookup, &var).filter(|v| !v.trim().is_empty()) {
+                if let Some(v) = crate::resolve_env(&lookup, &var).filter(|v| !v.trim().is_empty())
+                {
                     c.settings
                         .entry(m.id.clone())
                         .or_default()
@@ -502,15 +507,15 @@ impl Metasearch {
             crate::resolve_env(&lookup, ENGINES_DIR_ENV).filter(|d| !d.trim().is_empty())
         {
             let dir = std::path::Path::new(dir.trim());
-            let pins = match crate::resolve_env(&lookup, PINS_ENV).filter(|p| !p.trim().is_empty()) {
-                Some(p) => {
-                    registry::read_pins(std::path::Path::new(p.trim()), dir).unwrap_or_else(|e| {
-                        tracing::warn!(error = %e, "metasearch pins not loaded");
-                        BTreeMap::new()
-                    })
-                }
-                None => BTreeMap::new(),
-            };
+            let pins =
+                match crate::resolve_env(&lookup, PINS_ENV).filter(|p| !p.trim().is_empty()) {
+                    Some(p) => registry::read_pins(std::path::Path::new(p.trim()), dir)
+                        .unwrap_or_else(|e| {
+                            tracing::warn!(error = %e, "metasearch pins not loaded");
+                            BTreeMap::new()
+                        }),
+                    None => BTreeMap::new(),
+                };
             let allow_override = crate::resolve_env(&lookup, ALLOW_OVERRIDE_ENV).is_some_and(|v| {
                 matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes")
             });

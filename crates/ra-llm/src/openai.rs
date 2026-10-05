@@ -440,17 +440,14 @@ impl OpenAIProvider {
         ) {
             builder = builder.header(name, value);
         }
-        builder
-            .send()
-            .await
-            .wrap_err_with(|| {
-                crate::provider::transport_error_message(
-                    false,
-                    &self.provider_label,
-                    &self.model,
-                    crate::provider::ApiStyle::OpenAiChatCompletions,
-                )
-            })
+        builder.send().await.wrap_err_with(|| {
+            crate::provider::transport_error_message(
+                false,
+                &self.provider_label,
+                &self.model,
+                crate::provider::ApiStyle::OpenAiChatCompletions,
+            )
+        })
     }
 
     /// POST a streaming chat request (adds `stream` + `stream_options`).
@@ -490,17 +487,14 @@ impl OpenAIProvider {
         ) {
             builder = builder.header(name, value);
         }
-        builder
-            .send()
-            .await
-            .wrap_err_with(|| {
-                crate::provider::transport_error_message(
-                    true,
-                    &self.provider_label,
-                    &self.model,
-                    crate::provider::ApiStyle::OpenAiChatCompletions,
-                )
-            })
+        builder.send().await.wrap_err_with(|| {
+            crate::provider::transport_error_message(
+                true,
+                &self.provider_label,
+                &self.model,
+                crate::provider::ApiStyle::OpenAiChatCompletions,
+            )
+        })
     }
 
     /// Lane-attributed wording for operational failures (see

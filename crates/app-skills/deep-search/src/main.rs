@@ -298,11 +298,9 @@ fn install_sigterm_handler() {
             );
             // Close a browser the metasearch launched, inside the host's
             // 10-second budget.
-            let _ = tokio::time::timeout(
-                Duration::from_secs(4),
-                ra_research::browser::close_shared(),
-            )
-            .await;
+            let _ =
+                tokio::time::timeout(Duration::from_secs(4), ra_research::browser::close_shared())
+                    .await;
             // 130 = 128 + SIGTERM(2). Convention for "killed by signal 2".
             std::process::exit(130);
         }
@@ -3314,7 +3312,10 @@ mod tests {
         .unwrap();
         let log = SearchLog {
             queries: vec!["q".into()],
-            errors: vec!["duckduckgo: disabled (scraping search-results pages needs RA_ALLOW_SERP_SCRAPE=1)".into()],
+            errors: vec![
+                "duckduckgo: disabled (scraping search-results pages needs RA_ALLOW_SERP_SCRAPE=1)"
+                    .into(),
+            ],
             ..Default::default()
         };
         let out = no_results_output("q", &log, &opts);

@@ -323,8 +323,7 @@ fn auth_token_from_cli(cli: &Cli) -> Option<String> {
         .clone()
         .and_then(clean_auth_token)
         .or_else(|| {
-            crate::env::env_compat("RA_AUTH_TOKEN", "RA_AUTH_TOKEN")
-                .and_then(clean_auth_token)
+            crate::env::env_compat("RA_AUTH_TOKEN", "RA_AUTH_TOKEN").and_then(clean_auth_token)
         })
 }
 
@@ -6704,12 +6703,7 @@ fn mock_approval_details(kind: &str) -> ApprovalTypedDetails {
         },
         _ => ApprovalTypedDetails::command(
             ApprovalCommandDetails {
-                argv: vec![
-                    "cargo".into(),
-                    "test".into(),
-                    "-p".into(),
-                    "ra-core".into(),
-                ],
+                argv: vec!["cargo".into(), "test".into(), "-p".into(), "ra-core".into()],
                 command_line: Some("cargo test -p ra-core ui_protocol".into()),
                 cwd: std::env::current_dir()
                     .ok()
@@ -6795,7 +6789,8 @@ mod tests {
 
     #[test]
     fn stdio_target_label_redacts_inline_secret_env_assignments() {
-        let cmd = "env DEEPSEEK_API_KEY=sk-abc123secret RA_FOO=1 ra serve --stdio --solo --data-dir /d";
+        let cmd =
+            "env DEEPSEEK_API_KEY=sk-abc123secret RA_FOO=1 ra serve --stdio --solo --data-dir /d";
         let label = protocol_target_label(cmd);
         assert!(
             label.starts_with("stdio:"),
@@ -9500,7 +9495,10 @@ mod tests {
                 after: None,
                 include: Vec::new(),
             }),
-            AppUiCommand::ListSessions(ra_core::ui_protocol::SessionListParams { cwd: None, profile_id: None }),
+            AppUiCommand::ListSessions(ra_core::ui_protocol::SessionListParams {
+                cwd: None,
+                profile_id: None,
+            }),
             AppUiCommand::GetThreadGraph(ThreadGraphGetParams {
                 session_id: session_id.clone(),
                 at: None,
@@ -12647,7 +12645,10 @@ mod tests {
         });
         let request = backend
             .build_tracked_request(AppUiCommand::ListSessions(
-                ra_core::ui_protocol::SessionListParams { cwd: None, profile_id: None },
+                ra_core::ui_protocol::SessionListParams {
+                    cwd: None,
+                    profile_id: None,
+                },
             ))
             .expect("request builds");
 
@@ -12670,7 +12671,10 @@ mod tests {
         });
         let request = backend
             .build_tracked_request(AppUiCommand::ListSessions(
-                ra_core::ui_protocol::SessionListParams { cwd: None, profile_id: None },
+                ra_core::ui_protocol::SessionListParams {
+                    cwd: None,
+                    profile_id: None,
+                },
             ))
             .expect("request builds");
 
@@ -13666,7 +13670,10 @@ wait
         });
         backend
             .deferred_until_reconnect_open
-            .push_back(AppUiCommand::ListSessions(SessionListParams { cwd: None, profile_id: None }));
+            .push_back(AppUiCommand::ListSessions(SessionListParams {
+                cwd: None,
+                profile_id: None,
+            }));
         (backend, request_id)
     }
 

@@ -104,8 +104,7 @@ fn build_state_with_users(
     users: &[(&str, &str, ra_cli::user_store::UserRole)],
     profiles: &[(&str, Option<&str>)],
 ) -> (Arc<AppState>, Arc<ra_cli::otp::AuthManager>) {
-    let profile_store =
-        Arc::new(ra_cli::profiles::ProfileStore::open_unified(dir.path()).unwrap());
+    let profile_store = Arc::new(ra_cli::profiles::ProfileStore::open_unified(dir.path()).unwrap());
     for (id, parent) in profiles {
         let profile = ra_cli::profiles::UserProfile {
             id: (*id).into(),
@@ -427,11 +426,7 @@ async fn authenticated_non_admin_with_cross_tenant_header_on_trusted_hop_is_403(
                 "alice@example.com",
                 ra_cli::user_store::UserRole::User,
             ),
-            (
-                "bob",
-                "bob@example.com",
-                ra_cli::user_store::UserRole::User,
-            ),
+            ("bob", "bob@example.com", ra_cli::user_store::UserRole::User),
         ],
         &[("alice", None), ("bob", None)],
     );
@@ -531,11 +526,7 @@ async fn authenticated_non_admin_with_cross_tenant_header_on_external_hop_is_str
                 "alice@example.com",
                 ra_cli::user_store::UserRole::User,
             ),
-            (
-                "bob",
-                "bob@example.com",
-                ra_cli::user_store::UserRole::User,
-            ),
+            ("bob", "bob@example.com", ra_cli::user_store::UserRole::User),
         ],
         &[("alice", None), ("bob", None)],
     );
@@ -596,11 +587,7 @@ async fn ws_upgrade_with_cross_tenant_header_on_trusted_hop_is_403() {
                 "alice@example.com",
                 ra_cli::user_store::UserRole::User,
             ),
-            (
-                "bob",
-                "bob@example.com",
-                ra_cli::user_store::UserRole::User,
-            ),
+            ("bob", "bob@example.com", ra_cli::user_store::UserRole::User),
         ],
         &[("alice", None), ("bob", None)],
     );
@@ -650,8 +637,7 @@ async fn build_state_with_sessions_for_tenant_b(
     tenant_b_id: &str,
     session_id: &str,
 ) -> Arc<AppState> {
-    let profile_store =
-        Arc::new(ra_cli::profiles::ProfileStore::open_unified(dir.path()).unwrap());
+    let profile_store = Arc::new(ra_cli::profiles::ProfileStore::open_unified(dir.path()).unwrap());
     for (id, parent) in profiles {
         let profile = ra_cli::profiles::UserProfile {
             id: (*id).into(),

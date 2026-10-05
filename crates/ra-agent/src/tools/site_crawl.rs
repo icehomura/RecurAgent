@@ -310,8 +310,7 @@ async fn robots_refusal(cache: &ra_research::RobotsCache, url: &str) -> Option<S
             }
         })
         .await;
-    (!decision.allowed)
-        .then(|| format!("skipped: {} (RA_RESPECT_ROBOTS is on)", decision.reason))
+    (!decision.allowed).then(|| format!("skipped: {} (RA_RESPECT_ROBOTS is on)", decision.reason))
 }
 
 /// Normalize a URL: remove fragment, trailing slash, lowercase scheme+host.

@@ -13,9 +13,7 @@
 
 use std::sync::Arc;
 
-use ra_agent::cost_ledger::{
-    CostAccountant, CostBudgetPolicy, CostLedger, PersistentCostLedger,
-};
+use ra_agent::cost_ledger::{CostAccountant, CostBudgetPolicy, CostLedger, PersistentCostLedger};
 use ra_agent::file_state_cache::FileStateCache;
 use ra_agent::task_supervisor::TaskSupervisor;
 use ra_pipeline::host_context::PipelineHostContext;
@@ -222,9 +220,7 @@ async fn handler_registry_default_with_codergen_carrying_host_context() {
         Arc::new(codergen) as Arc<dyn ra_pipeline::Handler>,
     );
     assert!(
-        registry
-            .get(&ra_pipeline::HandlerKind::Codergen)
-            .is_some(),
+        registry.get(&ra_pipeline::HandlerKind::Codergen).is_some(),
         "Codergen handler should resolve out of the registry"
     );
 }

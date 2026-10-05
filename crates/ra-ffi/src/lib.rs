@@ -658,11 +658,8 @@ impl RaRuntime {
             Some(dir) => (PathBuf::from(dir), ScratchDir::none()),
             None => {
                 let seq = MEM_COUNTER.fetch_add(1, Ordering::Relaxed);
-                let dir = std::env::temp_dir().join(format!(
-                    "ra-ffi-mem-{}-{}",
-                    std::process::id(),
-                    seq
-                ));
+                let dir =
+                    std::env::temp_dir().join(format!("ra-ffi-mem-{}-{}", std::process::id(), seq));
                 (dir.clone(), ScratchDir::new(dir))
             }
         };
@@ -1380,10 +1377,7 @@ pub extern "C" fn ra_runtime_free(runtime: *mut RaRuntime) {
 /// On an incomplete response, NULL still means failure; retrieve the partial
 /// output separately with [`ra_take_last_partial_result`] on this thread.
 #[unsafe(no_mangle)]
-pub extern "C" fn ra_run_task(
-    runtime: *mut RaRuntime,
-    brief_json: *const c_char,
-) -> *mut c_char {
+pub extern "C" fn ra_run_task(runtime: *mut RaRuntime, brief_json: *const c_char) -> *mut c_char {
     guard(ptr::null_mut(), "ra_run_task", || {
         clear_last_error();
         match run_task_impl(runtime, brief_json) {
