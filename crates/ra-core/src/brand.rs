@@ -28,7 +28,7 @@ pub const STATE_DIR: &str = ".ra";
 /// Legacy state-home directory (no longer consulted).
 pub const LEGACY_STATE_DIR: &str = ".ra";
 
-/// Read `RA_<name>` and fall back to `RA_<name>`.
+/// Read `RA_<name>` and fall back to `ra_<name>`.
 ///
 /// `name` is the suffix without either prefix: `env_compat("HOME")` reads `RA_HOME` then
 /// `ra_HOME`. An empty value counts as unset.
