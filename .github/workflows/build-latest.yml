@@ -1,0 +1,76 @@
+name: Latest Build
+
+# Rolling "latest" pre-release built from main — PUBLIC, updated in place on
+# every main push.
+#
+# Trigger discipline: a `v*` tag push NEVER starts this workflow. `push` is
+# filtered to `branches: [main]`, and branch filters match branch refs only —
+# a tag ref (refs/tags/vX) is not a branch, so a tag push fires release.yml
+# (the official flow) and nothing here. Conversely an untagged push to main is
+# a branch ref, which never matches release.yml's `tags: ['v*']`. Exactly one
+# of the two flows can fire per push.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# `contents: write` is required to create/update the `latest` release with the
+# gh CLI. The repository (icehomura/RecurAgent) is public, so the release is
+# public too — `gh release create` without --draft publishes immediately.
+permissions:
+  contents: write
+
+concurrency:
+  group: latest-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    name: Build all variants
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-variants.yml
+    with:
+      platform: all
+
+  publish:
+    name: Publish rolling latest pre-release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Collect release assets
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          # Every variant (ra, ra-headless, ra-full) × target bundle plus its
+          # .sha256 sidecar from this run.
+          find artifacts -type f -name '*-bundle-*' -exec cp {} release-assets/ \;
+          echo "Assets to upload:"
+          ls -la release-assets/
+
+      - name: Publish to the rolling `latest` pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # `--generate-notes` keeps `gh release create` non-interactive in CI.
+          # `latest` is a moving tag owned by this workflow; official `v*`
+          # releases are a different tag namespace and are never touched here.
+          gh release view latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create latest \
+                 --prerelease \
+                 --title "Latest build" \
+                 --target "$GITHUB_SHA" \
+                 --generate-notes \
+                 --repo "$GITHUB_REPOSITORY"
+          # Idempotent: --clobber replaces the assets from the previous push.
+          gh release upload latest release-assets/* --clobber --repo "$GITHUB_REPOSITORY"
