@@ -465,7 +465,7 @@ fn do_remove(skills_dir: &std::path::Path, input: &Input) -> Result<ToolResult> 
 }
 
 fn do_search(input: &Input) -> Result<ToolResult> {
-    let url = "https://raw.githubusercontent.com/icehomura/ra-hub/main/registry.json";
+    let url = "https://raw.githubusercontent.com/icehomura/RecurAgent-hub/main/registry.json";
 
     let entries: Vec<serde_json::Value> = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
@@ -560,7 +560,7 @@ fn do_search(input: &Input) -> Result<ToolResult> {
 
 /// Fetch the registry version for a repo (e.g. "mofa-org/mofa-skills") or skill name.
 fn registry_version_for(repo: &str, skill_name: Option<&str>) -> Option<String> {
-    let url = "https://raw.githubusercontent.com/icehomura/ra-hub/main/registry.json";
+    let url = "https://raw.githubusercontent.com/icehomura/RecurAgent-hub/main/registry.json";
     let entries: Vec<serde_json::Value> = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
         .build()
@@ -813,7 +813,7 @@ struct RegistryEntry {
 fn lookup_registry_binaries(
     package_name: &str,
 ) -> Option<std::collections::HashMap<String, RegistryBinaryInfo>> {
-    let url = "https://raw.githubusercontent.com/icehomura/ra-hub/main/registry.json";
+    let url = "https://raw.githubusercontent.com/icehomura/RecurAgent-hub/main/registry.json";
     let entries: Vec<RegistryEntry> = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
         .build()

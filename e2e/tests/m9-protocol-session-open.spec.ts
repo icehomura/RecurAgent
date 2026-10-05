@@ -1,7 +1,7 @@
 /**
  * M9 wire-level e2e: `session/open`.
  *
- * Issue: https://github.com/icehomura/ra/issues/647
+ * Issue: https://github.com/icehomura/RecurAgent/issues/647
  * Spec  : api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md §7 Command Semantics
  *
  * Asserts envelope shape, error codes and cursor monotonicity ONLY — no

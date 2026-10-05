@@ -29,7 +29,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$GithubRepo = "icehomura/ra"
+$GithubRepo = "icehomura/RecurAgent"
 $BundleName = "ra-bundle-x86_64-pc-windows-msvc.zip"
 $NssmVersion = "2.24"
 

@@ -3,7 +3,7 @@
 //!
 //! ## Why this module exists
 //!
-//! Issue [#1013](https://github.com/icehomura/ra/issues/1013) — when
+//! Issue [#1013](https://github.com/icehomura/RecurAgent/issues/1013) — when
 //! the chat transport migrated to UI Protocol v1 over WebSocket (PR
 //! #66), the slash-command interception that exists on the
 //! gateway/SSE path was not ported. The pre-migration gateway path

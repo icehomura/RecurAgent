@@ -1,6 +1,6 @@
 name: Publish Homebrew Formula
 # The ra-tui Homebrew formula lives IN THIS REPO at Formula/ra-tui.rb
-# (this repo is its own tap -> `brew tap icehomura/ra-tui https://github.com/icehomura/ra-tui`).
+# (this repo is its own tap -> `brew tap icehomura/RecurAgent-tui https://github.com/icehomura/RecurAgent-tui`).
 #
 # This is a STANDALONE workflow triggered by the same version tag push that
 # starts release.yml — NOT a dist custom publish job and NOT `release: published`:
@@ -23,8 +23,8 @@ name: Publish Homebrew Formula
 #     Formula/ra-tui-dev.rb (class ra-tuiDev) from
 #     packaging/homebrew/ra-tui-dev.rb, pointed at the prerelease assets.
 # A prerelease NEVER touches the stable Formula/ra-tui.rb, so
-# `brew install icehomura/ra-tui/ra-tui` stays STABLE while
-# `brew install icehomura/ra-tui/ra-tui-dev` tracks the latest prerelease.
+# `brew install icehomura/RecurAgent-tui/ra-tui` stays STABLE while
+# `brew install icehomura/RecurAgent-tui/ra-tui-dev` tracks the latest prerelease.
 
 on:
   push:

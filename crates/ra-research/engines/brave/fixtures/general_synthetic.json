@@ -6,14 +6,14 @@
       "published": "2026-09-20T10:00:00Z",
       "source": "GitHub",
       "title": "ra: a Rust-native agentic OS",
-      "url": "https://github.com/icehomura/ra"
+      "url": "https://github.com/icehomura/RecurAgent"
     },
     {
       "lang": "en",
       "published": null,
       "source": "icehomura.github.io",
       "title": "ra documentation",
-      "url": "https://icehomura.github.io/ra"
+      "url": "https://icehomura.github.io/RecurAgent"
     }
   ],
   "http": {

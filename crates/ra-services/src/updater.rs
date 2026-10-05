@@ -1,6 +1,6 @@
 //! Self-update module: download, verify, backup, replace, rollback.
 //!
-//! Fetches release tarballs from GitHub Releases for `icehomura/ra`,
+//! Fetches release tarballs from GitHub Releases for `icehomura/RecurAgent`,
 //! verifies each download against the release's `.sha256` sidecar and the
 //! API-reported asset size — corruption protection only: the sidecar ships
 //! from the same release, so a compromised release channel is out of scope
@@ -14,7 +14,7 @@ use eyre::{Context, Result};
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 
-const GITHUB_REPO: &str = "icehomura/ra";
+const GITHUB_REPO: &str = "icehomura/RecurAgent";
 const ASSET_NAME: &str = "ra-bundle-aarch64-apple-darwin.tar.gz";
 
 /// The top-level files a release bundle is allowed to install, mirroring
@@ -569,7 +569,7 @@ mod tests {
             "assets": [
                 {
                     "name": ASSET_NAME,
-                    "browser_download_url": "https://github.com/icehomura/ra/releases/download/v0.3.1/ra-bundle-aarch64-apple-darwin.tar.gz",
+                    "browser_download_url": "https://github.com/icehomura/RecurAgent/releases/download/v0.3.1/ra-bundle-aarch64-apple-darwin.tar.gz",
                     "size": 12345678
                 }
             ]

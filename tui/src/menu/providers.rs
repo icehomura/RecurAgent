@@ -11971,7 +11971,7 @@ mod tests {
                 name: "deep-search".into(),
                 version: Some("0.1.0".into()),
                 tool_count: 1,
-                source_repo: Some("icehomura/ra-hub/skills/deep-search".into()),
+                source_repo: Some("icehomura/RecurAgent-hub/skills/deep-search".into()),
                 installed: true,
                 status: Some("installed".into()),
             }],
@@ -11981,7 +11981,7 @@ mod tests {
             packages: vec![crate::model::ProfileSkillRegistryPackage {
                 name: "news".into(),
                 description: "News skill".into(),
-                repo: "icehomura/ra-hub/skills/news".into(),
+                repo: "icehomura/RecurAgent-hub/skills/news".into(),
                 version: Some("0.2.0".into()),
                 author: None,
                 license: None,
@@ -12030,7 +12030,7 @@ mod tests {
             panic!("expected profile skills install action");
         };
         assert_eq!(params.profile_id.as_deref(), Some("coding"));
-        assert_eq!(params.repo, "icehomura/ra-hub/skills/news");
+        assert_eq!(params.repo, "icehomura/RecurAgent-hub/skills/news");
     }
 
     #[test]

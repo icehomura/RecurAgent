@@ -13,7 +13,7 @@
 <em>Welcome to ra-tui — Your Coding Buddy</em>
 </div>
 
-`ra-tui` is the terminal app for [RecurAgent](https://github.com/icehomura/ra)
+`ra-tui` is the terminal app for [RecurAgent](https://github.com/icehomura/RecurAgent)
 — an AI coding assistant in your terminal, in the spirit of Claude Code and
 Codex. The RecurAgent server runs the agent, the models, and the tools; `ra-tui`
 is the fast, keyboard-driven way to talk to it: chat, diffs, tool approvals,
@@ -25,10 +25,10 @@ Install **just the TUI** — it auto-provisions the RecurAgent **server** (the b
 on first launch, so there's nothing else to set up:
 
 ```bash
-npm install -g @icehomura/ra-tui
+npm install -g @icehomura/RecurAgent-tui
 # or Homebrew (this repo is its own tap):
-#   brew tap icehomura/ra-tui https://github.com/icehomura/ra-tui
-#   brew install icehomura/ra-tui/ra-tui
+#   brew tap icehomura/RecurAgent-tui https://github.com/icehomura/RecurAgent-tui
+#   brew install icehomura/RecurAgent-tui/ra-tui
 # (or the shell / PowerShell installer — see Install below)
 ```
 
@@ -52,7 +52,7 @@ provider, paste its API key, and open your first coding chat. The
 > **Want it in a browser too?** The solo launch above talks to its server over
 > stdio, which serves exactly one client. Run the server on a port instead and
 > the terminal and
-> [ra-tui-web](https://github.com/icehomura/ra-tui-web) can both attach —
+> [ra-tui-web](https://github.com/icehomura/RecurAgent-tui-web) can both attach —
 > to the same sessions, at the same time. See
 > [Two ways to run](#two-ways-to-run).
 
@@ -60,7 +60,7 @@ provider, paste its API key, and open your first coding chat. The
 
 | Symptom | Fix |
 |---|---|
-| First launch can't fetch the server | Auto-install needs network. Offline / behind a proxy? Install RecurAgent yourself (`npm i -g @icehomura/ra`, or the [server guide](https://github.com/icehomura/ra#start-here)) — the TUI then finds it. Set `RA_TUI_NO_AUTO_INSTALL=1` to disable auto-install. |
+| First launch can't fetch the server | Auto-install needs network. Offline / behind a proxy? Install RecurAgent yourself (`npm i -g @icehomura/RecurAgent`, or the [server guide](https://github.com/icehomura/RecurAgent#start-here)) — the TUI then finds it. Set `RA_TUI_NO_AUTO_INSTALL=1` to disable auto-install. |
 | Replies are instant and feel canned | You launched with `--mode mock`. Run plain `ra-tui` for the real backend. |
 | "Test provider" fails during onboarding | Re-check the API key and the provider choice; you can redo it anytime with `/onboard` or `/setup`. |
 
@@ -86,7 +86,7 @@ Every method installs a single self-contained `ra-tui` binary. Then run
 
 ### ⬇️ Prebuilt binary — no Rust toolchain needed (recommended)
 
-Same model as Claude Code and Codex: each [GitHub Release](https://github.com/icehomura/ra-tui/releases)
+Same model as Claude Code and Codex: each [GitHub Release](https://github.com/icehomura/RecurAgent-tui/releases)
 ships prebuilt binaries for macOS (Apple Silicon), Linux (x86-64 +
 arm64), and Windows (x86-64). Pick one — each block has its own **copy button**
 (top-right corner, on hover) that copies just that command:
@@ -94,27 +94,27 @@ arm64), and Windows (x86-64). Pick one — each block has its own **copy button*
 **📦 npm**
 
 ```bash
-npm install -g @icehomura/ra-tui
+npm install -g @icehomura/RecurAgent-tui
 ```
 
 **🍺 Homebrew** — this repo is its own tap
 
 ```bash
-brew tap icehomura/ra-tui https://github.com/icehomura/ra-tui
-brew install icehomura/ra-tui/ra-tui
+brew tap icehomura/RecurAgent-tui https://github.com/icehomura/RecurAgent-tui
+brew install icehomura/RecurAgent-tui/ra-tui
 ```
 
 **🐚 Shell installer** — macOS / Linux
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/icehomura/ra-tui/releases/latest/download/ra-tui-installer.sh | sh
+  https://github.com/icehomura/RecurAgent-tui/releases/latest/download/ra-tui-installer.sh | sh
 ```
 
 **🪟 PowerShell installer** — Windows
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/icehomura/ra-tui/releases/latest/download/ra-tui-installer.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/icehomura/RecurAgent-tui/releases/latest/download/ra-tui-installer.ps1 | iex"
 ```
 
 Once installed, `ra-tui update` checks for a newer release — and for
@@ -128,7 +128,7 @@ and connection prerequisites.
 **From git** — no crates.io publish required
 
 ```bash
-cargo install --git https://github.com/icehomura/ra-tui ra-tui
+cargo install --git https://github.com/icehomura/RecurAgent-tui ra-tui
 ```
 
 **From crates.io** — once published
@@ -164,7 +164,7 @@ pulled automatically as a git dependency, so a plain clone builds with **no
 sibling checkout** required (needs Rust 1.85+):
 
 ```bash
-git clone https://github.com/icehomura/ra-tui.git
+git clone https://github.com/icehomura/RecurAgent-tui.git
 cd ra-tui
 cargo build --release
 # produces ./target/release/ra-tui — substitute it for `ra-tui` below
@@ -257,7 +257,7 @@ Access is offered only on solo/local backends**, never on a shared `ra serve`.
 
 For **headless / scripted** code review and for running **many review or edit
 agents in parallel**, use the `ra chat` CLI in the main
-[RecurAgent](https://github.com/icehomura/ra) repo (`--sandbox`, `--yolo`,
+[RecurAgent](https://github.com/icehomura/RecurAgent) repo (`--sandbox`, `--yolo`,
 `--profile`, `--no-session-persistence`) — see its README's *Headless agent mode
 & code review* section.
 
@@ -294,7 +294,7 @@ re-run freely, and expensive tokens only on review and adjudication.
 
 ```bash
 cd your-project/
-curl -fsSL https://raw.githubusercontent.com/icehomura/ra-tui/main/scripts/olp-init.sh | bash
+curl -fsSL https://raw.githubusercontent.com/icehomura/RecurAgent-tui/main/scripts/olp-init.sh | bash
 ```
 
 It is idempotent and never overwrites an existing file. It lays down:
@@ -377,7 +377,7 @@ two talk, and that decides whether anything else can join.
 | Start it with | `ra-tui` | `ra serve --host … --port …`, then `ra-tui --endpoint …` |
 | Who runs the server | the TUI spawns and auto-provisions it | you do, and it outlives the client |
 | How many clients | exactly one | as many as you point at it |
-| Browser client | no | yes — [ra-tui-web](https://github.com/icehomura/ra-tui-web) |
+| Browser client | no | yes — [ra-tui-web](https://github.com/icehomura/RecurAgent-tui-web) |
 | Setup | none | a port and a shared token |
 
 Solo is the default because it is the shortest path to a working session.
@@ -457,7 +457,7 @@ out and a fresh server answers "This server cannot onboard from the Web".
 **2. Start the browser client** — terminal 2:
 
 ```bash
-git clone https://github.com/icehomura/ra-tui-web.git
+git clone https://github.com/icehomura/RecurAgent-tui-web.git
 cd ra-tui-web
 pnpm install --frozen-lockfile
 RA_TUI_DEV_PROXY_TARGET=http://127.0.0.1:50080 \

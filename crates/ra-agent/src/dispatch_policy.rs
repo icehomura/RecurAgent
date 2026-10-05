@@ -71,7 +71,7 @@ pub struct DispatchBackendMetadata {
     endpoint_label: String,
     sandboxed: bool,
     /// Env keys the backend is configured to set on the spawned child
-    /// ([#1601](https://github.com/icehomura/ra/issues/1601)). The
+    /// ([#1601](https://github.com/icehomura/RecurAgent/issues/1601)). The
     /// env gate inspects them alongside any `env` object on the
     /// dispatch payload.
     env_keys: Vec<String>,

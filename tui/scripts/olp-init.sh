@@ -26,12 +26,12 @@ command -v git >/dev/null 2>&1 && ok "git" || todo "git 未安装——请先安
 if command -v ra-tui >/dev/null 2>&1; then
   ok "ra-tui ($(command -v ra-tui))"
 else
-  todo "ra-tui 未安装:npm install -g @icehomura/ra-tui(或 brew / shell installer,见 README)"
+  todo "ra-tui 未安装:npm install -g @icehomura/RecurAgent-tui(或 brew / shell installer,见 README)"
 fi
 if command -v ra >/dev/null 2>&1 || [ -x "$HOME/.ra/bin/ra" ]; then
   ok "ra server(已装或已自动拉起过)"
 else
-  say "  [--] ra server 未见——首次运行 ra-tui 会自动下载到 ~/.ra/bin(需网络);离线环境请手装:npm i -g @icehomura/ra"
+  say "  [--] ra server 未见——首次运行 ra-tui 会自动下载到 ~/.ra/bin(需网络);离线环境请手装:npm i -g @icehomura/RecurAgent"
 fi
 [ -n "${MOONSHOT_API_KEY:-}${OPENAI_API_KEY:-}${ANTHROPIC_API_KEY:-}" ] \
   && ok "检测到模型 API key 环境变量" \
@@ -118,7 +118,7 @@ case "${OLP_INIT_LANG:-en}" in
   zh|zh-CN|zh_CN) CARD_NAME="OCTOLOOP_AGENTS.zh-CN.md" ;;
   *)              CARD_NAME="OCTOLOOP_AGENTS.md" ;;
 esac
-CARD_URL="https://raw.githubusercontent.com/icehomura/ra-tui/main/docs/$CARD_NAME"
+CARD_URL="https://raw.githubusercontent.com/icehomura/RecurAgent-tui/main/docs/$CARD_NAME"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
 CARD_SRC=""
 # 认仓库布局才复制:同目录须有 olp-init.sh 自身,避免 curl|bash 时 dirname 落在

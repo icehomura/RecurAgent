@@ -18,7 +18,7 @@ const binary = path.join(__dirname, "..", "vendor", "ra" + exeSuffix);
 
 if (!fs.existsSync(binary)) {
   console.error(
-    "[@icehomura/ra] native binary not found at " +
+    "[@icehomura/RecurAgent] native binary not found at " +
       binary +
       ".\nThe postinstall download did not run (was the package installed with " +
       "--ignore-scripts?).\nReinstall without --ignore-scripts, or run " +
@@ -32,7 +32,7 @@ if (!fs.existsSync(binary)) {
 const result = spawnSync(binary, process.argv.slice(2), { stdio: "inherit" });
 
 if (result.error) {
-  console.error("[@icehomura/ra] failed to launch ra: " + result.error.message);
+  console.error("[@icehomura/RecurAgent] failed to launch ra: " + result.error.message);
   process.exit(1);
 }
 

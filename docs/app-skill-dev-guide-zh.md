@@ -285,7 +285,7 @@ manage_skills(action="search", query="comic")
 
 ### 发布到注册中心
 
-外部技能可通过 [ra-hub](https://github.com/icehomura/ra-hub) 注册中心被发现。
+外部技能可通过 [ra-hub](https://github.com/icehomura/RecurAgent-hub) 注册中心被发现。
 
 1. 将技能仓库推送到 GitHub
 2. 通过 PR 向 `registry.json` 添加条目：

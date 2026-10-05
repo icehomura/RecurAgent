@@ -820,7 +820,7 @@ fn remediation_for(os: HostOs) -> String {
         HostOs::Windows => {
             "Install the ra-sandbox.exe AppContainer helper next to the ra binary, \
              or install Docker Desktop (a native no-helper Windows runner is tracked in \
-             icehomura/ra issue 2195)."
+             icehomura/RecurAgent issue 2195)."
         }
         HostOs::Other => "Install Docker (the only supported backend on this OS).",
     };

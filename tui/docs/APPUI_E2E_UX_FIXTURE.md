@@ -2,10 +2,10 @@
 
 Issues:
 
-- https://github.com/icehomura/ra-tui/issues/7
-- https://github.com/icehomura/ra-tui/issues/21
-- https://github.com/icehomura/ra-tui/issues/22
-- https://github.com/icehomura/ra-tui/issues/24
+- https://github.com/icehomura/RecurAgent-tui/issues/7
+- https://github.com/icehomura/RecurAgent-tui/issues/21
+- https://github.com/icehomura/RecurAgent-tui/issues/22
+- https://github.com/icehomura/RecurAgent-tui/issues/24
 
 This repo owns a deterministic short fixture for AppUI coding-session UX parity:
 

@@ -4,7 +4,7 @@
 #
 # Usage:
 #   ra-doctor.sh
-#   curl -fsSL https://github.com/icehomura/ra/releases/latest/download/ra-doctor.sh | bash
+#   curl -fsSL https://github.com/icehomura/RecurAgent/releases/latest/download/ra-doctor.sh | bash
 #
 # Options:
 #   --prefix DIR     Install prefix to check (default: ~/.ra/bin)

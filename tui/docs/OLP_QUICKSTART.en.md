@@ -49,11 +49,11 @@ onboarding card instead of this page:
 
 ```bash
 # ① install the TUI (the server is pulled on first start; no resident background service)
-npm install -g @icehomura/ra-tui
+npm install -g @icehomura/RecurAgent-tui
 
 # ② lay the OLP scaffolding in your project (idempotent; never overwrites an existing file)
 cd your-project/
-curl -fsSL https://raw.githubusercontent.com/icehomura/ra-tui/main/scripts/olp-init.sh | bash
+curl -fsSL https://raw.githubusercontent.com/icehomura/RecurAgent-tui/main/scripts/olp-init.sh | bash
 #   (or clone this repo and run scripts/olp-init.sh)
 
 # ③ start the inner loop
@@ -193,7 +193,7 @@ herdr users get a second injection channel: `herdr agent list` to see the panes,
 | `ra: 'serve' is not a subcommand` | A source build missed a feature: `cargo build --release --features api` (release binaries are unaffected) |
 | inner loop says "there is no cargo on this machine" | The bwrap sandbox of tiers 1–4 — see §0b: tier 5 or `--danger-full-access` |
 | `permission profile is not allowed outside local solo mode` | serve is missing `--solo` |
-| first-run server download fails | Offline or behind a proxy: install by hand with `npm i -g @icehomura/ra`; `RA_TUI_NO_AUTO_INSTALL=1` disables auto-install |
+| first-run server download fails | Offline or behind a proxy: install by hand with `npm i -g @icehomura/RecurAgent`; `RA_TUI_NO_AUTO_INSTALL=1` disables auto-install |
 | linker SIGBUS / EDQUOT when building a large project on Linux | `/tmp` is tmpfs and may carry a quota, and rust-lld's temporary files are large: `export TMPDIR=$HOME/.local/tmp` (create it, then put this in your shell profile) |
 | herdr injection silently lost | A double gate: the named-agent list **and** a pane foreground process-name match. Miss either and it is dropped. Fall back to tmux `send-keys` (text starting with `-` needs a `--` separator) |
 

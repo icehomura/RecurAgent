@@ -125,7 +125,7 @@ TUI requirements:
 ### M12-E: Solo Launch And Project Cwd UX
 
 Repository: `ra-tui`
-Issue: https://github.com/icehomura/ra-tui/issues/29
+Issue: https://github.com/icehomura/RecurAgent-tui/issues/29
 
 Deliverables:
 
@@ -154,7 +154,7 @@ Acceptance:
 ### M12-F: Permission Profile UX
 
 Repository: `ra-tui`
-Issue: https://github.com/icehomura/ra-tui/issues/30
+Issue: https://github.com/icehomura/RecurAgent-tui/issues/30
 
 Deliverables:
 
@@ -179,7 +179,7 @@ Acceptance:
 ### M12-G: Interactive Tmux Soak
 
 Repository: `ra-tui`
-Issue: https://github.com/icehomura/ra-tui/issues/31
+Issue: https://github.com/icehomura/RecurAgent-tui/issues/31
 
 Deliverables:
 

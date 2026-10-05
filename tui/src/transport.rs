@@ -6347,7 +6347,7 @@ fn mock_profile_skills() -> ProfileSkillsListResult {
             name: "deep-search".into(),
             version: Some("0.1.0".into()),
             tool_count: 1,
-            source_repo: Some("icehomura/ra-hub/skills/deep-search".into()),
+            source_repo: Some("icehomura/RecurAgent-hub/skills/deep-search".into()),
             installed: true,
             status: Some("installed".into()),
         }],
@@ -6360,7 +6360,7 @@ fn mock_skill_registry() -> ProfileSkillsRegistrySearchResult {
         packages: vec![ProfileSkillRegistryPackage {
             name: "deep-search".into(),
             description: "Mock registry package for deep research.".into(),
-            repo: "icehomura/ra-hub/skills/deep-search".into(),
+            repo: "icehomura/RecurAgent-hub/skills/deep-search".into(),
             version: Some("0.1.0".into()),
             author: Some("ra".into()),
             license: Some("MIT".into()),
@@ -8290,7 +8290,7 @@ mod tests {
             "skills-3".into(),
             AppUiCommand::ProfileSkillsInstall(ProfileSkillsInstallParams {
                 profile_id: Some("coding".into()),
-                repo: "icehomura/ra-hub/skills/deep-search".into(),
+                repo: "icehomura/RecurAgent-hub/skills/deep-search".into(),
                 branch: Some("main".into()),
                 force: true,
             }),
@@ -8302,7 +8302,7 @@ mod tests {
         );
         assert_eq!(
             install.params["repo"],
-            "icehomura/ra-hub/skills/deep-search"
+            "icehomura/RecurAgent-hub/skills/deep-search"
         );
         assert_eq!(install.params["branch"], "main");
         assert_eq!(install.params["force"], true);
@@ -9601,7 +9601,7 @@ mod tests {
             }),
             AppUiCommand::ProfileSkillsInstall(ProfileSkillsInstallParams {
                 profile_id: Some("coding".into()),
-                repo: "icehomura/ra-hub/skills/deep-search".into(),
+                repo: "icehomura/RecurAgent-hub/skills/deep-search".into(),
                 branch: None,
                 force: false,
             }),

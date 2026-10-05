@@ -1,7 +1,7 @@
 # Design: `ra-tui update` and `ra-tui doctor`
 
 **Status:** design / RFC.
-**Target repos:** `icehomura/ra-tui` (primary), `icehomura/ra` (shared bits + future `ra doctor`/`ra update`).
+**Target repos:** `icehomura/RecurAgent-tui` (primary), `icehomura/RecurAgent` (shared bits + future `ra doctor`/`ra update`).
 **Date:** 2026-06-05.
 
 ---
@@ -64,17 +64,17 @@ Detection order (first match wins):
 1. **cargo-dist installer** → `load_receipt()` succeeds (authoritative; receipt pins `install_prefix`).
 2. else classify by `current_exe()` location + corroborating signal:
    - Homebrew prefix (`/opt/homebrew/`, `/usr/local/Cellar/`, `$(brew --prefix)`) or `brew list ra-tui` → **Homebrew**.
-   - npm global root (`npm root -g`/`npm prefix -g`, or `node_modules/@icehomura/ra-tui` ancestor) → **npm**.
+   - npm global root (`npm root -g`/`npm prefix -g`, or `node_modules/@icehomura/RecurAgent-tui` ancestor) → **npm**.
    - `~/.cargo/bin` + `~/.cargo/.crates2.json` mentions ra-tui → **cargo**; sub-classify `--git` vs registry by the recorded `source`.
    - else → **Unknown / distro**.
 
 | Detected method | `update` does | `--check` does |
 |---|---|---|
 | cargo-dist installer (receipt) | self-update in place via axoupdater (verify + atomic swap; respects `--version`/`--tag`/`--prerelease`/`--force`) | `query_new_version()`; print + exit 10 if newer |
-| Homebrew | print `brew update && brew upgrade icehomura/ra-tui/ra-tui`; exit 3 | best-effort `brew outdated --json`; else print command, exit 0 |
-| npm (`-g`) | print `npm update -g @icehomura/ra-tui`; exit 3 | `npm outdated -g @icehomura/ra-tui` |
+| Homebrew | print `brew update && brew upgrade icehomura/RecurAgent-tui/ra-tui`; exit 3 | best-effort `brew outdated --json`; else print command, exit 0 |
+| npm (`-g`) | print `npm update -g @icehomura/RecurAgent-tui`; exit 3 | `npm outdated -g @icehomura/RecurAgent-tui` |
 | cargo install (registry) | print `cargo install ra-tui --force` (+ suggest `cargo install-update`); exit 3 | compare to crates.io / latest tag |
-| cargo install --git | print `cargo install --git https://github.com/icehomura/ra-tui ra-tui --force`; exit 3 | compare `CARGO_PKG_VERSION` to repo latest tag |
+| cargo install --git | print `cargo install --git https://github.com/icehomura/RecurAgent-tui ra-tui --force`; exit 3 | compare `CARGO_PKG_VERSION` to repo latest tag |
 | Unknown / distro | print manual instructions + suggest the curl\|sh installer to convert to a self-updating install; exit 3 | GitHub-latest compare only |
 
 ### A.4 UX, exit codes, security

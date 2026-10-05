@@ -22,8 +22,8 @@ RecurAgent 有三种主要运行模式：
 
 `ra serve` 后端使用单一的带版本 **UI Protocol**（基于 WebSocket 或 stdio 的 JSON-RPC），因此多个前端共享同一个服务器：
 
-- **Web**（[ra-web](https://github.com/icehomura/ra-web)）：内嵌在 `/app/` 的 React SPA（聊天、Slides Studio、Sites、语音）。位于 `/admin/` 的运维**管理仪表板**是 RecurAgent 仓库中一个独立的内嵌应用（`dashboard/`）。
-- **终端**（[ra-tui](https://github.com/icehomura/ra-tui)）：通过 UI Protocol 连接的 Rust TUI（WebSocket 连到运行中的 `serve`，或拉起一个 `serve --stdio` 子进程），支持实时流式、审批、diff 与引导。
+- **Web**（[ra-web](https://github.com/icehomura/RecurAgent-web)）：内嵌在 `/app/` 的 React SPA（聊天、Slides Studio、Sites、语音）。位于 `/admin/` 的运维**管理仪表板**是 RecurAgent 仓库中一个独立的内嵌应用（`dashboard/`）。
+- **终端**（[ra-tui](https://github.com/icehomura/RecurAgent-tui)）：通过 UI Protocol 连接的 Rust TUI（WebSocket 连到运行中的 `serve`，或拉起一个 `serve --stdio` 子进程），支持实时流式、审批、diff 与引导。
 
 ## 核心概念
 

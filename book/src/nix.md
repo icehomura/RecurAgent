@@ -32,9 +32,9 @@ RecurAgent provides a first-class Nix flake for reproducible builds, development
 ### Running Without Installing
 
 ```bash
-nix run github:icehomura/ra#ra -- --version
-nix run github:icehomura/ra#ra -- status
-nix run github:icehomura/ra#ra-full -- chat --message "Hello"
+nix run github:icehomura/RecurAgent#ra -- --version
+nix run github:icehomura/RecurAgent#ra -- status
+nix run github:icehomura/RecurAgent#ra-full -- chat --message "Hello"
 ```
 
 ### Building Packages
@@ -76,7 +76,7 @@ in
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    ra.url = "github:icehomura/ra";
+    ra.url = "github:icehomura/RecurAgent";
   };
 }
 ```

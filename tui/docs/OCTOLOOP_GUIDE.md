@@ -37,7 +37,7 @@ RecurAgent serve,如 glm/kimi 档)在你的仓库里干活——读黑板、执�
 | 依赖 | 必须? | 说明 |
 |---|---|---|
 | Linux / macOS | 是 | Windows 可跑 TUI;serve 的 bwrap 沙箱档是 Linux 特性 |
-| ra-tui 可执行 | 是 | `npm install -g @icehomura/ra-tui`(RecurAgent server 首启自动下载到 `~/.ra/bin`) |
+| ra-tui 可执行 | 是 | `npm install -g @icehomura/RecurAgent-tui`(RecurAgent server 首启自动下载到 `~/.ra/bin`) |
 | 内环模型 API key | 是 | 便宜档,例:Moonshot(kimi)/ ZAI;onboarding 向导里粘贴 |
 | 外环模型 CLI | 是 | Claude Code / Codex 任一,用你已有的订阅 |
 | herdr 或 tmux | 推荐 | 外环程序化驱动内环窗格;herdr 来源 <https://github.com/hagency-org/herdr>(ra-tui 窗格识别当前在 `feat/ra-tui-agent` 分支构建),不装可降级 tmux send-keys |
@@ -49,7 +49,7 @@ RecurAgent serve,如 glm/kimi 档)在你的仓库里干活——读黑板、执�
 
 ```bash
 # ① 装 TUI
-npm install -g @icehomura/ra-tui
+npm install -g @icehomura/RecurAgent-tui
 
 # ② 在你的项目目录铺 OLP 脚手架(幂等,绝不覆盖已有文件)
 cd your-project/
@@ -215,7 +215,7 @@ goal 达成后**必须显式收口**,否则变僵尸拦截后续 goal:
 | 黑板没被内环读到 | 黑板被误 track/跨分支裂脑 | 确认 `.ra/OUTER_LOOP_REVIEW.md` 在 `.gitignore`(olp-init 已做);重跑 init 幂等补 |
 | 断供空转/全线报错停摆 | 未配 fallbacks,主道 quota/auth 拒付 | 按 §5 配 `fallbacks[]`,新会话生效 |
 | herdr 注入静默丢失 | 双重门:named-agent 名单 + 窗格前台进程名匹配 | 缺一即丢;降级 tmux `send-keys`(`-` 开头文本用 `--` 分隔) |
-| 首启下载 server 失败 | 离线/代理 | 手装 `npm i -g @icehomura/ra`;`RA_TUI_NO_AUTO_INSTALL=1` 关自动装 |
+| 首启下载 server 失败 | 离线/代理 | 手装 `npm i -g @icehomura/RecurAgent`;`RA_TUI_NO_AUTO_INSTALL=1` 关自动装 |
 | Linux 构建大项目链接器 SIGBUS / EDQUOT | `/tmp` tmpfs 带配额 | `export TMPDIR=~/.local/tmp`(建目录后写进 shell profile) |
 
 ### 7.1 平台支持矩阵

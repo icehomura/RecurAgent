@@ -2,7 +2,7 @@
 
 Status: active closure contract
 Date: 2026-05-23
-Repository: icehomura/ra
+Repository: icehomura/RecurAgent
 Input snapshot: 70 open GitHub issues from `gh issue list --state open`
 
 ## Goal

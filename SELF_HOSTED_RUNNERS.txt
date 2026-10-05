@@ -88,7 +88,7 @@ Use a standard GitHub Actions runner installation on the Windows machine and reg
 
 Typical manual flow in PowerShell:
 
-    $repo = "icehomura/ra"
+    $repo = "icehomura/RecurAgent"
     $url = "https://github.com/$repo"
     $token = gh api -X POST "repos/$repo/actions/runners/registration-token" --jq .token
 
@@ -113,7 +113,7 @@ From GitHub Actions UI:
 From CLI:
 
     gh workflow run "CI (self-hosted)" \
-      --repo icehomura/ra \
+      --repo icehomura/RecurAgent \
       -f ref=main \
       -f include_arm=true \
       -f include_windows=false

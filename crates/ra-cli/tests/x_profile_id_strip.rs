@@ -1,5 +1,5 @@
 //! Integration tests for the `X-Profile-Id` header strip middleware (issue
-//! [#995](https://github.com/icehomura/ra/issues/995)) and the handler
+//! [#995](https://github.com/icehomura/RecurAgent/issues/995)) and the handler
 //! precedence flip in `handlers::decide_resolved_profile_id`.
 //!
 //! ## What this guards

@@ -118,7 +118,7 @@ Acceptance:
 #### M4.1A: Structured Progress Contract
 
 GitHub milestone:
-<https://github.com/icehomura/ra/milestone/1>
+<https://github.com/icehomura/RecurAgent/milestone/1>
 
 Trigger:
 
@@ -373,7 +373,7 @@ These are the published GitHub issues for M4.
 ### H4.1: Generalize Parent-Visible Progress ABI
 
 GitHub issue: `#464`
-<https://github.com/icehomura/ra/issues/464>
+<https://github.com/icehomura/RecurAgent/issues/464>
 
 Scope:
 
@@ -396,7 +396,7 @@ Acceptance:
 ### H4.2: Publish Harness Developer Contract And Starter Apps
 
 GitHub issue: `#465`
-<https://github.com/icehomura/ra/issues/465>
+<https://github.com/icehomura/RecurAgent/issues/465>
 
 Scope:
 
@@ -415,7 +415,7 @@ Acceptance:
 ### H4.3: Build Declarative Validator Runner
 
 GitHub issue: `#466`
-<https://github.com/icehomura/ra/issues/466>
+<https://github.com/icehomura/RecurAgent/issues/466>
 
 Scope:
 
@@ -433,7 +433,7 @@ Acceptance:
 ### H4.4: Add Third-Party Skill Compatibility Gate
 
 GitHub issue: `#467`
-<https://github.com/icehomura/ra/issues/467>
+<https://github.com/icehomura/RecurAgent/issues/467>
 
 Scope:
 
@@ -451,7 +451,7 @@ Acceptance:
 ### H4.5: Build Operator Harness Dashboard
 
 GitHub issue: `#468`
-<https://github.com/icehomura/ra/issues/468>
+<https://github.com/icehomura/RecurAgent/issues/468>
 
 Scope:
 
@@ -469,7 +469,7 @@ Acceptance:
 ### H4.6: Version Harness ABI Schemas
 
 GitHub issue: `#469`
-<https://github.com/icehomura/ra/issues/469>
+<https://github.com/icehomura/RecurAgent/issues/469>
 
 Scope:
 

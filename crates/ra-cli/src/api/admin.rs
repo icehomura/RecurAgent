@@ -4643,7 +4643,7 @@ fn build_admin_tenant_setup_script(
     domain: &str,
     server: &str,
 ) -> String {
-    let install_url = "https://github.com/icehomura/ra/releases/latest/download/install.sh";
+    let install_url = "https://github.com/icehomura/RecurAgent/releases/latest/download/install.sh";
     format!(
         r#"#!/usr/bin/env bash
 # Setup script for {subdomain}.{domain}
@@ -4944,7 +4944,7 @@ fn build_register_setup_command_windows(
     server: &str,
 ) -> String {
     format!(
-        r#"irm "https://github.com/icehomura/ra/releases/latest/download/install.ps1" -OutFile install.ps1; .\install.ps1 -Tunnel -AuthToken "{auth_token}" -Port {local_port} -TenantName "{subdomain}" -FrpsToken "{frps_token}" -SshPort {ssh_port} -TunnelDomain "{domain}" -FrpsServer "{server}""#,
+        r#"irm "https://github.com/icehomura/RecurAgent/releases/latest/download/install.ps1" -OutFile install.ps1; .\install.ps1 -Tunnel -AuthToken "{auth_token}" -Port {local_port} -TenantName "{subdomain}" -FrpsToken "{frps_token}" -SshPort {ssh_port} -TunnelDomain "{domain}" -FrpsServer "{server}""#,
         subdomain = tenant.subdomain,
         domain = domain,
         server = server,
@@ -4960,7 +4960,7 @@ fn build_register_setup_script(
     domain: &str,
     server: &str,
 ) -> String {
-    let install_url = "https://github.com/icehomura/ra/releases/latest/download/install.sh";
+    let install_url = "https://github.com/icehomura/RecurAgent/releases/latest/download/install.sh";
     format!(
         r#"#!/usr/bin/env bash
 # Setup script for {subdomain}.{domain}

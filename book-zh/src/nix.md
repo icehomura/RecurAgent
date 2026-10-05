@@ -32,9 +32,9 @@ RecurAgent 提供一流的 Nix Flake 支持，用于可重现构建、开发环�
 ### 不安装直接运行
 
 ```bash
-nix run github:icehomura/ra#ra -- --version
-nix run github:icehomura/ra#ra -- status
-nix run github:icehomura/ra#ra-full -- chat --message "Hello"
+nix run github:icehomura/RecurAgent#ra -- --version
+nix run github:icehomura/RecurAgent#ra -- status
+nix run github:icehomura/RecurAgent#ra-full -- chat --message "Hello"
 ```
 
 ### 构建软件包
@@ -76,7 +76,7 @@ in
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    ra.url = "github:icehomura/ra";
+    ra.url = "github:icehomura/RecurAgent";
   };
 }
 ```

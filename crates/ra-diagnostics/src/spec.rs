@@ -48,16 +48,16 @@ pub struct ProductSpec {
     /// The caller's own version — passed IN (its `env!("CARGO_PKG_VERSION")`).
     /// NEVER this crate's `CARGO_PKG_VERSION`.
     pub current_version: String,
-    /// `owner/repo` on GitHub, e.g. `icehomura/ra`.
+    /// `owner/repo` on GitHub, e.g. `icehomura/RecurAgent`.
     pub github_repo: String,
     /// Env var holding an optional GitHub token to dodge the unauthenticated
     /// rate limit, e.g. `ra_GITHUB_TOKEN`. Optional auth — the GitHub client
     /// (Stage 2, `github` feature) reads it only when this is `Some` and the var
     /// is set & non-blank; a public repo never requires it.
     pub github_token_env: Option<String>,
-    /// Homebrew formula (tap-qualified), e.g. `icehomura/ra/ra`.
+    /// Homebrew formula (tap-qualified), e.g. `icehomura/RecurAgent/ra`.
     pub brew_formula: Option<String>,
-    /// npm package name, e.g. `@icehomura/ra`.
+    /// npm package name, e.g. `@icehomura/RecurAgent`.
     pub npm_package: Option<String>,
     /// `cargo install` crate name (registry), e.g. `ra-cli`.
     pub cargo_install: Option<String>,
@@ -147,17 +147,17 @@ mod tests {
 
     #[test]
     fn builder_sets_optional_fields() {
-        let spec = ProductSpec::new("ra", "ra", "1.2.3", "icehomura/ra", "ra-bundle")
-            .with_brew_formula("icehomura/ra/ra")
-            .with_npm_package("@icehomura/ra")
+        let spec = ProductSpec::new("ra", "ra", "1.2.3", "icehomura/RecurAgent", "ra-bundle")
+            .with_brew_formula("icehomura/RecurAgent/ra")
+            .with_npm_package("@icehomura/RecurAgent")
             .with_cargo_install("ra-cli")
             .with_cargo_dist_app("ra");
         assert_eq!(spec.current_version, "1.2.3");
-        assert_eq!(spec.brew_formula.as_deref(), Some("icehomura/ra/ra"));
-        assert_eq!(spec.npm_package.as_deref(), Some("@icehomura/ra"));
+        assert_eq!(spec.brew_formula.as_deref(), Some("icehomura/RecurAgent/ra"));
+        assert_eq!(spec.npm_package.as_deref(), Some("@icehomura/RecurAgent"));
         assert_eq!(spec.cargo_install.as_deref(), Some("ra-cli"));
         assert_eq!(spec.cargo_dist_app.as_deref(), Some("ra"));
-        assert_eq!(spec.github_url(), "https://github.com/icehomura/ra");
+        assert_eq!(spec.github_url(), "https://github.com/icehomura/RecurAgent");
         assert_eq!(
             spec.asset_selector.asset_name("x86_64-unknown-linux-gnu"),
             "ra-bundle-x86_64-unknown-linux-gnu"
@@ -167,7 +167,7 @@ mod tests {
     #[cfg(not(windows))]
     #[test]
     fn binary_file_name_is_bare_on_unix() {
-        let spec = ProductSpec::new("ra", "ra", "0.1.0", "icehomura/ra", "ra-bundle");
+        let spec = ProductSpec::new("ra", "ra", "0.1.0", "icehomura/RecurAgent", "ra-bundle");
         assert_eq!(spec.binary_file_name(), "ra");
     }
 }

@@ -10,7 +10,7 @@ build-dir = "public"
 [output.html]
 default-theme = "light"
 preferred-dark-theme = "ayu"
-git-repository-url = "https://github.com/icehomura/ra"
-edit-url-template = "https://github.com/icehomura/ra/edit/main/book-zh/src/{path}"
+git-repository-url = "https://github.com/icehomura/RecurAgent"
+edit-url-template = "https://github.com/icehomura/RecurAgent/edit/main/book-zh/src/{path}"
 site-url = "/ra/zh/"
 additional-css = ["theme/ra.css"]

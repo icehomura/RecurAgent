@@ -1183,7 +1183,7 @@ pub(crate) fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 ///
 /// Query path: `?token=<value>` or `?_token=<value>` — used by SSE,
 /// `EventSource`, `<img src>`, and WebSocket clients that cannot set
-/// custom headers. Per [issue #1010](https://github.com/icehomura/ra/issues/1010),
+/// custom headers. Per [issue #1010](https://github.com/icehomura/RecurAgent/issues/1010),
 /// the raw query value is **percent-decoded** before comparison. The
 /// raw URI fragment may contain `%21` for `!`, `%2B` for `+`, `%2F`
 /// for `/`, etc. — without decoding, a token like
@@ -1739,7 +1739,7 @@ mod tests {
         assert_eq!(extract_token(&req), "");
     }
 
-    /// Issue [#1010](https://github.com/icehomura/ra/issues/1010):
+    /// Issue [#1010](https://github.com/icehomura/RecurAgent/issues/1010):
     /// browsers and curl percent-encode special characters in query
     /// string values. The raw query string contains `%21` for `!`, so
     /// the extractor must percent-decode the value before handing it to

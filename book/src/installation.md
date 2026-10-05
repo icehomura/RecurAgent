@@ -24,7 +24,7 @@ You also need an API key from at least one supported LLM provider.
 ## Build from Source
 
 ```bash
-git clone https://github.com/icehomura/ra
+git clone https://github.com/icehomura/RecurAgent
 cd ra
 
 # Recommended: canonical feature set (matches scripts/milestone-ci.sh).
@@ -100,7 +100,7 @@ brew install node ffmpeg poppler
 brew install --cask libreoffice
 
 # 3. Clone and deploy
-git clone https://github.com/icehomura/ra.git
+git clone https://github.com/icehomura/RecurAgent.git
 cd ra
 ./scripts/local-tenant-deploy.sh --full
 
@@ -142,7 +142,7 @@ source "$HOME/.cargo/env"
 sudo apt install -y nodejs npm ffmpeg poppler-utils
 
 # 4. Clone and deploy
-git clone https://github.com/icehomura/ra.git
+git clone https://github.com/icehomura/RecurAgent.git
 cd ra
 ./scripts/local-tenant-deploy.sh --full
 
@@ -192,7 +192,7 @@ rustup-init.exe
 # 2. Clone and build with the canonical feature set
 #    (omit features only if you just want `ra chat`; `ra serve`
 #    requires the `api` feature).
-git clone https://github.com/icehomura/ra.git
+git clone https://github.com/icehomura/RecurAgent.git
 cd ra
 cargo install --path crates/ra-cli `
     --features "api,telegram,discord,dingtalk,whatsapp,feishu,twilio,wecom,wecom-bot,audio_mp3"

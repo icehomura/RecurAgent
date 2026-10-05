@@ -41,7 +41,7 @@ Then fork the repository, clone it, and verify your fork:
 ```bash
 git clone https://github.com/YOUR-USER/ra-tui.git
 cd ra-tui
-git remote add upstream https://github.com/icehomura/ra-tui.git
+git remote add upstream https://github.com/icehomura/RecurAgent-tui.git
 scripts/verify.sh -- cargo test --all-targets
 ```
 

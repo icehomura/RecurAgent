@@ -1944,7 +1944,7 @@ mod tests {
         });
     }
 
-    /// Reproduction for icehomura/ra#1547: with `require_mention: false`,
+    /// Reproduction for icehomura/RecurAgent#1547: with `require_mention: false`,
     /// a group-room message that explicitly mentions a DIFFERENT user (and not
     /// this bot) must stay unanswered. Drives the real HTTP sync + membership
     /// probe + forward path against a local homeserver stub.

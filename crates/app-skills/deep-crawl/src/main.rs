@@ -69,7 +69,7 @@ const MAX_CRAWL_DELAY_SECS: u64 = 10;
 /// Product token appended to the browser's own User-Agent so sites can tell
 /// this is an automated ra-research reader (policy: no disguised automation; see
 /// SKILL.md "Automation policy").
-const UA_SUFFIX: &str = "ra-research/1.0 (+https://github.com/icehomura/ra)";
+const UA_SUFFIX: &str = "ra-research/1.0 (+https://github.com/icehomura/RecurAgent)";
 
 /// Environment variables to block when launching Chrome.
 const BLOCKED_ENV_VARS: &[&str] = &[

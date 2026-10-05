@@ -3296,7 +3296,7 @@ elimination that motivated M9-γ. The drop is silent at the projection
 layer (the metric is the operational signal); clients do NOT
 rehydrate, restart, or treat the situation as a desync. The same
 behaviour is implemented by the M9-γ-2 projection
-([`ra-web` PR #93](https://github.com/icehomura/ra-web/pull/93)).
+([`ra-web` PR #93](https://github.com/icehomura/RecurAgent-web/pull/93)).
 
 A server that needs to emit a follow-up assistant or tool event
 belonging to a logically separate turn MUST mint a new `thread_id` for

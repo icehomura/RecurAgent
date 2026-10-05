@@ -342,16 +342,16 @@ mod tests {
     }
 
     fn ra_spec() -> ProductSpec {
-        ProductSpec::new("ra", "ra", "1.0.0", "icehomura/ra", "ra-bundle")
-            .with_brew_formula("icehomura/ra/ra")
-            .with_npm_package("@icehomura/ra")
+        ProductSpec::new("ra", "ra", "1.0.0", "icehomura/RecurAgent", "ra-bundle")
+            .with_brew_formula("icehomura/RecurAgent/ra")
+            .with_npm_package("@icehomura/RecurAgent")
             .with_cargo_install("ra-cli")
             .with_cargo_dist_app("ra")
     }
 
     #[test]
     fn should_classify_npm_global_when_under_npm_root() {
-        let mut i = input("/usr/local/lib/node_modules/@icehomura/ra/bin/ra");
+        let mut i = input("/usr/local/lib/node_modules/@icehomura/RecurAgent/bin/ra");
         i.npm_global_roots = vec![PathBuf::from("/usr/local/lib/node_modules")];
         assert_eq!(classify_path(&i), InstallMethod::Npm);
     }
@@ -436,11 +436,11 @@ mod tests {
         );
         assert_eq!(
             InstallMethod::Homebrew.upgrade_hint(&spec).unwrap(),
-            "brew update && brew upgrade icehomura/ra/ra"
+            "brew update && brew upgrade icehomura/RecurAgent/ra"
         );
         assert_eq!(
             InstallMethod::Npm.upgrade_hint(&spec).unwrap(),
-            "npm update -g @icehomura/ra"
+            "npm update -g @icehomura/RecurAgent"
         );
         assert_eq!(
             InstallMethod::CargoRegistry.upgrade_hint(&spec).unwrap(),
@@ -448,7 +448,7 @@ mod tests {
         );
         assert_eq!(
             InstallMethod::CargoGit.upgrade_hint(&spec).unwrap(),
-            "cargo install --git https://github.com/icehomura/ra ra-cli --force"
+            "cargo install --git https://github.com/icehomura/RecurAgent ra-cli --force"
         );
         assert!(
             InstallMethod::Unknown
@@ -462,7 +462,7 @@ mod tests {
     fn upgrade_hint_falls_back_to_installer_when_pkg_field_absent() {
         // A spec lacking brew/npm/cargo fields must still produce a usable hint
         // (the one-line installer), not panic or return None.
-        let bare = ProductSpec::new("ra", "ra", "1.0.0", "icehomura/ra", "ra-bundle");
+        let bare = ProductSpec::new("ra", "ra", "1.0.0", "icehomura/RecurAgent", "ra-bundle");
         assert!(
             InstallMethod::Homebrew
                 .upgrade_hint(&bare)

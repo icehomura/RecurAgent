@@ -1832,7 +1832,7 @@ mod tests {
         assert_eq!(install_location_label(Path::new("/usr/bin/ra")), "system");
         assert_eq!(
             install_location_label(Path::new(
-                "/x/node_modules/@icehomura/ra-tui/.bin_real/ra-tui"
+                "/x/node_modules/@icehomura/RecurAgent-tui/.bin_real/ra-tui"
             )),
             "npm"
         );

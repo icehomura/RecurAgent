@@ -146,7 +146,7 @@ console.log(JSON.stringify(result));
 ## Publishing to the Registry
 
 1. Push your skill to a GitHub repo
-2. Submit to the [RecurAgent skill registry](https://github.com/icehomura/ra-hub)
+2. Submit to the [RecurAgent skill registry](https://github.com/icehomura/RecurAgent-hub)
 3. The registry team audits, builds binaries, and publishes
 
 ## Multi-Skill Repos

@@ -12,7 +12,7 @@ RecurAgent 的核心架构是 **可复用的内核 + 可编程的协议边界**�
 通过同一套 OUP 契约操作这个内核。
 
 [构建应用](#基于-recuragent-构建应用) · [通过 OUP 控制内核](#通过-oup-控制内核) ·
-[文档](https://icehomura.github.io/ra/zh/) · [English](README.md)
+[文档](https://icehomura.github.io/RecurAgent/zh/) · [English](README.md)
 
 [RecurAgent 集成源码导读](docs/recuragent-integration-walkthrough.md)
 用一个日历请求串起请求准入、Tokio 任务、宿主工具调用和答案返回，
@@ -25,8 +25,8 @@ RecurAgent 的核心架构是 **可复用的内核 + 可编程的协议边界**�
 
 | 应用 | 从哪里开始 |
 | --- | --- |
-| **[ra-tui](https://github.com/icehomura/ra-tui)** | 安装终端客户端；首次启动时会自动准备兼容的本地 RecurAgent 运行时。 |
-| **[ra-tui-web](https://github.com/icehomura/ra-tui-web)** | 按照[入门指南](https://github.com/icehomura/ra-tui-web/blob/main/docs/getting-started.md)部署浏览器客户端，并连接 RecurAgent 运行时。 |
+| **[ra-tui](https://github.com/icehomura/RecurAgent-tui)** | 安装终端客户端；首次启动时会自动准备兼容的本地 RecurAgent 运行时。 |
+| **[ra-tui-web](https://github.com/icehomura/RecurAgent-tui-web)** | 按照[入门指南](https://github.com/icehomura/RecurAgent-tui-web/blob/main/docs/getting-started.md)部署浏览器客户端，并连接 RecurAgent 运行时。 |
 
 本仓库面向嵌入、扩展或集成 Harness 内核的开发者。应用安装和日常编码操作，
 请查看上面的客户端仓库。
@@ -317,7 +317,7 @@ Goal 记录 Agent 要完成什么，Loop 安排周期性轮次，Monitor 观察�
 - [Harness 开发者接口](docs/ra_HARNESS_DEVELOPER_INTERFACE.md)
 - [产物与工作流集成指南](docs/ra_HARNESS_DEVELOPER_GUIDE.md)
 - [Harness 兼容性与版本管理](docs/ra_HARNESS_ABI_VERSIONING.md)
-- [文档站点](https://icehomura.github.io/ra/zh/)
+- [文档站点](https://icehomura.github.io/RecurAgent/zh/)
 
 ## 参与开发
 

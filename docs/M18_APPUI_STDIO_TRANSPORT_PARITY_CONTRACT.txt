@@ -197,7 +197,7 @@ Claude review:
 
 GitHub issue update status:
 
-- Attempted to comment on `icehomura/ra#1028`, but the GitHub connector
+- Attempted to comment on `icehomura/RecurAgent#1028`, but the GitHub connector
   returned `401 token_expired`: "Provided authentication token is expired.
   Please try signing in again."
 - Issue comments/closures for `ra#1028`-`#1032` and `ra-tui#48`-`#49`

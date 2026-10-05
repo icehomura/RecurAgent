@@ -24,7 +24,7 @@
 ## 从源码编译
 
 ```bash
-git clone https://github.com/icehomura/ra
+git clone https://github.com/icehomura/RecurAgent
 cd ra
 
 # 推荐：规范特性集（与 scripts/milestone-ci.sh 一致）。
@@ -97,7 +97,7 @@ brew install node ffmpeg poppler
 brew install --cask libreoffice
 
 # 3. 克隆并部署
-git clone https://github.com/icehomura/ra.git
+git clone https://github.com/icehomura/RecurAgent.git
 cd ra
 ./scripts/local-tenant-deploy.sh --full
 
@@ -139,7 +139,7 @@ source "$HOME/.cargo/env"
 sudo apt install -y nodejs npm ffmpeg poppler-utils
 
 # 4. 克隆并部署
-git clone https://github.com/icehomura/ra.git
+git clone https://github.com/icehomura/RecurAgent.git
 cd ra
 ./scripts/local-tenant-deploy.sh --full
 
@@ -188,7 +188,7 @@ rustup-init.exe
 
 # 2. 克隆并使用规范特性集编译
 #    （若只想要 `ra chat` 可省略特性；`ra serve` 需要 api 特性）
-git clone https://github.com/icehomura/ra.git
+git clone https://github.com/icehomura/RecurAgent.git
 cd ra
 cargo install --path crates/ra-cli `
     --features "api,telegram,discord,dingtalk,whatsapp,feishu,twilio,wecom,wecom-bot,audio_mp3"

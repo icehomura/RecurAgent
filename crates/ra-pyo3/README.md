@@ -1,6 +1,6 @@
 # RecurAgent (Python)
 
-Native Python bindings for embedding [RecurAgent](https://github.com/icehomura/ra)
+Native Python bindings for embedding [RecurAgent](https://github.com/icehomura/RecurAgent)
 — a Rust-native agentic OS — in a Python process. Built with
 [pyo3](https://pyo3.rs/) over the shared **native core** in `ra-ffi`.
 

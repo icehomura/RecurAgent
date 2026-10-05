@@ -1,4 +1,4 @@
-//! Integration tests for [issue #1010](https://github.com/icehomura/ra/issues/1010):
+//! Integration tests for [issue #1010](https://github.com/icehomura/RecurAgent/issues/1010):
 //! WS token auth must percent-decode the `?token=` query parameter so
 //! browsers / curl can pass tokens that contain `!`, `+`, `/`, `=`, `:`
 //! etc. without silent 401s.

@@ -42,11 +42,11 @@
 
 ```bash
 # ① 装 TUI(server 首启自动拉起,无后台常驻服务)
-npm install -g @icehomura/ra-tui
+npm install -g @icehomura/RecurAgent-tui
 
 # ② 在你的项目目录铺 OLP 脚手架(幂等,绝不覆盖已有文件)
 cd your-project/
-curl -fsSL https://raw.githubusercontent.com/icehomura/ra-tui/main/scripts/olp-init.sh | bash
+curl -fsSL https://raw.githubusercontent.com/icehomura/RecurAgent-tui/main/scripts/olp-init.sh | bash
 #   (或 clone 本仓库后运行 scripts/olp-init.sh)
 
 # ③ 启动内环
@@ -166,7 +166,7 @@ herdr 用户另有驾驶舱注入:`herdr agent list` 看窗格,
 | `ra: 'serve' 不是子命令 | 源码构建漏了 feature:`cargo build --release --features api`(发布二进制无此问题) |
 | 内环说"本机没有 cargo" | 权限档 1-4 的 bwrap 沙箱,见 0b 节——第 5 档或 `--danger-full-access` |
 | "permission profile is not allowed outside local solo mode" | serve 少了 `--solo` |
-| 首启下载 server 失败 | 离线/代理:手装 `npm i -g @icehomura/ra`;`RA_TUI_NO_AUTO_INSTALL=1` 关自动装 |
+| 首启下载 server 失败 | 离线/代理:手装 `npm i -g @icehomura/RecurAgent`;`RA_TUI_NO_AUTO_INSTALL=1` 关自动装 |
 | Linux 上构建大项目时链接器 SIGBUS / EDQUOT | `/tmp` 是 tmpfs 且可能带配额,rust-lld 临时文件很大:`export TMPDIR=$HOME/.local/tmp`(建目录后写进 shell profile) |
 | herdr 注入静默丢失 | 双重门:named-agent 名单 + 窗格前台进程名匹配,缺一即丢;降级 tmux `send-keys`(首字符 `-` 的文本用 `--` 分隔) |
 

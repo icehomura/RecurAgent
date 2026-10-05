@@ -1,12 +1,12 @@
 class ra < Formula
   desc "Rust-native, API-first Agentic OS server (ra serve + bundled skills)"
-  homepage "https://github.com/icehomura/ra"
+  homepage "https://github.com/icehomura/RecurAgent"
   version "2.0.0"
   license "Apache-2.0"
 
   on_macos do
     on_arm do
-      url "https://github.com/icehomura/ra/releases/download/v2.0.0/ra-bundle-aarch64-apple-darwin.tar.gz"
+      url "https://github.com/icehomura/RecurAgent/releases/download/v2.0.0/ra-bundle-aarch64-apple-darwin.tar.gz"
       sha256 "d6c3b53380a51579386687218feb575b4199a188061bad332a3541019a2107f4"
     end
     on_intel do
@@ -16,11 +16,11 @@ class ra < Formula
 
   on_linux do
     on_intel do
-      url "https://github.com/icehomura/ra/releases/download/v2.0.0/ra-bundle-x86_64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/icehomura/RecurAgent/releases/download/v2.0.0/ra-bundle-x86_64-unknown-linux-gnu.tar.gz"
       sha256 "a28ca262a060e1e76862f4eda9af831d31a7f46de04a34e397737b17830f46da"
     end
     on_arm do
-      url "https://github.com/icehomura/ra/releases/download/v2.0.0/ra-bundle-aarch64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/icehomura/RecurAgent/releases/download/v2.0.0/ra-bundle-aarch64-unknown-linux-gnu.tar.gz"
       sha256 "eb27475fde3fd823d23b460f6a8ab3f048f4bcde9cece22ab7bcab6f6d08eb8a"
     end
   end

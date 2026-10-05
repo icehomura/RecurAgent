@@ -3661,7 +3661,7 @@ impl Tool for ImageGenerationTool {
         Ok(ToolResult {
             output: json!({
                 "error": "image_generation has no native or skill backend bound on this profile",
-                "follow_up": "https://github.com/icehomura/ra/issues/1149",
+                "follow_up": "https://github.com/icehomura/RecurAgent/issues/1149",
                 "prompt": prompt,
             })
             .to_string(),
@@ -3670,7 +3670,7 @@ impl Tool for ImageGenerationTool {
                 "codex_tool": "image_generation",
                 "error_kind": "coding_tool_unsupported",
                 "reason": "no_backend_bound",
-                "follow_up_issue": "https://github.com/icehomura/ra/issues/1149",
+                "follow_up_issue": "https://github.com/icehomura/RecurAgent/issues/1149",
                 "accepted_input": {
                     "prompt": prompt,
                     "size": input.size,

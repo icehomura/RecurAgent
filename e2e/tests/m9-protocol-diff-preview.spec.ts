@@ -1,7 +1,7 @@
 /**
  * M9 wire-level e2e: `diff/preview/get`.
  *
- * Issue: https://github.com/icehomura/ra/issues/647
+ * Issue: https://github.com/icehomura/RecurAgent/issues/647
  * Spec  : api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md §7 / §8
  *
  * The pending-store population path requires a real tool call that emits

@@ -1,12 +1,12 @@
 {
-  "name": "@icehomura/ra",
+  "name": "@icehomura/RecurAgent",
   "version": "0.0.0-managed",
   "description": "Rust-native, API-first Agentic OS server (ra serve + bundled skills). Installs the prebuilt release bundle.",
-  "homepage": "https://github.com/icehomura/ra",
+  "homepage": "https://github.com/icehomura/RecurAgent",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/icehomura/ra.git"
+    "url": "git+https://github.com/icehomura/RecurAgent.git"
   },
   "bin": {
     "ra": "bin/ra.js"

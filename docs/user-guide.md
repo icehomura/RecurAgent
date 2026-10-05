@@ -127,7 +127,7 @@ End users register themselves via the cloud host's public signup page (e.g., `ht
 A typical emitted command (macOS/Linux):
 
 ```bash
-curl -fsSL https://github.com/icehomura/ra/releases/latest/download/install.sh | bash -s -- \
+curl -fsSL https://github.com/icehomura/RecurAgent/releases/latest/download/install.sh | bash -s -- \
     --tunnel \
     --tenant-name alice \
     --frps-token <per-tenant-uuid> \
@@ -2656,4 +2656,4 @@ The most common misconfiguration is a token mismatch. All three of these must ag
 
 ---
 
-*This guide reflects the post-M8.10 state (April 2026). For the latest updates, see the repository at [github.com/icehomura/ra](https://github.com/icehomura/ra).*
+*This guide reflects the post-M8.10 state (April 2026). For the latest updates, see the repository at [github.com/icehomura/RecurAgent](https://github.com/icehomura/RecurAgent).*

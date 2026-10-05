@@ -165,7 +165,7 @@ one `turn_completed` envelope per `(thread_id, turn)`. After it:
 
 The drop is silent at the projection layer. Clients do NOT rehydrate
 or treat the situation as a desync. The M9-γ-2 projection
-([`ra-web` PR #93](https://github.com/icehomura/ra-web/pull/93))
+([`ra-web` PR #93](https://github.com/icehomura/RecurAgent-web/pull/93))
 implements the same behaviour and is the canonical reference.
 
 ### Identity model

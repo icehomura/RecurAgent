@@ -195,8 +195,8 @@ mod tests {
     use super::*;
 
     fn ra_spec() -> ProductSpec {
-        ProductSpec::new("ra", "ra", "1.0.0", "icehomura/ra", "ra-bundle")
-            .with_brew_formula("icehomura/ra/ra")
+        ProductSpec::new("ra", "ra", "1.0.0", "icehomura/RecurAgent", "ra-bundle")
+            .with_brew_formula("icehomura/RecurAgent/ra")
             .with_cargo_dist_app("ra")
     }
 
@@ -210,15 +210,15 @@ mod tests {
             "assets": [
                 {
                     "name": "ra-bundle-aarch64-apple-darwin.tar.gz",
-                    "browser_download_url": "https://github.com/icehomura/ra/releases/download/v9.9.9/ra-bundle-aarch64-apple-darwin.tar.gz"
+                    "browser_download_url": "https://github.com/icehomura/RecurAgent/releases/download/v9.9.9/ra-bundle-aarch64-apple-darwin.tar.gz"
                 },
                 {
                     "name": "ra-bundle-x86_64-unknown-linux-gnu.tar.gz",
-                    "browser_download_url": "https://github.com/icehomura/ra/releases/download/v9.9.9/ra-bundle-x86_64-unknown-linux-gnu.tar.gz"
+                    "browser_download_url": "https://github.com/icehomura/RecurAgent/releases/download/v9.9.9/ra-bundle-x86_64-unknown-linux-gnu.tar.gz"
                 },
                 {
                     "name": "ra-bundle-x86_64-pc-windows-msvc.zip",
-                    "browser_download_url": "https://github.com/icehomura/ra/releases/download/v9.9.9/ra-bundle-x86_64-pc-windows-msvc.zip"
+                    "browser_download_url": "https://github.com/icehomura/RecurAgent/releases/download/v9.9.9/ra-bundle-x86_64-pc-windows-msvc.zip"
                 }
             ]
         })

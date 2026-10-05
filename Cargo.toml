@@ -50,7 +50,7 @@ edition = "2024"
 rust-version = "1.85.0"
 authors = ["RecurAgent team"]
 license = "Apache-2.0"
-repository = "https://github.com/icehomura/ra"
+repository = "https://github.com/icehomura/RecurAgent"
 [workspace.lints.rust]
 unsafe_code = "deny"
 [workspace.dependencies]

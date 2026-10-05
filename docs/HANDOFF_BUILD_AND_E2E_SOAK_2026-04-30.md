@@ -4,7 +4,7 @@ Audience: another agent (or human) running on a different machine, cold,
 to compile `ra` and run the e2e soaking suite against either a local
 build or the deployed fleet.
 
-Repo: `https://github.com/icehomura/ra`
+Repo: `https://github.com/icehomura/RecurAgent`
 Reference commit: `e256e6b5` (current `main` at handoff time)
 
 ---
@@ -50,7 +50,7 @@ System deps (if missing): `cmake`, `pkg-config`, OpenSSL is **not** required (th
 ## 2. Clone and orient
 
 ```bash
-git clone https://github.com/icehomura/ra.git
+git clone https://github.com/icehomura/RecurAgent.git
 cd ra
 git checkout e256e6b5   # or current main
 ```

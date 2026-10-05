@@ -1,10 +1,10 @@
-# @icehomura/ra
+# @icehomura/RecurAgent
 
-One-line installer for the [RecurAgent](https://github.com/icehomura/ra) server — a
+One-line installer for the [RecurAgent](https://github.com/icehomura/RecurAgent) server — a
 Rust-native, API-first Agentic OS.
 
 ```bash
-npm install -g @icehomura/ra
+npm install -g @icehomura/RecurAgent
 ra serve
 ```
 
@@ -33,8 +33,8 @@ macOS Intel is not supported (no prebuilt build is published).
 
 ```bash
 # Homebrew
-brew install icehomura/ra/ra
+brew install icehomura/RecurAgent/ra
 
 # Shell installer (sets up ra serve as a service)
-curl -fsSL https://github.com/icehomura/ra/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/icehomura/RecurAgent/releases/latest/download/install.sh | bash
 ```

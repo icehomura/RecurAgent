@@ -2940,8 +2940,8 @@ client replay repair is in progress. This candidate is rejected before copying
 any private provider profile or starting another real-provider 30+4 run.
 
 Separately, fixes for already-merged #2239 and #2240 are published in isolated
-follow-up PRs [#2261](https://github.com/icehomura/ra/pull/2261) and
-[#2262](https://github.com/icehomura/ra/pull/2262). They are open, not merged,
+follow-up PRs [#2261](https://github.com/icehomura/RecurAgent/pull/2261) and
+[#2262](https://github.com/icehomura/RecurAgent/pull/2262). They are open, not merged,
 and not silently included in these primary-worktree binaries. Their PR reports
 distinguish focused passing tests, upstream full-suite failures, and platform
 validation limitations.
@@ -3150,13 +3150,13 @@ this new long-run rejection.
 The original #2239/#2240 were already merged, so their fixes remain separate
 open follow-ups, not changes silently integrated into these dirty worktrees:
 
-- [#2261](https://github.com/icehomura/ra/pull/2261), head
+- [#2261](https://github.com/icehomura/RecurAgent/pull/2261), head
   `6aae774d87a913ef12139121aa0849865634b59a`: authentication-store safety and
   relocation/error-handling fixes, plus correctly serialized Windows readiness
   test fixtures. All scheduled checks pass; native Windows completed at
   2026-09-05 09:06:20 UTC. Its test-only Windows file-store override does not
   implement or claim a production Windows credential backend.
-- [#2262](https://github.com/icehomura/ra/pull/2262), head
+- [#2262](https://github.com/icehomura/RecurAgent/pull/2262), head
   `b26702dcb5f36a936aefcd98b54b2954dc8d114d`: fenced peer cache/config publication,
   valid TOML strings and safe exclusion updates. All scheduled checks pass;
   Windows completed at07:59:49 UTC. Unix no-follow/symlink/hardlink checks remain

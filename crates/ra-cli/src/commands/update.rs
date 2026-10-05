@@ -252,11 +252,11 @@ mod tests {
     #[test]
     fn defer_to_package_manager_exits_ten_and_prints_cmd() {
         let plan = UpdatePlan::DeferToPackageManager {
-            cmd: "brew upgrade icehomura/ra/ra".into(),
+            cmd: "brew upgrade icehomura/RecurAgent/ra".into(),
         };
         let (text, _json, code) = render_check(&plan, &InstallMethod::Homebrew, &spec());
         assert_eq!(code, EXIT_UPDATE_AVAILABLE);
-        assert!(text.contains("brew upgrade icehomura/ra/ra"));
+        assert!(text.contains("brew upgrade icehomura/RecurAgent/ra"));
     }
 
     #[test]

@@ -1,7 +1,7 @@
 /**
  * M9 wire-level e2e: `task/output/read`.
  *
- * Issue: https://github.com/icehomura/ra/issues/647
+ * Issue: https://github.com/icehomura/RecurAgent/issues/647
  * Spec  : api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md §7 / §8
  *
  * The harness asserts what we can observe without seeding private runtime

@@ -1782,7 +1782,7 @@ pub(super) fn detect_browser_executable() -> Option<std::path::PathBuf> {
 pub(super) async fn set_identifiable_user_agent(page: &chromiumoxide::Page) {
     use chromiumoxide::cdp::browser_protocol::network::SetUserAgentOverrideParams;
     let base = page.user_agent().await.unwrap_or_default();
-    let ua = format!("{base} ra-research/1.0 (+https://github.com/icehomura/ra)");
+    let ua = format!("{base} ra-research/1.0 (+https://github.com/icehomura/RecurAgent)");
     let _ = page
         .set_user_agent(SetUserAgentOverrideParams::new(ua.trim().to_string()))
         .await;

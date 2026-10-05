@@ -10,9 +10,9 @@ Connect your LLM API keys and messaging channels. RecurAgent handles conversatio
 
 | Repo | Description |
 |------|-------------|
-| **[RecurAgent](https://github.com/icehomura/ra)** | Core platform — Rust binary, 17 LLM providers, 14 channels, DOT pipeline engine, multi-tenant gateway, web dashboard |
-| **[ra-hub](https://github.com/icehomura/ra-hub)** | Community skill registry — install and share agent skills |
-| **[ra-web](https://github.com/icehomura/ra-web)** | Admin dashboard — React SPA for profile management, metrics, and fleet control |
+| **[RecurAgent](https://github.com/icehomura/RecurAgent)** | Core platform — Rust binary, 17 LLM providers, 14 channels, DOT pipeline engine, multi-tenant gateway, web dashboard |
+| **[ra-hub](https://github.com/icehomura/RecurAgent-hub)** | Community skill registry — install and share agent skills |
+| **[ra-web](https://github.com/icehomura/RecurAgent-web)** | Admin dashboard — React SPA for profile management, metrics, and fleet control |
 
 ## Key Capabilities
 
@@ -37,9 +37,9 @@ ra chat
 
 ## Links
 
-- [User Guide (English)](https://github.com/icehomura/ra/blob/main/docs/user-guide.md)
-- [用户指南 (中文)](https://github.com/icehomura/ra/blob/main/docs/user-guide-zh.md)
-- [中文 README](https://github.com/icehomura/ra/blob/main/README-zh.md)
+- [User Guide (English)](https://github.com/icehomura/RecurAgent/blob/main/docs/user-guide.md)
+- [用户指南 (中文)](https://github.com/icehomura/RecurAgent/blob/main/docs/user-guide-zh.md)
+- [中文 README](https://github.com/icehomura/RecurAgent/blob/main/README-zh.md)
 
 ---
 

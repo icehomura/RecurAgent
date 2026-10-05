@@ -22,8 +22,8 @@ RecurAgent operates in three primary modes:
 
 The `ra serve` backend speaks a single versioned **UI Protocol** (JSON-RPC over WebSocket or stdio), so several front-ends share one server:
 
-- **Web** ([ra-web](https://github.com/icehomura/ra-web)): the React SPA embedded at `/app/` (chat, Slides Studio, Sites, Voice). The operator **admin dashboard** at `/admin/` is a separate embedded app in the RecurAgent repo (`dashboard/`).
-- **Terminal** ([ra-tui](https://github.com/icehomura/ra-tui)): a Rust TUI that connects over the UI Protocol (WebSocket to a running `serve`, or a spawned `serve --stdio` child) with live streaming, approvals, diffs, and onboarding.
+- **Web** ([ra-web](https://github.com/icehomura/RecurAgent-web)): the React SPA embedded at `/app/` (chat, Slides Studio, Sites, Voice). The operator **admin dashboard** at `/admin/` is a separate embedded app in the RecurAgent repo (`dashboard/`).
+- **Terminal** ([ra-tui](https://github.com/icehomura/RecurAgent-tui)): a Rust TUI that connects over the UI Protocol (WebSocket to a running `serve`, or a spawned `serve --stdio` child) with live streaming, approvals, diffs, and onboarding.
 
 ## Key Concepts
 

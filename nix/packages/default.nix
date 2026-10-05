@@ -29,7 +29,7 @@ pkgs.buildEnv {
 
   meta = with lib; {
     description = "ra - Agentic OS";
-    homepage = "https://github.com/icehomura/ra";
+    homepage = "https://github.com/icehomura/RecurAgent";
     license = licenses.asl20;
     maintainers = [ ];
     platforms = platforms.linux ++ platforms.darwin;

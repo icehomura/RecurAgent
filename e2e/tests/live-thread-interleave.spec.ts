@@ -8,7 +8,7 @@
  * Old (broken) flat-list rendering would interleave: e.g. user1, user2,
  * assistant1's progress events split across both bubbles, then assistant2,
  * then assistant1's final text — pairing breaks. The new thread-by-cmid
- * renderer (ra-web PR #4 / icehomura/ra#627) anchors each response
+ * renderer (ra-web PR #4 / icehomura/RecurAgent#627) anchors each response
  * to its origin user message via `responseToClientMessageId`.
  *
  * The new renderer is BEHIND the feature flag

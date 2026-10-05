@@ -61,7 +61,7 @@ pub struct InstallResult {
 }
 
 const DEFAULT_REGISTRY_URL: &str =
-    "https://raw.githubusercontent.com/icehomura/ra-hub/main/registry.json";
+    "https://raw.githubusercontent.com/icehomura/RecurAgent-hub/main/registry.json";
 
 /// Pre-built binary info for a specific platform.
 #[derive(Debug, Clone, Deserialize)]

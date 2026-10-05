@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, type DeploymentMode } from '../../api'
 
 const INSTALL_URL =
-  'https://github.com/icehomura/ra/releases/latest/download/install.sh'
+  'https://github.com/icehomura/RecurAgent/releases/latest/download/install.sh'
 
 type Guidance = {
   tone: 'ok' | 'info' | 'warn'

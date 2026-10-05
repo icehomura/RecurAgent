@@ -21,7 +21,7 @@ const { spawnSync } = require("child_process");
 const { URL } = require("url");
 
 const VENDOR_DIR = path.join(__dirname, "vendor");
-const REPO = "icehomura/ra";
+const REPO = "icehomura/RecurAgent";
 
 // Every binary the release bundle is expected to contain. `ra` is the
 // server; the rest are the bundled skills discovered as siblings at runtime.
@@ -39,7 +39,7 @@ const EXPECTED_BINS = [
 ];
 
 function fail(msg) {
-  console.error("\n[@icehomura/ra] install failed: " + msg + "\n");
+  console.error("\n[@icehomura/RecurAgent] install failed: " + msg + "\n");
   process.exit(1);
 }
 
@@ -237,14 +237,14 @@ function finalizeAndVerify() {
 function main() {
   if (process.env.ra_SKIP_DOWNLOAD === "1") {
     console.log(
-      "[@icehomura/ra] ra_SKIP_DOWNLOAD=1 set; skipping bundle download."
+      "[@icehomura/RecurAgent] ra_SKIP_DOWNLOAD=1 set; skipping bundle download."
     );
     return;
   }
 
   const target = resolveTarget();
   const url = bundleUrl(target);
-  console.log("[@icehomura/ra] downloading " + url);
+  console.log("[@icehomura/RecurAgent] downloading " + url);
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ra-npm-"));
   const archiveFile = path.join(tmpDir, "bundle." + target.ext);
@@ -261,7 +261,7 @@ function main() {
       // non-fatal cleanup failure
     }
     console.log(
-      "[@icehomura/ra] installed ra + " +
+      "[@icehomura/RecurAgent] installed ra + " +
         (EXPECTED_BINS.length - 1) +
         " bundled skills into vendor/"
     );

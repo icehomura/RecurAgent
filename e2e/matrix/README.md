@@ -1,6 +1,6 @@
 # M22-H Onboarding Operational Matrix
 
-Issue: [#1056](https://github.com/icehomura/ra/issues/1056)
+Issue: [#1056](https://github.com/icehomura/RecurAgent/issues/1056)
 Contract: [UPCR-2026-018 Local Solo Onboarding And Policy Inspection](../../docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_018_LOCAL_SOLO_ONBOARDING_AND_POLICY.md)
 
 The matrix is a scenario-driven harness that exercises the AppUI onboarding

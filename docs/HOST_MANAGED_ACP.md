@@ -30,7 +30,7 @@ handle; all of it disappears when the worker exits.
 Host-managed execution is a distinct, opt-in mode. It does not replace ordinary
 ACP execution or its configured runtime. Upstream moved ordinary ACP turns into
 the ra UI Protocol (OUP) dispatcher in
-[#2265](https://github.com/icehomura/ra/pull/2265). The ordinary adapter stays
+[#2265](https://github.com/icehomura/RecurAgent/pull/2265). The ordinary adapter stays
 on that dispatcher. Host-managed mode uses the current shared `ra_agent::Agent`
 loop through a separate ACP adapter with private, memory-only session bookkeeping.
 

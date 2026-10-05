@@ -186,7 +186,7 @@ mod tests {
     use crate::report::CheckStatus;
 
     fn spec() -> ProductSpec {
-        ProductSpec::new("ra", "ra", "1.0.0", "icehomura/ra", "ra-bundle")
+        ProductSpec::new("ra", "ra", "1.0.0", "icehomura/RecurAgent", "ra-bundle")
     }
 
     #[test]
@@ -234,7 +234,7 @@ mod tests {
         // checks must PASS, not warn, and on-PATH must not suggest a fix.
         let located = LocatedBinaries::default();
         let exe = PathBuf::from(
-            "C:/Users/u/AppData/Roaming/npm/node_modules/@icehomura/ra/node_modules/.bin_real/ra.exe",
+            "C:/Users/u/AppData/Roaming/npm/node_modules/@icehomura/RecurAgent/node_modules/.bin_real/ra.exe",
         );
         let on_path = on_path_check(&located, Some(exe.as_path()), &InstallMethod::Npm, &spec());
         assert_eq!(on_path.status, CheckStatus::Pass);

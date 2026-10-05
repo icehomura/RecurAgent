@@ -2539,7 +2539,7 @@ mod tests {
     }
 
     /// Regression test for the M11-F production crashloop tracked in
-    /// `icehomura/ra#899`:
+    /// `icehomura/RecurAgent#899`:
     ///
     /// `ra serve` and `ra gateway` are separate OS processes,
     /// both calling `ProfileRuntime::bootstrap` against the same
