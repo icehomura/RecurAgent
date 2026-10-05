@@ -460,23 +460,23 @@ def _uniffi_check_contract_api_version(lib):
         raise InternalError("UniFFI contract version mismatch: try cleaning and rebuilding your project")
 
 def _uniffi_check_api_checksums(lib):
-    if lib.uniffi_ra_uniffi_checksum_func_embedding_model_ensure() != 45224:
+    if lib.uniffi_ra_uniffi_checksum_func_embedding_model_ensure() != 51633:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    if lib.uniffi_ra_uniffi_checksum_func_embedding_model_status() != 15934:
+    if lib.uniffi_ra_uniffi_checksum_func_embedding_model_status() != 44004:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    if lib.uniffi_ra_uniffi_checksum_method_runtime_embed() != 8927:
+    if lib.uniffi_ra_uniffi_checksum_method_runtime_embed() != 5237:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    if lib.uniffi_ra_uniffi_checksum_method_runtime_memory_load() != 55125:
+    if lib.uniffi_ra_uniffi_checksum_method_runtime_memory_load() != 36857:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    if lib.uniffi_ra_uniffi_checksum_method_runtime_memory_search() != 36497:
+    if lib.uniffi_ra_uniffi_checksum_method_runtime_memory_search() != 31306:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    if lib.uniffi_ra_uniffi_checksum_method_runtime_memory_stats() != 2345:
+    if lib.uniffi_ra_uniffi_checksum_method_runtime_memory_stats() != 57661:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    if lib.uniffi_ra_uniffi_checksum_method_runtime_memory_upsert() != 4504:
+    if lib.uniffi_ra_uniffi_checksum_method_runtime_memory_upsert() != 29275:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    if lib.uniffi_ra_uniffi_checksum_method_runtime_run_task() != 132:
+    if lib.uniffi_ra_uniffi_checksum_method_runtime_run_task() != 23722:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    if lib.uniffi_ra_uniffi_checksum_constructor_runtime_new() != 17041:
+    if lib.uniffi_ra_uniffi_checksum_constructor_runtime_new() != 62768:
         raise InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
 
 # A ctypes library to expose the extern-C FFI definitions.
@@ -1126,7 +1126,8 @@ class Config:
     Whether an `embed-llama` build may download the default embedding
     model (EmbeddingGemma-300M, 334 MB, once, into `<data_dir>/models/`)
     when `embedding_model_path` is unset and the file is not on disk.
-    Default `true` (`RA_NO_MODEL_DOWNLOAD=1` in the environment forces
+    Default `true` (`RA_NO_MODEL_DOWNLOAD=1`, legacy
+    `RA_NO_MODEL_DOWNLOAD=1`, in the environment forces
     `false`). The download blocks [`Runtime::new`]; hosts that want to
     control it call [`embedding_model_ensure`] first. With `false` and no
     model the runtime is keyword-only (`embed` raises `NoEmbedder`).
@@ -1686,7 +1687,7 @@ class _UniffiConverterSequenceFloat(_UniffiConverterRustBuffer):
 # objects.
 class RuntimeProtocol(typing.Protocol):
     """
-    An embedded ra runtime — the idiomatic counterpart of the C-ABI's opaque
+    An embedded RecurAgent runtime — the idiomatic counterpart of the C-ABI's opaque
     `RaRuntime*`. Shared as `Arc<Runtime>`; construct with [`Runtime::new`].
 
     Unlike the raw C handle (which the caller must manually free and never share
@@ -1747,7 +1748,7 @@ class RuntimeProtocol(typing.Protocol):
 # Runtime is a Rust-only trait - it's a wrapper around a Rust implementation.
 class Runtime():
     """
-    An embedded ra runtime — the idiomatic counterpart of the C-ABI's opaque
+    An embedded RecurAgent runtime — the idiomatic counterpart of the C-ABI's opaque
     `RaRuntime*`. Shared as `Arc<Runtime>`; construct with [`Runtime::new`].
 
     Unlike the raw C handle (which the caller must manually free and never share
@@ -1932,7 +1933,8 @@ def embedding_model_ensure(data_dir: "str",download: "bool") -> "str":
     Blocks for the whole transfer, so call it from a plain thread before
     [`Runtime::new`] when the host wants to own the timing. Raises
     [`RaError::Embed`] when the file is absent and `download` is false (or
-    `RA_NO_MODEL_DOWNLOAD` is set), or the download fails to verify.
+    `RA_NO_MODEL_DOWNLOAD`, legacy `RA_NO_MODEL_DOWNLOAD`, is set), or the
+    download fails to verify.
     """
 
     _UniffiConverterString.check_lower(data_dir)
