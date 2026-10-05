@@ -1,16 +1,3 @@
-<div align="center">
-
-<pre>
- ██████╗  ██████╗████████╗ ██████╗ ███████╗
-██╔═══██╗██╔════╝╚══██╔══╝██╔═══██╗██╔════╝
-██║   ██║██║        ██║   ██║   ██║███████╗
-██║   ██║██║        ██║   ██║   ██║╚════██║
-╚██████╔╝╚██████╗   ██║   ╚██████╔╝███████║
- ╚═════╝  ╚═════╝   ╚═╝    ╚═════╝ ╚══════╝
-</pre>
-
-</div>
-
 # ra
 
 **用 Rust 编写、可嵌入应用的 AI Agent Harness 内核。**
@@ -25,7 +12,7 @@ ra 的核心架构是 **可复用的内核 + 可编程的协议边界**。应用
 通过同一套 OUP 契约操作这个内核。
 
 [构建应用](#基于-ra-构建应用) · [通过 OUP 控制内核](#通过-oup-控制内核) ·
-[文档](https://your-org.github.io/octos/zh/) · [English](README.md)
+[文档](https://your-org.github.io/ra/zh/) · [English](README.md)
 
 [OctoSense 集成源码导读](docs/octosense-integration-walkthrough.md)
 用一个日历请求串起请求准入、Tokio 任务、宿主工具调用和答案返回，
@@ -38,8 +25,8 @@ ra 的核心架构是 **可复用的内核 + 可编程的协议边界**。应用
 
 | 应用 | 从哪里开始 |
 | --- | --- |
-| **[Octoscode](https://github.com/your-org/ra-tui)** | 安装终端客户端；首次启动时会自动准备兼容的本地 Octos 运行时。 |
-| **[Octoscode Web](https://github.com/your-org/ra-tui-web)** | 按照[入门指南](https://github.com/your-org/ra-tui-web/blob/main/docs/getting-started.md)部署浏览器客户端，并连接 Octos 运行时。 |
+| **[ra-tui](https://github.com/your-org/ra-tui)** | 安装终端客户端；首次启动时会自动准备兼容的本地 ra 运行时。 |
+| **[ra-tui-web](https://github.com/your-org/ra-tui-web)** | 按照[入门指南](https://github.com/your-org/ra-tui-web/blob/main/docs/getting-started.md)部署浏览器客户端，并连接 ra 运行时。 |
 
 本仓库面向嵌入、扩展或集成 Harness 内核的开发者。应用安装和日常编码操作，
 请查看上面的客户端仓库。
@@ -330,7 +317,7 @@ Goal 记录 Agent 要完成什么，Loop 安排周期性轮次，Monitor 观察�
 - [Harness 开发者接口](docs/ra_HARNESS_DEVELOPER_INTERFACE.md)
 - [产物与工作流集成指南](docs/ra_HARNESS_DEVELOPER_GUIDE.md)
 - [Harness 兼容性与版本管理](docs/ra_HARNESS_ABI_VERSIONING.md)
-- [文档站点](https://your-org.github.io/octos/zh/)
+- [文档站点](https://your-org.github.io/ra/zh/)
 
 ## 参与开发
 
