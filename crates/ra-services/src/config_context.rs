@@ -278,47 +278,34 @@ mod tests {
 
     // ── precedence ────────────────────────────────────────────────────
 
-    /// The precedence rule, end to end: new-name env wins, the legacy env still
-    /// works, and with no override the default is `~/.ra`.
+    /// The precedence rule, end to end: an explicit env override wins, and
+    /// with no override the default is `~/.ra`.
     #[test]
-    fn precedence_new_env_then_legacy_env_then_fresh() {
+    fn precedence_env_then_fresh() {
         let tmp = tempfile::tempdir().unwrap();
         let (_lock, _env) = pivot(tmp.path());
-        let new_state = tmp.path().join("new-state");
-        let legacy_state = tmp.path().join("legacy-state");
-        let new_config = tmp.path().join("new-config");
-        let legacy_config = tmp.path().join("legacy-config");
+        let state = tmp.path().join("state");
+        let config = tmp.path().join("config");
 
-        // State home: RA_HOME wins over RA_HOME…
-        set_env("RA_HOME", new_state.to_str().unwrap());
-        set_env("RA_HOME", legacy_state.to_str().unwrap());
+        // State home: `RA_HOME` wins.
+        set_env("RA_HOME", state.to_str().unwrap());
         let ctx = resolve_config_context(None);
-        assert_eq!(ctx.data_dir, new_state, "RA_HOME must win over RA_HOME");
+        assert_eq!(ctx.data_dir, state, "RA_HOME must win");
         assert!(!ctx.is_default);
-        // …and the legacy name alone still works.
-        remove_env("RA_HOME");
-        let ctx = resolve_config_context(None);
-        assert_eq!(ctx.data_dir, legacy_state, "RA_HOME must still work");
 
-        // Config home: RA_CONFIG_DIR wins over RA_CONFIG_DIR, and the
-        // config dir governs config + auth even while a state override is set.
-        set_env("RA_CONFIG_DIR", new_config.to_str().unwrap());
-        set_env("RA_CONFIG_DIR", legacy_config.to_str().unwrap());
+        // Config home: `RA_CONFIG_DIR` governs config + auth even while a state
+        // override is set.
+        set_env("RA_CONFIG_DIR", config.to_str().unwrap());
         let ctx = resolve_config_context(None);
-        assert_eq!(ctx.config_home, new_config);
-        assert_eq!(ctx.auth_home, new_config);
-        remove_env("RA_CONFIG_DIR");
-        let ctx = resolve_config_context(None);
-        assert_eq!(ctx.config_home, legacy_config);
-        assert_eq!(ctx.auth_home, legacy_config, "config dir governs auth_home");
+        assert_eq!(ctx.config_home, config);
+        assert_eq!(ctx.auth_home, config, "config dir governs auth_home");
 
         // No override: the default is `~/.ra`, regardless of what exists on
-        // disk — the resolver never consults a legacy directory. `dirs`
+        // disk — the resolver never consults another directory. `dirs`
         // resolves the Windows known folders from the user token rather than
         // `HOME`, so the pivot only moves the default locations on unix.
         #[cfg(not(windows))]
         {
-            remove_env("RA_CONFIG_DIR");
             remove_env("RA_CONFIG_DIR");
             remove_env("RA_HOME");
 
@@ -328,15 +315,13 @@ mod tests {
         }
     }
 
-    /// Empty-string values (both name generations) are treated as unset.
+    /// Empty-string values are treated as unset.
     #[test]
     fn empty_overrides_are_unset() {
         let tmp = tempfile::tempdir().unwrap();
         let (_lock, _env) = pivot(tmp.path());
 
         set_env("RA_HOME", "");
-        set_env("RA_HOME", "");
-        set_env("RA_CONFIG_DIR", "");
         set_env("RA_CONFIG_DIR", "");
         let ctx = resolve_config_context(None);
         assert!(ctx.is_default, "empty overrides must not count as explicit");
@@ -351,7 +336,6 @@ mod tests {
         let (_lock, _env) = pivot(tmp.path());
         let default_config = tmp.path().join(".config").join("ra");
 
-        // RA_HOME (the legacy env alias) set to the default location.
         set_env("RA_HOME", tmp.path().join(".ra").to_str().unwrap());
         let ctx = resolve_config_context(None);
         assert!(ctx.is_default, "RA_HOME==~/.ra must be is_default");
@@ -360,14 +344,6 @@ mod tests {
             ctx.config_home, default_config,
             "RA_HOME==~/.ra must resolve config_home to the brand default (no split-brain)"
         );
-
-        // RA_HOME explicitly set to the new default location.
-        remove_env("RA_HOME");
-        set_env("RA_HOME", tmp.path().join(".ra").to_str().unwrap());
-        let ctx = resolve_config_context(None);
-        assert!(ctx.is_default, "RA_HOME==~/.ra must be is_default");
-        assert_eq!(ctx.data_dir, tmp.path().join(".ra"));
-        assert_eq!(ctx.config_home, default_config);
     }
 
     // ── data_dir / config_home / auth_home ────────────────────────────
