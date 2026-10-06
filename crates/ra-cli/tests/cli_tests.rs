@@ -121,9 +121,9 @@ const MODEL_CATALOG: &str = include_str!(concat!(
 /// Run the binary against the compiled-in catalog, not whatever catalog a
 /// developer's own `~/.ra` holds: catalog loading is disk-first, so a
 /// machine that has run RecurAgent would otherwise shadow the SSOT and break the
-/// comparisons below. Also clears the completion channel (both the new and
-/// the legacy variable) so a globally exported var can't turn the invocation
-/// into a completion answer.
+/// comparisons below. Also clears the completion channel (`RA_COMPLETE`, plus
+/// a generic `COMPLETE` for another tool) so a globally exported var can't
+/// turn the invocation into a completion answer.
 fn run_completions(args: &[&str]) -> String {
     static CALL: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let scratch = std::env::temp_dir().join(format!(
@@ -135,7 +135,6 @@ fn run_completions(args: &[&str]) -> String {
     let mut cmd = Command::new(ra_binary());
     cmd.args(args)
         .current_dir(&scratch)
-        .env_remove("RA_COMPLETE")
         .env_remove("RA_COMPLETE")
         .env_remove("COMPLETE");
     for home_var in ["HOME", "USERPROFILE"] {
@@ -236,23 +235,22 @@ fn test_completions_env_channel_wiring() {
     assert!(answered.status.success());
     let stdout = String::from_utf8_lossy(&answered.stdout);
     assert!(
-        stdout.contains("_clap_complete_RA"),
+        stdout.contains("_clap_complete_ra"),
         "the binary must answer the completion channel with the registration script"
     );
 
-    // The legacy `RA_COMPLETE` name keeps shells registered before the
-    // rename working, so it must still answer the channel.
-    let legacy = Command::new(ra_binary())
-        .env_remove("RA_COMPLETE")
+    // A fresh child that exports the variable itself (a shell re-registering
+    // the channel) must answer the same way: one spelling, one set.
+    let exported = Command::new(ra_binary())
         .env("RA_COMPLETE", "bash")
         .current_dir(&scratch)
         .output()
         .expect("Failed to execute command");
-    assert!(legacy.status.success());
-    let stdout = String::from_utf8_lossy(&legacy.stdout);
+    assert!(exported.status.success());
+    let stdout = String::from_utf8_lossy(&exported.stdout);
     assert!(
-        stdout.contains("_clap_complete_RA"),
-        "the legacy RA_COMPLETE name must still answer the completion channel"
+        stdout.contains("_clap_complete_ra"),
+        "an explicit RA_COMPLETE export must answer the completion channel"
     );
 
     // The channel is namespaced: a generic COMPLETE exported for some other
@@ -260,7 +258,6 @@ fn test_completions_env_channel_wiring() {
     // empty value keeps the documented off switch.
     let unaffected = Command::new(ra_binary())
         .env("COMPLETE", "bash")
-        .env_remove("RA_COMPLETE")
         .env_remove("RA_COMPLETE")
         .arg("--version")
         .output()
@@ -278,7 +275,6 @@ fn test_completions_env_channel_wiring() {
 
     let disabled = Command::new(ra_binary())
         .env("RA_COMPLETE", "")
-        .env_remove("RA_COMPLETE")
         .arg("--version")
         .output()
         .expect("Failed to execute command");
@@ -301,7 +297,7 @@ fn test_completions_bash() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Bash completions should contain function definitions
-    assert!(stdout.contains("_RA"));
+    assert!(stdout.contains("_ra"));
 }
 
 #[test]
