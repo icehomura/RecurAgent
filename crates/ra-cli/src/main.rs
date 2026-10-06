@@ -108,6 +108,22 @@ fn main() -> Result<()> {
 }
 
 fn run_cli() -> Result<()> {
+    // Captured once: when the invocation turns out to be the terminal UI (no
+    // subcommand), the raw argv is forwarded to `ra_tui::run_with` — the TUI's
+    // launch flags (`--mode`, `--endpoint`, `--stdio-command`, `--no-splash`,
+    // …) belong to ITS parser, not to this one.
+    let argv: Vec<std::ffi::OsString> = std::env::args_os().collect();
+
+    // Answer shell completion requests before argument parsing (#2413): with
+    // `RA_COMPLETE=<shell>` set the shell sources the registration script and
+    // calls back into this binary on every tab; without it this is a no-op. The
+    // var is namespaced — a generic `COMPLETE` exported for some other tool
+    // must not brick every RecurAgent invocation. Must precede parsing —
+    // mid-edit arguments don't parse cleanly.
+    clap_complete::CompleteEnv::with_factory(<Args as clap::CommandFactory>::command)
+        .var(COMPLETE_VAR)
+        .complete();
+
     install_error_hooks()?;
 
     // Hidden chaos-test switch (outer-loop blueprint step ②): when
@@ -115,32 +131,65 @@ fn run_cli() -> Result<()> {
     // hooks are installed. Integration tests use this to drive the REAL
     // production panic-hook path under a broken-pipe stderr and assert no
     // second panic / no SIGABRT. Never set in normal operation.
+    //
+    // It stays ahead of the TUI dispatch below: the integration test drives a
+    // bare `ra` (no subcommand), i.e. exactly the invocation that becomes the
+    // terminal UI.
     if ra_core::brand::env_compat_str("TEST_PANIC_AFTER_BOOT").as_deref() == Some("1") {
         panic!("__test_panic__: intentional panic for production hook verification");
     }
-
-    // Answer shell completion requests before argument parsing (#2413): with
-    // `RA_COMPLETE=<shell>` set the shell sources the registration script and
-    // calls back into this binary on every tab; without it this is a no-op. The
-    // legacy `RA_COMPLETE` keeps shells registered before the rename working
-    // (new name wins when both are set). The var is namespaced — a generic
-    // `COMPLETE` exported for some other tool must not brick every RecurAgent
-    // invocation. Must precede parsing — mid-edit arguments don't parse cleanly.
-    clap_complete::CompleteEnv::with_factory(<Args as clap::CommandFactory>::command)
-        .var(complete_env_var())
-        .complete();
 
     // Parse into ArgMatches first (this preserves clap's --help/--version/error
     // handling exactly as `Args::parse()` did), materialize the typed Args, then
     // merge the layered `cli.<cmd>` startup defaults BEFORE any downstream reads
     // of the subcommand. Precedence: explicit CLI flag > env var > config.json
     // `cli.<cmd>` > built-in default (see `ra_cli::config_layer`).
-    let matches = Args::command().get_matches();
+    let matches = match Args::command().try_get_matches_from(argv.iter().cloned()) {
+        Ok(matches) => matches,
+        Err(error) => {
+            // An invocation this parser rejects outright and that names no
+            // subcommand is not a ra-cli command line — it is the TUI's own
+            // flag set (`ra --endpoint …`, `ra --no-splash`), so the raw argv
+            // goes to the TUI's parser. Everything else (help/version, an
+            // invalid subcommand, a bad flag inside a real subcommand) keeps
+            // clap's message and exit code.
+            #[cfg(feature = "tui")]
+            if tui_owns_invocation(&error, &argv) {
+                return ra_tui::run_with(argv);
+            }
+            error.exit();
+        }
+    };
     let mut args = Args::from_arg_matches(&matches).unwrap_or_else(|error| error.exit());
+
+    // `ra` with NO subcommand starts the terminal UI, in-process: the TUI is
+    // what the bare command does, never a subcommand of its own. In a build
+    // without the `tui` feature there is no UI to start, so a bare `ra` keeps
+    // clap's missing-subcommand contract (exit code 2).
+    if args.command.is_none() {
+        #[cfg(feature = "tui")]
+        {
+            return ra_tui::run_with(argv);
+        }
+        #[cfg(not(feature = "tui"))]
+        {
+            Args::command()
+                .error(
+                    clap::error::ErrorKind::MissingSubcommand,
+                    "'ra' requires a subcommand but one was not provided",
+                )
+                .exit();
+        }
+    }
+
     // Protected children must enter confinement before config, credentials,
     // tracing workers or a Tokio runtime can acquire ambient authority.
-    if matches!(&args.command, commands::Command::Acp(command) if command.host_managed) {
-        return args.command.execute();
+    if matches!(&args.command, Some(commands::Command::Acp(command)) if command.host_managed) {
+        return args
+            .command
+            .take()
+            .expect("the match above proved a subcommand is present")
+            .execute();
     }
     ra_cli::config_layer::apply(&mut args, &matches)?;
 
@@ -148,7 +197,7 @@ fn run_cli() -> Result<()> {
     #[allow(unused_mut)]
     let mut log_dir: Option<std::path::PathBuf> = None;
     #[cfg(feature = "api")]
-    if let commands::Command::Serve(ref cmd) = args.command {
+    if let Some(commands::Command::Serve(cmd)) = &args.command {
         let data_dir = commands::resolve_data_dir(cmd.data_dir.clone())?;
         let dir = data_dir.join("logs");
         std::fs::create_dir_all(&dir).ok();
@@ -160,10 +209,49 @@ fn run_cli() -> Result<()> {
     // `profile` payloads, `chat --json`) and must keep it pure — one stray log
     // line corrupts it — so their console logs are routed to stderr. See
     // [`commands::reserve_stdout`] for the exact set.
-    let reserve_stdout = commands::reserve_stdout(&args.command);
+    let reserve_stdout = commands::reserve_stdout(args.command.as_ref());
     let _log_guard = init_tracing(log_dir.as_deref(), reserve_stdout)?;
 
-    args.command.execute()
+    args.command
+        .take()
+        .expect("the no-subcommand case returned above")
+        .execute()
+}
+
+/// Whether a clap parse failure means "this invocation belongs to the terminal
+/// UI" rather than "this is a malformed `ra` command line".
+///
+/// `ra` with no subcommand IS the TUI, and its launch flags are the TUI's own,
+/// so the outer parser cannot judge them — it rejects the whole line before the
+/// TUI sees it. The subcommand slot is the first token after the program name,
+/// which is exactly what this parser looks at, so:
+///
+/// * help/version stay with clap — `ra --help` must list the commands;
+/// * a real `ra` subcommand keeps clap's error, however malformed the rest of
+///   the line is (`ra chat --bogus` must not become a TUI flag error);
+/// * a leading flag (`ra --endpoint …`, `ra --no-splash`) or a subcommand the
+///   TUI's own dispatch routes (`ra olp-mcp-serve`, `ra outer-duty`) is handed
+///   to the TUI, which parses it and reports any genuinely unknown flag itself;
+/// * anything else — a mistyped subcommand — keeps clap's message, which
+///   suggests the intended command.
+#[cfg(feature = "tui")]
+fn tui_owns_invocation(error: &clap::Error, argv: &[std::ffi::OsString]) -> bool {
+    if matches!(
+        error.kind(),
+        clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion
+    ) {
+        return false;
+    }
+    let Some(first) = argv.get(1).and_then(|arg| arg.to_str()) else {
+        return false;
+    };
+    if Args::command()
+        .get_subcommands()
+        .any(|command| command.get_name() == first)
+    {
+        return false;
+    }
+    first.starts_with('-') || ra_tui::cmd::SUBCOMMANDS.contains(&first)
 }
 
 /// Initialize tracing with console output and optional rolling file output.

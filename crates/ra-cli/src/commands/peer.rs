@@ -356,7 +356,7 @@ mod tests {
             "rafix",
         ])
         .expect("cli parse");
-        let crate::commands::Command::Peer(peer) = parsed.command else {
+        let Some(crate::commands::Command::Peer(peer)) = parsed.command else {
             panic!("expected peer command");
         };
         #[expect(

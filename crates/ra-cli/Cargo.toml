@@ -11,6 +11,12 @@ name = "ra"
 path = "src/main.rs"
 
 [dependencies]
+# The terminal UI (crate `ra-tui`), linked INTO this binary behind the
+# default-on `tui` feature: `ra` with no subcommand starts the TUI in-process,
+# and the kernel it talks to for a local launch is this same executable
+# (`ra serve --stdio`) — no separate `ra-tui` binary ships. Optional so
+# `--no-default-features --features api` (ra-headless) links no TUI at all.
+ra-tui = { path = "../../tui", optional = true }
 # In-process llama.cpp GGUF embedding provider. Deliberately NOT target-gated:
 # unlike ra-embed-mlx this builds on macOS, Linux and Windows, ARM and x86,
 # which is the entire reason it exists. Optional, so it costs nothing until
@@ -161,7 +167,13 @@ keyring = { workspace = true, features = ["windows-native"] }
 # `embed-llama` is on by default: the in-process EmbeddingGemma embedder
 # behind memory search (docs/adr/personal-memory-tiers.md). Building it needs
 # cmake + a C++ toolchain; `--no-default-features --features api` opts out.
-default = ["api", "embed-llama", "impersonate"]
+default = ["api", "embed-llama", "impersonate", "tui"]
+# The in-binary terminal UI: `ra` with no subcommand hands the process to
+# `ra_tui::run_with`. On by default so the shipped `ra`/`ra-full` binaries open
+# the TUI; a build without it (`--no-default-features --features api`, the
+# Android/ra-headless kernel) contains no TUI code and keeps clap's
+# missing-subcommand error for a bare `ra`.
+tui = ["dep:ra-tui"]
 # Results-page engines that need a browser-like client (Google's page for
 # simple phones, as SearXNG does; ra-research `impersonate`, BoringSSL,
 # needs cmake). A choice of this binary, not a default of ra-agent: a

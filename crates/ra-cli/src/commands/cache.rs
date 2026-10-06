@@ -1602,7 +1602,10 @@ mod tests {
             "/tmp/ra-cache-tmp",
         ])
         .expect("`ra cache status --json` must parse");
-        assert!(matches!(args.command, crate::commands::Command::Cache(_)));
+        assert!(matches!(
+            args.command,
+            Some(crate::commands::Command::Cache(_))
+        ));
 
         crate::commands::Args::try_parse_from([
             "ra",
@@ -1683,8 +1686,8 @@ mod tests {
         use clap::Parser;
         let json =
             crate::commands::Args::try_parse_from(["ra", "cache", "gate", "--json"]).unwrap();
-        assert!(crate::commands::reserve_stdout(&json.command));
+        assert!(crate::commands::reserve_stdout(json.command.as_ref()));
         let human = crate::commands::Args::try_parse_from(["ra", "cache", "status"]).unwrap();
-        assert!(!crate::commands::reserve_stdout(&human.command));
+        assert!(!crate::commands::reserve_stdout(human.command.as_ref()));
     }
 }

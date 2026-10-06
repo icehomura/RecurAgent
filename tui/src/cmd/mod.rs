@@ -23,7 +23,12 @@ use doctor::DoctorArgs;
 use update::UpdateArgs;
 
 /// Recognized subcommand names. Kept tiny so we never shadow a flag.
-const SUBCOMMANDS: &[&str] = &["update", "doctor", "config", "olp-mcp-serve", "outer-duty"];
+///
+/// Public because the merged `ra` binary reads it: when its own top-level parser
+/// doesn't recognize the invocation, a leading token from this list means the
+/// TUI's dispatch owns it (`ra olp-mcp-serve`), not that the user mistyped a
+/// `ra` subcommand.
+pub const SUBCOMMANDS: &[&str] = &["update", "doctor", "config", "olp-mcp-serve", "outer-duty"];
 
 /// Inspect `argv` (excluding the program name) for a leading subcommand. If the
 /// first non-flag positional is `update`/`doctor`, run it and return its exit
@@ -72,9 +77,9 @@ enum Route {
 
 /// Parse `argv` into a [`Route`] if it leads with a known subcommand; otherwise
 /// `None` (the caller launches the TUI). The synthetic program name keeps
-/// clap's usage strings accurate (e.g. `ra-tui doctor`); the subcommand
+/// clap's usage strings accurate (e.g. `ra doctor`); the subcommand
 /// token is dropped (`skip(2)`) so clap does not see it as a stray positional.
-/// `ra-tui outer-duty` args (manual parse; `--` splits the child command).
+/// `ra outer-duty` args (manual parse; `--` splits the child command).
 /// Strict: unknown flags / missing values / unknown actions are rejected
 /// with exit 2 (route negative golden).
 #[derive(Debug)]
@@ -146,7 +151,7 @@ fn route(argv: &[String]) -> Option<Route> {
     if !SUBCOMMANDS.contains(&first.as_str()) {
         return None;
     }
-    let prog = format!("ra-tui {first}");
+    let prog = format!("ra {first}");
     let sub_argv: Vec<String> = std::iter::once(prog)
         .chain(argv.iter().skip(2).cloned())
         .collect();

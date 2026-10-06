@@ -6165,6 +6165,7 @@ dependencies = [
  "ra-services",
  "ra-store",
  "ra-swarm",
+ "ra-tui",
  "ra-workflows",
  "rand 0.8.5",
  "redb",

@@ -99,8 +99,12 @@ pub use update::UpdateCommand;
 #[command(author, about, long_about = None)]
 #[command(version = version_string())]
 pub struct Args {
+    /// The subcommand to run. Optional: `ra` with no subcommand starts the
+    /// terminal UI (feature `tui`) — the TUI is what the bare command does,
+    /// never a subcommand of its own. In a build without that feature the
+    /// entry point reproduces clap's missing-subcommand error instead.
     #[command(subcommand)]
-    pub command: Command,
+    pub command: Option<Command>,
 }
 
 /// Build a version string like "0.1.0 (abc1234 2026-03-02)".
@@ -204,7 +208,13 @@ pub enum Command {
 ///   JSON.
 ///
 /// Every other command keeps its historical stdout console routing untouched.
-pub fn reserve_stdout(command: &Command) -> bool {
+///
+/// `None` — no subcommand, i.e. the terminal UI (or, without the `tui`
+/// feature, the missing-subcommand error) — reserves nothing.
+pub fn reserve_stdout(command: Option<&Command>) -> bool {
+    let Some(command) = command else {
+        return false;
+    };
     match command {
         Command::Acp(_) | Command::Profile(_) | Command::McpServe(_) | Command::Chat(_) => true,
         // `inbox path` is a machine-readable single path.
@@ -456,7 +466,7 @@ mod reserve_stdout_tests {
         // its tracing logs must route to stderr.
         let args = Args::try_parse_from(["ra", "chat", "--json", "--message", "hi"])
             .expect("`chat --json` must parse");
-        assert!(reserve_stdout(&args.command));
+        assert!(reserve_stdout(args.command.as_ref()));
     }
 
     #[test]
@@ -464,7 +474,7 @@ mod reserve_stdout_tests {
         // Shared OUP bootstrap/progress logs must not split assistant text.
         let args =
             Args::try_parse_from(["ra", "chat", "--message", "hi"]).expect("`chat` must parse");
-        assert!(reserve_stdout(&args.command));
+        assert!(reserve_stdout(args.command.as_ref()));
     }
 
     #[test]
@@ -474,9 +484,9 @@ mod reserve_stdout_tests {
         // JSON stays parseable. Plain `ra doctor` keeps stdout logging.
         let json =
             Args::try_parse_from(["ra", "doctor", "--json"]).expect("`doctor --json` must parse");
-        assert!(reserve_stdout(&json.command));
+        assert!(reserve_stdout(json.command.as_ref()));
         let human = Args::try_parse_from(["ra", "doctor"]).expect("`doctor` must parse");
-        assert!(!reserve_stdout(&human.command));
+        assert!(!reserve_stdout(human.command.as_ref()));
     }
 
     #[test]
@@ -484,7 +494,7 @@ mod reserve_stdout_tests {
         // A non-protocol command (e.g. `status`) is unchanged by the chat-json
         // extension — Serve, Status, etc. never reserve stdout.
         let args = Args::try_parse_from(["ra", "status"]).expect("`status` must parse");
-        assert!(!reserve_stdout(&args.command));
+        assert!(!reserve_stdout(args.command.as_ref()));
     }
 
     #[test]
@@ -492,8 +502,19 @@ mod reserve_stdout_tests {
         // Pre-existing reservations must remain: acp / mcp-serve speak a
         // machine protocol on stdout.
         let acp = Args::try_parse_from(["ra", "acp"]).expect("`acp` must parse");
-        assert!(reserve_stdout(&acp.command));
+        assert!(reserve_stdout(acp.command.as_ref()));
         let mcp = Args::try_parse_from(["ra", "mcp-serve"]).expect("`mcp-serve` must parse");
-        assert!(reserve_stdout(&mcp.command));
+        assert!(reserve_stdout(mcp.command.as_ref()));
+    }
+
+    #[test]
+    fn bare_ra_parses_without_a_subcommand() {
+        // `ra` with no arguments is a valid invocation: it means "start the
+        // terminal UI" (or, without the `tui` feature, clap's
+        // missing-subcommand error at the entry point). Nothing is reserved on
+        // stdout either way.
+        let args = Args::try_parse_from(["ra"]).expect("bare `ra` must parse");
+        assert!(args.command.is_none());
+        assert!(!reserve_stdout(args.command.as_ref()));
     }
 }
