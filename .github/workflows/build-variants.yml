@@ -15,9 +15,9 @@ name: Build Variants
 # Variant recipes (mirroring the Justfile's `just release`):
 #   ra-headless : kernel only — no TUI, no web UI, no local llama.cpp
 #                 (`--no-default-features --features api`)
-#   ra          : kernel + local llama.cpp embeddings, no web UI
+#   ra          : kernel + TUI + local llama.cpp embeddings, no web UI
 #                 (crate default features), bundled per scripts/bundle-release.sh
-#   ra-full     : `ra` with the web UI embed built first + the ra-tui client
+#   ra-full     : `ra` (TUI included) with the web UI embed built first
 on:
   workflow_call:
     inputs:
@@ -156,7 +156,6 @@ jobs:
               ;;
             ra-full)
               cargo build --release -p ra-cli --bin ra
-              cargo build --release --manifest-path tui/Cargo.toml --bin ra-tui
               ;;
             *)
               echo "::error::unknown variant '${{ matrix.variant }}'"
@@ -181,19 +180,9 @@ jobs:
           fi
           rm -rf dist-variant
           mkdir dist-variant
-          # The variant's own kernel build is the only `ra` in this bundle.
+          # The variant's own `ra` is the only binary in this bundle: ra-full
+          # embeds the web UI and (like every `ra` build) the terminal UI.
           cp "target/release/ra${ext}" dist-variant/
-          if [ '${{ matrix.variant }}' = 'ra-full' ]; then
-            # ra-full = ra with the dashboard embedded + the terminal client.
-            # tui/ is its own cargo workspace, so its artifacts land under
-            # tui/target unless CARGO_TARGET_DIR redirects them.
-            if [ -f "tui/target/release/ra-tui${ext}" ]; then
-              tui_bin="tui/target/release/ra-tui${ext}"
-            else
-              tui_bin="target/release/ra-tui${ext}"
-            fi
-            cp "$tui_bin" dist-variant/
-          fi
           # Canonical model catalog (model-provisioning SSOT) ships next to
           # the binary, same as in scripts/bundle-release.sh.
           cp model_catalog.json dist-variant/

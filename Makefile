@@ -23,7 +23,8 @@ dashboard-build: ## Build the embedded /admin/ dashboard.
 
 # There is no bundled web client in this fork: the upstream `ra-web` SPA
 # submodule was removed, so `ra serve` answers 503 "web_bundle_missing" at /app
-# until a client is built into crates/ra-cli/static/web/. Use `ra-tui` instead.
+# until a client is built into crates/ra-cli/static/web/. Use bare `ra`
+# (TUI mode) instead.
 app-build: dashboard-build ## Build the embedded browser assets (/admin/).
 
 dev: app-build serve ## Build browser assets, then start the local web app.

@@ -172,14 +172,15 @@ jobs:
             --pattern 'ra-full-bundle-*' \
             --dir verify
           # Every published sidecar must match the published bytes — this is
-          # the exact verification ra-tui's auto-install performs (#1929).
+          # the exact verification the installers' auto-provision performs
+          # (#1929).
           # Darwin sidecars are produced by shasum, the rest by sha256sum, so
           # checking every downloaded sidecar covers both producer paths.
           (cd verify && sha256sum -c ./*.sha256)
 
           # Readable archives, and the variant split really holds: ra-full
-          # carries the dashboard-embedded ra plus ra-tui, ra-headless is the
-          # kernel-only build.
+          # carries the dashboard-embedded ra (with the terminal UI built in),
+          # ra-headless is the kernel-only build.
           for archive in verify/*.tar.gz; do
             [ -e "$archive" ] || continue
             tar -tzf "$archive" >/dev/null
@@ -189,16 +190,16 @@ jobs:
           # keeps the match working on runners whose tar prints CRLF.
           case " $triples " in
             *" x86_64-unknown-linux-gnu "*)
-              tar -tzf verify/ra-full-bundle-x86_64-unknown-linux-gnu.tar.gz | tr -d '\r' | grep -qE '(^|/)ra-tui$' \
-                || { echo "::error::ra-full bundle is missing ra-tui"; exit 1; }
+              tar -tzf verify/ra-full-bundle-x86_64-unknown-linux-gnu.tar.gz | tr -d '\r' | grep -qE '(^|/)ra$' \
+                || { echo "::error::ra-full bundle is missing the ra binary"; exit 1; }
               tar -tzf verify/ra-headless-bundle-x86_64-unknown-linux-gnu.tar.gz | tr -d '\r' | grep -qE '(^|/)ra$' \
                 || { echo "::error::ra-headless bundle is missing the ra kernel"; exit 1; }
               ;;
           esac
           case " $triples " in
             *" x86_64-pc-windows-msvc "*)
-              unzip -l verify/ra-full-bundle-x86_64-pc-windows-msvc.zip | tr -d '\r' | grep -qE 'ra-tui\.exe$' \
-                || { echo "::error::ra-full bundle is missing ra-tui.exe"; exit 1; }
+              unzip -l verify/ra-full-bundle-x86_64-pc-windows-msvc.zip | tr -d '\r' | grep -qE 'ra\.exe$' \
+                || { echo "::error::ra-full bundle is missing ra.exe"; exit 1; }
               ;;
           esac
 

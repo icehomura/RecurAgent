@@ -25,8 +25,6 @@ set windows-shell := ["C:/Program Files/Git/bin/bash.exe", "-cu"]
 
 kernel  := "ra-cli"
 bin     := "ra"
-tui_dir := "tui"
-tui_bin := "ra-tui"
 dist    := "dist"
 target  := env_var_or_default("CARGO_TARGET_DIR", "target")
 exe     := if os() == "windows" { ".exe" } else { "" }
@@ -43,10 +41,6 @@ _kernel profile:
 _kernel_headless profile:
     cargo build --profile {{profile}} -p {{kernel}} --bin {{bin}} --no-default-features --features api
 
-# terminal client
-_tui profile:
-    cargo build --profile {{profile}} --manifest-path {{tui_dir}}/Cargo.toml --bin {{tui_bin}}
-
 # the embedded web UI (dashboard)
 _dashboard:
     ./scripts/build-dashboard.sh
@@ -54,16 +48,14 @@ _dashboard:
 # ---- ra (default: kernel + TUI, local llama.cpp, no web UI) ----------------
 
 # build `ra` (release)
-build: (_kernel "release") (_tui "release")
+build: (_kernel "release")
     @mkdir -p {{dist}}/ra
     cp "{{target}}/release/{{bin}}{{exe}}" "{{dist}}/ra/"
-    cp "{{target}}/release/{{tui_bin}}{{exe}}" "{{dist}}/ra/"
 
 # build `ra` (debug)
-build-debug: (_kernel "dev") (_tui "dev")
+build-debug: (_kernel "dev")
     @mkdir -p {{dist}}/ra
     cp "{{target}}/dev/{{bin}}{{exe}}" "{{dist}}/ra/"
-    cp "{{target}}/dev/{{tui_bin}}{{exe}}" "{{dist}}/ra/"
 
 # ---- ra-headless (kernel only, no TUI / web UI / llama.cpp) ----------------
 
@@ -80,39 +72,21 @@ build-headless-debug: (_kernel_headless "dev")
 # ---- ra-full (ra + embedded web UI) ---------------------------------------
 
 # build `ra-full` (release)
-build-full: _dashboard (_kernel "release") (_tui "release")
+build-full: _dashboard (_kernel "release")
     @mkdir -p {{dist}}/ra-full
     cp "{{target}}/release/{{bin}}{{exe}}" "{{dist}}/ra-full/"
-    cp "{{target}}/release/{{tui_bin}}{{exe}}" "{{dist}}/ra-full/"
 
 # build `ra-full` (debug)
-build-full-debug: _dashboard (_kernel "dev") (_tui "dev")
+build-full-debug: _dashboard (_kernel "dev")
     @mkdir -p {{dist}}/ra-full
     cp "{{target}}/dev/{{bin}}{{exe}}" "{{dist}}/ra-full/"
-    cp "{{target}}/dev/{{tui_bin}}{{exe}}" "{{dist}}/ra-full/"
 
 # all three variants (release)
 release: build build-headless build-full
 
-# ---- the TUI on its own ---------------------------------------------------
-
-# build the terminal client (release)
-tui-build: (_tui "release")
-
-# build the terminal client (debug)
-tui-build-debug: (_tui "dev")
-
-# run the terminal client (spawns `ra serve --stdio` by default)
-tui-run *args:
-    cargo run --release --manifest-path {{tui_dir}}/Cargo.toml --bin {{tui_bin}} -- {{args}}
-
-# run the terminal client (debug)
-tui-run-debug *args:
-    cargo run --manifest-path {{tui_dir}}/Cargo.toml --bin {{tui_bin}} -- {{args}}
-
 # ---- run / inspect --------------------------------------------------------
 
-# run ra with arguments: `just run --help`
+# run ra with arguments: `just run --help`; with no subcommand ra opens the TUI
 run *args:
     cargo run --release -p {{kernel}} --bin {{bin}} -- {{args}}
 
@@ -158,21 +132,19 @@ test:
 test-cli:
     cargo test -p {{kernel}} --lib --no-default-features --features api,impersonate
 
-# the terminal client's test suite
+# the terminal UI crate's test suite
 test-tui:
-    cargo test --manifest-path {{tui_dir}}/Cargo.toml --no-fail-fast
+    cargo test -p ra-tui --no-fail-fast
 
-# format both workspaces
+# format the workspace
 fmt:
     cargo fmt --all
-    cargo fmt --manifest-path {{tui_dir}}/Cargo.toml
 
 # lint the kernel closure
 clippy:
     cargo clippy -p {{kernel}} --all-targets --no-default-features --features api,impersonate
 
-# remove build output for both workspaces plus the collected variants
+# remove build output plus the collected variants
 clean:
     cargo clean
-    cargo clean --manifest-path {{tui_dir}}/Cargo.toml
     rm -rf {{dist}}

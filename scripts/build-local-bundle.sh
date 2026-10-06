@@ -98,7 +98,8 @@ else
     # There is no bundled web client: the upstream `ra-web` SPA submodule was
     # removed with the fork, so `ra serve` answers 503 "web_bundle_missing" at
     # /app until a client is built into crates/ra-cli/static/web/ (see
-    # crates/ra-cli/src/api/static_files.rs). The terminal client is `ra-tui`.
+    # crates/ra-cli/src/api/static_files.rs). The terminal client ships inside
+    # `ra` itself (`ra` with no subcommand opens it).
 fi
 
 # ── Build (delegates to milestone-ci.sh release-bundle) ──────────────
