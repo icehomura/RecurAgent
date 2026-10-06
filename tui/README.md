@@ -125,20 +125,24 @@ and connection prerequisites.
 
 ### 🔧 From source with Cargo (needs Rust 1.85+)
 
+The TUI is linked into the `ra` binary (the workspace CLI's default-on `tui`
+feature), so source installs come from the RecurAgent workspace and produce
+`ra`.
+
 **From git** — no crates.io publish required
 
 ```bash
-cargo install --git https://github.com/icehomura/RecurAgent-tui ra-tui
+cargo install --git https://github.com/icehomura/RecurAgent ra-cli
 ```
 
 **From crates.io** — once published
 
 ```bash
-cargo install ra-tui
+cargo install ra-cli
 ```
 
-> `ra-core` (the shared protocol crate) is pulled automatically as a git
-> dependency, so installing needs no sibling `ra` checkout.
+> Both commands install `ra`; run it with no subcommand to open the terminal
+> UI.
 
 ---
 
@@ -159,15 +163,15 @@ automatically (binary-only, no service), so there's no separate server install.
 (Already have `ra` on your `PATH`? The TUI uses it, as long as it's a
 compatible version.)
 
-Building from source works too — `ra-core` (the shared protocol crate) is
-pulled automatically as a git dependency, so a plain clone builds with **no
+Building from source works too — the TUI now lives in the RecurAgent
+workspace, so a plain clone of the workspace builds everything with **no
 sibling checkout** required (needs Rust 1.85+):
 
 ```bash
-git clone https://github.com/icehomura/RecurAgent-tui.git
-cd ra-tui
-cargo build --release
-# produces ./target/release/ra-tui — substitute it for `ra-tui` below
+git clone https://github.com/icehomura/RecurAgent.git
+cd RecurAgent
+cargo build --release -p ra-cli --bin ra
+# produces ./target/release/ra — run it bare to open the terminal UI
 ```
 
 > **Developing against a local `ra`?** To build against an uncommitted
@@ -817,8 +821,8 @@ source/fallback locale, so any untranslated string falls back to English.
 | `RA_LANG` / `LANG` | UI language fallback when `--lang` is unset. |
 | `RUST_LOG=off` | Keeps terminal output clean for live visual runs. |
 | `TERM=xterm-256color` | Avoids missing terminfo/color issues on remote hosts. |
-| `RA_TUI_BIN` | Forces a specific built `ra-tui` binary for harnesses. |
-| `RA_TUI_DIR` | Points RecurAgent harness scripts at this standalone TUI repo. |
+| `RA_TUI_BIN` | Points harness scripts at a specific TUI-capable `ra` binary. |
+| `RA_TUI_DIR` | Points harness scripts at this workspace's `tui/` crate. |
 | `RA_TUI_NO_AUTO_INSTALL` | Disables backend auto-install (a missing `ra` then errors). |
 | `RA_TUI_NO_SPLASH` | Disables the startup logo animation (same as `--no-splash`). |
 | `RA_TUI_SPLASH_EFFECT` | Pins the splash to one curated effect, e.g. `matrix`. |

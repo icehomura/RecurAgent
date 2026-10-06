@@ -9,7 +9,8 @@ RecurAgent is a 27-member Rust workspace (Edition 2024, rust-version 1.85.0) pro
 - **Agent-adjacent** (5): `ra-pipeline` (DOT-graph workflows), `ra-plugin` (plugin/skill SDK), `ra-swarm` (multi-agent contract authoring), `ra-sandbox`, `ra-dora-mcp`.
 - **Bundled skill crates** (15): each app skill under `crates/app-skills/` is its own crate — `news`, `deep-search`, `deep-crawl`, `send-email`, `account-manager`, `time`, `weather`, `smart-home`, `wechat-bridge`, `skill-evolve`, and the `harness-starter-{generic,report,audio,coding}` templates — plus `platform-skills/voice` (ASR/TTS).
 
-(The web SPA and terminal client live in the separate `ra-web` and `ra-tui` repositories and talk to `ra serve` over the UI Protocol.)
+(The terminal client is built **into** the `ra` binary — `ra` with no subcommand —
+while the web SPA lives separately; both talk to `ra serve` over the UI Protocol.)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐

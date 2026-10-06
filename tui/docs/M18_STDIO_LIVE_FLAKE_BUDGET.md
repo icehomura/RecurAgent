@@ -9,7 +9,7 @@ directory.
 Quick local smoke:
 
 ```sh
-cargo build --bin ra-tui
+cargo build -p ra-cli --bin ra
 scripts/run-m18-stdio-live-tmux-soak.sh run-once
 ```
 

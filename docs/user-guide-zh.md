@@ -44,11 +44,11 @@ RecurAgent 是一个 Rust 原生的 AI 智能体平台，支持三种运行模�
 - **`ra gateway`** — 单个 gateway 实例，服务于各消息通道（Telegram、Discord、Slack、WhatsApp、Matrix、飞书、邮件、微信、企业微信、企业微信群机器人、QQ 机器人、Twilio）。
 - **`ra chat`** — 交互式 CLI 聊天，用于开发和测试。
 
-chat 和 `ra acp` 通过进程内连接使用与 ra-tui 相同的 OUP 会话 runtime，
-共享历史、压缩、权限和取消逻辑，不再各自执行另一套 Agent 循环。
+chat 和 `ra acp` 通过进程内连接使用与内置在 `ra` 中的终端 UI 相同的 OUP 会话
+runtime，共享历史、压缩、权限和取消逻辑，不再各自执行另一套 Agent 循环。
 两者需要默认启用的 `api` feature，无需额外启动服务进程或网络监听。
 ACP 支持 `session/load` 回放和工具权限请求；OUP 结构化用户提问仍由
-终端 chat／ra-tui 提供交互。
+终端 UI 提供交互。
 
 ### 架构
 

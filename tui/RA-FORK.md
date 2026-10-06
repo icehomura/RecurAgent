@@ -6,6 +6,12 @@ This crate is the **RecurAgent terminal client**. It was imported from
 
 ## What changed on import
 
+> **Superseded by the TUI merge (2026-10).** The table below records the
+> import-time arrangement as history: `tui/` is now a member of the root
+> workspace (the root `Cargo.lock` is authoritative), and the terminal UI
+> ships inside the `ra` binary — no separate `ra-tui` executable or
+> own-workspace release train remains.
+
 | Change | Why |
 |---|---|
 | `tui/` is its **own cargo workspace** (`[workspace]` in `tui/Cargo.toml`), excluded from the kernel workspace via `exclude = ["tui"]` in the root `Cargo.toml` | the client has its own release train, `dist-workspace.toml`, packaging, `build.rs`, locales and lockfile; folding it into the kernel workspace would merge two release cadences |

@@ -9,7 +9,7 @@ RecurAgent 是一个包含 27 个成员的 Rust 工作区（Edition 2024，rust-
 - **agent 周边**（5 个）：`ra-pipeline`（DOT 图工作流）、`ra-plugin`（插件/技能 SDK）、`ra-swarm`（多 agent 契约创作）、`ra-sandbox`、`ra-dora-mcp`。
 - **内置技能 crate**（15 个）：`crates/app-skills/` 下每个应用技能都是独立 crate——`news`、`deep-search`、`deep-crawl`、`send-email`、`account-manager`、`time`、`weather`、`smart-home`、`wechat-bridge`、`skill-evolve`，以及 `harness-starter-{generic,report,audio,coding}` 模板——再加上 `platform-skills/voice`（ASR/TTS）。
 
-（Web SPA 与终端客户端分别位于独立的 `ra-web` 和 `ra-tui` 仓库，通过 UI Protocol 与 `ra serve` 通信。）
+（终端客户端已内置在 `ra` 二进制中 —— 运行不带子命令的 `ra` 即可打开；Web SPA 则单独存放。两者都通过 UI Protocol 与 `ra serve` 通信。）
 
 ```
 ┌─────────────────────────────────────────────────────────────┐

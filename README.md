@@ -21,16 +21,24 @@ client and an automated controller operate that runtime.
 
 ## Looking for a coding agent to use?
 
-Start with an application built on the kernel:
+The terminal UI ships **inside** the `ra` binary — there is no separate
+`ra-tui` client to install. Pick a variant, then run `ra` with no subcommand to
+open the TUI:
 
-| Application | Where to start |
+| Variant | What ships |
 | --- | --- |
-| **[ra-tui](https://github.com/icehomura/RecurAgent-tui)** | Install the terminal client. It provisions a compatible local `ra` runtime on first launch. |
-| **[ra-tui-web](https://github.com/icehomura/RecurAgent-tui-web)** | Set up the browser client using its [getting-started guide](https://github.com/icehomura/RecurAgent-tui-web/blob/main/docs/getting-started.md), and connect it to a `ra` runtime. |
+| **`ra`** | The kernel plus the terminal UI. This is the default build. |
+| **`ra-headless`** | The kernel only — no terminal UI. |
+| **`ra-full`** | `ra` plus the embedded admin dashboard at `/admin/`. |
+
+The browser chat client at `/app/` is not shipped: the `ra-full` build embeds
+the admin dashboard only, and `/app/` answers
+`503 web_bundle_missing` until you build a client into
+`crates/ra-cli/static/web/`.
 
 This repository is for developers embedding, extending, or integrating the
-harness kernel. Application installation and everyday coding workflows belong
-in the client repositories above.
+harness kernel. Application installation and everyday coding workflows run
+against the `ra` binary above.
 
 <a id="embed-recuragent"></a>
 

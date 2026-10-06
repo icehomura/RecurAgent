@@ -496,7 +496,7 @@ Split preference: paragraph boundary > newline > sentence end > space > hard cut
 
 ## Autonomy & Session Control
 
-Beyond one-shot chat, the graphical clients (ra-web, ra-tui) drive longer-running behaviors over the [UI Protocol](./architecture.md). The autonomy and task-artifact groups are gated by negotiated capability flags (see [Capability Negotiation](#capability-negotiation)); the core turn/session controls (`turn/start`, `turn/interrupt`, `session/rollback`, `task/output/read`) are always available.
+Beyond one-shot chat, the graphical clients (the `ra` terminal UI and the web SPA) drive longer-running behaviors over the [UI Protocol](./architecture.md). The autonomy and task-artifact groups are gated by negotiated capability flags (see [Capability Negotiation](#capability-negotiation)); the core turn/session controls (`turn/start`, `turn/interrupt`, `session/rollback`, `task/output/read`) are always available.
 
 ### Goals
 

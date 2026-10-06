@@ -21,15 +21,21 @@ RecurAgent 的核心架构是 **可复用的内核 + 可编程的协议边界**�
 
 ## 想直接使用编码 Agent？
 
-请从基于内核构建的应用开始：
+终端 UI 已内置于 `ra` 二进制中 —— 无需再单独安装 `ra-tui` 客户端。
+选择所需的变体后，直接运行不带子命令的 `ra` 即可打开 TUI：
 
-| 应用 | 从哪里开始 |
+| 变体 | 包含内容 |
 | --- | --- |
-| **[ra-tui](https://github.com/icehomura/RecurAgent-tui)** | 安装终端客户端；首次启动时会自动准备兼容的本地 RecurAgent 运行时。 |
-| **[ra-tui-web](https://github.com/icehomura/RecurAgent-tui-web)** | 按照[入门指南](https://github.com/icehomura/RecurAgent-tui-web/blob/main/docs/getting-started.md)部署浏览器客户端，并连接 RecurAgent 运行时。 |
+| **`ra`** | 内核 + 终端 UI，默认构建。 |
+| **`ra-headless`** | 仅内核，不含终端 UI。 |
+| **`ra-full`** | `ra` + 内嵌于 `/admin/` 的管理仪表板。 |
+
+浏览器聊天客户端 `/app/` 不随包发布：`ra-full` 只内嵌管理仪表板，
+在你将客户端构建到 `crates/ra-cli/static/web/` 之前，`/app/` 会返回
+`503 web_bundle_missing`。
 
 本仓库面向嵌入、扩展或集成 Harness 内核的开发者。应用安装和日常编码操作，
-请查看上面的客户端仓库。
+请直接使用上面的 `ra` 二进制。
 
 ## 基于 RecurAgent 构建应用
 

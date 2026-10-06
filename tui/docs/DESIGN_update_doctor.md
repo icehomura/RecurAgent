@@ -1,6 +1,8 @@
 # Design: `ra-tui update` and `ra-tui doctor`
 
-**Status:** design / RFC.
+**Status:** historical design / RFC — written for the pre-merge standalone
+`ra-tui` repository. The TUI now ships inside the `ra` binary in the
+RecurAgent workspace; the package-manager commands below are historical.
 **Target repos:** `icehomura/RecurAgent-tui` (primary), `icehomura/RecurAgent` (shared bits + future `ra doctor`/`ra update`).
 **Date:** 2026-06-05.
 

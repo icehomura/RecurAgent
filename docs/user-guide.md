@@ -44,11 +44,12 @@ RecurAgent is a Rust-native AI agent platform that runs in three modes:
 - **`ra gateway`** — A single gateway instance serving messaging channels (Telegram, Discord, DingTalk, Slack, WhatsApp, Matrix, Feishu, Email, WeChat, WeCom, WeCom Bot, QQ Bot, Twilio).
 - **`ra chat`** — Interactive CLI chat for development and testing.
 
-Chat and `ra acp` use the same OUP session runtime as ra-tui, via an
-in-process connection. Both require the default `api` feature; no extra server
-process or network listener is required. They share OUP history, compaction,
-permissions and cancellation. ACP supports `session/load` replay and typed tool
-permissions; structured OUP user questions remain a terminal/ra-tui feature.
+Chat and `ra acp` use the same OUP session runtime as the terminal UI built
+into `ra`, via an in-process connection. Both require the default `api` feature;
+no extra server process or network listener is required. They share OUP history,
+compaction, permissions and cancellation. ACP supports `session/load` replay and
+typed tool permissions; structured OUP user questions remain a terminal-UI-only
+feature.
 
 ### Architecture
 
