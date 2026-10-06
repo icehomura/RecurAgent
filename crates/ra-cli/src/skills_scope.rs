@@ -122,9 +122,8 @@ pub fn build_account_plugin_dirs(data_dir: &Path) -> Vec<PathBuf> {
 /// installer.
 ///
 /// The OMiniX home resolution mirrors the runtime installer
-/// (`api::ominix_runtime`): `RA_OMINIX_HOME` (legacy `RA_OMINIX_HOME`)
-/// relocates the whole OMiniX home (including the discovery file), falling
-/// back to `HOME`
+/// (`api::ominix_runtime`): `RA_OMINIX_HOME` relocates the whole OMiniX
+/// home (including the discovery file), falling back to `HOME`
 /// and then the OS home directory.
 ///
 /// Used by both `gateway` and `serve` plugin loaders so dashboard-
@@ -203,10 +202,6 @@ where
 /// `gateway_runtime.rs:435` so the `serve` plugin loader can spawn
 /// dashboard-installed skills with the same environment they expect.
 ///
-/// Every variable is emitted twice: under the new `RA_` prefix first and
-/// the legacy `RA_` prefix second, with the same value, so skills that
-/// still read the old name keep working.
-///
 /// The set is intentionally narrow: every entry is something a
 /// dashboard-installed skill (e.g. `mofa-fm`) needs to locate
 /// per-profile state (voice profiles, data dir) or to reach the
@@ -222,21 +217,14 @@ pub(crate) fn push_runtime_plugin_env(
         "RA_DATA_DIR".to_string(),
         data_dir.to_string_lossy().to_string(),
     ));
-    plugin_env.push((
-        "RA_DATA_DIR".to_string(),
-        data_dir.to_string_lossy().to_string(),
-    ));
-    plugin_env.push(("RA_HOME".to_string(), ra_home.to_string_lossy().to_string()));
     plugin_env.push(("RA_HOME".to_string(), ra_home.to_string_lossy().to_string()));
     if let Some(profile_id) = profile_id {
-        plugin_env.push(("RA_PROFILE_ID".to_string(), profile_id.to_string()));
         plugin_env.push(("RA_PROFILE_ID".to_string(), profile_id.to_string()));
     }
     let voice_dir = data_dir
         .join("voice_profiles")
         .to_string_lossy()
         .to_string();
-    plugin_env.push(("RA_VOICE_DIR".to_string(), voice_dir.clone()));
     plugin_env.push(("RA_VOICE_DIR".to_string(), voice_dir));
     if let Some(ominix_url) = ominix_url {
         plugin_env.push(("OMINIX_API_URL".to_string(), ominix_url.to_string()));
@@ -462,9 +450,8 @@ mod tests {
     #[test]
     fn push_runtime_plugin_env_carries_voice_dir_and_profile_id() {
         // Validates the contract that `mofa-fm` / `fm_tts` depend on:
-        // `RA_PROFILE_ID` (legacy `RA_PROFILE_ID`) for per-profile state
-        // and `RA_VOICE_DIR` (legacy `RA_VOICE_DIR`) pointing at the
-        // profile's `voice_profiles/` so yangmi.wav etc.
+        // `RA_PROFILE_ID` for per-profile state and `RA_VOICE_DIR`
+        // pointing at the profile's `voice_profiles/` so yangmi.wav etc.
         // are findable. Also `OMINIX_API_URL` when provided so the
         // skill can reach the local TTS server.
         let data_dir = std::path::PathBuf::from("/tmp/profile-data");
@@ -484,18 +471,9 @@ mod tests {
             Some("/tmp/profile-data")
         );
         assert_eq!(
-            map.get("RA_DATA_DIR").map(String::as_str),
-            Some("/tmp/profile-data")
-        );
-        assert_eq!(
             map.get("RA_HOME").map(String::as_str),
             Some("/home/user/.ra")
         );
-        assert_eq!(
-            map.get("RA_HOME").map(String::as_str),
-            Some("/home/user/.ra")
-        );
-        assert_eq!(map.get("RA_PROFILE_ID").map(String::as_str), Some("dspfac"));
         assert_eq!(map.get("RA_PROFILE_ID").map(String::as_str), Some("dspfac"));
         // Derive the expectation the way the product does (`Path::join`), so
         // the separator matches on Windows (`\`) as well as Unix (`/`).
@@ -503,7 +481,6 @@ mod tests {
             .join("voice_profiles")
             .to_string_lossy()
             .to_string();
-        assert_eq!(map.get("RA_VOICE_DIR"), Some(&expected_voice));
         assert_eq!(map.get("RA_VOICE_DIR"), Some(&expected_voice));
         assert_eq!(
             map.get("OMINIX_API_URL").map(String::as_str),
@@ -521,16 +498,16 @@ mod tests {
             None,
             None,
         );
-        let keys: std::collections::HashSet<_> = env.into_iter().map(|(k, _)| k).collect();
-        assert!(!keys.contains("RA_PROFILE_ID"));
-        assert!(!keys.contains("RA_PROFILE_ID"));
-        assert!(!keys.contains("OMINIX_API_URL"));
-        assert!(keys.contains("RA_DATA_DIR"));
-        assert!(keys.contains("RA_DATA_DIR"));
-        assert!(keys.contains("RA_HOME"));
-        assert!(keys.contains("RA_HOME"));
-        assert!(keys.contains("RA_VOICE_DIR"));
-        assert!(keys.contains("RA_VOICE_DIR"));
+        let mut keys: Vec<String> = env.iter().map(|(k, _)| k.clone()).collect();
+        keys.sort();
+        keys.dedup();
+        // Every key is emitted exactly once.
+        assert_eq!(env.len(), keys.len());
+        assert!(!keys.iter().any(|k| k == "RA_PROFILE_ID"));
+        assert!(!keys.iter().any(|k| k == "OMINIX_API_URL"));
+        assert!(keys.iter().any(|k| k == "RA_DATA_DIR"));
+        assert!(keys.iter().any(|k| k == "RA_HOME"));
+        assert!(keys.iter().any(|k| k == "RA_VOICE_DIR"));
     }
 
     #[test]

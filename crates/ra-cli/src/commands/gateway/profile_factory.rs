@@ -48,8 +48,6 @@ const FIRST_PARTY_SKILL_ENV_VARS: &[&str] = &[
     // search-results scrape opt-in (default off).
     "SEARXNG_URL",
     "RA_RESPECT_ROBOTS",
-    "RA_RESPECT_ROBOTS",
-    "RA_ALLOW_SERP_SCRAPE",
     "RA_ALLOW_SERP_SCRAPE",
 ];
 
@@ -196,16 +194,7 @@ pub(crate) fn profile_plugin_env(profile: &crate::profiles::UserProfile) -> Vec<
             .cloned()
             .or_else(|| std::env::var(key).ok())
         {
-            // Forward the new brand spelling too, so a skill that reads `RA_*`
-            // sees the same setting; the legacy name stays for un-migrated
-            // readers. New name first.
-            if let Some(suffix) = key.strip_prefix("RA_") {
-                push_env_once(&mut env, format!("RA_{suffix}"), value.clone());
-            }
-            push_env_once(&mut env, *key, value.clone());
-            if let Some(suffix) = key.strip_prefix("RA_") {
-                push_env_once(&mut env, format!("RA_{suffix}"), value);
-            }
+            push_env_once(&mut env, *key, value);
         }
     }
 
@@ -227,10 +216,8 @@ pub(crate) fn profile_plugin_env(profile: &crate::profiles::UserProfile) -> Vec<
             .or_else(|| primary.model_id.as_deref().and_then(detect_provider))
         {
             push_env_once(&mut env, "RA_PROFILE_LLM_PROVIDER", provider.to_string());
-            push_env_once(&mut env, "RA_PROFILE_LLM_PROVIDER", provider.to_string());
         }
         if let Some(model) = primary.model_id.as_deref() {
-            push_env_once(&mut env, "RA_PROFILE_LLM_MODEL", model.to_string());
             push_env_once(&mut env, "RA_PROFILE_LLM_MODEL", model.to_string());
         }
     }
@@ -296,21 +283,8 @@ fn push_runtime_plugin_env(
         "RA_DATA_DIR".to_string(),
         data_dir.to_string_lossy().to_string(),
     ));
-    plugin_env.push((
-        "RA_DATA_DIR".to_string(),
-        data_dir.to_string_lossy().to_string(),
-    ));
-    plugin_env.push(("RA_HOME".to_string(), ra_home.to_string_lossy().to_string()));
     plugin_env.push(("RA_HOME".to_string(), ra_home.to_string_lossy().to_string()));
     plugin_env.push(("RA_PROFILE_ID".to_string(), profile_id.to_string()));
-    plugin_env.push(("RA_PROFILE_ID".to_string(), profile_id.to_string()));
-    plugin_env.push((
-        "RA_VOICE_DIR".to_string(),
-        data_dir
-            .join("voice_profiles")
-            .to_string_lossy()
-            .to_string(),
-    ));
     plugin_env.push((
         "RA_VOICE_DIR".to_string(),
         data_dir
@@ -1241,8 +1215,6 @@ mod tests {
         let map: HashMap<_, _> = env.iter().cloned().collect();
         assert_eq!(env.len(), map.len());
         assert_eq!(map["RA_PROFILE_LLM_PROVIDER"], "google");
-        assert_eq!(map["RA_PROFILE_LLM_PROVIDER"], "google");
-        assert_eq!(map["RA_PROFILE_LLM_MODEL"], "resolved-model");
         assert_eq!(map["RA_PROFILE_LLM_MODEL"], "resolved-model");
         assert_eq!(
             map["RA_PROFILE_LLM_BASE_URL"],
@@ -1258,10 +1230,7 @@ mod tests {
         apply_resolved_profile_llm_env(&mut env, &config, "revision-2");
         let map: HashMap<_, _> = env.into_iter().collect();
         assert_eq!(map["RA_PROFILE_LLM_PROVIDER"], "gemini");
-        assert_eq!(map["RA_PROFILE_LLM_PROVIDER"], "gemini");
         assert!(!map.contains_key("RA_PROFILE_LLM_BASE_URL"));
-        assert!(!map.contains_key("RA_PROFILE_LLM_BASE_URL"));
-        assert!(!map.contains_key("RA_PROFILE_LLM_API_TYPE"));
         assert!(!map.contains_key("RA_PROFILE_LLM_API_TYPE"));
         assert_eq!(map["RA_PROFILE_LLM_CONFIG_REVISION"], "revision-2");
     }
@@ -1350,11 +1319,6 @@ mod tests {
         let env = profile_plugin_env(&profile);
 
         assert!(env.contains(&("RA_PROFILE_LLM_PROVIDER".to_string(), "google".to_string())));
-        assert!(env.contains(&("RA_PROFILE_LLM_PROVIDER".to_string(), "google".to_string())));
-        assert!(env.contains(&(
-            "RA_PROFILE_LLM_MODEL".to_string(),
-            "gemini-3.6-flash".to_string()
-        )));
         assert!(env.contains(&(
             "RA_PROFILE_LLM_MODEL".to_string(),
             "gemini-3.6-flash".to_string()
