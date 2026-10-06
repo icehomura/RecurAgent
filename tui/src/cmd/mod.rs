@@ -226,8 +226,7 @@ struct DoctorCli {
     /// WS endpoint to record for the connectivity check.
     #[arg(long = "endpoint", value_name = "WS_URL")]
     endpoint: Option<String>,
-    /// Bearer token for UI Protocol authentication. Falls back to RA_AUTH_TOKEN
-    /// (legacy RA_AUTH_TOKEN).
+    /// Bearer token for UI Protocol authentication. Falls back to RA_AUTH_TOKEN.
     #[arg(long = "auth-token", value_name = "TOKEN")]
     auth_token: Option<String>,
     /// Data dir to check (defaults to `~/.ra`).

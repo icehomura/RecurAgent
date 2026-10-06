@@ -322,9 +322,7 @@ fn auth_token_from_cli(cli: &Cli) -> Option<String> {
     cli.auth_token
         .clone()
         .and_then(clean_auth_token)
-        .or_else(|| {
-            crate::env::env_compat("RA_AUTH_TOKEN", "RA_AUTH_TOKEN").and_then(clean_auth_token)
-        })
+        .or_else(|| crate::env::env_compat("RA_AUTH_TOKEN").and_then(clean_auth_token))
 }
 
 fn clean_auth_token(token: String) -> Option<String> {
@@ -3255,8 +3253,7 @@ fn websocket_request(
 /// Build the `X-Ra-Ui-Features` negotiation value.
 ///
 /// Normally the TUI advertises the full modern feature set. When
-/// `RA_TUI_OLD_SERVER_FEATURES=1` (legacy `RA_TUI_OLD_SERVER_FEATURES`) is
-/// set it advertises only the
+/// `RA_TUI_OLD_SERVER_FEATURES=1` is set it advertises only the
 /// pre-autonomy baseline, dropping the coding autonomy / agent-control /
 /// goal / loop / harness-task-control features. This lets the onboarding
 /// soak exercise the genuine old-server fallback path (header-negotiated):
@@ -3268,8 +3265,7 @@ fn appui_feature_header_value() -> String {
 }
 
 fn old_server_features_requested() -> bool {
-    crate::env::env_compat("RA_TUI_OLD_SERVER_FEATURES", "RA_TUI_OLD_SERVER_FEATURES").as_deref()
-        == Some("1")
+    crate::env::env_compat("RA_TUI_OLD_SERVER_FEATURES").as_deref() == Some("1")
 }
 
 fn appui_feature_header_for(old_server: bool) -> String {
@@ -6231,7 +6227,7 @@ impl AppUiBackend for MockAppUiBackend {
 }
 
 fn mock_approval_kind() -> String {
-    crate::env::env_compat("RA_TUI_MOCK_APPROVAL_KIND", "RA_TUI_MOCK_APPROVAL_KIND")
+    crate::env::env_compat("RA_TUI_MOCK_APPROVAL_KIND")
         .unwrap_or_else(|| approval_kinds::COMMAND.into())
 }
 

@@ -49,18 +49,6 @@ pub(crate) const MIN_BACKEND_VERSION: &str = "0.1.0";
 /// Set to any value to disable auto-install (a missing backend then errors).
 const OPT_OUT_ENV: &str = "RA_TUI_NO_AUTO_INSTALL";
 
-/// Pre-rename spelling of [`OPT_OUT_ENV`], still honoured.
-///
-/// This is the ONLY environment variable the binary reads that was part of the
-/// documented `ra-tui` contract (the other ~157 `RA_TUI_*` names belong
-/// to the soak harness, and the two `_BIN`/`_DIR` ones are read by our own
-/// scripts — all renamed in lockstep). Someone with
-/// `RA_TUI_NO_AUTO_INSTALL=1` in a CI job or shell profile would otherwise
-/// find auto-install silently switching itself back on, which is exactly the
-/// kind of quiet breakage a rename must not cause. Honour it, say so once,
-/// and drop it a release or two after the rename has settled.
-const OPT_OUT_ENV_LEGACY: &str = "RA_TUI_NO_AUTO_INSTALL";
-
 /// Ensure a usable `ra` backend for a stdio launch, rewriting
 /// `cli.stdio_command` to an explicit path when the backend is usable only off
 /// `PATH`. Call this BEFORE entering raw mode.
@@ -140,50 +128,16 @@ enum Probe {
 }
 
 fn opted_out() -> bool {
-    match opt_out_from(
-        std::env::var_os(OPT_OUT_ENV),
-        std::env::var_os(OPT_OUT_ENV_LEGACY),
-    ) {
-        OptOut::No => false,
-        OptOut::Current => true,
-        OptOut::Legacy => {
-            // Warn once per process, not per probe — `opted_out` is called
-            // from several paths and a repeated notice would bury the real
-            // output.
-            static WARNED: std::sync::Once = std::sync::Once::new();
-            WARNED.call_once(|| {
-                eprintln!(
-                    "ra-tui: {OPT_OUT_ENV_LEGACY} is deprecated — \
-                     rename it to {OPT_OUT_ENV}. Still honoured for now."
-                );
-            });
-            true
-        }
-    }
+    opt_out_from(std::env::var_os(OPT_OUT_ENV))
 }
 
-/// Which spelling (if either) opted out.
-#[derive(Debug, PartialEq, Eq)]
-enum OptOut {
-    No,
-    Current,
-    /// Only the pre-rename name was set — honour it, but say so.
-    Legacy,
-}
-
-/// Pure resolver behind [`opted_out`]: the current name wins, the pre-rename
-/// name still counts, and empty values are ignored (matching the original
-/// `!v.is_empty()` semantics — `FOO=` is not "set"). Split out so the
-/// back-compat is testable without mutating process env (`std::env::set_var`
-/// is `unsafe` under edition 2024 + `unsafe_code = deny`).
-fn opt_out_from(current: Option<std::ffi::OsString>, legacy: Option<std::ffi::OsString>) -> OptOut {
-    if current.is_some_and(|v| !v.is_empty()) {
-        return OptOut::Current;
-    }
-    if legacy.is_some_and(|v| !v.is_empty()) {
-        return OptOut::Legacy;
-    }
-    OptOut::No
+/// Pure resolver behind [`opted_out`]: any non-empty value opts out; an empty
+/// value is not "set" (matching the original `!v.is_empty()` semantics —
+/// `FOO=` must not count). Split out so the rule is testable without mutating
+/// process env (`std::env::set_var` is `unsafe` under edition 2024 +
+/// `unsafe_code = deny`).
+fn opt_out_from(value: Option<std::ffi::OsString>) -> bool {
+    value.is_some_and(|v| !v.is_empty())
 }
 
 /// Which candidate slot a backend path came from, in resolution precedence.
@@ -425,11 +379,11 @@ fn where_first(name: &Path) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-/// The RecurAgent binary this fork installs: `$RA_PREFIX/ra` (or the legacy
-/// `$RA_PREFIX` env fallback) or `~/.ra/bin/ra` (`ra.exe` on Windows).
+/// The RecurAgent binary this fork installs: `$RA_PREFIX/ra` or
+/// `~/.ra/bin/ra` (`ra.exe` on Windows).
 /// `None` if no home dir.
 fn install_dir_backend() -> Option<PathBuf> {
-    let dir = match crate::env::env_os_compat("RA_PREFIX", "RA_PREFIX") {
+    let dir = match crate::env::env_os_compat("RA_PREFIX") {
         Some(p) => PathBuf::from(p),
         _ => home_dir()?.join(".ra").join("bin"),
     };
@@ -937,7 +891,6 @@ mod tests {
             "my-custom-backend --stdio",         // not ra
             "env A=1 my-backend serve",          // not ra
             "ra.exe serve --stdio",              // not canonical; bare `ra` is
-            "ra serve --stdio",                  // legacy name — user-managed
             "env PATH=/custom/bin:$PATH ra serve", // PATH override — can't probe same ra
             "PATH=/opt/ra/bin ra serve",         // leading PATH override
         ] {
@@ -1019,40 +972,16 @@ mod tests {
         assert!(!version_lt("1.1.0", "1.1")); // 1.1.0 == 1.1(.0)
     }
 
-    /// The rename must not silently re-enable auto-install for anyone who set
-    /// the opt-out under the old name. This is the ONE documented env var the
-    /// binary reads that predates the rename.
+    /// `RA_TUI_NO_AUTO_INSTALL` opts auto-install out on any non-empty value;
+    /// an empty value is not "set" (the original `!v.is_empty()` rule).
     #[test]
-    fn legacy_opt_out_env_is_still_honoured() {
+    fn opt_out_env_opts_out_on_a_non_empty_value() {
         use std::ffi::OsString;
         let set = |v: &str| Some(OsString::from(v));
 
-        assert_eq!(opt_out_from(None, None), OptOut::No, "neither set");
-        assert_eq!(
-            opt_out_from(set("1"), None),
-            OptOut::Current,
-            "current name opts out"
-        );
-        assert_eq!(
-            opt_out_from(None, set("1")),
-            OptOut::Legacy,
-            "pre-rename name must STILL opt out, or a CI job that set it \
-             silently gets auto-install back"
-        );
-        assert_eq!(
-            opt_out_from(set("1"), set("1")),
-            OptOut::Current,
-            "current name wins so the deprecation notice stays quiet"
-        );
-
-        // Empty is not "set" — preserves the original `!v.is_empty()` rule.
-        assert_eq!(opt_out_from(set(""), None), OptOut::No, "empty current");
-        assert_eq!(opt_out_from(None, set("")), OptOut::No, "empty legacy");
-        assert_eq!(
-            opt_out_from(set(""), set("1")),
-            OptOut::Legacy,
-            "empty current falls through to a real legacy value"
-        );
+        assert!(!opt_out_from(None), "unset does not opt out");
+        assert!(opt_out_from(set("1")), "a value opts out");
+        assert!(!opt_out_from(set("")), "empty does not opt out");
     }
 
     /// The ra-core rev in Cargo.toml and the server release tag this client

@@ -1,46 +1,39 @@
-//! ra/legacy environment + user-path compatibility (`ra-fork.md` follow-up #2).
+//! Environment and user-path access for the TUI (`ra-fork.md` follow-up #2).
 //!
-//! Every environment read prefers the new RecurAgent spelling and falls back to the
-//! pre-rename one:
+//! Every environment read uses the current `RA_` spelling directly — one name
+//! per variable, no fallback chain:
 //!
-//! | New | Legacy | Scope |
+//! | Prefix | Example | Scope |
 //! |---|---|---|
-//! | `RA_TUI_*` | `RA_TUI_*` | behaviour owned by this client |
-//! | `RA_*` | `RA_*` | names shared with the kernel (token, home, prefix) |
+//! | `RA_TUI_*` | `RA_TUI_NO_SPLASH` | behaviour owned by this client |
+//! | `RA_*` | `RA_AUTH_TOKEN` | names shared with the kernel (token, home, prefix) |
 //!
-//! Paths use the new RecurAgent spelling only: `~/.ra`, `~/.config/ra-tui`. There is no
-//! backward-compat for state directories — legacy locations are neither read
-//! nor migrated. The env-var fallback above is the only compatibility kept.
+//! Paths use the RecurAgent spelling only: `~/.ra`, `~/.config/ra-tui`. There is no
+//! backward-compat for state directories — other locations are neither read
+//! nor migrated.
 //!
-//! Env reads are routed through [`env_compat`] / [`env_os_compat`]; the pure
-//! cores ([`pick_compat`], [`home_entry`]) are split out so the fallback order
-//! is unit-testable without mutating process env (`std::env::set_var` is
-//! `unsafe` under edition 2024 + `unsafe_code = deny`).
+//! Env reads are routed through [`env_compat`] / [`env_os_compat`]; both take
+//! the full variable name (no prefix is added) and ignore empty values.
+//! [`home_entry`] is split out so path joining is unit-testable without
+//! mutating process env (`std::env::set_var` is `unsafe` under edition 2024 +
+//! `unsafe_code = deny`).
 
 use std::path::{Path, PathBuf};
 
-/// Read `new`, falling back to `legacy`. The first variable set to a
-/// **non-empty** value wins; `FOO=` counts as unset (matching the pre-rename
-/// opt-out semantics — an empty opt-out never disabled anything).
-pub fn env_compat(new: &str, legacy: &str) -> Option<String> {
-    pick_compat(non_empty(new), non_empty(legacy))
+/// Read the environment variable `name` (the full name — no prefix is added).
+/// A value set to the empty string counts as unset (`FOO=` never enables
+/// anything).
+pub fn env_compat(name: &str) -> Option<String> {
+    non_empty(name)
 }
 
 /// [`env_compat`] for path-ish values (`OsString`, so non-UTF-8 paths survive).
-pub fn env_os_compat(new: &str, legacy: &str) -> Option<std::ffi::OsString> {
-    std::env::var_os(new)
-        .filter(|v| !v.is_empty())
-        .or_else(|| std::env::var_os(legacy).filter(|v| !v.is_empty()))
+pub fn env_os_compat(name: &str) -> Option<std::ffi::OsString> {
+    std::env::var_os(name).filter(|value| !value.is_empty())
 }
 
 fn non_empty(key: &str) -> Option<String> {
-    std::env::var(key).ok().filter(|v| !v.is_empty())
-}
-
-/// Pure fallback core of [`env_compat`]: new wins, legacy still works, neither
-/// set is `None`.
-fn pick_compat(new: Option<String>, legacy: Option<String>) -> Option<String> {
-    new.or(legacy)
+    std::env::var(key).ok().filter(|value| !value.is_empty())
 }
 
 /// `HOME`, falling back to `USERPROFILE` on native Windows shells (where
@@ -66,19 +59,6 @@ pub fn ra_home_entry(rel: &str) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn env_pick_new_wins_legacy_still_works_neither_set() {
-        assert_eq!(
-            pick_compat(Some("new".into()), Some("legacy".into())).as_deref(),
-            Some("new")
-        );
-        assert_eq!(
-            pick_compat(None, Some("legacy".into())).as_deref(),
-            Some("legacy")
-        );
-        assert_eq!(pick_compat(None, None), None);
-    }
 
     #[test]
     fn home_entry_is_the_new_path() {

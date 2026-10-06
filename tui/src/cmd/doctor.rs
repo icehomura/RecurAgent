@@ -485,7 +485,7 @@ fn locate_backend() -> LocatedBinaries {
     {
         dirs.push(sibling_dir);
     }
-    if let Some(prefix) = crate::env::env_compat("RA_PREFIX", "RA_PREFIX") {
+    if let Some(prefix) = crate::env::env_compat("RA_PREFIX") {
         dirs.push(PathBuf::from(prefix));
     }
     if let Some(home) = std::env::var_os("HOME") {

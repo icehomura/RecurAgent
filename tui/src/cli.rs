@@ -138,8 +138,7 @@ pub struct Cli {
     pub profile_id: Option<String>,
     /// Workspace cwd to request for this AppUi session. Defaults to the launch directory.
     pub cwd: Option<PathBuf>,
-    /// Bearer token for UI Protocol authentication. Falls back to RA_AUTH_TOKEN
-    /// (legacy RA_AUTH_TOKEN).
+    /// Bearer token for UI Protocol authentication. Falls back to RA_AUTH_TOKEN.
     pub auth_token: Option<String>,
     /// Disable turn/start sends and use the client as a read-only viewer.
     pub readonly: bool,
@@ -169,22 +168,14 @@ pub struct Cli {
 /// outside a git checkout, in which case only the bare version is shown).
 fn version_string() -> &'static str {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
-    // Build metadata set by `build.rs` under the new names; the pre-rename
-    // `RA_TUI_*` spellings still resolve for a build.rs that predates the
-    // rename (belt-and-braces — both files ship together).
+    // Build metadata set by `build.rs` (empty when it was unavailable).
     const GIT_HASH: &str = match option_env!("RA_TUI_GIT_HASH") {
         Some(v) => v,
-        None => match option_env!("RA_TUI_GIT_HASH") {
-            Some(v) => v,
-            None => "",
-        },
+        None => "",
     };
     const BUILD_DATE: &str = match option_env!("RA_TUI_BUILD_DATE") {
         Some(v) => v,
-        None => match option_env!("RA_TUI_BUILD_DATE") {
-            Some(v) => v,
-            None => "",
-        },
+        None => "",
     };
     #[allow(clippy::const_is_empty)]
     if GIT_HASH.is_empty() {
@@ -247,8 +238,7 @@ struct CliArgs {
     #[arg(long = "cwd", value_name = "DIR")]
     pub cwd: Option<PathBuf>,
 
-    /// Bearer token for UI Protocol authentication. Falls back to RA_AUTH_TOKEN
-    /// (legacy RA_AUTH_TOKEN).
+    /// Bearer token for UI Protocol authentication. Falls back to RA_AUTH_TOKEN.
     #[arg(long = "auth-token", value_name = "TOKEN")]
     pub auth_token: Option<String>,
 
@@ -465,8 +455,7 @@ impl Cli {
                 .lang
                 .or(file_config.lang)
                 .or_else(|| {
-                    crate::env::env_compat("RA_LANG", "RA_LANG")
-                        .and_then(|v| Lang::from_env_value(&v))
+                    crate::env::env_compat("RA_LANG").and_then(|v| Lang::from_env_value(&v))
                 })
                 .or_else(|| {
                     std::env::var("LANG")
