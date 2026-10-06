@@ -64,9 +64,8 @@ impl Default for ApprovalsAuditConfig {
 }
 
 impl ApprovalsAuditConfig {
-    /// Read the `RA_APPROVALS_AUDIT_*` knobs; the legacy
-    /// `RA_APPROVALS_AUDIT_*` names are still honoured through
-    /// [`ra_core::brand::env_compat_str`].
+    /// Read the `RA_APPROVALS_AUDIT_*` knobs through
+    /// [`ra_core::brand::env_compat_str`]. An empty value counts as unset.
     pub fn from_env() -> Self {
         let mut cfg = Self::default();
         if let Some(v) = ra_core::brand::env_compat_str("APPROVALS_AUDIT_ENABLED") {
@@ -410,32 +409,68 @@ mod tests {
 
     #[test]
     #[allow(unsafe_code)]
-    fn from_env_prefers_ra_and_falls_back_to_legacy() {
+    fn from_env_reads_single_prefix_knobs() {
         // Serialized: process-env mutation races every parallel test that
         // reads the approvals-audit knobs.
         static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let prev_new = std::env::var_os("RA_APPROVALS_AUDIT_ENABLED");
-        let prev_legacy = std::env::var_os("RA_APPROVALS_AUDIT_ENABLED");
+        let prev_enabled = std::env::var_os("RA_APPROVALS_AUDIT_ENABLED");
+        let prev_dir = std::env::var_os("RA_APPROVALS_AUDIT_DIR");
+        let prev_rotate = std::env::var_os("RA_APPROVALS_AUDIT_ROTATE_BYTES");
 
-        // RA_ wins over the legacy name.
+        // Disabled and enabled both parse from the one `RA_`-prefixed name.
         unsafe {
             std::env::set_var("RA_APPROVALS_AUDIT_ENABLED", "0");
-            std::env::set_var("RA_APPROVALS_AUDIT_ENABLED", "1");
         }
         assert!(!ApprovalsAuditConfig::from_env().enabled);
-
-        // With only the legacy name set, the fallback still applies.
-        unsafe { std::env::remove_var("RA_APPROVALS_AUDIT_ENABLED") };
+        unsafe {
+            std::env::set_var("RA_APPROVALS_AUDIT_ENABLED", "1");
+        }
+        assert!(ApprovalsAuditConfig::from_env().enabled);
+        // An unparseable value keeps the default (`on`).
+        unsafe {
+            std::env::set_var("RA_APPROVALS_AUDIT_ENABLED", "sometimes");
+        }
+        assert!(ApprovalsAuditConfig::from_env().enabled);
+        // An empty value counts as unset, as does removing the variable.
+        unsafe {
+            std::env::set_var("RA_APPROVALS_AUDIT_ENABLED", "");
+        }
+        assert!(ApprovalsAuditConfig::from_env().enabled);
+        unsafe {
+            std::env::remove_var("RA_APPROVALS_AUDIT_ENABLED");
+        }
         assert!(ApprovalsAuditConfig::from_env().enabled);
 
-        match prev_new {
-            Some(v) => unsafe { std::env::set_var("RA_APPROVALS_AUDIT_ENABLED", v) },
-            None => unsafe { std::env::remove_var("RA_APPROVALS_AUDIT_ENABLED") },
+        unsafe {
+            std::env::set_var("RA_APPROVALS_AUDIT_DIR", "/tmp/ra-audit");
         }
-        match prev_legacy {
-            Some(v) => unsafe { std::env::set_var("RA_APPROVALS_AUDIT_ENABLED", v) },
-            None => unsafe { std::env::remove_var("RA_APPROVALS_AUDIT_ENABLED") },
+        assert_eq!(
+            ApprovalsAuditConfig::from_env().directory,
+            Some(PathBuf::from("/tmp/ra-audit"))
+        );
+
+        unsafe {
+            std::env::set_var("RA_APPROVALS_AUDIT_ROTATE_BYTES", "4096");
+        }
+        assert_eq!(ApprovalsAuditConfig::from_env().rotate_bytes, 4096);
+        unsafe {
+            std::env::set_var("RA_APPROVALS_AUDIT_ROTATE_BYTES", "not-a-number");
+        }
+        assert_eq!(
+            ApprovalsAuditConfig::from_env().rotate_bytes,
+            DEFAULT_ROTATE_BYTES
+        );
+
+        for (key, prev) in [
+            ("RA_APPROVALS_AUDIT_ENABLED", prev_enabled),
+            ("RA_APPROVALS_AUDIT_DIR", prev_dir),
+            ("RA_APPROVALS_AUDIT_ROTATE_BYTES", prev_rotate),
+        ] {
+            match prev {
+                Some(v) => unsafe { std::env::set_var(key, v) },
+                None => unsafe { std::env::remove_var(key) },
+            }
         }
     }
 }
