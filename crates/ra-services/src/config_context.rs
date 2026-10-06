@@ -9,9 +9,8 @@
 //! # Resolution rules
 //!
 //! Inputs: the `--data-dir` CLI flag plus the state-home and config-home
-//! environment variables. Every env read is new-name-first with a legacy
-//! fallback ([`ra_core::brand`]): `RA_HOME` > `RA_HOME`,
-//! `RA_CONFIG_DIR` > `RA_CONFIG_DIR`. An empty-string value (env or flag)
+//! environment variables. Every env read goes through [`ra_core::brand`]:
+//! `RA_HOME`, `RA_CONFIG_DIR`. An empty-string value (env or flag)
 //! counts as unset, and override values are normalized (tilde-expanded, made
 //! absolute) before use.
 //!
@@ -19,17 +18,17 @@
 //! only: `~/.ra` (`<config>/ra`). No legacy directory is consulted, migrated
 //! or deleted — an install that used the old name starts fresh here.
 //!
-//! * `data_dir` = `--data-dir` > `RA_HOME` > `RA_HOME` > `~/.ra`
+//! * `data_dir` = `--data-dir` > `RA_HOME` > `~/.ra`
 //!   (state/sessions/skills/logs).
 //! * `is_explicit` = `--data-dir` set OR a state-home override that does not
-//!   name the default location OR `RA_CONFIG_DIR`/`RA_CONFIG_DIR` set.
+//!   name the default location OR `RA_CONFIG_DIR` set.
 //!   `is_default = !is_explicit`. An override that names the default
-//!   (`RA_HOME=~/.ra`, `RA_HOME=~/.ra`) is deliberately *not* explicit:
+//!   (`RA_HOME=~/.ra`) is deliberately *not* explicit:
 //!   it must not split config away from the default config home.
-//! * `config_home` = `RA_CONFIG_DIR` > `RA_CONFIG_DIR` if set, else
+//! * `config_home` = `RA_CONFIG_DIR` if set, else
 //!   `data_dir` when the data dir came from an explicit override, else the
 //!   brand config home (`<config>/ra`).
-//! * `auth_home` = `RA_CONFIG_DIR` > `RA_CONFIG_DIR` if set, else the same
+//! * `auth_home` = `RA_CONFIG_DIR` if set, else the same
 //!   brand config home. **DECOUPLED from `data_dir`** so per-profile gateways
 //!   (which run with `--data-dir <profile-data>`) keep the host's shared,
 //!   global `ra auth login`.
@@ -52,7 +51,7 @@ pub struct ConfigContext {
     /// Where `config.json` is read from / written to (when not project-local).
     pub config_home: PathBuf,
     /// Where `auth.json` lives. GLOBAL (the brand config home) unless
-    /// `RA_CONFIG_DIR` / `RA_CONFIG_DIR` is set.
+    /// `RA_CONFIG_DIR` is set.
     pub auth_home: PathBuf,
     /// Runtime state root: episodes, sessions, skills, memory, logs.
     pub data_dir: PathBuf,
@@ -141,12 +140,12 @@ fn default_config_home() -> PathBuf {
 /// See the module docs for the full rule set. This is the ONLY function that
 /// reads those env vars for path resolution.
 pub fn resolve_config_context(cli_data_dir: Option<&Path>) -> ConfigContext {
-    // New-name-first reads: RA_HOME > RA_HOME, RA_CONFIG_DIR > RA_CONFIG_DIR.
+    // Env reads: RA_HOME, RA_CONFIG_DIR.
     let state_override = normalize_override(brand::env_compat("HOME").map(PathBuf::from));
     let config_override = normalize_override(brand::env_compat("CONFIG_DIR").map(PathBuf::from));
     let cli_override = normalize_override(cli_data_dir.map(PathBuf::from));
 
-    // data_dir: --data-dir > RA_HOME > RA_HOME > ~/.ra. `brand::state_home`
+    // data_dir: --data-dir > RA_HOME > ~/.ra. `brand::state_home`
     // implements the env tail; the CLI flag is the one input it does not know
     // about.
     let data_dir = cli_override
@@ -187,7 +186,7 @@ pub fn resolve_config_context(cli_data_dir: Option<&Path>) -> ConfigContext {
 }
 
 /// Process-wide lock for tests that mutate the global `HOME` / `RA_HOME` /
-/// `RA_HOME` / `RA_CONFIG_DIR` / `RA_CONFIG_DIR` environment variables.
+/// `RA_CONFIG_DIR` environment variables.
 /// These vars are process-global, so EVERY env-pivoting test in the crate (here
 /// and in `config.rs`) must serialize against this single mutex — separate
 /// per-module locks would let tests in different modules race each other and
@@ -202,14 +201,12 @@ mod tests {
     /// Alias for the crate-wide env lock (see [`super::TEST_ENV_LOCK`]).
     use super::TEST_ENV_LOCK as ENV_LOCK;
 
-    /// Every environment variable the resolver reads, in both name generations.
-    /// Pivoting saves all of them so no ambient value can leak in or out.
-    const ENV_KEYS: [&str; 8] = [
+    /// Every environment variable the resolver reads. Pivoting saves all of
+    /// them so no ambient value can leak in or out.
+    const ENV_KEYS: [&str; 6] = [
         "HOME",
         "USERPROFILE",
         "RA_HOME",
-        "RA_HOME",
-        "RA_CONFIG_DIR",
         "RA_CONFIG_DIR",
         "XDG_CONFIG_HOME",
         "APPDATA",
@@ -232,8 +229,6 @@ mod tests {
                 std::env::set_var("HOME", home);
                 std::env::set_var("USERPROFILE", home);
                 std::env::remove_var("RA_HOME");
-                std::env::remove_var("RA_HOME");
-                std::env::remove_var("RA_CONFIG_DIR");
                 std::env::remove_var("RA_CONFIG_DIR");
                 std::env::remove_var("XDG_CONFIG_HOME");
             }
