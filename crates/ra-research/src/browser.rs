@@ -60,10 +60,6 @@ pub use crate::BROWSER_ENV;
 /// Profile directory override (default `~/.ra/browser-profile`).
 pub const BROWSER_PROFILE_ENV: &str = "RA_BROWSER_PROFILE";
 
-/// The spelling the previous build used for [`BROWSER_PROFILE_ENV`]; still
-/// honoured as a fallback.
-pub const LEGACY_BROWSER_PROFILE_ENV: &str = "RA_BROWSER_PROFILE";
-
 /// Chrome/Chromium executable override (same variable the `browser` tool
 /// honours).
 pub const CHROME_ENV: &str = "CHROME";
@@ -218,8 +214,9 @@ pub fn check_profile(profile: &Path, default: bool, home: Option<&Path>) -> Resu
     ))
 }
 
-/// Default profile directory: `~/.ra/browser-profile`. Only the new-name state
-/// home is consulted — a profile created before the rename is not reused.
+/// Default profile directory: `<state home>/browser-profile`. Only the
+/// current state home is consulted — a browser profile a previous install
+/// created under an older directory is not reused.
 pub fn default_profile(lookup: impl Fn(&str) -> Option<String>) -> Option<PathBuf> {
     if let Some(p) =
         crate::resolve_env(&lookup, BROWSER_PROFILE_ENV).filter(|p| !p.trim().is_empty())
@@ -760,26 +757,20 @@ mod tests {
             default_profile(env(&[("HOME", "/home/p")])),
             Some(PathBuf::from("/home/p/.ra/browser-profile"))
         );
-        // The override wins, under both spellings.
+        // The override wins over the HOME default.
         assert_eq!(
             default_profile(env(&[("HOME", "/home/p"), (BROWSER_PROFILE_ENV, "/x")])),
             Some(PathBuf::from("/x"))
-        );
-        assert_eq!(
-            default_profile(env(&[
-                ("HOME", "/home/p"),
-                (LEGACY_BROWSER_PROFILE_ENV, "/y")
-            ])),
-            Some(PathBuf::from("/y"))
         );
         assert_eq!(default_profile(env(&[])), None);
     }
 
     #[test]
-    fn should_default_to_the_new_state_home_ignoring_legacy() {
+    fn should_default_to_the_state_home_when_it_already_exists() {
         let home = std::env::temp_dir().join(format!("ra-browser-home-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
-        // A pre-rename home is present, but the default is always the new one.
+        // The state home is already present (an earlier run left it); the
+        // default resolves to the same path either way.
         std::fs::create_dir_all(home.join(".ra")).unwrap();
         let lookup = {
             let home = home.to_string_lossy().into_owned();
@@ -788,7 +779,7 @@ mod tests {
         assert_eq!(
             default_profile(lookup),
             Some(home.join(".ra/browser-profile")),
-            "a legacy ~/.ra directory is never consulted"
+            "an existing state home yields the same default profile path"
         );
         let _ = std::fs::remove_dir_all(&home);
     }

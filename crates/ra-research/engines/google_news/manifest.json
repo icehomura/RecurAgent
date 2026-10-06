@@ -18,7 +18,7 @@
     "https://news.google.com/rss",
     "https://news.google.com/robots.txt"
   ],
-  "license_note": "Google News search feed: headlines, publisher and date only; article redirect links are cited, never fetched. Google does not document the feed; the feed text limits it to personal, non-commercial feed-reader use, which is how an ra agent acting for one person uses it. news.google.com/robots.txt disallows /rss; it is honoured when the operator sets RA_RESPECT_ROBOTS=1 (legacy RA_RESPECT_ROBOTS still honoured).",
+  "license_note": "Google News search feed: headlines, publisher and date only; article redirect links are cited, never fetched. Google does not document the feed; the feed text limits it to personal, non-commercial feed-reader use, which is how an ra agent acting for one person uses it. news.google.com/robots.txt disallows /rss; it is honoured when the operator sets RA_RESPECT_ROBOTS=1.",
   "weight": 1.0,
   "cache_ttl_secs": 600,
   "timeout_secs": 10,

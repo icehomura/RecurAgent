@@ -66,45 +66,25 @@ pub const PROVIDER_ID: &str = "metasearch";
 /// Environment variable that turns the metasearch off (`0`/`false`/`no`).
 pub const METASEARCH_ENV: &str = "RA_METASEARCH";
 
-/// The spelling the previous build used for [`METASEARCH_ENV`]; still
-/// honoured as a fallback.
-pub const LEGACY_METASEARCH_ENV: &str = "RA_METASEARCH";
-
 /// Contact address for polite pools (OpenAlex `mailto`). Optional.
 pub const CONTACT_ENV: &str = "RA_RESEARCH_CONTACT";
 
-/// The spelling the previous build used for [`CONTACT_ENV`]; still honoured
-/// as a fallback.
-pub const LEGACY_CONTACT_ENV: &str = "RA_RESEARCH_CONTACT";
-
 /// Directory with extra engines (see [`Registry::load_dir`]).
 pub const ENGINES_DIR_ENV: &str = "RA_METASEARCH_ENGINES";
-
-/// The spelling the previous build used for [`ENGINES_DIR_ENV`]; still
-/// honoured as a fallback.
-pub const LEGACY_ENGINES_DIR_ENV: &str = "RA_METASEARCH_ENGINES";
 
 /// Pins file for [`ENGINES_DIR_ENV`] engines (`{"id": "sha256:..."}`); must
 /// live outside that directory.
 pub const PINS_ENV: &str = "RA_METASEARCH_PINS";
 
-/// The spelling the previous build used for [`PINS_ENV`]; still honoured as
-/// a fallback.
-pub const LEGACY_PINS_ENV: &str = "RA_METASEARCH_PINS";
-
 /// Lets a pinned directory engine replace a built-in with the same id
 /// (`1`/`true`/`yes`; off by default).
 pub const ALLOW_OVERRIDE_ENV: &str = "RA_METASEARCH_ALLOW_OVERRIDE";
 
-/// The spelling the previous build used for [`ALLOW_OVERRIDE_ENV`]; still
-/// honoured as a fallback.
-pub const LEGACY_ALLOW_OVERRIDE_ENV: &str = "RA_METASEARCH_ALLOW_OVERRIDE";
-
 /// Default [`SearchRequest::straggler_grace`].
 pub const DEFAULT_STRAGGLER_GRACE: Duration = Duration::from_secs(2);
 
-/// Whether the metasearch is enabled (default on). `RA_METASEARCH` wins over
-/// the legacy `RA_METASEARCH`.
+/// Whether the metasearch is enabled (default on): off only when
+/// [`METASEARCH_ENV`] holds `0`/`false`/`no`/`off`.
 pub fn enabled(lookup: impl Fn(&str) -> Option<String>) -> bool {
     !crate::resolve_env(&lookup, METASEARCH_ENV).is_some_and(|v| {
         matches!(
@@ -160,26 +140,18 @@ impl Default for Config {
     }
 }
 
-/// The value of an engine's `key_env`. Engine key names are plain
-/// (`BRAVE_API_KEY`); an ra-owned knob such as `RA_GOOGLE_CSE_CX` (legacy
-/// `RA_GOOGLE_CSE_CX`) follows the brand fallback.
+/// The value of an engine's `key_env`, empty values dropped. Key names are
+/// either plain (`BRAVE_API_KEY`) or an already-prefixed ra-owned knob
+/// (`RA_GOOGLE_CSE_CX`); both are read through the injected lookup.
 fn engine_key_env(lookup: &impl Fn(&str) -> Option<String>, name: &str) -> Option<String> {
-    let owned = name.starts_with(ra_core::brand::ENV_PREFIX)
-        || name.starts_with(ra_core::brand::ENV_PREFIX);
-    let value = if owned {
-        crate::resolve_env(lookup, name)
-    } else {
-        lookup(name)
-    };
-    value.filter(|v| !v.trim().is_empty())
+    crate::resolve_env(lookup, name).filter(|v| !v.trim().is_empty())
 }
 
 impl Config {
     /// Keys from each engine's `key_env`, settings from
-    /// `RA_METASEARCH_<ENGINE>_<SETTING>` (the legacy
-    /// `RA_METASEARCH_<ENGINE>_<SETTING>` is still honoured), contact from
-    /// [`CONTACT_ENV`]. `extra_keys` (engine id → key, e.g. a profile's
-    /// provider keys) win over the environment.
+    /// `RA_METASEARCH_<ENGINE>_<SETTING>`, contact from [`CONTACT_ENV`].
+    /// `extra_keys` (engine id → key, e.g. a profile's provider keys) win
+    /// over the environment.
     pub fn from_env(
         registry: &Registry,
         lookup: impl Fn(&str) -> Option<String>,

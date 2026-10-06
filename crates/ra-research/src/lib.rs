@@ -59,34 +59,26 @@ pub const AGENT_TOKEN: &str = "ra-research";
 /// browser.
 pub const USER_AGENT: &str = "ra-research/1.0 (+https://github.com/icehomura/RecurAgent)";
 
-/// The environment lookup the research tools use in production: `RA_<NAME>`
-/// wins over the legacy `RA_<NAME>`, and both spellings are honoured
-/// (see [`ra_core::brand::env_compat_str`]).
+/// The environment lookup the research tools use in production: it reads
+/// `RA_<NAME>` (see [`ra_core::brand::env_compat_str`]).
 ///
-/// Accepts the bare suffix (`RESPECT_ROBOTS`) or either fully-prefixed
-/// spelling, so callers that pass the `*_ENV` constants back in (or their
-/// own compat lookup) cannot end up double-prefixing.
+/// Accepts the bare suffix (`RESPECT_ROBOTS`) or the fully-prefixed
+/// spelling, so callers that pass the `*_ENV` constants back in cannot end
+/// up double-prefixing.
 pub fn env_lookup(name: &str) -> Option<String> {
     ra_core::brand::env_compat_str(env_suffix(name))
 }
 
-/// `RA_FOO`/`RA_FOO`/`FOO` → `FOO`.
+/// `RA_FOO`/`FOO` → `FOO`.
 fn env_suffix(name: &str) -> &str {
     name.strip_prefix(ra_core::brand::ENV_PREFIX)
-        .or_else(|| name.strip_prefix(ra_core::brand::ENV_PREFIX))
         .unwrap_or(name)
 }
 
-/// The legacy `RA_` spelling of `name`.
-pub fn legacy_env_name(name: &str) -> String {
-    format!("{}{}", ra_core::brand::ENV_PREFIX, env_suffix(name))
-}
-
-/// Resolve `name` through an injected lookup: the new spelling first, the
-/// legacy `RA_` spelling as the fallback. Production passes
+/// Resolve `name` through an injected lookup. Production passes
 /// [`env_lookup`]; tests pass a map keyed by the names they care about.
 pub(crate) fn resolve_env(lookup: &impl Fn(&str) -> Option<String>, name: &str) -> Option<String> {
-    lookup(name).or_else(|| lookup(&legacy_env_name(name)))
+    lookup(name)
 }
 
 /// Environment variable for results-page search: the metasearch's engines
@@ -102,31 +94,18 @@ pub(crate) fn resolve_env(lookup: &impl Fn(&str) -> Option<String>, name: &str) 
 /// not allow automated queries (Google and Bing: high risk).
 pub const SERP_SCRAPE_ENV: &str = "RA_ALLOW_SERP_SCRAPE";
 
-/// The spelling the previous build used for [`SERP_SCRAPE_ENV`]; still
-/// honoured as a fallback.
-pub const LEGACY_SERP_SCRAPE_ENV: &str = "RA_ALLOW_SERP_SCRAPE";
-
 /// Earlier name of [`SERP_SCRAPE_ENV`], still honoured as an alias.
 pub const BROWSER_SERP_ENV: &str = "RA_ALLOW_BROWSER_SERP";
-
-/// The spelling the previous build used for [`BROWSER_SERP_ENV`]; still
-/// honoured as a fallback.
-pub const LEGACY_BROWSER_SERP_ENV: &str = "RA_ALLOW_BROWSER_SERP";
 
 /// Operator setting that turns robots.txt checks **on** for the research
 /// tools (`1`/`true`/`yes`). Default off: RecurAgent agents are personal
 /// assistants reading on behalf of one person (a product decision by the
-/// maintainer). When off, robots.txt is never fetched or consulted; the
+/// maintainer). When off, robots.txt is never fetched or consulted: the
 /// honest User-Agent, per-host spacing, 429/503 backoff, timeouts, size
 /// caps and SSRF protections all still apply.
 pub const RESPECT_ROBOTS_ENV: &str = "RA_RESPECT_ROBOTS";
 
-/// The spelling the previous build used for [`RESPECT_ROBOTS_ENV`]; still
-/// honoured as a fallback.
-pub const LEGACY_RESPECT_ROBOTS_ENV: &str = "RA_RESPECT_ROBOTS";
-
 /// Whether robots.txt checks are enabled (env lookup injected for tests).
-/// `RA_RESPECT_ROBOTS` wins over the legacy `RA_RESPECT_ROBOTS`.
 pub fn respect_robots(lookup: impl Fn(&str) -> Option<String>) -> bool {
     resolve_env(&lookup, RESPECT_ROBOTS_ENV)
         .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
@@ -137,10 +116,6 @@ pub fn respect_robots(lookup: impl Fn(&str) -> Option<String>) -> bool {
 /// (`google_cse`): `off` (default) | `auto` | `window` | `headless`. See
 /// `ra_research::browser` (feature `browser`).
 pub const BROWSER_ENV: &str = "RA_BROWSER";
-
-/// The spelling the previous build used for [`BROWSER_ENV`]; still honoured
-/// as a fallback.
-pub const LEGACY_BROWSER_ENV: &str = "RA_BROWSER";
 
 /// Shown with results whenever a search used the person's browser (and
 /// logged once when the browser starts): what that means for their account
@@ -163,10 +138,6 @@ pub const BROWSER_SEARCH_NOTICE: &str = "Some results were loaded in the ra brow
 /// retried in the browser; set it to `0` to keep that behaviour.
 pub const READ_BLOCKED_IN_BROWSER_ENV: &str = "RA_READ_BLOCKED_IN_BROWSER";
 
-/// The spelling the previous build used for
-/// [`READ_BLOCKED_IN_BROWSER_ENV`]; still honoured as a fallback.
-pub const LEGACY_READ_BLOCKED_IN_BROWSER_ENV: &str = "RA_READ_BLOCKED_IN_BROWSER";
-
 /// Whether a page blocked over plain HTTP may be read once in the browser
 /// ([`READ_BLOCKED_IN_BROWSER_ENV`]; env lookup injected for tests).
 pub fn read_blocked_in_browser(lookup: impl Fn(&str) -> Option<String>) -> bool {
@@ -187,8 +158,7 @@ pub const SEARXNG_URL_ENV: &str = "SEARXNG_URL";
 /// for `1`/`true`/`yes`/`on`; any other value, including an empty or
 /// unrecognised one, turns it **off**, so a mistyped opt-out fails safe.
 /// If either [`SERP_SCRAPE_ENV`] or its alias [`BROWSER_SERP_ENV`] turns it
-/// off, it is off; for each, the `RA_` spelling wins over the legacy
-/// `RA_` one. The env lookup is injected so tests never touch process
+/// off, it is off. The env lookup is injected so tests never touch process
 /// env.
 pub fn serp_scrape_allowed(lookup: impl Fn(&str) -> Option<String>) -> bool {
     [SERP_SCRAPE_ENV, BROWSER_SERP_ENV].iter().all(|k| {
@@ -260,31 +230,7 @@ mod tests {
             assert!(!serp_scrape_allowed(only(SERP_SCRAPE_ENV, off)), "{off:?}");
         }
         assert!(!serp_scrape_allowed(only(BROWSER_SERP_ENV, "0")), "alias");
-        // The legacy `RA_` spellings are still honoured…
-        assert!(
-            !serp_scrape_allowed(only(LEGACY_SERP_SCRAPE_ENV, "0")),
-            "legacy"
-        );
-        assert!(
-            !serp_scrape_allowed(only(LEGACY_BROWSER_SERP_ENV, "0")),
-            "legacy alias"
-        );
-        // …and the new spelling wins over the legacy one.
-        let both = |new: &'static str, legacy: &'static str| {
-            move |k: &str| {
-                if k == new {
-                    Some("1".to_string())
-                } else if k == legacy {
-                    Some("0".to_string())
-                } else {
-                    None
-                }
-            }
-        };
-        assert!(serp_scrape_allowed(both(
-            SERP_SCRAPE_ENV,
-            LEGACY_SERP_SCRAPE_ENV
-        )));
+        // An unrelated variable never turns it off.
         assert!(serp_scrape_allowed(only("OTHER", "0")));
     }
 
@@ -296,11 +242,6 @@ mod tests {
         );
         assert!(
             serp_scrape_default_notice(|k| (k == BROWSER_SERP_ENV).then(|| "0".into())).is_none()
-        );
-        assert!(
-            serp_scrape_default_notice(|k| (k == LEGACY_SERP_SCRAPE_ENV).then(|| "1".into()))
-                .is_none(),
-            "the legacy spelling counts as set"
         );
     }
 
@@ -333,17 +274,6 @@ mod tests {
         for off in ["0", "false", "off", "", "nope"] {
             assert!(!read_blocked_in_browser(set(off)), "{off:?}: fails safe");
         }
-        let legacy = |v: &'static str| {
-            move |k: &str| (k == LEGACY_READ_BLOCKED_IN_BROWSER_ENV).then(|| v.to_string())
-        };
-        assert!(
-            read_blocked_in_browser(legacy("1")),
-            "legacy spelling honoured"
-        );
-        assert!(
-            !read_blocked_in_browser(legacy("0")),
-            "legacy opt-out honoured"
-        );
     }
 
     #[test]
@@ -353,28 +283,14 @@ mod tests {
         assert!(respect_robots(
             |k| (k == RESPECT_ROBOTS_ENV).then(|| "1".to_string())
         ));
-        assert!(
-            respect_robots(|k| (k == LEGACY_RESPECT_ROBOTS_ENV).then(|| "1".to_string())),
-            "the legacy spelling turns it on too"
-        );
     }
 
     #[test]
     fn env_lookup_accepts_bare_and_prefixed_names_without_inventing_values() {
-        // Pure: neither the `RA_` nor the legacy `RA_` spelling is set, so
-        // the helper must not invent a value (no process env is touched).
+        // Pure: neither the bare nor the prefixed name is set, so the
+        // helper must not invent a value (no process env is touched).
         assert_eq!(env_lookup("NOT_SET_XYZ"), None);
         assert_eq!(env_lookup("RA_NOT_SET_XYZ"), None);
-        assert_eq!(env_lookup("RA_NOT_SET_XYZ"), None);
-        assert_eq!(
-            legacy_env_name("RA_RESPECT_ROBOTS"),
-            LEGACY_RESPECT_ROBOTS_ENV
-        );
-        assert_eq!(legacy_env_name("RESPECT_ROBOTS"), LEGACY_RESPECT_ROBOTS_ENV);
-        assert_eq!(
-            legacy_env_name(LEGACY_RESPECT_ROBOTS_ENV),
-            LEGACY_RESPECT_ROBOTS_ENV
-        );
     }
 
     #[test]

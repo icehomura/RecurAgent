@@ -552,10 +552,7 @@ fn should_read_keys_settings_and_contact_from_the_environment() {
         ("BRAVE_API_KEY", " bk "),
         ("GITHUB_TOKEN", ""),
         ("RA_METASEARCH_MASTODON_INSTANCE", "fosstodon.org"),
-        // The legacy `RA_` spellings are still honoured…
         ("RA_RESEARCH_CONTACT", "ops@example.org"),
-        // …and the new spelling wins over the legacy one.
-        ("RA_RESEARCH_CONTACT", "new@example.org"),
         ("RA_METASEARCH_STACKEXCHANGE_SITE", "serverfault"),
     ]);
     let lookup = |k: &str| env.get(k).map(|v| v.to_string());
@@ -570,14 +567,13 @@ fn should_read_keys_settings_and_contact_from_the_environment() {
     assert_eq!(c.settings["mastodon"]["instance"], "fosstodon.org");
     assert_eq!(
         c.settings["stackexchange"]["site"], "serverfault",
-        "the legacy settings spelling is honoured"
+        "RA_METASEARCH_<ENGINE>_<SETTING> is read from the environment"
     );
-    assert_eq!(c.contact.as_deref(), Some("new@example.org"));
+    assert_eq!(c.contact.as_deref(), Some("ops@example.org"));
     assert!(enabled(|_| None));
     assert!(!enabled(|_| Some("0".into())));
-    assert!(!enabled(
-        |k| (k == LEGACY_METASEARCH_ENV).then(|| "0".into())
-    ));
+    // The opt-out is bound to the one canonical variable name.
+    assert!(!enabled(|k| (k == METASEARCH_ENV).then(|| "0".into())));
 }
 
 #[tokio::test(start_paused = true)]
