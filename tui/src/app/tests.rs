@@ -5748,13 +5748,16 @@ mod tests {
     #[test]
     fn agent_task_edit_row_compacts_complete_detail_echo() {
         let item = ActivityItem::new(ActivityKind::Tool, "edit_file", "complete")
-            .with_detail(r#"{"path":"/a/App.tsx","new_string":"<Route/>\n  <Route/>"}"#)
+            .with_detail(r#"{"new_string":"<Route/>\n  <Route/>","path":"/a/App.tsx"}"#)
             .with_success(true)
             .with_duration_ms(21);
         let text = agent_task_child_text(&item, 120);
-        // serde_json maps iterate alphabetically (no preserve_order), so the
-        // first meaningful field is `new_string`; its REAL newline (decoded by
-        // the strict parse) must flatten to spaces in the one-line row.
+        // `new_string` is written FIRST in the fixture so the first meaningful
+        // field is stable under either serde_json Map order (the workspace
+        // unification enables preserve_order via agent-client-protocol, making
+        // iteration follow document order instead of alphabetical); its REAL
+        // newline (decoded by the strict parse) must flatten to spaces in the
+        // one-line row.
         assert!(
             text.contains("new_string=<Route/>   <Route/>"),
             "complete echo must compact to key=value: {text:?}"
