@@ -103,7 +103,7 @@ def architecture(zh=False):
     c.text(48, 135, choose("Embed the libraries or control a runtime through OUP.", "将库嵌入应用，或通过 OUP 控制运行时。"), 19, MUTED)
 
     entries = [
-        (48, "app", choose("Applications", "应用客户端"), "ra-tui · ra-tui Web"),
+        (48, "app", choose("Applications", "应用客户端"), "ra (TUI) · ra Web"),
         (424, "agents", choose("Agent controllers", "Agent 控制端"), "Codex · Claude Code"),
         (800, "code", choose("Your native app", "你的原生应用"), choose("Desktop · service · device", "桌面应用 · 服务 · 设备")),
     ]

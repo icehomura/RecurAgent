@@ -10,7 +10,7 @@
 <rect x="48" y="174" width="352" height="96" rx="16" fill="#ffffff" stroke="#dce5ef"/>
 <g transform="translate(72 199) scale(1)" fill="none" stroke="#3468ce" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="24" height="21" rx="4"/><path d="M2 10h24"/><path d="M7 6.5h.1M11 6.5h.1"/></g>
 <text x="116" y="211" font-size="22" font-weight="600" fill="#182b45" text-anchor="start">Applications</text>
-<text x="72" y="244" font-size="18" font-weight="400" fill="#5c6f86" text-anchor="start">ra-tui · ra-tui Web</text>
+<text x="72" y="244" font-size="18" font-weight="400" fill="#5c6f86" text-anchor="start">ra (TUI) · ra Web</text>
 <rect x="424" y="174" width="352" height="96" rx="16" fill="#ffffff" stroke="#dce5ef"/>
 <g transform="translate(448 199) scale(1)" fill="none" stroke="#3468ce" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="14" cy="6" r="4"/><circle cx="5" cy="20" r="4"/><circle cx="23" cy="20" r="4"/><path d="M11 10 7 16m10-6 4 6M9 20h10"/></g>
 <text x="492" y="211" font-size="22" font-weight="600" fill="#182b45" text-anchor="start">Agent controllers</text>
