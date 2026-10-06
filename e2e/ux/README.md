@@ -35,9 +35,9 @@ tier = "local"
 transport = "stdio"
 provider = "fixture"
 terminal = "100x30"
-tui_binary = "ra-tui"
+tui_binary = "ra"
 tmux_command = "ux-tui-stdio-happy"
-required_tools = ["tmux", "ra", "ra-tui"]
+required_tools = ["tmux", "ra"]
 required_capabilities = ["chat/send_prompt", "chat/receive_response"]
 expected_artifacts = [
   "scenario.json",
@@ -74,7 +74,7 @@ replay = "e2e/ux/replays/stdio-happy-path.replay"
 | `transport`             | enum           | yes      | `stdio` or `ws`. |
 | `provider`              | enum           | yes      | `fixture`, `live`, or `none`. |
 | `terminal`              | string         | yes      | e.g. `80x24`, `100x30`, `120x40`, `narrow`. |
-| `tui_binary`            | string         | yes      | Logical binary name; resolved by the runner (#1065). |
+| `tui_binary`            | string         | yes      | Logical binary name; the merged `ra` binary is resolved by the runner (#1065). |
 | `tmux_command`          | string         | yes      | Logical command label; runner picks the script. |
 | `required_tools`        | string[]       | yes      | Host binaries that MUST be on PATH. |
 | `required_capabilities` | string[]       | yes      | AppUI capability flags (see UPCR-2026-019). |

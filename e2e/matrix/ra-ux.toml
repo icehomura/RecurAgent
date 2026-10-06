@@ -5,8 +5,8 @@
 # registry (#1066). When the schema changes, bump `schema_version`.
 #
 # Each `[[scenario]]` table declares one UX scenario the gate can list, plan,
-# and (in follow-up PRs) actually run through real tmux against a real
-# `ra` plus real `ra-tui`.
+# and (in follow-up PRs) actually run through real tmux against the merged
+# `ra` binary (CLI + TUI).
 #
 # Mandatory fields per scenario:
 #   id                 - kebab-case identifier, unique
@@ -40,9 +40,9 @@ tier = "fast"
 transport = "stdio"
 provider = "fixture"
 terminal = "80x24"
-tui_binary = "ra-tui"
+tui_binary = "ra"
 tmux_command = "ux-tui-solo-onboarding"
-required_tools = ["tmux", "ra", "ra-tui"]
+required_tools = ["tmux", "ra"]
 required_capabilities = ["onboarding/workspace_probe", "runtime/policy_stamp"]
 expected_artifacts = [
   "scenario.json",
@@ -73,9 +73,9 @@ tier = "fast"
 transport = "stdio"
 provider = "none"
 terminal = "80x24"
-tui_binary = "ra-tui"
+tui_binary = "ra"
 tmux_command = "ux-tui-provider-missing"
-required_tools = ["tmux", "ra", "ra-tui"]
+required_tools = ["tmux", "ra"]
 required_capabilities = ["onboarding/workspace_probe"]
 expected_artifacts = [
   "scenario.json",
@@ -106,9 +106,9 @@ tier = "local"
 transport = "stdio"
 provider = "fixture"
 terminal = "80x24"
-tui_binary = "ra-tui"
+tui_binary = "ra"
 tmux_command = "ux-tui-permission-selection"
-required_tools = ["tmux", "ra", "ra-tui"]
+required_tools = ["tmux", "ra"]
 required_capabilities = ["runtime/policy_stamp", "permission/profile_select"]
 expected_artifacts = [
   "scenario.json",
@@ -140,9 +140,9 @@ tier = "local"
 transport = "stdio"
 provider = "fixture"
 terminal = "100x30"
-tui_binary = "ra-tui"
+tui_binary = "ra"
 tmux_command = "ux-tui-stdio-happy"
-required_tools = ["tmux", "ra", "ra-tui"]
+required_tools = ["tmux", "ra"]
 required_capabilities = ["chat/send_prompt", "chat/receive_response"]
 expected_artifacts = [
   "scenario.json",
@@ -171,9 +171,9 @@ tier = "local"
 transport = "ws"
 provider = "fixture"
 terminal = "100x30"
-tui_binary = "ra-tui"
+tui_binary = "ra"
 tmux_command = "ux-tui-ws-happy"
-required_tools = ["tmux", "ra", "ra-tui"]
+required_tools = ["tmux", "ra"]
 required_capabilities = ["chat/send_prompt", "chat/receive_response"]
 expected_artifacts = [
   "scenario.json",
@@ -202,9 +202,9 @@ tier = "local"
 transport = "stdio"
 provider = "fixture"
 terminal = "100x30"
-tui_binary = "ra-tui"
+tui_binary = "ra"
 tmux_command = "ux-tui-approval-denial"
-required_tools = ["tmux", "ra", "ra-tui"]
+required_tools = ["tmux", "ra"]
 required_capabilities = ["approval/request", "approval/deny"]
 expected_artifacts = [
   "scenario.json",
@@ -236,9 +236,9 @@ tier = "local"
 transport = "stdio"
 provider = "fixture"
 terminal = "120x40"
-tui_binary = "ra-tui"
+tui_binary = "ra"
 tmux_command = "ux-tui-task-subagent-tree"
-required_tools = ["tmux", "ra", "ra-tui"]
+required_tools = ["tmux", "ra"]
 required_capabilities = ["task/spawn", "task/observe"]
 expected_artifacts = [
   "scenario.json",
@@ -274,9 +274,9 @@ tier = "release"
 transport = "ws"
 provider = "fixture"
 terminal = "100x30"
-tui_binary = "ra-tui"
+tui_binary = "ra"
 tmux_command = "ux-tui-restart-reconnect"
-required_tools = ["tmux", "ra", "ra-tui"]
+required_tools = ["tmux", "ra"]
 required_capabilities = ["session/resume", "session/snapshot", "session/hydrate", "protocol/replay_lossy", "transport/reconnect"]
 expected_artifacts = [
   "scenario.json",
@@ -313,9 +313,9 @@ tier = "release"
 transport = "stdio"
 provider = "fixture"
 terminal = "narrow"
-tui_binary = "ra-tui"
+tui_binary = "ra"
 tmux_command = "ux-tui-narrow-layout"
-required_tools = ["tmux", "ra", "ra-tui"]
+required_tools = ["tmux", "ra"]
 required_capabilities = ["chat/send_prompt"]
 expected_artifacts = [
   "scenario.json",
@@ -342,9 +342,9 @@ tier = "release"
 transport = "ws"
 provider = "fixture"
 terminal = "100x30"
-tui_binary = "ra-tui"
+tui_binary = "ra"
 tmux_command = "ux-tui-dropped-completion"
-required_tools = ["tmux", "ra", "ra-tui"]
+required_tools = ["tmux", "ra"]
 required_capabilities = ["chat/send_prompt", "chat/stream", "turn/completed", "protocol/replay_lossy", "session/snapshot"]
 expected_artifacts = [
   "scenario.json",

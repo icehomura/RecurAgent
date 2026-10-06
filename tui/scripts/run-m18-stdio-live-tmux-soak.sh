@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
-ra_repo="${RA_REPO:-$(cd "$repo_root/../ra" 2>/dev/null && pwd || true)}"
+workspace_root="$(cd "$repo_root/.." && pwd)"
 
 run_id="${RA_TUI_M18_STDIO_RUN_ID:-m18-stdio-live-$(date -u +%Y%m%dT%H%M%SZ)}"
 artifact_root="${RA_TUI_M18_STDIO_ARTIFACT_ROOT:-$repo_root/e2e/test-results-m18-stdio-live-tmux}"
@@ -11,8 +11,8 @@ artifact_dir="${RA_TUI_M18_STDIO_RUN_ARTIFACT_DIR:-$artifact_root/$run_id}"
 runtime_root="${RA_TUI_M18_STDIO_RUNTIME_ROOT:-/tmp/ra-tui-m18-stdio-$run_id}"
 workspace="${RA_TUI_M18_STDIO_WORKSPACE:-$runtime_root/workspace}"
 data_dir="${RA_TUI_M18_STDIO_DATA_DIR:-$runtime_root/data}"
-ra_bin="${RA_BIN:-${ra_repo:+$ra_repo/target/debug/ra}}"
-ra_tui_bin="${RA_TUI_BIN:-$repo_root/target/debug/ra-tui}"
+ra_bin="${RA_BIN:-$workspace_root/target/debug/ra}"
+ra_tui_bin="${RA_TUI_BIN:-$workspace_root/target/debug/ra}"
 profile_id="${RA_TUI_M18_STDIO_PROFILE:-coding}"
 session_id="${RA_TUI_M18_STDIO_SESSION:-$profile_id:local:m18-stdio#$run_id}"
 tmux_session="${RA_TUI_M18_STDIO_TMUX_SESSION:-ra-m18-stdio-$run_id}"
@@ -32,8 +32,8 @@ Commands:
   self-test  Exercise repeat-report accounting with synthetic child commands only.
 
 Environment:
-  RA_BIN                                  Backend binary. Default: ../ra/target/debug/ra.
-  RA_TUI_BIN                              TUI binary. Default: target/debug/ra-tui.
+  RA_BIN                                  Backend binary. Default: workspace target/debug/ra.
+  RA_TUI_BIN                              TUI binary override. Default: the merged ra binary (workspace target/debug/ra).
   RA_TUI_M18_STDIO_REPEAT_COUNT           Repeat count for repeat. Default: 1.
   RA_TUI_M18_STDIO_FAILURE_BUDGET         Allowed failed runs before repeat exits nonzero. Default: 0.
   RA_TUI_M18_STDIO_ARTIFACT_ROOT          Report/artifact root. Default: e2e/test-results-m18-stdio-live-tmux.
@@ -135,7 +135,7 @@ run_once() {
   require_executable RA_BIN "$ra_bin"
   require_executable RA_TUI_BIN "$ra_tui_bin"
   if ! "$ra_bin" serve --help >/dev/null 2>&1; then
-    die 'RA_BIN does not expose 'serve': $ra_bin"
+    die "RA_BIN does not expose 'serve': $ra_bin"
   fi
 
   mkdir -p "$artifact_dir" "$workspace" "$data_dir"

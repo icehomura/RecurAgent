@@ -2,7 +2,6 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RA_TUI_DIR="${RA_TUI_DIR:-$ROOT_DIR/../ra-tui}"
 
 # shellcheck source=../../scripts/tmux-cli-driver.sh
 if [ -f "$ROOT_DIR/scripts/tmux-cli-driver.sh" ]; then
@@ -373,14 +372,12 @@ resolve_ra_tui_bin_cmd() {
 
   if [ -n "${RA_TUI_BIN:-}" ]; then
     RA_TUI_BIN_CMD="$RA_TUI_BIN"
-  elif [ -f "$RA_TUI_DIR/Cargo.toml" ]; then
-    RA_TUI_BIN_CMD="cargo run --manifest-path $(printf '%q' "$RA_TUI_DIR/Cargo.toml") --"
-  elif [ -x "$RA_TUI_DIR/target/debug/ra-tui" ]; then
-    RA_TUI_BIN_CMD="$RA_TUI_DIR/target/debug/ra-tui"
-  elif [ -x "$ROOT_DIR/target/debug/ra-tui" ]; then
-    RA_TUI_BIN_CMD="$ROOT_DIR/target/debug/ra-tui"
+  elif [ -x "$ROOT_DIR/target/debug/ra" ]; then
+    RA_TUI_BIN_CMD="$ROOT_DIR/target/debug/ra"
+  elif [ -f "$ROOT_DIR/Cargo.toml" ]; then
+    RA_TUI_BIN_CMD="cargo run --manifest-path $(printf '%q' "$ROOT_DIR/Cargo.toml") -p ra-cli --bin ra --"
   else
-    echo "Unable to locate standalone ra-tui. Set RA_TUI_BIN or RA_TUI_DIR." >&2
+    echo "Unable to locate the merged ra TUI binary. Set RA_TUI_BIN." >&2
     exit 2
   fi
 }
@@ -620,8 +617,8 @@ run_default() {
   run_line_capture "ra-help" "$RA_BIN_CMD --help" "Usage: ra" "Commands:" "serve"
   run_line_capture \
     "ra-tui-help" \
-    "$RA_TUI_BIN_CMD --help" \
-    "Usage: ra-tui" \
+    "$RA_TUI_BIN_CMD --mode protocol --help" \
+    "Usage: ra.*\[OPTIONS\]" \
     "--mode" \
     "--endpoint" \
     "--session" \

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Drive the real ra-tui protocol client and Codex through tmux on the same
-# coding fixture. The ra server is only the AppUi/UI Protocol backend; the
-# sole Ra product client under test is standalone ra-tui.
+# Drive the real `ra` terminal UI and Codex through tmux on the same coding
+# fixture. The ra server is only the AppUi/UI Protocol backend; the sole Ra
+# product client under test is the TUI built into `ra` itself (bare `ra`).
 
 set -euo pipefail
 
@@ -14,7 +14,9 @@ export RA_TMUX_RUN_ID="${RA_TMUX_RUN_ID:-$RUN_ID}"
 # shellcheck source=tmux-cli-driver.sh
 source "$ROOT_DIR/scripts/tmux-cli-driver.sh"
 
-RA_TUI_DIR="${RA_TUI_DIR:-$ROOT_DIR/../ra-tui}"
+# The terminal UI ships inside the `ra` binary (bare `ra` opens it), so there
+# is no separate ra-tui checkout anymore; both lanes build/use this repo's `ra`.
+TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT_DIR/target}"
 LONG_MODE="${RA_TUI_UX_LONG:-0}"
 if [ "$LONG_MODE" = "1" ] && [ -z "${RA_TUI_UX_FIXTURE_DIR+x}" ]; then
   FIXTURE_DIR="$ROOT_DIR/e2e/fixtures/coding-agent-long-workspace"
@@ -212,16 +214,23 @@ cleanup_all() {
   tmux_cleanup
 }
 
+# Both lanes use this repo's `ra`: the backend runs `ra serve`, and the client
+# lane runs bare `ra`, which opens the TUI linked into the same binary.
+ra_default_bin() {
+  local bin="$TARGET_DIR/debug/ra"
+  if [ ! -x "$bin" ]; then
+    log "building ra (backend + terminal UI)"
+    ( cd "$ROOT_DIR" && cargo build -p ra-cli --features api --bin ra )
+  fi
+  printf '%s\n' "$bin"
+}
+
 resolve_ra_bin() {
   if [ -n "${RA_BIN:-}" ]; then
     printf '%s\n' "$RA_BIN"
     return 0
   fi
-  if [ ! -x "$ROOT_DIR/target/debug/ra" ]; then
-    log "building ra backend"
-    cargo build -p ra-cli --features api --bin ra
-  fi
-  printf '%s\n' "$ROOT_DIR/target/debug/ra"
+  ra_default_bin
 }
 
 resolve_tui_bin() {
@@ -229,11 +238,9 @@ resolve_tui_bin() {
     printf '%s\n' "$RA_TUI_BIN"
     return 0
   fi
-  if [ ! -x "$RA_TUI_DIR/target/debug/ra-tui" ]; then
-    log "building ra-tui client"
-    cargo build --manifest-path "$RA_TUI_DIR/Cargo.toml" --bin ra-tui
-  fi
-  printf '%s\n' "$RA_TUI_DIR/target/debug/ra-tui"
+  # Bare `ra` opens the terminal UI (linked into the `ra` binary), so the TUI
+  # lane reuses the same backend build — there is no standalone client.
+  ra_default_bin
 }
 
 start_compat_proxy_if_needed() {
@@ -1148,7 +1155,7 @@ EOF
     return 1
   fi
 
-  tui_command="cd '$RA_TUI_DIR' && RUST_LOG=off '$tui_bin' --mode protocol --endpoint '$endpoint' --session '$SESSION_ID' --profile-id coding --cwd '$dir' --auth-token '$AUTH_TOKEN'"
+  tui_command="cd '$ROOT_DIR' && RUST_LOG=off '$tui_bin' --mode protocol --endpoint '$endpoint' --session '$SESSION_ID' --profile-id coding --cwd '$dir' --auth-token '$AUTH_TOKEN'"
   start_plain_session "$tui_session" "$tui_command"
   start_frame_sampler "$tui_session" ra-tui
   frame_sampler_pid="$LAST_FRAME_SAMPLER_PID"
@@ -1853,6 +1860,8 @@ main() {
   if [ "$RUN_TUI" = "1" ]; then
     ra_bin="$(resolve_ra_bin)"
     tui_bin="$(resolve_tui_bin)"
+    # "ra-tui" here is only the TUI lane's candidate/label (fixture copy name,
+    # tmux session, artifact prefix) — not a separate binary to build.
     drive_tui "$(prepare_candidate ra-tui)" "$ra_bin" "$tui_bin" || tui_rc=$?
   fi
 

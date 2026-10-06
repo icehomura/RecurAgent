@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
-ra_repo="${RA_REPO:-$(cd "$repo_root/../ra" 2>/dev/null && pwd || true)}"
+ra_repo="${RA_REPO:-$(cd "$repo_root/.." && pwd)}"
 
 run_id="${RA_TUI_SOAK_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 artifact_root="${RA_TUI_SOAK_ARTIFACT_ROOT:-$repo_root/e2e/test-results-tui-onboarding}"
@@ -14,7 +14,7 @@ data_dir="${RA_TUI_SOAK_DATA_DIR:-$runtime_root/data}"
 logs_dir="${RA_TUI_SOAK_LOGS_DIR:-$runtime_root/logs}"
 
 ra_bin="${RA_BIN:-${ra_repo:+$ra_repo/target/debug/ra}}"
-ra_tui_bin="${RA_TUI_BIN:-$repo_root/target/debug/ra-tui}"
+ra_tui_bin="${RA_TUI_BIN:-$(cd "$repo_root/.." && pwd)/target/debug/ra}"
 transport="${RA_TUI_SOAK_TRANSPORT:-ws}"
 if [ "$transport" = "stdio" ]; then
   default_solo_probe_data_dir="$runtime_root/solo-probe-data"
@@ -49,9 +49,9 @@ usage() {
 Usage: scripts/run-onboarding-tmux-soak.sh <preflight-live|start|restart-server|drive-onboard|drive-solo|drive-permissions|drive-provider-missing|drive-approval-denial|drive-multiline-composer|drive-runtime-menus|drive-task-subagent-tree|drive-task-subagent-reconnect|drive-task-subagent-old-server-fallback|drive-autonomy-live|drive-autonomy-reconnect|drive-dropped-completion-backpressure|drive-interrupt-reconnect|drive-validator-cycle|drive-long-output|drive-narrow-terminal|drive-diff-artifact|drive-tool-denial|drive-tool-success|capture|send-turn|verify|verify-onboard|verify-solo|verify-solo-closure|verify-solo-transport-closure|verify-first-launch|verify-provider-missing|verify-permissions|verify-approval-denial|verify-multiline-composer|verify-runtime-menus|verify-task-subagent-tree|verify-task-subagent-reconnect|verify-task-subagent-old-server-fallback|verify-task-subagent-closure|verify-backpressure|verify-interrupt-reconnect|verify-validator-cycle|verify-long-output|verify-narrow-terminal|verify-diff-artifact|verify-tool-denial|verify-tool-success|verify-autonomy-live|verify-autonomy-reconnect|verify-autonomy-closure|verify-transport-parity|verify-ux-run|api-parity|self-test|solo-self-test|stop|help>
 
 Environment:
-  RA_REPO                     Path to sibling ra checkout.
-  RA_BIN                      ra backend binary.
-  RA_TUI_BIN                  ra-tui binary.
+  RA_REPO                     Path to the RecurAgent workspace. Default: this repo.
+  RA_BIN                      ra backend binary. Default: workspace target/debug/ra.
+  RA_TUI_BIN                  TUI binary override. Default: the merged ra binary (workspace target/debug/ra).
   RA_TUI_SOAK_TRANSPORT       ws or stdio, default ws.
   RA_TUI_SOAK_RUN_ID          Stable run id for repeated capture/verify.
   RA_TUI_SOAK_RUNTIME_ROOT    Runtime workspace/data/log root used by tmux children, default /tmp/ra-tui-onboarding-$run_id.
@@ -161,7 +161,7 @@ require_bin() {
 require_ra_serve() {
   require_bin RA_BIN "$ra_bin"
   if ! "$ra_bin" serve --help >/dev/null 2>&1; then
-    die 'RA_BIN does not expose 'serve'; build ra-cli with the api feature or set RA_BIN to an API-enabled binary"
+    die "RA_BIN does not expose 'serve'; build ra-cli with the api feature or set RA_BIN to an API-enabled binary"
   fi
 }
 
@@ -308,7 +308,7 @@ preflight_live() {
     ra_check="missing serve"
     ra_version_status="missing serve"
     status="failed"
-    [ -n "$failure" ] || failure='RA_BIN does not expose 'serve'; build ra-cli with the api feature or set RA_BIN to an API-enabled binary"
+    [ -n "$failure" ] || failure="RA_BIN does not expose 'serve'; build ra-cli with the api feature or set RA_BIN to an API-enabled binary"
   elif ra_version="$("$ra_bin" --version 2>/dev/null)"; then
     ra_version_status="passed"
   else

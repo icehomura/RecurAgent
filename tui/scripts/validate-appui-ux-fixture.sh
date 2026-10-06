@@ -58,7 +58,7 @@ Required live matrix:
 - validator lane that records at least one failed validator followed by a passing rerun.
 - narrow terminal lane, 80x24 or smaller, with no overlap in cockpit/timeline/safety panes.
 
-Run the parent ra tmux harness against this ra-tui checkout and retain:
+Run the parent ra tmux harness against this workspace and retain:
 - transcripts/appui-transcript.jsonl
 - logs/server.log
 - policy/runtime-policy-stamp.json

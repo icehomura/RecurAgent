@@ -5,8 +5,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 
 run_id="${RA_M15_TASK_MIRROR_TMUX_RUN_ID:-m15-task-mirror-tmux-$(date -u +%Y%m%dT%H%M%SZ)}"
-tui_repo="${RA_TUI_REPO:-$(dirname "$repo_root")/ra-tui}"
-tui_runner="${RA_M15_TASK_MIRROR_TUI_RUNNER:-$tui_repo/scripts/run-m15-live-tmux-ux-soak.sh}"
+tui_runner="${RA_M15_TASK_MIRROR_TUI_RUNNER:-$repo_root/tui/scripts/run-m15-live-tmux-ux-soak.sh}"
 out_root="${RA_M15_TASK_MIRROR_TMUX_OUT_ROOT:-$repo_root/e2e/test-results-m15-task-supervisor-mirror-tmux}"
 out_dir="${RA_M15_TASK_MIRROR_TMUX_OUT_DIR:-$out_root/$run_id}"
 runtime_root="${RA_M15_TASK_MIRROR_TMUX_RUNTIME_ROOT:-/tmp/ra-m15-task-mirror-$run_id}"
@@ -14,7 +13,7 @@ data_dir="${RA_M15_TASK_MIRROR_TMUX_DATA_DIR:-$runtime_root/data}"
 workdir="${RA_M15_TASK_MIRROR_TMUX_WORKDIR:-$runtime_root/workspace}"
 replay_file="${RA_M15_TASK_MIRROR_TMUX_REPLAY:-$out_dir/m15-task-supervisor-mirror-replay.txt}"
 ra_bin="${RA_BIN:-$repo_root/target/debug/ra}"
-tui_bin="${RA_TUI_BIN:-$tui_repo/target/debug/ra-tui}"
+tui_bin="${RA_TUI_BIN:-$repo_root/target/debug/ra}"
 session_name="${RA_M15_TASK_MIRROR_TMUX_SESSION:-ra-m15-task-mirror-$run_id}"
 profile_id="${RA_M15_TASK_MIRROR_PROFILE:-coding}"
 session_id="${RA_M15_TASK_MIRROR_SESSION_ID:-$profile_id:local:m15-task-mirror:$run_id}"
@@ -27,11 +26,10 @@ Runs a real tmux visual soak proving that ra-tui can display a backend
 TaskSupervisor task mirrored into the AppUI agent lifecycle over stdio.
 
 Environment:
-  RA_TUI_REPO                         Path to ra-tui checkout. Default: an ra-tui checkout next to this repo.
-  RA_BIN                              ra binary. Default: ra/target/debug/ra.
-  RA_TUI_BIN                          ra-tui binary. Default: ra-tui/target/debug/ra-tui.
+  RA_BIN                              ra binary. Default: target/debug/ra.
+  RA_TUI_BIN                          TUI binary override. Default: the merged ra binary (target/debug/ra).
   RA_M15_TASK_MIRROR_BUILD            Set 0 to skip building ra. Default: 1.
-  RA_M15_TASK_MIRROR_BUILD_TUI        Set 1 to rebuild ra-tui. Default: build only if missing.
+  RA_M15_TASK_MIRROR_BUILD_TUI        Set 1 to force rebuilding the merged ra/TUI binary. Default: build only if missing.
   RA_M15_TASK_MIRROR_TMUX_KEEP_SESSION
                                          Set 1 to keep tmux session after the run.
 USAGE
@@ -47,15 +45,12 @@ shell_quote() {
 }
 
 ensure_binaries() {
-  if [[ "${RA_M15_TASK_MIRROR_BUILD:-1}" == "1" ]]; then
+  if [[ "${RA_M15_TASK_MIRROR_BUILD:-1}" == "1" || "${RA_M15_TASK_MIRROR_BUILD_TUI:-0}" == "1" || ! -x "$tui_bin" ]]; then
     (cd "$repo_root" && cargo build -p ra-cli --bin ra --features api)
   fi
-  if [[ "${RA_M15_TASK_MIRROR_BUILD_TUI:-0}" == "1" || ! -x "$tui_bin" ]]; then
-    (cd "$tui_repo" && cargo build --bin ra-tui)
-  fi
   [[ -x "$ra_bin" ]] || die "ra binary is not executable: $ra_bin"
-  [[ -x "$tui_bin" ]] || die "ra-tui binary is not executable: $tui_bin"
-  [[ -x "$tui_runner" ]] || die "ra-tui tmux runner is not executable: $tui_runner"
+  [[ -x "$tui_bin" ]] || die "TUI ra binary is not executable: $tui_bin"
+  [[ -x "$tui_runner" ]] || die "TUI tmux runner is not executable: $tui_runner"
 }
 
 write_profile_config() {

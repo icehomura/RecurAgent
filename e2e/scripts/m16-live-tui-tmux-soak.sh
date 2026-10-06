@@ -5,8 +5,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 
 run_id="${RA_M16_UX_RUN_ID:-m16-ux-soak-$(date -u +%Y%m%dT%H%M%SZ)}"
-tui_repo="${RA_TUI_REPO:-$(dirname "$repo_root")/ra-tui}"
-tui_runner="${RA_M16_TUI_RUNNER:-$tui_repo/scripts/run-m15-live-tmux-ux-soak.sh}"
+tui_runner="${RA_M16_TUI_RUNNER:-$repo_root/tui/scripts/run-m15-live-tmux-ux-soak.sh}"
 out_root="${RA_M16_UX_OUT_ROOT:-$repo_root/e2e/test-results-m16-tmux-ux}"
 out_dir="${RA_M16_UX_OUT_DIR:-$out_root/$run_id}"
 runtime_root="${RA_M16_UX_RUNTIME_ROOT:-/tmp/ra-m16-ux-$run_id}"
@@ -14,7 +13,7 @@ data_dir="${RA_M16_UX_DATA_DIR:-$runtime_root/data}"
 workdir="${RA_M16_UX_WORKDIR:-$runtime_root/workspace}"
 replay_file="${RA_M16_UX_REPLAY:-$out_dir/m16-code-review-replay.txt}"
 ra_bin="${RA_BIN:-$repo_root/target/debug/ra}"
-tui_bin="${RA_TUI_BIN:-$tui_repo/target/debug/ra-tui}"
+tui_bin="${RA_TUI_BIN:-$repo_root/target/debug/ra}"
 session_name="${RA_M16_UX_TMUX_SESSION:-ra-m16-ux-$run_id}"
 profile_id="${RA_M16_UX_PROFILE:-coding}"
 session_id="${RA_M16_UX_SESSION_ID:-$profile_id:local:m16-ux:$run_id}"
@@ -39,11 +38,10 @@ The script reuses the ra-tui tmux driver but writes all M16 evidence under
 ra/e2e/test-results-m16-tmux-ux/<run-id>.
 
 Key environment:
-  RA_TUI_REPO              Path to ra-tui checkout. Default: an ra-tui checkout next to this repo.
   RA_BIN                   ra binary. Default: ra/target/debug/ra.
-  RA_TUI_BIN               ra-tui binary. Default: ra-tui/target/debug/ra-tui.
+  RA_TUI_BIN               TUI binary override. Default: the merged ra binary (target/debug/ra).
   RA_M16_BUILD             Set 0 to skip building ra with api. Default: 1.
-  RA_M16_BUILD_TUI         Set 1 to rebuild ra-tui. Default: build only if missing.
+  RA_M16_BUILD_TUI         Set 1 to force rebuilding the merged ra/TUI binary. Default: build only if missing.
   RA_M16_UX_KEEP_SESSION   Set 1 to keep tmux session after the run.
   RA_M16_UX_OUT_DIR        Override evidence output directory.
 USAGE
@@ -59,14 +57,11 @@ shell_quote() {
 }
 
 ensure_binaries() {
-  if [[ "${RA_M16_BUILD:-1}" == "1" ]]; then
+  if [[ "${RA_M16_BUILD:-1}" == "1" || "${RA_M16_BUILD_TUI:-0}" == "1" || ! -x "$tui_bin" ]]; then
     (cd "$repo_root" && cargo build -p ra-cli --bin ra --features api)
   fi
-  if [[ "${RA_M16_BUILD_TUI:-0}" == "1" || ! -x "$tui_bin" ]]; then
-    (cd "$tui_repo" && cargo build --bin ra-tui)
-  fi
   [[ -x "$ra_bin" ]] || die "ra binary is not executable: $ra_bin"
-  [[ -x "$tui_bin" ]] || die "ra-tui binary is not executable: $tui_bin"
+  [[ -x "$tui_bin" ]] || die "TUI ra binary is not executable: $tui_bin"
 }
 
 write_replay() {
@@ -466,7 +461,7 @@ run_soak() {
   trap 'cleanup_on_signal 143' TERM
   if [[ "${RA_M16_UX_INJECT_FAIL_AFTER_PROFILE_WRITE:-0}" != "1" ]]; then
     command -v tmux >/dev/null 2>&1 || die "tmux is required"
-    [[ -x "$tui_runner" ]] || die "ra-tui tmux runner not found or not executable: $tui_runner"
+    [[ -x "$tui_runner" ]] || die "TUI tmux runner not found or not executable: $tui_runner"
     ensure_binaries
   fi
   write_review_workspace_fixture

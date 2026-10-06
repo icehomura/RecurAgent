@@ -13,7 +13,7 @@
 set -euo pipefail
 
 RA_BIN="${RA_BIN:-$HOME/home/ra-one/ra/target/debug/ra}"
-RA_TUI_BIN="${RA_TUI_BIN:-$(cd "$(dirname "$0")/.." && pwd)/target/debug/ra-tui}"
+RA_TUI_BIN="${RA_TUI_BIN:-$(cd "$(dirname "$0")/../.." && pwd)/target/debug/ra}"
 
 RUN_ID="${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 ROOT="/tmp/ra-peer-soak-$RUN_ID"
@@ -91,7 +91,7 @@ trap teardown EXIT
 
 echo "=== binaries ==="
 [ -x "$RA_BIN" ] || die "ra binary missing: $RA_BIN"
-[ -x "$RA_TUI_BIN" ] || die "ra-tui binary missing: $RA_TUI_BIN"
+[ -x "$RA_TUI_BIN" ] || die "TUI ra binary missing: $RA_TUI_BIN"
 "$RA_BIN" --version | head -1
 "$RA_TUI_BIN" --version | head -1
 

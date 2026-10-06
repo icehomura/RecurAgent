@@ -174,8 +174,7 @@ Environment:
   RA_UX_TMUX_RUN_ID       Override run id.
   RA_UX_TMUX_OUT_ROOT     Override output root. Default: e2e/test-results-ux.
   RA_UX_TMUX_OUT_DIR      Override scenario output directory.
-  RA_UX_TMUX_TUI_RUNNER   Override ra-tui tmux runner script.
-  RA_TUI_REPO             Override ra-tui checkout. Default: ../ra-tui next to this repo.
+  RA_UX_TMUX_TUI_RUNNER   Override the TUI tmux runner script.
 `;
 }
 
@@ -370,14 +369,13 @@ function resolveContext({ scenarioId, selfTest }) {
   const replayFile = path.resolve(
     process.env.RA_UX_TMUX_REPLAY || path.join(scenarioDir, 'input-replay.log'),
   );
-  const tuiRepo = path.resolve(process.env.RA_TUI_REPO || path.join(repoRoot, '..', 'ra-tui'));
   const lowerRunner = path.resolve(
     process.env.RA_UX_TMUX_TUI_RUNNER
       || process.env.RA_M19_UX_TUI_RUNNER
-      || path.join(tuiRepo, 'scripts', 'run-onboarding-tmux-soak.sh'),
+      || path.join(repoRoot, 'tui', 'scripts', 'run-onboarding-tmux-soak.sh'),
   );
   const raBin = path.resolve(process.env.RA_BIN || path.join(repoRoot, 'target', 'debug', 'ra'));
-  const tuiBin = path.resolve(process.env.RA_TUI_BIN || path.join(tuiRepo, 'target', 'debug', 'ra-tui'));
+  const tuiBin = path.resolve(process.env.RA_TUI_BIN || raBin);
   const cols = positiveIntegerEnv('RA_UX_TMUX_COLS', scenario.id === 'narrow-layout' ? 80 : 120);
   const rows = positiveIntegerEnv('RA_UX_TMUX_ROWS', scenario.id === 'narrow-layout' ? 24 : 40);
   const port = positiveIntegerEnv('RA_UX_TMUX_PORT', stablePortForRunId(runKey));
@@ -421,7 +419,6 @@ function resolveContext({ scenarioId, selfTest }) {
     dataDir,
     workdir,
     replayFile,
-    tuiRepo,
     lowerRunner,
     raBin,
     tuiBin,
@@ -698,10 +695,10 @@ function skipValidation(ctx) {
 
 function missingRunnerBlocker(ctx) {
   if (!fs.existsSync(ctx.lowerRunner)) {
-    return `ra-tui tmux runner is missing: ${ctx.lowerRunner}`;
+    return `TUI tmux runner is missing: ${ctx.lowerRunner}`;
   }
   if (!isExecutable(ctx.lowerRunner)) {
-    return `ra-tui tmux runner is not executable: ${ctx.lowerRunner}`;
+    return `TUI tmux runner is not executable: ${ctx.lowerRunner}`;
   }
   return null;
 }

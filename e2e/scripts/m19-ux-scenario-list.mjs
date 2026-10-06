@@ -7,7 +7,6 @@ import { fileURLToPath } from 'node:url';
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..', '..');
 const defaultManifestPath = path.join(repoRoot, 'e2e', 'matrix', 'ra-ux.toml');
-const siblingra-tuiRepo = path.resolve(repoRoot, '..', 'ra-tui');
 const statusClasses = ['runnable', 'skipped', 'blocked', 'quarantined'];
 const initialM19ScenarioIds = [
   'stdio-happy-path',
@@ -336,23 +335,24 @@ function resolveSpecialHostTool(tool) {
     case 'ra-tui-bin':
       return firstExecutable([
         process.env.RA_TUI_BIN,
-        path.join(siblingra-tuiRepo, 'target', 'debug', executableName('ra-tui')),
+        process.env.RA_BIN,
+        path.join(repoRoot, 'target', 'debug', executableName('ra')),
       ]);
     case 'ra-tui-onboarding-runner':
       return firstExecutable([
         process.env.RA_TUI_ONBOARDING_RUNNER,
         process.env.RA_M19_UX_TUI_RUNNER,
-        path.join(siblingra-tuiRepo, 'scripts', 'run-onboarding-tmux-soak.sh'),
+        path.join(repoRoot, 'tui', 'scripts', 'run-onboarding-tmux-soak.sh'),
       ]);
     case 'ra-tui-m15-runner':
       return firstExecutable([
         process.env.RA_TUI_M15_RUNNER,
-        path.join(siblingra-tuiRepo, 'scripts', 'run-m15-live-tmux-ux-soak.sh'),
+        path.join(repoRoot, 'tui', 'scripts', 'run-m15-live-tmux-ux-soak.sh'),
       ]);
     case 'ra-tui-m18-runner':
       return firstExecutable([
         process.env.RA_TUI_M18_RUNNER,
-        path.join(siblingra-tuiRepo, 'scripts', 'run-m18-stdio-live-tmux-soak.sh'),
+        path.join(repoRoot, 'tui', 'scripts', 'run-m18-stdio-live-tmux-soak.sh'),
       ]);
     default:
       return undefined;
