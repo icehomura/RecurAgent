@@ -13133,6 +13133,7 @@ done
         backend.refresh_capabilities_on_reconnect = true;
         backend
             .send(AppUiCommand::SubmitPrompt(TurnStartParams {
+                origin: None,
                 tool_context: None,
                 session_id: session_id.clone(),
                 turn_id: TurnId::new(),
@@ -13305,6 +13306,7 @@ wait
         ] {
             backend
                 .send(AppUiCommand::OpenSession(SessionOpenParams {
+                    client_commands: None,
                     session_id: SessionKey(session.into()),
                     topic: None,
                     profile_id: Some(
@@ -13358,6 +13360,7 @@ wait
         for session in ["local:master", "local:peer"] {
             backend
                 .send(AppUiCommand::SubmitPrompt(TurnStartParams {
+                    origin: None,
                     tool_context: None,
                     session_id: SessionKey(session.into()),
                     turn_id: TurnId::new(),
@@ -13569,6 +13572,7 @@ wait
         backend.disconnected_status_reported = true;
         let prompt = |session: &str| {
             AppUiCommand::SubmitPrompt(TurnStartParams {
+                origin: None,
                 tool_context: None,
                 session_id: SessionKey(session.into()),
                 turn_id: TurnId::new(),
@@ -13609,6 +13613,7 @@ wait
         );
         backend
             .send(AppUiCommand::OpenSession(SessionOpenParams {
+                client_commands: None,
                 session_id: SessionKey("local:peer".into()),
                 topic: None,
                 profile_id: Some("dev".into()),
@@ -13897,6 +13902,7 @@ done
         backend.refresh_capabilities_on_reconnect = true;
         backend
             .send(AppUiCommand::SubmitPrompt(TurnStartParams {
+                origin: None,
                 tool_context: None,
                 session_id: session_id.clone(),
                 turn_id: TurnId::new(),
@@ -14015,6 +14021,7 @@ done
         backend.refresh_capabilities_on_reconnect = true;
         backend
             .send(AppUiCommand::SubmitPrompt(TurnStartParams {
+                origin: None,
                 tool_context: None,
                 session_id: session_id.clone(),
                 turn_id: TurnId::new(),
@@ -14152,7 +14159,10 @@ done
         backend.disconnected_status_reported = true;
         backend.refresh_capabilities_on_reconnect = true;
         backend
-            .send(AppUiCommand::ListSessions(SessionListParams { cwd: None }))
+            .send(AppUiCommand::ListSessions(SessionListParams {
+                cwd: None,
+                profile_id: None,
+            }))
             .expect("child launch + deferred list");
 
         let mut seen = Vec::new();
@@ -14171,6 +14181,7 @@ done
 
         let prompt = || {
             AppUiCommand::SubmitPrompt(TurnStartParams {
+                origin: None,
                 tool_context: None,
                 session_id: SessionKey("local:rejected".into()),
                 turn_id: TurnId::new(),
@@ -14188,6 +14199,7 @@ done
         // with a follow-up command queued behind the barrier.
         backend
             .send(AppUiCommand::OpenSession(SessionOpenParams {
+                client_commands: None,
                 session_id: SessionKey("local:rejected".into()),
                 topic: None,
                 profile_id: Some("dev".into()),
@@ -14201,7 +14213,10 @@ done
             "every open arms the scoped barrier"
         );
         backend
-            .send(AppUiCommand::ListSessions(SessionListParams { cwd: None }))
+            .send(AppUiCommand::ListSessions(SessionListParams {
+                cwd: None,
+                profile_id: None,
+            }))
             .expect("list defers behind the barrier");
         backend.send(prompt()).expect("submit defers");
         assert_eq!(backend.deferred_until_reconnect_open.len(), 2);
@@ -14295,6 +14310,7 @@ done
         );
         backend
             .send(AppUiCommand::OpenSession(SessionOpenParams {
+                client_commands: None,
                 session_id: launch_session.clone(),
                 topic: None,
                 profile_id: Some("dev".into()),

@@ -5389,6 +5389,7 @@ done
             &mut backend,
             &mut store,
             AppUiCommand::OpenSession(ra_core::ui_protocol::SessionOpenParams {
+                client_commands: None,
                 session_id: session_id.clone(),
                 topic: None,
                 profile_id: Some("coding".into()),
