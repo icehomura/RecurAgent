@@ -24,6 +24,18 @@ const FRAME_DEADLINE: std::time::Duration = std::time::Duration::from_secs(60);
 #[cfg(windows)]
 const FRAME_DEADLINE: std::time::Duration = std::time::Duration::from_secs(300);
 
+/// Multiplier for the "poll until the condition holds" iteration budgets below
+/// (`for _ in 0..N`, `N * 20ms` or `N * 10ms` today). Those loops break the
+/// instant the state arrives, so a larger budget costs a passing run nothing
+/// while a starved Windows test still reaches its subject. `check-windows` runs
+/// this ~4000-test binary four-wide on a four-vCPU runner, where a background
+/// turn can otherwise exhaust a 2-60s budget before it reaches an approval or
+/// its second model call.
+#[cfg(not(windows))]
+const POLL_SCALE: u32 = 1;
+#[cfg(windows)]
+const POLL_SCALE: u32 = 6;
+
 /// The chat id of this test's host sessions. Peer state (routes, the staged
 /// peers on disk) is process-wide and tests run in parallel, so each test
 /// (one thread per `#[tokio::test]`) gets its own id; every key in one test
@@ -583,7 +595,7 @@ async fn wait_for_pending(
     contracts: &UiProtocolContractStores,
     key: &SessionKey,
 ) -> Vec<ApprovalRequestedEvent> {
-    for _ in 0..200 {
+    for _ in 0..200 * POLL_SCALE {
         let pending = contracts.approvals.pending_for_session(key);
         if !pending.is_empty() {
             return pending;
@@ -1154,7 +1166,7 @@ async fn should_keep_a_host_tool_approval_and_turn_controls_on_the_host_connecti
     // Another connection of the profile, on the same session.
     let (spoof_ws, mut spoof_rx) = ws_connection_for_test(64);
     let mut requested = None;
-    for _ in 0..200 {
+    for _ in 0..200 * POLL_SCALE {
         requested = ledger
             .replay_after(
                 &key,
@@ -2145,7 +2157,7 @@ async fn e2e_turn_with(
     )
     .await;
     // Generous: under a loaded test run the turn can take seconds.
-    for _ in 0..3000 {
+    for _ in 0..3000 * POLL_SCALE {
         if llm.calls.load(std::sync::atomic::Ordering::SeqCst) >= 2 {
             break;
         }
@@ -2517,7 +2529,7 @@ async fn recorded_turn(
         )
         .await;
     }
-    for _ in 0..500 {
+    for _ in 0..500 * POLL_SCALE {
         if llm.requests.lock().unwrap().len() > before {
             break;
         }
@@ -3352,7 +3364,7 @@ async fn should_cancel_an_in_flight_host_call_when_the_turn_is_interrupted() {
     // the `reason` assert below is the backstop.
     let peers_root = e.data_dir.join("peers");
     let mut cancelled = false;
-    for _ in 0..1000 {
+    for _ in 0..1000 * POLL_SCALE {
         if crate::peers::host_tools::pending_calls_for(&peers_root, "news").is_empty() {
             cancelled = true;
             break;
@@ -3368,7 +3380,7 @@ async fn should_cancel_an_in_flight_host_call_when_the_turn_is_interrupted() {
     assert_eq!(cancel["reason"], "cancelled");
     // ...and the call ends as an unknown outcome (it is not resent later).
     let mut unknown = false;
-    for _ in 0..200 {
+    for _ in 0..200 * POLL_SCALE {
         let audit =
             std::fs::read_to_string(peers_root.join("news/tool_audit.jsonl")).unwrap_or_default();
         if audit.contains("\"outcome\":\"unknown\"") {
@@ -4981,9 +4993,9 @@ fn collect_frames(mut rx: mpsc::Receiver<WsMessage>) -> Frames {
     frames
 }
 
-/// The first frame matching `pick`, waiting up to 10 s.
+/// The first frame matching `pick`, waiting up to 10 s (times `POLL_SCALE`).
 async fn wait_frame(frames: &Frames, pick: impl Fn(&Value) -> bool) -> Value {
-    for _ in 0..500 {
+    for _ in 0..500 * POLL_SCALE {
         if let Some(frame) = frames.lock().unwrap().iter().find(|f| pick(f)) {
             return frame.clone();
         }
@@ -5070,7 +5082,7 @@ async fn start_turn_in(
 async fn wait_result(e: &E2e, turn_id: &TurnId) -> String {
     let path = e.data_dir.join("peers/news/result.md");
     let needle = format!("turn_id: {}", turn_id.0);
-    for _ in 0..1500 {
+    for _ in 0..1500 * POLL_SCALE {
         if let Ok(body) = std::fs::read_to_string(&path) {
             if body.contains(&needle) {
                 return body;
@@ -5120,7 +5132,7 @@ async fn should_run_a_persons_turn_on_the_peer_session_labelled_with_its_origin(
     // it is recorded as covered.
     let peers = e.data_dir.join("peers");
     let mut covered = false;
-    for _ in 0..250 {
+    for _ in 0..250 * POLL_SCALE {
         if matches!(
             read_peer_fleet_synthesis_marks(&peers, &e.system.0),
             FleetSynthesisMarks::Rounds(ref rounds) if rounds.get("news") == Some(&1)
@@ -5487,7 +5499,7 @@ async fn should_refuse_a_second_turn_while_the_shared_peer_session_is_busy() {
     let result = wait_result(&e, &person_turn).await;
     assert!(result.contains("\norigin: person\n"), "{result}");
     let mut admitted = false;
-    for _ in 0..250 {
+    for _ in 0..250 * POLL_SCALE {
         if start_turn(
             &e,
             &e.ws,
@@ -5899,7 +5911,7 @@ async fn should_run_the_person_lane_while_the_system_agent_lane_is_busy() {
     let dir = e.data_dir.join("peers/news");
     // (`turns.txt` is appended just after `result.md`.)
     let mut turns = String::new();
-    for _ in 0..1000 {
+    for _ in 0..1000 * POLL_SCALE {
         turns = std::fs::read_to_string(dir.join("turns.txt")).unwrap();
         if turns.lines().count() >= 3 {
             break;
@@ -6071,8 +6083,9 @@ async fn should_let_only_the_host_open_a_sharing_context_and_label_its_turns() {
     // The plain context's turn writes no blackboard round.
     let plain_turn = TurnId::new();
     start_turn_when_free(&e, &active, "o5", &plain, &plain_turn, "mini", None).await;
-    // (Slow runners: wait up to 20 s for the plain turn to reach the model.)
-    for _ in 0..1000 {
+    // (Slow runners: wait up to 20 s, times `POLL_SCALE`, for the plain turn to
+    // reach the model.)
+    for _ in 0..1000 * POLL_SCALE {
         if llm.requests.lock().unwrap().len() >= 2 {
             break;
         }
@@ -6246,7 +6259,7 @@ async fn wait_for_pending_approval(
     contracts: &UiProtocolContractStores,
     session: &SessionKey,
 ) -> Vec<ApprovalRequestedEvent> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    let deadline = std::time::Instant::now() + FRAME_DEADLINE;
     while std::time::Instant::now() < deadline {
         let pending = contracts.approvals.pending_for_session(session);
         if !pending.is_empty() {
