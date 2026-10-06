@@ -5493,7 +5493,7 @@ done
 
         let written = String::from_utf8_lossy(&terminal.backend().buf);
         assert!(
-            written.contains("Welcome to ra"),
+            written.contains("Welcome to RecurAgent"),
             "onboarding should render before the first frame; wrote {written:?}"
         );
     }

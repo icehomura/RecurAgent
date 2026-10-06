@@ -4581,7 +4581,7 @@ mod tests {
 
         let text = rendered_text(&store.state);
 
-        assert!(text.contains("Welcome to ra"));
+        assert!(text.contains("Welcome to RecurAgent"));
         // The "stays local, no OTP" framing is no longer a dead menu row — it
         // moved to the right-hand teaching pane ("About this step"), and the
         // profile step is identified by its purpose line.
@@ -4590,7 +4590,7 @@ mod tests {
         assert!(text.contains("Onboarding setup"));
         assert!(!text.contains("No session selected"));
         assert!(!text.contains("Work  sticky"));
-        assert!(!text.contains("Ask ra to change code"));
+        assert!(!text.contains("Ask RecurAgent to change code"));
     }
 
     /// M22 (#58): the first-run onboarding surface renders the ASCII RecurAgent
@@ -4624,7 +4624,7 @@ mod tests {
             text.contains("██████╗  █████╗"),
             "expected ra figlet art in the main window, got:\n{text}"
         );
-        assert!(text.contains("Welcome to ra — Your Coding Buddy"));
+        assert!(text.contains("Welcome to RecurAgent — Your Coding Buddy"));
     }
 
     /// At the soak's narrow 80x24 first-launch size, the RA logo shows in the
@@ -4655,7 +4655,7 @@ mod tests {
                 .map(|c| c.symbol())
                 .collect::<String>();
         assert!(
-            text.contains("Welcome to ra — Your Coding Buddy"),
+            text.contains("Welcome to RecurAgent — Your Coding Buddy"),
             "logo/tagline must render at 80x24"
         );
         assert!(
@@ -4759,7 +4759,7 @@ mod tests {
 
         assert!(!text.contains("No session selected"));
         assert!(!text.contains("Work  sticky"));
-        assert!(!text.contains("Ask ra to change code"));
+        assert!(!text.contains("Ask RecurAgent to change code"));
     }
 
     /// M22-A: when the backend advertises no onboarding methods,
@@ -4795,7 +4795,7 @@ mod tests {
         // first-launch (no sessions) — that would be the "blank pane"
         // regression the acceptance bullet bans.
         assert!(!text.contains("No session selected"));
-        assert!(!text.contains("Ask ra to change code"));
+        assert!(!text.contains("Ask RecurAgent to change code"));
     }
 
     #[test]
@@ -4895,7 +4895,7 @@ mod tests {
         );
         assert!(text.contains("steer from the master"));
         assert!(
-            !text.contains("Ask ra"),
+            !text.contains("Ask RecurAgent to change code"),
             "no editable-composer placeholder on a peer"
         );
         // render never placed a caret, so the backend cursor stays at its
@@ -5337,12 +5337,12 @@ mod tests {
             .map(|cell| cell.symbol())
             .collect::<String>();
 
-        assert!(text.contains("›  Ask ra to change code"));
+        assert!(text.contains("›  Ask RecurAgent to change code"));
         assert!(!text.contains("▌"));
         let rows = rendered_rows(&buffer);
         assert_eq!(
             usize::from(cursor.y),
-            row_index_containing(&rows, "›  Ask ra")
+            row_index_containing(&rows, "›  Ask RecurAgent")
         );
         assert_eq!(
             cursor,

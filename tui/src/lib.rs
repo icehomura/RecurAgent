@@ -127,11 +127,11 @@ mod i18n_tests {
     fn resolves_keys_in_en_and_zh() {
         assert_eq!(
             &*t!("composer.placeholder", locale = "en"),
-            "Ask ra to change code..."
+            "Ask RecurAgent to change code..."
         );
         assert_eq!(
             &*t!("composer.placeholder", locale = "zh"),
-            "让 ra 帮你改代码……"
+            "让 RecurAgent 帮你改代码……"
         );
     }
 

@@ -9374,7 +9374,7 @@ mod tests {
                 .iter()
                 .any(|item| item.id == "onboard.auth.verify")
         );
-        assert_eq!(spec.title, "Welcome to ra");
+        assert_eq!(spec.title, "Welcome to RecurAgent");
         // The first-run splash renders in the MAIN window (app.rs
         // render_onboarding_first_launch_layout); the welcome menu now also
         // carries the per-step TEACHING panel (explanatory prose + progress) as
