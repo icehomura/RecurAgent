@@ -54,7 +54,7 @@ const SESSION_CACHE_IDLE_TTL: std::time::Duration = std::time::Duration::from_se
 
 /// Idle lifetime of a cached per-session runtime.
 ///
-/// `RA_SESSION_CACHE_IDLE_TTL_SECS` (legacy `RA_SESSION_CACHE_IDLE_TTL_SECS`)
+/// `RA_SESSION_CACHE_IDLE_TTL_SECS`
 /// overrides it (minimum 1 s; a malformed
 /// or zero value keeps the default). Rebuilding an evicted runtime is correct
 /// but slow for a long session, so an operator on a big box may want it
@@ -403,8 +403,7 @@ pub struct ServeCommand {
     pub model: Option<String>,
 
     /// Auth token for API access (overrides config). Visible in the process
-    /// list (`ps`) — prefer the RA_AUTH_TOKEN env var (legacy
-    /// RA_AUTH_TOKEN) or the config file.
+    /// list (`ps`) — prefer the RA_AUTH_TOKEN env var or the config file.
     #[arg(long)]
     pub auth_token: Option<String>,
 
@@ -422,7 +421,7 @@ pub struct ServeCommand {
     /// local single-user install. OFF by default. Only honoured for direct
     /// loopback requests on a Local-mode host with profile/user stores, and
     /// never when the request carries reverse-proxy headers. Also settable
-    /// via `RA_SOLO_LOGIN=1` (legacy `RA_SOLO_LOGIN`). In Local mode profiles
+    /// via `RA_SOLO_LOGIN=1`. In Local mode profiles
     /// run in this process;
     /// per-profile gateways are not auto-started. Do NOT set on a host fronted by a
     /// reverse proxy (e.g. the Caddy-fronted fleet) — see `api::solo_auth`.
@@ -435,16 +434,14 @@ pub struct ServeCommand {
     /// Requires `--solo` (the same local-single-user keystone that gates
     /// selecting Full Access from the `/permissions` menu). A session's
     /// explicit `/permissions` choice still overrides the default. Also
-    /// settable via `RA_DANGER_FULL_ACCESS=1` (legacy
-    /// `RA_DANGER_FULL_ACCESS`).
+    /// settable via `RA_DANGER_FULL_ACCESS=1`.
     #[arg(long)]
     pub danger_full_access: bool,
 
     /// Opt OUT of the network-on default. By default a fresh Local session with
     /// no explicit `/permissions` choice runs Workspace-Write with network
     /// ALLOWED (filesystem still sandboxed) so `npm install` / git / fetch work
-    /// out of the box. Pass `--no-network` (or `RA_NO_NETWORK=1`, legacy
-    /// `RA_NO_NETWORK`) to revert
+    /// out of the box. Pass `--no-network` (or `RA_NO_NETWORK=1`) to revert
     /// the default to network DENIED. Cloud/tenant deployments always default to
     /// network-denied regardless. An explicit `/permissions` choice still wins.
     #[arg(long)]
@@ -520,7 +517,7 @@ enum AuthTokenSource {
 }
 
 /// Resolve the operator-supplied auth token with the documented precedence
-/// `--auth-token` > `RA_AUTH_TOKEN` (legacy `RA_AUTH_TOKEN`) > config
+/// `--auth-token` > `RA_AUTH_TOKEN` > config
 /// `auth_token` (an empty config token counts as absent). `None` means no
 /// operator source produced a token — the caller then auto-generates one for
 /// non-loopback binds.
@@ -1101,9 +1098,7 @@ impl ServeCommand {
             // read from /proc/<pid>/environ.
             for name in [
                 crate::api::host_managed::HOST_TOKEN_ENV,
-                crate::api::host_managed::LEGACY_HOST_TOKEN_ENV,
                 crate::api::host_managed::EXTERNAL_TOKEN_ENV,
-                crate::api::host_managed::LEGACY_EXTERNAL_TOKEN_ENV,
             ] {
                 eyre::ensure!(
                     std::env::var_os(name).is_none(),
@@ -1136,7 +1131,7 @@ impl ServeCommand {
                 // steer operators to the env var or the config file.
                 tracing::warn!(
                     "--auth-token exposes the bearer token in the process list (ps); \
-                     prefer the RA_AUTH_TOKEN env var (legacy RA_AUTH_TOKEN) or the config file"
+                     prefer the RA_AUTH_TOKEN env var or the config file"
                 );
             }
             Some(token)

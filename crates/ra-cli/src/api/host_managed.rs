@@ -50,16 +50,8 @@ use crate::user_store::UserRole;
 /// every local process, and a config file outlives the host.
 pub const HOST_TOKEN_ENV: &str = "RA_AUTH_TOKEN";
 
-/// The name the client still exports for [`HOST_TOKEN_ENV`]; refused like the
-/// new spelling so an older install cannot leak the token through the
-/// environment either.
-pub const LEGACY_HOST_TOKEN_ENV: &str = "RA_AUTH_TOKEN";
-
 /// Also refused in this mode, for the same reason.
 pub const EXTERNAL_TOKEN_ENV: &str = "RA_HOST_EXTERNAL_TOKEN";
-
-/// The name the client still exports for [`EXTERNAL_TOKEN_ENV`]; refused too.
-pub const LEGACY_EXTERNAL_TOKEN_ENV: &str = "RA_HOST_EXTERNAL_TOKEN";
 
 /// Tokens shorter than this are refused (128 bits of hex).
 pub const MIN_TOKEN_LEN: usize = 32;
