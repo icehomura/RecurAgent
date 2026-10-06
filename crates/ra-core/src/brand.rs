@@ -41,7 +41,7 @@ fn non_empty_path(path: Option<PathBuf>) -> Option<PathBuf> {
     path.filter(|path| !path.as_os_str().is_empty() && path.is_absolute())
 }
 
-/// The runtime state home: `RA_HOME` → `RA_HOME` → `~/.ra`.
+/// The runtime state home: `RA_HOME` → `~/.ra`.
 ///
 /// No legacy state directory is consulted: an install that used the old name
 /// starts fresh under `~/.ra` (the fork keeps no database compatibility).
@@ -52,7 +52,7 @@ pub fn state_home() -> Option<PathBuf> {
     Some(dirs::home_dir()?.join(STATE_DIR))
 }
 
-/// The config home: `RA_CONFIG_DIR` → `RA_CONFIG_DIR` → `<config>/ra`, where
+/// The config home: `RA_CONFIG_DIR` → `<config>/ra`, where
 /// `<config>` is `%APPDATA%` on Windows and `${XDG_CONFIG_HOME:-~/.config}`
 /// elsewhere. The pre-rename config directory is not consulted.
 pub fn config_home() -> Option<PathBuf> {
