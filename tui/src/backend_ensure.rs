@@ -3,11 +3,13 @@
 //!
 //! This client is a *client*: a local launch spawns `ra serve --stdio` as a
 //! child (`--stdio-command`). Before the TUI takes over the terminal, this
-//! module resolves a usable backend — in order: a `ra`/`ra.exe` beside the
-//! running TUI binary (the normal layout in this repo, where `cargo build`
-//! drops both into the same target dir), then `ra` on `PATH`, then the install
-//! dir (`~/.ra/bin`, or `$RA_PREFIX`). The first `Ready` candidate wins; a
-//! present-but-too-old one surfaces an "update" error.
+//! module resolves a usable backend — in order: **the running executable
+//! itself** (the TUI is linked into `ra`, so this binary is already a kernel
+//! and speaks exactly the protocol it was built against), then a `ra`/`ra.exe`
+//! beside it (the normal layout when the executable was renamed, e.g.
+//! `ra-full`), then `ra` on `PATH`, then the install dir (`~/.ra/bin`, or
+//! `$RA_PREFIX`). The first `Ready` candidate wins; a present-but-too-old one
+//! surfaces an "update" error.
 //!
 //! We do NOT auto-install: this fork's server is built from this repo, so a
 //! fully-missing backend is an actionable error (`cargo build --bin ra`, or an
@@ -188,7 +190,10 @@ fn opt_out_from(current: Option<std::ffi::OsString>, legacy: Option<std::ffi::Os
 /// Shared with `doctor` so the reported set can't drift from what launches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CandidateKind {
-    /// A `ra`/`ra.exe` beside the running ra-tui binary.
+    /// The running executable itself ([`self_backend`]). The terminal client
+    /// lives inside the `ra` binary now, so this process IS a full kernel.
+    SelfExe,
+    /// A `ra`/`ra.exe` beside the running binary.
     Sibling,
     /// Bare `ra` resolved through `PATH`.
     Path,
@@ -199,7 +204,8 @@ pub(crate) enum CandidateKind {
 impl CandidateKind {
     pub(crate) fn label(self) -> &'static str {
         match self {
-            Self::Sibling => "sibling of ra-tui",
+            Self::SelfExe => "this binary",
+            Self::Sibling => "sibling of this binary",
             Self::Path => "PATH",
             Self::InstallDir => "ra install dir",
         }
@@ -208,9 +214,22 @@ impl CandidateKind {
 
 /// The backend candidates in resolution precedence. Shared by
 /// [`resolve_backend`] and `doctor` so the two can't disagree about the set.
+///
+/// The running executable comes first because it is the one backend that is
+/// guaranteed to match this build's protocol: the TUI is linked into `ra`
+/// (`ra_tui::run`), so launching `ra serve --stdio` from this very file is
+/// always correct. A sibling/`PATH`/install-dir `ra` only gets the nod when
+/// this file can't act as one (see [`probe_self`]).
 pub(crate) fn backend_candidates(program: &str) -> Vec<(PathBuf, CandidateKind)> {
     let mut candidates = Vec::new();
-    if let Some(sibling) = sibling_backend() {
+    let running = self_backend();
+    if let Some(me) = &running {
+        candidates.push((me.clone(), CandidateKind::SelfExe));
+    }
+    // A sibling that IS this file (the usual case: `target/debug/ra` beside
+    // itself) adds nothing — the running-executable candidate already covers
+    // it, and the second probe would only spawn the same binary again.
+    if let Some(sibling) = sibling_backend().filter(|s| Some(s) != running.as_ref()) {
         candidates.push((sibling, CandidateKind::Sibling));
     }
     candidates.push((PathBuf::from(program), CandidateKind::Path));
@@ -221,7 +240,10 @@ pub(crate) fn backend_candidates(program: &str) -> Vec<(PathBuf, CandidateKind)>
 }
 
 /// Outcome of scanning the candidate list — pure, with the probe injected so
-/// the precedence rules are testable without spawning real binaries.
+/// the precedence rules are testable without spawning real binaries. The probe
+/// receives the candidate's [`CandidateKind`] because the kind decides which
+/// probe applies (the running executable is checked strictly, see
+/// [`probe_self`]).
 enum Choice {
     Resolved(Resolved),
     Outdated(String),
@@ -230,11 +252,11 @@ enum Choice {
 
 fn choose_backend(
     candidates: &[(PathBuf, CandidateKind)],
-    probe: impl Fn(&Path) -> Probe,
+    probe: impl Fn(&Path, CandidateKind) -> Probe,
 ) -> Choice {
     let mut outdated: Option<String> = None;
     for (path, kind) in candidates {
-        match probe(path) {
+        match probe(path, *kind) {
             Probe::Ready => {
                 return Choice::Resolved(match kind {
                     CandidateKind::Path => Resolved::OnPath,
@@ -260,7 +282,7 @@ fn choose_backend(
 /// `Ready` but a candidate exists and is too old, guide an update; otherwise
 /// error with the fix (no upstream install is attempted).
 fn resolve_backend(program: &str) -> Result<Resolved> {
-    match choose_backend(&backend_candidates(program), probe) {
+    match choose_backend(&backend_candidates(program), probe_backend) {
         Choice::Resolved(resolved) => Ok(resolved),
         Choice::Outdated(found) => Err(outdated_error(&found)),
         Choice::Missing => {
@@ -280,7 +302,7 @@ fn resolve_backend(program: &str) -> Result<Resolved> {
 pub(crate) fn resolved_backend_report() -> Option<(PathBuf, &'static str)> {
     backend_candidates("ra")
         .into_iter()
-        .find(|(path, _)| matches!(probe(path), Probe::Ready))
+        .find(|(path, kind)| matches!(probe_backend(path, *kind), Probe::Ready))
         .map(|(path, kind)| (path, kind.label()))
 }
 
@@ -346,6 +368,48 @@ fn probe(candidate: &Path) -> Probe {
     }
 }
 
+/// Dispatch the probe that matches a candidate's slot: the running executable
+/// is checked strictly ([`probe_self`]); every other slot uses [`probe`].
+fn probe_backend(candidate: &Path, kind: CandidateKind) -> Probe {
+    match kind {
+        CandidateKind::SelfExe => probe_self(candidate),
+        _ => probe(candidate),
+    }
+}
+
+/// Probe the running executable as a backend.
+///
+/// Stricter than [`probe`] on purpose. [`probe`]'s "present but unparseable
+/// counts as Ready" rule avoids fighting a backend the user clearly has, but
+/// applied to *this* file it would let any process that merely fails
+/// `--version` win the scan — a test harness under `cargo test`, a stripped
+/// launcher — and then be spawned as the kernel. This candidate must actually
+/// answer `ra <version>`, or the scan falls through to the older slots.
+fn probe_self(candidate: &Path) -> Probe {
+    let Ok(output) = Command::new(candidate).arg("--version").output() else {
+        return Probe::Missing;
+    };
+    classify_self_version(
+        output.status.success(),
+        &String::from_utf8_lossy(&output.stdout),
+    )
+}
+
+/// Classification half of [`probe_self`]: only a successful `ra <version>`
+/// answer counts. Split out so the strict rule is testable without spawning
+/// processes.
+fn classify_self_version(success: bool, stdout: &str) -> Probe {
+    if !success {
+        return Probe::Missing;
+    }
+    match parse_ra_version(stdout) {
+        Some(found) if version_lt(&found, MIN_BACKEND_VERSION) => Probe::Outdated(found),
+        Some(_) => Probe::Ready,
+        // No `ra X.Y.Z` on stdout → not our kernel; let the other slots answer.
+        None => Probe::Missing,
+    }
+}
+
 /// The first path `where <name>` resolves on Windows — the same PATH+PATHEXT
 /// order `cmd /C` (the stdio transport) uses — or `None` when it isn't found.
 /// Windows-only; on other platforms `probe`/`have` never call it.
@@ -372,9 +436,17 @@ fn install_dir_backend() -> Option<PathBuf> {
     Some(dir.join(backend_binary_name()))
 }
 
-/// A `ra`/`ra.exe` sitting beside the running TUI binary — the normal dev
-/// layout in this repo, where `cargo build` drops both into the same target
-/// dir. `None` if the running exe path can't be resolved.
+/// The running executable ([`CandidateKind::SelfExe`]) — the preferred backend
+/// now that the terminal client is linked into `ra`: this file is a full
+/// kernel, and launching it can't drift from the protocol this build was
+/// compiled against. `None` if the exe path can't be resolved.
+fn self_backend() -> Option<PathBuf> {
+    std::env::current_exe().ok()
+}
+
+/// A `ra`/`ra.exe` sitting beside the running binary — the layout of a renamed
+/// build (e.g. `ra-full`) launched from a dir that also holds a plain `ra`.
+/// `None` if the running exe path can't be resolved.
 fn sibling_backend() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     Some(exe.parent()?.join(backend_binary_name()))
@@ -638,7 +710,7 @@ mod tests {
         // MUST-FIX 1: an OUTDATED sibling must not win over a Ready `ra` on
         // PATH — the chosen Resolved is OnPath, so nothing is prepended and the
         // stale sibling can't be launched.
-        let choice = choose_backend(&candidates, |p| {
+        let choice = choose_backend(&candidates, |p, _| {
             if p == sibling.as_path() {
                 Probe::Outdated("1.0.0".into())
             } else if p == path.as_path() {
@@ -653,7 +725,7 @@ mod tests {
         );
 
         // A Ready sibling wins outright (the repo dev layout).
-        let choice = choose_backend(&candidates, |p| {
+        let choice = choose_backend(&candidates, |p, _| {
             if p == sibling.as_path() {
                 Probe::Ready
             } else {
@@ -663,7 +735,7 @@ mod tests {
         assert!(matches!(choice, Choice::Resolved(Resolved::AtPath(p)) if p == sibling));
 
         // A Ready install dir wins when nothing earlier is Ready.
-        let choice = choose_backend(&candidates, |p| {
+        let choice = choose_backend(&candidates, |p, _| {
             if p == install.as_path() {
                 Probe::Ready
             } else {
@@ -674,7 +746,7 @@ mod tests {
 
         // Nothing Ready, one Outdated → the update guidance fires (first one
         // encountered in precedence order).
-        let choice = choose_backend(&candidates, |p| {
+        let choice = choose_backend(&candidates, |p, _| {
             if p == install.as_path() {
                 Probe::Outdated("1.0.0".into())
             } else {
@@ -685,8 +757,65 @@ mod tests {
 
         // All Missing → Missing (caller then errors without installing).
         assert!(matches!(
-            choose_backend(&candidates, |_| Probe::Missing),
+            choose_backend(&candidates, |_, _| Probe::Missing),
             Choice::Missing
+        ));
+    }
+
+    /// The running executable is the FIRST candidate — it is the one backend
+    /// guaranteed to speak this build's protocol — and it resolves to an
+    /// explicit path, never `OnPath`: a user who launched `ra` by path can't be
+    /// assumed to have a `ra` on the child's `PATH`.
+    #[test]
+    fn running_executable_is_the_first_candidate() {
+        use CandidateKind::*;
+        let me = PathBuf::from("/repo/target/debug/ra");
+        let path = PathBuf::from("ra");
+        let candidates = vec![(me.clone(), SelfExe), (path.clone(), Path)];
+
+        let choice = choose_backend(&candidates, |p, kind| {
+            if kind == SelfExe && p == me.as_path() {
+                Probe::Ready
+            } else {
+                Probe::Missing
+            }
+        });
+        assert!(matches!(choice, Choice::Resolved(Resolved::AtPath(p)) if p == me));
+
+        // An outdated running executable must not shadow a later Ready backend
+        // (same rule as the sibling slot).
+        let choice = choose_backend(&candidates, |p, kind| match kind {
+            SelfExe if p == me.as_path() => Probe::Outdated("0.0.1".into()),
+            Path if p == path.as_path() => Probe::Ready,
+            _ => Probe::Missing,
+        });
+        assert!(matches!(choice, Choice::Resolved(Resolved::OnPath)));
+    }
+
+    /// The strict self-probe: only a successful `ra <version>` answer counts.
+    /// A harness or launcher that merely *runs* must not become the kernel —
+    /// the lenient [`probe`] would call those Ready ("present"), which is right
+    /// for a backend the user chose and wrong for the file we are running.
+    #[test]
+    fn strict_self_probe_requires_a_successful_ra_version_answer() {
+        assert!(matches!(
+            classify_self_version(true, "ra 0.1.0 (abc1234 2026-01-01)\n"),
+            Probe::Ready
+        ));
+        // Ran, but isn't the kernel (a test harness, a foreign tool).
+        assert!(matches!(
+            classify_self_version(true, "unrecognized option: 'version'\n"),
+            Probe::Missing
+        ));
+        // Failed to run / errored out.
+        assert!(matches!(
+            classify_self_version(false, "ra 0.1.0"),
+            Probe::Missing
+        ));
+        // Answered, but too old to speak this build's protocol.
+        assert!(matches!(
+            classify_self_version(true, "ra 0.0.1\n"),
+            Probe::Outdated(v) if v == "0.0.1"
         ));
     }
 
