@@ -107,6 +107,17 @@ mod tests {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
+    /// Ceiling for the wait-for-progress budgets below. This is NOT a latency
+    /// assertion: each wait returns the moment the step lands, so a generous
+    /// ceiling costs a passing run nothing while a genuinely stuck run still
+    /// fails — just later. `check-windows` runs this whole library binary on a
+    /// four-vCPU runner; same reasoning as `ra-agent`'s `BACKGROUND_DEADLINE`
+    /// (#2053).
+    #[cfg(not(windows))]
+    const STEP_DEADLINE: Duration = Duration::from_secs(60);
+    #[cfg(windows)]
+    const STEP_DEADLINE: Duration = Duration::from_secs(300);
+
     /// Store the `_main` profile whose primary model is a keyless local
     /// OpenAI-compatible endpoint at `base_url`. `_main` is reserved, so it
     /// bypasses `ProfileStore::save`'s id validation the way a host writes it.
@@ -187,7 +198,7 @@ mod tests {
                 .unwrap();
 
             let mut lines = BufReader::new(client_reader).lines();
-            let reply = tokio::time::timeout(Duration::from_secs(60), async {
+            let reply = tokio::time::timeout(STEP_DEADLINE, async {
                 loop {
                     let line = lines
                         .next_line()
@@ -217,7 +228,7 @@ mod tests {
             drop(client_writer);
             let drain =
                 tokio::spawn(async move { while let Ok(Some(_)) = lines.next_line().await {} });
-            tokio::time::timeout(Duration::from_secs(30), serving)
+            tokio::time::timeout(STEP_DEADLINE, serving)
                 .await
                 .expect("serve_io ends once the host drops the pipe")
                 .expect("serve_io task does not panic")

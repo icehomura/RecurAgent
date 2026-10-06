@@ -2045,15 +2045,25 @@ mod tests {
 
     #[test]
     fn should_refuse_a_view_when_an_excluded_folder_is_outside_its_root() {
-        let scope = SessionScope::solo(PathBuf::from("/w"), vec![]).unwrap();
+        // The validation below is platform-independent, but it first requires
+        // an *absolute* root. `/w` is absolute on unix yet not on Windows,
+        // where a path also needs a drive prefix, so build the fixtures for
+        // the host rather than gating the test to unix and losing Windows
+        // coverage of the same rule.
+        let (root, view, outside) = if cfg!(windows) {
+            (r"C:\w", r"C:\p", r"C:\q\contexts")
+        } else {
+            ("/w", "/p", "/q/contexts")
+        };
+        let scope = SessionScope::solo(PathBuf::from(root), vec![]).unwrap();
         assert!(matches!(
             scope
                 .clone()
-                .with_read_only_view(PathBuf::from("/p"), vec![PathBuf::from("/q/contexts")]),
+                .with_read_only_view(PathBuf::from(view), vec![PathBuf::from(outside)]),
             Err(SessionScopeError::ReadOnlyViewInvalid(_))
         ));
         assert!(matches!(
-            scope.with_read_only_view(PathBuf::from("/p"), vec![PathBuf::from("/p")]),
+            scope.with_read_only_view(PathBuf::from(view), vec![PathBuf::from(view)]),
             Err(SessionScopeError::ReadOnlyViewInvalid(_))
         ));
     }

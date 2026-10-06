@@ -8,6 +8,22 @@ use super::*;
 use crate::peers::host_tools::{apply_session_host_tools, resolve_session_host_tools};
 use ra_core::ui_protocol::{ApprovalRespondParams, QuestionId, UserQuestionAnswer};
 
+/// Wait budget for the "poll until the expected frame/notification arrives"
+/// waits below. This is NOT a latency assertion: each wait returns the moment
+/// the state arrives, so a generous ceiling costs a passing run nothing while
+/// a genuinely broken run still fails — just later.
+///
+/// The `check-windows` job runs this ~4000-test library binary four-wide on a
+/// four-vCPU runner, where the previous fixed 5s/20s/60s ceilings sat under the
+/// noise floor: it failed with `Elapsed(())` on a different subset every run
+/// (this module, `oup_tests`, `embedded`, `session_actor`) while the Linux
+/// `test-ra-cli (unit)` job runs the same binary green. Same reasoning as
+/// `ra-agent`'s `BACKGROUND_DEADLINE` (#2053).
+#[cfg(not(windows))]
+const FRAME_DEADLINE: std::time::Duration = std::time::Duration::from_secs(60);
+#[cfg(windows)]
+const FRAME_DEADLINE: std::time::Duration = std::time::Duration::from_secs(300);
+
 /// The chat id of this test's host sessions. Peer state (routes, the staged
 /// peers on disk) is process-wide and tests run in parallel, so each test
 /// (one thread per `#[tokio::test]`) gets its own id; every key in one test
@@ -229,7 +245,7 @@ fn frame_json(message: WsMessage) -> Value {
 /// Next notification with `method` (skips any other frame).
 async fn next_frame(rx: &mut mpsc::Receiver<WsMessage>, method: &str) -> Value {
     loop {
-        let message = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+        let message = tokio::time::timeout(FRAME_DEADLINE, rx.recv())
             .await
             .expect("a frame in time")
             .expect("connection open");
@@ -2142,7 +2158,7 @@ async fn e2e_turn_with(
     // Let the turn finish, then stop the fake host.
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     let _ = send_raw_notification_ephemeral(&e.ws, "__stop__", json!({}));
-    tokio::time::timeout(std::time::Duration::from_secs(5), host)
+    tokio::time::timeout(FRAME_DEADLINE, host)
         .await
         .expect("fake host stops")
         .unwrap()
@@ -4892,7 +4908,7 @@ async fn should_refuse_a_turn_start_with_a_rejected_inputs_turn_id() {
     assert!(!started, "the turn is refused");
     let refused = loop {
         let frame = frame_json(
-            tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+            tokio::time::timeout(FRAME_DEADLINE, rx.recv())
                 .await
                 .expect("a frame in time")
                 .expect("connection open"),
@@ -5418,7 +5434,7 @@ async fn should_refuse_a_second_turn_while_the_shared_peer_session_is_busy() {
         )
         .await
     );
-    tokio::time::timeout(std::time::Duration::from_secs(20), llm.entered.notified())
+    tokio::time::timeout(FRAME_DEADLINE, llm.entered.notified())
         .await
         .expect("the person's turn reached the model");
 
@@ -5827,7 +5843,7 @@ async fn should_run_the_person_lane_while_the_system_agent_lane_is_busy() {
         )
         .await
     );
-    tokio::time::timeout(std::time::Duration::from_secs(20), llm.entered.notified())
+    tokio::time::timeout(FRAME_DEADLINE, llm.entered.notified())
         .await
         .expect("the system agent's turn reached the model");
 
@@ -6365,7 +6381,7 @@ async fn should_show_the_peer_session_a_persons_turn_in_progress() {
         )
         .await
     );
-    tokio::time::timeout(std::time::Duration::from_secs(60), llm.held.notified())
+    tokio::time::timeout(FRAME_DEADLINE, llm.held.notified())
         .await
         .expect("the person's turn reached the model");
 
@@ -6954,7 +6970,7 @@ async fn should_fail_the_host_call_and_stop_the_turn_when_the_peer_is_purged_mid
     // The host is working on the call (never answers) when it purges. A
     // loaded test run can take a while to reach the call.
     let call = loop {
-        let message = tokio::time::timeout(std::time::Duration::from_secs(60), rx.recv())
+        let message = tokio::time::timeout(FRAME_DEADLINE, rx.recv())
             .await
             .expect("the call reaches the host")
             .expect("connection open");

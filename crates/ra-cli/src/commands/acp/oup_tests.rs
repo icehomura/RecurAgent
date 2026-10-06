@@ -1,5 +1,19 @@
 use super::*;
 
+/// Ceiling for the "wait for the next protocol step" budgets below. This is
+/// NOT a latency assertion: each wait returns the moment the step lands, so a
+/// generous ceiling costs a passing run nothing while a genuinely stuck run
+/// still fails — just later.
+///
+/// The `check-windows` job runs this binary under heavy load, where the
+/// original 10s/20s ceilings flaked to `Elapsed(())` on a different test each
+/// run while the Linux job stayed green. Same reasoning as `ra-agent`'s
+/// `BACKGROUND_DEADLINE` (#2053).
+#[cfg(not(windows))]
+const STEP_DEADLINE: std::time::Duration = std::time::Duration::from_secs(20);
+#[cfg(windows)]
+const STEP_DEADLINE: std::time::Duration = std::time::Duration::from_secs(180);
+
 #[tokio::test]
 async fn input_eof_closes_an_idle_acp_session_without_waiting_for_output_to_close() {
     use futures::StreamExt;
@@ -37,7 +51,7 @@ async fn input_eof_closes_an_idle_acp_session_without_waiting_for_output_to_clos
             .unwrap()))
             .unwrap();
         loop {
-            let frame = tokio::time::timeout(std::time::Duration::from_secs(10), client.rx.next())
+            let frame = tokio::time::timeout(STEP_DEADLINE, client.rx.next())
                 .await
                 .unwrap()
                 .unwrap()
@@ -153,7 +167,7 @@ impl agent_client_protocol::ConnectTo<Client> for CancelTestTransport {
 /// the dispatch loop, the turn would complete un-cancelled, and the test
 /// would flake to `EndTurn` (seen repeatedly on CI under load).
 async fn wait_for_cancel_dispatch(sessions: &Sessions, sid: &SessionId) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let deadline = std::time::Instant::now() + STEP_DEADLINE;
     loop {
         let flagged = sessions
             .lock()
@@ -167,7 +181,7 @@ async fn wait_for_cancel_dispatch(sessions: &Sessions, sid: &SessionId) {
         }
         assert!(
             std::time::Instant::now() < deadline,
-            "session/cancel was not dispatched within 10s"
+            "session/cancel was not dispatched within the step deadline"
         );
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
@@ -204,7 +218,7 @@ async fn should_report_cancelled_when_session_cancel_arrives_during_turn() {
     let prompt_cwd = cwd.clone();
 
     tokio::time::timeout(
-        std::time::Duration::from_secs(20),
+        STEP_DEADLINE,
         Client
             .builder()
             .name("ra-acp-cancel-client")
@@ -257,7 +271,7 @@ async fn should_report_cancelled_when_session_cancel_arrives_during_turn() {
             ),
     )
     .await
-    .expect("ACP request cycle must complete within 20 seconds")
+    .expect("ACP request cycle must complete within the step deadline")
     .expect("ACP client run completes");
 
     let got = *stop_reason.lock().await;
@@ -300,7 +314,7 @@ async fn should_report_end_turn_for_fresh_prompt_after_prior_turn_was_cancelled(
     let prompt_cwd = cwd.clone();
 
     tokio::time::timeout(
-        std::time::Duration::from_secs(20),
+        STEP_DEADLINE,
         Client
             .builder()
             .name("ra-acp-cancel-then-fresh-client")
@@ -369,7 +383,7 @@ async fn should_report_end_turn_for_fresh_prompt_after_prior_turn_was_cancelled(
             ),
     )
     .await
-    .expect("ACP request cycle must complete within 20 seconds")
+    .expect("ACP request cycle must complete within the step deadline")
     .expect("ACP client run completes");
 
     let got = *second_stop.lock().await;
@@ -427,7 +441,7 @@ async fn should_reject_a_concurrent_prompt_on_the_same_session() {
 
     let prompt_cwd = cwd.clone();
     tokio::time::timeout(
-        std::time::Duration::from_secs(20),
+        STEP_DEADLINE,
         Client
             .builder()
             .name("ra-acp-concurrent-prompt-client")
@@ -539,6 +553,6 @@ async fn should_reject_a_concurrent_prompt_on_the_same_session() {
             ),
     )
     .await
-    .expect("ACP request cycle must complete within 20 seconds")
+    .expect("ACP request cycle must complete within the step deadline")
     .expect("ACP client run completes");
 }
