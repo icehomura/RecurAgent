@@ -2624,8 +2624,7 @@ async fn handle_admin_shell(
         .filter(|t| !t.is_empty())
         .or_else(|| ra_core::brand::env_compat_str("AUTH_TOKEN").filter(|t| !t.is_empty()))
         .or_else(|| {
-            // Try RA_DATA_DIR (legacy RA_DATA_DIR), then the state home
-            // (~/.ra).
+            // Try RA_DATA_DIR, then the state home (~/.ra).
             let candidates = [
                 ra_core::brand::env_compat_str("DATA_DIR"),
                 ra_core::brand::state_home().map(|dir| dir.display().to_string()),

@@ -1381,8 +1381,7 @@ impl Config {
             dirs.push(bundled);
         }
         // Note: platform-skills/ (voice, etc.) are admin-only — loaded explicitly in serve.rs
-        // Extra dirs from RA_SKILLS_PATH env var (legacy RA_SKILLS_PATH;
-        // colon-separated)
+        // Extra dirs from RA_SKILLS_PATH env var (colon-separated)
         if let Some(extra) = ra_core::brand::env_compat_str("SKILLS_PATH") {
             for p in extra.split(':') {
                 let p = p.trim();

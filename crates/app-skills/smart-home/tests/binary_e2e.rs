@@ -100,11 +100,9 @@ fn run_skill(tool: &str, input: &str, env: &[(&str, String)]) -> (serde_json::Va
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         // Start from a clean smart-home config surface so ambient
-        // RA_*/RA_*/SMART_HOME_* vars on the test machine can't leak in.
+        // RA_*/SMART_HOME_* vars on the test machine can't leak in.
         .env_remove("SMART_HOME_BRIDGE_URL")
         .env_remove("SMART_HOME_BRIDGE_TOKEN")
-        .env_remove("RA_HOME")
-        .env_remove("RA_PROFILE_ID")
         .env_remove("RA_HOME")
         .env_remove("RA_PROFILE_ID");
     for (key, value) in env {
@@ -321,8 +319,8 @@ fn should_report_clear_error_when_no_bridge_configured_anywhere() {
         "smart_home_list_devices",
         "{}",
         &[
-            // The legacy `RA_` spellings are still honoured (this test
-            // keeps them on purpose; the others use `RA_*`).
+            // The current `RA_*` spellings; the others in this file set the
+            // same variables too.
             ("RA_HOME", state_home.path().to_string_lossy().to_string()),
             ("RA_PROFILE_ID", "e2e-user".to_string()),
         ],

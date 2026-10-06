@@ -148,11 +148,9 @@ fn resolve_bridge_from_profile() -> Result<BridgeConfig, String> {
     let profile_id = match ra_core::brand::env_compat_str("PROFILE_ID").filter(|v| !v.is_empty()) {
         Some(v) => v,
         None => {
-            return Err(
-                "RA_PROFILE_ID (legacy RA_PROFILE_ID) is not set — run from a gateway, or set \
+            return Err("RA_PROFILE_ID is not set — run from a gateway, or set \
                  SMART_HOME_BRIDGE_URL (and SMART_HOME_BRIDGE_TOKEN) directly"
-                    .to_string(),
-            )
+                .to_string())
         }
     };
 

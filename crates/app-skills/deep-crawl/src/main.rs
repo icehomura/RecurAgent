@@ -1306,8 +1306,7 @@ async fn run() -> Output {
         );
 
         // robots.txt (only when the operator enabled it with
-        // RA_RESPECT_ROBOTS=1, legacy RA_RESPECT_ROBOTS honoured;
-        // default off, never fetched): a disallowed
+        // RA_RESPECT_ROBOTS=1; default off, never fetched): a disallowed
         // (or unreachable-robots) URL is recorded, never navigated, and
         // Crawl-delay is honoured between pages. Otherwise pages are spaced
         // by the settle time alone (sequential, one tab).
