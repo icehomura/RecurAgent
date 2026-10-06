@@ -23,25 +23,10 @@ fn should_enable_console_logs(has_rolling_file_logs: bool, interactive: bool) ->
     !has_rolling_file_logs || interactive
 }
 
-/// Shell-completion request variable (new name) — see [`complete_env_var`].
+/// Shell-completion request variable. Kept as a literal because `clap_complete`
+/// is handed the *name*, not a value; [`complete_var_name_follows_the_brand_prefix`]
+/// pins it to the brand prefix.
 const COMPLETE_VAR: &str = "RA_COMPLETE";
-/// Pre-rename shell-completion request variable. Kept as a literal because
-/// `clap_complete` is handed the *name*, not a value;
-/// [`complete_var_names_follow_the_brand_prefixes`] pins both spellings to the
-/// brand prefixes.
-const LEGACY_COMPLETE_VAR: &str = "RA_COMPLETE";
-
-/// Name of the shell-completion request variable: `RA_COMPLETE`, falling back to
-/// the legacy `RA_COMPLETE` when only that one is set (the new name wins when
-/// both are). `clap_complete` reads the variable itself and wants a
-/// `&'static str`, so the two candidate names are consts.
-fn complete_env_var() -> &'static str {
-    if std::env::var_os(COMPLETE_VAR).is_some_and(|value| !value.is_empty()) {
-        COMPLETE_VAR
-    } else {
-        LEGACY_COMPLETE_VAR
-    }
-}
 
 /// Write a panic report to any `io::Write` without panicking on BrokenPipe.
 ///
@@ -419,16 +404,12 @@ mod tests {
         assert!(should_enable_console_logs(false, true));
     }
 
-    /// The completion variable names must stay tied to the brand prefixes
-    /// (they are literals only because `clap_complete` wants `&'static str`).
+    /// The completion variable name must stay tied to the brand prefix
+    /// (it is a literal only because `clap_complete` wants `&'static str`).
     #[test]
-    fn complete_var_names_follow_the_brand_prefixes() {
+    fn complete_var_name_follows_the_brand_prefix() {
         assert_eq!(
             COMPLETE_VAR,
-            format!("{}COMPLETE", ra_core::brand::ENV_PREFIX)
-        );
-        assert_eq!(
-            LEGACY_COMPLETE_VAR,
             format!("{}COMPLETE", ra_core::brand::ENV_PREFIX)
         );
     }
