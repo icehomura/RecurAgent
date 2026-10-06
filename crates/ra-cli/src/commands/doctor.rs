@@ -241,10 +241,11 @@ fn build_report(cmd: &DoctorCommand, with_network: bool) -> Result<Report> {
     ));
     report.push(shadow_check(&located, &method, &spec));
 
-    // --- Installations (every RecurAgent + ra-tui copy, with versions) --------
-    // Parity with `ra-tui doctor`'s Installations section: enumerate BOTH
-    // binaries across PATH + the known install dirs so duplicate / mismatched
-    // installs are visible from either doctor.
+    // --- Installations (every RecurAgent copy, with versions) ----------------
+    // Parity with the TUI doctor's Installations section: enumerate `ra`
+    // across PATH + the known install dirs so duplicate / mismatched installs
+    // are visible from either doctor. The terminal UI ships inside `ra`, so
+    // there is no separate ra-tui product to enumerate.
     report.extend(installations_checks(&spec));
 
     // --- Config / data-dir context ------------------------------------------
@@ -336,29 +337,20 @@ fn build_report(cmd: &DoctorCommand, with_network: bool) -> Result<Report> {
 }
 
 // ---------------------------------------------------------------------------
-// Installations — every RecurAgent + ra-tui on the machine, with versions
+// Installations — every RecurAgent copy on the machine, with versions
 // ---------------------------------------------------------------------------
 
-/// Parity with `ra-tui doctor`'s Installations section: enumerate every
-/// RecurAgent AND ra-tui copy (across `$PATH`, Homebrew, cargo, the shell
-/// installer's `~/.local/bin`, and RecurAgent's `~/.ra/bin` auto-install dir),
-/// with each copy's `--version` + inferred install method — so duplicate /
-/// mismatched installs are visible from `ra doctor` too, not just the TUI's.
+/// Parity with the TUI doctor's Installations section: enumerate every
+/// RecurAgent copy (across `$PATH`, Homebrew, cargo, the shell installer's
+/// `~/.local/bin`, and RecurAgent's `~/.ra/bin` auto-install dir), with each
+/// copy's `--version` + inferred install method — so duplicate / mismatched
+/// installs are visible from `ra doctor` too, not just the TUI's.
+///
+/// The shipped executables are variants of this one product: `ra` and
+/// `ra-full` open the in-binary terminal UI, `ra-headless` is the no-TUI
+/// build, and there is no separate ra-tui product to enumerate.
 fn installations_checks(ra: &ProductSpec) -> Vec<Check> {
-    let mut checks = vec![
-        installs_check("ra", &locate_with_ra_bin(ra)),
-        installs_check("ra-tui", &locate(&ra_tui_spec())),
-    ];
-    checks
-}
-
-/// Minimal spec for LOCATING the terminal-client binary — only `binary_name`
-/// matters for enumeration; the rest are placeholders.
-fn ra_tui_spec() -> ProductSpec {
-    ProductSpec::new(
-        "ra-tui", "ra-tui", "0.0.0", "", // no release channel (source-built)
-        "ra-tui",
-    )
+    vec![installs_check("ra", &locate_with_ra_bin(ra))]
 }
 
 /// `locate()` scans PATH + Homebrew/cargo/`~/.local/bin`, but RecurAgent's
@@ -395,7 +387,7 @@ fn install_method_for_path(path: &Path) -> &'static str {
     } else if p.contains("/homebrew/") || p.contains("/Cellar/") || p.starts_with("/usr/local/") {
         "brew"
     } else if p.contains("/.ra/bin/") {
-        "ra-tui auto-install"
+        "ra auto-install"
     } else if p.contains("/.local/bin/") {
         "shell installer"
     } else if p.starts_with("/usr/bin/") || p.starts_with("/bin/") {
@@ -2034,16 +2026,16 @@ mod tests {
             "brew"
         );
         assert_eq!(
-            install_method_for_path(Path::new("/home/u/.local/bin/ra-tui")),
+            install_method_for_path(Path::new("/home/u/.local/bin/ra")),
             "shell installer"
         );
         assert_eq!(
             install_method_for_path(Path::new("/home/u/.ra/bin/ra")),
-            "ra-tui auto-install"
+            "ra auto-install"
         );
         assert_eq!(install_method_for_path(Path::new("/usr/bin/ra")), "system");
         assert_eq!(
-            install_method_for_path(Path::new("/x/node_modules/.bin/ra-tui")),
+            install_method_for_path(Path::new("/x/node_modules/.bin/ra")),
             "npm"
         );
     }
@@ -2075,10 +2067,11 @@ mod tests {
     }
 
     #[test]
-    fn installations_checks_cover_server_and_terminal_client() {
+    fn installations_checks_cover_ra_only() {
         let checks = installations_checks(&ra_server_spec());
         assert!(checks.iter().any(|c| c.name == "ra installs"));
-        assert!(checks.iter().any(|c| c.name == "ra-tui installs"));
+        // The terminal UI ships inside `ra`; there is no ra-tui product row.
+        assert!(!checks.iter().any(|c| c.name == "ra-tui installs"));
     }
 
     #[test]
