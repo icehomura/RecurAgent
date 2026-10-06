@@ -221,4 +221,3 @@ tsconfig.tsbuildinfo
 # foreign git dependency). Their manifests/provenance/readmes are part of the
 # tree, so the repo-wide `*.md` rule must not drop them.
 !vendor/**
-!tui/vendor/**

@@ -1,5 +1,7 @@
-# Workspace for the crates vendored under `vendor/` for `ra-research`'s
-# `metasearch` feature (Rascript core + the Makepad VM it re-exports).
+# Workspace for the third-party crates vendored under `vendor/` so the build
+# needs no foreign git dependency: the Rascript core + the Makepad VM it
+# re-exports (for `ra-research`'s `metasearch` feature) and the `ttfx` splash
+# engine used by the terminal client.
 #
 # Keeping them in their own workspace lets the tree be inspected/built
 # standalone; the root workspace pulls them in as path dependencies.
@@ -21,4 +23,5 @@ members = [
     "makepad-regex",
     "makepad-html",
     "smallvec",
+    "ttfx",
 ]

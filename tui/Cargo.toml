@@ -21,8 +21,8 @@ path = "src/main.rs"
 ra-core = { path = "../crates/ra-core" }
 # Startup splash animation engine (specs/task-startup-splash.spec), vendored in
 # tree so the build needs no network (source, rev and license in
-# vendor/ttfx/PROVENANCE.md). ttfx itself only depends on clap + terminal_size.
-ttfx = { path = "vendor/ttfx" }
+# ../vendor/ttfx/PROVENANCE.md). ttfx itself only depends on clap + terminal_size.
+ttfx = { path = "../vendor/ttfx" }
 clap = { version = "4", features = ["derive"] }
 eyre = "0.6"
 fs2 = "0.4"
@@ -83,7 +83,7 @@ unsafe_code = "deny"
 
 [workspace]
 resolver = "3"
-# The vendored ttfx drop (vendor/ttfx/PROVENANCE.md) stays its own package: a
+# The vendored ttfx drop (../vendor/ttfx/PROVENANCE.md) stays its own package: a
 # path dependency inside the workspace root would otherwise be adopted as a
 # member, pulling its upstream profiles into this workspace and dragging it
 # through our lints/formatting. As an excluded path dep it resolves from disk

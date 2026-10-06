@@ -17,13 +17,13 @@ ra-tui 启动时（`backend_ensure` 之后、`event_loop::run` 接管终端之�
 
 ## 已定决策
 
-- **依赖**：`Cargo.toml` 用 `ttfx = { path = "vendor/ttfx" }`——引擎源码整体 vendor
+- **依赖**：`Cargo.toml` 用 `ttfx = { path = "../vendor/ttfx" }`——引擎源码整体 vendor
   进本仓库（上游仓库、rev `6e24dac`、MIT 许可与拷贝日期见
-  `vendor/ttfx/PROVENANCE.md`），构建不再访问网络。
+  `../vendor/ttfx/PROVENANCE.md`），构建不再访问网络。
   新增依赖的正当理由：本任务即为集成该引擎；ttfx 自身仅依赖 clap + terminal_size。
   （原决策：以 git 依赖 pin 到 main tip 的 rev，外加 `.cargo/config.toml.example`
   里的本地 patch 示例；2026-10-05 去第三方 git 依赖时改为 vendor，patch 示例随之删除，
-  本地开发直接改 `vendor/ttfx/`。）
+  本地开发直接改 `../vendor/ttfx/`。）
 - **挂载点**：`src/main.rs` 中 `backend_ensure::ensure_ra_backend` 之后、
   `event_loop::run(cli)` 之前调用 `splash::play(&cli)`；`update`/`doctor` 在更早的
   `cmd::dispatch` 已退出，天然不播。

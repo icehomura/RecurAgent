@@ -103,6 +103,5 @@ extend-exclude = [
     # Vendored third-party sources: kept byte-faithful to their upstream
     # revision, so their prose and identifiers are not ours to lint.
     "vendor/**",
-    "tui/vendor/**",
     "references/**",
 ]

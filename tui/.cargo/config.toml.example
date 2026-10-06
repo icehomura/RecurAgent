@@ -2,7 +2,7 @@
 #
 # Nothing the TUI depends on is fetched over the network any more: `ra-core` is
 # the sibling kernel workspace at `../crates/ra-core`, and the splash animation
-# engine is vendored in-tree at `vendor/ttfx`. Both are plain path
+# engine is vendored in-tree at `../vendor/ttfx`. Both are plain path
 # dependencies, so a clean checkout builds offline and there is no git pin to
 # work around.
 #
@@ -20,5 +20,5 @@
 
 paths = ["../crates/ra-core"]
 
-# The splash engine needs no entry here: its live checkout *is* `vendor/ttfx`,
-# so edit that directory directly (see vendor/ttfx/PROVENANCE.md).
+# The splash engine needs no entry here: its live checkout *is* `../vendor/ttfx`,
+# so edit that directory directly (see ../vendor/ttfx/PROVENANCE.md).

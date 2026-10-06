@@ -20,7 +20,7 @@ carry provenance notes next to them:
     vendor/PROVENANCE.md            the Rascript / makepad-script VM chain
                                     (github.com/icehomura/Rascript,
                                      github.com/icehomura/makepad)
-    tui/vendor/ttfx/PROVENANCE.md   the splash animation engine
+    vendor/ttfx/PROVENANCE.md       the splash animation engine
                                     (github.com/omacom-io/ttfx)
 
 Upstream references in the source (for example `icehomura/RecurAgent#NNNN` issue
