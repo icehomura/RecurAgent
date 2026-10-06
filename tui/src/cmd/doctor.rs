@@ -359,7 +359,7 @@ fn build_source_check() -> Check {
         CAT_BINARY,
         "update channel",
         "ships from the ra repository — update by rebuilding from source \
-         (`cargo build --release --bin ra-tui`)",
+         (`cargo build --release -p ra-cli --bin ra`)",
     )
 }
 

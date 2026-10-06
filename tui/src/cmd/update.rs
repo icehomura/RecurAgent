@@ -40,7 +40,7 @@ impl UpdateOutcome {
 }
 
 /// The one command that updates this build.
-pub const REBUILD_COMMAND: &str = "cargo build --release --bin ra-tui";
+pub const REBUILD_COMMAND: &str = "cargo build --release -p ra-cli --bin ra";
 
 /// Entry point for `ra-tui update`.
 pub fn run(args: UpdateArgs) -> Result<UpdateOutcome> {
