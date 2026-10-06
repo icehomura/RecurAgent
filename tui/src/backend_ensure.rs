@@ -622,7 +622,7 @@ fn run_installer() -> Result<()> {
 /// Cargo.toml). Surfaced by `doctor` as the server version to run against.
 ///
 /// **BUMP THIS whenever you bump the `ra-core` rev in Cargo.toml**, to the
-/// release tag that contains that rev. [`REQUIRED_ra_CORE_REV`] and the test
+/// release tag that contains that rev. [`REQUIRED_RA_CORE_REV`] and the test
 /// beside it make the pair checkable: the rev moved to v2.0.3-rc.1 while this
 /// stayed on v2.0.2, so the tag and the pinned rev must move together.
 pub(crate) const REQUIRED_BACKEND_RELEASE: &str = "v0.1.0";
@@ -639,7 +639,7 @@ pub(crate) const REQUIRED_BACKEND_RELEASE: &str = "v0.1.0";
 /// Test-only: its whole job is to be compared against Cargo.toml, so it would
 /// be dead weight in a real build.
 #[cfg(test)]
-pub(crate) const REQUIRED_ra_CORE_REV: &str = "f4a31d9a0ef2228e919c3d516b78a9d82ad6f470";
+pub(crate) const REQUIRED_RA_CORE_REV: &str = "f4a31d9a0ef2228e919c3d516b78a9d82ad6f470";
 /// The backend binary filename on this platform.
 fn backend_binary_name() -> &'static str {
     if cfg!(windows) { "ra.exe" } else { "ra" }
@@ -1007,14 +1007,14 @@ mod tests {
             .expect("Cargo.toml records the ra-core protocol rev");
 
         assert_eq!(
-            rev, REQUIRED_ra_CORE_REV,
+            rev, REQUIRED_RA_CORE_REV,
             "Cargo.toml records ra-core rev {rev}, but backend_ensure records \
-             {REQUIRED_ra_CORE_REV} as the rev behind \
+             {REQUIRED_RA_CORE_REV} as the rev behind \
              REQUIRED_BACKEND_RELEASE ({REQUIRED_BACKEND_RELEASE}).\n\
              \n\
              If you bumped the rev, also bump REQUIRED_BACKEND_RELEASE to the \
              release tag containing it, and update \
-             REQUIRED_ra_CORE_REV to match. Otherwise the recorded protocol \
+             REQUIRED_RA_CORE_REV to match. Otherwise the recorded protocol \
              revision disagrees with this client."
         );
     }

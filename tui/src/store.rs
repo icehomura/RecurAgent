@@ -10713,7 +10713,7 @@ impl Store {
             });
             let in_archive = item.turn_id.as_ref().is_some_and(|turn| {
                 self.state.turn_activity_logs.iter().any(|log| {
-                    &log.session_id == &session_id
+                    log.session_id == session_id
                         && &log.turn_id == turn
                         && log.items.iter().any(|existing| {
                             existing.kind == ActivityKind::Tool

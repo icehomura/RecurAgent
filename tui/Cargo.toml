@@ -14,7 +14,7 @@ description = "Terminal UI client for the ra kernel (UI Protocol over WebSocket/
 # the root workspace, so it builds against the kernel in the working tree
 # instead of a pinned git rev. The upstream revision this client was validated
 # against is still recorded as a literal below — `rev = "f4a31d9a0ef2228e919c3d516b78a9d82ad6f470"`
-# — because `backend_ensure::REQUIRED_ra_CORE_REV` and its test read the
+# — because `backend_ensure::REQUIRED_RA_CORE_REV` and its test read the
 # first `rev = "` in this file back and require the pair to match. Bump the two
 # together; nothing resolves that rev over the network any more.
 [dependencies]

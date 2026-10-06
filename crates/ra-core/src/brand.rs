@@ -91,11 +91,6 @@ fn platform_config_base() -> Option<PathBuf> {
 mod tests {
     use super::*;
 
-    fn p(s: &str) -> PathBuf {
-        // absolute on every platform (a bare "/x" is not absolute on Windows)
-        std::env::temp_dir().join("ra-brand-test").join(s)
-    }
-
     #[test]
     fn env_compat_reads_only_the_ra_prefix() {
         // A name that cannot be set in the environment must resolve to `None`

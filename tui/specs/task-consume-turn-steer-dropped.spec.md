@@ -24,7 +24,7 @@ RecurAgent F4 已让服务端在 turn 退出时把受理但未消费的 steer �
   （RecurAgent 分支 `fix/return-unconsumed-steer-inputs`），`Cargo.lock` 同步；该 rev 新增的
   `MonitorUpdated`/`MonitorFired`/`MonitorExpired`/`BackgroundActivity` 通知本任务不消费，
   reducer 里显式 `=> None`。
-- 版本配对：`backend_ensure::REQUIRED_ra_CORE_REV` 同步更新为该 rev 以通过
+- 版本配对：`backend_ensure::REQUIRED_RA_CORE_REV` 同步更新为该 rev 以通过
   `ra_release_pin_matches_cargo_core_rev`；`REQUIRED_ra_RELEASE` 暂保持
   `v2.0.3-rc.2`——尚无 RecurAgent release 包含 `1ff2e3d8`。本次协议变更是纯新增通知，
   老服务端只是不会发送 `turn/steer_dropped`（客户端退化为 F5 终态兜底），因此
@@ -190,7 +190,7 @@ RecurAgent F4 已让服务端在 turn 退出时把受理但未消费的 steer �
 场景: rev 与 release 配对常量同步
   测试: ra_release_pin_matches_cargo_core_rev
   当 读取 `Cargo.toml` 的 ra-core rev
-  那么 与 `REQUIRED_ra_CORE_REV` 一致
+  那么 与 `REQUIRED_RA_CORE_REV` 一致
 
 场景: 客户端在能力协商中请求该 feature
   测试: feature_header_requests_turn_steer_dropped
