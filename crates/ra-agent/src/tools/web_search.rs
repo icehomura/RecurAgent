@@ -31,8 +31,7 @@
 //! DuckDuckGo HTML and Bing-in-Chrome read search engines' results pages (ADR
 //! 0002 §6: honest User-Agent, a challenge is a miss, no CAPTCHA solving).
 //! They are on unless the operator sets `RA_ALLOW_SERP_SCRAPE=0` (alias
-//! `RA_ALLOW_BROWSER_SERP`; the legacy `RA_` spellings are still
-//! honoured). Bing drives the
+//! `RA_ALLOW_BROWSER_SERP`). Bing drives the
 //! same in-process `chromiumoxide`
 //! headless browser the `browser` tool uses and is gated behind the `browser`
 //! cargo feature. On any box with no Chrome/Chromium it degrades to a fast,
@@ -84,14 +83,12 @@ pub(crate) fn is_quota_or_rate_limit_error(result: &ToolResult) -> bool {
     CHINESE.iter().any(|kw| result.output.contains(kw))
 }
 
-/// Env lookup for the research knobs: `RA_<NAME>` wins over the legacy
-/// `RA_<NAME>`. Accepts the bare suffix or either fully-prefixed spelling,
-/// so callers (including a future ra-research that resolves names itself)
-/// cannot end up double-prefixing.
+/// Env lookup for the research knobs: reads `RA_<NAME>`. Accepts the bare
+/// suffix or the fully-prefixed spelling, so callers that pass a prefixed
+/// name cannot end up double-prefixing.
 pub(crate) fn compat_env_lookup(name: &str) -> Option<String> {
     let suffix = name
         .strip_prefix(ra_core::brand::ENV_PREFIX)
-        .or_else(|| name.strip_prefix(ra_core::brand::ENV_PREFIX))
         .unwrap_or(name);
     ra_core::brand::env_compat_str(suffix)
 }
@@ -281,8 +278,7 @@ pub(crate) fn serp_scrape_opted_in(lookup: impl Fn(&str) -> Option<String>) -> b
     ra_research::serp_scrape_allowed(lookup)
 }
 
-/// Whether the RecurAgent metasearch is on (`RA_METASEARCH`, default on; legacy
-/// `RA_METASEARCH` is still honoured).
+/// Whether the RecurAgent metasearch is on (`RA_METASEARCH`, default on).
 fn metasearch_on() -> bool {
     ra_research::metasearch::enabled(compat_env_lookup)
 }
@@ -2469,10 +2465,9 @@ mod tests {
 
     #[test]
     fn compat_env_lookup_resolves_unset_names_to_none() {
-        // Pure: neither the `RA_` nor the legacy `RA_` spelling is set,
-        // so the helper must not invent a value (no process env is touched).
+        // Pure: neither the bare nor the prefixed name is set, so the
+        // helper must not invent a value (no process env is touched).
         assert_eq!(compat_env_lookup("NOT_SET_XYZ"), None);
-        assert_eq!(compat_env_lookup("RA_NOT_SET_XYZ"), None);
         assert_eq!(compat_env_lookup("RA_NOT_SET_XYZ"), None);
     }
 
