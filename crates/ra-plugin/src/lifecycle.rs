@@ -498,10 +498,6 @@ impl LifecycleExecutor {
         // Export RA_SKILL_DIR so SKILL.md `init:`/`shutdown:` commands can
         // reference paths relative to the skill's installed location, e.g.
         //   cd "$RA_SKILL_DIR" && dora up && dora start dataflows/foo.yaml
-        // The legacy RA_SKILL_DIR is still exported alongside it: skill
-        // bundles written before the rename (and hosts that only forward the
-        // old name) reference it.
-        cmd.env("RA_SKILL_DIR", &self.cwd);
         cmd.env("RA_SKILL_DIR", &self.cwd);
         cmd.kill_on_drop(true);
 
@@ -698,31 +694,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn run_phase_injects_ra_and_legacy_skill_dir_env() {
+    async fn run_phase_injects_skill_dir_env() {
         // Build an executor whose cwd is a tempdir; the step writes
-        // $RA_SKILL_DIR and the legacy $RA_SKILL_DIR to files we can read
-        // back.
+        // $RA_SKILL_DIR to a file we can read back.
         let dir = tempfile::tempdir().unwrap();
         let skill_path = dir.path().to_path_buf();
         let ra_out = skill_path.join("captured_ra.txt");
         let ra_str = ra_out.to_string_lossy().to_string();
-        let legacy_out = skill_path.join("captured_legacy.txt");
-        let legacy_str = legacy_out.to_string_lossy().to_string();
 
         let executor = LifecycleExecutor::new(Box::new(NoSandbox), skill_path.clone());
         // The lifecycle runs the step through the platform shell (`sh -c` on
-        // Unix, `cmd /C` on Windows), so the command to echo the variables
-        // into files must match that shell: cmd expands `%VAR%` and has no
+        // Unix, `cmd /C` on Windows), so the command to echo the variable
+        // into a file must match that shell: cmd expands `%VAR%` and has no
         // `printf`. Tempdir paths carry no spaces, so we pass them unquoted
         // (which also avoids `cmd` mangling Rust's quoted argv). The Windows
         // `echo <var> >file` appends a trailing space + CRLF, so both sides are
         // trimmed before comparison.
         #[cfg(windows)]
-        let command = format!("echo %RA_SKILL_DIR% >{ra_str} & echo %RA_SKILL_DIR% >{legacy_str}");
+        let command = format!("echo %RA_SKILL_DIR% >{ra_str}");
         #[cfg(not(windows))]
-        let command = format!(
-            r#"printf '%s' "$RA_SKILL_DIR" > "{ra_str}" && printf '%s' "$RA_SKILL_DIR" > "{legacy_str}""#
-        );
+        let command = format!(r#"printf '%s' "$RA_SKILL_DIR" > "{ra_str}""#);
         let steps = vec![LifecycleStep {
             label: "capture env".into(),
             command,
@@ -735,9 +726,7 @@ mod tests {
         assert!(result.success, "phase failed: {:?}", result.error);
 
         let expected = skill_path.to_string_lossy();
-        for out_file in [&ra_out, &legacy_out] {
-            let captured = std::fs::read_to_string(out_file).unwrap();
-            assert_eq!(captured.trim(), expected.trim(), "{out_file:?}");
-        }
+        let captured = std::fs::read_to_string(&ra_out).unwrap();
+        assert_eq!(captured.trim(), expected.trim());
     }
 }
