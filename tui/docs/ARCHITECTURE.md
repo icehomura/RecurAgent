@@ -2,7 +2,10 @@
 
 ## Scope
 
-`ra-tui` is a standalone terminal client for the ra UI Protocol.
+`ra-tui` (the `tui/` crate) is the terminal client for the ra UI Protocol.
+It is compiled into the `ra` binary — `crates/ra-cli`'s default-on `tui`
+feature hands a bare `ra` to `ra_tui::run_with` — and ships no separate
+executable of its own.
 In protocol mode it does not run the RecurAgent agent, execute tools, approve
 commands, maintain the durable ledger, or own provider/model configuration.
 Those responsibilities belong to the `ra serve` process.
@@ -489,8 +492,7 @@ added without a row here.
 | `src/cmd/update.rs` | 606 | `ra-tui update` — install-method-aware updater (design §A). |
 | `src/cmd/olp_mcp.rs` | 20 | `ra-tui olp-mcp-serve` entry — OUTER_LOOP_REVIEW #31 OLP-MCP server subcommand. |
 | `src/cmd/outer_duty.rs` | 98 | `ra-tui outer-duty` entry — OUTER_LOOP_REVIEW #38 per-project duty lock (hold/check). |
-| `src/lib.rs` | 317 | Crate root — module declarations and the shared public surface. |
-| `src/main.rs` | 53 | Binary entry point: subcommand dispatch, then `event_loop::run`. |
+| `src/lib.rs` | 737 | Crate root — module declarations and the shared public surface. |
 
 ### Core loop and state
 

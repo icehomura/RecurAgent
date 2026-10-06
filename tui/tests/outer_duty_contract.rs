@@ -1,6 +1,7 @@
-//! Contract tests for `ra-tui outer-duty` (#38 / #38-r1) — the
+//! Contract tests for `ra outer-duty` (#38 / #38-r1) — the
 //! per-project session-lifetime OS-exclusive duty lock. Real subprocess
-//! (CARGO_BIN_EXE), temp HOME + project (locks never touch real state).
+//! (the merged `ra` binary, see [`bin`]), temp HOME + project (locks never
+//! touch real state).
 #![cfg(target_os = "linux")]
 
 use std::path::PathBuf;
@@ -8,25 +9,40 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 fn bin() -> PathBuf {
-    // CARGO_BIN_EXE may point at a bin-unittest harness under some cargo
-    // versions; prefer the real bin adjacent to the test deps directory,
-    // falling back to the env var and the plain target path.
-    let candidates = [
-        std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|d| d.join("../../ra-tui")))
-            .map(|p| p.canonicalize().unwrap_or(p)),
-        std::env::var("CARGO_BIN_EXE_ra-tui")
-            .ok()
-            .map(PathBuf::from),
-        Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/ra-tui")),
-    ];
-    for candidate in candidates.into_iter().flatten() {
+    // The client is linked INTO the `ra` binary now (crates/ra-cli's `tui`
+    // feature): `ra outer-duty` is this lock. Cargo only exports
+    // `CARGO_BIN_EXE_*` for the package's OWN bins, so locate the workspace
+    // binary next to this test's target dir, with a manifest-relative fallback
+    // and an explicit override for custom installs.
+    let name = format!("ra{}", std::env::consts::EXE_SUFFIX);
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Ok(path) = std::env::var("RA_BIN") {
+        candidates.push(PathBuf::from(path));
+    }
+    if let Some(profile_dir) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(PathBuf::from))
+        .and_then(|deps| deps.parent().map(PathBuf::from))
+    {
+        candidates.push(profile_dir.join(&name));
+    }
+    for profile in ["debug", "release"] {
+        candidates.push(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../target")
+                .join(profile)
+                .join(&name),
+        );
+    }
+    for candidate in candidates {
         if candidate.exists() {
             return candidate;
         }
     }
-    PathBuf::from(env!("CARGO_BIN_EXE_ra-tui"))
+    panic!(
+        "`{name}` not found next to the test target dir; build it first \
+         (`cargo build -p ra-cli --bin ra`) or set RA_BIN to a build"
+    );
 }
 
 struct TempHome(PathBuf);

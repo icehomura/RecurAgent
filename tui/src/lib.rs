@@ -34,6 +34,90 @@ pub mod transport;
 pub mod tui_terminal;
 pub mod viewport;
 
+/// Run the terminal UI from the process's own arguments — the standalone entry
+/// point. Installs the process-wide `color_eyre` error hooks first.
+///
+/// The `ra` binary (which links this crate behind its `tui` feature) installs
+/// its own production hooks and calls [`run_with`] instead: an `eyre` hook can
+/// only be installed once, so a second `color_eyre::install` would fail and
+/// take the whole UI down with it.
+pub fn run() -> eyre::Result<()> {
+    color_eyre::install()?;
+    run_with(std::env::args_os())
+}
+
+/// Run the terminal UI for an explicit argv (program name first).
+///
+/// `ra` forwards the argv its own top-level parser already validated, when the
+/// invocation carried no subcommand: the TUI's launch flags (`--mode`,
+/// `--endpoint`, `--stdio-command`, `--no-splash`, `--lang`, …) belong to THIS
+/// parser, so they must reach it rather than being judged by the outer one.
+///
+/// The caller owns the process-wide error hooks. This chains the
+/// terminal-restoring panic hook onto whatever hook is installed, then takes
+/// over the terminal for the event loop — so call it before releasing stdout
+/// to anything else (no log lines into the UI).
+pub fn run_with<I>(argv: I) -> eyre::Result<()>
+where
+    I: IntoIterator<Item = std::ffi::OsString>,
+{
+    install_terminal_restoring_panic_hook();
+
+    let argv: Vec<std::ffi::OsString> = argv.into_iter().collect();
+
+    // Intercept `update`/`doctor` subcommands before the normal TUI launch.
+    // A leading `update`/`doctor` positional dispatches to the command modules
+    // and exits with their code; anything else falls through to the TUI.
+    // (Routed on the lossy form of argv: routing matches ASCII subcommand
+    // names, and `std::env::args()` would panic outright on non-UTF-8 input.)
+    if let Some(code) = cmd::dispatch(argv.iter().map(|arg| arg.to_string_lossy().into_owned()))? {
+        std::process::exit(code);
+    }
+
+    let mut cli = crate::cli::Cli::parse_from(argv)?;
+    // Provision the `ra` server backend if a local stdio launch needs it and
+    // it isn't installed — BEFORE the event loop claims the terminal, so the
+    // installer's output prints cleanly. May rewrite `cli.stdio_command` to an
+    // explicit `~/.ra/bin/ra` path when a fresh install isn't on PATH.
+    // No-op for WebSocket/mock launches, a user-managed RecurAgent path/command, or
+    // when a compatible backend is already present.
+    backend_ensure::ensure_ra_backend(&mut cli)?;
+    // Startup splash: ttfx-rendered logo on the main screen, before the event
+    // loop claims the terminal. Gated (non-TTY/CI/--no-splash) and best-effort;
+    // see specs/task-startup-splash.spec.
+    splash::play(&cli);
+    event_loop::run(cli)
+}
+
+/// Chain a panic hook that restores the terminal before the (color_eyre)
+/// panic report prints.
+///
+/// A panic while raw mode and/or the alternate screen are active would emit
+/// the report into the raw terminal: staircased line endings, or entirely
+/// erased when the alternate screen is dropped, leaving the user's shell
+/// looking wedged. Every step is best-effort (errors ignored) and idempotent
+/// with the normal `TerminalGuard` restore in the event loop, so running both
+/// is harmless.
+fn install_terminal_restoring_panic_hook() {
+    let previous_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        use crossterm::{
+            cursor::Show,
+            event::{DisableBracketedPaste, DisableFocusChange, DisableMouseCapture},
+            execute,
+            terminal::{LeaveAlternateScreen, disable_raw_mode},
+        };
+
+        let mut stdout = std::io::stdout();
+        let _ = execute!(stdout, DisableMouseCapture);
+        let _ = execute!(stdout, LeaveAlternateScreen);
+        let _ = disable_raw_mode();
+        let _ = execute!(stdout, DisableBracketedPaste, DisableFocusChange, Show);
+
+        previous_hook(panic_info);
+    }));
+}
+
 #[cfg(test)]
 mod i18n_tests {
     /// The i18n scaffold loads both locale files and resolves keys. Uses the

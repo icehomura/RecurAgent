@@ -346,7 +346,22 @@ pub struct CliFileConfig {
 
 impl Cli {
     pub fn parse() -> Result<Self> {
-        let args = CliArgs::parse();
+        Self::parse_from(std::env::args_os())
+    }
+
+    /// Parse the launch flags from an explicit argv (program name first),
+    /// instead of the process arguments.
+    ///
+    /// The merged `ra` binary forwards the argv its own top-level parser
+    /// already saw: with no subcommand, the flags in it belong to this parser
+    /// (`--mode`, `--endpoint`, `--stdio-command`, `--no-splash`, …), and it
+    /// must report any real mistake itself.
+    pub fn parse_from<I, T>(itr: I) -> Result<Self>
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<std::ffi::OsString> + Clone,
+    {
+        let args = CliArgs::parse_from(itr);
         // Production launch reads the default config when no `--config` is
         // given, so `/saveconfig` settings round-trip on the next plain launch.
         Self::from_args(args, true)

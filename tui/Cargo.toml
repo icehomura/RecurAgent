@@ -6,14 +6,14 @@ rust-version = "1.85.0"
 license = "Apache-2.0"
 description = "Terminal UI client for the ra kernel (UI Protocol over WebSocket/stdio)"
 
-[[bin]]
-name = "ra-tui"
-path = "src/main.rs"
+# This crate is a library: the terminal UI it implements is started in-process
+# by the `ra` binary (crates/ra-cli, `tui` feature) via `ra_tui::run()`. No
+# `[[bin]]` here — a second `ra-tui` executable must not ship.
 
-# The shared protocol crate lives in this repo now: the ra kernel is the sibling
-# workspace at `../`, so the TUI builds against the working tree instead of a
-# pinned git rev. The upstream revision this client was validated against is
-# still recorded as a literal below — `rev = "f4a31d9a0ef2228e919c3d516b78a9d82ad6f470"`
+# The shared protocol crate lives in this repo now: this crate is a member of
+# the root workspace, so it builds against the kernel in the working tree
+# instead of a pinned git rev. The upstream revision this client was validated
+# against is still recorded as a literal below — `rev = "f4a31d9a0ef2228e919c3d516b78a9d82ad6f470"`
 # — because `backend_ensure::REQUIRED_ra_CORE_REV` and its test read the
 # first `rev = "` in this file back and require the pair to match. Bump the two
 # together; nothing resolves that rev over the network any more.
@@ -22,6 +22,8 @@ ra-core = { path = "../crates/ra-core" }
 # Startup splash animation engine (specs/task-startup-splash.spec), vendored in
 # tree so the build needs no network (source, rev and license in
 # ../vendor/ttfx/PROVENANCE.md). ttfx itself only depends on clap + terminal_size.
+# ttfx belongs to the root-excluded `vendor` workspace, so it stays its own
+# package there, built exactly as its own manifest declares.
 ttfx = { path = "../vendor/ttfx" }
 clap = { version = "4", features = ["derive"] }
 eyre = "0.6"
@@ -80,34 +82,3 @@ update = ["dep:axoupdater"]
 
 [lints.rust]
 unsafe_code = "deny"
-
-[workspace]
-resolver = "3"
-# The vendored ttfx drop (../vendor/ttfx/PROVENANCE.md) stays its own package: a
-# path dependency inside the workspace root would otherwise be adopted as a
-# member, pulling its upstream profiles into this workspace and dragging it
-# through our lints/formatting. As an excluded path dep it resolves from disk
-# but is built exactly as its own manifest declares.
-exclude = ["vendor/ttfx"]
-
-# The profile that 'dist' will build with
-[profile.dist]
-inherits = "release"
-lto = "thin"
-
-# Syntax highlighting must stay interactive in DEBUG builds too: the pager
-# re-highlights visible history on every scroll frame, and unoptimized
-# fancy-regex is 10-50x slower. Optimize just the hot highlight dependencies;
-# the workspace's own code keeps fast incremental debug compiles.
-[profile.dev.package.syntect]
-opt-level = 3
-[profile.dev.package.fancy-regex]
-opt-level = 3
-[profile.dev.package.regex-automata]
-opt-level = 3
-[profile.dev.package.regex-syntax]
-opt-level = 3
-[profile.dev.package.bit-set]
-opt-level = 3
-[profile.dev.package.bit-vec]
-opt-level = 3

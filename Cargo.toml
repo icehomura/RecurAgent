@@ -1,9 +1,14 @@
 [workspace]
 resolver = "2"
-# `tui/` is its own workspace (the RecurAgent terminal client ships and releases on its
-# own cadence, like upstream's ra-tui); it path-depends on crates/ra-core.
-exclude = ["tui", "vendor"]
+# `tui/` is a MEMBER: the terminal client (crate `ra-tui`) is linked into the
+# `ra` binary behind crates/ra-cli's default-on `tui` feature, so one build
+# produces one executable per variant (ra / ra-headless / ra-full) and no
+# separate `ra-tui` binary ships. Its vendored splash engine stays its own
+# package: vendor/ttfx is built exactly as its own manifest declares instead of
+# being adopted here, which would drag its upstream profiles and lints in.
+exclude = ["vendor"]
 members = [
+    "tui",
     "crates/ra-core",
     "crates/ra-diagnostics",
     "crates/ra-research",
@@ -233,3 +238,27 @@ incremental = false
 
 [profile.dev.package."*"]
 debug = false
+
+# Syntax highlighting must stay interactive in DEBUG builds too: the terminal
+# client's pager re-highlights visible history on every scroll frame, and
+# unoptimized fancy-regex is 10-50x slower. Optimize just the hot highlight
+# dependencies; the workspace's own code keeps fast incremental debug compiles.
+# (Moved down from tui/Cargo.toml when `tui` became a member: cargo only honours
+# profiles declared at the workspace root and warns about the ones it ignores.)
+[profile.dev.package.syntect]
+opt-level = 3
+[profile.dev.package.fancy-regex]
+opt-level = 3
+[profile.dev.package.regex-automata]
+opt-level = 3
+[profile.dev.package.regex-syntax]
+opt-level = 3
+[profile.dev.package.bit-set]
+opt-level = 3
+[profile.dev.package.bit-vec]
+opt-level = 3
+
+# The profile that 'dist' will build with.
+[profile.dist]
+inherits = "release"
+lto = "thin"

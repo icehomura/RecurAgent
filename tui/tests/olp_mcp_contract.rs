@@ -11,13 +11,41 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 
 fn server_binary() -> std::path::PathBuf {
-    // OLP_MCP_SERVER_BIN overrides the binary path (CI / custom installs);
-    // the default is cargo's own integration-test compile of the bin target —
-    // correct under any CARGO_TARGET_DIR (no fragile target/debug probing).
+    // OLP_MCP_SERVER_BIN overrides the binary path (CI / custom installs).
     if let Ok(path) = std::env::var("OLP_MCP_SERVER_BIN") {
         return std::path::PathBuf::from(path);
     }
-    std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra-tui"))
+    // The client is linked INTO the `ra` binary now (crates/ra-cli's `tui`
+    // feature), and `ra olp-mcp-serve` routes to this server. Cargo only
+    // exports `CARGO_BIN_EXE_*` for the package's OWN bins, so locate the
+    // workspace binary next to this test's target dir — correct under any
+    // CARGO_TARGET_DIR and for the profile the tests were built with.
+    let name = format!("ra{}", std::env::consts::EXE_SUFFIX);
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+    if let Some(profile_dir) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(std::path::Path::to_path_buf))
+        .and_then(|deps| deps.parent().map(std::path::Path::to_path_buf))
+    {
+        candidates.push(profile_dir.join(&name));
+    }
+    for profile in ["debug", "release"] {
+        candidates.push(
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../target")
+                .join(profile)
+                .join(&name),
+        );
+    }
+    for candidate in candidates {
+        if candidate.exists() {
+            return candidate;
+        }
+    }
+    panic!(
+        "`{name}` not found next to the test target dir; build it first \
+         (`cargo build -p ra-cli --bin ra`) or point OLP_MCP_SERVER_BIN at a build"
+    );
 }
 
 struct ServerProc {
