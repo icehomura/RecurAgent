@@ -29,6 +29,7 @@ pub mod file_state_cache;
 pub mod format;
 pub mod harness_errors;
 pub mod harness_events;
+pub mod helper_binaries;
 pub mod hooks;
 pub mod loop_detect;
 pub mod mcp;

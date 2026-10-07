@@ -144,13 +144,13 @@ impl Sandbox for AppContainerSandbox {
 }
 
 /// Find the `ra-sandbox` helper binary.
-/// Looks next to the current executable, then on PATH.
+/// Looks beside the current executable (including a nested `tools/` folder next
+/// to it), then on PATH.
 fn find_sandbox_helper() -> Option<String> {
-    // Next to our binary
+    // Next to our binary (or in its `tools/` subdirectory)
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            let helper = dir.join("ra-sandbox.exe");
-            if helper.exists() {
+            if let Some(helper) = crate::helper_binaries::find_helper_binary(dir, "ra-sandbox") {
                 return Some(helper.to_string_lossy().into_owned());
             }
         }

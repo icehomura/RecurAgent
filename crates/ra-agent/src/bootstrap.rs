@@ -132,23 +132,14 @@ fn sha256_file(path: &Path) -> Option<String> {
 }
 
 /// Resolve a bundled skill's source binary that sits beside the RecurAgent
-/// executable. Tries the bare `binary_name` first, then `binary_name.exe` on
-/// Windows — release bundles ship `weather.exe`, `news_fetch.exe`, … so a
-/// bare-name-only lookup would falsely report every skill missing on Windows
-/// (and never bootstrap them). Returns the first existing path, or `None`.
+/// executable.
+///
+/// The lookup itself lives in [`crate::helper_binaries`] so the skill
+/// bootstrap and the sandbox-helper probe agree on where helpers are allowed
+/// to live: beside `ra` (the release-bundle layout) or in a nested `tools/`
+/// folder next to it. Returns the first existing path, or `None`.
 fn resolve_sibling_binary(exe_dir: &Path, binary_name: &str) -> Option<std::path::PathBuf> {
-    let bare = exe_dir.join(binary_name);
-    if bare.exists() {
-        return Some(bare);
-    }
-    #[cfg(windows)]
-    {
-        let exe = exe_dir.join(format!("{binary_name}.exe"));
-        if exe.exists() {
-            return Some(exe);
-        }
-    }
-    None
+    crate::helper_binaries::find_helper_binary(exe_dir, binary_name)
 }
 
 /// Bootstrap skill entries into the given directory.
@@ -262,7 +253,8 @@ fn bootstrap_entries_in(
 const PREFLIGHT_OPTIONAL_SKILLS: &[&str] = &["skill-evolve"];
 
 /// Returns the `binary_name`s of [`BUNDLED_APP_SKILLS`] that the standard bundle
-/// is expected to ship but whose sibling binary is absent from `exe_dir` — i.e.
+/// is expected to ship but whose sibling binary is absent from `exe_dir` (or its
+/// `tools/` subdirectory — see [`crate::helper_binaries`]) — i.e.
 /// the signal of a bare-binary deploy. Skills in [`PREFLIGHT_OPTIONAL_SKILLS`]
 /// are excluded so a normal full-bundle install never false-warns.
 ///
@@ -431,6 +423,54 @@ mod tests {
             std::fs::read_to_string(&marker).unwrap(),
             sha256_bytes(b"v1"),
             "marker must contain the sha256 of the source sibling binary"
+        );
+    }
+
+    #[test]
+    fn bootstrap_entries_in_finds_binaries_in_a_nested_tools_dir() {
+        // The "CLI at the top, helpers in `tools/`" layout: `ra` resolves the
+        // skill binary from `<exe_dir>/tools/` when it is not beside the
+        // executable. See `crate::helper_binaries`.
+        let tmp = tempfile::tempdir().unwrap();
+        let exe_dir = tmp.path().join("exe");
+        let skills_dir = tmp.path().join("skills");
+        std::fs::create_dir_all(exe_dir.join(crate::helper_binaries::TOOLS_SUBDIR)).unwrap();
+
+        std::fs::write(
+            exe_dir
+                .join(crate::helper_binaries::TOOLS_SUBDIR)
+                .join("wx"),
+            b"nested",
+        )
+        .unwrap();
+        let entries: &[(&str, &str, &str, &str)] = &[("wx", "wx", "SKILL", "MANIFEST")];
+
+        let n = bootstrap_entries_in(&exe_dir, &skills_dir, entries);
+        assert_eq!(n, 1, "a nested tools/ binary must bootstrap the skill");
+        assert_eq!(
+            std::fs::read(skills_dir.join("wx").join("main")).unwrap(),
+            b"nested"
+        );
+    }
+
+    #[test]
+    fn missing_sibling_skill_binaries_in_accepts_a_nested_tools_dir() {
+        // A `tools/`-nested install is NOT a bare-binary deploy, so the
+        // preflight must stay quiet — warning there would make the guard cry
+        // wolf on a perfectly good install.
+        let tmp = tempfile::tempdir().unwrap();
+        let exe_dir = tmp.path().join("exe");
+        let tools_dir = exe_dir.join(crate::helper_binaries::TOOLS_SUBDIR);
+        std::fs::create_dir_all(&tools_dir).unwrap();
+
+        for &(_, binary_name, _, _) in BUNDLED_APP_SKILLS {
+            std::fs::write(tools_dir.join(binary_name), b"x").unwrap();
+        }
+
+        let missing = missing_sibling_skill_binaries_in(&exe_dir);
+        assert!(
+            missing.is_empty(),
+            "a nested tools/ layout must not be reported as a bare-binary deploy, got: {missing:?}"
         );
     }
 

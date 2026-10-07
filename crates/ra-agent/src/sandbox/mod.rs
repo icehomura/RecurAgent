@@ -818,9 +818,9 @@ fn remediation_for(os: HostOs) -> String {
         }
         HostOs::Macos => "sandbox-exec ships with macOS — restore it on PATH, or install Docker.",
         HostOs::Windows => {
-            "Install the ra-sandbox.exe AppContainer helper next to the ra binary, \
-             or install Docker Desktop (a native no-helper Windows runner is tracked in \
-             icehomura/RecurAgent issue 2195)."
+            "Install the ra-sandbox.exe AppContainer helper next to the ra binary \
+             (or in a `tools/` folder beside it), or install Docker Desktop (a native \
+             no-helper Windows runner is tracked in icehomura/RecurAgent issue 2195)."
         }
         HostOs::Other => "Install Docker (the only supported backend on this OS).",
     };
@@ -924,8 +924,8 @@ pub fn decide_sandbox(
             } else if !probe.windows_container_helper() {
                 refuse_missing(
                     "appcontainer",
-                    "the ra-sandbox.exe AppContainer helper was not found next to \
-                     the ra binary or on PATH",
+                    "the ra-sandbox.exe AppContainer helper was not found beside \
+                     the ra binary (or in a `tools/` folder next to it) or on PATH",
                     os,
                 )
             } else {
@@ -1268,12 +1268,9 @@ fn has_sandbox_helper() -> bool {
 fn find_sandbox_helper_path() -> Option<String> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            let helper = if cfg!(windows) {
-                dir.join("ra-sandbox.exe")
-            } else {
-                dir.join("ra-sandbox")
-            };
-            if helper.exists() {
+            // Beside `ra`, or in a nested `tools/` folder next to it — the same
+            // two layouts the skill-binary bootstrap accepts.
+            if let Some(helper) = crate::helper_binaries::find_helper_binary(dir, "ra-sandbox") {
                 return Some(helper.to_string_lossy().into_owned());
             }
         }
