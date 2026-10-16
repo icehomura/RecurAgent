@@ -22,6 +22,14 @@ pub enum ConfigChange {
     },
     /// Fields changed that require a restart. Log warning only.
     RestartRequired(Vec<String>),
+    /// A structural change (provider / model / endpoint / key / MCP / tool-policy /
+    /// sandbox / …) that a full `ProfileRuntime` rebuild can apply in-process.
+    /// Carries the freshly parsed `Config` so a consumer that owns a rebuild path
+    /// (the ACP / local-OUP runtime) can hot-swap provider + MCP without restarting
+    /// the process. The gateway, which swaps its provider via `SwappableProvider`
+    /// and cannot cheaply rebuild, ignores this. Emitted *in addition to* the other
+    /// variants.
+    Reload(Box<Config>),
 }
 
 /// Watches config file(s) and emits changes via a watch channel.
@@ -315,7 +323,8 @@ impl ConfigWatcher {
             restart_fields.push("gateway.channels".into());
         }
 
-        if !restart_fields.is_empty() {
+        let restart_needed = !restart_fields.is_empty();
+        if restart_needed {
             warn!(
                 "Config fields changed that require restart: {}. Restart gateway to apply.",
                 restart_fields.join(", ")
@@ -331,6 +340,19 @@ impl ConfigWatcher {
                 system_prompt: hot_prompt,
                 max_history: hot_history,
             }));
+        }
+
+        // A structural change (provider / model / endpoint / key / MCP /
+        // tool-policy / sandbox / hooks / plugins / format) is fixable by a full
+        // ProfileRuntime rebuild — emit a Reload carrying the new config for
+        // consumers that can rebuild in-process (the ACP / local runtime). This is
+        // the foundation for hot-reloading provider + MCP without a restart.
+        let structurally_changed = restart_needed
+            || old.provider != new.provider
+            || old.model != new.model
+            || old.api_type != new.api_type;
+        if structurally_changed {
+            let _ = self.tx.send(Some(ConfigChange::Reload(Box::new(new.clone()))));
         }
     }
 

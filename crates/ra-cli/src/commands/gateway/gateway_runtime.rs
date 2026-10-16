@@ -1874,6 +1874,11 @@ impl GatewayRuntime {
                         ConfigChange::RestartRequired(_) => {
                             // Already logged by ConfigWatcher
                         }
+                        ConfigChange::Reload(_) => {
+                            // The gateway applies provider/model changes via
+                            // `SwappableProvider` and does not rebuild its runtime
+                            // here; ConfigWatcher already logged the field diff.
+                        }
                     }
                 }
             }
