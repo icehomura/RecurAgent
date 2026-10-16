@@ -24709,11 +24709,21 @@ pub(crate) async fn ensure_session_profile_runtime(
         let had_retired = retired.is_some();
         // Boxed: the bootstrap future is large, and this function is awaited
         // inside many request futures that run on worker-thread stacks.
+        // A desktop client (RecurCode, the ACP transport) spawns one agent
+        // process per conversation, all pointed at the same profile data dir.
+        // The episode store is a single-writer redb file, so a strict `Serve`
+        // bootstrap here made every session after the first fail with
+        // "failed to open episode store for profile '_main'". Use the
+        // degraded role instead: `open_or_degraded` still takes the canonical
+        // lock whenever it is free (identical to `Serve` in the common case)
+        // and only falls back to a no-op memory handle when another process
+        // already owns it — the same posture `bootstrap_ephemeral` takes for
+        // ephemeral frontends.
         let bootstrap = Box::pin(crate::runtime::ProfileRuntime::bootstrap_replacing(
             &profile,
             &profile_data_dir,
             Some(store.ra_home_dir()),
-            crate::runtime::BootstrapRole::Serve,
+            crate::runtime::BootstrapRole::Gateway,
             None,
             None,
             state.host_memory.as_ref(),
