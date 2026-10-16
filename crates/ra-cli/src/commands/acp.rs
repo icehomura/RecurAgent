@@ -283,17 +283,71 @@ impl SessionAgentFactory for ConfigAgentFactory {
                     stored.unwrap_or_else(|| local_profile(&self.session_profile_id(), &config));
                 profile.config.env_vars = config.env_vars.clone();
                 profile.config.gateway.max_iterations = config.max_iterations;
-                bootstrap(LocalOupOptions {
+                let no_retry = false;
+                let state = bootstrap(LocalOupOptions {
                     config,
-                    profile,
+                    profile: profile.clone(),
                     data_dir: self.data_dir.clone(),
                     config_home: self.data_dir.clone(),
-                    no_retry: false,
+                    no_retry,
                     provider: None,
                     tool_profile: Some(tool_profile),
                     save_episodes: true,
                 })
-                .await
+                .await?;
+
+                // ACP in-process hot-reload: watch the `config.json` RecurCode
+                // writes (provider/model/mcp_servers) and, on a structural
+                // change, rebuild the runtime via the fail-closed
+                // `reload_local_profile_runtime` (redb stores handed over, never
+                // reopened). Detached for the ACP process lifetime (ACP has no
+                // shutdown channel; the OS reaps it on exit). A reload that cannot
+                // reuse the stores logs "restart required" and keeps the live
+                // runtime, so this can never corrupt an in-flight session.
+                {
+                    use crate::config_watcher::{ConfigChange, ConfigWatcher};
+                    let watch_path = self.data_dir.join("config.json");
+                    let (tx, mut rx) = tokio::sync::watch::channel(None);
+                    let seed = state
+                        .profiles
+                        .get(ra_core::MAIN_PROFILE_ID)
+                        .map(|rt| rt.config.clone())
+                        .unwrap_or_else(|| self.config.clone());
+                    let _handle = ConfigWatcher::new(vec![watch_path], seed, tx).spawn();
+                    let state_for_reload = state.clone();
+                    let profile_for_reload = profile.clone();
+                    let ra_home = self.data_dir.clone();
+                    let provider_name = self.provider_name.clone();
+                    let model = self.model.clone();
+                    let base_url = self.base_url.clone();
+                    let max_iterations = self.max_iterations;
+                    tokio::spawn(async move {
+                        while rx.changed().await.is_ok() {
+                            let change = rx.borrow_and_update().clone();
+                            let Some(ConfigChange::Reload(new_config)) = change else {
+                                continue;
+                            };
+                            // Re-apply the same CLI overrides the runtime was
+                            // bootstrapped with, so a reload does not silently
+                            // drop them in favour of the on-disk values.
+                            let mut cfg = *new_config;
+                            cfg.provider = Some(provider_name.clone());
+                            cfg.model = model.clone();
+                            cfg.base_url = base_url.clone();
+                            cfg.max_iterations = Some(max_iterations);
+                            crate::api::ui_protocol_transport::reload_local_profile_runtime(
+                                &state_for_reload,
+                                &profile_for_reload,
+                                Some(&ra_home),
+                                no_retry,
+                                cfg,
+                            )
+                            .await;
+                        }
+                    });
+                }
+
+                Ok(state)
             })
             .await
             .cloned()

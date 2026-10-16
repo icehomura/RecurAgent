@@ -24447,12 +24447,85 @@ pub(crate) fn resolve_session_profile_runtime(
             .get(&key)
             .cloned()
     });
+    if state.profile_store.is_none() {
+        if let Some(local) = take_local_runtime_override(candidate) {
+            return Some(local);
+        }
+    }
     dynamic.or_else(|| state.profiles.get(candidate).cloned())
 }
 
 fn dynamic_profile_runtimes() -> &'static DynamicProfileRuntimeMap {
     static RUNTIMES: OnceLock<DynamicProfileRuntimeMap> = OnceLock::new();
     RUNTIMES.get_or_init(|| std::sync::RwLock::new(HashMap::new()))
+}
+
+/// ACP / local-OUP in-process runtime override (#hot-reload).
+///
+/// The ACP runtime has no `ProfileStore`, so the dynamic-map reload machine
+/// above never engages for it — a config change would otherwise be pinned to
+/// the immutable startup map until restart. This single-slot override is set
+/// ONLY by the ACP config-watcher consumer on a successful `reload_from_config`
+/// and consulted (ahead of the startup map) by `resolve_session_profile_runtime`
+/// and `ensure_session_profile_runtime` when `profile_store` is `None`. The old
+/// `Arc<ProfileRuntime>` (and its MCP transports) is left to drop naturally once
+/// the session cache is invalidated and in-flight turns finish.
+fn local_runtime_override() -> &'static std::sync::RwLock<Option<Arc<crate::runtime::ProfileRuntime>>> {
+    static OVERRIDE: OnceLock<std::sync::RwLock<Option<Arc<crate::runtime::ProfileRuntime>>>> =
+        OnceLock::new();
+    OVERRIDE.get_or_init(|| std::sync::RwLock::new(None))
+}
+
+fn take_local_runtime_override(candidate: &str) -> Option<Arc<crate::runtime::ProfileRuntime>> {
+    if candidate != MAIN_PROFILE_ID {
+        return None;
+    }
+    local_runtime_override()
+        .read()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone()
+}
+
+/// Rebuild the ACP runtime in-process from a freshly-read `new_config` (provider
+/// chain + `mcp_servers`), then publish it via the override and invalidate the
+/// session cache so the next turn resolves the new runtime. Fail-closed: if the
+/// stores cannot be reused in place (`reload_from_config` `Err`), leave the old
+/// runtime authoritative and log that a restart is required — never drop into a
+/// double-opened redb.
+pub(crate) async fn reload_local_profile_runtime(
+    state: &Arc<AppState>,
+    profile: &crate::profiles::UserProfile,
+    ra_home: Option<&std::path::Path>,
+    no_retry: bool,
+    new_config: crate::config::Config,
+) {
+    let current = match take_local_runtime_override(MAIN_PROFILE_ID)
+        .or_else(|| state.profiles.get(MAIN_PROFILE_ID).cloned())
+    {
+        Some(current) => current,
+        None => {
+            tracing::warn!("config reload: no ACP runtime to reload yet");
+            return;
+        }
+    };
+    match current.reload_from_config(profile, ra_home, no_retry, new_config).await {
+        Ok(replacement) => {
+            *local_runtime_override()
+                .write()
+                .unwrap_or_else(|p| p.into_inner()) = Some(replacement);
+            // Invalidate AFTER publishing: any turn that starts now resolves the
+            // new runtime; in-flight turns keep the old Arc (and its MCP clients)
+            // until they finish, then drop naturally.
+            state.session_cache.invalidate_profile(MAIN_PROFILE_ID).await;
+            tracing::info!("ACP config reloaded in-process (provider + MCP rebuilt)");
+        }
+        Err(error) => {
+            tracing::warn!(
+                %error,
+                "ACP config change needs a restart (stores not reusable in place); keeping the running runtime"
+            );
+        }
+    }
 }
 
 /// Stores of runtimes a configuration commit removed from the cache, held
@@ -24572,6 +24645,9 @@ pub(crate) async fn ensure_session_profile_runtime(
 ) -> Result<Option<Arc<crate::runtime::ProfileRuntime>>, RpcError> {
     let profile_id = active_profile_id.unwrap_or(MAIN_PROFILE_ID);
     let Some(store) = state.profile_store.as_ref() else {
+        if let Some(local) = take_local_runtime_override(profile_id) {
+            return Ok(Some(local));
+        }
         return Ok(state.profiles.get(profile_id).cloned());
     };
     let Some(key) = dynamic_profile_runtime_key(state, profile_id) else {
