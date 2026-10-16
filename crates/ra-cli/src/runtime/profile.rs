@@ -804,6 +804,45 @@ impl ProfileRuntime {
         }
     }
 
+    /// Full configuration reload: rebuild the WHOLE runtime (provider chain +
+    /// `McpClient::start` on the new `mcp_servers`) from `new_config`, handing
+    /// the single-writer redb-backed stores over via [`Self::retire`] so the
+    /// replacement never reopens files an in-flight turn still holds.
+    ///
+    /// FAIL-CLOSED on redb safety: if the retired stores cannot be reused for
+    /// `new_config` (`can_share_with` false), returns `Err` WITHOUT reopening
+    /// anything, so the caller falls back to the documented "restart required"
+    /// path. It can never double-open the episode store.
+    ///
+    /// `profile` / `ra_home` / `no_retry` are the inputs the runtime was first
+    /// bootstrapped with; the local OUP caller owns them.
+    pub(crate) async fn reload_from_config(
+        self: &Arc<Self>,
+        profile: &UserProfile,
+        ra_home: Option<&Path>,
+        no_retry: bool,
+        new_config: Config,
+    ) -> Result<Arc<Self>> {
+        let retired = self.retire();
+        if !retired.can_share_with(&self.data_dir, &new_config) {
+            return Err(eyre::eyre!(
+                "configuration change requires a restart (stores are not reusable in place)"
+            ));
+        }
+        ProfileRuntime::bootstrap_resolved_sharing(
+            profile,
+            &self.data_dir,
+            ra_home,
+            BootstrapRole::Serve,
+            new_config,
+            None,
+            no_retry,
+            None,
+            Some(retired.resources),
+        )
+        .await
+    }
+
     /// Rebuild plugin-derived tools, trusted actions, prompt fragments, and
     /// hooks while sharing all long-lived profile resources with `self`.
     pub async fn rebuild_plugin_layer(self: &Arc<Self>) -> Result<Arc<Self>> {
