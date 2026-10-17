@@ -12072,6 +12072,7 @@ mod tests {
         use ra_core::ui_protocol::SessionOpenParams;
         let open = |id: &str| {
             AppUiCommand::OpenSession(SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id: SessionKey(id.into()),
                 topic: None,
                 profile_id: None,
@@ -12132,6 +12133,7 @@ mod tests {
         state
             .pending_autonomy_hydration
             .push_front(AppUiCommand::OpenSession(SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id: session_id.clone(),
                 topic: None,
                 profile_id: None,
@@ -12192,6 +12194,7 @@ mod tests {
         let mut state = AppState::new(Vec::new(), 0, "ready".into(), None, false);
         for index in 0..16 {
             state.enqueue_autonomy_hydration(AppUiCommand::OpenSession(SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id: SessionKey(format!("local:{index}")),
                 topic: None,
                 profile_id: None,
@@ -12242,6 +12245,7 @@ mod tests {
             }));
         }
         state.enqueue_local_session_open_front(AppUiCommand::OpenSession(SessionOpenParams {
+            mcp_servers: Vec::new(),
             session_id: SessionKey("local:active".into()),
             topic: None,
             profile_id: None,

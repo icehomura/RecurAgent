@@ -2050,6 +2050,35 @@ pub enum InputItem {
     Unknown,
 }
 
+/// One external MCP (Model Context Protocol) server a client asks the server
+/// to connect for a single session. Mirrors the ACP `session/new`
+/// `mcpServers` entries the ACP front-end receives, but stays transport-flat
+/// (`command`+`args`+`env` for stdio, or `url`+`headers` for streamable HTTP)
+/// rather than an enum so it is wire-compatible with
+/// `ra_agent::McpServerConfig` without ra-core depending on ra-agent. A `url`
+/// selects the HTTP transport; otherwise `command` selects stdio.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct SessionMcpServer {
+    /// Human-readable name (ACP `mcpServers[].name`). Diagnostics only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Stdio transport: command to spawn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    /// Stdio transport: arguments for `command`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub args: Vec<String>,
+    /// Stdio transport: environment variables for the spawned server.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub env: HashMap<String, String>,
+    /// HTTP transport: MCP endpoint URL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// HTTP transport: request headers (e.g. `Authorization`).
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub headers: HashMap<String, String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionOpenParams {
     pub session_id: SessionKey,
@@ -2080,6 +2109,13 @@ pub struct SessionOpenParams {
     /// that survive come back in `SessionOpened::accepted_client_commands`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_commands: Option<Vec<String>>,
+    /// External MCP servers the client asks this session to connect before its
+    /// first prompt (ACP `session/new` `mcpServers`). Connected once, at
+    /// runtime bootstrap, and registered as session tools; a session-cache hit
+    /// keeps the FIRST open's set (like `cwd`). Empty for clients that push
+    /// MCP another way.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp_servers: Vec<SessionMcpServer>,
 }
 
 /// Optional session-scoped sandbox narrowing requested by `session/open`.

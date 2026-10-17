@@ -2011,6 +2011,7 @@ impl ProtocolAppUiBackend {
                 .cloned()
                 .or_else(|| self.launch.cwd.clone());
             AppUiCommand::OpenSession(SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id,
                 topic: None,
                 profile_id: self.launch.profile_id.clone(),
@@ -2081,6 +2082,7 @@ impl ProtocolAppUiBackend {
             return None;
         }
         Some(AppUiCommand::OpenSession(SessionOpenParams {
+            mcp_servers: Vec::new(),
             session_id: params.session_id.clone(),
             topic: None,
             profile_id: self.launch.profile_id.clone(),
@@ -2819,6 +2821,7 @@ impl AppUiBackend for ProtocolAppUiBackend {
         if let Some(session_id) = self.launch.session_id.clone() {
             self.send(AppUiCommand::OpenSession(
                 ra_core::ui_protocol::SessionOpenParams {
+                    mcp_servers: Vec::new(),
                     session_id,
                     topic: None,
                     profile_id: self.launch.profile_id.clone(),
@@ -9454,6 +9457,7 @@ mod tests {
         let read_style_commands = [
             AppUiCommand::ListConfigCapabilities(ConfigCapabilitiesListParams {}),
             AppUiCommand::OpenSession(SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id: session_id.clone(),
                 topic: None,
                 sandbox: None,
@@ -10998,6 +11002,7 @@ mod tests {
             .expect("session opened event");
         let request = exchange
             .build_tracked_request(AppUiCommand::OpenSession(SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id: session_id.clone(),
                 topic: None,
                 sandbox: None,
@@ -11483,6 +11488,7 @@ mod tests {
         // This seam tests a hydrate writer failure in an ALREADY opened
         // scope; unknown-scope hydration has a separate session/open gate.
         backend.remember_confirmed_session_scope(SessionOpenParams {
+            mcp_servers: Vec::new(),
             session_id: SessionKey("local:hydrate-send".into()),
             topic: None,
             profile_id: None,
@@ -11904,6 +11910,7 @@ mod tests {
         let session_id = SessionKey("local:test".into());
         let request = backend
             .build_tracked_request(AppUiCommand::OpenSession(SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id: session_id.clone(),
                 topic: None,
                 sandbox: None,
@@ -12528,6 +12535,7 @@ mod tests {
         });
         let request = backend
             .build_tracked_request(AppUiCommand::OpenSession(SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id: SessionKey("local:test".into()),
                 topic: None,
                 sandbox: None,
@@ -12611,6 +12619,7 @@ mod tests {
         });
         let request = backend
             .build_tracked_request(AppUiCommand::OpenSession(SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id: SessionKey("local:test".into()),
                 topic: None,
                 sandbox: None,
@@ -12700,6 +12709,7 @@ mod tests {
         );
         let open = |session_id: &str, cwd: Option<&str>| {
             AppUiCommand::OpenSession(SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id: SessionKey(session_id.into()),
                 topic: None,
                 profile_id: Some("dev".into()),
@@ -12804,6 +12814,7 @@ mod tests {
 
         let request = backend
             .build_tracked_request(AppUiCommand::OpenSession(SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id: session_id.clone(),
                 topic: None,
                 sandbox: None,
@@ -13030,6 +13041,7 @@ mod tests {
 
         // 2. An explicit open carries its OWN cwd, not the launch one.
         backend.record_reopen_target(&AppUiCommand::OpenSession(SessionOpenParams {
+            mcp_servers: Vec::new(),
             session_id: SessionKey("local:other".into()),
             topic: None,
             profile_id: Some("research".into()),
@@ -13652,6 +13664,7 @@ wait
         let session_id = SessionKey("local:barrier".into());
         let request = backend
             .build_tracked_request(AppUiCommand::OpenSession(SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id: session_id.clone(),
                 topic: None,
                 profile_id: Some("dev".into()),
@@ -13684,6 +13697,7 @@ wait
     fn arm_session_open_barrier(backend: &mut ProtocolAppUiBackend, session_id: &str) -> String {
         let session_id = SessionKey(session_id.into());
         let command = AppUiCommand::OpenSession(SessionOpenParams {
+            mcp_servers: Vec::new(),
             session_id: session_id.clone(),
             topic: None,
             profile_id: Some("dev".into()),
@@ -14397,6 +14411,7 @@ done
         let mut exchange = ProtocolExchange::default();
         let open = exchange
             .build_tracked_request(AppUiCommand::OpenSession(SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id: SessionKey("local:context".into()),
                 topic: None,
                 profile_id: None,
@@ -14516,6 +14531,7 @@ done
         // An explicitly recorded reopen target (e.g. after /resume) also gets
         // its cwd corrected to the confirmed root.
         backend.record_reopen_target(&AppUiCommand::OpenSession(SessionOpenParams {
+            mcp_servers: Vec::new(),
             session_id: session_id.clone(),
             topic: None,
             profile_id: Some("coding".into()),
@@ -14588,6 +14604,7 @@ done
         // records the reopen target via `record_reopen_target` before any
         // network I/O; drive that helper directly so the test never dials out.
         backend.record_reopen_target(&AppUiCommand::OpenSession(SessionOpenParams {
+            mcp_servers: Vec::new(),
             session_id: resumed_session.clone(),
             topic: None,
             profile_id: Some("research".into()),

@@ -618,6 +618,7 @@ async fn session_open_snapshot_waits_for_runtime_window_before_compacting() {
         None,
         ConnectionUiFeatures::stdio_defaults(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             session_id: session,
             topic: None,
             profile_id: Some(profile.into()),
@@ -4460,6 +4461,7 @@ async fn stdio_cleanup_aborts_active_turns_and_live_forwarders() {
 #[test]
 fn stdio_session_open_candidate_profile_is_last_success_candidate_only() {
     let params = SessionOpenParams {
+        mcp_servers: Vec::new(),
         client_commands: None,
         session_id: SessionKey("coding:local:test".into()),
         topic: None,
@@ -4474,6 +4476,7 @@ fn stdio_session_open_candidate_profile_is_last_success_candidate_only() {
     );
 
     let params = SessionOpenParams {
+        mcp_servers: Vec::new(),
         client_commands: None,
         session_id: SessionKey("local:test".into()),
         topic: None,
@@ -4488,6 +4491,7 @@ fn stdio_session_open_candidate_profile_is_last_success_candidate_only() {
     );
 
     let params = SessionOpenParams {
+        mcp_servers: Vec::new(),
         client_commands: None,
         session_id: SessionKey("local:test".into()),
         topic: None,
@@ -8097,6 +8101,7 @@ async fn stdio_binding_updates_only_after_successful_session_open() {
     let mut binding = Some("ada".to_owned());
 
     let missing_params = SessionOpenParams {
+        mcp_servers: Vec::new(),
         client_commands: None,
         session_id: SessionKey("local:missing-binding".into()),
         topic: None,
@@ -8154,6 +8159,7 @@ async fn stdio_binding_updates_only_after_successful_session_open() {
     assert_eq!(status["runtime_policy_stamp"]["profile_id"], json!("ada"));
 
     let grace_params = SessionOpenParams {
+        mcp_servers: Vec::new(),
         client_commands: None,
         session_id: SessionKey("local:grace-binding".into()),
         topic: None,
@@ -8379,6 +8385,7 @@ async fn session_open_client_commands_reach_the_session_agent_prompt() {
         None,
         ConnectionUiFeatures::stdio_defaults(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             session_id: session_id.clone(),
             topic: None,
             profile_id: None,
@@ -8420,6 +8427,7 @@ async fn session_open_result_echoes_the_accepted_client_commands() {
             None,
             ConnectionUiFeatures::stdio_defaults(),
             SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id: session_id.clone(),
                 topic: None,
                 profile_id: None,
@@ -8477,6 +8485,7 @@ async fn session_reopen_without_client_commands_clears_the_previous_declaration(
             None,
             ConnectionUiFeatures::stdio_defaults(),
             SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id: session_id.clone(),
                 topic: None,
                 profile_id: None,
@@ -8524,6 +8533,7 @@ async fn closing_the_declaring_connection_releases_its_client_commands() {
         None,
         ConnectionUiFeatures::stdio_defaults(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             session_id: session_id.clone(),
             topic: None,
             profile_id: None,
@@ -8652,6 +8662,7 @@ async fn stdio_multi_profile_open_status_reads_isolated_runtime_policy_stamps() 
             None,
             features,
             SessionOpenParams {
+                mcp_servers: Vec::new(),
                 client_commands: None,
                 session_id: session_id.clone(),
                 topic: None,
@@ -8769,6 +8780,7 @@ async fn session_open_writes_active_profile_marker_only_with_flag_and_cwd() {
                 None,
                 features,
                 SessionOpenParams {
+                    mcp_servers: Vec::new(),
                     client_commands: None,
                     session_id,
                     topic: None,
@@ -11546,6 +11558,7 @@ async fn newly_configured_local_profile_allows_session_open_cwd_validation() {
 
     let workspace = tempfile::tempdir().unwrap();
     let params = SessionOpenParams {
+        mcp_servers: Vec::new(),
         client_commands: None,
         session_id: SessionKey::with_profile_topic(&profile_id, "local", "tui", "coding"),
         topic: None,
@@ -16289,6 +16302,7 @@ async fn should_retain_only_same_profile_goal_events_when_open_session_result_re
         Some("alpha"),
         ConnectionUiFeatures::default(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -16381,6 +16395,7 @@ async fn should_drop_cross_profile_goal_frames_when_connection_scopes_another_pr
         ConnectionUiFeatures::default(),
         "open-alpha".into(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -16496,6 +16511,7 @@ async fn should_replay_main_and_legacy_goal_frames_when_connection_is_unprofiled
         ConnectionUiFeatures::default(),
         "open-main".into(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -16988,6 +17004,7 @@ async fn should_drop_cross_profile_loop_and_monitor_frames_when_connection_scope
         ConnectionUiFeatures::default(),
         "open-alpha-autonomy".into(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -17252,6 +17269,7 @@ async fn should_drop_cross_profile_session_opened_frames_when_connection_scopes_
         ConnectionUiFeatures::default(),
         "open-alpha-shared".into(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -17370,6 +17388,7 @@ async fn should_drop_cross_profile_background_activity_frames_when_connection_sc
         features,
         "open-alpha-activity".into(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -17521,6 +17540,7 @@ async fn should_deliver_routed_profile_frames_when_the_connection_scope_is_not_a
         features,
         "open-routed-admin".into(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -17623,6 +17643,7 @@ async fn should_deliver_later_profile_frames_when_an_unscoped_connection_opened_
     // No routing header anywhere: this connection is plain unscoped.
     let open = |session_id: SessionKey, profile_id: Option<&str>, rpc_id: &str| {
         let params = SessionOpenParams {
+        mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -18141,6 +18162,7 @@ async fn session_open_replays_notifications_after_cursor_and_returns_ledger_curs
         None,
         ConnectionUiFeatures::default(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -18206,6 +18228,7 @@ async fn session_open_topic_scope_replays_only_matching_topic_bucket() {
         None,
         ConnectionUiFeatures::default(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: base_session.clone(),
             topic: Some("alpha".into()),
@@ -18239,6 +18262,7 @@ async fn session_open_topic_scope_replays_only_matching_topic_bucket() {
         None,
         ConnectionUiFeatures::default(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: base_session.clone(),
             topic: None,
@@ -18281,6 +18305,7 @@ async fn session_open_rejects_after_cursor_from_other_stream() {
         None,
         ConnectionUiFeatures::default(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -18344,6 +18369,7 @@ async fn session_open_rejects_stale_after_cursor() {
         None,
         ConnectionUiFeatures::default(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -18403,6 +18429,7 @@ async fn session_open_replays_pending_approval_after_reconnect_without_cursor() 
         None,
         ConnectionUiFeatures::default(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -18488,6 +18515,7 @@ async fn session_open_replays_pending_question_for_negotiated_client() {
         None,
         features_with_user_question_v1(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -18840,6 +18868,7 @@ async fn session_open_does_not_duplicate_pending_question_already_in_cursor_repl
         None,
         features_with_user_question_v1(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -19080,6 +19109,7 @@ async fn session_open_does_not_duplicate_pending_approval_already_in_cursor_repl
         None,
         ConnectionUiFeatures::default(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -19161,6 +19191,7 @@ async fn session_open_includes_pane_snapshot_after_negotiation() {
             stdio_transport: false,
         },
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -19215,6 +19246,7 @@ async fn session_open_rejects_cwd_without_negotiated_feature() {
         None,
         ConnectionUiFeatures::default(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id,
             topic: None,
@@ -19256,6 +19288,7 @@ async fn session_open_result_advertises_full_protocol_when_no_header() {
         None,
         ConnectionUiFeatures::default(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -19331,6 +19364,7 @@ async fn session_open_result_advertises_intersection_when_header_subset() {
         None,
         features,
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id,
             topic: None,
@@ -21367,6 +21401,7 @@ fn session_ingress_scope_rejects_global_methods_and_mismatched_sessions() {
     assert!(validate_session_ingress_command_scope(&global, &allowed).is_err());
 
     let mismatched = UiCommand::SessionOpen(SessionOpenParams {
+        mcp_servers: Vec::new(),
         client_commands: None,
         session_id: SessionKey("other:local:tui".into()),
         topic: None,
@@ -22549,6 +22584,7 @@ async fn cancelled_approval_replays_on_reconnect() {
         None,
         ConnectionUiFeatures::default(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -22577,6 +22613,7 @@ async fn cancelled_approval_replays_on_reconnect() {
         None,
         ConnectionUiFeatures::default(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -25128,6 +25165,7 @@ async fn reconnect_after_decision_replays_decided_event() {
         None,
         ConnectionUiFeatures::default(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -32093,6 +32131,7 @@ async fn cold_scope_admission_case(case: &str) {
             Some(&profile),
             ConnectionUiFeatures::stdio_defaults(),
             SessionOpenParams {
+                mcp_servers: Vec::new(),
                 client_commands: None,
                 session_id: session.clone(),
                 topic: None,
@@ -32117,6 +32156,7 @@ async fn cold_scope_admission_case(case: &str) {
             Some(&profile),
             ConnectionUiFeatures::stdio_defaults(),
             SessionOpenParams {
+                mcp_servers: Vec::new(),
                 client_commands: None,
                 session_id: session.clone(),
                 topic: None,
@@ -33241,6 +33281,7 @@ async fn appui_session_with_custom_cwd_reads_supplied_workspace() {
         None,
         features,
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -33297,6 +33338,7 @@ async fn appui_session_with_custom_cwd_reads_supplied_workspace() {
 #[test]
 fn session_sandbox_requires_negotiated_feature() {
     let params = SessionOpenParams {
+        mcp_servers: Vec::new(),
         client_commands: None,
         session_id: SessionKey::new("api", "sandbox-feature-required"),
         topic: None,
@@ -33334,6 +33376,7 @@ fn session_sandbox_can_narrow_network_but_not_widen() {
         ..ConnectionUiFeatures::default()
     };
     let params = SessionOpenParams {
+        mcp_servers: Vec::new(),
         client_commands: None,
         session_id: SessionKey::new("api", "sandbox-network-narrow"),
         topic: None,
@@ -33357,6 +33400,7 @@ fn session_sandbox_can_narrow_network_but_not_widen() {
     assert!(!narrowed.allow_network);
 
     let widening = SessionOpenParams {
+        mcp_servers: Vec::new(),
         client_commands: None,
         session_id: SessionKey::new("api", "sandbox-network-widen"),
         topic: None,
@@ -33404,6 +33448,7 @@ fn session_sandbox_read_paths_must_stay_within_profile_allowlist() {
     };
 
     let narrowed = SessionOpenParams {
+        mcp_servers: Vec::new(),
         client_commands: None,
         session_id: SessionKey::new("api", "sandbox-read-narrow"),
         topic: None,
@@ -33423,6 +33468,7 @@ fn session_sandbox_read_paths_must_stay_within_profile_allowlist() {
     assert!(Path::new(&sandbox.read_allow_paths[0]).ends_with("nested"));
 
     let widening = SessionOpenParams {
+        mcp_servers: Vec::new(),
         client_commands: None,
         session_id: SessionKey::new("api", "sandbox-read-widen"),
         topic: None,
@@ -33480,6 +33526,7 @@ async fn session_sandbox_open_override_materializes_distinct_session_policies() 
         None,
         features,
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: gamma.clone(),
             topic: None,
@@ -33505,6 +33552,7 @@ async fn session_sandbox_open_override_materializes_distinct_session_policies() 
         None,
         features,
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: delta.clone(),
             topic: None,
@@ -33576,6 +33624,7 @@ async fn two_appui_sessions_on_same_profile_with_different_cwds_isolated() {
         None,
         features,
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_a.clone(),
             topic: None,
@@ -33599,6 +33648,7 @@ async fn two_appui_sessions_on_same_profile_with_different_cwds_isolated() {
         None,
         features,
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_b.clone(),
             topic: None,
@@ -33751,6 +33801,7 @@ async fn second_session_open_with_new_cwd_reports_cached_workspace_root() {
         None,
         features,
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -33773,6 +33824,7 @@ async fn second_session_open_with_new_cwd_reports_cached_workspace_root() {
         None,
         features,
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -33851,6 +33903,7 @@ async fn session_open_with_cwd_for_unregistered_profile_is_rejected() {
         None,
         features,
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id,
             topic: None,
@@ -33922,6 +33975,7 @@ async fn parent_directory_symlink_escapes_per_session_workspace_documents_gap() 
         None,
         features,
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_a.clone(),
             topic: None,
@@ -34049,6 +34103,7 @@ async fn appui_session_without_client_cwd_respects_operator_default_session_cwd(
         None,
         features,
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -34148,6 +34203,7 @@ async fn appui_no_cwd_workspace_does_not_become_a_transcript_store_hint() {
             ..ConnectionUiFeatures::default()
         },
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -34214,6 +34270,7 @@ async fn appui_explicit_cwd_remains_a_transcript_store_hint() {
             ..ConnectionUiFeatures::default()
         },
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -43246,6 +43303,7 @@ async fn session_open_goal_frames_gated_when_goal_runtime_not_negotiated() {
         features,
         "open-no-goal-runtime".into(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             client_commands: None,
             session_id: session_id.clone(),
             topic: None,
@@ -47273,6 +47331,7 @@ async fn g1_opened_pending(
         None,
         ConnectionUiFeatures::default(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             session_id: session_id.clone(),
             topic: None,
             profile_id: None,
@@ -47809,6 +47868,7 @@ async fn g1_opened_questions(
         None,
         g1_question_features(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             session_id: session_id.clone(),
             topic: None,
             profile_id: None,
@@ -48345,6 +48405,7 @@ async fn r2625_opened_prompt_ids(
         None,
         g1_question_features(),
         SessionOpenParams {
+            mcp_servers: Vec::new(),
             session_id: session_id.clone(),
             topic: None,
             profile_id: None,

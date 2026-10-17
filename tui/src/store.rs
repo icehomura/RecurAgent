@@ -1377,6 +1377,7 @@ impl Store {
                     },
                 );
                 let open = AppUiCommand::OpenSession(ra_core::ui_protocol::SessionOpenParams {
+                    mcp_servers: Vec::new(),
                     session_id,
                     topic: None,
                     profile_id: Some(entry.profile_id.clone()),
@@ -1424,6 +1425,7 @@ impl Store {
         .into_owned();
         Some(AppUiCommand::OpenSession(
             ra_core::ui_protocol::SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id,
                 topic: None,
                 profile_id: Some(result.profile_id),
@@ -1489,6 +1491,7 @@ impl Store {
         self.state.status = t!("status.peer_staged_by_agent", slug = display_name).into_owned();
         Some(AppUiCommand::OpenSession(
             ra_core::ui_protocol::SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id,
                 topic: None,
                 profile_id: Some(event.profile_id),
@@ -3054,6 +3057,7 @@ impl Store {
         self.state.status = t!("status.switching_profile", profile = id.to_string()).into_owned();
         Some(AppUiCommand::OpenSession(
             ra_core::ui_protocol::SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id,
                 topic: None,
                 profile_id: Some(id.to_owned()),
@@ -5245,6 +5249,7 @@ impl Store {
             ra_core::SessionKey::with_profile_topic(&profile_id, "local", "tui", "coding");
         self.state.status = t!("status.opening_coding_session", profile = profile_id).into_owned();
         Some(AppUiCommand::OpenSession(SessionOpenParams {
+            mcp_servers: Vec::new(),
             session_id,
             topic: None,
             profile_id: Some(profile_id),
@@ -10192,6 +10197,7 @@ impl Store {
         .into_owned();
         Some(AppUiCommand::OpenSession(
             ra_core::ui_protocol::SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id,
                 topic: None,
                 profile_id: Some(profile_id),
@@ -14980,6 +14986,7 @@ impl Store {
             runtime.and_then(|status| status.workspace_root.clone().or_else(|| status.cwd.clone()));
         self.state
             .enqueue_local_session_open_front(AppUiCommand::OpenSession(SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id,
                 topic: None,
                 profile_id,

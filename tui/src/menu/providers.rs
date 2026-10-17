@@ -2252,6 +2252,7 @@ fn launch_prompt_menu(ctx: &MenuContext<'_>) -> MenuBuildResult {
         let session_id = ra_core::SessionKey::with_profile_topic(profile, "local", "tui", "coding");
         MenuAction::send_appui(AppUiCommand::OpenSession(
             ra_core::ui_protocol::SessionOpenParams {
+                mcp_servers: Vec::new(),
                 session_id,
                 topic: None,
                 profile_id: Some(profile.to_owned()),

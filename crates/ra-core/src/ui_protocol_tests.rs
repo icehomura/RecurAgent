@@ -390,6 +390,7 @@ fn session_open_params_topic_cwd_and_sandbox_are_additive_and_round_trip() {
         }),
         after: None,
         client_commands: None,
+        mcp_servers: Vec::new(),
     };
 
     let wire = serde_json::to_value(&params).expect("serialize session/open params");
@@ -424,6 +425,7 @@ fn session_open_client_commands_round_trip() {
         sandbox: None,
         after: None,
         client_commands: Some(vec!["/model".into(), "/add-model".into()]),
+        mcp_servers: Vec::new(),
     };
 
     let wire = serde_json::to_value(&params).expect("serialize session/open params");
@@ -445,6 +447,56 @@ fn session_open_client_commands_stay_off_the_wire_when_absent() {
         serde_json::from_value(json!({"session_id": "local:demo", "client_commands": []}))
             .expect("an empty declaration is distinct from an absent one");
     assert_eq!(declared_none.client_commands, Some(Vec::new()));
+}
+
+#[test]
+fn session_open_mcp_servers_round_trip_and_stay_off_the_wire_when_absent() {
+    let params = SessionOpenParams {
+        session_id: SessionKey("local:demo".into()),
+        topic: None,
+        profile_id: None,
+        cwd: None,
+        sandbox: None,
+        after: None,
+        client_commands: None,
+        mcp_servers: vec![
+            SessionMcpServer {
+                name: Some("rc-mcp".into()),
+                command: Some("/opt/rc-mcp".into()),
+                args: vec!["--token".into(), "t".into()],
+                env: HashMap::from([("RC_X".to_string(), "1".to_string())]),
+                url: None,
+                headers: HashMap::new(),
+            },
+            SessionMcpServer {
+                name: Some("remote".into()),
+                command: None,
+                args: Vec::new(),
+                env: HashMap::new(),
+                url: Some("https://example.test/mcp".into()),
+                headers: HashMap::from([("Authorization".to_string(), "Bearer x".to_string())]),
+            },
+        ],
+    };
+
+    let wire = serde_json::to_value(&params).expect("serialize session/open params");
+    assert_eq!(wire["mcp_servers"][0]["command"], json!("/opt/rc-mcp"));
+    assert_eq!(wire["mcp_servers"][1]["url"], json!("https://example.test/mcp"));
+    let decoded: SessionOpenParams =
+        serde_json::from_value(wire).expect("deserialize session/open params");
+    assert_eq!(decoded, params);
+
+    // An mcp-server-free open keeps the field off the wire entirely, and a
+    // legacy payload without the field decodes to an empty list.
+    let without = SessionOpenParams {
+        mcp_servers: Vec::new(),
+        ..params.clone()
+    };
+    let wire = serde_json::to_value(&without).expect("serialize empty mcp params");
+    assert!(wire.get("mcp_servers").is_none());
+    let legacy: SessionOpenParams =
+        serde_json::from_value(json!({"session_id": "local:demo"})).expect("legacy params");
+    assert!(legacy.mcp_servers.is_empty());
 }
 
 #[test]
