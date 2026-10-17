@@ -119,7 +119,10 @@ impl OpenAIResponsesProvider {
             body["max_output_tokens"] = max.into();
         }
         if !is_official_openai_base_url(&self.base_url) {
-            if let Some(temperature) = config.temperature {
+            // Drop the `Some(0.0)` "no override" sentinel, matching the
+            // Anthropic path — a custom endpoint fronting a model that rejects
+            // non-default sampling (Claude behind a proxy) would 400 on it.
+            if let Some(temperature) = config.temperature.filter(|t| *t != 0.0) {
                 body["temperature"] = temperature.into();
             }
             if !config.stop_sequences.is_empty() {

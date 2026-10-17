@@ -703,10 +703,17 @@ impl OpenAIProvider {
             )
         };
 
+        // `Some(0.0)` is `ChatConfig::default()`'s "no override" sentinel; the
+        // Anthropic path already drops it (`filter(|t| *t != 0.0)`) so a stock
+        // request stays byte-identical. On this OpenAI-compatible path the
+        // sentinel used to ride the wire, which breaks any endpoint fronting a
+        // model that rejects non-default sampling — e.g. Claude behind a proxy,
+        // which answers "claude-… does not support non-default temperature".
+        // Drop it here too; an explicit non-zero temperature is still sent.
         let temperature = if self.hints.fixed_temperature {
             None
         } else {
-            config.temperature
+            config.temperature.filter(|t| *t != 0.0)
         };
 
         let response_format = config.response_format.as_ref().map(|rf| match rf {
