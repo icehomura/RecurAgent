@@ -46,6 +46,9 @@ pub struct ConfigWatcher {
     /// malformed edit to a previously-valid defaults file does NOT silently
     /// drop the whole base layer (a fresh never-valid file stays `None`).
     last_good_defaults: Option<ProfileConfig>,
+    /// Ra root (`--data-dir`) when this watcher should follow the ACTIVE
+    /// profile rather than a bare `config.json`.
+    profile_root: Option<PathBuf>,
 }
 
 impl ConfigWatcher {
@@ -63,7 +66,50 @@ impl ConfigWatcher {
             tx,
             defaults_path: None,
             last_good_defaults: None,
+            profile_root: None,
         }
+    }
+
+    /// Follow the ACTIVE profile under `root` (Ra's `--data-dir`).
+    ///
+    /// Two things stop being invisible once this is set:
+    ///   * the `default-profile` POINTER — switching profile is a config change
+    ///     like any other, and without watching it a switch only took effect on
+    ///     the next process launch;
+    ///   * the active profile's own file — editing it is the profile-mode
+    ///     equivalent of editing `config.json`.
+    ///
+    /// The active profile's path is resolved on EVERY poll (not once here),
+    /// because the pointer can name a different file between polls.
+    pub fn with_profile_store(mut self, root: PathBuf) -> Self {
+        self.profile_root = Some(root);
+        // A newly-watched pointer/file must not read as "no change" on the
+        // first poll after construction.
+        self.last_hash = Self::hash_buffers(&Self::read_files(&self.watched_paths()));
+        self
+    }
+
+    /// The files this poll hashes, in parse order.
+    ///
+    /// The active profile comes FIRST so `parse_first` sees a `UserProfile`
+    /// (its nested `config` is the effective one — the same precedence
+    /// `ConfigAgentFactory::oup_state` gives a stored profile). `default-profile`
+    /// comes last: it is not JSON, but its bytes are hashed, which is what makes
+    /// a switch detectable.
+    fn watched_paths(&self) -> Vec<PathBuf> {
+        let Some(root) = &self.profile_root else {
+            return self.paths.clone();
+        };
+        let mut out = Vec::with_capacity(self.paths.len() + 2);
+        if let Some(id) = Self::read_active_profile_id(root) {
+            let profile = root.join("profiles").join(format!("{id}.json"));
+            if profile.is_file() {
+                out.push(profile);
+            }
+        }
+        out.extend(self.paths.iter().cloned());
+        out.push(root.join("default-profile"));
+        out
     }
 
     /// Also watch the store's global `profile-defaults.json` at `path` so a
@@ -82,6 +128,23 @@ impl ConfigWatcher {
         // change detection from the first poll onward.
         self.last_hash = Self::hash_buffers(&Self::read_files(&self.paths));
         self
+    }
+
+    /// The active profile id the way Ra resolves it: the `RA_PROFILE` override,
+    /// else the `default-profile` pointer file. Trimmed; `None` when neither is
+    /// set or non-empty. The raw-file twin of `ProfileStore::default_profile` —
+    /// this module deliberately reads bytes rather than opening the store.
+    fn read_active_profile_id(root: &std::path::Path) -> Option<String> {
+        std::env::var("RA_PROFILE")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                std::fs::read_to_string(root.join("default-profile"))
+                    .ok()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+            })
     }
 
     /// Parse a `profile-defaults.json` into a partial [`ProfileConfig`].
@@ -107,7 +170,7 @@ impl ConfigWatcher {
 
     fn check(&mut self) {
         // Read all files once to avoid TOCTOU between hash and parse.
-        let buffers = Self::read_files(&self.paths);
+        let buffers = Self::read_files(&self.watched_paths());
         let new_hash = Self::hash_buffers(&buffers);
         if new_hash == self.last_hash {
             return;
