@@ -568,4 +568,34 @@ mod tests {
         assert_eq!(levenshtein("kitten", "sitting"), 3);
         assert_eq!(levenshtein("path", "pth"), 1);
     }
+
+    #[test]
+    fn normalizes_the_argument_names_models_actually_emit() {
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": { "path": {"type": "string"}, "old_string": {"type": "string"} },
+            "required": ["path"],
+        });
+
+        // `file_path` — Claude Code's and most examples' spelling — is accepted.
+        let mut args = serde_json::json!({ "file_path": "a.txt" });
+        normalize_arg_keys(&mut args, &schema);
+        assert_eq!(args["path"], "a.txt");
+        assert!(args.get("file_path").is_none());
+
+        // Case variants of a schema property are derived, not listed.
+        let mut args = serde_json::json!({ "oldString": "x" });
+        normalize_arg_keys(&mut args, &schema);
+        assert_eq!(args["old_string"], "x");
+
+        // A canonical key the model already sent wins; nothing is overwritten.
+        let mut args = serde_json::json!({ "path": "canon", "file_path": "other" });
+        normalize_arg_keys(&mut args, &schema);
+        assert_eq!(args["path"], "canon");
+
+        // An unrelated key stays put, so validation still reports the typo.
+        let mut args = serde_json::json!({ "pth": "typo" });
+        normalize_arg_keys(&mut args, &schema);
+        assert!(args.get("pth").is_some());
+    }
 }
