@@ -250,6 +250,14 @@ struct ConfigAgentFactory {
     provider_name: String,
     model: Option<String>,
     base_url: Option<String>,
+    /// The RAW `--provider` / `--model` / `--base-url` values, before they were
+    /// resolved against `config.json`. They are what a hot reload may re-apply:
+    /// replaying the RESOLVED values would pin whatever `config.json` said at
+    /// bootstrap, so a later edit to `config.json` — or a profile switch —
+    /// reloaded and then silently had its provider/model overwritten.
+    cli_provider: Option<String>,
+    cli_model: Option<String>,
+    cli_base_url: Option<String>,
     data_dir: PathBuf,
     default_cwd: PathBuf,
     max_iterations: u32,
@@ -313,13 +321,19 @@ impl SessionAgentFactory for ConfigAgentFactory {
                         .get(ra_core::MAIN_PROFILE_ID)
                         .map(|rt| rt.config.clone())
                         .unwrap_or_else(|| self.config.clone());
-                    let _handle = ConfigWatcher::new(vec![watch_path], seed, tx).spawn();
+                    let _handle = ConfigWatcher::new(vec![watch_path], seed, tx)
+                        // Follow the ACTIVE profile too, so switching it (or
+                        // editing it) reaches the same reload path as an edit
+                        // to `config.json` — RecurCode's profile settings write
+                        // those files.
+                        .with_profile_store(self.data_dir.clone())
+                        .spawn();
                     let state_for_reload = state.clone();
                     let profile_for_reload = profile.clone();
                     let ra_home = self.data_dir.clone();
-                    let provider_name = self.provider_name.clone();
-                    let model = self.model.clone();
-                    let base_url = self.base_url.clone();
+                    let cli_provider = self.cli_provider.clone();
+                    let cli_model = self.cli_model.clone();
+                    let cli_base_url = self.cli_base_url.clone();
                     let max_iterations = self.max_iterations;
                     tokio::spawn(async move {
                         while rx.changed().await.is_ok() {
@@ -327,13 +341,20 @@ impl SessionAgentFactory for ConfigAgentFactory {
                             let Some(ConfigChange::Reload(new_config)) = change else {
                                 continue;
                             };
-                            // Re-apply the same CLI overrides the runtime was
-                            // bootstrapped with, so a reload does not silently
-                            // drop them in favour of the on-disk values.
+                            // Re-apply ONLY the real CLI overrides. Values
+                            // derived from `config.json` are not overrides —
+                            // replaying them would keep the stale provider/model
+                            // and make the reload a no-op.
                             let mut cfg = *new_config;
-                            cfg.provider = Some(provider_name.clone());
-                            cfg.model = model.clone();
-                            cfg.base_url = base_url.clone();
+                            if cli_provider.is_some() {
+                                cfg.provider = cli_provider.clone();
+                            }
+                            if cli_model.is_some() {
+                                cfg.model = cli_model.clone();
+                            }
+                            if cli_base_url.is_some() {
+                                cfg.base_url = cli_base_url.clone();
+                            }
                             cfg.max_iterations = Some(max_iterations);
                             crate::api::ui_protocol_transport::reload_local_profile_runtime(
                                 &state_for_reload,
@@ -577,6 +598,10 @@ impl AcpCommand {
             provider_name,
             model,
             base_url,
+            // The raw CLI args, captured before the resolution above.
+            cli_provider: self.provider.clone(),
+            cli_model: self.model.clone(),
+            cli_base_url: self.base_url.clone(),
             data_dir,
             default_cwd: cwd,
             max_iterations: self.max_iterations,
