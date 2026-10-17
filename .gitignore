@@ -1,5 +1,6 @@
 # Build artifacts
 /target/
+/crates/ra-sandbox/target/
 /dist/
 /scripts/ra-bundle-*.tar.gz
 **/*.rs.bk
@@ -221,3 +222,6 @@ tsconfig.tsbuildinfo
 # foreign git dependency). Their manifests/provenance/readmes are part of the
 # tree, so the repo-wide `*.md` rule must not drop them.
 !vendor/**
+
+# local dev: Cranelift backend config (nightly-only)
+.cargo/config.toml
