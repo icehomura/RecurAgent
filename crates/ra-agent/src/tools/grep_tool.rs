@@ -52,7 +52,7 @@ struct GrepInput {
     /// Optional path under which to search. When omitted the tool
     /// searches the base directory (legacy) or the scope workspace
     /// (when a SessionScope is wired through `ToolContext`).
-    #[serde(default)]
+    #[serde(default, alias = "filePath", alias = "file_path")]
     path: Option<String>,
     /// Optional glob pattern to filter files.
     #[serde(default)]

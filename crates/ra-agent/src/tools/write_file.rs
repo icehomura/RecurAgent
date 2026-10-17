@@ -83,8 +83,9 @@ impl WriteFileTool {
 // self-correct instead of silently dropping its intent.
 #[serde(deny_unknown_fields)]
 struct WriteFileInput {
-    /// #1767: `filePath` is the industry-convention alias.
-    #[serde(alias = "filePath")]
+    /// #1767: `filePath` is the industry-convention alias; `file_path` is the
+    /// snake_case one most coding models emit.
+    #[serde(alias = "filePath", alias = "file_path")]
     path: String,
     content: String,
 }

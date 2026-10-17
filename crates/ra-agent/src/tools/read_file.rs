@@ -63,8 +63,11 @@ impl ReadFileTool {
 // self-correct instead of silently dropping its intent.
 #[serde(deny_unknown_fields)]
 struct ReadFileInput {
-    /// #1767: `filePath` is the industry-convention alias.
-    #[serde(alias = "filePath")]
+    /// #1767: `filePath` is the industry-convention alias; `file_path` is the
+    /// snake_case one most coding models emit (Claude Code's read/write tools
+    /// use `file_path`). Without it `deny_unknown_fields` turns a perfectly
+    /// reasonable call into a hard error the model then repeats forever.
+    #[serde(alias = "filePath", alias = "file_path")]
     path: String,
     /// `offset` is a 1:1 alias — both mean "first line to read, 1-indexed".
     #[serde(default, alias = "offset")]

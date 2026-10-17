@@ -72,15 +72,107 @@ impl ValidationIssue {
 /// lists each one. When the schema walk finds nothing (e.g. a
 /// constraint the shallow walk cannot see), the serde error text is
 /// surfaced instead so the model still learns something actionable.
+/// Argument names models routinely emit for a schema property that are NOT
+/// mere case variants of it, so [`normalize_arg_keys`] cannot derive them.
+///
+/// `file_path` is the one that actually recurs: it is the parameter name of
+/// Claude Code's own Read/Write/Edit tools and of most tool-calling examples,
+/// so a model reaches for it even when the schema says `path`. Failing the
+/// whole call over a name is a self-inflicted doom loop — the model re-emits
+/// the identical shape until the loop guard kills the turn (#1765).
+const KEY_ALIASES: &[(&str, &[&str])] = &[
+    ("path", &["file_path", "filePath", "filepath"]),
+    ("old_string", &["oldString", "old_str", "oldText"]),
+    ("new_string", &["newString", "new_str", "newText"]),
+];
+
+fn snake_case(name: &str) -> String {
+    let mut out = String::with_capacity(name.len() + 4);
+    for (i, ch) in name.char_indices() {
+        if ch.is_ascii_uppercase() {
+            if i > 0 {
+                out.push('_');
+            }
+            out.push(ch.to_ascii_lowercase());
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+fn camel_case(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    let mut upper = false;
+    for ch in name.chars() {
+        if ch == '_' {
+            upper = true;
+            continue;
+        }
+        if upper {
+            out.extend(ch.to_uppercase());
+            upper = false;
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+/// Rewrite the argument names a model chose to the schema's canonical ones,
+/// **before** deserialization.
+///
+/// Two layers, both conservative — a canonical key the model already sent is
+/// never touched, and only the first matching variant is moved:
+///
+///   * case variants of every schema property (`oldString` ↔ `old_string`),
+///     derived, so a new snake_case field needs no extra work;
+///   * [`KEY_ALIASES`], for the names that are *not* case variants (`file_path`
+///     → `path`) and are therefore the ones that keep biting.
+///
+/// This is the general fix for the class of bug the per-struct `#[serde(alias)]`
+/// attributes only patched one tool at a time: a model's naming prior should
+/// cost nothing, not a failed turn.
+pub fn normalize_arg_keys(args: &mut Value, schema: &Value) {
+    let Some(obj) = args.as_object_mut() else { return };
+    let Some(properties) = schema.get("properties").and_then(Value::as_object) else {
+        return;
+    };
+
+    for canonical in properties.keys() {
+        if obj.contains_key(canonical) {
+            continue;
+        }
+        let mut candidates = vec![snake_case(canonical), camel_case(canonical)];
+        if let Some((_, aliases)) = KEY_ALIASES.iter().find(|(c, _)| c == canonical) {
+            candidates.extend(aliases.iter().map(|alias| (*alias).to_string()));
+        }
+        for candidate in candidates {
+            if candidate == *canonical {
+                continue;
+            }
+            if let Some(value) = obj.remove(&candidate) {
+                obj.insert(canonical.clone(), value);
+                break;
+            }
+        }
+    }
+}
+
 pub fn parse_tool_args<T: DeserializeOwned>(
     tool_name: &str,
     schema: &Value,
     args: &Value,
 ) -> eyre::Result<T> {
+    // Normalize first so a naming prior costs nothing. The error report below
+    // uses the normalized object too — reporting `file_path: unknown` after
+    // silently accepting it would be a lie.
+    let mut args = args.clone();
+    normalize_arg_keys(&mut args, schema);
     match serde_json::from_value::<T>(args.clone()) {
         Ok(input) => Ok(input),
         Err(serde_err) => {
-            let mut issues = validate_args_against_schema(schema, args);
+            let mut issues = validate_args_against_schema(schema, &args);
             if issues.is_empty() {
                 issues.push(ValidationIssue::new("(input)", serde_err.to_string()));
             }

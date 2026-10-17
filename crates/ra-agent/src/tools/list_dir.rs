@@ -36,6 +36,9 @@ impl ListDirTool {
 // self-correct instead of silently dropping its intent.
 #[serde(deny_unknown_fields)]
 struct Input {
+    /// `filePath` / `file_path` are the conventions models emit; `deny_unknown_fields`
+    /// would otherwise reject them outright.
+    #[serde(alias = "filePath", alias = "file_path")]
     path: String,
 }
 
