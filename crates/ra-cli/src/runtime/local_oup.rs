@@ -57,7 +57,24 @@ pub(crate) fn local_profile(id: &str, config: &Config) -> UserProfile {
 
 pub(crate) async fn bootstrap(options: LocalOupOptions) -> Result<Arc<AppState>> {
     let profile_data_dir = options.data_dir.clone();
-    bootstrap_with_profile_root(options, &profile_data_dir, false).await
+    bootstrap_with_profile_root(options, &profile_data_dir, false, BootstrapRole::Serve).await
+}
+
+/// The ACP transport's bootstrap. Persists sessions exactly like [`bootstrap`],
+/// but opens the profile stores **degraded** when another process already owns
+/// them.
+///
+/// A desktop client (RecurCode) spawns one `ra acp` per conversation, all
+/// pointed at the same profile data dir, and the episode store is a
+/// single-writer redb file — so a strict open made every session after the
+/// first fail with `failed to open episode store for profile '_main'`.
+/// `open_or_degraded` still takes the canonical lock whenever it is free, so a
+/// lone `ra acp` behaves exactly as before; only a second concurrent process
+/// degrades (its memory lane becomes a no-op instead of the whole session
+/// failing).
+pub(crate) async fn bootstrap_shared(options: LocalOupOptions) -> Result<Arc<AppState>> {
+    let profile_data_dir = options.data_dir.clone();
+    bootstrap_with_profile_root(options, &profile_data_dir, false, BootstrapRole::Gateway).await
 }
 
 /// An ephemeral frontend keeps profile context and explicitly invoked shared
@@ -67,24 +84,21 @@ pub(crate) async fn bootstrap_ephemeral(
     options: LocalOupOptions,
     profile_data_dir: &Path,
 ) -> Result<Arc<AppState>> {
-    bootstrap_with_profile_root(options, profile_data_dir, true).await
+    bootstrap_with_profile_root(options, profile_data_dir, true, BootstrapRole::Gateway).await
 }
 
 async fn bootstrap_with_profile_root(
     options: LocalOupOptions,
     profile_data_dir: &Path,
     ephemeral: bool,
+    role: BootstrapRole,
 ) -> Result<Arc<AppState>> {
     std::fs::create_dir_all(&options.data_dir).wrap_err("create local OUP runtime directory")?;
     let mut runtime = ProfileRuntime::bootstrap_resolved(
         &options.profile,
         profile_data_dir,
         Some(&options.config_home),
-        if ephemeral {
-            BootstrapRole::Gateway
-        } else {
-            BootstrapRole::Serve
-        },
+        role,
         options.config,
         None,
         options.no_retry,

@@ -266,7 +266,7 @@ impl SessionAgentFactory for ConfigAgentFactory {
         self.oup_state
             .get_or_try_init(|| async {
                 use crate::runtime::local_oup::{
-                    LocalOupOptions, bootstrap, local_profile, resolve_stored_profile,
+                    LocalOupOptions, bootstrap_shared, local_profile, resolve_stored_profile,
                 };
                 let mut config = self.config.clone();
                 config.provider = Some(self.provider_name.clone());
@@ -284,7 +284,7 @@ impl SessionAgentFactory for ConfigAgentFactory {
                 profile.config.env_vars = config.env_vars.clone();
                 profile.config.gateway.max_iterations = config.max_iterations;
                 let no_retry = false;
-                let state = bootstrap(LocalOupOptions {
+                let state = bootstrap_shared(LocalOupOptions {
                     config,
                     profile: profile.clone(),
                     data_dir: self.data_dir.clone(),
