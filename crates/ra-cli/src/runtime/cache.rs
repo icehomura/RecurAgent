@@ -363,6 +363,32 @@ impl SessionRuntimeCache {
         workspace_hint: Option<PathBuf>,
         permissions: EffectivePermissions,
         sandbox_override: Option<SandboxConfig>,
+        permissions_epoch: u64,
+    ) -> Result<Arc<SessionRuntime>> {
+        self.get_or_init_with_permissions_sandbox_and_mcp(
+            profile,
+            session_key,
+            workspace_hint,
+            permissions,
+            sandbox_override,
+            permissions_epoch,
+            Vec::new(),
+        )
+        .await
+    }
+
+    /// [`Self::get_or_init_with_permissions_and_sandbox`] plus session-scoped
+    /// MCP servers the client asked for on THIS session (ACP `session/new`
+    /// `mcpServers`, threaded through `session/open`). They are connected once,
+    /// at bootstrap, and registered into the session's tool registry; a cache
+    /// HIT keeps the FIRST open's set, exactly like `workspace_hint`.
+    pub async fn get_or_init_with_permissions_sandbox_and_mcp(
+        &self,
+        profile: &Arc<ProfileRuntime>,
+        session_key: SessionKey,
+        workspace_hint: Option<PathBuf>,
+        permissions: EffectivePermissions,
+        sandbox_override: Option<SandboxConfig>,
         // Session-generation epoch captured by the CALLER at (or before) the
         // moment it resolved `permissions` — NOT re-sampled here. A bootstrap
         // that waits on an in-flight slot and then claims its own must reject
@@ -371,6 +397,7 @@ impl SessionRuntimeCache {
         // pre-change (possibly dangerous) policy after a downgrade (codex P1
         // round 3 on #1639).
         permissions_epoch: u64,
+        extra_mcp_servers: Vec<ra_agent::McpServerConfig>,
     ) -> Result<Arc<SessionRuntime>> {
         // Resolve the sessions root the same way bootstrap will, so the cache
         // identity separates the same key opened against different project
@@ -478,7 +505,7 @@ impl SessionRuntimeCache {
                     // Caller-supplied epoch (tied to the permission snapshot),
                     // not a post-wait re-sample — see the param doc.
                     let session_generation_at_start = permissions_epoch;
-                    let result = SessionRuntime::bootstrap_with_permissions_and_sandbox(
+                    let result = SessionRuntime::bootstrap_with_permissions_sandbox_and_mcp(
                         profile,
                         session_key.clone(),
                         workspace_hint,
@@ -488,6 +515,7 @@ impl SessionRuntimeCache {
                         // session relocates its store to `<cwd>/.ra` only
                         // when this is on; no-hint sessions ignore it.
                         self.sessions_in_cwd,
+                        extra_mcp_servers.clone(),
                     )
                     .await;
                     match result {

@@ -368,12 +368,41 @@ impl SessionRuntime {
         workspace_hint: Option<PathBuf>,
         permissions: EffectivePermissions,
         sandbox_override: Option<SandboxConfig>,
+        sessions_in_cwd: bool,
+    ) -> Result<Arc<Self>> {
+        Self::bootstrap_with_permissions_sandbox_and_mcp(
+            profile,
+            session_key,
+            workspace_hint,
+            permissions,
+            sandbox_override,
+            sessions_in_cwd,
+            Vec::new(),
+        )
+        .await
+    }
+
+    /// [`Self::bootstrap_with_permissions_and_sandbox`] plus session-scoped MCP
+    /// servers supplied by the client for THIS session (ACP `session/new`
+    /// `mcpServers`, threaded through `session/open`). They are connected once
+    /// here and registered into the per-session tool registry BEFORE the tool
+    /// envelope, so the profile's policy still applies — mirroring the
+    /// profile-level `config.mcp_servers` registration in
+    /// `ProfileRuntime::bootstrap`. Fail-soft: a server that will not start is
+    /// logged and skipped, never failing the session.
+    pub async fn bootstrap_with_permissions_sandbox_and_mcp(
+        profile: &Arc<ProfileRuntime>,
+        session_key: SessionKey,
+        workspace_hint: Option<PathBuf>,
+        permissions: EffectivePermissions,
+        sandbox_override: Option<SandboxConfig>,
         // When `true` AND a `workspace_hint` (cwd) is present, the session
         // transcript store is relocated from `profile.data_dir` to
         // `<cwd>/.ra` (per-project storage, `appui.sessions_in_cwd`). No
         // hint → `profile.data_dir` regardless, so gateway/web-chat are inert.
         // Threaded from the `SessionRuntimeCache`'s process-global flag.
         sessions_in_cwd: bool,
+        extra_mcp_servers: Vec<ra_agent::McpServerConfig>,
     ) -> Result<Arc<Self>> {
         // Step 1: resolve workspace_root. Capture whether a hint was supplied
         // BEFORE it is consumed — the sessions-root resolution below keys off
@@ -552,6 +581,25 @@ impl SessionRuntime {
                             .to_string(),
                     ),
                 );
+            }
+        }
+        // Session-scoped MCP servers the client supplied for THIS session
+        // (ACP `session/new` `mcpServers`, threaded through `session/open`).
+        // Registered before the tool envelope so the profile's policy/allow-
+        // list still gates them, exactly like the profile-level
+        // `config.mcp_servers` at `ProfileRuntime::bootstrap`. `register_tools`
+        // hands the live transports to the registry and drops name-colliding
+        // tools, so a remote server cannot shadow a built-in.
+        if !extra_mcp_servers.is_empty() {
+            match ra_agent::McpClient::start(&extra_mcp_servers).await {
+                Ok(client) => client.register_tools(&mut tools),
+                Err(error) => {
+                    tracing::warn!(
+                        session = %session_key,
+                        error = %error,
+                        "session-scoped MCP initialization failed"
+                    );
+                }
             }
         }
         // RFC-0 (#1289): the `activate_tools` meta-tool was removed — every
