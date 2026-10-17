@@ -525,6 +525,23 @@ impl OpenAIProvider {
         self.build_request_stripping(messages, tools, config, force_text_only, false)
     }
 
+    /// `build_request` for the sampling-parameter retry leg: the same request
+    /// with `temperature` and every sampler key from `sampling_params`
+    /// removed, so an endpoint that refuses non-default sampling falls back to
+    /// its own defaults instead of failing the turn. Content, tools and the
+    /// reasoning controls are untouched — this leg answers "the server objects
+    /// to the sampler", not "the server objects to the media".
+    fn build_request_without_sampling<'a>(
+        &'a self,
+        messages: &'a [Message],
+        tools: &'a [ToolSpec],
+        config: &'a ChatConfig,
+    ) -> OpenAIRequest<'a> {
+        let mut request = self.build_request_stripping(messages, tools, config, false, false);
+        strip_sampling_params(&mut request);
+        request
+    }
+
     /// `build_request` with the retry legs spelled out: `force_text_only`
     /// strips images (and video), `force_no_video` strips only the video
     /// parts — the leg for an endpoint that takes images but answered a
@@ -958,8 +975,21 @@ impl LlmProvider for OpenAIProvider {
         // `video_url` (DeepSeek answers 422 naming the part) gets the request
         // again with the video parts replaced by a note, so the turn proceeds
         // and the model is told what it did not get to see.
+        // A third refusal class is the sampler: an endpoint fronting a model
+        // that rejects non-default `temperature`/`top_p`/`top_k` (a relay to
+        // Claude answers "does not support non-default temperature") gets the
+        // request again with those fields dropped, so internal calls that
+        // legitimately set an explicit temperature still complete. The refusal
+        // cannot be predicted from an opaque model alias, only read off the
+        // response — hence discover-then-retry. See `is_sampling_param_error`.
+        // The gate keeps a 400 nobody can rescue flowing to the generic error
+        // handler below: it must only be entered when there is something to
+        // strip (media parts, or a sampler the endpoint refused).
         let status = response.status().as_u16();
-        if (status == 400 || status == 422) && request_has_user_media(messages, &self.hints) {
+        if (status == 400 || status == 422)
+            && (request_has_user_media(messages, &self.hints)
+                || request_has_sampling_params(&request))
+        {
             let body = response.text().await.unwrap_or_default();
             let fail_fast = crate::current_llm_call_policy() == crate::LlmCallPolicy::FailFast;
             let retry = if !fail_fast
@@ -983,6 +1013,17 @@ impl LlmProvider for OpenAIProvider {
                     "endpoint rejected image content (400); retrying text-only"
                 );
                 Some(self.build_request(messages, tools, config, true))
+            } else if !fail_fast
+                && request_has_sampling_params(&request)
+                && is_sampling_param_error(&body)
+            {
+                tracing::warn!(
+                    provider = %self.provider_label,
+                    model = %self.model,
+                    status,
+                    "endpoint rejected sampling parameters; retrying without them"
+                );
+                Some(self.build_request_without_sampling(messages, tools, config))
             } else {
                 None
             };
@@ -1133,9 +1174,13 @@ impl LlmProvider for OpenAIProvider {
         let mut response = self.post_chat_stream(&request).await?;
 
         // Graceful image-modality fallback (see `chat()`): retry once
-        // text-only if the endpoint rejected the image content parts.
+        // text-only if the endpoint rejected the image content parts, and the
+        // same for a refused sampler (see `is_sampling_param_error`).
         let status = response.status().as_u16();
-        if (status == 400 || status == 422) && request_has_user_media(messages, &self.hints) {
+        if (status == 400 || status == 422)
+            && (request_has_user_media(messages, &self.hints)
+                || request_has_sampling_params(&request))
+        {
             let text = response.text().await.unwrap_or_default();
             let fail_fast = crate::current_llm_call_policy() == crate::LlmCallPolicy::FailFast;
             let retry = if !fail_fast
@@ -1159,6 +1204,17 @@ impl LlmProvider for OpenAIProvider {
                     "endpoint rejected image content (400); retrying text-only (stream)"
                 );
                 Some(self.build_request(messages, tools, config, true))
+            } else if !fail_fast
+                && request_has_sampling_params(&request)
+                && is_sampling_param_error(&text)
+            {
+                tracing::warn!(
+                    provider = %self.provider_label,
+                    model = %self.model,
+                    status,
+                    "endpoint rejected sampling parameters; retrying without them (stream)"
+                );
+                Some(self.build_request_without_sampling(messages, tools, config))
             } else {
                 None
             };
@@ -1168,7 +1224,7 @@ impl LlmProvider for OpenAIProvider {
             } else {
                 let body = crate::provider::truncate_error_body(&text);
                 return Err(crate::error::LlmError::from_status_with_label(
-                    400,
+                    status,
                     &body,
                     format!("{}/{}", self.provider_label, self.model),
                 )
@@ -1393,6 +1449,129 @@ fn is_video_modality_error(body: &str) -> bool {
     b.contains("video_url")
         || (b.contains("video")
             && (b.contains("not support") || b.contains("modal") || b.contains("unsupported")))
+}
+
+/// Request keys that carry sampler behaviour: the dedicated `temperature`
+/// field's siblings plus the operator `sampling_params` keys an
+/// OpenAI-compatible server reads as samplers (`top_p`, `top_k`, `min_p`, the
+/// penalty family, …). Two uses, deliberately sharing one list so they cannot
+/// drift:
+///
+/// - [`request_has_sampling_params`] decides whether a sampler refusal is
+///   worth retrying at all — a request that sent no sampler must not be
+///   re-sent byte-identically, it would loop on the same unrelated 400.
+/// - [`strip_sampling_params`] removes exactly those keys on the retry leg.
+///
+/// `seed` and `best_of` are included because they steer decoding, and
+/// dropping them costs nothing on a leg whose whole purpose is "use the
+/// server's own defaults". Non-samplers are excluded on purpose: `stop` and
+/// `chat_template_kwargs` (which carries the qwen thinking toggle) are
+/// conversation/reasoning control, not sampling, and must survive the retry.
+pub(crate) const SAMPLING_PARAM_KEYS: &[&str] = &[
+    "temperature",
+    "top_p",
+    "top_k",
+    "min_p",
+    "presence_penalty",
+    "frequency_penalty",
+    "repetition_penalty",
+    "repeat_penalty",
+    "best_of",
+    "seed",
+];
+
+/// Whether the outgoing request actually carried a sampling parameter.
+/// Mirrors [`request_has_user_media`] for the sampler class: the fallback is
+/// only meaningful when there is something to strip.
+fn request_has_sampling_params(request: &OpenAIRequest<'_>) -> bool {
+    request.temperature.is_some() || request.extra_sampling.keys().any(|k| is_sampling_key(k))
+}
+
+/// Whether a JSON key names one of [`SAMPLING_PARAM_KEYS`]. One predicate for
+/// the "did we send a sampler?" and "strip it?" passes so they cannot drift.
+pub(crate) fn is_sampling_key(key: &str) -> bool {
+    SAMPLING_PARAM_KEYS.contains(&key)
+}
+
+/// Remove every sampler field from a built request, leaving all other fields
+/// (messages, tools, `max_tokens`, reasoning controls) untouched.
+fn strip_sampling_params(request: &mut OpenAIRequest<'_>) {
+    request.temperature = None;
+    request.extra_sampling.retain(|k, _| !is_sampling_key(k));
+}
+
+/// Whether a provider 400/422 means "this endpoint/model refuses
+/// non-default sampling parameters" — as opposed to any other bad request.
+///
+/// WHY this needs a response-time classifier rather than a model-name gate:
+/// the model id RecurAgent sends is often an opaque alias (a relay's
+/// `x-preview-f` fronting `claude-sonnet-5-5`), so nothing in the string tells
+/// us the sampler will be refused — only the answer does. The same
+/// discover-then-adapt shape as [`is_image_modality_error`] /
+/// [`is_video_modality_error`], applied to `temperature`/`top_p`/`top_k`
+/// instead of content parts, so internal calls that set an explicit sampler
+/// (`ra-agent`'s compaction and rich-output paths use `temperature: Some(0.2)`,
+/// which is correct behaviour for a real OpenAI endpoint) still complete.
+///
+/// Phrasings matched (case-insensitively against the raw, untruncated body):
+///
+/// - `claude-sonnet-5-5 does not support non-default temperature` — the refusal
+///   a Claude-fronting relay returns. It arrives wrapped in an upstream-error
+///   envelope with the real message as escaped JSON
+///   (`"message":"上游错误：{\"message\":\"…temperature\"}"`); that is fine for
+///   substring matching because escaping only rewrites the quotes, the words
+///   stay contiguous and lowercase-stable.
+/// - `Unsupported parameter: 'temperature' is not supported with this model`
+///   and the `top_p` / `top_k` / `sampling` siblings of that OpenAI-style form.
+/// - `Only 1 is allowed for this model` — the value-form refusal some relays
+///   return for `temperature`/`top_p` instead of naming the parameter.
+///
+/// The generic arm requires a sampler noun AND a refusal phrase in the same
+/// body, so an unrelated 400 ("invalid api key", "context length exceeded",
+/// a content-modality refusal) never triggers the retry.
+pub(crate) fn is_sampling_param_error(body: &str) -> bool {
+    let b = body.to_ascii_lowercase();
+    /// Whole phrases that are already unambiguous: each names either the
+    /// sampler class or a sampler, together with the refusal.
+    const UNAMBIGUOUS: &[&str] = &[
+        "non-default temperature",
+        "non default temperature",
+        "only 1 is allowed for this model",
+        "sampling parameters",
+        "sampling parameter",
+        "unsupported sampling",
+        "invalid temperature",
+        "invalid top_p",
+        "invalid top_k",
+    ];
+    if UNAMBIGUOUS.iter().any(|p| b.contains(p)) {
+        return true;
+    }
+    /// Sampler nouns — the parameter the endpoint is objecting to.
+    const SAMPLERS: &[&str] = &[
+        "temperature",
+        "top_p",
+        "top_k",
+        "sampling",
+        "presence_penalty",
+        "frequency_penalty",
+        "repetition_penalty",
+        "repeat_penalty",
+        "min_p",
+    ];
+    /// Refusal phrases, deliberately including the `does not support` /
+    /// `is not supported` / `not allowed` forms the relays use.
+    const REFUSALS: &[&str] = &[
+        "not supported",
+        "unsupported",
+        "does not support",
+        "doesn't support",
+        "not support",
+        "not allowed",
+        "only 1 is",
+        "only default",
+    ];
+    SAMPLERS.iter().any(|s| b.contains(s)) && REFUSALS.iter().any(|r| b.contains(r))
 }
 
 fn build_openai_content(
@@ -3799,5 +3978,360 @@ mod lane_attributed_operational_errors {
         );
         assert!(RetryProvider::should_failover(&err));
         assert!(RetryProvider::is_retryable_error(&err));
+    }
+}
+
+/// Tests for the graceful sampling-parameter fallback: an endpoint that
+/// refuses non-default `temperature`/`top_p`/`top_k` is answered by resending
+/// the request once with every sampler field removed.
+///
+/// The harness is the same wiremock lane the image/video modality retry tests
+/// use (`crates/ra-llm/src/openai.rs`, `mod tests`): a first mock bound to a
+/// body matcher so only the offending leg is refused, a catch-all that answers
+/// the retry, and `received_requests()` asserted byte-for-byte.
+#[cfg(test)]
+mod sampling_param_fallback_tests {
+    use futures::StreamExt;
+    use ra_core::Message;
+    use wiremock::matchers::{body_string_contains, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    use super::{OpenAIProvider, is_sampling_param_error};
+    use crate::config::ChatConfig;
+    use crate::provider::LlmProvider;
+    use crate::types::StreamEvent;
+
+    /// The refusal a Claude-fronting relay returns for an explicit sampler,
+    /// transcribed from a real 400. The upstream message arrives nested as
+    /// escaped JSON inside an `upstream_error` envelope, and the model id sent
+    /// on the wire is an opaque alias (`x-preview-f`), so nothing but the body
+    /// identifies this refusal class.
+    const RELAY_NON_DEFAULT_TEMPERATURE_400_BODY: &str = r#"{"error":{"message":"上游错误：{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"claude-sonnet-5-5 does not support non-default temperature\"}}","type":"upstream_error"}}"#;
+
+    #[test]
+    fn is_sampling_param_error_matches_known_sampler_refusals() {
+        // The nested escaped-JSON envelope: the `\"` escaping rewrites quotes
+        // only, so the inner refusal stays a contiguous substring.
+        assert!(is_sampling_param_error(
+            RELAY_NON_DEFAULT_TEMPERATURE_400_BODY
+        ));
+        // The same message unwrapped.
+        assert!(is_sampling_param_error(
+            "claude-sonnet-5-5 does not support non-default temperature"
+        ));
+        // The value-form refusal some relays return instead of naming the
+        // parameter, plus the OpenAI-style and `top_p`/`top_k` forms.
+        assert!(is_sampling_param_error(
+            r#"{"error":{"message":"Only 1 is allowed for this model","type":"invalid_request_error"}}"#
+        ));
+        assert!(is_sampling_param_error(
+            "Invalid temperature, omit it for this model"
+        ));
+        assert!(is_sampling_param_error(
+            "temperature is not supported by this model"
+        ));
+        assert!(is_sampling_param_error("this model does not support top_p"));
+        assert!(is_sampling_param_error(
+            "Sampling parameters are not accepted here"
+        ));
+        assert!(is_sampling_param_error(
+            "unsupported sampling settings: top_k"
+        ));
+    }
+
+    #[test]
+    fn is_sampling_param_error_ignores_other_refusal_classes() {
+        // The sampler retry must not swallow the other 400 classes: a resend
+        // without samplers would carry the very thing the endpoint objected to
+        // (media) or fail for the unrelated reason (auth, context, rate limit).
+        use super::{is_image_modality_error, is_video_modality_error};
+        for body in [
+            r#"{"error":{"message":"invalid api key","type":"authentication_error"}}"#,
+            r#"{"error":{"message":"This model's maximum context length is 8192 tokens"}}"#,
+            r#"{"error":{"message":"rate limit reached"}}"#,
+            r#"{"error":{"message":"temperature must be a number"}}"#,
+            r#"{"error":{"message":"This model does not support image input","type":"invalid_request_error"}}"#,
+            r#"{"error":{"message":"Failed to deserialize the JSON body into the target type: messages[0]: unknown variant `video_url`, expected one of `text`, `image_url`, `file` at line 1 column 6377","type":"invalid_request_error"}}"#,
+        ] {
+            assert!(
+                !is_sampling_param_error(body),
+                "must not read as a sampler refusal: {body}"
+            );
+        }
+        // And the media classes keep their own classifiers intact.
+        assert!(is_image_modality_error(
+            r#"{"error":{"message":"This model does not support image input"}}"#
+        ));
+        assert!(is_video_modality_error(
+            r#"{"error":{"message":"unknown variant `video_url`"}}"#
+        ));
+    }
+
+    #[test]
+    fn build_request_without_sampling_drops_only_the_sampler_fields() {
+        let mut sp = serde_json::Map::new();
+        sp.insert("top_p".to_string(), serde_json::json!(0.95));
+        // A non-sampler control: it must survive the retry leg.
+        sp.insert(
+            "chat_template_kwargs".to_string(),
+            serde_json::json!({ "enable_thinking": false }),
+        );
+        let config = ChatConfig {
+            temperature: Some(0.2),
+            max_tokens: Some(1024),
+            sampling_params: Some(sp),
+            ..Default::default()
+        };
+        let provider = OpenAIProvider::new("test-key", "x-preview-f");
+        let messages = vec![Message::user("hi")];
+
+        let sent =
+            serde_json::to_value(provider.build_request(&messages, &[], &config, false)).unwrap();
+        assert!(
+            (sent["temperature"].as_f64().unwrap() - 0.2).abs() < 1e-6,
+            "the first leg sends the sampler: {sent}"
+        );
+        assert_eq!(sent["top_p"], serde_json::json!(0.95), "{sent}");
+
+        let stripped =
+            serde_json::to_value(provider.build_request_without_sampling(&messages, &[], &config))
+                .unwrap();
+        assert!(
+            stripped.get("temperature").is_none(),
+            "the retry leg sends no temperature: {stripped}"
+        );
+        assert!(
+            stripped.get("top_p").is_none(),
+            "the retry leg sends no top_p: {stripped}"
+        );
+        assert_eq!(
+            stripped["chat_template_kwargs"]["enable_thinking"],
+            serde_json::json!(false),
+            "a non-sampler control is not collateral damage: {stripped}"
+        );
+        assert_eq!(stripped["max_tokens"], sent["max_tokens"]);
+        assert_eq!(stripped["messages"], sent["messages"]);
+    }
+
+    /// A lane that refuses any request still carrying a `"temperature"` key and
+    /// answers the sampler-free resend.
+    async fn sampler_rejecting_lane() -> (MockServer, OpenAIProvider) {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .and(body_string_contains("\"temperature\""))
+            .respond_with(
+                ResponseTemplate::new(400)
+                    .set_body_string(RELAY_NON_DEFAULT_TEMPERATURE_400_BODY)
+                    .append_header("Content-Type", "application/json"),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "choices": [{"message": {"role": "assistant", "content": "compacted"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+            })))
+            // No `expect` here: the FailFast test reuses this lane and never
+            // reaches the success leg.
+            .mount(&server)
+            .await;
+        // An opaque alias: nothing about the model string predicts the refusal.
+        let provider = OpenAIProvider::new("test-key", "x-preview-f").with_base_url(server.uri());
+        (server, provider)
+    }
+
+    /// `ra-agent`'s compaction / rich-output shape (`temperature: Some(0.2)`)
+    /// against an endpoint that refuses it: the turn must still complete.
+    #[tokio::test]
+    async fn should_retry_without_sampling_parameters_when_the_endpoint_refuses_them() {
+        let (server, provider) = sampler_rejecting_lane().await;
+        let config = ChatConfig {
+            temperature: Some(0.2),
+            ..Default::default()
+        };
+
+        let response = provider
+            .chat(&[Message::user("summarise the transcript")], &[], &config)
+            .await
+            .expect("the sampler-free retry succeeds");
+        assert_eq!(response.content.as_deref(), Some("compacted"));
+
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 2, "one refusal, one sampler-free retry");
+        let first: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+        let second: serde_json::Value = serde_json::from_slice(&requests[1].body).unwrap();
+        // `f32` on the wire: compare with a tolerance, the streaming leg
+        // serialises through `to_value` and widens 0.2 to its f64 form.
+        assert!(
+            (first["temperature"].as_f64().unwrap() - 0.2).abs() < 1e-6,
+            "the first leg sends the sampler: {first}"
+        );
+        assert!(
+            second.get("temperature").is_none(),
+            "the retry must send no temperature: {second}"
+        );
+        assert_eq!(
+            second["messages"], first["messages"],
+            "only the sampler is dropped, never the conversation"
+        );
+    }
+
+    /// The same fallback on the streaming leg (the agent's live path), which
+    /// must also keep `stream: true` on the resend.
+    #[tokio::test]
+    async fn should_retry_stream_without_sampling_parameters_when_the_endpoint_refuses_them() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .and(body_string_contains("\"temperature\""))
+            .respond_with(
+                ResponseTemplate::new(400)
+                    .set_body_string(RELAY_NON_DEFAULT_TEMPERATURE_400_BODY)
+                    .append_header("Content-Type", "application/json"),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_string(
+                        "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"streamed\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+                    )
+                    .append_header("Content-Type", "text/event-stream"),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        let provider = OpenAIProvider::new("test-key", "x-preview-f").with_base_url(server.uri());
+        let config = ChatConfig {
+            temperature: Some(0.2),
+            ..Default::default()
+        };
+
+        let mut stream = provider
+            .chat_stream(&[Message::user("summarise")], &[], &config)
+            .await
+            .expect("the sampler-free retry succeeds");
+        let mut text = String::new();
+        while let Some(event) = stream.next().await {
+            if let StreamEvent::TextDelta(delta) = event {
+                text.push_str(&delta);
+            }
+        }
+        assert_eq!(text, "streamed");
+
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 2, "one refusal, one sampler-free retry");
+        let first: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+        let second: serde_json::Value = serde_json::from_slice(&requests[1].body).unwrap();
+        assert!(
+            (first["temperature"].as_f64().unwrap() - 0.2).abs() < 1e-6,
+            "the first leg sends the sampler: {first}"
+        );
+        assert!(
+            second.get("temperature").is_none(),
+            "the retry must send no temperature: {second}"
+        );
+        assert_eq!(
+            second["stream"],
+            serde_json::json!(true),
+            "the retry stays a streaming request: {second}"
+        );
+    }
+
+    /// A 400 unrelated to sampling must surface as-is with no resend: the
+    /// retry would carry the same conversation and fail for the same reason.
+    #[tokio::test]
+    async fn should_not_retry_sampling_when_the_400_is_unrelated() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(
+                ResponseTemplate::new(400)
+                    .set_body_string(r#"{"error":{"message":"messages: field required","type":"invalid_request_error"}}"#)
+                    .append_header("Content-Type", "application/json"),
+            )
+            .mount(&server)
+            .await;
+        let provider = OpenAIProvider::new("test-key", "x-preview-f").with_base_url(server.uri());
+        let config = ChatConfig {
+            temperature: Some(0.2),
+            ..Default::default()
+        };
+
+        let err = provider
+            .chat(&[Message::user("hi")], &[], &config)
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("messages: field required"),
+            "the provider's own reason surfaces: {err}"
+        );
+        assert_eq!(
+            server.received_requests().await.unwrap().len(),
+            1,
+            "an unrelated 400 must not be retried"
+        );
+    }
+
+    /// Nothing sampling-related on the wire means nothing to strip, so the
+    /// refusal is returned rather than retried — even though the body reads
+    /// like a sampler refusal. `ChatConfig::default()`'s `Some(0.0)` sentinel
+    /// is dropped by `build_request`, so this request carries no sampler.
+    #[tokio::test]
+    async fn should_not_retry_sampling_when_no_sampler_was_sent() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(
+                ResponseTemplate::new(400)
+                    .set_body_string(RELAY_NON_DEFAULT_TEMPERATURE_400_BODY)
+                    .append_header("Content-Type", "application/json"),
+            )
+            .mount(&server)
+            .await;
+        let provider = OpenAIProvider::new("test-key", "x-preview-f").with_base_url(server.uri());
+
+        let err = provider
+            .chat(&[Message::user("hi")], &[], &ChatConfig::default())
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("non-default temperature"), "{err}");
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 1, "no sampler to strip: no retry");
+        let sent: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+        assert!(sent.get("temperature").is_none(), "{sent}");
+    }
+
+    /// FailFast (at most one provider attempt) suppresses the sampler retry,
+    /// exactly as it does the image/video modality retries.
+    #[tokio::test]
+    async fn should_not_retry_without_sampling_parameters_when_failfast() {
+        use crate::{LlmCallPolicy, with_llm_call_policy};
+
+        let (server, provider) = sampler_rejecting_lane().await;
+        let messages = vec![Message::user("summarise")];
+        let config = ChatConfig {
+            temperature: Some(0.2),
+            ..Default::default()
+        };
+
+        let result = with_llm_call_policy(LlmCallPolicy::FailFast, async {
+            provider.chat(&messages, &[], &config).await
+        })
+        .await;
+        assert!(result.is_err(), "expected Err on 400, got Ok");
+        let requests = server.received_requests().await.unwrap_or_default();
+        assert_eq!(
+            requests.len(),
+            1,
+            "FailFast must skip the sampler retry; got {} request(s)",
+            requests.len()
+        );
     }
 }

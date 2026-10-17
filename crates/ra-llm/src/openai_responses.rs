@@ -278,6 +278,10 @@ impl OpenAIResponsesProvider {
         } else {
             &self.client
         };
+        // One-shot guard for the sampling-parameter fallback below: the retry
+        // leg carries no sampler at all, so a second refusal must not be met
+        // with another identical resend.
+        let mut sampling_stripped = false;
         loop {
             tracing::info!(target: "ra.responses", continuation = body.get("previous_response_id").is_some(),
                 full_bytes = full.to_string().len(), sent_bytes = body.to_string().len(), "Responses request");
@@ -315,6 +319,34 @@ impl OpenAIResponsesProvider {
                 body = full.clone();
                 body["store"] = true.into();
                 tracing::info!(target: "ra.responses", "Stored response unavailable; retrying full history");
+                continue;
+            }
+            // Graceful sampling-parameter fallback — the Responses-path twin of
+            // the `temperature` refusal retry in
+            // [`crate::openai::OpenAIProvider::chat`]. `build_request` emits
+            // `temperature` and the operator `sampling_params` only on its
+            // compatibility branch (a non-official base URL), which is exactly
+            // where a relay fronting a sampler-hostile model (Claude) answers
+            // 400/422 naming the parameter — so `body_has_sampling_params` is
+            // both the "is there something to strip?" guard and the
+            // compat-branch guard. The model id is an opaque alias, so the
+            // refusal can only be read off the response; strip the samplers and
+            // resend once so the turn proceeds on the server's own defaults.
+            let fail_fast = crate::current_llm_call_policy() == crate::LlmCallPolicy::FailFast;
+            if !fail_fast
+                && !sampling_stripped
+                && matches!(status.as_u16(), 400 | 422)
+                && body_has_sampling_params(&body)
+                && crate::openai::is_sampling_param_error(&text)
+            {
+                tracing::warn!(
+                    provider = %self.provider_name(),
+                    model = %self.model,
+                    status = status.as_u16(),
+                    "endpoint rejected sampling parameters; retrying without them"
+                );
+                strip_sampling_fields(&mut body);
+                sampling_stripped = true;
                 continue;
             }
             return Err(crate::error::LlmError::from_status_with_label(
@@ -802,6 +834,26 @@ struct ResponsesStreamState {
 /// slash (matching the custom-endpoint check in `ra chat`'s wiring).
 fn is_official_openai_base_url(base_url: &str) -> bool {
     base_url.trim_end_matches('/') == "https://api.openai.com/v1"
+}
+
+/// Whether a Responses request body carries a sampler field (the dedicated
+/// `temperature`, or any `sampling_params` key the compatibility branch
+/// forwarded). Shares [`crate::openai::SAMPLING_PARAM_KEYS`] with the chat-path
+/// twin so the two protocols strip the same set. A body with no sampler is
+/// never retried: the 400 is about something else and an identical resend
+/// would fail the same way.
+fn body_has_sampling_params(body: &serde_json::Value) -> bool {
+    body.as_object()
+        .is_some_and(|map| map.keys().any(|k| crate::openai::is_sampling_key(k)))
+}
+
+/// Drop every sampler key from a Responses request body in place, leaving the
+/// conversation `input`, `tools`, `max_output_tokens`, `stop` and the
+/// `reasoning`/`chat_template_kwargs` controls untouched.
+fn strip_sampling_fields(body: &mut serde_json::Value) {
+    if let Some(map) = body.as_object_mut() {
+        map.retain(|k, _| !crate::openai::is_sampling_key(k));
+    }
 }
 
 fn map_responses_sse(
@@ -1655,6 +1707,170 @@ mod lane_attributed_operational_errors {
             "openai/gpt-5",
             "api_style=openai_responses",
             &["OpenAI Responses API response"],
+        );
+    }
+}
+
+/// Tests for the Responses-path sampling-parameter fallback: a compat endpoint
+/// that refuses non-default samplers is answered by one resend with every
+/// sampler key removed from the body.
+#[cfg(test)]
+mod sampling_param_fallback_tests {
+    use ra_core::Message;
+    use wiremock::matchers::{body_string_contains, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    use super::{OpenAIResponsesProvider, body_has_sampling_params, strip_sampling_fields};
+    use crate::config::ChatConfig;
+    use crate::provider::LlmProvider;
+
+    /// The relay's real 400: the upstream refusal nested as escaped JSON.
+    const RELAY_NON_DEFAULT_TEMPERATURE_400_BODY: &str = r#"{"error":{"message":"上游错误：{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"claude-sonnet-5-5 does not support non-default temperature\"}}","type":"upstream_error"}}"#;
+
+    fn completed(id: &str, text: &str) -> serde_json::Value {
+        serde_json::json!({
+            "id": id,
+            "status": "completed",
+            "output": [{"type": "message",
+                "content": [{"type": "output_text", "text": text}]}],
+            "usage": {"input_tokens": 1, "output_tokens": 1}
+        })
+    }
+
+    #[test]
+    fn strip_sampling_fields_keeps_the_conversation_and_non_samplers() {
+        let mut body = serde_json::json!({
+            "model": "x-preview-f",
+            "input": [{"role": "user", "content": "hi"}],
+            "temperature": 0.2,
+            "top_p": 0.95,
+            "max_output_tokens": 1024,
+            "stop": ["END"],
+            "chat_template_kwargs": {"enable_thinking": false}
+        });
+        assert!(body_has_sampling_params(&body));
+        strip_sampling_fields(&mut body);
+        assert!(!body_has_sampling_params(&body));
+        assert!(body.get("temperature").is_none(), "{body}");
+        assert!(body.get("top_p").is_none(), "{body}");
+        assert_eq!(body["stop"], serde_json::json!(["END"]), "{body}");
+        assert_eq!(body["max_output_tokens"], serde_json::json!(1024), "{body}");
+        assert_eq!(
+            body["chat_template_kwargs"]["enable_thinking"],
+            serde_json::json!(false),
+            "{body}"
+        );
+        assert_eq!(body["input"].as_array().unwrap().len(), 1, "{body}");
+    }
+
+    #[test]
+    fn a_plain_request_has_nothing_to_strip() {
+        // The `Some(0.0)` sentinel never reaches the body, so a stock request
+        // must not be retried against a sampler refusal.
+        let provider = OpenAIResponsesProvider::new("test", "x-preview-f")
+            .with_base_url("http://127.0.0.1:9/v1");
+        let body = provider.build_request(&[Message::user("hi")], &[], &ChatConfig::default());
+        assert!(!body_has_sampling_params(&body), "{body}");
+    }
+
+    /// `ra-agent`'s compaction shape (`temperature: Some(0.2)`) against a
+    /// Claude-fronting relay on the Responses protocol.
+    #[tokio::test]
+    async fn should_retry_responses_without_sampling_parameters_when_the_endpoint_refuses_them() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/responses"))
+            .and(body_string_contains("\"temperature\""))
+            .respond_with(
+                ResponseTemplate::new(400)
+                    .set_body_string(RELAY_NON_DEFAULT_TEMPERATURE_400_BODY)
+                    .append_header("Content-Type", "application/json"),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/responses"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(completed("resp_ok", "compacted")),
+            )
+            .mount(&server)
+            .await;
+
+        let provider =
+            OpenAIResponsesProvider::new("test-key", "x-preview-f").with_base_url(server.uri());
+        let mut sp = serde_json::Map::new();
+        sp.insert("top_p".to_string(), serde_json::json!(0.95));
+        let config = ChatConfig {
+            temperature: Some(0.2),
+            sampling_params: Some(sp),
+            ..Default::default()
+        };
+
+        let response = provider
+            .chat(&[Message::user("summarise the transcript")], &[], &config)
+            .await
+            .expect("the sampler-free retry succeeds");
+        assert_eq!(response.content.as_deref(), Some("compacted"));
+
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 2, "one refusal, one sampler-free retry");
+        let first: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+        let second: serde_json::Value = serde_json::from_slice(&requests[1].body).unwrap();
+        assert!(
+            first.get("temperature").is_some(),
+            "the first leg sends samplers: {first}"
+        );
+        assert!(
+            first.get("top_p").is_some(),
+            "the first leg sends samplers: {first}"
+        );
+        assert!(
+            second.get("temperature").is_none(),
+            "the retry must send no temperature: {second}"
+        );
+        assert!(
+            second.get("top_p").is_none(),
+            "the retry must send no top_p: {second}"
+        );
+        assert_eq!(
+            second["input"], first["input"],
+            "only the samplers are dropped, never the conversation"
+        );
+    }
+
+    /// An unrelated 400 must not be retried, and a request that sent no sampler
+    /// has nothing to strip.
+    #[tokio::test]
+    async fn should_not_retry_responses_sampling_when_the_400_is_unrelated() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/responses"))
+            .respond_with(
+                ResponseTemplate::new(400)
+                    .set_body_string(r#"{"error":{"message":"input: field required"}}"#)
+                    .append_header("Content-Type", "application/json"),
+            )
+            .mount(&server)
+            .await;
+        let provider =
+            OpenAIResponsesProvider::new("test-key", "x-preview-f").with_base_url(server.uri());
+        let config = ChatConfig {
+            temperature: Some(0.2),
+            ..Default::default()
+        };
+        let err = provider
+            .chat(&[Message::user("hi")], &[], &config)
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("input: field required"),
+            "the provider's own reason surfaces: {err}"
+        );
+        assert_eq!(
+            server.received_requests().await.unwrap().len(),
+            1,
+            "an unrelated 400 must not be retried"
         );
     }
 }
