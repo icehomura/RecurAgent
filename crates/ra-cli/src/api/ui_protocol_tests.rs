@@ -48950,3 +48950,49 @@ async fn should_replay_an_external_prompt_to_its_owner_after_the_side_table_forg
     assert!(hosted.is_empty(), "{hosted:?}");
     question_task.abort();
 }
+
+#[test]
+fn session_open_mcp_server_maps_stdio_http_and_drops_transportless() {
+    use super::session_mcp_server_to_config;
+
+    let stdio = SessionMcpServer {
+        name: Some("rc-mcp".into()),
+        command: Some("/opt/rc-mcp".into()),
+        args: vec!["--token".into(), "t".into()],
+        env: HashMap::from([("RC_X".to_string(), "1".to_string())]),
+        url: None,
+        headers: HashMap::new(),
+    };
+    let cfg = session_mcp_server_to_config(stdio).expect("stdio entry must map");
+    assert_eq!(cfg.command.as_deref(), Some("/opt/rc-mcp"));
+    assert_eq!(cfg.args, vec!["--token".to_string(), "t".to_string()]);
+    assert_eq!(cfg.env.get("RC_X").map(String::as_str), Some("1"));
+    assert!(cfg.url.is_none());
+    assert!(cfg.headers.is_empty());
+
+    let http = SessionMcpServer {
+        name: Some("remote".into()),
+        command: None,
+        args: Vec::new(),
+        env: HashMap::new(),
+        url: Some("https://example.test/mcp".into()),
+        headers: HashMap::from([("Authorization".to_string(), "Bearer x".to_string())]),
+    };
+    let cfg = session_mcp_server_to_config(http).expect("http entry must map");
+    assert_eq!(cfg.url.as_deref(), Some("https://example.test/mcp"));
+    assert_eq!(
+        cfg.headers.get("Authorization").map(String::as_str),
+        Some("Bearer x")
+    );
+    assert!(cfg.command.is_none());
+
+    let transportless = SessionMcpServer {
+        name: Some("bad".into()),
+        command: None,
+        args: Vec::new(),
+        env: HashMap::new(),
+        url: None,
+        headers: HashMap::new(),
+    };
+    assert!(session_mcp_server_to_config(transportless).is_none());
+}

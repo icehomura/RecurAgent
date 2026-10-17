@@ -40,8 +40,9 @@ use ra_core::ui_protocol::{
     SESSION_HYDRATE_INCLUDE_MAX, SESSION_MESSAGES_PAGE_DEFAULT_LIMIT,
     SESSION_MESSAGES_PAGE_MAX_LIMIT, SESSION_MESSAGES_PAGE_MAX_OFFSET, SESSION_TITLE_SET_MAX_CHARS,
     SessionBtwParams, SessionDeleteParams, SessionFilesListParams, SessionHydrateParams,
-    SessionHydrateResult, SessionListParams, SessionMessagesPageParams, SessionOpenParams,
-    SessionOpenResult, SessionOpened, SessionOrchestrationEvent, SessionRollbackParams,
+    SessionHydrateResult, SessionListParams, SessionMcpServer, SessionMessagesPageParams,
+    SessionOpenParams, SessionOpenResult, SessionOpened, SessionOrchestrationEvent,
+    SessionRollbackParams,
     SessionRollbackResult, SessionSnapshotParams, SessionStatusGetParams, SessionTasksListParams,
     SessionTitleSetParams, SessionWorkspaceGetParams, SkillActionJobUpdatedEvent,
     SystemStatusGetParams, TaskArtifactListParams, TaskArtifactListResult, TaskArtifactReadParams,
@@ -23064,6 +23065,44 @@ struct SessionOpenOutcome {
 // through the session/open contract pushes this past clippy's 7-arg lint;
 // the parameters are a flat dependency list, not a missing struct.
 #[allow(clippy::too_many_arguments)]
+/// Map one wire `session/open` MCP server entry onto the runtime's
+/// [`ra_agent::McpServerConfig`]. A `url` selects the streamable-HTTP
+/// transport; otherwise `command` selects stdio. An entry naming neither is
+/// dropped (logged) — it could never connect. The wire `name` is
+/// diagnostics-only and does not survive the mapping (the runtime derives a
+/// display name from the command/url).
+fn session_mcp_server_to_config(server: SessionMcpServer) -> Option<ra_agent::McpServerConfig> {
+    if let Some(url) = server.url {
+        return Some(ra_agent::McpServerConfig {
+            command: None,
+            args: Vec::new(),
+            env: HashMap::new(),
+            url: Some(url),
+            headers: server.headers,
+            oauth: false,
+            scopes: Vec::new(),
+            concurrency_class: None,
+        });
+    }
+    let Some(command) = server.command else {
+        tracing::warn!(
+            name = ?server.name,
+            "session/open MCP server names neither command nor url; skipped"
+        );
+        return None;
+    };
+    Some(ra_agent::McpServerConfig {
+        command: Some(command),
+        args: server.args,
+        env: server.env,
+        url: None,
+        headers: HashMap::new(),
+        oauth: false,
+        scopes: Vec::new(),
+        concurrency_class: None,
+    })
+}
+
 async fn open_session_result(
     state: &Arc<AppState>,
     ledger: &UiProtocolLedger,
@@ -23166,6 +23205,14 @@ async fn open_session_result(
     // accepted. Stays `None` when the open declared none or no runtime
     // materializes to apply them.
     let mut accepted_client_commands: Option<Vec<String>> = None;
+    // Session-scoped MCP servers the client asked for on this open (ACP
+    // `session/new` `mcpServers`). Converted once; a session-runtime cache HIT
+    // keeps the FIRST open's set, mirroring `workspace_hint`.
+    let session_mcp_servers: Vec<ra_agent::McpServerConfig> = params
+        .mcp_servers
+        .drain(..)
+        .filter_map(session_mcp_server_to_config)
+        .collect();
     if let Some(profile_runtime) =
         resolve_session_profile_runtime(state, active_profile_id.as_deref())
     {
@@ -23184,13 +23231,14 @@ async fn open_session_result(
         )?;
         match state
             .session_cache
-            .get_or_init_with_permissions_and_sandbox(
+            .get_or_init_with_permissions_sandbox_and_mcp(
                 &profile_runtime,
                 params.session_id.clone(),
                 hint,
                 permissions,
                 sandbox_override,
                 permissions_epoch,
+                session_mcp_servers,
             )
             .await
         {
